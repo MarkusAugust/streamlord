@@ -8,8 +8,11 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.ui.components.ActionLink
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -28,14 +31,26 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Container
+import java.awt.KeyboardFocusManager
+import java.awt.Rectangle
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.swing.JButton
 import javax.swing.JComboBox
+import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
+import javax.swing.JScrollPane
+import javax.swing.JTextArea
 import javax.swing.ListCellRenderer
+import javax.swing.Scrollable
+import javax.swing.SwingUtilities
+import javax.swing.text.JTextComponent
 import kotlin.test.assertFailsWith
 
 class InspectorTest : BasePlatformTestCase() {
@@ -109,6 +124,97 @@ class InspectorTest : BasePlatformTestCase() {
     private fun aboutTheRequestsFile(text: String) =
         "is not read" in text || "is not a requests file" in text || "is not valid JSON" in text
 
+    /** What the panel says in text components that cannot be edited: an error line is one. */
+    private fun texts(panel: InspectorPanel) =
+        UIUtil.findComponentsOfType(panel, JTextComponent::class.java).filter { !it.isEditable }.map { it.text }
+
+    /** Give [panel] a size and lay out everything in it, as a window would have. */
+    private fun layOut(
+        panel: InspectorPanel,
+        width: Int,
+    ) {
+        fun all(c: Container) {
+            // A window marks what it lays out valid, and a size that changes then invalidates the layouts above it; here each pass asks anew.
+            c.invalidate()
+            c.doLayout()
+            for (child in c.components) if (child is Container) all(child)
+        }
+        panel.setSize(width, 700)
+        // Wrapped text knows its height only once it has its width, so one pass is not enough.
+        repeat(4) { all(panel) }
+    }
+
+    private fun boundsIn(
+        panel: InspectorPanel,
+        c: java.awt.Component,
+    ): Rectangle = SwingUtilities.convertRectangle(c.parent, c.bounds, panel)
+
+    /** Whether the panel shows the marker of an edited request: the label and everything it stands in is visible. */
+    private fun modifiedShows(panel: InspectorPanel) =
+        UIUtil.findComponentsOfType(panel, JBLabel::class.java).any { label ->
+            label.text == "● modified" &&
+                generateSequence<java.awt.Component>(label) { it.parent }.takeWhile { it !== panel }.all { it.isVisible }
+        }
+
+    /**
+     * What is out of place in the form of [panel] as it is laid out: a button, a field or the request list that does
+     * not lie wholly inside the panel's width, an action button outside the form, and a field under an action button.
+     */
+    private fun outside(panel: InspectorPanel): List<String> {
+        val buttons = UIUtil.findComponentsOfType(panel, JButton::class.java).filter { it.text in FORM_BUTTONS }
+        assertEquals(FORM_BUTTONS, buttons.map { it.text }.sorted())
+        val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+        val list = UIUtil.findComponentsOfType(panel, JComboBox::class.java).single { it.getItemAt(0) !is String }
+        val areas = UIUtil.findComponentsOfType(form(panel), JBTextArea::class.java).filter { it.isEditable }
+        assertEquals(2, areas.size)
+        val fields =
+            listOf("the URL field" to url, "the signals field" to areas[0], "the headers field" to areas[1])
+                .map { (name, c) -> name to (SwingUtilities.getAncestorOfClass(JScrollPane::class.java, c) ?: c) }
+        val form = form(panel).bounds
+        val actions = buttons.filter { it.text in ACTION_BUTTONS }
+        return (buttons.map { it.text to it } + fields + ("the request list" to list)).mapNotNull { (name, c) ->
+            val b = boundsIn(panel, c)
+            if (b.width > 0 && b.x >= 0 && b.x + b.width <= panel.width) null else "$name at x ${b.x} to ${b.x + b.width}"
+        } +
+            actions.mapNotNull { c ->
+                val b = boundsIn(panel, c)
+                if (b.height > 0 && form.contains(b)) null else "${c.text} at $b outside the form at $form"
+            } +
+            fields.flatMap { (name, c) ->
+                actions.filter { boundsIn(panel, it).intersects(boundsIn(panel, c)) }.map { "$name under ${it.text}" }
+            }
+    }
+
+    /** The scroll pane of the event list; asked for before the first event, while the list holds its note. */
+    private fun events(panel: InspectorPanel): JScrollPane =
+        UIUtil.findComponentsOfType(panel, JScrollPane::class.java).single { pane ->
+            UIUtil.findComponentsOfType(pane, JLabel::class.java).any { it.text.startsWith("No events yet") }
+        }
+
+    private fun showError(
+        panel: InspectorPanel,
+        message: String,
+        define: List<String>? = null,
+        useBaseUrl: String? = null,
+    ) {
+        panel.javaClass
+            .getDeclaredMethod("error", String::class.java, List::class.java, String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, message, define, useBaseUrl)
+    }
+
+    /** The line of the error [message] in the event list. */
+    private fun errorLine(
+        events: JScrollPane,
+        message: String,
+    ): JTextArea {
+        val found = UIUtil.findComponentsOfType(events, JTextArea::class.java).filter { !it.isEditable && it.text == message }
+        assertEquals("no error line that is text: $message", 1, found.size)
+        return found.single()
+    }
+
+    private fun links(events: JScrollPane) = UIUtil.findComponentsOfType(events, ActionLink::class.java).map { it.text }
+
     private fun pump(
         body: java.io.InputStream,
         handlers: StreamClient.Handlers,
@@ -123,6 +229,48 @@ class InspectorTest : BasePlatformTestCase() {
             Thread.sleep(5)
         }
         assertTrue("the panel did not finish reading", job.isCompleted && !job.isCancelled)
+    }
+
+    /** What an answer does: the status, and the URL it came from. The tool window's queue does not run in a test. */
+    private fun setStatus(
+        panel: InspectorPanel,
+        text: String,
+        status: StreamClient.Status?,
+        url: String?,
+    ) {
+        panel.javaClass
+            .getDeclaredMethod("setStatus", String::class.java, StreamClient.Status::class.java, String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, text, status, url)
+    }
+
+    /** The form above the event list: the fields and the row of action buttons. */
+    private fun form(panel: InspectorPanel) = (panel.layout as BorderLayout).getLayoutComponent(BorderLayout.NORTH) as JComponent
+
+    private fun button(
+        panel: InspectorPanel,
+        text: String,
+    ) = UIUtil.findComponentsOfType(panel, JButton::class.java).single { it.text == text }
+
+    /** The line under the URL field that shows the URL as it is sent, [text] being what it shows. */
+    private fun preview(
+        panel: InspectorPanel,
+        text: String,
+    ): JTextArea {
+        val found =
+            UIUtil
+                .findComponentsOfType(
+                    form(panel),
+                    JTextArea::class.java,
+                ).filter { !it.isEditable && it.text == text }
+        assertEquals("no preview that is text: $text in ${texts(panel)}", 1, found.size)
+        return found.single()
+    }
+
+    private fun tabLeaves(text: JTextComponent) {
+        for (keys in listOf(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS)) {
+            assertEquals(text.parent.getFocusTraversalKeys(keys), text.getFocusTraversalKeys(keys))
+        }
     }
 
     fun `test the client reads a datastar stream as the browser would`() {
@@ -989,7 +1137,7 @@ class InspectorTest : BasePlatformTestCase() {
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
         assertEquals("""{"a":[7,2],"b":1}""", JsonParser.parse(store.text).toJson())
-        val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        val labels = texts(panel)
         // The client leaves its batch open after a throw, so the bindings on the page stop
         // redrawing (measured in Chrome).
         val expected =
@@ -1009,7 +1157,7 @@ class InspectorTest : BasePlatformTestCase() {
         fun patch(signals: String) =
             apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
 
-        fun labels() = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        fun labels() = texts(panel)
         patch("""{"a":[1]}""")
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         patch("""{"b":1,"o":{"__proto__":{"x":1}},"c":2}""")
@@ -1055,6 +1203,394 @@ class InspectorTest : BasePlatformTestCase() {
         patch("""{"b":3,"c":3}""", "\u001Ctrue")
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         assertEquals("""{"a":1,"b":3,"c":3}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // The request sends a param encoded, and the line under the URL is there to show what is sent.
+    fun `test the line under the URL shows a param as the request sends it`() {
+        write(Requests.ENV_FILE, "{\"baseUrl\":\"http://h:1\",\"params\":{\"id\":\"4 2/x\"}}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(SavedRequest("", "{{baseUrl}}/feed/{{id}}", "GET", "", "")))
+            await(panel.pushRequests(null))
+
+            val line = preview(panel, "http://h:1/feed/4%202%2Fx")
+            assertTrue(line.lineWrap)
+            assertTrue(line.isVisible)
+            tabLeaves(line)
+
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single { it.text == "{{baseUrl}}/feed/{{id}}" }
+            url.text = "{{baseUrl}}/feed/{{nowhere}}/{{signals}}?id={{ id }}"
+            assertEquals("http://h:1/feed/{{nowhere}}/{{signals}}?id=4%202%2Fx", line.text)
+            assertTrue(line.isVisible)
+
+            // The IDE renders a tooltip as HTML whatever it starts with, and the URL is typed or comes from a shared file.
+            url.text = "{{baseUrl}}/feed/<b>bold</b>"
+            assertEquals("http://h:1/feed/<b>bold</b>", line.text)
+            assertNull(line.toolTipText)
+            val tooltips = UIUtil.findComponentsOfType(panel, JComponent::class.java).mapNotNull { it.toolTipText }
+            assertEquals(emptyList<String>(), tooltips.filter { "bold" in it || "http://h:1" in it })
+
+            url.text = "http://h:1/feed"
+            assertEquals("", line.text)
+            assertFalse(line.isVisible)
+            assertFalse(texts(panel).toString(), texts(panel).any { it.startsWith("http://h:1/feed") })
+        } finally {
+            remove(Requests.ENV_FILE)
+        }
+    }
+
+    fun `test a long preview goes on to more lines inside the panel`() {
+        write(Requests.ENV_FILE, "{\"baseUrl\":\"http://h:1\"}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            val long = "http://h:1" + "/part".repeat(38)
+            assertEquals(200, long.length)
+            await(panel.pushRequests(SavedRequest("", "{{baseUrl}}" + "/part".repeat(38), "GET", "", "")))
+            layOut(panel, 360)
+            val line = preview(panel, long)
+            val bounds = boundsIn(panel, line)
+            assertTrue("$bounds in 360", bounds.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= panel.width)
+            val oneLine = line.getFontMetrics(line.font).height
+            assertTrue("${line.height} high, a line is $oneLine", line.height >= 2 * oneLine)
+            assertEquals(emptyList<String>(), outside(panel))
+        } finally {
+            remove(Requests.ENV_FILE)
+        }
+    }
+
+    // A URL is typed or comes from a shared file, and the IDE renders every tooltip as HTML.
+    fun `test the tooltip of the status shows the URL that was sent as text`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x?a=1&lt=2<b>")
+        assertEquals("open · 200 OK", status.text)
+        assertEquals("open · 200 OK<br>http://h/x?a=1&amp;lt=2&lt;b&gt;", status.toolTipText)
+
+        // The tooltip is of the status that shows: the URL of an earlier request does not stay on it.
+        setStatus(panel, "error", null, null)
+        assertEquals("error", status.toolTipText)
+
+        // A content type is the server's text, as much as the URL is the file's.
+        setStatus(panel, "open · 200 OK · text/<i>\"x\"</i>&", StreamClient.Status.OPEN, "http://h/\"q\"&amp;")
+        assertEquals("open · 200 OK · text/&lt;i&gt;&quot;x&quot;&lt;/i&gt;&amp;<br>http://h/&quot;q&quot;&amp;amp;", status.toolTipText)
+        setStatus(panel, "idle", null, null)
+        assertEquals("idle", status.toolTipText)
+    }
+
+    // A status with a content type is longer than the row has room for in a narrow panel, and the buttons are what is clicked.
+    fun `test a long status gives way to the action buttons`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        val statuses =
+            listOf(
+                "open · 200 OK · text/event-stream; charset=utf-8" to StreamClient.Status.OPEN,
+                "error · 500 Internal Server Error · application/problem+json; charset=utf-8" to null,
+            )
+        val found = ArrayList<String>()
+        for ((text, kind) in statuses) {
+            setStatus(panel, text, kind, "http://h/x")
+            // Longer than the label may be in a narrow panel, so the label is in fact cut there and the cap is not met by a short text.
+            val whole = status.getFontMetrics(status.font).stringWidth(text)
+            val cap = JBUI.scale(160)
+            assertTrue(text, whole > cap)
+            for (width in listOf(360, 460, 900, 1200, 360)) {
+                layOut(panel, width)
+                val at = "at $width with ${text.substringBefore(' ')}"
+                val form = form(panel).bounds
+                val label = boundsIn(panel, status)
+                found += outside(panel).map { "$it $at" }
+                if (label.width <= 0 || label.x < 0 || !form.contains(label)) found += "the status at $label outside the form at $form $at"
+                // Cut only where the row has no room for more: whole beside the buttons in a wide panel, never under the cap in between.
+                if (width <= 460 && label.width > cap) found += "the status is ${label.width} wide $at"
+                if (width == 900 && label.width < cap) found += "the status is ${label.width} wide, under $cap $at"
+                if (width == 1200) {
+                    if (label.width < whole) found += "the status is ${label.width} wide and its text $whole $at"
+                    val row = ACTION_BUTTONS.map { boundsIn(panel, button(panel, it)) }
+                    if (row.map { it.y }.distinct().size != 1) found += "the action buttons stand on lines ${row.map { it.y }} $at"
+                    if (row.any { label.x < it.x + it.width }) found += "the status at $label is not right of the buttons $row $at"
+                }
+                for (name in ACTION_BUTTONS) {
+                    val button = button(panel, name)
+                    val b = boundsIn(panel, button)
+                    val own = button.bounds
+                    val room = button.parent.size
+                    if (own.x < 0 || own.y < 0 || own.x + own.width > room.width || own.y + own.height > room.height) {
+                        found += "$name at $own is cut by its row of ${room.width} by ${room.height} $at"
+                    }
+                    if (label.x < b.x + b.width &&
+                        label.y < b.y + b.height
+                    ) {
+                        found += "the status at $label is not right of or below $name at $b $at"
+                    }
+                }
+            }
+        }
+        assertEquals("", found.joinToString("\n"))
+
+        setStatus(panel, "idle", null, null)
+        layOut(panel, 900)
+        val idle = boundsIn(panel, status)
+        val right = form(panel).x + form(panel).width
+        assertTrue("$idle, the form ends at $right", right - (idle.x + idle.width) in 0..16)
+        val connect = boundsIn(panel, button(panel, "Connect"))
+        assertTrue("$idle beside $connect", idle.y + idle.height / 2 in connect.y..connect.y + connect.height)
+    }
+
+    fun `test Stop is enabled only while a request is connecting or open`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val stop = button(panel, "Stop")
+        assertFalse(stop.isEnabled)
+        await(panel.pushRequests(null))
+        assertFalse(stop.isEnabled)
+
+        setStatus(panel, "connecting", StreamClient.Status.CONNECTING, "http://h/x")
+        assertTrue(stop.isEnabled)
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
+        assertTrue(stop.isEnabled)
+        setStatus(panel, "closed", StreamClient.Status.CLOSED, "http://h/x")
+        assertFalse(stop.isEnabled)
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
+        setStatus(panel, "error", null, null)
+        assertFalse(stop.isEnabled)
+    }
+
+    fun `test the modified marker asks for the width of its text in the font it has`() {
+        val feed = SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", "")
+        RequestStore.getInstance(project).save(feed)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(feed))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single { it.text == feed.url }
+            url.text = "${feed.url}/2"
+            val marker = UIUtil.findComponentsOfType(panel, JBLabel::class.java).single { it.text == "● modified" }
+            val shown = marker.preferredSize
+            assertTrue("$shown", shown.width >= marker.getFontMetrics(marker.font).stringWidth("● modified"))
+
+            url.text = feed.url
+            assertFalse(modifiedShows(panel))
+            assertEquals(shown, marker.preferredSize)
+
+            marker.font = marker.font.deriveFont(marker.font.size2D * 2)
+            val larger = marker.preferredSize
+            assertTrue("$larger after $shown", larger.width > shown.width)
+            assertTrue("$larger", larger.width >= marker.getFontMetrics(marker.font).stringWidth("● modified"))
+            url.text = "${feed.url}/2"
+            assertEquals(larger, marker.preferredSize)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the status stands at the right end of the action row`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+
+        layOut(panel, 900)
+        val wide = boundsIn(panel, status)
+        val right = form(panel).x + form(panel).width
+        assertTrue("$wide, the form ends at $right", right - (wide.x + wide.width) in 0..16)
+        val connect = boundsIn(panel, button(panel, "Connect"))
+        assertTrue("$wide beside $connect", wide.y + wide.height / 2 in connect.y..connect.y + connect.height)
+
+        layOut(panel, 360)
+        val narrow = boundsIn(panel, status)
+        assertTrue("$narrow in 360", narrow.width > 0 && narrow.x >= 0 && narrow.x + narrow.width <= panel.width)
+    }
+
+    fun `test the form holds its buttons and fields apart whichever width came first`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val found =
+            listOf(360, 460, 900, 360, 900, 460, 360).mapIndexedNotNull { step, width ->
+                layOut(panel, width)
+                outside(panel).takeIf { it.isNotEmpty() }?.let { "step ${step + 1}, $width wide: $it" }
+            }
+        assertEquals(emptyList<String>(), found)
+    }
+
+    // The note stands in an empty list only: the first event takes its place, and no event takes the place of another.
+    fun `test the first event takes the place of the note, and no later one takes a line away`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+        val list = UIUtil.findComponentsOfType(events, JLabel::class.java).single { it.text.startsWith("No events yet") }.parent
+
+        fun labels() = UIUtil.findComponentsOfType(events, JLabel::class.java).map { it.text }
+
+        fun comment(text: String) {
+            panel.javaClass
+                .getDeclaredMethod("addComment", String::class.java)
+                .apply { isAccessible = true }
+                .invoke(panel, text)
+        }
+
+        fun frame(event: String) {
+            panel.javaClass
+                .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+                .apply { isAccessible = true }
+                .invoke(panel, DatastarFrame(event, null, null, mapOf("elements" to "<p>x</p>"), "", 0L))
+        }
+
+        comment("first comment")
+        assertEquals(1, list.componentCount)
+        assertFalse(labels().toString(), labels().any { it.startsWith("No events yet") })
+        frame("first-frame")
+        assertEquals(2, list.componentCount)
+        assertTrue(labels().toString(), labels().any { it.endsWith(": first comment") } && "first-frame" in labels())
+
+        button(panel, "Clear").doClick()
+        assertEquals(listOf("Cleared."), labels())
+        showError(panel, "an error")
+        assertEquals(1, list.componentCount)
+        assertFalse(labels().toString(), "Cleared." in labels())
+        comment("after the error")
+        assertEquals(2, list.componentCount)
+        errorLine(events, "an error")
+        assertTrue(labels().toString(), labels().any { it.endsWith(": after the error") })
+
+        button(panel, "Clear").doClick()
+        comment("after Clear")
+        assertEquals(1, list.componentCount)
+        assertEquals(listOf(true), labels().map { it.endsWith(": after Clear") })
+
+        // Each line added is one line more, whatever stood alone before it.
+        val adds = listOf<() -> Unit>({ comment("a") }, { comment("b") }, { frame("c") }, { showError(panel, "d") }, { comment("e") })
+        for (start in adds) {
+            button(panel, "Clear").doClick()
+            start()
+            for ((n, add) in adds.withIndex()) {
+                add()
+                assertEquals(n + 2, list.componentCount)
+            }
+        }
+    }
+
+    fun `test every line of the event list starts at its left edge`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+        val note = UIUtil.findComponentsOfType(events, JLabel::class.java).single { it.text.startsWith("No events yet") }
+        val list = note.parent
+        layOut(panel, 460)
+        assertEquals(0, SwingUtilities.convertRectangle(list, note.bounds, events.viewport).x)
+
+        // The note gives way to the first event, so it is measured alone and the other four together.
+        panel.javaClass
+            .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, DatastarFrame("datastar-patch-elements", "1", null, mapOf("elements" to "<p>x</p>"), "", 0L))
+        panel.javaClass
+            .getDeclaredMethod("addComment", String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, "a comment")
+        showError(panel, "an error without a link")
+        showError(panel, "an error with a link", listOf("id"))
+        layOut(panel, 460)
+        assertEquals(4, list.componentCount)
+        assertEquals(listOf(0, 0, 0, 0), list.components.map { SwingUtilities.convertRectangle(list, it.bounds, events.viewport).x })
+        val texts = listOf("an error without a link", "an error with a link").map { errorLine(events, it) }
+        assertEquals(1, texts.map { SwingUtilities.convertRectangle(it.parent, it.bounds, events.viewport).x }.distinct().size)
+    }
+
+    // A tool window is often narrower than the row of action buttons, and the form is no wider than the panel.
+    fun `test the form fits a narrow panel, and its action buttons share a line in a wide one`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val found =
+            listOf(900, 460, 360).flatMap { width ->
+                layOut(panel, width)
+                outside(panel).map { "$it of $width" }
+            }
+        assertEquals(emptyList<String>(), found)
+        layOut(panel, 900)
+        val lines = ACTION_BUTTONS.map { boundsIn(panel, button(panel, it)).y }
+        assertEquals(lines.toString(), 1, lines.distinct().size)
+    }
+
+    // The marker holds its place whether it shows or not, so a click meant for Save does not land on Delete.
+    fun `test Save and Delete stay where they are when the modified marker comes and goes`() {
+        val feed = SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", "")
+        RequestStore.getInstance(project).save(feed)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(feed))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single { it.text == feed.url }
+
+            fun buttons() =
+                listOf("Save", "Delete").map { text ->
+                    boundsIn(panel, UIUtil.findComponentsOfType(panel, JButton::class.java).single { it.text == text })
+                }
+            for (width in listOf(900, 460, 360)) {
+                layOut(panel, width)
+                assertFalse(modifiedShows(panel))
+                val before = buttons()
+                assertEquals("at $width", emptyList<String>(), outside(panel))
+
+                url.text = "${feed.url}/2"
+                layOut(panel, width)
+                assertTrue(modifiedShows(panel))
+                assertEquals("edited, at $width", before, buttons())
+
+                url.text = feed.url
+                layOut(panel, width)
+                assertFalse(modifiedShows(panel))
+                assertEquals("put back, at $width", before, buttons())
+            }
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test an error in the event list is text that wraps, with its link beside it`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+
+        // A message is someone else's text as much as an event name is: never Swing HTML.
+        val markup = "<html><b>bold</b><img src='http://127.0.0.1:1/beacon'> could not be reached"
+        showError(panel, markup)
+        val line = errorLine(events, markup)
+        assertTrue(line.lineWrap)
+        assertTrue(line.wrapStyleWord)
+        tabLeaves(line)
+        assertEquals(emptyList<String>(), links(events))
+
+        showError(panel, "{{id}} is not set. Add it to params in .streamlord/env.json.", listOf("id"))
+        tabLeaves(errorLine(events, "{{id}} is not set. Add it to params in .streamlord/env.json."))
+        assertEquals(listOf("Add to .streamlord/env.json"), links(events))
+
+        showError(panel, "Could not reach http://localhost:8080/feed.", emptyList())
+        errorLine(events, "Could not reach http://localhost:8080/feed.")
+        assertTrue(links(events).toString(), "Edit variables" in links(events))
+
+        showError(panel, "Could not reach http://localhost:8080/x.", null, "http://localhost:9102")
+        errorLine(events, "Could not reach http://localhost:8080/x.")
+        assertTrue(links(events).toString(), "Use http://localhost:9102 in .streamlord/env.json" in links(events))
+        assertEquals(3, links(events).size)
+    }
+
+    // An error is read whole in the list: it goes on to more lines, and the list never scrolls sideways.
+    fun `test a long error is laid out no wider than the event list, on more lines than one`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+        assertTrue((events.viewport.view as? Scrollable)?.scrollableTracksViewportWidth == true)
+
+        val long = "long ".repeat(59) + "words"
+        assertEquals(300, long.length)
+        showError(panel, long)
+        showError(panel, "$long.", listOf("id"))
+        for (width in listOf(460, 360, 900, 360)) {
+            layOut(panel, width)
+            val viewport = events.viewport
+            assertTrue("${viewport.width}", viewport.width in 1..width)
+            assertTrue("${viewport.view.width} in ${viewport.width}", viewport.view.width <= viewport.width)
+            for (line in listOf(errorLine(events, long), errorLine(events, "$long."))) {
+                val bounds = SwingUtilities.convertRectangle(line.parent, line.bounds, viewport)
+                assertTrue("$bounds in ${viewport.width}", line.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= viewport.width)
+                val oneLine = line.getFontMetrics(line.font).height
+                assertTrue("${line.height} high at $width, a line is $oneLine", line.height >= 2 * oneLine)
+            }
+        }
     }
 
     // Reading a file is not work for the UI thread: the form is there at once, and the list follows.
@@ -1206,6 +1742,9 @@ class InspectorTest : BasePlatformTestCase() {
     }
 
     private companion object {
+        val FORM_BUTTONS = listOf("Clear", "Connect", "Copy as curl", "Delete", "Reset signals", "Save", "Stop")
+        val ACTION_BUTTONS = listOf("Connect", "Stop", "Clear", "Reset signals", "Copy as curl")
+
         /** A requests file as a person writes one: members and an entry the inspector does not know, and a layout of its own. */
         val HAND_WRITTEN =
             """

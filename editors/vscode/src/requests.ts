@@ -655,6 +655,15 @@ export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: Sa
 }
 
 /**
+ * The URL as a request would send it, to show under the field while it is written: each variable
+ * filled in as `resolveRequest` fills it, a param encoded, and one that cannot be filled left as
+ * written. Empty for a URL without a variable, which shows itself.
+ */
+export function previewUrl(url: string, vars: Variable[]): string {
+  return url.includes("{{") ? resolveRequest({ name: "", url, method: "GET", signals: "", headers: "" }, vars).request.url : "";
+}
+
+/**
  * The text of `.streamlord/env.json` with `keys` added after what is there: `baseUrl` with its
  * current value, `signals` and `headers` as empty objects to fill in, and any other name as an
  * empty entry in `params`. A missing file is written with `baseUrl` first. The text is extended

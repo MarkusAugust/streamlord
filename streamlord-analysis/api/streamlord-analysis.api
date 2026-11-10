@@ -768,6 +768,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public final fun parseHeaderLines (Ljava/lang/String;)Ljava/util/Map;
 	public final fun parseRequestsFile (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/RequestsFile;
 	public static synthetic fun parseRequestsFile$default (Lio/github/markusaugust/streamlord/analysis/Requests;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/RequestsFile;
+	public final fun previewUrl (Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
 	public final fun pushRecent (Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/SavedRequest;)Ljava/util/List;
 	public final fun readsAsStream (ILjava/lang/String;)Z
 	public final fun removeRequest (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/RequestsEdit;

@@ -15,6 +15,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListenerBackgroundable
@@ -32,6 +33,7 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.WrapLayout
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RequestsFile
@@ -51,7 +53,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Dimension
+import java.awt.FlowLayout
 import java.awt.Font
+import java.awt.Rectangle
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -62,7 +67,9 @@ import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JList
 import javax.swing.JPanel
+import javax.swing.Scrollable
 import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -103,14 +110,37 @@ class InspectorPanel(
         override fun toString(): String = label
     }
 
-    private val choices = ComboBox(DefaultComboBoxModel<Choice>())
+    private val choices = ComboBox(DefaultComboBoxModel<Choice>(), JBUI.scale(FIELD_WIDTH))
     private val url = JBTextField()
     private val method = ComboBox(Requests.METHODS.toTypedArray())
-    private val signalsField = JBTextArea(3, 40).mono()
-    private val headersField = JBTextArea(2, 40).mono()
-    private val resolved = plainLabel().apply { foreground = JBColor.GRAY }
-    private val dirty = JBLabel("● modified").apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
-    private val status = plainLabel("idle")
+    private val signalsField = JBTextArea(3, FIELD_COLUMNS).mono()
+    private val headersField = JBTextArea(2, FIELD_COLUMNS).mono()
+
+    /** The URL as it is sent, read whole: a long one goes on to more lines. */
+    private val resolved =
+        Wrapped("").apply {
+            columns = FIELD_COLUMNS
+            // A URL has no spaces to break at.
+            wrapStyleWord = false
+            foreground = JBColor.GRAY
+            isVisible = false
+        }
+
+    /** Says a loaded request is edited. It holds its place whether it says so or not, so Save and Delete do not move under the pointer. */
+    private val dirty =
+        object : JBLabel() {
+            /** The room of the marker in the font of the moment, so it is whole after a zoom as well. */
+            private fun place(): Dimension {
+                val metrics = getFontMetrics(font)
+                return Dimension(metrics.stringWidth(MODIFIED) + insets.left + insets.right, metrics.height + insets.top + insets.bottom)
+            }
+
+            override fun getPreferredSize(): Dimension = place()
+
+            override fun getMinimumSize(): Dimension = place()
+        }.apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
+
+    private val status = Status()
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
     private val variablesView = JBTextArea("").mono().apply { isEditable = false }
@@ -125,16 +155,12 @@ class InspectorPanel(
 
     /** What is wrong with the requests file: why it is not read, or which of its entries are not. */
     private val requestProblems =
-        JBTextArea("").apply {
-            isEditable = false
-            isOpaque = false
-            lineWrap = true
-            wrapStyleWord = true
+        Wrapped("").apply {
             foreground = JBColor.RED
             isVisible = false
         }
     private val deleteButton = JButton("Delete")
-    private val stopButton = JButton("Stop")
+    private val stopButton = JButton("Stop").apply { isEnabled = false }
 
     /** The request as loaded from the list, to detect edits. */
     private var loaded: SavedRequest? = null
@@ -236,53 +262,203 @@ class InspectorPanel(
             wrapStyleWord = false
         }
 
-    private fun form(): JComponent =
-        panel {
-            row("Request:") {
-                cell(choices).align(AlignX.FILL).resizableColumn()
-                button("Save") { save() }.applyToComponent { toolTipText = "Save the current request to ${store.requestsPath()}" }
-                cell(deleteButton).applyToComponent {
-                    toolTipText = "Delete the selected saved request"
-                    addActionListener { delete() }
+    /**
+     * The fields over the action buttons. Each field gives way when the tool window is narrow, and the
+     * buttons go on to a second line, so nothing is laid out past the edge where it cannot be reached.
+     */
+    private fun form(): JComponent {
+        val fields =
+            panel {
+                row("Request:") {
+                    cell(choices).align(AlignX.FILL).resizableColumn().applyToComponent { narrows() }
+                    button("Save") { save() }.applyToComponent { toolTipText = "Save the current request to ${store.requestsPath()}" }
+                    cell(deleteButton).applyToComponent {
+                        toolTipText = "Delete the selected saved request"
+                        addActionListener { delete() }
+                    }
+                    cell(dirty)
                 }
-                cell(dirty)
-            }
-            row("") { cell(requestProblems).align(AlignX.FILL) }
-            row("URL:") {
-                cell(url).align(AlignX.FILL).applyToComponent { emptyText.text = "{{baseUrl}}/api/feed" }
-            }
-            row("") { cell(resolved) }
-            row("Method:") { cell(method) }
-            row("Signals:") {
-                scrollCell(signalsField).align(AlignX.FILL).applyToComponent { emptyText.text = "{\"search\": \"ash\"}" }
-            }
-            row("Headers:") {
-                scrollCell(headersField).align(AlignX.FILL).applyToComponent { emptyText.text = "Authorization: Bearer token" }
-            }
-            row {
-                button("Connect") { connect() }.applyToComponent { icon = AllIcons.Actions.Execute }
-                cell(stopButton).applyToComponent {
-                    icon = AllIcons.Actions.Suspend
-                    addActionListener {
-                        stop()
-                        setStatus("idle", null)
+                row("") { cell(requestProblems).align(AlignX.FILL).resizableColumn() }
+                row("URL:") {
+                    cell(url).align(AlignX.FILL).resizableColumn().applyToComponent {
+                        emptyText.text = "{{baseUrl}}/api/feed"
+                        narrows()
                     }
                 }
-                button("Clear") { clearFrames("Cleared.") }
-                button("Reset signals") {
-                    signals = JsonObject.EMPTY
-                    storeView.text = "{}"
+                row("") { cell(resolved).align(AlignX.FILL).resizableColumn() }
+                row("Method:") { cell(method) }
+                row("Signals:") {
+                    scrollCell(signalsField).align(AlignX.FILL).resizableColumn().applyToComponent {
+                        emptyText.text =
+                            "{\"search\": \"ash\"}"
+                    }
                 }
-                button("Copy as curl") { copyCurl() }.applyToComponent { toolTipText = "Copy an equivalent curl command" }
-                cell(status).align(AlignX.RIGHT).resizableColumn()
+                row("Headers:") {
+                    scrollCell(headersField).align(AlignX.FILL).resizableColumn().applyToComponent {
+                        emptyText.text =
+                            "Authorization: Bearer token"
+                    }
+                }
             }
+        val actions =
+            Wrapping().apply {
+                add(JButton("Connect", AllIcons.Actions.Execute).apply { addActionListener { connect() } })
+                add(
+                    stopButton.apply {
+                        icon = AllIcons.Actions.Suspend
+                        addActionListener {
+                            stop()
+                            setStatus("idle", null)
+                        }
+                    },
+                )
+                add(JButton("Clear").apply { addActionListener { clearFrames("Cleared.") } })
+                add(
+                    JButton("Reset signals").apply {
+                        addActionListener {
+                            signals = JsonObject.EMPTY
+                            storeView.text = "{}"
+                        }
+                    },
+                )
+                add(
+                    JButton("Copy as curl").apply {
+                        toolTipText = "Copy an equivalent curl command"
+                        addActionListener { copyCurl() }
+                    },
+                )
+            }
+        // The status keeps to the right end of the row, and is cut before it takes the room of the buttons.
+        val row =
+            JPanel(BorderLayout(JBUI.scale(GAP), 0)).apply {
+                add(actions, BorderLayout.CENTER)
+                add(status.apply { beside = actions }, BorderLayout.EAST)
+            }
+        return JPanel(BorderLayout()).apply {
+            add(fields, BorderLayout.CENTER)
+            add(row, BorderLayout.SOUTH)
+        }
+    }
+
+    /**
+     * The status of the request, whole while the buttons [beside] it have a line to themselves, and
+     * cut when they would lose it; its tooltip has it whole.
+     */
+    private class Status : JBLabel() {
+        var beside: JComponent? = null
+
+        init {
+            putClientProperty("html.disable", true)
+            text = "idle"
         }
 
+        override fun getPreferredSize(): Dimension {
+            val whole = super.getPreferredSize()
+            return Dimension(minOf(whole.width, maxOf(JBUI.scale(STATUS_WIDTH), left())), whole.height)
+        }
+
+        override fun getMinimumSize(): Dimension = Dimension(0, super.getMinimumSize().height)
+
+        /** The room of the row that the buttons on one line leave. */
+        private fun left(): Int {
+            val row = parent ?: return 0
+            val buttons = beside ?: return 0
+            val gap = JBUI.scale(GAP)
+            val line = buttons.components.sumOf { it.preferredSize.width + gap } + gap + buttons.insets.left + buttons.insets.right
+            return row.width - line - gap
+        }
+    }
+
+    /**
+     * Text to read and not to write, on as many lines as its width takes: a message from a server or a
+     * URL from a shared file is shown whole, and as text. Its height follows from its width, so a
+     * new width is laid out again.
+     */
+    private class Wrapped(
+        text: String,
+    ) : JBTextArea(text) {
+        init {
+            isEditable = false
+            isOpaque = false
+            lineWrap = true
+            wrapStyleWord = true
+            font = JBFont.label()
+        }
+
+        /** As high as its text is at the width it has, and asking for little width itself: a text area asks for the width it was last given, and would hold a form at it. */
+        override fun getPreferredSize(): Dimension =
+            super.getPreferredSize().let { Dimension(minOf(it.width, JBUI.scale(FIELD_WIDTH)), it.height) }
+
+        override fun getMinimumSize(): Dimension = preferredSize
+
+        override fun setBounds(
+            x: Int,
+            y: Int,
+            width: Int,
+            height: Int,
+        ) {
+            val wider = width != this.width
+            super.setBounds(x, y, width, height)
+            // After the layout under way: one asked for in the middle of it is forgotten when it ends.
+            if (wider) SwingUtilities.invokeLater { revalidate() }
+        }
+    }
+
+    /** Lets a field be laid out narrower than it would like, down to a few characters. */
+    private fun JComponent.narrows() {
+        minimumSize = Dimension(JBUI.scale(40), minimumSize.height)
+    }
+
+    /** A row of buttons that goes on to a new line where the panel ends. Its height follows from its width, so a new width is laid out again. */
+    private class Wrapping : JPanel(WrapLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(4))) {
+        init {
+            // The layout sets its gap before the first button too; taken back, so the row starts where the fields do.
+            border = JBUI.Borders.emptyLeft(-GAP)
+        }
+
+        override fun getMinimumSize(): Dimension = Dimension(JBUI.scale(40), super.getMinimumSize().height)
+
+        override fun setBounds(
+            x: Int,
+            y: Int,
+            width: Int,
+            height: Int,
+        ) {
+            val wider = width != this.width
+            super.setBounds(x, y, width, height)
+            // After the layout under way: one asked for in the middle of it is forgotten when it ends.
+            if (wider) SwingUtilities.invokeLater { revalidate() }
+        }
+    }
+
     private fun framesHolder(): JComponent {
-        val holder = JPanel(BorderLayout())
+        val holder = EventList()
         holder.add(frames, BorderLayout.NORTH)
         clearFrames("No events yet. The realm is quiet.")
         return holder
+    }
+
+    /** The list of events, as wide as the pane that scrolls it: a long line breaks in it, and is not cut at the edge. */
+    private class EventList :
+        JPanel(BorderLayout()),
+        Scrollable {
+        override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
+
+        override fun getScrollableUnitIncrement(
+            visibleRect: Rectangle,
+            orientation: Int,
+            direction: Int,
+        ): Int = JBUI.scale(16)
+
+        override fun getScrollableBlockIncrement(
+            visibleRect: Rectangle,
+            orientation: Int,
+            direction: Int,
+        ): Int = visibleRect.height
+
+        override fun getScrollableTracksViewportWidth(): Boolean = true
+
+        override fun getScrollableTracksViewportHeight(): Boolean = false
     }
 
     private fun aside(): JComponent =
@@ -328,11 +504,12 @@ class InspectorPanel(
 
     private fun refresh() {
         if (filling) return
-        val vars = Requests.variableValues(environment.vars)
-        resolved.text = if ("{{" in url.text) Requests.substitute(url.text, vars).text else ""
+        resolved.text = Requests.previewUrl(url.text, environment.vars)
+        resolved.isVisible = resolved.text.isNotEmpty()
         val f = fields()
         val l = loaded
-        dirty.isVisible = l != null && (f.url != l.url || f.method != l.method || f.signals != l.signals || f.headers != l.headers)
+        val edited = l != null && (f.url != l.url || f.method != l.method || f.signals != l.signals || f.headers != l.headers)
+        dirty.text = if (edited) MODIFIED else ""
         deleteButton.isEnabled = (choices.selectedItem as? Choice)?.saved == true
     }
 
@@ -505,8 +682,11 @@ class InspectorPanel(
                         http: String?,
                         contentType: String?,
                     ) = later {
-                        setStatus(status.name.lowercase() + (http?.let { " · $it" } ?: "") + (contentType?.let { " · $it" } ?: ""), status)
-                        this@InspectorPanel.status.toolTipText = request.url
+                        setStatus(
+                            status.name.lowercase() + (http?.let { " · $it" } ?: "") + (contentType?.let { " · $it" } ?: ""),
+                            status,
+                            request.url,
+                        )
                     }
 
                     override fun onFrame(frame: DatastarFrame) =
@@ -625,11 +805,15 @@ class InspectorPanel(
 
     // ---- rendering -----------------------------------------------------------------------------
 
+    /** Show the status; its tooltip has it whole, with [url] when it is the status of a request. */
     private fun setStatus(
         text: String,
         s: StreamClient.Status?,
+        url: String? = null,
     ) {
         status.text = text
+        // The IDE renders a tooltip as HTML, whatever it starts with, and a URL comes from a shared file.
+        status.toolTipText = listOfNotNull(text, url).joinToString("<br>") { StringUtil.escapeXmlEntities(it) }
         status.foreground =
             when (s) {
                 StreamClient.Status.OPEN -> JBColor.namedColor("Label.successForeground", JBColor(0x368746, 0x50A661))
@@ -641,22 +825,30 @@ class InspectorPanel(
     private fun clearFrames(message: String) {
         frames.removeAll()
         count = 0
-        frames.add(
+        val note =
             plainLabel(message).apply {
                 foreground = JBColor.GRAY
                 border = JBUI.Borders.empty(8)
-            },
-        )
+                alignmentX = LEFT_ALIGNMENT
+            }
+        emptyNote = note
+        frames.add(note)
         frames.revalidate()
         frames.repaint()
     }
 
+    /** The note of a list without events, which the first event takes the place of. A comment is a label as well, and stays. */
+    private var emptyNote: JComponent? = null
+
     private fun clearEmpty() {
-        if (frames.componentCount == 1 && frames.getComponent(0) is JBLabel) frames.removeAll()
+        emptyNote?.let(frames::remove)
+        emptyNote = null
     }
 
     private fun prepend(c: JComponent) {
         clearEmpty()
+        // One left edge for every kind of line: the layout sets a label and a panel apart when they differ in this.
+        c.alignmentX = LEFT_ALIGNMENT
         frames.add(c, 0)
         while (frames.componentCount > MAX_FRAMES) frames.remove(frames.componentCount - 1)
         frames.revalidate()
@@ -712,24 +904,29 @@ class InspectorPanel(
         define: List<String>? = null,
         useBaseUrl: String? = null,
     ) {
-        val label =
-            plainLabel(message).apply {
+        val text =
+            Wrapped(message).apply {
                 foreground = JBColor.RED
                 border = JBUI.Borders.empty(2, 4)
             }
         if (define == null && useBaseUrl == null) {
-            prepend(label)
+            prepend(text)
         } else {
-            val line =
-                JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0)).apply {
+            val links =
+                JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
                     isOpaque = false
-                    add(label)
                     if (define != null) {
                         add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
                     }
                     if (useBaseUrl != null) add(ActionLink("Use $useBaseUrl in ${Requests.ENV_FILE}") { useBaseUrl(useBaseUrl) })
                 }
-            prepend(line)
+            prepend(
+                JPanel(BorderLayout()).apply {
+                    isOpaque = false
+                    add(text, BorderLayout.CENTER)
+                    add(links, BorderLayout.SOUTH)
+                },
+            )
         }
         setStatus("error", null)
     }
@@ -815,6 +1012,13 @@ class InspectorPanel(
 
     companion object {
         private const val MAX_FRAMES = 500
+        private const val MODIFIED = "● modified"
+
+        /** What a field of the form asks for; each is given the width there is, and asks for little so a narrow panel can hold it. */
+        private const val GAP = 6
+        private const val FIELD_COLUMNS = 12
+        private const val FIELD_WIDTH = 60
+        private const val STATUS_WIDTH = 160
 
         /** How long a failed request waits for the server to finish logging why. */
         private const val LOG_GRACE_MS = 400L
