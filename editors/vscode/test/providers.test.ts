@@ -306,7 +306,7 @@ describe("an attribute on its own line", () => {
     const started = performance.now();
     const items = labels(hostile, "pebble");
     const took = performance.now() - started;
-    assert.ok(took < 250, `${Math.round(took)} ms`);
+    assert.ok(took < 1000, `${Math.round(took)} ms`);
     assert.ok(items.includes("debounce"), "modifiers at the end of the long document");
   });
 

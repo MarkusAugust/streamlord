@@ -79,7 +79,14 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 val inKotlin =
                     (hostFile as? KtFile)?.let { kt ->
                         val at = manager.injectedToHost(file, parameters.offset)
-                        analysis.analyzer.htmlStringAt(kt.text, at)?.let { it to at }
+                        // The literal the caret is in, also one that is no HTML string of its own, such as a later part of a sum.
+                        val literal =
+                            analysis.analyzer.htmlStringAt(kt.text, at)
+                                ?: analysis.analyzer
+                                    .lex(kt.text)
+                                    .strings
+                                    .firstOrNull { at > it.contentStart && at <= it.contentEnd }
+                        literal?.let { it to at }
                     }
                 Html(
                     file.text,
@@ -239,7 +246,16 @@ class StreamlordCompletionContributor : CompletionContributor() {
             }
             // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
             val before =
-                (if (string != null) tagBeforeCaret(string, stringOffset, prefix) else tagBeforeCaret(src, offset, prefix)) ?: return false
+                (
+                    if (string !=
+                        null
+                    ) {
+                        tagBeforeCaret(string, stringOffset, prefix)
+                    } else {
+                        tagBeforeCaret(src, offset, prefix, templates = indexFile !is KtFile)
+                    }
+                )
+                    ?: return false
             // On an attribute name inside a tag: <div data-on:cl|. What comes before is whitespace-separated runs of
             // plain characters and quoted strings, as completion.ts reads it, so a quote left open is a value, not a name.
             val inName =

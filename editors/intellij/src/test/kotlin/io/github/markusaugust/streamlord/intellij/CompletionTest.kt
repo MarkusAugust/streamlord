@@ -200,6 +200,43 @@ class CompletionTest : StreamlordTestCase() {
         }
     }
 
+    fun `test quoted values on earlier lines are read as the browser reads them`() {
+        val missing =
+            withoutModifiers(
+                listOf(
+                    "<div data-show=\"\$a > 1 && \$b < 2\"\n     data-text='\"x\"'\n     data-on:click__<caret>",
+                    "<div data-show=\"\$a\n > 1\"\n     data-on:click__<caret>",
+                ),
+            )
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test no modifiers in element content or in a comment`() {
+        val sources =
+            listOf(
+                "<div data-show=\"\$a\">\n  data-on:click__<caret>",
+                "<!-- <div -->\n  data-on:click__<caret>",
+                "<!-- <div\n  data-on:click__<caret>",
+            )
+        val offered =
+            sources.mapIndexedNotNull {
+                n,
+                source,
+                ->
+                itemsIn("outside$n.html", source).takeIf { "debounce" in it }?.let { "$source -> $it" }
+            }
+        assertEmpty(offered.joinToString("\n"), offered)
+    }
+
+    fun `test a fragment injected into a kotlin file is read with templates off`() {
+        // The later literal of a concatenation: the injection spans both, but no HTML string is found at the caret.
+        val control = itemsIn("Control.kt", "// language=HTML\nval s = \"<p>\" + \"<div data-on:click__<caret>\"")
+        assertEquals("the same shape without a template comment completes", onModifiers, control)
+        // Without templates the quote in `{{!-- <i a="b --}}` is left open, so the caret is in a value.
+        val items = itemsIn("View.kt", "// language=HTML\nval s = \"<p>\" + \"{{!-- <i a=\\\"b --}}<div data-on:click__<caret>\"")
+        assertFalse(items.toString(), "debounce" in items)
+    }
+
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {
         myFixture.configureByText("page.html", "<div data-on-signal-patch=\"pat<caret>\"></div>")
         // The one item is inserted straight away.

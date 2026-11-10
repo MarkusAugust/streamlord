@@ -1,27 +1,52 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { expressionAtCaret } from "../src/caret.ts";
+import { expressionAtCaret, tagBeforeCaretInString } from "../src/caret.ts";
 import { catalog } from "../src/catalog.ts";
-import { actionCallAt, valueAtCaret } from "../src/completionContext.ts";
+import { actionCallAt, tagBeforeCaret, valueAtCaret } from "../src/completionContext.ts";
+import { stringAt } from "../src/scanner.ts";
 import { twinCases } from "./twins.ts";
 
 type Case = {
   name: string;
   prefix?: string;
+  templates?: boolean;
   before: string;
   after: string;
   attribute: string | null;
   value?: string;
+  tag?: string | null;
 };
 
 describe("completion contexts", () => {
   for (const c of twinCases<Case>("completion-contexts.json")) {
     it(c.name, () => {
-      const at = valueAtCaret(c.before + c.after, c.before.length, c.prefix ?? "data-");
+      const at = valueAtCaret(c.before + c.after, c.before.length, c.prefix ?? "data-", c.templates ?? true);
       assert.equal(at?.attribute ?? null, c.attribute);
       if (at) assert.equal(at.before, c.value);
     });
   }
+});
+
+describe("the tag before the caret", () => {
+  const cases = twinCases<Case>("completion-contexts.json").filter((c) => c.tag !== undefined);
+  it("has cases", () => assert.ok(cases.length > 0));
+  for (const c of cases) {
+    it(c.name, () => {
+      assert.equal(tagBeforeCaret(c.before + c.after, c.before.length, c.prefix ?? "data-", c.templates ?? true), c.tag);
+    });
+  }
+
+  it("reads a Kotlin string decoded, from the tag's <", () => {
+    /** The tag before a caret just after `data-on:click__` in the string of `src`. */
+    const at = (src: string) => {
+      const offset = src.indexOf("data-on:click__") + "data-on:click__".length;
+      const s = stringAt(src, offset);
+      assert.ok(s, src);
+      return tagBeforeCaretInString(s, offset, "data-");
+    };
+    assert.equal(at(`val x = "<div data-show=\\"\\$a > 1\\" data-on:click__"`), `<div data-show="$a > 1" data-on:click__`, "escaped quotes around a value holding >");
+    assert.equal(at(`fun side() = """\n<div class="card"\n     data-on:click__\n"""`), `<div class="card"\n     data-on:click__`, "a raw string over two lines");
+  });
 });
 
 type ExpressionCase = {

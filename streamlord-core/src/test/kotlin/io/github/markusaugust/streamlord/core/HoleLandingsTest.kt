@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.interpolate
+import io.github.markusaugust.streamlord.core.domain.landingAsParsed
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -104,6 +105,28 @@ class HoleLandingsTest {
         assertEquals(null, name.attribute)
         assertEquals(Position.URL, url.position)
         assertEquals(7, url.valueStart)
+    }
+
+    @Test
+    fun `gives the start of the tag a hole lands in, at its opening bracket, or -1 outside a tag`() {
+        fun tagStart(markup: String): Int = holeLandings(markup, holesOf(markup)).single().tagStart
+        val overLines = "<p>x</p>\n<div\n  id=\"a\"\n  %s>"
+        assertEquals(overLines.indexOf("<div"), tagStart(overLines), "an attribute name in a tag that starts lines above")
+        val quoted = "<p>x</p><a title=\"%s\">"
+        assertEquals(quoted.indexOf("<a"), tagStart(quoted), "a quoted value")
+        for (outside in listOf(
+            "<p>%s</p>",
+            "<!-- <div %s -->",
+            "<script>if (a<b) %s</script>",
+        )) {
+            assertEquals(-1, tagStart(outside), outside)
+        }
+        // The strictest reading takes a textarea's text as markup too; the browser's reads it as text.
+        val textarea = "<textarea><i %s</textarea>"
+        assertEquals(-1, landingAsParsed(textarea, holesOf(textarea).single()).tagStart, textarea)
+        val markup = "<p>%s</p><a title=\"%s\">"
+        val title = holeLandings(markup, holesOf(markup), known = mapOf(0 to "a text longer than its hole"))[1]
+        assertEquals(markup.indexOf("<a"), title.tagStart, "an offset into the markup as written, after known text")
     }
 
     @Test

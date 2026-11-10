@@ -23,12 +23,12 @@ export interface ExpressionAtCaret {
   patchInScope: boolean;
 }
 
-/** The decoded index of a source offset in a Kotlin string: the last character that starts at or before it. */
 /** `tagBeforeCaret` in an HTML string in Kotlin, read decoded, as its values are: tagBeforeCaret in CompletionContext.kt. */
 export function tagBeforeCaretInString(html: KotlinString, offset: number, prefix: string): string | null {
   return tagBeforeCaret(html.text, decodedIndex(html, offset), prefix, false);
 }
 
+/** The decoded index of a source offset in a Kotlin string: the last character that starts at or before it. */
 function decodedIndex(s: KotlinString, offset: number): number {
   let i = 0;
   while (i + 1 < s.map.length && (s.map[i + 1] ?? Infinity) <= offset) i++;
