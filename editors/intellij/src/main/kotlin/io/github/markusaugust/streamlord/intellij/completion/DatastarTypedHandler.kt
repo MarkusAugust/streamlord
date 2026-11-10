@@ -20,17 +20,16 @@ class DatastarTypedHandler : TypedHandlerDelegate() {
         editor: Editor,
         file: PsiFile,
     ): Result {
-        if (charTyped == '(' || charTyped == ',') {
-            // The handler runs before the character goes in and before the document is committed, so the text is the editor's.
-            if (DatastarCaret.expressionAt(file, editor.caretModel.offset, fromDocument = true)?.allowActions == true) {
-                AutoPopupController.getInstance(project).autoPopupParameterInfo(editor, null)
-            }
-            return Result.CONTINUE
-        }
-        if (charTyped !in TRIGGERS) return Result.CONTINUE
+        val parameters = charTyped == '(' || charTyped == ','
+        if (!parameters && charTyped !in TRIGGERS) return Result.CONTINUE
         if (file !is KtFile && !file.language.isKindOf(HTMLLanguage.INSTANCE) &&
             !StreamlordAnalysis.isTemplateText(file)
         ) {
+            return Result.CONTINUE
+        }
+        if (parameters) {
+            // The handler runs on the UI thread, before the character goes in: whether there is anything to show is found out after.
+            ExpressionHelp.getInstance(project).offerParameterInfo(editor)
             return Result.CONTINUE
         }
         AutoPopupController.getInstance(project).scheduleAutoPopup(editor)

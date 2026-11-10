@@ -28,6 +28,7 @@ import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
+import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.CancellationException
@@ -375,6 +376,7 @@ class SignalIndex(
                 DumbService.getInstance(project).modificationTracker.modificationCount,
             )
         if (counts == refreshedAt) return
+        UiThreadWork.note()
         val forgottenAt = forgotten.get()
         val seen = HashSet<String>()
         for (vf in projectFiles(counts.drop(1))) {
