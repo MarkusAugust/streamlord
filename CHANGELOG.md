@@ -6,6 +6,47 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- In both editors, **Save** and **Delete** in the Stream Inspector wrote
+  `.streamlord/inspector.json` anew, which dropped what a person had written in it: an entry
+  without a `url`, members of their own such as a `"note"`, and the object form of `signals` and
+  `headers`. They now change the one entry and leave the rest of the file byte for byte, in the
+  line endings the file has, and write nothing when a request is saved as it was read.
+- In both editors, a requests file whose root is a list, or whose `requests` is no list, read as
+  a file without requests, and the next save wrote over it. It is now said to be no requests
+  file and left alone, and so is a file of another `version` than 1. An empty file is a file
+  without requests, where it was invalid JSON and stopped a save.
+- In both editors, the inspector says under the Request list what it does not read: an entry
+  without a `name` or a `url`, and a second entry of a name, which a save of that name used to
+  delete. It says there as well when the setting for the requests file names a path it refuses.
+- In both editors, the setting for the requests file took `.streamlord/env.json`, and a save
+  then wrote the requests over the variables. That path is refused, as are one with a backslash
+  and one that ends in `/`; the IntelliJ settings page says so in the field and does not store
+  the path.
+- In IntelliJ, the inspector reads the requests file and the default base URL again when the
+  settings are applied, where it showed the old ones until something else made it read.
+- In VS Code, a requests file that could not be read was taken for a missing one, and a save
+  wrote a new file over it; and two saves at once could each write over what the other had read.
+
+### Changed
+
+- `Requests.upsert` and `Requests.remove` in streamlord-analysis are gone, since they changed a
+  requests file by writing it anew, which lost what the file held besides its requests.
+  `Requests.saveRequest` and `Requests.removeRequest` take the text of the file and return it with
+  the one entry changed, as a `RequestsEdit`: other members, entries that are not read and the
+  layout stay as written, and an entry that is saved keeps its own other members and the object
+  form of its `signals` and `headers`. Each touches the first entry of the name and no other.
+- `RequestsFile` has a third value, `skipped`, with one message for each entry of the file that
+  is not read, so code compiled against its two-value constructor or `copy` needs a rebuild.
+- `Requests.parseRequestsFile` reports a file whose root is no object, whose `requests` is no
+  list, or whose `version` is not 1, in `error`, where it read each as a file of requests; a
+  save then wrote over them. A second entry of a name is not read, and is named in `skipped`.
+  An empty file is a file without requests, and no longer invalid JSON, and `Requests.parseEnv`,
+  `withEnvVariables` and `withBaseUrl` read an empty env file as a missing one.
+- `Requests.requestsPathProblem` refuses a path that names `.streamlord/env.json`, however it
+  is spelled, one with a backslash and one that ends in `/`.
+
 ## [0.20.0] - 2026-11-09
 
 ### Security

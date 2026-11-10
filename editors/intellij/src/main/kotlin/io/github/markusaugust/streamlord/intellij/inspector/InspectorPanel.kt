@@ -34,6 +34,7 @@ import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
+import io.github.markusaugust.streamlord.analysis.RequestsFile
 import io.github.markusaugust.streamlord.analysis.SavedRequest
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -120,6 +121,17 @@ class InspectorPanel(
             lineWrap = true
             wrapStyleWord = true
             foreground = JBColor.RED
+        }
+
+    /** What is wrong with the requests file: why it is not read, or which of its entries are not. */
+    private val requestProblems =
+        JBTextArea("").apply {
+            isEditable = false
+            isOpaque = false
+            lineWrap = true
+            wrapStyleWord = true
+            foreground = JBColor.RED
+            isVisible = false
         }
     private val deleteButton = JButton("Delete")
     private val stopButton = JButton("Stop")
@@ -235,6 +247,7 @@ class InspectorPanel(
                 }
                 cell(dirty)
             }
+            row("") { cell(requestProblems).align(AlignX.FILL) }
             row("URL:") {
                 cell(url).align(AlignX.FILL).applyToComponent { emptyText.text = "{{baseUrl}}/api/feed" }
             }
@@ -336,15 +349,20 @@ class InspectorPanel(
         reading?.cancel()
         return scope
             .launch {
-                val read = readAction { store.saved() to store.environment() }
-                withContext(Dispatchers.EDT) { show(read.first, read.second) }
+                val read = readAction { Triple(store.read(), store.environment(), store.requestsPathProblem()) }
+                withContext(Dispatchers.EDT) { show(read.first, read.second, read.third) }
             }.also { reading = it }
     }
 
     private fun show(
-        saved: List<SavedRequest>,
+        file: RequestsFile,
         env: RequestStore.Environment,
+        pathProblem: String?,
     ) {
+        val saved = file.requests
+        val problems = listOfNotNull(pathProblem?.let { "$it The default file is shown." }) + (file.error?.let(::listOf) ?: file.skipped)
+        requestProblems.text = problems.joinToString("\n")
+        requestProblems.isVisible = requestProblems.text.isNotEmpty()
         environment = env
         val recent = store.recent()
         variablesView.text = Requests.describeVariables(env.vars)
@@ -453,7 +471,7 @@ class InspectorPanel(
     /** Add [names] to the env file, creating it when it is missing, and open it. */
     private fun editVariables(names: List<String>) {
         change("Could not open ${Requests.ENV_FILE}.", { store.definingVariables(names) }) { file, extended ->
-            OpenFileDescriptor(project, file).navigate(true)
+            file?.let { OpenFileDescriptor(project, it).navigate(true) }
             if (!extended) error("${Requests.ENV_FILE} is not a JSON object, so nothing was added to it.")
         }
     }
@@ -539,7 +557,7 @@ class InspectorPanel(
     private fun change(
         failure: String,
         plan: () -> RequestStore.Change,
-        done: (VirtualFile, Boolean) -> Unit,
+        done: (VirtualFile?, Boolean) -> Unit,
     ): Job =
         scope.launch(ModalityState.current().asContextElement()) {
             val planned =
@@ -719,7 +737,7 @@ class InspectorPanel(
     /** Set the env file's `baseUrl` to [url] and open the file, so the change is seen where it was made. */
     private fun useBaseUrl(url: String) {
         change("Could not open ${Requests.ENV_FILE}.", { store.usingBaseUrl(url) }) { file, changed ->
-            OpenFileDescriptor(project, file).navigate(true)
+            file?.let { OpenFileDescriptor(project, it).navigate(true) }
             if (!changed) error("${Requests.ENV_FILE} is not a JSON object, so baseUrl was not changed.")
         }
     }

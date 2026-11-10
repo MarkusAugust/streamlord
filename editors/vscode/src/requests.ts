@@ -20,8 +20,16 @@ export interface SavedRequest {
 export interface RequestsFile {
   version: 1;
   requests: SavedRequest[];
-  /** Why the file could not be read, when it exists and is not JSON; saving over it would lose what it holds. */
+  /** Why the file could not be read, when it is not JSON or not a requests file; saving over it would lose what it holds. */
   error?: string;
+  /** One message for each entry that is not read, for the user to be told: it stays in the file, and out of the list. */
+  skipped: string[];
+}
+
+/** The text of the requests file after a change, or the reason the file cannot be changed: exactly one is set. */
+export interface RequestsEdit {
+  text: string | null;
+  error: string | null;
 }
 
 export const REQUESTS_FILE = ".streamlord/inspector.json";
@@ -38,37 +46,78 @@ export function bodyless(method: string): boolean {
 }
 
 export function emptyRequestsFile(): RequestsFile {
-  return { version: 1, requests: [] };
+  return { version: 1, requests: [], skipped: [] };
+}
+
+/** Whether a file's text holds nothing: no character but the whitespace JSON allows between values. */
+function empty(text: string): boolean {
+  return /^[ \t\n\r]*$/.test(text);
+}
+
+function withoutBom(text: string): string {
+  return text.startsWith("\uFEFF") ? text.slice(1) : text;
 }
 
 /**
- * Parse the requests file leniently: bad entries are dropped. Text that is not JSON at all is
- * reported in `error`, so a save does not write an empty list over it.
+ * Parse the requests file leniently: an entry that cannot be read is left out and named in
+ * `skipped`. Text that is not JSON, or not shaped as a requests file, is reported in `error`, so a
+ * save does not write over it. An empty file holds no requests.
  */
 export function parseRequestsFile(text: string, path = REQUESTS_FILE): RequestsFile {
-  const json = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  return readRequests(withoutBom(text), path).file;
+}
+
+/** The file as read, and each entry of its list in file order: the request it is, or null when it is not read. */
+interface ReadRequests {
+  file: RequestsFile;
+  entries: (SavedRequest | null)[];
+  root: Record<string, unknown> | null;
+}
+
+function readRequests(json: string, path: string): ReadRequests {
+  const none = (error?: string): ReadRequests => ({ file: { ...emptyRequestsFile(), ...(error === undefined ? {} : { error }) }, entries: [], root: null });
+  if (empty(json)) return none();
   let raw: unknown;
   try {
     raw = JSON.parse(json);
   } catch (e) {
     const position = /position (\d+)/.exec((e as Error).message)?.[1];
-    return { version: 1, requests: [], error: position !== undefined ? `${path} is not valid JSON ${lineAndColumn(json, Number(position))}.` : `${path} is not valid JSON.` };
+    return none(position !== undefined ? `${path} is not valid JSON ${lineAndColumn(json, Number(position))}.` : `${path} is not valid JSON.`);
   }
-  const list = (raw as { requests?: unknown })?.requests;
-  if (!Array.isArray(list)) return emptyRequestsFile();
-  const requests: SavedRequest[] = [];
-  (list as Record<string, unknown>[]).forEach((item, index) => {
-    if (!item || typeof item !== "object" || typeof item.name !== "string" || typeof item.url !== "string") return;
-    requests.push({
-      name: item.name,
-      url: item.url,
-      method: METHODS.includes(String(item.method ?? "GET").toUpperCase()) ? String(item.method ?? "GET").toUpperCase() : "GET",
+  if (!isObject(raw)) return none(`${path} is not a requests file: it must be an object with a "requests" list.`);
+  if (Object.hasOwn(raw, "version") && raw.version !== 1) {
+    const written = topLevelValues(json).get("version") ?? JSON.stringify(raw.version);
+    return none(`${path} is version ${written} of the requests file, and this Streamlord reads version 1.`);
+  }
+  if (!Object.hasOwn(raw, "requests")) return { ...none(), root: raw };
+  const list = raw.requests;
+  if (!Array.isArray(list)) return none(`${path} is not a requests file: "requests" must be a list.`);
+  const skipped: string[] = [];
+  // Where the first entry of each name stands: a file holds a name once, and a later entry of it is not read.
+  const named = new Map<string, number>();
+  const entries = (list as unknown[]).map((item, index): SavedRequest | null => {
+    let missing = !isObject(item) ? "it is not an object" : typeof item.name !== "string" ? 'it has no "name"' : typeof item.url !== "string" ? 'it has no "url"' : null;
+    if (missing === null && isObject(item)) {
+      const key = nameKey(item.name as string);
+      const earlier = named.get(key);
+      if (earlier === undefined) named.set(key, index + 1);
+      else missing = `request ${earlier} has its name`;
+    }
+    if (missing !== null || !isObject(item)) {
+      skipped.push(`Request ${index + 1} in ${path} is not read: ${missing}.`);
+      return null;
+    }
+    const method = String(item.method ?? "GET").toUpperCase();
+    return {
+      name: item.name as string,
+      url: item.url as string,
+      method: METHODS.includes(method) ? method : "GET",
       // As written in the file: JSON.parse has already rounded a number past 2^53, and a second writer spells escapes its own way.
       signals: typeof item.signals === "string" ? item.signals : item.signals && typeof item.signals === "object" ? (rawMember(json, index) ?? JSON.stringify(item.signals, null, 2)) : "",
-      headers: typeof item.headers === "string" ? item.headers : item.headers && typeof item.headers === "object" && !Array.isArray(item.headers) ? Object.entries(item.headers as Record<string, unknown>).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n") : "",
-    });
+      headers: typeof item.headers === "string" ? item.headers : isObject(item.headers) ? Object.entries(item.headers).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n") : "",
+    };
   });
-  return { version: 1, requests };
+  return { file: { version: 1, requests: entries.filter((e): e is SavedRequest => e !== null), skipped }, entries, root: raw };
 }
 
 /**
@@ -129,16 +178,22 @@ class JsonScan {
 
   /** Each member of the object at `from`: its key and the span of its value. */
   members(from: number, each: (key: string, start: number, end: number) => void): void {
+    this.membersAsWritten(from, (_keyStart, _keyEnd, key, start, end) => each(key, start, end));
+  }
+
+  /** Each member of the object at `from`: the span of its key as written, the key, and the span of its value. */
+  membersAsWritten(from: number, each: (keyStart: number, keyEnd: number, key: string, start: number, end: number) => void): void {
     let i = this.skipSpace(from + 1);
     while (i < this.text.length && this.text[i] !== "}") {
       if (this.text[i] !== '"') return;
+      const keyStart = i;
       const keyEnd = this.skipString(i);
       const key = JSON.parse(this.text.slice(i, keyEnd)) as string;
       i = this.skipSpace(keyEnd);
       if (this.text[i] !== ":") return;
       const start = this.skipSpace(i + 1);
       const end = this.skipValue(start);
-      each(key, start, end);
+      each(keyStart, keyEnd, key, start, end);
       i = this.skipSpace(end);
       if (this.text[i] === ",") i = this.skipSpace(i + 1);
     }
@@ -161,9 +216,13 @@ class JsonScan {
  * workspace, since the setting may come from a checked-in file.
  */
 export function requestsPathProblem(path: string): string | null {
-  if (path.trim().length === 0) return null;
+  if (empty(path)) return null;
   if (path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:/.test(path)) return `The requests file ${path} is not inside the workspace: use a workspace-relative path.`;
   if (path.split(/[/\\]/).includes("..")) return `The requests file ${path} leaves the workspace: use a path without .. in it.`;
+  if (path.includes("\\")) return `The requests file ${path} holds a backslash: write the path with /.`;
+  if (path.endsWith("/")) return `The requests file ${path} names a folder: add a file name, such as ${path}inspector.json.`;
+  const named = path.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "").split("/").filter((part) => part.length > 0 && part !== ".").join("/");
+  if (named.toLowerCase() === ENV_FILE) return `The requests file cannot be ${ENV_FILE}: that file holds the variables.`;
   return null;
 }
 
@@ -171,10 +230,150 @@ export function requestsPathProblem(path: string): string | null {
  * Written by hand, not by JSON.stringify: the file is shared with the IntelliJ plugin, and the
  * two must produce the same bytes or each editor rewrites what the other saved.
  */
-export function serializeRequestsFile(file: RequestsFile): string {
-  const fields = ["name", "url", "method", "signals", "headers"] as const;
-  const requests = file.requests.map((r) => `    {\n${fields.map((f) => `      "${f}": ${jsonString(r[f])}`).join(",\n")}\n    }`);
+export function serializeRequestsFile(file: Partial<RequestsFile> & Pick<RequestsFile, "requests">): string {
+  const requests = file.requests.map((r) => `    ${entryText(r)}`);
   return `{\n  "version": 1,\n  "requests": [${requests.length ? `\n${requests.join(",\n")}\n  ` : ""}]\n}\n`;
+}
+
+/**
+ * One entry as the file holds it, from its `{` to its `}`, to stand four spaces in. `signals` and
+ * `headers` are the values as JSON; `more` are members to keep after them, each as written.
+ */
+function entryText(r: SavedRequest, signals = jsonString(r.signals), headers = jsonString(r.headers), more: string[] = []): string {
+  const members = [`"name": ${jsonString(r.name)}`, `"url": ${jsonString(r.url)}`, `"method": ${jsonString(r.method)}`, `"signals": ${signals}`, `"headers": ${headers}`, ...more];
+  return `{\n${members.map((m) => `      ${m}`).join(",\n")}\n    }`;
+}
+
+/** Where the list of a requests file stands in its text, and each of its entries. */
+interface Listed {
+  /** The offsets of `[` and of `]`. */
+  open: number;
+  close: number;
+  /** Each entry from its first character to just past its last. */
+  spans: [number, number][];
+}
+
+/** The list of `json`, which has parsed as a requests file; null when its root has no `requests`. */
+function listed(json: string): Listed | null {
+  const scan = new JsonScan(json);
+  let found: Listed | null = null;
+  scan.members(scan.skipSpace(0), (key, start) => {
+    if (key !== "requests" || json[start] !== "[") return;
+    const spans: [number, number][] = [];
+    const end = scan.elements(start, (elementStart, elementEnd) => {
+      spans.push([elementStart, elementEnd]);
+      return elementEnd;
+    });
+    found = { open: start, close: end - 1, spans };
+  });
+  return found;
+}
+
+const ENTRY_KEYS: ReadonlySet<string> = new Set(["name", "url", "method", "signals", "headers"]);
+
+const sameRequest = (a: SavedRequest, b: SavedRequest) => a.name === b.name && a.url === b.url && a.method === b.method && a.signals === b.signals && a.headers === b.headers;
+
+/**
+ * The text of the requests file with `request` saved in it: in place of the entry of its name, or
+ * else where the names keep their order. The file is changed where the entry stands and nowhere
+ * else, so what a person or a newer Streamlord wrote in it stays: other members, entries that are
+ * not read, the layout. A missing or empty file is written anew.
+ */
+export function saveRequest(text: string | null, request: SavedRequest, path = REQUESTS_FILE): RequestsEdit {
+  const fresh = (): RequestsEdit => ({ text: serializeRequestsFile({ requests: [request] }), error: null });
+  if (text === null || empty(withoutBom(text))) return fresh();
+  const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const json = withoutBom(text);
+  const read = readRequests(json, path);
+  if (read.file.error !== undefined) return { text: null, error: read.file.error };
+  // What is written follows the line endings of the file it is written into.
+  // Text copied from the file has them already, so each line break is counted once.
+  const written = (lines: string) => (json.includes("\r\n") ? lines.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n") : lines);
+  const list = listed(json);
+  if (list === null) {
+    if (read.root === null || Object.keys(read.root).length === 0) return fresh();
+    const scan = new JsonScan(json);
+    let last = 0;
+    scan.members(scan.skipSpace(0), (_k, _s, end) => (last = end));
+    return { text: bom + json.slice(0, last) + written(`,\n  "requests": [\n    ${entryText(request)}\n  ]`) + json.slice(last), error: null };
+  }
+  const key = nameKey(request.name);
+  const keys = read.entries.map((e) => (e === null ? null : nameKey(e.name)));
+  const first = keys.indexOf(key);
+  const span = list.spans[first];
+  const held = read.entries[first];
+  if (span === undefined || !held) {
+    const entry = entryText(request);
+    const at = list.spans[keys.findIndex((k) => k !== null && k > key)];
+    const lastSpan = list.spans[list.spans.length - 1];
+    const [from, added, rest]: [number, string, number] =
+      at !== undefined ? [at[0], `${entry},\n    `, at[0]] : lastSpan !== undefined ? [lastSpan[1], `,\n    ${entry}`, lastSpan[1]] : [list.open + 1, `\n    ${entry}\n  `, list.close];
+    return { text: bom + json.slice(0, from) + written(added) + json.slice(rest), error: null };
+  }
+  if (sameRequest(held, request)) return { text, error: null };
+  const old = JSON.parse(json.slice(span[0], span[1])) as Record<string, unknown>;
+  const more: string[] = [];
+  new JsonScan(json).membersAsWritten(span[0], (keyStart, keyEnd, k, start, end) => {
+    if (!ENTRY_KEYS.has(k)) more.push(`${json.slice(keyStart, keyEnd)}: ${json.slice(start, end)}`);
+  });
+  const entry = entryText(request, signalsAs(old.signals, request.signals), headersAs(old.headers, request.headers), more);
+  return { text: bom + json.slice(0, span[0]) + written(entry) + json.slice(span[1]), error: null };
+}
+
+/**
+ * The text of the requests file without the entries named `name`, and everything else as it was.
+ * A file that holds none, or is missing, is returned as it is.
+ */
+export function removeRequest(text: string | null, name: string, path = REQUESTS_FILE): RequestsEdit {
+  if (text === null || empty(withoutBom(text))) return { text: text ?? "", error: null };
+  const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const json = withoutBom(text);
+  const read = readRequests(json, path);
+  if (read.file.error !== undefined) return { text: null, error: read.file.error };
+  const key = nameKey(name);
+  const first = read.entries.findIndex((e) => e !== null && nameKey(e.name) === key);
+  return first < 0 ? { text, error: null } : { text: bom + without(json, first), error: null };
+}
+
+/** `json` without the entry at `index` of its list, and without the comma that set it apart. */
+function without(json: string, index: number): string {
+  const list = listed(json);
+  const span = list?.spans[index];
+  if (!list || !span) return json;
+  if (list.spans.length === 1) return json.slice(0, list.open + 1) + json.slice(list.close);
+  const next = list.spans[index + 1];
+  if (next !== undefined) return json.slice(0, span[0]) + json.slice(next[0]);
+  const previous = list.spans[index - 1];
+  return json.slice(0, previous ? previous[1] : span[0]) + json.slice(span[1]);
+}
+
+/** The signals of a saved entry as JSON: an object as written when the entry held one before and still can, or else text. */
+function signalsAs(old: unknown, signals: string): string {
+  const trimmed = signals.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+  let stillObject = false;
+  if (old !== null && typeof old === "object") {
+    try {
+      stillObject = isObject(JSON.parse(trimmed));
+    } catch {
+      stillObject = false;
+    }
+  }
+  return stillObject ? trimmed : jsonString(signals);
+}
+
+/** The headers of a saved entry as JSON: an object when the entry held one before and each line is one header of its own name, or else text. */
+function headersAs(old: unknown, headers: string): string {
+  const text = jsonString(headers);
+  if (!isObject(old)) return text;
+  const members: [string, string][] = [];
+  for (const line of headers.split("\n").filter((l) => /[^ \t\r]/.test(l))) {
+    const colon = line.indexOf(":");
+    const name = colon > 0 ? line.slice(0, colon).replace(/^[ \t]+|[ \t]+$/g, "") : "";
+    if (name.length === 0 || members.some(([n]) => nameKey(n) === nameKey(name))) return text;
+    members.push([name, line.slice(colon + 1).replace(/^[ \t\r]+|[ \t\r]+$/g, "")]);
+  }
+  if (members.length === 0) return text;
+  return `{ ${members.map(([k, v]) => `${jsonString(k)}: ${jsonString(v)}`).join(", ")} }`;
 }
 
 const JSON_ESCAPES: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f", "\u2028": "\\u2028", "\u2029": "\\u2029" };
@@ -186,32 +385,11 @@ function jsonString(s: string): string {
 }
 
 /**
- * Insert or replace by name (case-insensitive), keeping the list sorted by name.
- *
- * Names are matched and ordered by `nameKey`, never by locale: the IntelliJ plugin applies the
- * same rule, so the shared file keeps one order whichever editor saves it.
- */
-export function upsert(file: RequestsFile, request: SavedRequest): RequestsFile {
-  const key = nameKey(request.name);
-  const others = file.requests.filter((r) => nameKey(r.name) !== key);
-  return { version: 1, requests: [...others, request].sort((a, b) => compareText(nameKey(a.name), nameKey(b.name))) };
-}
-
-/**
  * A name in lowercase, one character at a time, compared code unit by code unit. Lowercasing the
  * whole string would depend on the runtime: the JVM and V8 disagree on where a sigma is final.
  */
 function nameKey(name: string): string {
   return [...name].map((c) => c.toLowerCase()).join("");
-}
-
-function compareText(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-export function remove(file: RequestsFile, name: string): RequestsFile {
-  const key = nameKey(name);
-  return { version: 1, requests: file.requests.filter((r) => nameKey(r.name) !== key) };
 }
 
 /** The first entry of the request list, saying what else is in it, so the list reads as the place to find them. */
@@ -248,6 +426,7 @@ const INVALID = `${ENV_FILE} is not valid`;
 export function parseEnv(rawText: string): Env {
   const env: Env = { baseUrl: null, signals: null, headers: null, params: null, errors: [] };
   const text = rawText.startsWith("\uFEFF") ? rawText.slice(1) : rawText;
+  if (empty(text)) return env;
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -482,7 +661,9 @@ export function resolveRequest(r: SavedRequest, vars: Variable[]): { request: Sa
  * rather than written anew, so the user's own layout and values stay as they were; null when it
  * is not a JSON object and cannot be extended safely.
  */
-export function withEnvVariables(text: string | null, keys: string[], baseUrl: string): string | null {
+export function withEnvVariables(written: string | null, keys: string[], baseUrl: string): string | null {
+  // An empty file is one to write, as a missing one is.
+  const text = written !== null && empty(written) ? null : written;
   const distinct = [...new Set(keys)];
   const own = distinct.filter(isEnvKey);
   const params = distinct.filter((k) => !isEnvKey(k));
@@ -554,7 +735,8 @@ export function baseUrlSuggestion(vars: Variable[], running: RunningServer | nul
  * stands and everything else as written, or added when the file has none. Null when the text is
  * not a JSON object and cannot be changed safely.
  */
-export function withBaseUrl(text: string | null, url: string): string | null {
+export function withBaseUrl(written: string | null, url: string): string | null {
+  const text = written !== null && empty(written) ? null : written;
   let range: [number, number] | undefined;
   if (text !== null) {
     try {

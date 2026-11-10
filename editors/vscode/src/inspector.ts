@@ -65,11 +65,15 @@ export class Inspector {
   }
 
   private async pushRequests(current?: Partial<SavedRequest>): Promise<void> {
-    const [saved, env] = await Promise.all([this.store.saved(), this.store.environment()]);
+    const [file, env] = await Promise.all([this.store.readFile(), this.store.environment()]);
+    const saved = file.requests;
+    const pathProblem = this.store.requestsPathProblem();
     const recent = this.store.recent();
     this.post({
       type: "requests",
       saved,
+      // Why the file is not read, or which of its entries are not: they stay in the file, and the user is told.
+      requestProblems: [...(pathProblem === null ? [] : [`${pathProblem} The default file is shown.`]), ...(file.error !== undefined ? [file.error] : file.skipped)],
       recent,
       newLabel: newRequestLabel(saved.length, recent.length),
       variables: variableValues(env.vars),
@@ -298,6 +302,9 @@ function html(cspSource: string): string {
   .row { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .saved-row { display: flex; gap: 6px; align-items: center; }
   .saved-row select { flex: 1; width: auto; }
+  #requestProblems { grid-column: 2; }
+  #requestProblems:empty { display: none; }
+  #requestProblems p { margin: 0; }
   .dirty { color: var(--vscode-editorWarning-foreground); font-size: .9em; white-space: nowrap; }
   .status { margin-left: auto; opacity: .8; }
   .status.open { color: var(--vscode-testing-iconPassed); }
@@ -341,6 +348,7 @@ function html(cspSource: string): string {
     <button type="button" class="secondary" id="delete" title="Delete the selected saved request">Delete</button>
     <span class="dirty" id="dirty" hidden>● modified</span>
   </div>
+  <div id="requestProblems"></div>
   <label for="url">URL</label><input id="url" placeholder="{{baseUrl}}/api/feed">
   <span class="resolved" id="resolved"></span>
   <label for="method">Method</label>
@@ -420,6 +428,8 @@ function html(cspSource: string): string {
     if (m.type === 'requests') {
       saved = m.saved; recent = m.recent; variables = m.variables; newLabel = m.newLabel;
       $('vars').textContent = m.variablesText;
+      $('requestProblems').replaceChildren();
+      for (const e of m.requestProblems) { const p = document.createElement('p'); p.className = 'error'; p.textContent = e; $('requestProblems').append(p); }
       $('varErrors').innerHTML = '';
       for (const e of m.variableErrors) { const p = document.createElement('p'); p.className = 'error'; p.textContent = e; $('varErrors').append(p); }
       if (m.current) {

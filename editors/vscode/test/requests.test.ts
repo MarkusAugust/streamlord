@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { baseUrlSuggestion, describeVariables, emptyBodyHint, emptyRequestsFile, lineAndColumn, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, remove, requestHeaders, requestsPathProblem, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, upsert, variableCompletions, withBaseUrl, withEnvVariables, type SavedRequest } from "../src/requests.ts";
+import { baseUrlSuggestion, describeVariables, emptyBodyHint, emptyRequestsFile, lineAndColumn, mergeVariables, newRequestLabel, parseEnv, parseRequestsFile, pushRecent, readsAsStream, removeRequest, requestHeaders, requestsPathProblem, requestUrl, resolveRequest, routeHeaders, routeOptional, routeUrl, saveRequest, sendableUrl, serializeRequestsFile, substitute, toCurl, unreachableHint, variableCompletions, withBaseUrl, withEnvVariables, type SavedRequest } from "../src/requests.ts";
 import { findRoutes } from "../src/routes.ts";
 import { twinCases } from "./twins.ts";
 
@@ -29,7 +29,7 @@ describe("the url the client opens", () => {
 });
 
 /** A case of `fixtures/twins/requests.json`: the function in `call`, its inputs, and what it gives. */
-type Case = { name: string; call: string; expected: unknown } & Record<string, any>;
+type Case = { name: string; call: string; expected: any } & Record<string, any>;
 
 const request = (r: Partial<SavedRequest> = {}): SavedRequest => ({ name: "counter", url: "{{baseUrl}}/api/counter-stream", method: "GET", signals: "", headers: "", ...r });
 const shown = (r: SavedRequest) => ({ name: r.name, url: r.url, method: r.method, signals: r.signals, headers: r.headers });
@@ -40,14 +40,19 @@ const calls: Record<string, (c: Case) => unknown> = {
   parseRequestsFile: (c) => {
     const file = parseRequestsFile(c.text, c.path);
     const again = parseRequestsFile(serializeRequestsFile(file)).requests.map(shown);
-    return { requests: file.requests.map(shown), invalid: file.error !== undefined, roundTrips: JSON.stringify(again) === JSON.stringify(file.requests.map(shown)) };
+    // The text of an error that names a position is each reader's own, so a case states these two only when it pins them.
+    const pinned = { ...("error" in c.expected ? { error: file.error ?? null } : {}), ...("skipped" in c.expected ? { skipped: file.skipped } : {}) };
+    return { requests: file.requests.map(shown), invalid: file.error !== undefined, roundTrips: JSON.stringify(again) === JSON.stringify(file.requests.map(shown)), ...pinned };
   },
+  saveRequest: (c) => saveRequest(c.text, request(c.request), c.path),
+  removeRequest: (c) => removeRequest(c.text, c.remove, c.path),
   serializeRequestsFile: (c) => serializeRequestsFile({ version: 1, requests: c.requests.map(request) }),
   upsert: (c) => {
-    let file = emptyRequestsFile();
-    for (const r of c.upsert) file = upsert(file, request(r));
-    if (c.remove !== undefined) file = remove(file, c.remove);
-    return file.requests.map((r) => [r.name, r.url]);
+    // Through the edits of the file's text, as a store saves and deletes.
+    let text: string | null = null;
+    for (const r of c.upsert) text = saveRequest(text, request(r)).text;
+    if (c.remove !== undefined) text = removeRequest(text, c.remove).text;
+    return parseRequestsFile(text ?? "").requests.map((r) => [r.name, r.url]);
   },
   pushRecent: (c) => (c.push as Partial<SavedRequest>[]).reduce((recent: SavedRequest[], r) => pushRecent(recent, request(r)), []).map((r) => [r.name, r.url]),
   substitute: (c) => substitute(c.text, c.vars),
@@ -63,6 +68,9 @@ const calls: Record<string, (c: Case) => unknown> = {
   emptyBodyHint: (c) => emptyBodyHint(c.status, c.body),
   requestHeaders: (c) => Object.entries(requestHeaders(c.method, Object.fromEntries(c.headers))),
   requestsPathProblem: (c) => requestsPathProblem(c.path) !== null,
+  requestsPathMessage: (c) => requestsPathProblem(c.path),
+  // The two older messages say "workspace" here and "project" in the plugin, so a case names the part they share.
+  requestsPathProblemSays: (c) => requestsPathProblem(c.path)?.includes(c.says) ?? false,
   newRequestLabel: (c) => newRequestLabel(c.saved, c.recent),
   lineAndColumn: (c) => lineAndColumn(c.text, c.position),
   parseEnv: (c) => parseEnv(c.text),
@@ -99,9 +107,47 @@ describe("inspector requests", () => {
 // says less than RequestsTest.kt's.
 describe("text that is not JSON", () => {
   it("is named without a position where V8 gives none", () => {
-    assert.deepEqual(parseRequestsFile("not json"), { version: 1, requests: [], error: ".streamlord/inspector.json is not valid JSON." });
+    const file = parseRequestsFile("not json");
+    assert.deepEqual([file.requests, file.error], [[], ".streamlord/inspector.json is not valid JSON."]);
     assert.deepEqual(parseEnv("not json").errors, [".streamlord/env.json is not valid JSON."]);
     const broken = parseRequestsFile('{"requests":[{"name":"a","url":"/a"},]}', "req.json");
     assert.ok(broken.error?.startsWith("req.json is not valid JSON"), broken.error);
+  });
+
+  it("is not changed, and the edit says why", () => {
+    const refused = { text: null, error: ".streamlord/inspector.json is not valid JSON." };
+    assert.deepEqual(saveRequest("not json", request({ name: "a", url: "/a" })), refused);
+    assert.deepEqual(removeRequest("not json", "a"), refused);
+    const broken = saveRequest('{"requests":[{"name":"a","url":"/a"},]}', request({ name: "b", url: "/b" }), "req.json");
+    assert.equal(broken.text, null);
+    assert.ok(broken.error?.startsWith("req.json is not valid JSON"), String(broken.error));
+  });
+
+});
+
+describe("a requests file with CRLF line endings", () => {
+  // A text field hands back the signals it was given, line endings and all.
+  it("keeps every line break a single CRLF through save after save", () => {
+    const lines = ['{', '  "version": 1,', '  "requests": [', '    {', '      "name": "a",', '      "url": "/a",', '      "method": "GET",', '      "signals": {', '        "q": 1', '      },', '      "headers": "",', '      "note": {', '        "k": 1', '      }', '    }', '  ]', '}', ''];
+    let text = lines.join("\r\n");
+    for (const url of ["/one", "/two"]) {
+      const [read] = parseRequestsFile(text).requests;
+      assert.ok(read?.signals.includes("\r\n"), JSON.stringify(read));
+      const saved = saveRequest(text, { ...read!, url });
+      assert.equal(saved.error, null);
+      text = saved.text!;
+      assert.ok(!text.includes("\r\r"), JSON.stringify(text));
+      assert.equal(text.split("\n").length, text.split("\r\n").length, JSON.stringify(text));
+      assert.equal(text, lines.join("\r\n").replace('"/a"', `"${url}"`));
+    }
+    const [read] = parseRequestsFile(text).requests;
+    assert.equal(saveRequest(text, read!).text, text);
+  });
+});
+
+describe("text that is not JSON, and the file read", () => {
+  it("holds no skipped entries, as an empty file holds none", () => {
+    assert.deepEqual(parseRequestsFile("not json").skipped, []);
+    assert.deepEqual(emptyRequestsFile(), { version: 1, requests: [], skipped: [] });
   });
 });

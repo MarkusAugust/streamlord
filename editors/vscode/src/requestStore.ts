@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, remove, REQUESTS_FILE, requestsPathProblem, serializeRequestsFile, upsert, withBaseUrl, withEnvVariables, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
+import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, removeRequest, REQUESTS_FILE, requestsPathProblem, saveRequest, withBaseUrl, withEnvVariables, type RequestsEdit, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
 import type { RunningServers } from "./serverLog.ts";
 
 /**
@@ -44,33 +44,70 @@ export class RequestStore implements vscode.Disposable {
     return requestsPathProblem(configured) === null && configured.trim().length > 0 ? configured : REQUESTS_FILE;
   }
 
-  /** The requests file; a file that is missing is empty, one that is not JSON says so in `error`. */
-  async readFile(): Promise<RequestsFile> {
+  /** What is wrong with the path the setting names, or null; the default file is read meanwhile. */
+  requestsPathProblem(): string | null {
+    return requestsPathProblem(this.configuredRequestsPath());
+  }
+
+  /** The text of the requests file, or null when there is none. A file that is there and cannot be read throws: it is no missing file. */
+  private async requestsText(): Promise<string | null> {
     const uri = this.fileUri(this.requestsRel());
-    if (!uri) return emptyRequestsFile();
-    let text: string;
+    if (!uri) return null;
     try {
-      text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
-    } catch {
-      return emptyRequestsFile();
+      return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
+    } catch (e) {
+      if (e instanceof vscode.FileSystemError && e.code === "FileNotFound") return null;
+      throw new Error(`${this.requestsRel()} cannot be read: ${e instanceof Error ? e.message : String(e)}`);
     }
-    return parseRequestsFile(text, this.requestsRel());
   }
 
-  /** The file to write over, or the reason it cannot be: writing an empty list over a file that did not parse would lose what it holds. */
-  private async writable(): Promise<RequestsFile> {
-    const problem = requestsPathProblem(this.configuredRequestsPath());
+  /** The requests file; a file that is missing is empty, one that cannot be read says so in `error`, and an entry that is not read is named in `skipped`. */
+  async readFile(): Promise<RequestsFile> {
+    let text: string | null;
+    try {
+      text = await this.requestsText();
+    } catch (e) {
+      return { ...emptyRequestsFile(), error: (e as Error).message };
+    }
+    return text === null ? emptyRequestsFile() : parseRequestsFile(text, this.requestsRel());
+  }
+
+  /** The change under way, which the next one waits for: two at once would each write over what the other read. */
+  private changing: Promise<void> | null = null;
+
+  /**
+   * Change the requests file as `edit` says of its text, which keeps what the file holds besides.
+   * A file that cannot be read is left alone: writing over it would lose what it holds.
+   */
+  private change(edit: (text: string | null, path: string) => RequestsEdit): Promise<void> {
+    // With none under way it starts at once, so it reads the file as it is when asked.
+    const next = this.changing === null ? this.changeNow(edit) : this.changing.then(() => this.changeNow(edit));
+    const done: Promise<void> = next
+      .catch(() => undefined)
+      .then(() => {
+        if (this.changing === done) this.changing = null;
+      });
+    this.changing = done;
+    return next;
+  }
+
+  private async changeNow(edit: (text: string | null, path: string) => RequestsEdit): Promise<void> {
+    const problem = this.requestsPathProblem();
     if (problem) throw new Error(`${problem} Nothing was saved.`);
-    const file = await this.readFile();
-    if (file.error) throw new Error(`${file.error} Fix the file before saving, so the requests in it are not lost.`);
-    return file;
-  }
-
-  private async writeFile(file: RequestsFile): Promise<void> {
     const uri = this.fileUri(this.requestsRel());
     if (!uri) throw new Error("Open a folder to save requests; they are stored in the workspace.");
+    const unreadable = (reason: string | null) => new Error(`${reason} Fix the file before saving, so the requests in it are not lost.`);
+    let text: string | null;
+    try {
+      text = await this.requestsText();
+    } catch (e) {
+      throw unreadable((e as Error).message);
+    }
+    const next = edit(text, this.requestsRel());
+    if (next.text === null) throw unreadable(next.error);
+    if (next.text === (text ?? "")) return;
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(serializeRequestsFile(file), "utf8"));
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(next.text, "utf8"));
     this.onChange.fire();
   }
 
@@ -79,11 +116,11 @@ export class RequestStore implements vscode.Disposable {
   }
 
   async save(request: SavedRequest): Promise<void> {
-    await this.writeFile(upsert(await this.writable(), request));
+    await this.change((text, path) => saveRequest(text, request, path));
   }
 
   async delete(name: string): Promise<void> {
-    await this.writeFile(remove(await this.writable(), name));
+    await this.change((text, path) => removeRequest(text, name, path));
   }
 
   recent(): SavedRequest[] {
