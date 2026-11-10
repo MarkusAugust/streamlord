@@ -116,6 +116,20 @@ class CompletionTest : StreamlordTestCase() {
         assertTrue(items.toString(), "data-on" in items)
     }
 
+    fun `test modifiers for an attribute on its own line in html`() {
+        myFixture.configureByText("page.html", "<input data-bind:query\n       data-on:input__<caret>")
+        assertEquals(onModifiers, myFixture.completeBasic()!!.map { it.lookupString })
+    }
+
+    fun `test attribute names and modifiers for an attribute on its own line in a kotlin string`() {
+        myFixture.configureByText("View.kt", "fun side() = \"\"\"\n<div class=\"card\"\n     data-<caret>\n\"\"\"")
+        val attrs = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertTrue(attrs.toString(), "data-on" in attrs && "data-signals" in attrs)
+        myFixture.configureByText("View2.kt", "fun side() = \"\"\"\n<div class=\"card\"\n     data-on:click__<caret>\n\"\"\"")
+        val mods = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertEquals(onModifiers, mods)
+    }
+
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {
         myFixture.configureByText("page.html", "<div data-on-signal-patch=\"pat<caret>\"></div>")
         // The one item is inserted straight away.

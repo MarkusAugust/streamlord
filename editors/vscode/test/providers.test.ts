@@ -234,6 +234,81 @@ describe("help inside an expression", () => {
   });
 });
 
+describe("an attribute on its own line", () => {
+  const index = new FakeIndex().add("file:///other.html", other, "html");
+  /** The labels offered at `at` in `src`, by default its end, in a document of `language`. */
+  const labels = (src: string, language = "html", at = src.length) => {
+    const doc = new MockDocument(src, language);
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    return provider.provideCompletionItems(doc as never, doc.positionAt(at) as never).map((i) => String(i.label));
+  };
+  /** The labels offered at the end of a Kotlin raw string whose content is `html`. */
+  const inKotlin = (html: string) => labels(`fun side() = """${html}"""`, "kotlin", `fun side() = """${html}`.length);
+
+  it("offers the modifiers of data-on in a tag opened on the line above", () => {
+    const oneLine = labels(`<input data-bind:query data-on:input__`);
+    assert.ok(oneLine.includes("debounce"), oneLine.join());
+    assert.deepEqual(labels(`<input data-bind:query\n       data-on:input__`), oneLine);
+  });
+
+  it("offers the duration values of a modifier in a tag opened on the line above", () => {
+    const oneLine = labels(`<input data-bind:query data-on:input__debounce.`);
+    assert.ok(oneLine.includes("500ms"), oneLine.join());
+    assert.deepEqual(labels(`<input data-bind:query\n       data-on:input__debounce.`), oneLine);
+  });
+
+  it("offers the events after data-on: in a tag opened on the line above", () => {
+    const oneLine = labels(`<input data-bind:query data-on:`);
+    assert.ok(oneLine.includes("click") && oneLine.includes("datastar-fetch"), oneLine.join());
+    assert.deepEqual(labels(`<input data-bind:query\n       data-on:`), oneLine);
+  });
+
+  it("offers the modifiers in a tag opened several lines above, with attributes on each line between", () => {
+    const oneLine = labels(`<input type="search" data-bind:query class=wide data-on:input__`);
+    assert.deepEqual(labels(`<input\n  type="search"\n  data-bind:query\n  class=wide\n  data-on:input__`), oneLine);
+  });
+
+  it("offers attribute names and modifiers in a Kotlin string, in a tag opened on the line above", () => {
+    const oneLine = inKotlin(`\n<div class="card" data-`);
+    assert.ok(oneLine.includes("data-on") && oneLine.includes("data-signals"), oneLine.join());
+    assert.deepEqual(inKotlin(`\n<div class="card"\n     data-`), oneLine);
+    const modifiers = inKotlin(`\n<div class="card" data-on:click__`);
+    assert.ok(modifiers.includes("debounce"), modifiers.join());
+    assert.deepEqual(inKotlin(`\n<div class="card"\n     data-on:click__`), modifiers);
+  });
+
+  it("reads no tag out of the Kotlin code before the string", () => {
+    // The quotes in the code pair up so that `<b` reads as a tag reaching into the string.
+    const sameLine = `val ok = a <b || e == "\\""; s.patchElements("""  data-on:click__""")`;
+    assert.deepEqual(labels(sameLine, "kotlin", sameLine.indexOf(`""")`)), []);
+    const lineAbove = `val ok = a <b || e == "\\""\ns.patchElements("""\n  data-on:click__""")`;
+    assert.deepEqual(labels(lineAbove, "kotlin", lineAbove.indexOf(`""")`)), []);
+  });
+
+  it("reads quoted values on earlier lines as the browser does", () => {
+    const oneLine = labels(`<div data-on:click__`);
+    assert.ok(oneLine.includes("debounce"), oneLine.join());
+    assert.deepEqual(labels(`<div data-show="$a > 1 && $b < 2"\n     data-text='"x"'\n     data-on:click__`), oneLine, "quotes holding >, < and the other quote");
+    assert.deepEqual(labels(`<div data-show="$a\n > 1"\n     data-on:click__`), oneLine, "a value over two lines");
+  });
+
+  it("offers nothing in element content or in a comment", () => {
+    assert.deepEqual(labels(`<div data-show="$a">\n  data-on:click__`), [], "after the tag is closed");
+    assert.deepEqual(labels(`<!-- <div -->\n  data-on:click__`), [], "after a comment that held a tag");
+    assert.deepEqual(labels(`<!-- <div\n  data-on:click__`), [], "inside a comment");
+  });
+
+  it("answers in time on a long document of tags never closed", () => {
+    let hostile = "";
+    while (hostile.length < 50_000) hostile += "<a " + "!= ".repeat(40) + "\n";
+    hostile += "<a " + "!= ".repeat(40) + "'";
+    const started = performance.now();
+    labels(hostile, "pebble");
+    const took = performance.now() - started;
+    assert.ok(took < 250, `${Math.round(took)} ms`);
+  });
+});
+
 describe("signature help", () => {
   const help = new StreamlordSignatureHelpProvider(() => "data-");
   const signature = (src: string, language: string, offset = src.length) => {

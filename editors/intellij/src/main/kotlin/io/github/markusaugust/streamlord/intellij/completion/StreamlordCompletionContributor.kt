@@ -127,7 +127,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
             }
             val html = calls.htmlStringAt(analysis, src, offset)
             if (html != null && offset > html.contentStart && offset <= html.contentEnd) {
-                Html(src, offset, analysis, index, file, result, offerAttributeNames = true, valueFile = null).complete()
+                Html(src, offset, analysis, index, file, result, offerAttributeNames = true, valueFile = null, from = html.contentStart)
+                    .complete()
             }
         }
 
@@ -200,6 +201,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
         val result: CompletionResultSet,
         val offerAttributeNames: Boolean,
         val valueFile: PsiFile?,
+        /** Where the markup starts: the file's start, or the start of a Kotlin string. */
+        val from: Int = 0,
     ) {
         val catalog: Catalog = analysis.catalog
         val prefix: String = analysis.prefix
@@ -213,8 +216,10 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 val templates = indexFile !is KtFile
                 if (valueAtCaret(src, offset, prefix, templates) != null) return false
             }
-            val lineStart = src.lastIndexOf('\n', maxOf(0, offset - 1)) + 1
-            val before = src.substring(maxOf(lineStart, offset - 400), offset.coerceIn(0, src.length))
+            // From the start of the tag the caret is in, which may be lines above, with its attributes on lines of their own.
+            val tag = tagStartAt(src, from, offset.coerceIn(0, src.length))
+            if (tag < 0) return false
+            val before = src.substring(tag, offset.coerceIn(0, src.length))
             // On an attribute name inside a tag: <div data-on:cl|. What comes before is whitespace-separated runs of
             // plain characters and quoted strings, as completion.ts reads it, so a quote left open is a value, not a name.
             val inName =
@@ -514,3 +519,39 @@ private class Fixed(
 
 /** Add an element that the machine-learned ranking must not move. */
 private fun CompletionResultSet.addFixed(element: LookupElement) = addElement(Fixed(element))
+
+/**
+ * Where the tag [offset] stands in starts, reading [src] from [from] as the browser reads markup, or
+ * -1 when it stands in text, in a comment or in a quoted value. A quote opens a value only inside a
+ * tag, and `>` closes the tag only outside one, so a value may hold `>`, `<` and line breaks.
+ * tagStartAt in completion.ts.
+ */
+internal fun tagStartAt(
+    src: String,
+    from: Int,
+    offset: Int,
+): Int {
+    var tag = -1
+    var quote = 0.toChar()
+    var i = from
+    while (i < offset) {
+        val c = src[i]
+        if (tag < 0) {
+            if (src.startsWith("<!--", i)) {
+                val end = src.indexOf("-->", i + 4)
+                if (end < 0 || end + 3 > offset) return -1
+                i = end + 3
+                continue
+            }
+            if (c == '<' && src.getOrNull(i + 1)?.let { it in 'A'..'Z' || it in 'a'..'z' } == true) tag = i
+        } else if (quote != 0.toChar()) {
+            if (c == quote) quote = 0.toChar()
+        } else if (c == '"' || c == '\'') {
+            quote = c
+        } else if (c == '>') {
+            tag = -1
+        }
+        i++
+    }
+    return if (quote == 0.toChar()) tag else -1
+}

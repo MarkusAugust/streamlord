@@ -31,6 +31,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- In both editors, an attribute on a line of its own, in a tag opened on a line above, gets its
+  completions: the events after `data-on:`, the modifiers after `__` and their values, and in a
+  Kotlin string the attribute names as well. Completion read only the caret's line, so it found
+  no tag there and offered nothing. In VS Code, a `<` in the Kotlin code before an HTML string no
+  longer makes the string read as inside a tag.
 - In both editors, the inspector reads `.streamlord/inspector.json` as an open editor has it,
   saved or not, as it reads `env.json`, and the Request list follows it as you type. **Save** and
   **Delete** change the open editor's text as one edit that can be undone, where they wrote the
