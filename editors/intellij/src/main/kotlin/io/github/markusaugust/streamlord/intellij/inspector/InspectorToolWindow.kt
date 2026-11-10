@@ -30,6 +30,7 @@ class InspectorToolWindowFactory :
         InspectorService.getInstance(project).panel = panel
         val content = ContentFactory.getInstance().createContent(panel, "Stream Inspector", false)
         content.setDisposer(disposable)
+        Disposer.register(disposable) { InspectorService.getInstance(project).panel = null }
         toolWindow.contentManager.addContent(content)
     }
 }

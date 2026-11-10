@@ -23,10 +23,12 @@ class ReindexSignalsAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         currentThreadCoroutineScope().launch {
+            val index = SignalIndex.getInstance(project)
             val count =
                 withBackgroundProgress(project, "Streamlord: indexing signals") {
-                    // Gives way to a write and starts over after it, and waits for the IDE's own indexing.
-                    smartReadAction(project) { SignalIndex.getInstance(project).rebuild() }
+                    // Forgotten once: the read gives way to a write and starts over after it, and keeps what it had read.
+                    index.forget()
+                    smartReadAction(project) { index.all().size }
                 }
             Notification(Streamlord.NOTIFICATION_GROUP, "Streamlord: indexed $count signal names.", NotificationType.INFORMATION)
                 .notify(project)
