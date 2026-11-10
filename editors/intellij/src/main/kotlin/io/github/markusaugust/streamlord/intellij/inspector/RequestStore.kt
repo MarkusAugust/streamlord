@@ -44,8 +44,11 @@ class RequestStore(
 
     fun requestsFile(): VirtualFile? = baseDir()?.findFileByRelativePath(requestsPath())
 
-    /** Where the requests file is, found or not, so a change of it is known by its path alone. */
-    fun requestsFilePath(): String? = baseDir()?.path?.let { "$it/${requestsPath()}" }
+    /** Where the requests file is, found or not, written plainly, so a change of it is known by its path alone. */
+    fun requestsFilePath(): String? =
+        baseDir()?.path?.let { base ->
+            (listOf(base) + requestsPath().split('/').filter { it.isNotEmpty() && it != "." }).joinToString("/")
+        }
 
     /**
      * The requests file as an open editor has it, saved or not; a file that is missing is empty, one

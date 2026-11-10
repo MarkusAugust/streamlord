@@ -44,9 +44,14 @@ export class RequestStore implements vscode.Disposable {
     this.requestsWatcher?.dispose();
     this.requestsWatcher = undefined;
     const folder = this.folder();
-    const rel = this.requestsRel();
+    // The path as Uri.joinPath reads it, each glob character in a class of its own so it is that very path.
+    const rel = this.requestsRel()
+      .split("/")
+      .filter((part) => part !== "" && part !== ".")
+      .join("/");
     if (!folder || rel === REQUESTS_FILE) return;
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, rel));
+    const literal = rel.replace(/[[\]{}*?!,]/g, (c) => `[${c}]`);
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, literal));
     watcher.onDidChange(() => this.onChange.fire());
     watcher.onDidCreate(() => this.onChange.fire());
     watcher.onDidDelete(() => this.onChange.fire());
@@ -136,7 +141,7 @@ export class RequestStore implements vscode.Disposable {
     const next = edit(text, this.requestsRel());
     if (next.text === null) throw unreadable(next.error);
     if (next.text === (text ?? "")) return;
-    await this.writeText(uri, next.text);
+    await this.writeText(uri, next.text, this.requestsRel());
     this.onChange.fire();
   }
 
@@ -218,17 +223,17 @@ export class RequestStore implements vscode.Disposable {
   private async write(uri: vscode.Uri, text: string | null, next: string | null): Promise<{ uri: vscode.Uri; extended: boolean }> {
     if (next === null) return { uri, extended: false };
     if (next === text) return { uri, extended: true };
-    await this.writeText(uri, next);
+    await this.writeText(uri, next, ENV_FILE);
     return { uri, extended: true };
   }
 
-  /** Put `next` in the file: an open editor gets an edit it can undo, not a write underneath its unsaved text. */
-  private async writeText(uri: vscode.Uri, next: string): Promise<void> {
+  /** Put `next` in the file `name`: an open editor gets an edit it can undo, not a write underneath its unsaved text. */
+  private async writeText(uri: vscode.Uri, next: string, name: string): Promise<void> {
     const doc = this.openDocument(uri);
     if (doc) {
       const edit = new vscode.WorkspaceEdit();
       edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), next);
-      await vscode.workspace.applyEdit(edit);
+      if (!(await vscode.workspace.applyEdit(edit))) throw new Error(`The editor of ${name} did not take the change, so nothing was saved.`);
     } else {
       await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
       await vscode.workspace.fs.writeFile(uri, Buffer.from(next, "utf8"));

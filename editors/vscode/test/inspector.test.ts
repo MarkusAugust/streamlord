@@ -165,9 +165,17 @@ describe("inspector requests file", () => {
   });
 });
 
-/** A glob as VS Code reads it: `**` is any folders, `*` any part of a name, `{a,b}` either. */
+/** Where the class that opens at `start` ends, or -1 when it is no class; a `]` first in it is one of its characters. */
+function classEnd(glob: string, start: number): number {
+  let j = start + 1;
+  if (glob[j] === "!" || glob[j] === "^") j++;
+  return glob.indexOf("]", j + 1);
+}
+
+/** A glob as VS Code reads it: `**` is any folders, `*` any part of a name, `?` one character, `[...]` a class and `{a,b}` either. */
 function globMatches(glob: string, path: string): boolean {
   let re = "";
+  let braces = 0;
   for (let i = 0; i < glob.length; i++) {
     const c = glob[i]!;
     if (glob.startsWith("**/", i)) {
@@ -178,10 +186,21 @@ function globMatches(glob: string, path: string): boolean {
       i += 1;
     } else if (c === "*") re += "[^/]*";
     else if (c === "?") re += "[^/]";
-    else if (c === "{") re += "(?:";
-    else if (c === "}") re += ")";
-    else if (c === ",") re += "|";
-    else re += c.replace(/[.+^$()|[\]\\]/g, "\\$&");
+    else if (c === "[" && classEnd(glob, i) > 0) {
+      // `!` or `^` first takes the class's complement.
+      const end = classEnd(glob, i);
+      const negated = glob[i + 1] === "!" || glob[i + 1] === "^";
+      const members = glob.slice(i + (negated ? 2 : 1), end).replace(/[\\\]^]/g, "\\$&");
+      re += `[${negated ? "^" : ""}${members}]`;
+      i = end;
+    } else if (c === "{") {
+      braces++;
+      re += "(?:";
+    } else if (c === "}" && braces > 0) {
+      braces--;
+      re += ")";
+    } else if (c === "," && braces > 0) re += "|";
+    else re += c.replace(/[.+^$()|[\]{}\\]/g, "\\$&");
   }
   return new RegExp(`^${re}$`).test(path);
 }
@@ -198,24 +217,30 @@ function watchedInspector(text: string, path = REQUESTS) {
   workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
   files.set(path, new TextEncoder().encode(text));
   const edits: ((e: { document: { uri: unknown } }) => void)[] = [];
-  const watchers: { pattern: unknown; listeners: ((u: unknown) => void)[] }[] = [];
-  const { onDidChangeTextDocument, createFileSystemWatcher } = workspace;
+  const watchers: { pattern: unknown; listeners: ((u: unknown) => void)[]; disposed: boolean }[] = [];
+  const configurations: ((e: { affectsConfiguration: (section: string) => boolean }) => void)[] = [];
+  const { onDidChangeTextDocument, createFileSystemWatcher, onDidChangeConfiguration } = workspace;
+  (workspace as Record<string, unknown>).onDidChangeConfiguration = (l: (e: { affectsConfiguration: (section: string) => boolean }) => void) => {
+    configurations.push(l);
+    return { dispose: () => {} };
+  };
   (workspace as Record<string, unknown>).onDidChangeTextDocument = (l: (e: { document: { uri: unknown } }) => void) => {
     edits.push(l);
     return { dispose: () => {} };
   };
   (workspace as Record<string, unknown>).createFileSystemWatcher = (pattern: unknown) => {
-    const w = { pattern, listeners: [] as ((u: unknown) => void)[] };
+    const w = { pattern, listeners: [] as ((u: unknown) => void)[], disposed: false };
     watchers.push(w);
     const on = (l: (u: unknown) => void) => {
       w.listeners.push(l);
       return { dispose: () => {} };
     };
-    return { onDidChange: on, onDidCreate: on, onDidDelete: on, dispose: () => {} };
+    return { onDidChange: on, onDidCreate: on, onDidDelete: on, dispose: () => (w.disposed = true) };
   };
   const restore = () => {
     workspace.onDidChangeTextDocument = onDidChangeTextDocument;
     workspace.createFileSystemWatcher = createFileSystemWatcher;
+    workspace.onDidChangeConfiguration = onDidChangeConfiguration;
   };
   const context = { subscriptions: [] as unknown[], workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } };
   let store: RequestStore;
@@ -243,17 +268,21 @@ function watchedInspector(text: string, path = REQUESTS) {
   const change = async (written: string, at = path) => {
     files.set(at, new TextEncoder().encode(written));
     const relative = at.replace(/^\/ws\//, "");
-    for (const w of watchers) {
+    for (const w of watchers.filter((x) => !x.disposed)) {
       const p = w.pattern as string | { pattern: string; base?: string; baseUri?: { path: string } };
-      const hit =
-        typeof p === "string"
-          ? globMatches(p, at) || globMatches(p, relative)
-          : globMatches(p.pattern, at.slice(((p.baseUri?.path ?? p.base ?? "").replace(/\/$/, "") + "/").length));
+      const base = typeof p === "string" ? "" : `${(p.baseUri?.path ?? p.base ?? "").replace(/\/$/, "")}/`;
+      const hit = typeof p === "string" ? globMatches(p, at) || globMatches(p, relative) : at.startsWith(base) && globMatches(p.pattern, at.slice(base.length));
       if (hit) for (const l of w.listeners) l(Uri.file(at));
     }
     await settle();
   };
-  return { push: () => i.pushRequests(), lists, type, change, restore };
+  /** Set a setting, and tell the store as VS Code does: every section that holds the key is affected. */
+  const configure = async (key: string, value: unknown) => {
+    settings.set(key, value);
+    for (const l of configurations) l({ affectsConfiguration: (section: string) => key === section || key.startsWith(`${section}.`) });
+    await settle();
+  };
+  return { push: () => i.pushRequests(), lists, type, change, configure, restore };
 }
 
 describe("inspector requests file as the editor has it", () => {
@@ -281,6 +310,50 @@ describe("inspector requests file as the editor has it", () => {
       await w.push();
       assert.deepEqual(w.lists(), ["feed"]);
       await w.type(typed);
+      assert.deepEqual(w.lists(), ["feed", "typed"]);
+    } finally {
+      w.restore();
+      settings.clear();
+    }
+  });
+
+  /** What the list of a requests file at `file` misses, the setting being `setting`: as read, as typed, and as changed on disk. */
+  async function followed(setting: string, file: string): Promise<string[]> {
+    const found: string[] = [];
+    settings.set("streamlord.inspector.requestsFile", setting);
+    const w = watchedInspector(feed, file);
+    try {
+      await w.push();
+      if (JSON.stringify(w.lists()) !== '["feed"]') found.push(`${setting} reads ${JSON.stringify(w.lists())}`);
+      await w.change(typed);
+      if (JSON.stringify(w.lists()) !== '["feed","typed"]') found.push(`${setting} after a change on disk lists ${JSON.stringify(w.lists())}`);
+      await w.type(feed);
+      if (JSON.stringify(w.lists()) !== '["feed"]') found.push(`${setting} as typed lists ${JSON.stringify(w.lists())}`);
+    } finally {
+      w.restore();
+      settings.clear();
+    }
+    return found;
+  }
+
+  it("follows the requests file the setting names however its path is written", async () => {
+    const found = [...(await followed("./requests/inspector.json", "/ws/requests/inspector.json")), ...(await followed("requests//inspector.json", "/ws/requests/inspector.json"))];
+    assert.equal(found.join("\n"), "");
+  });
+
+  it("follows a requests file whose path holds glob characters as that very path", async () => {
+    const found = [...(await followed("req[1]/inspector.json", "/ws/req[1]/inspector.json")), ...(await followed("a{b}/inspector.json", "/ws/a{b}/inspector.json"))];
+    assert.equal(found.join("\n"), "");
+  });
+
+  it("follows the requests file a setting changed after the start names, on disk", async () => {
+    const w = watchedInspector(feed, "/ws/requests/inspector.json");
+    try {
+      await w.push();
+      assert.deepEqual(w.lists(), []);
+      await w.configure("streamlord.inspector.requestsFile", "requests/inspector.json");
+      assert.deepEqual(w.lists(), ["feed"]);
+      await w.change(typed);
       assert.deepEqual(w.lists(), ["feed", "typed"]);
     } finally {
       w.restore();

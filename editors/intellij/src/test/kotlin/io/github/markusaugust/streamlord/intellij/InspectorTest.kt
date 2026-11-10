@@ -1750,13 +1750,44 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
+    /** The tool window's queue as a test holds it: what it is given runs on the UI thread, or waits in [held] while [holding]. */
+    private class Queue {
+        @Volatile var holding = false
+        val held = CopyOnWriteArrayList<Runnable>()
+
+        /** Run what waits, in the order it came, and let what comes after run as it comes. */
+        fun release() {
+            holding = false
+            val waiting = held.toList()
+            held.clear()
+            waiting.forEach { it.run() }
+        }
+    }
+
     /** Let the tool window's queue run, as it does in the IDE; in a test it drops what it is given. */
-    private fun toolWindowRuns() {
+    private fun toolWindowRuns(): Queue {
+        val queue = Queue()
         val manager =
             object : ToolWindowHeadlessManagerImpl(project) {
-                override fun invokeLater(runnable: Runnable) = ApplicationManager.getApplication().invokeLater(runnable)
+                override fun invokeLater(runnable: Runnable) {
+                    if (queue.holding) queue.held += runnable else ApplicationManager.getApplication().invokeLater(runnable)
+                }
             }
         project.replaceService(ToolWindowManager::class.java, manager, testRootDisposable)
+        return queue
+    }
+
+    /** Run the UI thread until [done] or [seconds] have passed, and say whether it is done. */
+    private fun within(
+        seconds: Long,
+        done: () -> Boolean,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (!done() && System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+        return done()
     }
 
     /** Run the UI thread until [done], or fail with [what]. */
@@ -1764,14 +1795,7 @@ class InspectorTest : BasePlatformTestCase() {
         what: () -> String,
         seconds: Long = 10,
         done: () -> Boolean,
-    ) {
-        val deadline = System.currentTimeMillis() + seconds * 1000
-        while (!done() && System.currentTimeMillis() < deadline) {
-            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
-            Thread.sleep(5)
-        }
-        assertTrue(what(), done())
-    }
+    ) = assertTrue(what(), within(seconds, done))
 
     /** Run the UI thread for [millis], so what is on its way arrives. */
     private fun settle(millis: Long = 300) {
@@ -1881,20 +1905,30 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
-    fun `test the request list follows the requests file as it is typed, at the default path and at the path the settings name`() {
+    /** The setting, and the file it names: written as the default, as a path of its own, and as that path spelt otherwise. */
+    private val requestsPaths =
+        listOf(
+            Requests.REQUESTS_FILE to Requests.REQUESTS_FILE,
+            "requests/inspector.json" to "requests/inspector.json",
+            "./requests/inspector.json" to "requests/inspector.json",
+            "requests//inspector.json" to "requests/inspector.json",
+        )
+
+    fun `test the request list follows the requests file as it is typed, however the settings write its path`() {
         toolWindowRuns()
         val settings = StreamlordSettings.getInstance(project)
+        val found = ArrayList<String>()
         try {
-            for (path in listOf(Requests.REQUESTS_FILE, "requests/inspector.json")) {
-                settings.state.requestsFile = path
+            for ((setting, path) in requestsPaths) {
+                settings.state.requestsFile = setting
                 val file = write(path, written)
                 try {
                     val panel = InspectorPanel(project, testRootDisposable)
                     await(panel.pushRequests(null))
-                    assertEquals(listOf("feed"), savedNames(panel))
+                    if (savedNames(panel) != listOf("feed")) found += "$setting reads ${savedNames(panel)}"
                     val document = FileDocumentManager.getInstance().getDocument(file)!!
                     WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
-                    until({ "the list of $path as typed: ${savedNames(panel)}" }, 3) { savedNames(panel) == listOf("feed", "typed") }
+                    if (!within(3) { savedNames(panel) == listOf("feed", "typed") }) found += "$setting as typed lists ${savedNames(panel)}"
                 } finally {
                     forget(file)
                     remove(path)
@@ -1904,23 +1938,25 @@ class InspectorTest : BasePlatformTestCase() {
             settings.state.requestsFile = Requests.REQUESTS_FILE
             remove("requests")
         }
+        assertEquals("", found.joinToString("\n"))
     }
 
-    fun `test the request list follows a change on disk, at the default path and at the path the settings name`() {
+    fun `test the request list follows a change on disk, however the settings write its path`() {
         toolWindowRuns()
         val settings = StreamlordSettings.getInstance(project)
+        val found = ArrayList<String>()
         try {
-            for (path in listOf(Requests.REQUESTS_FILE, "requests/inspector.json")) {
-                settings.state.requestsFile = path
+            for ((setting, path) in requestsPaths) {
+                settings.state.requestsFile = setting
                 write(path, written)
                 try {
                     val panel = InspectorPanel(project, testRootDisposable)
                     await(panel.pushRequests(null))
-                    assertEquals(listOf("feed"), savedNames(panel))
+                    if (savedNames(panel) != listOf("feed")) found += "$setting reads ${savedNames(panel)}"
                     write(path, typed)
-                    until({ "the list of $path after a change on disk: ${savedNames(panel)}" }, 3) {
-                        savedNames(panel) ==
-                            listOf("feed", "typed")
+                    if (!within(3) { savedNames(panel) == listOf("feed", "typed") }) {
+                        found +=
+                            "$setting after a change on disk lists ${savedNames(panel)}"
                     }
                 } finally {
                     remove(path)
@@ -1929,6 +1965,107 @@ class InspectorTest : BasePlatformTestCase() {
         } finally {
             settings.state.requestsFile = Requests.REQUESTS_FILE
             remove("requests")
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    /** A server that opens a stream on each request and holds it until the client closes it. */
+    private class Streaming : AutoCloseable {
+        private val server = java.net.ServerSocket(0)
+        private val sockets = CopyOnWriteArrayList<java.net.Socket>()
+        val port = server.localPort
+
+        init {
+            Thread {
+                runCatching {
+                    while (true) {
+                        val socket = server.accept()
+                        sockets += socket
+                        Thread {
+                            runCatching {
+                                val input = socket.getInputStream().bufferedReader()
+                                var line = input.readLine()
+                                while (!line.isNullOrEmpty()) line = input.readLine()
+                                socket.getOutputStream().apply {
+                                    write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n: open\n\n".toByteArray())
+                                    flush()
+                                }
+                                // Held open until the client closes it, which ends the read.
+                                input.readText()
+                            }
+                        }.apply {
+                            isDaemon = true
+                            start()
+                        }
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+        }
+
+        override fun close() {
+            sockets.forEach { runCatching { it.close() } }
+            server.close()
+        }
+    }
+
+    // The earlier stream's close is held until what came after it is done, as a slow close of a stream may come.
+    fun `test an earlier request does not speak for the one after it`() {
+        val queue = toolWindowRuns()
+        Streaming().use { server ->
+            write(Requests.ENV_FILE, """{"baseUrl": "http://127.0.0.1:${server.port}"}""")
+            try {
+                val panel = InspectorPanel(project, testRootDisposable)
+                await(panel.pushRequests(null))
+                val events = events(panel)
+                val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+                val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+                val stop = button(panel, "Stop")
+                val found = ArrayList<String>()
+
+                fun open() {
+                    url.text = "{{baseUrl}}/feed"
+                    button(panel, "Connect").doClick()
+                    until({ "the stream does not open: ${status.text}" }) { status.text.startsWith("open") }
+                    settle(100)
+                    queue.holding = true
+                }
+
+                fun heldClose(what: String) {
+                    if (!within(5) { queue.held.isNotEmpty() }) found += "$what: the earlier stream told nothing as it closed"
+                    settle(200)
+                    queue.release()
+                    settle(100)
+                }
+
+                open()
+                val before = lines(events).toSet()
+                url.text = "{{nope}}/x"
+                button(panel, "Connect").doClick()
+                until({ "the new request shows no error line" }) { lines(events).any { it !in before } }
+                heldClose("Connect")
+                if (status.text != "error" || status.toolTipText != "error<br>{{nope}}/x") {
+                    found += "after Connect the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (stop.isEnabled) found += "after Connect Stop is enabled"
+
+                open()
+                stop.doClick()
+                heldClose("Stop")
+                if (status.text != "idle" ||
+                    status.toolTipText != "idle"
+                ) {
+                    found += "after Stop the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (stop.isEnabled) found += "after Stop Stop is enabled"
+                assertEquals("", found.joinToString("\n"))
+            } finally {
+                queue.release()
+                remove(Requests.ENV_FILE)
+                InspectorState.getInstance(project).loadState(InspectorState.State())
+            }
         }
     }
 
@@ -2015,6 +2152,8 @@ class InspectorTest : BasePlatformTestCase() {
     }
 
     fun `test an error that is not about the request leaves the status of an open stream as it was`() {
+        // What the panel does later on the UI thread runs, so a status it sets there is seen.
+        toolWindowRuns()
         val settings = StreamlordSettings.getInstance(project)
         write(Requests.REQUESTS_FILE, written)
         // Not a JSON object, so neither Edit variables nor Use baseUrl can change it.

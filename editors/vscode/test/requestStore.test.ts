@@ -292,6 +292,47 @@ describe("request store", () => {
     }
   });
 
+  /** Make the open editors refuse every edit, as `workspace.applyEdit` does when it resolves to false; the returned function undoes it. */
+  function editorsRefuse(): () => void {
+    const applyEdit = workspace.applyEdit;
+    workspace.applyEdit = async () => false;
+    return () => (workspace.applyEdit = applyEdit);
+  }
+
+  it("refuses a save and a delete the open editor of the requests file does not take, naming the file, and tells of no change", async () => {
+    const { onDisk, typed, doc, restore } = typedInEditor();
+    const undo = editorsRefuse();
+    try {
+      const s = store();
+      let changes = 0;
+      s.onDidChange(() => changes++);
+      const names = { message: /\.streamlord\/inspector\.json/ };
+      await assert.rejects(s.save(request("a")), names);
+      await assert.rejects(s.delete("feed"), names);
+      assert.equal(changes, 0);
+      assert.equal(doc.text, typed);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      undo();
+      restore();
+    }
+  });
+
+  it("refuses Edit variables and Use baseUrl the open editor of the env file does not take, naming the file", async () => {
+    const doc = open('{"baseUrl": "http://unsaved:2"}');
+    const undo = editorsRefuse();
+    try {
+      const s = store();
+      const names = { message: /\.streamlord\/env\.json/ };
+      await assert.rejects(s.defineVariables(["signals"]), names);
+      await assert.rejects(s.useBaseUrl("http://localhost:9102"), names);
+      assert.equal(doc.text, '{"baseUrl": "http://unsaved:2"}');
+      assert.equal(disk(), '{"baseUrl": "http://disk:1"}');
+    } finally {
+      undo();
+    }
+  });
+
   it("refuses a save and a delete when the setting names a path with a problem, and writes nothing", async () => {
     const env = files.get(ENV);
     const problems = {

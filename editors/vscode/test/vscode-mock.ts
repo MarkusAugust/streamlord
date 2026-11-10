@@ -103,6 +103,8 @@ export class Disposable {
 
 export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 } as const;
 
+export const ViewColumn = { Active: -1, Beside: -2, One: 1, Two: 2, Three: 3 } as const;
+
 const noop = () => new Disposable();
 
 export class EventEmitter<T> {

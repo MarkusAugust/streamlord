@@ -4,12 +4,13 @@ import { readFileSync } from "node:fs";
 import { mergeVariables, parseEnv, variableValues, type SavedRequest } from "../src/requests.ts";
 import { twinCases } from "./twins.ts";
 import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { Inspector } from "../src/inspector.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
 import type { DatastarFrame } from "../src/sse.ts";
-import { files, settings, unreadable, Uri, window, workspace } from "./vscode-mock.ts";
+import { files, Position, settings, unreadable, Uri, window, workspace, type OpenDocument } from "./vscode-mock.ts";
 
 /**
  * The inspector's page is a template literal, so its script escapes are TypeScript's and the
@@ -248,11 +249,21 @@ describe("inspector page", () => {
     const context = { subscriptions: [] as unknown[], workspaceState: { get: <T>(_k: string, d: T) => d, update: async () => {} } };
     const servers = new RunningServers();
     const i = new Inspector(context as never, new RequestStore(context as never, servers), servers) as any;
-    i.panel = { webview: { postMessage: async (m: unknown) => (shown.post(m), true) } };
+    // While `held` is set, the status messages wait there instead of reaching the page.
+    const hold = { held: null as unknown[] | null };
+    i.panel = {
+      webview: {
+        postMessage: async (m: { type?: string }) => {
+          if (hold.held !== null && m.type === "status") hold.held.push(m);
+          else shown.post(m);
+          return true;
+        },
+      },
+    };
     const status = shown.element("status");
     const env = (text: string) => files.set("/ws/.streamlord/env.json", new TextEncoder().encode(text));
     const request = (url: string, more: Partial<SavedRequest> = {}): SavedRequest => ({ name: "", url, method: "GET", signals: "", headers: "", ...more });
-    return { ...shown, i, status, env, request };
+    return { ...shown, i, status, env, request, hold };
   }
 
   /** A port nothing listens on. */
@@ -350,6 +361,100 @@ describe("inspector page", () => {
       } finally {
         Object.assign(window, { showInputBox, showWarningMessage });
         settings.clear();
+      }
+      assert.equal(found.join("\n"), "");
+    });
+      /** A server that opens a stream on each request and holds it open until it is closed. */
+    async function streaming() {
+      const server = createHttpServer((_q, res) => {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(": open\n\n");
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const close = () => {
+        server.closeAllConnections();
+        return new Promise((resolve) => server.close(resolve));
+      };
+      return { base, close };
+    }
+
+    const statusOf = (p: ReturnType<typeof overExtension>) => `${p.status.textContent} | ${(p.status as unknown as { title?: string }).title}`;
+
+    /** Connect to `base` and wait until the stream is open; `earlier` ends when it does. */
+    async function opened(p: ReturnType<typeof overExtension>, base: string): Promise<{ earlier: Promise<void> }> {
+      p.env(`{"baseUrl": "${base}"}`);
+      const earlier: Promise<void> = p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/feed") });
+      const deadline = Date.now() + 5000;
+      while (!p.status.textContent.startsWith("open") && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal(statusOf(p), `open · 200 OK · text/event-stream | ${base}/feed`);
+      return { earlier };
+    }
+
+    it("keeps the status of a new request that failed when the earlier stream's close comes after it", async () => {
+      const server = await streaming();
+      try {
+        const p = overExtension();
+        const { earlier } = await opened(p, server.base);
+        // The earlier stream's close is held until the new request has failed.
+        p.hold.held = [];
+        await p.i.handle({ type: "connect", request: p.request("{{nope}}/x") });
+        await earlier;
+        const held = p.hold.held;
+        p.hold.held = null;
+        for (const m of held) p.post(m);
+        assert.equal(statusOf(p), "error | {{nope}}/x");
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("keeps the status Stop gives when the stopped stream's close comes after it", async () => {
+      const server = await streaming();
+      try {
+        const p = overExtension();
+        const { earlier } = await opened(p, server.base);
+        await p.i.handle({ type: "stop" });
+        await earlier;
+        assert.equal(statusOf(p), "idle | ");
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("shows a change the open editor refuses as an error line naming the file, and leaves the status as it was", async () => {
+      const { showInputBox, showWarningMessage, showTextDocument } = window as Record<string, unknown>;
+      const applyEdit = workspace.applyEdit;
+      const found: string[] = [];
+      try {
+        Object.assign(window, { showInputBox: async () => "a", showWarningMessage: async () => "Delete", showTextDocument: async () => undefined });
+        workspace.applyEdit = async () => false;
+        const p = overExtension();
+        const doc = (path: string, text: string): OpenDocument => {
+          const d: OpenDocument = { uri: Uri.file(path), text, getText: () => d.text, offsetAt: () => 0, positionAt: (o: number) => new Position(0, o) };
+          return d;
+        };
+        const requests = '{"requests": [{"name": "feed", "url": "/feed"}]}';
+        files.set("/ws/.streamlord/inspector.json", new TextEncoder().encode(requests));
+        p.env('{"baseUrl": "http://h:1"}');
+        workspace.textDocuments.push(doc("/ws/.streamlord/inspector.json", requests), doc("/ws/.streamlord/env.json", '{"baseUrl": "http://h:1"}'));
+        const changes: [string, string, Record<string, unknown>][] = [
+          ["a Save", ".streamlord/inspector.json", { type: "save", request: p.request("/a") }],
+          ["a Delete", ".streamlord/inspector.json", { type: "delete", name: "feed" }],
+          ["Edit variables", ".streamlord/env.json", { type: "defineVariables", names: ["signals"] }],
+          ["Use baseUrl", ".streamlord/env.json", { type: "useBaseUrl", url: "http://localhost:9" }],
+        ];
+        for (const [what, file, message] of changes) {
+          p.post({ type: "status", status: "open", http: "200 OK", resolvedUrl: "http://h/feed" });
+          const before = p.element("frames").children.length;
+          await p.i.handle(message);
+          const errors = p.element("frames").children.slice(0, p.element("frames").children.length - before).filter((c) => c.className === "error");
+          if (errors.length !== 1 || !errors[0]!.textContent.includes(file)) found.push(`${what} shows ${JSON.stringify(errors.map((e) => e.textContent))}`);
+          if (statusOf(p) !== "open · 200 OK | http://h/feed") found.push(`${what}: ${statusOf(p)}`);
+        }
+      } finally {
+        Object.assign(window, { showInputBox, showWarningMessage, showTextDocument });
+        workspace.applyEdit = applyEdit;
       }
       assert.equal(found.join("\n"), "");
     });

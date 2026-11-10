@@ -198,11 +198,14 @@ export class Inspector {
     await this.store.addRecent(raw);
     void this.pushRequests();
     const since = Date.now();
-    this.abort = new AbortController();
+    const abort = new AbortController();
+    this.abort = abort;
+    // A request stopped, or followed by another, no longer speaks for the status: its close can come late.
+    const current = () => !abort.signal.aborted;
     await openStream(
       { url: request.url, method: request.method, signals: request.signals, headers: parseHeaderLines(request.headers) },
       {
-        onStatus: (status, detail) => this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
+        onStatus: (status, detail) => current() && this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
         onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),
         onNonSse: (r) => {
           const status = Number.parseInt(r.http, 10);
@@ -218,6 +221,7 @@ export class Inspector {
           this.post({ type: "frame", frame });
         },
         onError: (message) => {
+          if (!current()) return;
           const unreachable = /^(Connection refused|Host not found)/.test(message);
           const server = this.running.current();
           const hint = unreachable ? unreachableHint(raw.url, vars, server) : null;
@@ -226,7 +230,7 @@ export class Inspector {
           else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined, requestUrl: request.url });
         },
       },
-      this.abort.signal,
+      abort.signal,
     );
   }
 

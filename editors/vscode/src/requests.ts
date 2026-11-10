@@ -144,7 +144,8 @@ function rawMember(text: string, index: number): string | null {
 
 /**
  * The headers of an entry as lines. A value that is not text is as written in the file, without the
- * spaces between its parts: JSON.parse has already spelt `1.0` as `1` and rounded a number past 2^53.
+ * spaces between its parts: JSON.parse has already spelt `1.0` as `1`, rounded a number past 2^53,
+ * read the escapes and kept one of two keys of a name.
  */
 function headerLines(headers: Record<string, unknown>, raw: Map<string, string>): string {
   return Object.entries(headers)
@@ -174,7 +175,7 @@ function rawHeaders(text: string, index: number): Map<string, string> {
   return found;
 }
 
-/** JSON as written, less the spaces between its parts; a string is spelt as JSON.stringify spells it. */
+/** JSON as written, less the white space between its parts. */
 function compactJson(text: string): string {
   let out = "";
   let i = 0;
@@ -183,7 +184,7 @@ function compactJson(text: string): string {
     if (c === '"') {
       let end = i + 1;
       while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
-      out += JSON.stringify(JSON.parse(text.slice(i, end + 1)));
+      out += text.slice(i, end + 1);
       i = end + 1;
     } else {
       if (!" \t\n\r".includes(c)) out += c;

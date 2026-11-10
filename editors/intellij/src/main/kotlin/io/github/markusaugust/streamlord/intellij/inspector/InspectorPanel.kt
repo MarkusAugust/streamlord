@@ -15,6 +15,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -98,6 +99,9 @@ class InspectorPanel(
     /** A Connect that is reading the variables before it sends. */
     private var connecting: Job? = null
     private var connection: StreamClient.Connection? = null
+
+    /** Counts the requests stopped, so one stopped or followed by another no longer speaks for the status. */
+    private var stopped = 0
     private var signals: JsonObject = JsonObject.EMPTY
     private var count = 0
 
@@ -226,7 +230,11 @@ class InspectorPanel(
             object : BulkFileListenerBackgroundable {
                 override fun after(events: List<VFileEvent>) {
                     val requests = store.requestsFilePath()
-                    if (events.any { it.path == requests || (it.path.contains("/.streamlord/") && it.path.endsWith(".json")) }) {
+                    if (events.any {
+                            FileUtil.pathsEqual(it.path, requests) ||
+                                (it.path.contains("/.streamlord/") && it.path.endsWith(".json"))
+                        }
+                    ) {
                         later { pushRequests(null) }
                     }
                 }
@@ -237,7 +245,9 @@ class InspectorPanel(
             object : com.intellij.openapi.editor.event.DocumentListener {
                 override fun documentChanged(event: com.intellij.openapi.editor.event.DocumentEvent) {
                     val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
-                    if ((file.name == "env.json" && file.parent?.name == ".streamlord") || file.path == store.requestsFilePath()) {
+                    if ((file.name == "env.json" && file.parent?.name == ".streamlord") ||
+                        FileUtil.pathsEqual(file.path, store.requestsFilePath())
+                    ) {
                         later { pushRequests(null) }
                     }
                 }
@@ -686,12 +696,15 @@ class InspectorPanel(
                     /** Set on the UI thread, where the statuses are shown in turn: the close after an error does not hide it. */
                     private var failed = false
 
+                    /** Whether this is still the request of the panel, on the UI thread: a close can come after Stop or the next Connect. */
+                    private val current = stopped.let { at -> { at == stopped } }
+
                     override fun onStatus(
                         status: StreamClient.Status,
                         http: String?,
                         contentType: String?,
                     ) = later {
-                        if (failed && status == StreamClient.Status.CLOSED) return@later
+                        if (!current() || (failed && status == StreamClient.Status.CLOSED)) return@later
                         setStatus(
                             status.name.lowercase() + (http?.let { " · $it" } ?: "") + (contentType?.let { " · $it" } ?: ""),
                             status,
@@ -718,6 +731,7 @@ class InspectorPanel(
 
                     override fun onError(message: String) =
                         later {
+                            if (!current()) return@later
                             val unreachable = message.startsWith("Connection refused") || message.startsWith("Host not found")
                             val server = running.current()
                             val hint = if (unreachable) Requests.unreachableHint(raw.url, vars, server) else null
@@ -738,6 +752,7 @@ class InspectorPanel(
         connecting = null
         connection?.close()
         connection = null
+        stopped++
     }
 
     /**
