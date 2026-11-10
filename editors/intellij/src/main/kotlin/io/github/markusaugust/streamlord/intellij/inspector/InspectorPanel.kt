@@ -542,16 +542,24 @@ class InspectorPanel(
         done: (VirtualFile, Boolean) -> Unit,
     ): Job =
         scope.launch(ModalityState.current().asContextElement()) {
-            try {
-                val planned = readAction(plan)
-                withContext(Dispatchers.EDT) {
-                    val (file, changed) = store.apply(planned)
-                    done(file, changed)
+            val planned =
+                try {
+                    readAction(plan)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    withContext(Dispatchers.EDT) { error(e.message ?: failure) }
+                    return@launch
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                withContext(Dispatchers.EDT) { error(e.message ?: failure) }
+            withContext(Dispatchers.EDT) {
+                val written =
+                    try {
+                        store.apply(planned)
+                    } catch (e: Exception) {
+                        error(e.message ?: failure)
+                        return@withContext
+                    }
+                done(written.first, written.second)
             }
         }
 

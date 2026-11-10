@@ -147,7 +147,8 @@ class StreamClient(
             val response =
                 blocking {
                     try {
-                        client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+                        // Held on the thread that got it: a cancellation as it arrives drops the answer, and the body with it.
+                        client.send(request, HttpResponse.BodyHandlers.ofInputStream()).also { holder.stream = it.body() }
                     } catch (e: ConnectException) {
                         /*
                          * localhost is 127.0.0.1 first, and Java's client tries no other address. A
@@ -155,13 +156,13 @@ class StreamClient(
                          * VS Code inspector, so it is tried here before the refusal is reported.
                          */
                         val v6 = ipv6Loopback(target) ?: throw e
-                        client.send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
+                        client
+                            .send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
+                            .also { holder.stream = it.body() }
                     }
                 }
             response.body().use { body ->
-                // Held before anything is read, so a close from here on ends the read; one that came while the
-                // request was in flight is honoured here, and the response is never reported open.
-                holder.stream = body
+                // A close that came while the request was in flight is honoured here, and the response is never reported open.
                 if (aborted.get()) {
                     handlers.onStatus(Status.CLOSED)
                     return
@@ -193,6 +194,7 @@ class StreamClient(
             }
             handlers.onStatus(Status.CLOSED)
         } catch (e: Exception) {
+            holder.close()
             // A request that was closed, or whose scope ended, has not failed, however the read under way put it.
             if (!aborted.get() && e !is CancellationException && currentCoroutineContext().isActive) handlers.onError(describe(e, url))
             handlers.onStatus(Status.CLOSED)

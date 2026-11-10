@@ -826,6 +826,83 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(listOf("feed", "pulled"), store.saved().map { it.name })
     }
 
+    fun `test the variables file edited after a change was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        val (file, _) = store.defineVariables(emptyList())
+        try {
+            val planned = store.usingBaseUrl("http://localhost:9103")
+            val document = FileDocumentManager.getInstance().getDocument(file)!!
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("""{"baseUrl": "http://typed"}""") }
+
+            try {
+                store.apply(planned)
+                fail("the change wrote over text typed since")
+            } catch (e: IllegalStateException) {
+                assertEquals("${Requests.ENV_FILE} changed in the meantime. Try again.", e.message)
+            }
+            assertEquals("""{"baseUrl": "http://typed"}""", document.text)
+        } finally {
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        }
+    }
+
+    // The stream is open and silent when its scope ends: the read under way is interrupted, which is no failure.
+    fun `test an open stream ends quietly when its scope does`() {
+        val server = java.net.ServerSocket(0)
+        val serving =
+            Thread {
+                runCatching {
+                    server.accept().use { socket ->
+                        val input = socket.getInputStream().bufferedReader()
+                        var line = input.readLine()
+                        while (!line.isNullOrEmpty()) line = input.readLine()
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n".toByteArray())
+                            flush()
+                        }
+                        Thread.sleep(30_000)
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+        try {
+            val open = CountDownLatch(1)
+            val closed = CountDownLatch(1)
+            val errors = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val scope = CoroutineScope(SupervisorJob())
+            StreamClient(scope).open(
+                "http://127.0.0.1:${server.localPort}/silent",
+                "GET",
+                "{}",
+                emptyMap(),
+                object : StreamClient.Handlers {
+                    override fun onStatus(
+                        status: StreamClient.Status,
+                        http: String?,
+                        contentType: String?,
+                    ) {
+                        if (status == StreamClient.Status.OPEN) open.countDown()
+                        if (status == StreamClient.Status.CLOSED) closed.countDown()
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
+                    }
+                },
+            )
+            assertTrue(open.await(10, TimeUnit.SECONDS))
+            Thread.sleep(200)
+            scope.cancel()
+            assertTrue(closed.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
+        } finally {
+            serving.interrupt()
+            server.close()
+        }
+    }
+
     // The server takes the connection and never answers, so the request is waiting when its scope ends.
     fun `test a request waiting for the server ends quietly when its scope does`() {
         val server = java.net.ServerSocket(0)
