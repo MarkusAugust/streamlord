@@ -24,7 +24,7 @@ describe("hole landings", () => {
   it("gives the start of a value in the markup it was handed, known text or not", () => {
     const markup = '<a %s="x%s">';
     const [name, url] = holeLandings(markup, [{ start: 3, end: 5 }, { start: 8, end: 10 }], undefined, new Map([[0, "href"]]));
-    assert.deepEqual(name, { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false });
+    assert.deepEqual(name, { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false, tagStart: -1 });
     assert.equal(url?.position, "URL");
     assert.equal(url?.valueStart, 7);
     assert.equal(holeLandings('<a href="%s">', [{ start: 9, end: 11 }], undefined, new Map([[0, '/x" title="']]))[0]?.position, "TEXT");

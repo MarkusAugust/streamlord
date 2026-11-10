@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
 import { lexCached } from "./analyze.ts";
-import { expressionAtCaret, type ExpressionAtCaret } from "./caret.ts";
+import { expressionAtCaret, tagBeforeCaretInString, type ExpressionAtCaret } from "./caret.ts";
 import { catalog, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { actionCallAt } from "./completionContext.ts";
+import { actionCallAt, tagBeforeCaret } from "./completionContext.ts";
 import { actionPrefixAt, signalPrefixAt } from "./expression.ts";
 import { keyKind } from "./markup.ts";
 import { kotlinExpressionAtCaret, kotlinHtmlStringAt, kotlinModules, streamlordSites } from "./modules.ts";
+import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites } from "./scanner.ts";
 import type { SignalIndex } from "./signalIndex.ts";
 
@@ -18,35 +19,6 @@ const ALL_SITES: ReadonlySet<string> = new Set([
   ...Object.keys(catalog.callSites.selector),
 ]);
 const SELECTOR_ARG_NAMES = new Set(["selector", "viewTransitionSelector"]);
-
-/**
- * Where the tag `offset` stands in starts, reading `src` from `from` as the browser reads markup, or
- * -1 when it stands in text, in a comment or in a quoted value. A quote opens a value only inside a
- * tag, and `>` closes the tag only outside one, so a value may hold `>`, `<` and line breaks.
- * tagStartAt in StreamlordCompletionContributor.kt.
- */
-export function tagStartAt(src: string, from: number, offset: number): number {
-  let tag = -1;
-  let quote = "";
-  let i = from;
-  while (i < offset) {
-    const c = src[i];
-    if (tag < 0) {
-      if (src.startsWith("<!--", i)) {
-        const end = src.indexOf("-->", i + 4);
-        if (end < 0 || end + 3 > offset) return -1;
-        i = end + 3;
-        continue;
-      }
-      if (c === "<" && /[A-Za-z]/.test(src[i + 1] ?? "")) tag = i;
-    } else if (quote !== "") {
-      if (c === quote) quote = "";
-    } else if (c === '"' || c === "'") quote = c;
-    else if (c === ">") tag = -1;
-    i++;
-  }
-  return quote === "" ? tag : -1;
-}
 
 /** Completions for Datastar expressions in Kotlin strings, and for data-* attributes in HTML. */
 export class StreamlordCompletionProvider implements vscode.CompletionItemProvider {
@@ -67,7 +39,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (expression) return this.expressionItems(expression, src, offset, document, position);
     // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
     const html = kotlinHtmlStringAt(src, offset, modules);
-    if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position, html.contentStart);
+    if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position, html);
     return [];
   }
 
@@ -118,18 +90,17 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   }
 
   /** Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup languages. */
-  /** `from` is where the markup starts: the file's start, or the start of a Kotlin string. */
-  private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position, from = 0): vscode.CompletionItem[] {
+  /** `string` is the HTML string in Kotlin the caret is in, read decoded; without it `src` is markup. */
+  private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position, string?: KotlinString): vscode.CompletionItem[] {
     const prefix = this.prefix();
     // Inside an attribute value, read as the browser reads the markup: over several lines and in either quote.
     if (document.languageId !== "kotlin") {
       const expression = expressionAtCaret(src, offset, false, prefix);
       if (expression) return this.expressionItems(expression, src, offset, document, position);
     }
-    // From the start of the tag the caret is in, which may be lines above, with its attributes on lines of their own.
-    const tag = tagStartAt(src, from, offset);
-    if (tag < 0) return [];
-    const before = src.slice(tag, offset);
+    // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
+    const before = string ? tagBeforeCaretInString(string, offset, prefix) : tagBeforeCaret(src, offset, prefix);
+    if (before === null) return [];
     // On an attribute name inside a tag: <div data-on:cl|
     // What comes before is whitespace-separated runs of plain characters and quoted strings, each
     // character read one way only. Telling names from values instead made `<a != != …` backtrack

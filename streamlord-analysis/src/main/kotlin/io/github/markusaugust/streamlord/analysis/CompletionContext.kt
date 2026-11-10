@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.landingAsParsed
 
 /*
@@ -40,6 +41,31 @@ public fun valueAtCaret(
     if (landing.valueStart !in 0..offset) return null
     return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text)
 }
+
+/**
+ * The markup of the tag [offset] stands in, from its `<` up to [offset], read as [valueAtCaret]
+ * reads it, or null in text, a comment, raw text or a quoted value. The tag may begin lines above,
+ * with its attributes on lines of their own. tagBeforeCaret in completionContext.ts.
+ */
+public fun tagBeforeCaret(
+    markup: String,
+    offset: Int,
+    prefix: String,
+    templates: Boolean = true,
+): String? {
+    if (offset !in 0..markup.length) return null
+    val probe = StringBuilder(withTemplateTagNames(markup)).insert(offset, CARET).toString()
+    val landing = landingAsParsed(probe, offset..offset, listOf(prefix), templates)
+    if (landing.position != Position.STRUCTURE || landing.attribute != null || landing.tagStart !in 0..offset) return null
+    return markup.substring(landing.tagStart, offset)
+}
+
+/** [tagBeforeCaret] in an HTML string in Kotlin, read decoded, as its values are. */
+public fun tagBeforeCaret(
+    html: KotlinString,
+    offset: Int,
+    prefix: String,
+): String? = tagBeforeCaret(html.text, decodedIndex(html, offset), prefix, templates = false)
 
 /** The Datastar expression before a caret, as Datastar is handed it, and what belongs there. */
 public data class ExpressionAtCaret(

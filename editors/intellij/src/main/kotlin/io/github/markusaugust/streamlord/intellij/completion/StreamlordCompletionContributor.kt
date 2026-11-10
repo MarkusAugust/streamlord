@@ -23,6 +23,7 @@ import io.github.markusaugust.streamlord.analysis.ActionSpec
 import io.github.markusaugust.streamlord.analysis.AttributeSpec
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret
+import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.ModifierType
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.actionCallAt
@@ -31,6 +32,7 @@ import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.analysis.signalPrefixAt
+import io.github.markusaugust.streamlord.analysis.tagBeforeCaret
 import io.github.markusaugust.streamlord.analysis.valueAtCaret
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
@@ -73,6 +75,12 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     hostFile == null && file.virtualFile != null && !manager.isInjectedFragment(file) &&
                         StreamlordSettings.getInstance(project).state.yieldAttributeNamesToDatastarPlugin &&
                         PluginManagerCore.isPluginInstalled(PluginId.getId(Streamlord.DATASTAR_PLUGIN_ID))
+                // A fragment injected into a Kotlin string holds the string's escapes; its tag is read from the string, decoded.
+                val inKotlin =
+                    (hostFile as? KtFile)?.let { kt ->
+                        val at = manager.injectedToHost(file, parameters.offset)
+                        analysis.analyzer.htmlStringAt(kt.text, at)?.let { it to at }
+                    }
                 Html(
                     file.text,
                     parameters.offset,
@@ -82,6 +90,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     result,
                     offerAttributeNames = !yieldNames,
                     valueFile = file,
+                    string = inKotlin?.first,
+                    stringOffset = inKotlin?.second ?: parameters.offset,
                 ).complete()
             }
         }
@@ -127,8 +137,18 @@ class StreamlordCompletionContributor : CompletionContributor() {
             }
             val html = calls.htmlStringAt(analysis, src, offset)
             if (html != null && offset > html.contentStart && offset <= html.contentEnd) {
-                Html(src, offset, analysis, index, file, result, offerAttributeNames = true, valueFile = null, from = html.contentStart)
-                    .complete()
+                Html(
+                    src,
+                    offset,
+                    analysis,
+                    index,
+                    file,
+                    result,
+                    offerAttributeNames = true,
+                    valueFile = null,
+                    string = html,
+                    stringOffset = offset,
+                ).complete()
             }
         }
 
@@ -201,8 +221,9 @@ class StreamlordCompletionContributor : CompletionContributor() {
         val result: CompletionResultSet,
         val offerAttributeNames: Boolean,
         val valueFile: PsiFile?,
-        /** Where the markup starts: the file's start, or the start of a Kotlin string. */
-        val from: Int = 0,
+        /** The HTML string in Kotlin the caret is in, read decoded, and the caret's offset in its file; without it [src] is markup. */
+        val string: KotlinString? = null,
+        val stringOffset: Int = offset,
     ) {
         val catalog: Catalog = analysis.catalog
         val prefix: String = analysis.prefix
@@ -216,10 +237,9 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 val templates = indexFile !is KtFile
                 if (valueAtCaret(src, offset, prefix, templates) != null) return false
             }
-            // From the start of the tag the caret is in, which may be lines above, with its attributes on lines of their own.
-            val tag = tagStartAt(src, from, offset.coerceIn(0, src.length))
-            if (tag < 0) return false
-            val before = src.substring(tag, offset.coerceIn(0, src.length))
+            // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
+            val before =
+                (if (string != null) tagBeforeCaret(string, stringOffset, prefix) else tagBeforeCaret(src, offset, prefix)) ?: return false
             // On an attribute name inside a tag: <div data-on:cl|. What comes before is whitespace-separated runs of
             // plain characters and quoted strings, as completion.ts reads it, so a quote left open is a value, not a name.
             val inName =
@@ -519,39 +539,3 @@ private class Fixed(
 
 /** Add an element that the machine-learned ranking must not move. */
 private fun CompletionResultSet.addFixed(element: LookupElement) = addElement(Fixed(element))
-
-/**
- * Where the tag [offset] stands in starts, reading [src] from [from] as the browser reads markup, or
- * -1 when it stands in text, in a comment or in a quoted value. A quote opens a value only inside a
- * tag, and `>` closes the tag only outside one, so a value may hold `>`, `<` and line breaks.
- * tagStartAt in completion.ts.
- */
-internal fun tagStartAt(
-    src: String,
-    from: Int,
-    offset: Int,
-): Int {
-    var tag = -1
-    var quote = 0.toChar()
-    var i = from
-    while (i < offset) {
-        val c = src[i]
-        if (tag < 0) {
-            if (src.startsWith("<!--", i)) {
-                val end = src.indexOf("-->", i + 4)
-                if (end < 0 || end + 3 > offset) return -1
-                i = end + 3
-                continue
-            }
-            if (c == '<' && src.getOrNull(i + 1)?.let { it in 'A'..'Z' || it in 'a'..'z' } == true) tag = i
-        } else if (quote != 0.toChar()) {
-            if (c == quote) quote = 0.toChar()
-        } else if (c == '"' || c == '\'') {
-            quote = c
-        } else if (c == '>') {
-            tag = -1
-        }
-        i++
-    }
-    return if (quote == 0.toChar()) tag else -1
-}

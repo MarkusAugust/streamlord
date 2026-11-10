@@ -8,11 +8,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- streamlord-analysis has `tagBeforeCaret`: the markup of the tag a caret stands in, from its `<`,
+  read as the browser reads it, for markup and for an HTML string in Kotlin.
 - streamlord-analysis has `Requests.previewUrl`: a URL with its variables filled in as a request
   sends it, a param encoded and one that cannot be filled left as written.
 
 ### Changed
 
+- `HoleLanding` in streamlord-core has a fifth value, `tagStart`: where the tag a hole landed in
+  starts, or -1. It has a default, but code compiled against the four-value constructor needs a
+  rebuild.
 - `Requests.upsert` and `Requests.remove` in streamlord-analysis are gone, since they changed a
   requests file by writing it anew, which lost what the file held besides its requests.
   `Requests.saveRequest` and `Requests.removeRequest` take the text of the file and return it with
@@ -34,8 +39,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - In both editors, an attribute on a line of its own, in a tag opened on a line above, gets its
   completions: the events after `data-on:`, the modifiers after `__` and their values, and in a
   Kotlin string the attribute names as well. Completion read only the caret's line, so it found
-  no tag there and offered nothing. In VS Code, a `<` in the Kotlin code before an HTML string no
-  longer makes the string read as inside a tag.
+  no tag there and offered nothing. The tag is now read as the browser reads the markup, so the
+  text of a `<script>`, `<style>`, `<textarea>` or `<title>`, a comment and a quoted value hold
+  no tag, and in VS Code a `<` in the Kotlin code before an HTML string no longer makes the
+  string read as inside a tag.
 - In both editors, the inspector reads `.streamlord/inspector.json` as an open editor has it,
   saved or not, as it reads `env.json`, and the Request list follows it as you type. **Save** and
   **Delete** change the open editor's text as one edit that can be undone, where they wrote the

@@ -130,6 +130,76 @@ class CompletionTest : StreamlordTestCase() {
         assertEquals(onModifiers, mods)
     }
 
+    /** The items at the caret in `source`, as a file named `name`. */
+    private fun itemsIn(
+        name: String,
+        source: String,
+    ): List<String> {
+        myFixture.configureByText(name, source)
+        return myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+    }
+
+    /** Each html source whose items are not the modifiers of data-on, with what it got, so one run shows them all. */
+    private fun withoutModifiers(sources: List<String>): List<String> =
+        sources.mapIndexedNotNull { n, source ->
+            val items = itemsIn("page$n.html", source)
+            if (items == onModifiers) null else "$source -> $items"
+        }
+
+    fun `test modifiers after a stray quote elsewhere in the markup`() {
+        val missing =
+            withoutModifiers(
+                listOf(
+                    "<img alt=it's> <div data-on:click__<caret>",
+                    "<p a\"b>x</p>\n<div\n  data-on:click__<caret>",
+                ),
+            )
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test the text of script, textarea and title is read as text`() {
+        val missing =
+            withoutModifiers(
+                listOf(
+                    "<script>if (i<n) {/* don't */}</script> <div data-on:click__<caret>",
+                    "<textarea>x<y isn't</textarea>\n<div data-on:click__<caret>",
+                    "<title>a<b don't</title>\n<div data-on:click__<caret>",
+                ),
+            )
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test no modifiers inside a script or a style`() {
+        for ((n, source) in listOf(
+            "<script>\n if (a<b &&\n  data-on:click__<caret>",
+            "<style>\n a<b\n  data-on:click__<caret>",
+        ).withIndex()) {
+            val items = itemsIn("raw$n.html", source)
+            assertFalse("$source -> $items", "debounce" in items)
+        }
+    }
+
+    fun `test a comment ends at the short closings the browser takes`() {
+        val missing = withoutModifiers(listOf("<!--> <div\n data-on:click__<caret>", "<!---> <div\n data-on:click__<caret>"))
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test escaped quotes in an ordinary kotlin string read as quotes`() {
+        val items = itemsIn("View.kt", "val x = \"<div data-show=\\\"\\\$a > 1\\\" data-on:click__<caret>\"")
+        assertEquals(onModifiers, items)
+    }
+
+    fun `test no tag is read out of the kotlin code before the string`() {
+        // The quotes in the code pair up so that `<b` reads as a tag reaching into the string.
+        for ((n, source) in listOf(
+            "val ok = a <b || e == \"\\\"\"; s.patchElements(\"\"\"  data-on:click__<caret>\"\"\")",
+            "val ok = a <b || e == \"\\\"\"\ns.patchElements(\"\"\"\n  data-on:click__<caret>\"\"\")",
+        ).withIndex()) {
+            val items = itemsIn("Code$n.kt", source)
+            assertFalse("$source -> $items", "debounce" in items)
+        }
+    }
+
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {
         myFixture.configureByText("page.html", "<div data-on-signal-patch=\"pat<caret>\"></div>")
         // The one item is inserted straight away.
