@@ -85,12 +85,24 @@ function readRequests(json: string, path: string): ReadRequests {
     return none(position !== undefined ? `${path} is not valid JSON ${lineAndColumn(json, Number(position))}.` : `${path} is not valid JSON.`);
   }
   if (!isObject(raw)) return none(`${path} is not a requests file: it must be an object with a "requests" list.`);
+  if (Object.hasOwn(raw, "version") && raw.version !== 1) {
+    const written = topLevelValues(json).get("version") ?? JSON.stringify(raw.version);
+    return none(`${path} is version ${written} of the requests file, and this Streamlord reads version 1.`);
+  }
   if (!Object.hasOwn(raw, "requests")) return { ...none(), root: raw };
   const list = raw.requests;
   if (!Array.isArray(list)) return none(`${path} is not a requests file: "requests" must be a list.`);
   const skipped: string[] = [];
+  // Where the first entry of each name stands: a file holds a name once, and a later entry of it is not read.
+  const named = new Map<string, number>();
   const entries = (list as unknown[]).map((item, index): SavedRequest | null => {
-    const missing = !isObject(item) ? "it is not an object" : typeof item.name !== "string" ? 'it has no "name"' : typeof item.url !== "string" ? 'it has no "url"' : null;
+    let missing = !isObject(item) ? "it is not an object" : typeof item.name !== "string" ? 'it has no "name"' : typeof item.url !== "string" ? 'it has no "url"' : null;
+    if (missing === null && isObject(item)) {
+      const key = nameKey(item.name as string);
+      const earlier = named.get(key);
+      if (earlier === undefined) named.set(key, index + 1);
+      else missing = `request ${earlier} has its name`;
+    }
     if (missing !== null || !isObject(item)) {
       skipped.push(`Request ${index + 1} in ${path} is not read: ${missing}.`);
       return null;
@@ -209,7 +221,8 @@ export function requestsPathProblem(path: string): string | null {
   if (path.split(/[/\\]/).includes("..")) return `The requests file ${path} leaves the workspace: use a path without .. in it.`;
   if (path.includes("\\")) return `The requests file ${path} holds a backslash: write the path with /.`;
   if (path.endsWith("/")) return `The requests file ${path} names a folder: add a file name, such as ${path}inspector.json.`;
-  if (path.trim().replace(/^\.\//, "").toLowerCase() === ENV_FILE) return `The requests file cannot be ${ENV_FILE}: that file holds the variables.`;
+  const named = path.trim().split("/").filter((part) => part.length > 0 && part !== ".").join("/");
+  if (named.toLowerCase() === ENV_FILE) return `The requests file cannot be ${ENV_FILE}: that file holds the variables.`;
   return null;
 }
 
@@ -270,47 +283,40 @@ export function saveRequest(text: string | null, request: SavedRequest, path = R
   const fresh = (): RequestsEdit => ({ text: serializeRequestsFile({ requests: [request] }), error: null });
   if (text === null || empty(withoutBom(text))) return fresh();
   const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
-  let json = withoutBom(text);
+  const json = withoutBom(text);
   const read = readRequests(json, path);
   if (read.file.error !== undefined) return { text: null, error: read.file.error };
+  // What is written follows the line endings of the file it is written into.
+  const written = (lines: string) => (json.includes("\r\n") ? lines.replace(/\n/g, "\r\n") : lines);
   const list = listed(json);
   if (list === null) {
     if (read.root === null || Object.keys(read.root).length === 0) return fresh();
     const scan = new JsonScan(json);
     let last = 0;
     scan.members(scan.skipSpace(0), (_k, _s, end) => (last = end));
-    return { text: `${bom}${json.slice(0, last)},\n  "requests": [\n    ${entryText(request)}\n  ]${json.slice(last)}`, error: null };
+    return { text: bom + json.slice(0, last) + written(`,\n  "requests": [\n    ${entryText(request)}\n  ]`) + json.slice(last), error: null };
   }
   const key = nameKey(request.name);
   const keys = read.entries.map((e) => (e === null ? null : nameKey(e.name)));
-  const same = keys.flatMap((k, i) => (k === key ? [i] : []));
-  const first = same[0];
-  if (first === undefined) {
-    const before = keys.findIndex((k) => k !== null && k > key);
-    const entry = entryText(request);
-    const lastSpan = list.spans[list.spans.length - 1];
-    const at = list.spans[before];
-    const out =
-      at !== undefined
-        ? `${json.slice(0, at[0])}${entry},\n    ${json.slice(at[0])}`
-        : lastSpan !== undefined
-          ? `${json.slice(0, lastSpan[1])},\n    ${entry}${json.slice(lastSpan[1])}`
-          : `${json.slice(0, list.open + 1)}\n    ${entry}\n  ${json.slice(list.close)}`;
-    return { text: bom + out, error: null };
-  }
+  const first = keys.indexOf(key);
+  const span = list.spans[first];
   const held = read.entries[first];
-  if (same.length === 1 && held && sameRequest(held, request)) return { text, error: null };
-  // The later ones of the name go first, so the first still stands where it stood.
-  for (const index of same.slice(1).reverse()) json = without(json, index);
-  const span = listed(json)?.spans[first];
-  if (span === undefined) return { text: null, error: `${path} is not a requests file: "requests" must be a list.` };
+  if (span === undefined || !held) {
+    const entry = entryText(request);
+    const at = list.spans[keys.findIndex((k) => k !== null && k > key)];
+    const lastSpan = list.spans[list.spans.length - 1];
+    const [from, added, rest]: [number, string, number] =
+      at !== undefined ? [at[0], `${entry},\n    `, at[0]] : lastSpan !== undefined ? [lastSpan[1], `,\n    ${entry}`, lastSpan[1]] : [list.open + 1, `\n    ${entry}\n  `, list.close];
+    return { text: bom + json.slice(0, from) + written(added) + json.slice(rest), error: null };
+  }
+  if (sameRequest(held, request)) return { text, error: null };
   const old = JSON.parse(json.slice(span[0], span[1])) as Record<string, unknown>;
   const more: string[] = [];
   new JsonScan(json).membersAsWritten(span[0], (keyStart, keyEnd, k, start, end) => {
     if (!ENTRY_KEYS.has(k)) more.push(`${json.slice(keyStart, keyEnd)}: ${json.slice(start, end)}`);
   });
   const entry = entryText(request, signalsAs(old.signals, request.signals), headersAs(old.headers, request.headers), more);
-  return { text: bom + json.slice(0, span[0]) + entry + json.slice(span[1]), error: null };
+  return { text: bom + json.slice(0, span[0]) + written(entry) + json.slice(span[1]), error: null };
 }
 
 /**
@@ -320,14 +326,12 @@ export function saveRequest(text: string | null, request: SavedRequest, path = R
 export function removeRequest(text: string | null, name: string, path = REQUESTS_FILE): RequestsEdit {
   if (text === null || empty(withoutBom(text))) return { text: text ?? "", error: null };
   const bom = text.startsWith("\uFEFF") ? "\uFEFF" : "";
-  let json = withoutBom(text);
+  const json = withoutBom(text);
   const read = readRequests(json, path);
   if (read.file.error !== undefined) return { text: null, error: read.file.error };
   const key = nameKey(name);
-  const same = read.entries.flatMap((e, i) => (e !== null && nameKey(e.name) === key ? [i] : []));
-  if (same.length === 0) return { text, error: null };
-  for (const index of same.reverse()) json = without(json, index);
-  return { text: bom + json, error: null };
+  const first = read.entries.findIndex((e) => e !== null && nameKey(e.name) === key);
+  return first < 0 ? { text, error: null } : { text: bom + without(json, first), error: null };
 }
 
 /** `json` without the entry at `index` of its list, and without the comma that set it apart. */
@@ -344,7 +348,7 @@ function without(json: string, index: number): string {
 
 /** The signals of a saved entry as JSON: an object as written when the entry held one before and still can, or else text. */
 function signalsAs(old: unknown, signals: string): string {
-  const trimmed = signals.trim();
+  const trimmed = signals.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "");
   let stillObject = false;
   if (old !== null && typeof old === "object") {
     try {
@@ -361,11 +365,11 @@ function headersAs(old: unknown, headers: string): string {
   const text = jsonString(headers);
   if (!isObject(old)) return text;
   const members: [string, string][] = [];
-  for (const line of headers.split("\n").map((l) => l.replace(/\r+$/, "")).filter((l) => l.trim().length > 0)) {
+  for (const line of headers.split("\n").filter((l) => /[^ \t\r]/.test(l))) {
     const colon = line.indexOf(":");
-    const name = colon > 0 ? line.slice(0, colon).trim() : "";
-    if (name.length === 0 || members.some(([n]) => n.toLowerCase() === name.toLowerCase())) return text;
-    members.push([name, line.slice(colon + 1).trim()]);
+    const name = colon > 0 ? line.slice(0, colon).replace(/^[ \t]+|[ \t]+$/g, "") : "";
+    if (name.length === 0 || members.some(([n]) => nameKey(n) === nameKey(name))) return text;
+    members.push([name, line.slice(colon + 1).replace(/^[ \t\r]+|[ \t\r]+$/g, "")]);
   }
   if (members.length === 0) return text;
   return `{ ${members.map(([k, v]) => `${jsonString(k)}: ${jsonString(v)}`).join(", ")} }`;

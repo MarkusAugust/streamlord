@@ -4,7 +4,7 @@ import { Inspector } from "../src/inspector.ts";
 import type { DatastarFrame } from "../src/sse.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
-import { files, Uri, workspace } from "./vscode-mock.ts";
+import { files, settings, unreadable, Uri, workspace } from "./vscode-mock.ts";
 
 /** An inspector with a stand-in panel that records what it posts to the page. */
 function inspector(): { apply: (signals: string, onlyIfMissing?: string) => void; posted: { type: string; [k: string]: unknown }[] } {
@@ -75,6 +75,8 @@ const REQUESTS = "/ws/.streamlord/inspector.json";
 /** An inspector over a store that reads `text` as the requests file, null for none; `push` sends the page its requests. */
 function inspectorOver(text: string | null) {
   files.clear();
+  unreadable.clear();
+  settings.clear();
   workspace.textDocuments.length = 0;
   workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
   const write = (t: string | null) => (t === null ? files.delete(REQUESTS) : files.set(REQUESTS, new TextEncoder().encode(t)));
@@ -138,5 +140,27 @@ describe("inspector requests file", () => {
     const { push, reads } = inspectorOver('{"requests": [7, {"name": "feed", "url": "/feed"}]}');
     await push();
     assert.equal(reads.count, 1);
+  });
+
+  // The default file is what the list then shows, and nothing else said so before a Save was refused.
+  it("tells the page first when the setting names a path with a problem", async () => {
+    const { push, write } = inspectorOver('{"requests": [7, {"name": "feed", "url": "/feed"}]}');
+    settings.set("streamlord.inspector.requestsFile", "../elsewhere/requests.json");
+    const problem = "The requests file ../elsewhere/requests.json leaves the workspace: use a path without .. in it. The default file is shown.";
+    try {
+      const m = await push();
+      assert.deepEqual(m.requestProblems, [problem, "Request 1 in .streamlord/inspector.json is not read: it is not an object."]);
+      assert.deepEqual(m.saved.map((r: { name: string }) => r.name), ["feed"]);
+      write("[]");
+      assert.deepEqual((await push()).requestProblems, [problem, '.streamlord/inspector.json is not a requests file: it must be an object with a "requests" list.']);
+      write(null);
+      assert.deepEqual((await push()).requestProblems, [problem]);
+      settings.set("streamlord.inspector.requestsFile", ".streamlord/env.json");
+      assert.deepEqual((await push()).requestProblems, ["The requests file cannot be .streamlord/env.json: that file holds the variables. The default file is shown."]);
+      settings.clear();
+      assert.deepEqual((await push()).requestProblems, []);
+    } finally {
+      settings.clear();
+    }
   });
 });

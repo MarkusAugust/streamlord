@@ -1,7 +1,7 @@
 import { beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { files, Position, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
+import { files, Position, settings, unreadable, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
 
@@ -57,6 +57,8 @@ const baseUrl = async (s: RequestStore) => (await s.environment()).vars.find((v)
 describe("request store", () => {
   beforeEach(() => {
     files.clear();
+    unreadable.clear();
+    settings.clear();
     workspace.textDocuments.length = 0;
     workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
     files.set(ENV, bytes('{"baseUrl": "http://disk:1"}'));
@@ -159,5 +161,82 @@ describe("request store", () => {
     files.set(REQUESTS, bytes('{"requests": [{"name": "a", "url": "/a"}]}'));
     const clean = await s.readFile();
     assert.deepEqual([clean.requests.map((r) => r.name), clean.skipped], [["a"], []]);
+  });
+
+  const request = (name: string) => ({ name, url: `/${name}`, method: "GET", signals: "", headers: "" });
+
+  // Reading it as a missing file would write a fresh file over requests that are there.
+  it("does not take a file it cannot read for a missing one", async () => {
+    const written = bytes(HAND_WRITTEN);
+    files.set(REQUESTS, written);
+    unreadable.set(REQUESTS, Object.assign(new Error("EACCES: permission denied"), { code: "NoPermissions" }));
+    const s = store();
+    const file = await s.readFile();
+    const error = ".streamlord/inspector.json cannot be read: EACCES: permission denied";
+    assert.deepEqual([file.requests, file.error], [[], error]);
+    const refused = { message: `${error} Fix the file before saving, so the requests in it are not lost.` };
+    await assert.rejects(s.save(request("a")), refused);
+    await assert.rejects(s.delete("feed"), refused);
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("creates no file where one cannot be read", async () => {
+    unreadable.set(REQUESTS, new Error("the disk is gone"));
+    const s = store();
+    assert.equal((await s.readFile()).error, ".streamlord/inspector.json cannot be read: the disk is gone");
+    await assert.rejects(s.save(request("a")), { message: ".streamlord/inspector.json cannot be read: the disk is gone Fix the file before saving, so the requests in it are not lost." });
+    assert.equal(files.has(REQUESTS), false);
+  });
+
+  it("reads a file that is not found as no file", async () => {
+    const file = await store().readFile();
+    assert.deepEqual([file.requests, file.error, file.skipped], [[], undefined, []]);
+  });
+
+  // Two saves that both read the file before either writes would lose one of them.
+  it("makes changes one at a time, so two saves at once are both kept", async () => {
+    files.set(REQUESTS, bytes('{\n  "version": 1,\n  "requests": []\n}\n'));
+    const s = store();
+    await Promise.all([s.save(request("a")), s.save(request("b"))]);
+    assert.equal(disk(REQUESTS), `{\n  "version": 1,\n  "requests": [\n    ${entry("a", "/a")},\n    ${entry("b", "/b")}\n  ]\n}\n`);
+    await Promise.all([s.delete("a"), s.save(request("c")), s.delete("b")]);
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["c"]);
+  });
+
+  it("goes on with the next change after one that was refused", async () => {
+    files.set(REQUESTS, bytes("[]"));
+    const s = store();
+    const refused = s.save(request("a"));
+    files.set(REQUESTS, bytes('{"requests": []}'));
+    const next = s.save(request("b"));
+    await assert.rejects(refused);
+    await next;
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["b"]);
+  });
+
+  it("reads and writes the file the setting names", async () => {
+    settings.set("streamlord.inspector.requestsFile", "tools/requests.json");
+    const s = store();
+    assert.equal(s.requestsPathProblem(), null);
+    await s.save(request("a"));
+    assert.deepEqual([...files.keys()], [ENV, "/ws/tools/requests.json"]);
+  });
+
+  it("refuses a save and a delete when the setting names a path with a problem, and writes nothing", async () => {
+    const env = files.get(ENV);
+    const problems = {
+      "../elsewhere/requests.json": "The requests file ../elsewhere/requests.json leaves the workspace: use a path without .. in it.",
+      "tools\\requests.json": "The requests file tools\\requests.json holds a backslash: write the path with /.",
+      ".streamlord/./env.json": "The requests file cannot be .streamlord/env.json: that file holds the variables.",
+    };
+    for (const [path, problem] of Object.entries(problems)) {
+      settings.set("streamlord.inspector.requestsFile", path);
+      const s = store();
+      assert.equal(s.requestsPathProblem(), problem);
+      await assert.rejects(s.save(request("a")), { message: `${problem} Nothing was saved.` });
+      await assert.rejects(s.delete("a"), { message: `${problem} Nothing was saved.` });
+      assert.deepEqual([...files.keys()], [ENV]);
+      assert.equal(files.get(ENV), env);
+    }
   });
 });

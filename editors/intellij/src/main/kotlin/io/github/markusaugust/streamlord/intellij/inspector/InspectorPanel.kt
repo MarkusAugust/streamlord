@@ -349,17 +349,19 @@ class InspectorPanel(
         reading?.cancel()
         return scope
             .launch {
-                val read = readAction { store.read() to store.environment() }
-                withContext(Dispatchers.EDT) { show(read.first, read.second) }
+                val read = readAction { Triple(store.read(), store.environment(), store.requestsPathProblem()) }
+                withContext(Dispatchers.EDT) { show(read.first, read.second, read.third) }
             }.also { reading = it }
     }
 
     private fun show(
         file: RequestsFile,
         env: RequestStore.Environment,
+        pathProblem: String?,
     ) {
         val saved = file.requests
-        requestProblems.text = file.error ?: file.skipped.joinToString("\n")
+        val problems = listOfNotNull(pathProblem?.let { "$it The default file is shown." }) + (file.error?.let(::listOf) ?: file.skipped)
+        requestProblems.text = problems.joinToString("\n")
         requestProblems.isVisible = requestProblems.text.isNotEmpty()
         environment = env
         val recent = store.recent()

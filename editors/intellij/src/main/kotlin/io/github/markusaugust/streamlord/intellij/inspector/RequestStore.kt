@@ -39,9 +39,12 @@ class RequestStore(
         return if (configured.isBlank() || Requests.requestsPathProblem(configured) != null) Requests.REQUESTS_FILE else configured
     }
 
+    /** What is wrong with the path the settings name, or null; the default file is read meanwhile. */
+    fun requestsPathProblem(): String? = Requests.requestsPathProblem(settings.state.requestsFile)
+
     fun requestsFile(): VirtualFile? = baseDir()?.findFileByRelativePath(requestsPath())
 
-    /** The requests file; a file that is missing is empty, one that is not JSON says so in [RequestsFile.error]. */
+    /** The requests file; a file that is missing is empty, one that is not read says why in [RequestsFile.error], and an entry that is not read is named in [RequestsFile.skipped]. */
     @RequiresReadLock
     fun read(): RequestsFile {
         val file = requestsFile() ?: return RequestsFile.EMPTY
@@ -75,7 +78,7 @@ class RequestStore(
 
     /** The requests file with [edit] made in its text, or the reason it cannot be: a file that is not read is not written over. */
     private fun requests(edit: (text: String?, path: String) -> RequestsEdit): Change {
-        Requests.requestsPathProblem(settings.state.requestsFile)?.let { throw IllegalStateException("$it Nothing was saved.") }
+        requestsPathProblem()?.let { throw IllegalStateException("$it Nothing was saved.") }
         val file = requestsFile()
         val text = file?.let { VfsUtil.loadText(it) }
         val edited = edit(text, requestsPath())

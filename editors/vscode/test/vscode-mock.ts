@@ -139,8 +139,26 @@ export const Uri = {
   },
 };
 
-/** The disk the store reads and writes, by path. A path not here reads as empty, as before. */
+/** The disk the store reads and writes, by path. A path not here is a file that is not found. */
 export const files = new Map<string, Uint8Array>();
+
+/** The paths that are there and cannot be read, and what reading each throws. */
+export const unreadable = new Map<string, Error>();
+
+/** The settings that are set, by full key such as `streamlord.inspector.requestsFile`; any other has its default. */
+export const settings = new Map<string, unknown>();
+
+export class FileSystemError extends Error {
+  readonly code: string;
+  constructor(message: string, code = "Unknown") {
+    super(message);
+    this.name = `${code} (FileSystemError)`;
+    this.code = code;
+  }
+  static FileNotFound(u?: MockUri): FileSystemError {
+    return new FileSystemError(`Unable to read file '${u?.path ?? ""}' (EntryNotFound (FileSystemError): no such file)`, "FileNotFound");
+  }
+}
 
 /** An open editor's document, which may hold text not yet saved to `files`. */
 export interface OpenDocument {
@@ -184,13 +202,25 @@ export const workspace = {
     return true;
   },
   fs: {
-    readFile: async (u?: MockUri) => (u && files.get(u.path)) ?? new Uint8Array(),
+    readFile: async (u?: MockUri) => {
+      const failure = u && unreadable.get(u.path);
+      if (failure) throw failure;
+      const bytes = u && files.get(u.path);
+      if (!bytes) throw FileSystemError.FileNotFound(u);
+      return bytes;
+    },
     writeFile: async (u: MockUri, bytes: Uint8Array) => {
       files.set(u.path, bytes);
     },
     createDirectory: async () => {},
   },
-  getConfiguration: () => ({ get: <T>(_k: string, d: T) => d, update: async () => {} }),
+  getConfiguration: (section?: string) => ({
+    get: <T>(k: string, d: T) => {
+      const key = section ? `${section}.${k}` : k;
+      return settings.has(key) ? (settings.get(key) as T) : d;
+    },
+    update: async () => {},
+  }),
 };
 
 export const window = { showInformationMessage: () => {} };

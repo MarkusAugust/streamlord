@@ -67,12 +67,13 @@ export class Inspector {
   private async pushRequests(current?: Partial<SavedRequest>): Promise<void> {
     const [file, env] = await Promise.all([this.store.readFile(), this.store.environment()]);
     const saved = file.requests;
+    const pathProblem = this.store.requestsPathProblem();
     const recent = this.store.recent();
     this.post({
       type: "requests",
       saved,
       // Why the file is not read, or which of its entries are not: they stay in the file, and the user is told.
-      requestProblems: file.error !== undefined ? [file.error] : file.skipped,
+      requestProblems: [...(pathProblem === null ? [] : [`${pathProblem} The default file is shown.`]), ...(file.error !== undefined ? [file.error] : file.skipped)],
       recent,
       newLabel: newRequestLabel(saved.length, recent.length),
       variables: variableValues(env.vars),

@@ -90,6 +90,22 @@ class InspectorTest : BasePlatformTestCase() {
     private fun notes(panel: InspectorPanel) =
         UIUtil.findComponentsOfType(panel, JBTextArea::class.java).filter { !it.isEditable }.map { it.text }
 
+    private fun areas(panel: InspectorPanel) = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).filter { !it.isEditable }
+
+    /** The one area that tells the user exactly [text]. */
+    private fun telling(
+        panel: InspectorPanel,
+        text: String,
+    ): JBTextArea {
+        val found = areas(panel).filter { it.text == text }
+        assertEquals(notes(panel).toString(), 1, found.size)
+        return found.single()
+    }
+
+    // An area that holds nothing is not shown, so it takes no room in the form.
+    private fun assertNoEmptyAreaShows(panel: InspectorPanel) =
+        assertEquals(emptyList<String>(), areas(panel).filter { it.text.isEmpty() && it.isVisible }.map { it.toString() })
+
     private fun aboutTheRequestsFile(text: String) =
         "is not read" in text || "is not a requests file" in text || "is not valid JSON" in text
 
@@ -788,7 +804,13 @@ class InspectorTest : BasePlatformTestCase() {
         remove(Requests.REQUESTS_FILE)
         val refused = "The requests file cannot be .streamlord/env.json: that file holds the variables. Nothing was saved."
         try {
-            for (path in listOf(".streamlord/env.json", "./.streamlord/env.json", ".Streamlord/ENV.json")) {
+            for (path in listOf(
+                ".streamlord/env.json",
+                "./.streamlord/env.json",
+                ".Streamlord/ENV.json",
+                ".streamlord/./env.json",
+                ".streamlord//env.json",
+            )) {
                 settings.state.requestsFile = path
                 assertEquals(Requests.REQUESTS_FILE, store.requestsPath())
                 val saved = assertFailsWith<IllegalStateException> { store.save(SavedRequest("a", "/a", "GET", "", "")) }
@@ -813,7 +835,7 @@ class InspectorTest : BasePlatformTestCase() {
             val skipped =
                 "Request 1 in .streamlord/inspector.json is not read: it is not an object.\n" +
                     "Request 3 in .streamlord/inspector.json is not read: it has no \"url\"."
-            assertTrue(notes(panel).toString(), skipped in notes(panel))
+            assertTrue(telling(panel, skipped).isVisible)
         } finally {
             remove(Requests.REQUESTS_FILE)
         }
@@ -825,7 +847,7 @@ class InspectorTest : BasePlatformTestCase() {
             val panel = InspectorPanel(project, testRootDisposable)
             await(panel.pushRequests(null))
             val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
-            assertTrue(notes(panel).toString(), reason in notes(panel))
+            assertTrue(telling(panel, reason).isVisible)
         } finally {
             remove(Requests.REQUESTS_FILE)
         }
@@ -836,18 +858,68 @@ class InspectorTest : BasePlatformTestCase() {
         try {
             val panel = InspectorPanel(project, testRootDisposable)
             await(panel.pushRequests(null))
-            assertTrue(notes(panel).toString(), notes(panel).any(::aboutTheRequestsFile))
+            val area = telling(panel, "Request 2 in .streamlord/inspector.json is not read: it has no \"url\".")
+            assertTrue(area.isVisible)
 
-            // Once the file is put right, what was said about it goes.
+            // Once the file is put right, what was said about it goes, and the area with it.
             write(Requests.REQUESTS_FILE, "{\"requests\": [{\"name\": \"feed\", \"url\": \"/feed\"}]}")
             await(panel.pushRequests(null))
             assertFalse(notes(panel).toString(), notes(panel).any(::aboutTheRequestsFile))
+            assertEquals("", area.text)
+            assertFalse(area.isVisible)
+            assertNoEmptyAreaShows(panel)
 
             remove(Requests.REQUESTS_FILE)
             val fresh = InspectorPanel(project, testRootDisposable)
             await(fresh.pushRequests(null))
             assertFalse(notes(fresh).toString(), notes(fresh).any(::aboutTheRequestsFile))
+            assertNoEmptyAreaShows(fresh)
         } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    // The default file is what the list then shows, and nothing else said so before a Save was refused.
+    fun `test the panel says first when the setting names a path with a problem`() {
+        val store = RequestStore.getInstance(project)
+        val settings = StreamlordSettings.getInstance(project)
+        val problem = "The requests file ../elsewhere/inspector.json leaves the project: use a path without .. in it."
+        val skipped = "Request 1 in .streamlord/inspector.json is not read: it is not an object."
+        write(Requests.REQUESTS_FILE, "{\"requests\": [7, {\"name\": \"feed\", \"url\": \"/feed\"}]}")
+        try {
+            assertNull(store.requestsPathProblem())
+            settings.state.requestsFile = "../elsewhere/inspector.json"
+            assertEquals(problem, store.requestsPathProblem())
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val area = telling(panel, "$problem The default file is shown.\n$skipped")
+            assertTrue(area.isVisible)
+
+            write(Requests.REQUESTS_FILE, "[]")
+            await(panel.pushRequests(null))
+            val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
+            assertEquals("$problem The default file is shown.\n$reason", area.text)
+
+            remove(Requests.REQUESTS_FILE)
+            await(panel.pushRequests(null))
+            assertEquals("$problem The default file is shown.", area.text)
+            assertTrue(area.isVisible)
+
+            settings.state.requestsFile = ".streamlord/./env.json"
+            assertEquals("The requests file cannot be .streamlord/env.json: that file holds the variables.", store.requestsPathProblem())
+            await(panel.pushRequests(null))
+            assertEquals(
+                "The requests file cannot be .streamlord/env.json: that file holds the variables. The default file is shown.",
+                area.text,
+            )
+
+            settings.state.requestsFile = ""
+            assertNull(store.requestsPathProblem())
+            await(panel.pushRequests(null))
+            assertEquals("", area.text)
+            assertFalse(area.isVisible)
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
             remove(Requests.REQUESTS_FILE)
         }
     }
