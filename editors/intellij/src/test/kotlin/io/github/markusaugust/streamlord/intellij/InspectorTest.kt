@@ -5,6 +5,7 @@ import com.intellij.execution.process.ProcessOutputTypes
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.ui.components.JBTextArea
@@ -53,9 +54,44 @@ class InspectorTest : BasePlatformTestCase() {
 
     private fun RequestStore.delete(name: String) = apply(deleting(name))
 
-    private fun RequestStore.defineVariables(keys: List<String>) = apply(definingVariables(keys))
+    private fun RequestStore.defineVariables(keys: List<String>) = apply(definingVariables(keys)).let { it.first!! to it.second }
 
-    private fun RequestStore.useBaseUrl(url: String) = apply(usingBaseUrl(url))
+    private fun RequestStore.useBaseUrl(url: String) = apply(usingBaseUrl(url)).let { it.first!! to it.second }
+
+    /** Write [text] to [path] in the project, as a person or another tool would have. */
+    private fun write(
+        path: String,
+        text: String,
+    ): VirtualFile =
+        WriteCommandAction.writeCommandAction(project).compute<VirtualFile, Throwable> {
+            val base = RequestStore.getInstance(project).baseDir()!!
+            val dir = VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/'))!!
+            val name = path.substringAfterLast('/')
+            (dir.findChild(name) ?: dir.createChildData(this, name)).also { VfsUtil.saveText(it, text) }
+        }
+
+    // The project is shared with the other tests, which read these files.
+    private fun remove(path: String) =
+        WriteCommandAction.runWriteCommandAction(project) {
+            RequestStore
+                .getInstance(project)
+                .baseDir()
+                ?.findFileByRelativePath(path)
+                ?.delete(this)
+        }
+
+    private fun entry(
+        name: String,
+        url: String,
+    ) =
+        "{\n      \"name\": \"$name\",\n      \"url\": \"$url\",\n      \"method\": \"GET\",\n      \"signals\": \"\",\n      \"headers\": \"\"\n    }"
+
+    /** What the panel tells the user in text that cannot be edited. */
+    private fun notes(panel: InspectorPanel) =
+        UIUtil.findComponentsOfType(panel, JBTextArea::class.java).filter { !it.isEditable }.map { it.text }
+
+    private fun aboutTheRequestsFile(text: String) =
+        "is not read" in text || "is not a requests file" in text || "is not valid JSON" in text
 
     private fun pump(
         body: java.io.InputStream,
@@ -660,6 +696,162 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test a save and a delete keep what else a hand-written requests file holds`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, HAND_WRITTEN)
+        try {
+            assertEquals(listOf("feed", "plain"), store.saved().map { it.name })
+            assertEquals(listOf("Request 2 in .streamlord/inspector.json is not read: it has no \"url\"."), store.read().skipped)
+
+            store.save(SavedRequest("alpha", "/a", "GET", "", ""))
+            val withAlpha =
+                HAND_WRITTEN.replace(
+                    "    {\n      \"name\": \"feed\"",
+                    "    ${entry("alpha", "/a")},\n    {\n      \"name\": \"feed\"",
+                )
+            assertEquals(withAlpha, String(file.contentsToByteArray()))
+
+            val feed = store.saved().single { it.name == "feed" }
+            assertEquals(SavedRequest("feed", "{{baseUrl}}/feed", "POST", "{ \"search\": \"ash\", \"n\": 1.0 }", "X-Id: 7"), feed)
+            store.save(feed.copy(url = "{{baseUrl}}/feed2"))
+            val withFeed2 = withAlpha.replace("\"url\": \"{{baseUrl}}/feed\"", "\"url\": \"{{baseUrl}}/feed2\"")
+            assertEquals(withFeed2, String(file.contentsToByteArray()))
+
+            store.delete("PLAIN")
+            assertEquals(
+                withFeed2.replace(",\n    { \"name\": \"plain\", \"url\": \"http://h/feed\" }", ""),
+                String(file.contentsToByteArray()),
+            )
+            store.delete("alpha")
+            store.delete("feed")
+            val left =
+                "{\n  \"version\": 1,\n  \"team\": \"blue\",\n  \"requests\": [\n    { \"name\": \"no url here\" }\n  ]\n}\n"
+            assertEquals(left, String(file.contentsToByteArray()))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save of an unchanged request leaves the file as it is, bytes and stamp`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, HAND_WRITTEN)
+        try {
+            val stamp = file.modificationStamp
+            for (request in store.saved()) store.save(request)
+            assertEquals(HAND_WRITTEN, String(file.contentsToByteArray()))
+            assertEquals(stamp, file.modificationStamp)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a delete of a name that is not saved leaves the file as it is, and creates none`() {
+        val store = RequestStore.getInstance(project)
+        remove(Requests.REQUESTS_FILE)
+        store.delete("nowhere")
+        assertNull(store.requestsFile())
+
+        val file = write(Requests.REQUESTS_FILE, HAND_WRITTEN)
+        try {
+            val stamp = file.modificationStamp
+            store.delete("nowhere")
+            assertEquals(HAND_WRITTEN, String(file.contentsToByteArray()))
+            assertEquals(stamp, file.modificationStamp)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a requests file that is a list is not written over`() {
+        val store = RequestStore.getInstance(project)
+        val list = "[{\"name\": \"a\", \"url\": \"/a\"}]\n"
+        val file = write(Requests.REQUESTS_FILE, list)
+        val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
+        try {
+            assertEquals(reason, store.read().error)
+            assertEquals(emptyList<SavedRequest>(), store.saved())
+            val saved = assertFailsWith<IllegalStateException> { store.save(SavedRequest("b", "/b", "GET", "", "")) }
+            assertEquals("$reason Fix the file before saving, so the requests in it are not lost.", saved.message)
+            val deleted = assertFailsWith<IllegalStateException> { store.delete("a") }
+            assertEquals("$reason Fix the file before saving, so the requests in it are not lost.", deleted.message)
+            assertEquals(list, String(file.contentsToByteArray()))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the variables file cannot be made the requests file`() {
+        val store = RequestStore.getInstance(project)
+        val settings = StreamlordSettings.getInstance(project)
+        val variables = "{\n  \"baseUrl\": \"http://localhost:9102\"\n}\n"
+        val env = write(Requests.ENV_FILE, variables)
+        remove(Requests.REQUESTS_FILE)
+        val refused = "The requests file cannot be .streamlord/env.json: that file holds the variables. Nothing was saved."
+        try {
+            for (path in listOf(".streamlord/env.json", "./.streamlord/env.json", ".Streamlord/ENV.json")) {
+                settings.state.requestsFile = path
+                assertEquals(Requests.REQUESTS_FILE, store.requestsPath())
+                val saved = assertFailsWith<IllegalStateException> { store.save(SavedRequest("a", "/a", "GET", "", "")) }
+                assertEquals(refused, saved.message)
+                val deleted = assertFailsWith<IllegalStateException> { store.delete("a") }
+                assertEquals(refused, deleted.message)
+                assertEquals(variables, String(env.contentsToByteArray()))
+                assertNull(store.requestsFile())
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.ENV_FILE)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the panel names the entries of the requests file that are not read`() {
+        write(Requests.REQUESTS_FILE, "{\"requests\": [7, {\"name\": \"feed\", \"url\": \"/feed\"}, {\"name\": \"no url\"}]}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val skipped =
+                "Request 1 in .streamlord/inspector.json is not read: it is not an object.\n" +
+                    "Request 3 in .streamlord/inspector.json is not read: it has no \"url\"."
+            assertTrue(notes(panel).toString(), skipped in notes(panel))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the panel says why a requests file is not read`() {
+        write(Requests.REQUESTS_FILE, "[]")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
+            assertTrue(notes(panel).toString(), reason in notes(panel))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the panel says nothing about a requests file that reads cleanly`() {
+        write(Requests.REQUESTS_FILE, "{\"requests\": [{\"name\": \"feed\", \"url\": \"/feed\"}, {\"name\": \"no url\"}]}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            assertTrue(notes(panel).toString(), notes(panel).any(::aboutTheRequestsFile))
+
+            // Once the file is put right, what was said about it goes.
+            write(Requests.REQUESTS_FILE, "{\"requests\": [{\"name\": \"feed\", \"url\": \"/feed\"}]}")
+            await(panel.pushRequests(null))
+            assertFalse(notes(panel).toString(), notes(panel).any(::aboutTheRequestsFile))
+
+            remove(Requests.REQUESTS_FILE)
+            val fresh = InspectorPanel(project, testRootDisposable)
+            await(fresh.pushRequests(null))
+            assertFalse(notes(fresh).toString(), notes(fresh).any(::aboutTheRequestsFile))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
     // Swing renders a label whose text starts with <html> as HTML and fetches its images; an event name or a saved name must not.
     fun `test the panel shows server text and shared names as text, never as Swing HTML`() {
         val store = RequestStore.getInstance(project)
@@ -939,5 +1131,28 @@ class InspectorTest : BasePlatformTestCase() {
         } finally {
             server.close()
         }
+    }
+
+    private companion object {
+        /** A requests file as a person writes one: members and an entry the inspector does not know, and a layout of its own. */
+        val HAND_WRITTEN =
+            """
+            {
+              "version": 1,
+              "team": "blue",
+              "requests": [
+                {
+                  "name": "feed",
+                  "url": "{{baseUrl}}/feed",
+                  "method": "POST",
+                  "signals": { "search": "ash", "n": 1.0 },
+                  "headers": { "X-Id": "7" },
+                  "note": "written by hand"
+                },
+                { "name": "no url here" },
+                { "name": "plain", "url": "http://h/feed" }
+              ]
+            }
+            """.trimIndent() + "\n"
     }
 }

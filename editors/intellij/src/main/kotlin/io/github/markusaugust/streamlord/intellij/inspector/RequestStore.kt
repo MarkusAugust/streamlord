@@ -11,6 +11,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import io.github.markusaugust.streamlord.analysis.Requests
+import io.github.markusaugust.streamlord.analysis.RequestsEdit
 import io.github.markusaugust.streamlord.analysis.RequestsFile
 import io.github.markusaugust.streamlord.analysis.SavedRequest
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
@@ -64,37 +65,39 @@ class RequestStore(
         internal val throughDocument: Boolean,
     )
 
-    /** Add [request] to the requests file, in place of one of its name. */
+    /** Save [request] in the requests file, in place of the entry of its name, and leave the rest of the file as it is. */
     @RequiresReadLock
-    fun saving(request: SavedRequest): Change = requests(Requests.upsert(writable(), request))
+    fun saving(request: SavedRequest): Change = requests { text, path -> Requests.saveRequest(text, request, path) }
 
-    /** Take the request called [name] out of the requests file. */
+    /** Take the request called [name] out of the requests file, and leave the rest of the file as it is. */
     @RequiresReadLock
-    fun deleting(name: String): Change = requests(Requests.remove(writable(), name))
+    fun deleting(name: String): Change = requests { text, path -> Requests.removeRequest(text, name, path) }
 
-    /** The file to write over, or the reason it cannot be: writing an empty list over a file that did not parse would lose what it holds. */
-    private fun writable(): RequestsFile {
+    /** The requests file with [edit] made in its text, or the reason it cannot be: a file that is not read is not written over. */
+    private fun requests(edit: (text: String?, path: String) -> RequestsEdit): Change {
         Requests.requestsPathProblem(settings.state.requestsFile)?.let { throw IllegalStateException("$it Nothing was saved.") }
-        val file = read()
-        file.error?.let { throw IllegalStateException("$it Fix the file before saving, so the requests in it are not lost.") }
-        return file
+        val file = requestsFile()
+        val text = file?.let { VfsUtil.loadText(it) }
+        val edited = edit(text, requestsPath())
+        val next =
+            edited.text ?: throw IllegalStateException("${edited.error} Fix the file before saving, so the requests in it are not lost.")
+        return Change(requestsPath(), file?.modificationStamp, text ?: "", next, throughDocument = false)
     }
-
-    private fun requests(file: RequestsFile): Change =
-        Change(requestsPath(), requestsFile()?.modificationStamp, null, Requests.serializeRequestsFile(file), throughDocument = false)
 
     /**
      * Write what [change] planned, and return the file with whether it holds the change: false when the
-     * file is not one the change can be made in. A file changed since it was read is left as it is.
+     * file is not one the change can be made in. A file changed since it was read is left as it is, and
+     * a change that changes nothing writes nothing, so it makes no file where there was none.
      */
     @RequiresEdt
-    fun apply(change: Change): Pair<VirtualFile, Boolean> {
+    fun apply(change: Change): Pair<VirtualFile?, Boolean> {
         val base = baseDir() ?: throw IllegalStateException("Open a project to keep ${change.path}; it is stored in the project.")
         val existing = base.findFileByRelativePath(change.path)
         val documents = FileDocumentManager.getInstance()
         val stamp = existing?.let { if (change.throughDocument) stampOf(it) else it.modificationStamp }
         if (stamp != change.stamp) throw IllegalStateException("${change.path} changed in the meantime. Try again.")
-        if (existing != null && (change.next == null || change.next == change.was)) return existing to (change.next != null)
+        val next = change.next
+        if (next == null || next == change.was) return existing to (next != null)
         var file: VirtualFile? = null
         WriteCommandAction.runWriteCommandAction(project) {
             val dir =
@@ -104,7 +107,7 @@ class RequestStore(
             val vf = dir.findChild(name) ?: dir.createChildData(this, name)
             // An open editor gets an edit it can undo, not a write underneath its unsaved text.
             val document = if (change.throughDocument) documents.getCachedDocument(vf) else null
-            if (document != null) document.setText(change.next ?: "") else VfsUtil.saveText(vf, change.next ?: "")
+            if (document != null) document.setText(next) else VfsUtil.saveText(vf, next)
             file = vf
         }
         return file!! to true

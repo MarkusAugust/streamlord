@@ -6,8 +6,30 @@ import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
 
 const ENV = "/ws/.streamlord/env.json";
+const REQUESTS = "/ws/.streamlord/inspector.json";
 const bytes = (s: string) => new TextEncoder().encode(s);
-const disk = () => new TextDecoder().decode(files.get(ENV));
+const disk = (path = ENV) => new TextDecoder().decode(files.get(path));
+
+/** A requests file as a person writes one: members and an entry the inspector does not know, and a layout of its own. */
+const HAND_WRITTEN = `{
+  "version": 1,
+  "team": "blue",
+  "requests": [
+    {
+      "name": "feed",
+      "url": "{{baseUrl}}/feed",
+      "method": "POST",
+      "signals": { "search": "ash", "n": 1.0 },
+      "headers": { "X-Id": "7" },
+      "note": "written by hand"
+    },
+    { "name": "no url here" },
+    { "name": "plain", "url": "http://h/feed" }
+  ]
+}
+`;
+const entry = (name: string, url: string) => `{\n      "name": "${name}",\n      "url": "${url}",\n      "method": "GET",\n      "signals": "",\n      "headers": ""\n    }`;
+const NOT_A_REQUESTS_FILE = '.streamlord/inspector.json is not a requests file: it must be an object with a "requests" list.';
 
 /** An open editor on the env file, holding `text` that is not saved. */
 function open(text: string): OpenDocument {
@@ -71,5 +93,71 @@ describe("request store", () => {
     files.set(ENV, bytes('{"params": {}}'));
     const found = (await s.environment()).vars[0];
     assert.deepEqual(found, { name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Motregning back (dev)" });
+  });
+
+  it("keeps what else a hand-written requests file holds through a save and a delete", async () => {
+    files.set(REQUESTS, bytes(HAND_WRITTEN));
+    const s = store();
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["feed", "plain"]);
+
+    await s.save({ name: "alpha", url: "/a", method: "GET", signals: "", headers: "" });
+    const withAlpha = HAND_WRITTEN.replace('    {\n      "name": "feed"', `    ${entry("alpha", "/a")},\n    {\n      "name": "feed"`);
+    assert.equal(disk(REQUESTS), withAlpha);
+
+    const feed = (await s.saved()).find((r) => r.name === "feed");
+    assert.deepEqual(feed, { name: "feed", url: "{{baseUrl}}/feed", method: "POST", signals: '{ "search": "ash", "n": 1.0 }', headers: "X-Id: 7" });
+    await s.save({ ...feed!, url: "{{baseUrl}}/feed2" });
+    const withFeed2 = withAlpha.replace('"url": "{{baseUrl}}/feed"', '"url": "{{baseUrl}}/feed2"');
+    assert.equal(disk(REQUESTS), withFeed2);
+
+    await s.delete("PLAIN");
+    assert.equal(disk(REQUESTS), withFeed2.replace(',\n    { "name": "plain", "url": "http://h/feed" }', ""));
+    await s.delete("alpha");
+    await s.delete("feed");
+    assert.equal(disk(REQUESTS), '{\n  "version": 1,\n  "team": "blue",\n  "requests": [\n    { "name": "no url here" }\n  ]\n}\n');
+  });
+
+  it("writes the fresh file when there is none", async () => {
+    await store().save({ name: "a", url: "/a", method: "GET", signals: "", headers: "" });
+    assert.equal(disk(REQUESTS), `{\n  "version": 1,\n  "requests": [\n    ${entry("a", "/a")}\n  ]\n}\n`);
+  });
+
+  it("writes nothing when a request is saved as it was read", async () => {
+    const written = bytes(HAND_WRITTEN);
+    files.set(REQUESTS, written);
+    const s = store();
+    for (const request of await s.saved()) await s.save(request);
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("writes nothing when the name to delete is not saved, and creates no file", async () => {
+    const s = store();
+    await s.delete("nowhere");
+    assert.equal(files.has(REQUESTS), false);
+    const written = bytes(HAND_WRITTEN);
+    files.set(REQUESTS, written);
+    await s.delete("nowhere");
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("does not write over a requests file that is a list", async () => {
+    const written = bytes('[{"name": "a", "url": "/a"}]\n');
+    files.set(REQUESTS, written);
+    const s = store();
+    assert.equal((await s.readFile()).error, NOT_A_REQUESTS_FILE);
+    const refused = { message: `${NOT_A_REQUESTS_FILE} Fix the file before saving, so the requests in it are not lost.` };
+    await assert.rejects(s.save({ name: "b", url: "/b", method: "GET", signals: "", headers: "" }), refused);
+    await assert.rejects(s.delete("a"), refused);
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("reads the entries it leaves out by number, and none from a clean or a missing file", async () => {
+    const s = store();
+    assert.deepEqual((await s.readFile()).skipped, []);
+    files.set(REQUESTS, bytes(HAND_WRITTEN));
+    assert.deepEqual((await s.readFile()).skipped, ['Request 2 in .streamlord/inspector.json is not read: it has no "url".']);
+    files.set(REQUESTS, bytes('{"requests": [{"name": "a", "url": "/a"}]}'));
+    const clean = await s.readFile();
+    assert.deepEqual([clean.requests.map((r) => r.name), clean.skipped], [["a"], []]);
   });
 });

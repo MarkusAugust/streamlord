@@ -6,6 +6,23 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `Requests.upsert` and `Requests.remove` in streamlord-analysis are gone, since they changed a
+  requests file by writing it anew, which lost what the file held besides its requests.
+  `Requests.saveRequest` and `Requests.removeRequest` take the text of the file and return it with
+  the one entry changed, as a `RequestsEdit`: other members, entries that are not read and the
+  layout stay as written, and an entry that is saved keeps its own other members and the object
+  form of its `signals` and `headers`.
+- `RequestsFile` has a third value, `skipped`, with one message for each entry of the file that
+  is not read, so code compiled against its two-value constructor or `copy` needs a rebuild.
+- `Requests.parseRequestsFile` reports a file whose root is no object, or whose `requests` is no
+  list, in `error`, where it read both as a file without requests; a save then wrote over them.
+  An empty file is a file without requests, and no longer invalid JSON, and `Requests.parseEnv`,
+  `withEnvVariables` and `withBaseUrl` read an empty env file as a missing one.
+- `Requests.requestsPathProblem` refuses a path that names `.streamlord/env.json`, one with a
+  backslash and one that ends in `/`.
+
 ## [0.20.0] - 2026-11-09
 
 ### Security

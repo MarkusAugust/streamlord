@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, remove, REQUESTS_FILE, requestsPathProblem, serializeRequestsFile, upsert, withBaseUrl, withEnvVariables, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
+import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, removeRequest, REQUESTS_FILE, requestsPathProblem, saveRequest, withBaseUrl, withEnvVariables, type RequestsEdit, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
 import type { RunningServers } from "./serverLog.ts";
 
 /**
@@ -44,33 +44,38 @@ export class RequestStore implements vscode.Disposable {
     return requestsPathProblem(configured) === null && configured.trim().length > 0 ? configured : REQUESTS_FILE;
   }
 
-  /** The requests file; a file that is missing is empty, one that is not JSON says so in `error`. */
-  async readFile(): Promise<RequestsFile> {
+  /** The text of the requests file, or null when there is none. */
+  private async requestsText(): Promise<string | null> {
     const uri = this.fileUri(this.requestsRel());
-    if (!uri) return emptyRequestsFile();
-    let text: string;
+    if (!uri) return null;
     try {
-      text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
+      return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
     } catch {
-      return emptyRequestsFile();
+      return null;
     }
-    return parseRequestsFile(text, this.requestsRel());
   }
 
-  /** The file to write over, or the reason it cannot be: writing an empty list over a file that did not parse would lose what it holds. */
-  private async writable(): Promise<RequestsFile> {
+  /** The requests file; a file that is missing is empty, one that cannot be read says so in `error`, and an entry that is not read is named in `skipped`. */
+  async readFile(): Promise<RequestsFile> {
+    const text = await this.requestsText();
+    return text === null ? emptyRequestsFile() : parseRequestsFile(text, this.requestsRel());
+  }
+
+  /**
+   * Change the requests file as `edit` says of its text, which keeps what the file holds besides.
+   * A file that cannot be read is left alone: writing over it would lose what it holds.
+   */
+  private async change(edit: (text: string | null, path: string) => RequestsEdit): Promise<void> {
     const problem = requestsPathProblem(this.configuredRequestsPath());
     if (problem) throw new Error(`${problem} Nothing was saved.`);
-    const file = await this.readFile();
-    if (file.error) throw new Error(`${file.error} Fix the file before saving, so the requests in it are not lost.`);
-    return file;
-  }
-
-  private async writeFile(file: RequestsFile): Promise<void> {
     const uri = this.fileUri(this.requestsRel());
     if (!uri) throw new Error("Open a folder to save requests; they are stored in the workspace.");
+    const text = await this.requestsText();
+    const next = edit(text, this.requestsRel());
+    if (next.text === null) throw new Error(`${next.error} Fix the file before saving, so the requests in it are not lost.`);
+    if (next.text === (text ?? "")) return;
     await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(uri, ".."));
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(serializeRequestsFile(file), "utf8"));
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(next.text, "utf8"));
     this.onChange.fire();
   }
 
@@ -79,11 +84,11 @@ export class RequestStore implements vscode.Disposable {
   }
 
   async save(request: SavedRequest): Promise<void> {
-    await this.writeFile(upsert(await this.writable(), request));
+    await this.change((text, path) => saveRequest(text, request, path));
   }
 
   async delete(name: string): Promise<void> {
-    await this.writeFile(remove(await this.writable(), name));
+    await this.change((text, path) => removeRequest(text, name, path));
   }
 
   recent(): SavedRequest[] {

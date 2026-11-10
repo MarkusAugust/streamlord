@@ -74,6 +74,9 @@ class StreamlordConfigurable(
                     textField()
                         .bindText(state::requestsFile)
                         .align(AlignX.FILL)
+                        // Said here, where the path is written, and not first when a request is saved.
+                        .validationOnInput { field -> Requests.requestsPathProblem(field.text)?.let { error(it) } }
+                        .validationOnApply { field -> Requests.requestsPathProblem(field.text)?.let { error(it) } }
                         .comment("Project-relative; ${Requests.REQUESTS_FILE} by default. Commit it to share requests with the team.")
                 }
                 row {
