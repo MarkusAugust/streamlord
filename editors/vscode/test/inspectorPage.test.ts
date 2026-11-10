@@ -369,13 +369,11 @@ describe("inspector page", () => {
     });
       /** A server that opens a stream on each request and holds it open until it is closed. */
     async function streaming() {
-      // The path of each request without its query, in order, and the response of each path, to drop its connection.
+      // The path of each request without its query, in order.
       const paths: string[] = [];
-      const responses = new Map<string, import("node:http").ServerResponse>();
       const server = createHttpServer((q, res) => {
         const path = (q.url ?? "").split("?")[0] ?? "";
         paths.push(path);
-        responses.set(path, res);
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         res.write(": open\n\n");
       });
@@ -385,8 +383,7 @@ describe("inspector page", () => {
         server.closeAllConnections();
         return new Promise((resolve) => server.close(resolve));
       };
-      const drop = (path: string) => responses.get(path)?.socket?.destroy();
-      return { base, close, paths, drop };
+      return { base, close, paths };
     }
 
     const statusOf = (p: ReturnType<typeof overExtension>) => `${p.status.textContent} | ${(p.status as unknown as { title?: string }).title}`;
@@ -441,8 +438,63 @@ describe("inspector page", () => {
       }
     });
 
+    /** Hold the store's first reading of the variables until the returned function is called. */
+    function holdFirstEnvironment(p: ReturnType<typeof overExtension>): () => void {
+      const store = p.i.store as { environment: () => Promise<unknown> };
+      const environment = store.environment.bind(store);
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let first = true;
+      store.environment = async () => {
+        if (first) {
+          first = false;
+          await gate;
+        }
+        return environment();
+      };
+      return release;
+    }
+
+    const errorLines = (p: ReturnType<typeof overExtension>) => p.element("frames").children.filter((c) => c.className === "error").map((c) => c.textContent);
+
+    it("shows no error of a request that Stop stops while its variables are read", async () => {
+      const found: string[] = [];
+      for (const [what, env, url] of [
+        ["a variable that is not set", '{"baseUrl": "http://h:1"}', "{{nope}}/x"],
+        ["an env file that is not valid", "[]", "{{baseUrl}}/x"],
+      ] as const) {
+        const p = overExtension();
+        p.env(env);
+        const release = holdFirstEnvironment(p);
+        const first: Promise<void> = p.i.handle({ type: "connect", request: p.request(url) });
+        await p.i.handle({ type: "stop" });
+        release();
+        await first;
+        if (errorLines(p).length || statusOf(p) !== "idle | ") found.push(`${what}: ${statusOf(p)}, ${JSON.stringify(errorLines(p))}`);
+      }
+      assert.equal(found.join("\n"), "");
+    });
+
+    it("shows no error of a request that a second Connect replaces while its variables are read", async () => {
+      const server = await streaming();
+      const p = overExtension();
+      try {
+        p.env(`{"baseUrl": "${server.base}"}`);
+        const release = holdFirstEnvironment(p);
+        const first: Promise<void> = p.i.handle({ type: "connect", request: p.request("{{nope}}/x") });
+        void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/b") });
+        await until(() => statusOf(p).startsWith("open"));
+        release();
+        await first;
+        assert.deepEqual([statusOf(p), errorLines(p)], [`open · 200 OK · text/event-stream | ${server.base}/b`, []]);
+      } finally {
+        await p.i.handle({ type: "stop" });
+        await server.close();
+      }
+    });
+
     // What the earlier stream tells is held until the request after it is open, as a slow close may come.
-    it("keeps the status of a later request that is open when the earlier stream's close and error come after it", async () => {
+    it("keeps the status of a later request that is open when the earlier stream's close comes after it", async () => {
       const server = await streaming();
       const p = overExtension();
       try {
@@ -453,7 +505,6 @@ describe("inspector page", () => {
         const lines = p.element("frames").children.length;
         void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/b") });
         await until(() => statusOf(p) === `open · 200 OK · text/event-stream | ${server.base}/b`);
-        server.drop("/feed");
         await pause(200);
         const held = p.hold.held;
         p.hold.held = null;
@@ -461,6 +512,38 @@ describe("inspector page", () => {
         const errors = p.element("frames").children.slice(0, p.element("frames").children.length - lines).filter((c) => c.className === "error");
         assert.deepEqual([statusOf(p), errors.map((e) => e.textContent)], [`open · 200 OK · text/event-stream | ${server.base}/b`, []]);
       } finally {
+        await p.i.handle({ type: "stop" });
+        await server.close();
+      }
+    });
+
+    // The earlier stream's body is a stand-in that takes no notice of the abort, so its read fails, and the client tells of it, only once the request after it is open.
+    it("keeps the status of a later request that is open when the earlier stream's error comes after it", async () => {
+      const server = await streaming();
+      const p = overExtension();
+      const realFetch = globalThis.fetch;
+      let body: ReadableStreamDefaultController<Uint8Array> | undefined;
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        if (!String(input).includes("/feed")) return realFetch(input, init);
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            body = controller;
+            controller.enqueue(new TextEncoder().encode(": open\n\n"));
+          },
+        });
+        return new Response(stream, { status: 200, statusText: "OK", headers: { "Content-Type": "text/event-stream" } });
+      }) as typeof fetch;
+      try {
+        await opened(p, server.base);
+        const lines = p.element("frames").children.length;
+        void p.i.handle({ type: "connect", request: p.request("{{baseUrl}}/b") });
+        await until(() => statusOf(p) === `open · 200 OK · text/event-stream | ${server.base}/b`);
+        body!.error(new TypeError("terminated"));
+        await pause(200);
+        const errors = p.element("frames").children.slice(0, p.element("frames").children.length - lines).filter((c) => c.className === "error");
+        assert.deepEqual([statusOf(p), errors.map((e) => e.textContent)], [`open · 200 OK · text/event-stream | ${server.base}/b`, []]);
+      } finally {
+        globalThis.fetch = realFetch;
         await p.i.handle({ type: "stop" });
         await server.close();
       }

@@ -86,11 +86,13 @@ export class Inspector {
   /**
    * The request with its variables filled in, or null after the reason is posted: an invalid
    * env file, or a variable that is unknown, misplaced or not set. With `sending`, the reason is
-   * the status of the request, whose URL is as written since it could not be filled in.
+   * the status of the request, whose URL is as written since it could not be filled in; `current`
+   * says whether it is still the request of the panel once the env file is read.
    */
-  private async resolve(raw: SavedRequest, sending = false): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+  private async resolve(raw: SavedRequest, sending = false, current = () => true): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
     const requestUrl = sending ? raw.url : undefined;
     const env = await this.store.environment();
+    if (!current()) return null;
     if (env.errors.length) {
       this.post({ type: "error", message: env.errors.join(" "), define: [], requestUrl });
       return null;
@@ -191,7 +193,7 @@ export class Inspector {
     this.abort = abort;
     // A request stopped, or followed by another, no longer speaks for the status: its close can come late.
     const current = () => !abort.signal.aborted;
-    const resolved = await this.resolve(raw, true);
+    const resolved = await this.resolve(raw, true, current);
     if (!resolved || !current()) return;
     const { request, vars } = resolved;
     try {

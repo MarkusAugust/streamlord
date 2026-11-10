@@ -2172,6 +2172,45 @@ class InspectorTest : BasePlatformTestCase() {
             assertEquals("", found.joinToString("\n"))
         }
 
+    // Stop and the next Connect are clicked before the UI thread runs again, so the variables of the first are not read back yet.
+    fun `test a request stopped or replaced while its variables are read shows no error`() =
+        streams { s, _ ->
+            val found = ArrayList<String>()
+            s.open("/feed")
+            var before = lines(s.events).toSet()
+            s.url.text = "{{nope}}/x"
+            button(s.panel, "Connect").doClick()
+            s.stop.doClick()
+            settle(500)
+            if (s.status.text != "idle" ||
+                s.status.toolTipText != "idle"
+            ) {
+                found += "after Stop the status is ${s.status.text} ${s.status.toolTipText}"
+            }
+            lines(s.events).filter { it !in before }.map { it.text }.let {
+                if (it.isNotEmpty()) {
+                    found +=
+                        "after Stop the event list shows $it"
+                }
+            }
+
+            s.open("/feed")
+            before = lines(s.events).toSet()
+            s.url.text = "{{nope}}/x"
+            button(s.panel, "Connect").doClick()
+            s.connect("/b")
+            if (!within(5) { s.isOpen("/b") }) found += "the second Connect does not open: ${s.status.text} ${s.status.toolTipText}"
+            settle(300)
+            if (!s.isOpen("/b")) found += "after the second Connect the status is ${s.status.text} ${s.status.toolTipText}"
+            lines(s.events).filter { it !in before }.map { it.text }.let {
+                if (it.isNotEmpty()) {
+                    found +=
+                        "after the second Connect the event list shows $it"
+                }
+            }
+            assertEquals("", found.joinToString("\n"))
+        }
+
     // The earlier stream's close is held until the request after it is open, as a slow close of a stream may come.
     fun `test a later request that is open keeps its status when the earlier stream's close comes after it`() =
         streams { s, queue ->
