@@ -1,11 +1,15 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.LookupElement
+import com.intellij.injected.editor.DocumentWindow
 import com.intellij.lang.documentation.ide.IdeDocumentationTargetProvider
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.platform.backend.documentation.DocumentationTarget
+import com.intellij.psi.PsiDocumentManager
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationTarget
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationTargetProvider
 
 /** Quick documentation as the platform asks for it: by a place in a file, and by an item of the completion list. */
 class DocumentationTargetTest : StreamlordTestCase() {
@@ -28,7 +32,7 @@ class DocumentationTargetTest : StreamlordTestCase() {
 
     private fun List<DocumentationTarget>.streamlord() = filterIsInstance<StreamlordDocumentationTarget>()
 
-    fun `test an attribute and an action in html are documented by Streamlord alone`() {
+    fun `test an attribute and an action in html are documented by Streamlord, in place of what html says of them`() {
         myFixture.configureByText("a.html", "<div data-on:click=\"@post('/x')\"></div>")
         val attribute = at(myFixture.file.text.indexOf("data-on") + 6)
         assertEquals(1, attribute.size)
@@ -51,13 +55,22 @@ class DocumentationTargetTest : StreamlordTestCase() {
         assertFalse(call.isEmpty())
     }
 
-    // The platform asks for the HTML injected into the string and for the Kotlin file around it: the answer is given once.
-    fun `test an attribute in html inside a Kotlin string is documented once`() {
+    // With the caret in HTML injected into a string, the platform asks for the injected file at its own offset.
+    fun `test html inside a Kotlin string is documented, asked as the injected file and as the Kotlin file`() {
         myFixture.configureByText("Page.kt", "fun page() = \"\"\"<div data-on:click=\"@post('/x')\"></div>\"\"\"")
-        val attribute = at(myFixture.file.text.indexOf("data-on") + 6)
-        assertEquals(attribute.toString(), 1, attribute.streamlord().size)
-        val action = at(myFixture.file.text.indexOf("@post") + 2)
-        assertEquals(action.toString(), 1, action.streamlord().size)
+        val host = myFixture.file
+        for (word in listOf("data-on", "@post")) {
+            val offset = host.text.indexOf(word) + 2
+            assertEquals(word, 1, at(offset).streamlord().size)
+            val injected =
+                inBackground {
+                    val manager = InjectedLanguageManager.getInstance(project)
+                    val file = manager.findInjectedElementAt(host, offset)!!.containingFile
+                    val window = PsiDocumentManager.getInstance(project).getDocument(file) as DocumentWindow
+                    StreamlordDocumentationTargetProvider().documentationTargets(file, window.hostToInjected(offset))
+                }
+            assertEquals(word, 1, injected.size)
+        }
     }
 
     fun `test a word that is no Datastar is nobody's`() {

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij.documentation
 
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.icons.AllIcons
+import com.intellij.lang.documentation.DocumentationMarkup
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.model.Pointer
 import com.intellij.openapi.fileTypes.PlainTextLanguage
@@ -27,7 +28,9 @@ class StreamlordDocumentationTarget(
     override fun computePresentation(): TargetPresentation =
         TargetPresentation.builder(word).icon(AllIcons.Actions.Lightning).presentation()
 
-    override fun computeDocumentation(): DocumentationResult = DocumentationResult.documentation(html)
+    // In the platform's content section, so it is set as the documentation of every other language is.
+    override fun computeDocumentation(): DocumentationResult =
+        DocumentationResult.documentation(DocumentationMarkup.CONTENT_START + html + DocumentationMarkup.CONTENT_END)
 }
 
 /**
