@@ -33,7 +33,7 @@ import org.jetbrains.kotlin.psi.KtFile
  * and patched by a handler has, so this one takes the first: the rename renames them all.
  */
 class SignalRenameHandler : RenameHandler {
-    // Asked on every update of the action, so it resolves nothing: a signal reference at the caret is enough.
+    // Asked on every update of the action, in the background: a signal reference at the caret is enough.
     override fun isAvailableOnDataContext(dataContext: DataContext): Boolean = referenceAt(dataContext) != null
 
     override fun invoke(

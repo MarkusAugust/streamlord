@@ -20,15 +20,16 @@ class DatastarTypedHandler : TypedHandlerDelegate() {
         editor: Editor,
         file: PsiFile,
     ): Result {
-        if (charTyped == '(' || charTyped == ',') {
-            // The handler runs on the UI thread, before the character goes in: whether there is anything to show is found out after.
-            ExpressionHelp.getInstance(project).offerParameterInfo(editor, file)
-            return Result.CONTINUE
-        }
-        if (charTyped !in TRIGGERS) return Result.CONTINUE
+        val parameters = charTyped == '(' || charTyped == ','
+        if (!parameters && charTyped !in TRIGGERS) return Result.CONTINUE
         if (file !is KtFile && !file.language.isKindOf(HTMLLanguage.INSTANCE) &&
             !StreamlordAnalysis.isTemplateText(file)
         ) {
+            return Result.CONTINUE
+        }
+        if (parameters) {
+            // The handler runs on the UI thread, before the character goes in: whether there is anything to show is found out after.
+            ExpressionHelp.getInstance(project).offerParameterInfo(editor)
             return Result.CONTINUE
         }
         AutoPopupController.getInstance(project).scheduleAutoPopup(editor)

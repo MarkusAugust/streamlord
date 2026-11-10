@@ -10,9 +10,14 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
-import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.impl.source.tree.injected.InjectedLanguageEditorUtil
+import com.intellij.util.concurrency.annotations.RequiresEdt
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -22,23 +27,39 @@ class ExpressionHelp(
     private val project: Project,
     private val scope: CoroutineScope,
 ) {
+    /** The question under way; a character typed after it asks again, for the caret where it then stands. */
+    private var asking: Job? = null
+
     /**
      * Open the parameter info at the caret of [editor] when it stands in a Datastar expression that takes
-     * actions. Asked as a character is typed, and answered once the character is in [file]: which
+     * actions. Asked as a character is typed, and answered once the character is in the file: which
      * modules the file can use is a question for the indexes.
      */
-    fun offerParameterInfo(
-        editor: Editor,
-        file: PsiFile,
-    ) {
-        scope.launch(ModalityState.current().asContextElement()) {
-            val wanted =
-                constrainedReadAction(ReadConstraint.withDocumentsCommitted(project)) {
-                    !editor.isDisposed && file.isValid && DatastarCaret.expressionAt(file, editor.caretModel.offset)?.allowActions == true
+    @RequiresEdt
+    fun offerParameterInfo(editor: Editor) {
+        asking?.cancel()
+        val wanted = parameterInfoWanted(editor)
+        asking =
+            scope.launch(ModalityState.current().asContextElement()) {
+                if (!wanted.await()) return@launch
+                withContext(Dispatchers.EDT) {
+                    if (!editor.isDisposed) AutoPopupController.getInstance(project).autoPopupParameterInfo(editor, null)
                 }
-            if (!wanted) return@launch
-            withContext(Dispatchers.EDT) {
-                if (!editor.isDisposed) AutoPopupController.getInstance(project).autoPopupParameterInfo(editor, null)
+            }
+    }
+
+    /**
+     * Whether the caret of [editor] stands in a Datastar expression that takes actions, read once the
+     * document is committed. The file is the editor's as it is then: one injected into a string may
+     * have been made anew by what was typed.
+     */
+    internal fun parameterInfoWanted(editor: Editor): Deferred<Boolean> {
+        val host = InjectedLanguageEditorUtil.getTopLevelEditor(editor)
+        return scope.async {
+            constrainedReadAction(ReadConstraint.withDocumentsCommitted(project)) {
+                if (host.isDisposed) return@constrainedReadAction false
+                val file = PsiDocumentManager.getInstance(project).getPsiFile(host.document) ?: return@constrainedReadAction false
+                DatastarCaret.expressionAt(file, host.caretModel.offset)?.allowActions == true
             }
         }
     }

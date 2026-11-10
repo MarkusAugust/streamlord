@@ -156,7 +156,7 @@ class StreamlordAnalysis(
         file: KtFile,
         sites: List<CallSite>,
     ): Set<Int> {
-        // Nothing is resolved on the UI thread, where a typed handler or an action may ask: there the names decide.
+        // Nothing is resolved on the UI thread, should something ask from it: there the names decide.
         if (sites.isEmpty() || ApplicationManager.getApplication().isDispatchThread) return emptySet()
         val src = file.text
         val elsewhere = namesFromElsewhere(file)
