@@ -216,12 +216,12 @@ class JsonScan {
  * workspace, since the setting may come from a checked-in file.
  */
 export function requestsPathProblem(path: string): string | null {
-  if (path.trim().length === 0) return null;
+  if (empty(path)) return null;
   if (path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:/.test(path)) return `The requests file ${path} is not inside the workspace: use a workspace-relative path.`;
   if (path.split(/[/\\]/).includes("..")) return `The requests file ${path} leaves the workspace: use a path without .. in it.`;
   if (path.includes("\\")) return `The requests file ${path} holds a backslash: write the path with /.`;
   if (path.endsWith("/")) return `The requests file ${path} names a folder: add a file name, such as ${path}inspector.json.`;
-  const named = path.trim().split("/").filter((part) => part.length > 0 && part !== ".").join("/");
+  const named = path.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, "").split("/").filter((part) => part.length > 0 && part !== ".").join("/");
   if (named.toLowerCase() === ENV_FILE) return `The requests file cannot be ${ENV_FILE}: that file holds the variables.`;
   return null;
 }
@@ -287,7 +287,8 @@ export function saveRequest(text: string | null, request: SavedRequest, path = R
   const read = readRequests(json, path);
   if (read.file.error !== undefined) return { text: null, error: read.file.error };
   // What is written follows the line endings of the file it is written into.
-  const written = (lines: string) => (json.includes("\r\n") ? lines.replace(/\n/g, "\r\n") : lines);
+  // Text copied from the file has them already, so each line break is counted once.
+  const written = (lines: string) => (json.includes("\r\n") ? lines.replace(/\r\n/g, "\n").replace(/\n/g, "\r\n") : lines);
   const list = listed(json);
   if (list === null) {
     if (read.root === null || Object.keys(read.root).length === 0) return fresh();

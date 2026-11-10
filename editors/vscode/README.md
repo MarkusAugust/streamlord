@@ -160,8 +160,10 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
   it takes no comments.
 
   **Save** and **Delete** change the one entry and leave the rest of the file as you wrote it:
-  the other entries, members of your own such as a `"note"`, the layout, and the object form of
-  `signals` and `headers` where the new values still fit it. A request saved as it was read
+  the other entries, their layout, and what else the file holds. The entry that is saved is
+  written in the layout above and keeps its members of your own, such as a `"note"`; `signals`
+  stays an object where the new value is one, and `headers` an object on one line with text
+  values where each line is a header of its own name. A request saved as it was read
   writes nothing. What the inspector cannot read is said in red under the Request list, and
   stays in the file: an entry without a `name` or a `url`, or a second entry of a name. A file
   that is not JSON, not an object with a `requests` list, or of another `version` than 1 is not

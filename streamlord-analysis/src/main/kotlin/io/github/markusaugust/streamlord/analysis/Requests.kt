@@ -279,7 +279,8 @@ public object Requests {
         // What is written follows the line endings of the file it is written into.
         val crlf = "\r\n" in json
 
-        fun written(lines: String) = if (crlf) lines.replace("\n", "\r\n") else lines
+        // Text copied from the file has them already, so each line break is counted once.
+        fun written(lines: String) = if (crlf) lines.replace("\r\n", "\n").replace("\n", "\r\n") else lines
         val list = listed(json)
         if (list == null) {
             if (read.root.isNullOrEmpty()) return RequestsEdit(serializeRequestsFile(RequestsFile(listOf(request))), null)
@@ -1104,7 +1105,7 @@ public object Requests {
      */
     public fun requestsPathProblem(path: String): String? =
         when {
-            path.isBlank() -> null
+            empty(path) -> null
 
             path.startsWith(
                 "/",
@@ -1120,7 +1121,7 @@ public object Requests {
             path.endsWith("/") -> "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
 
             path
-                .trim()
+                .trim(' ', '\t', '\r', '\n')
                 .split('/')
                 .filter { it.isNotEmpty() && it != "." }
                 .joinToString("/")

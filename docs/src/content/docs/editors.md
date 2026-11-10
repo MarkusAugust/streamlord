@@ -203,9 +203,10 @@ you started from the editor said it listens, and with nothing running the defaul
 the settings.
 
 **What a save keeps.** **Save** and **Delete** change the one entry and leave the rest of
-`inspector.json` as it was written: the other entries, members of your own such as a `"note"`,
-the layout, and the object form of `signals` and `headers`. So the diff a colleague reviews is
-the request that changed.
+`inspector.json` as it was written: the other entries, their layout, and what else the file
+holds. The entry that is saved is written in the layout above, with its members of your own such
+as a `"note"` after `headers`, and with `signals` and `headers` still objects where the new
+values allow it. So the diff a colleague reviews is the request that changed.
 
 **What stops you, and where it says so.** Both files are JSON and take no comments, and both
 have a schema, so the editor marks a mistake as you type it.

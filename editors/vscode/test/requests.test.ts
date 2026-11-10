@@ -123,6 +123,29 @@ describe("text that is not JSON", () => {
     assert.ok(broken.error?.startsWith("req.json is not valid JSON"), String(broken.error));
   });
 
+});
+
+describe("a requests file with CRLF line endings", () => {
+  // A text field hands back the signals it was given, line endings and all.
+  it("keeps every line break a single CRLF through save after save", () => {
+    const lines = ['{', '  "version": 1,', '  "requests": [', '    {', '      "name": "a",', '      "url": "/a",', '      "method": "GET",', '      "signals": {', '        "q": 1', '      },', '      "headers": "",', '      "note": {', '        "k": 1', '      }', '    }', '  ]', '}', ''];
+    let text = lines.join("\r\n");
+    for (const url of ["/one", "/two"]) {
+      const [read] = parseRequestsFile(text).requests;
+      assert.ok(read?.signals.includes("\r\n"), JSON.stringify(read));
+      const saved = saveRequest(text, { ...read!, url });
+      assert.equal(saved.error, null);
+      text = saved.text!;
+      assert.ok(!text.includes("\r\r"), JSON.stringify(text));
+      assert.equal(text.split("\n").length, text.split("\r\n").length, JSON.stringify(text));
+      assert.equal(text, lines.join("\r\n").replace('"/a"', `"${url}"`));
+    }
+    const [read] = parseRequestsFile(text).requests;
+    assert.equal(saveRequest(text, read!).text, text);
+  });
+});
+
+describe("text that is not JSON, and the file read", () => {
   it("holds no skipped entries, as an empty file holds none", () => {
     assert.deepEqual(parseRequestsFile("not json").skipped, []);
     assert.deepEqual(emptyRequestsFile(), { version: 1, requests: [], skipped: [] });

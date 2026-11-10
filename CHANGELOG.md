@@ -22,7 +22,10 @@ All notable changes to Streamlord are recorded here. The format follows
   delete. It says there as well when the setting for the requests file names a path it refuses.
 - In both editors, the setting for the requests file took `.streamlord/env.json`, and a save
   then wrote the requests over the variables. That path is refused, as are one with a backslash
-  and one that ends in `/`; the IntelliJ settings page says so in the field.
+  and one that ends in `/`; the IntelliJ settings page says so in the field and does not store
+  the path.
+- In IntelliJ, the inspector reads the requests file and the default base URL again when the
+  settings are applied, where it showed the old ones until something else made it read.
 - In VS Code, a requests file that could not be read was taken for a missing one, and a save
   wrote a new file over it; and two saves at once could each write over what the other had read.
 

@@ -223,6 +223,45 @@ class RequestsTest {
         assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
     }
 
+    // A text field hands back the signals it was given, line endings and all.
+    @Test
+    fun `a file with CRLF line endings keeps every line break a single CRLF through save after save`() {
+        val lines =
+            listOf(
+                "{",
+                "  \"version\": 1,",
+                "  \"requests\": [",
+                "    {",
+                "      \"name\": \"a\",",
+                "      \"url\": \"/a\",",
+                "      \"method\": \"GET\",",
+                "      \"signals\": {",
+                "        \"q\": 1",
+                "      },",
+                "      \"headers\": \"\",",
+                "      \"note\": {",
+                "        \"k\": 1",
+                "      }",
+                "    }",
+                "  ]",
+                "}",
+                "",
+            )
+        var text = lines.joinToString("\r\n")
+        for (url in listOf("/one", "/two")) {
+            val read = Requests.parseRequestsFile(text).requests.single()
+            assertTrue("\r\n" in read.signals, read.signals)
+            val saved = Requests.saveRequest(text, read.copy(url = url))
+            assertEquals(null, saved.error)
+            text = saved.text!!
+            assertTrue("\r\r" !in text, text)
+            assertEquals(text.split("\n").size, text.split("\r\n").size, text)
+            assertEquals(lines.joinToString("\r\n").replace("\"/a\"", "\"$url\""), text)
+        }
+        val read = Requests.parseRequestsFile(text).requests.single()
+        assertEquals(text, Requests.saveRequest(text, read).text)
+    }
+
     @Test
     fun `the entries that are not read are part of the file, none by default`() {
         val file = Requests.parseRequestsFile("{\"requests\":[7]}")
