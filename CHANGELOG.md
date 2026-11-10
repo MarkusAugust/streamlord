@@ -43,7 +43,9 @@ All notable changes to Streamlord are recorded here. The format follows
   tooltip as HTML, so a URL with `&copy=1` in it showed a copyright sign, and markup in a URL
   from a shared requests file was rendered. The tooltip also has the status whole and is set
   anew with each status, where it kept the URL of an earlier request; a long status is cut in
-  the panel, so the action buttons keep their room in a narrow tool window.
+  the panel when the action buttons need the room, so they keep it in a narrow tool window.
+- In IntelliJ, the inspector's **Stop** button is disabled until a request is connecting or open.
+  It was enabled in a panel that had not connected to anything.
 - In both editors, **Save** and **Delete** in the Stream Inspector wrote
   `.streamlord/inspector.json` anew, which dropped what a person had written in it: an entry
   without a `url`, members of their own such as a `"note"`, and the object form of `signals` and

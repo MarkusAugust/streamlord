@@ -140,19 +140,7 @@ class InspectorPanel(
             override fun getMinimumSize(): Dimension = place()
         }.apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
 
-    /** Cut when it is long, so the buttons beside it keep their room; its tooltip has it whole. */
-    private val status =
-        object : JBLabel() {
-            override fun getPreferredSize(): Dimension =
-                super.getPreferredSize().let {
-                    Dimension(minOf(it.width, JBUI.scale(STATUS_WIDTH)), it.height)
-                }
-
-            override fun getMinimumSize(): Dimension = Dimension(0, super.getMinimumSize().height)
-        }.apply {
-            putClientProperty("html.disable", true)
-            text = "idle"
-        }
+    private val status = Status()
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
     private val variablesView = JBTextArea("").mono().apply { isEditable = false }
@@ -172,7 +160,7 @@ class InspectorPanel(
             isVisible = false
         }
     private val deleteButton = JButton("Delete")
-    private val stopButton = JButton("Stop")
+    private val stopButton = JButton("Stop").apply { isEnabled = false }
 
     /** The request as loaded from the list, to detect edits. */
     private var loaded: SavedRequest? = null
@@ -344,11 +332,40 @@ class InspectorPanel(
         val row =
             JPanel(BorderLayout(JBUI.scale(GAP), 0)).apply {
                 add(actions, BorderLayout.CENTER)
-                add(status, BorderLayout.EAST)
+                add(status.apply { beside = actions }, BorderLayout.EAST)
             }
         return JPanel(BorderLayout()).apply {
             add(fields, BorderLayout.CENTER)
             add(row, BorderLayout.SOUTH)
+        }
+    }
+
+    /**
+     * The status of the request, whole while the buttons [beside] it have a line to themselves, and
+     * cut when they would lose it; its tooltip has it whole.
+     */
+    private class Status : JBLabel() {
+        var beside: JComponent? = null
+
+        init {
+            putClientProperty("html.disable", true)
+            text = "idle"
+        }
+
+        override fun getPreferredSize(): Dimension {
+            val whole = super.getPreferredSize()
+            return Dimension(minOf(whole.width, maxOf(JBUI.scale(STATUS_WIDTH), left())), whole.height)
+        }
+
+        override fun getMinimumSize(): Dimension = Dimension(0, super.getMinimumSize().height)
+
+        /** The room of the row that the buttons on one line leave. */
+        private fun left(): Int {
+            val row = parent ?: return 0
+            val buttons = beside ?: return 0
+            val gap = JBUI.scale(GAP)
+            val line = buttons.components.sumOf { it.preferredSize.width + gap } + gap + buttons.insets.left + buttons.insets.right
+            return row.width - line - gap
         }
     }
 

@@ -1291,21 +1291,33 @@ class InspectorTest : BasePlatformTestCase() {
         val found = ArrayList<String>()
         for ((text, kind) in statuses) {
             setStatus(panel, text, kind, "http://h/x")
-            for (width in listOf(360, 460, 900, 360)) {
+            // Longer than the label may be in a narrow panel, so the label is in fact cut there and the cap is not met by a short text.
+            val whole = status.getFontMetrics(status.font).stringWidth(text)
+            val cap = JBUI.scale(160)
+            assertTrue(text, whole > cap)
+            for (width in listOf(360, 460, 900, 1200, 360)) {
                 layOut(panel, width)
                 val at = "at $width with ${text.substringBefore(' ')}"
                 val form = form(panel).bounds
                 val label = boundsIn(panel, status)
                 found += outside(panel).map { "$it $at" }
                 if (label.width <= 0 || label.x < 0 || !form.contains(label)) found += "the status at $label outside the form at $form $at"
-                if (label.width > JBUI.scale(160)) found += "the status is ${label.width} wide $at"
+                // Cut only where the row has no room for more: whole beside the buttons in a wide panel, never under the cap in between.
+                if (width <= 460 && label.width > cap) found += "the status is ${label.width} wide $at"
+                if (width == 900 && label.width < cap) found += "the status is ${label.width} wide, under $cap $at"
+                if (width == 1200) {
+                    if (label.width < whole) found += "the status is ${label.width} wide and its text $whole $at"
+                    val row = ACTION_BUTTONS.map { boundsIn(panel, button(panel, it)) }
+                    if (row.map { it.y }.distinct().size != 1) found += "the action buttons stand on lines ${row.map { it.y }} $at"
+                    if (row.any { label.x < it.x + it.width }) found += "the status at $label is not right of the buttons $row $at"
+                }
                 for (name in ACTION_BUTTONS) {
                     val button = button(panel, name)
                     val b = boundsIn(panel, button)
-                    if (b.width <
-                        button.preferredSize.width
-                    ) {
-                        found += "$name is ${b.width} wide and asks for ${button.preferredSize.width} $at"
+                    val own = button.bounds
+                    val room = button.parent.size
+                    if (own.x < 0 || own.y < 0 || own.x + own.width > room.width || own.y + own.height > room.height) {
+                        found += "$name at $own is cut by its row of ${room.width} by ${room.height} $at"
                     }
                     if (label.x < b.x + b.width &&
                         label.y < b.y + b.height
@@ -1324,6 +1336,24 @@ class InspectorTest : BasePlatformTestCase() {
         assertTrue("$idle, the form ends at $right", right - (idle.x + idle.width) in 0..16)
         val connect = boundsIn(panel, button(panel, "Connect"))
         assertTrue("$idle beside $connect", idle.y + idle.height / 2 in connect.y..connect.y + connect.height)
+    }
+
+    fun `test Stop is enabled only while a request is connecting or open`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val stop = button(panel, "Stop")
+        assertFalse(stop.isEnabled)
+        await(panel.pushRequests(null))
+        assertFalse(stop.isEnabled)
+
+        setStatus(panel, "connecting", StreamClient.Status.CONNECTING, "http://h/x")
+        assertTrue(stop.isEnabled)
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
+        assertTrue(stop.isEnabled)
+        setStatus(panel, "closed", StreamClient.Status.CLOSED, "http://h/x")
+        assertFalse(stop.isEnabled)
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
+        setStatus(panel, "error", null, null)
+        assertFalse(stop.isEnabled)
     }
 
     fun `test the modified marker asks for the width of its text in the font it has`() {
