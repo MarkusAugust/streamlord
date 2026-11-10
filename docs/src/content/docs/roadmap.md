@@ -26,16 +26,16 @@ template that lags the API it demonstrates teaches the wrong thing, and the API 
 
 ## Values from outside, in the DSL and in templates
 
-[`interpolate`](/strings/) asks where a value landed, which it can only do because the holes are
-still standing in the format string. The DSL has no holes: `dataText(expression)` takes a `String`
-and the call itself is the position, so `dataText(userName)` is the original hazard with nothing
-in the way. A template has the same gap in another shape. `data-text="'{{ name }}'"` looks like
-the fix and is code injection, as [Templates](/templates/#do-not-render-a-value-into-an-expression)
-measures, and the editors say nothing about it: the analysis declines to judge a value that holds
-template syntax, since it cannot know what the engine will put there. So markup written as a
-string is covered twice, by `interpolate` at run time and by `unescaped-interpolation` and
-`unsafe-interpolation` in the editors, while the DSL and templates are covered by a paragraph of
-advice.
+[`interpolate`](/strings/) asks where a value landed, which it can only do because the placeholders
+are still standing in the format string. The DSL has no placeholders: `dataText(expression)` takes a
+`String` and the call itself is the position, so `dataText(userName)` is the original hazard with
+nothing in the way. A template has the same gap in another shape. `data-text="'{{ name }}'"` looks
+like the fix and is code injection, as
+[Templates](/templates/#do-not-render-a-value-into-an-expression) measures, and the editors say
+nothing about it: the analysis declines to judge a value that holds template syntax, since it cannot
+know what the engine will put there. So markup written as a string is covered twice, by
+`interpolate` at run time and by `unescaped-interpolation` and `unsafe-interpolation` in the
+editors, while the DSL and templates are covered by a paragraph of advice.
 
 Planned: one diagnostic in `streamlord-analysis`, so it lands in both editors and in the
 [check you run from a test](/analysis/), as `unsafe-interpolation`. It has two shapes:

@@ -17,10 +17,10 @@ import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
-import io.github.markusaugust.streamlord.analysis.HoleFact
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
+import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
@@ -66,7 +66,7 @@ class StreamlordAnalysis(
         if (foreign.isEmpty()) return judged.issues
         resolved.issues?.takeIf { it.first === judged && it.second == foreign }?.let { return it.third }
         val facts = judged.facts
-        val options = judged.options.copy(foreignCalls = foreign, holeFact = { start, end -> facts[TextRange(start, end)] })
+        val options = judged.options.copy(foreignCalls = foreign, valueFact = { start, end -> facts[TextRange(start, end)] })
         val kept = analyzer.analyzeKotlinSites(file.text, options)
         resolved.issues = Triple(judged, foreign, kept)
         return kept
@@ -85,7 +85,7 @@ class StreamlordAnalysis(
             Judged(
                 facts,
                 options,
-                analyzer.analyzeKotlinSites(file.text, options.copy(holeFact = { start, end -> facts[TextRange(start, end)] })),
+                analyzer.analyzeKotlinSites(file.text, options.copy(valueFact = { start, end -> facts[TextRange(start, end)] })),
             )
         memo.set(judged)
         return judged
@@ -209,7 +209,7 @@ class StreamlordAnalysis(
     internal val resolves = AtomicInteger()
 
     /** The facts of a file's holes; what a value's type is can change with any file in the project. None while the IDE indexes. */
-    internal fun holeFacts(file: KtFile): Map<TextRange, HoleFact> =
+    internal fun holeFacts(file: KtFile): Map<TextRange, ValueFact> =
         CachedValuesManager.getCachedValue(file) {
             val dumb = DumbService.getInstance(project)
             val facts = if (dumb.isDumb) emptyMap() else HoleFacts.of(file)
@@ -218,7 +218,7 @@ class StreamlordAnalysis(
 
     /** A first pass: the facts and the options it was run with, and the issues they gave. */
     private class Judged(
-        val facts: Map<TextRange, HoleFact>,
+        val facts: Map<TextRange, ValueFact>,
         val options: AnalyzeOptions,
         val issues: List<SiteIssues>,
     )

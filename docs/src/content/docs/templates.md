@@ -111,7 +111,7 @@ runs from `data-attr:data-init`, and from `data-attr:data-on:click` once clicked
 compiles the attribute it has just set. And `@get(el.dataset.value)` with another site's address
 sends every signal on the page there, though `fetch` refuses a `javascript:` URL.
 Check such a value on the server, or write the markup with
-[`interpolate`](/strings/#values-from-outside), which refuses a hole in a Datastar attribute, an
+[`interpolate`](/strings/#values-from-outside), which refuses a value in a Datastar attribute, an
 event handler, `srcdoc` or `style`, and a URL that is not relative, `http`, `https`, `mailto` or
 `tel`.
 

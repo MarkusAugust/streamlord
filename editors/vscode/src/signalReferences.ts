@@ -52,9 +52,9 @@ export function helperSignalReference(text: string): SignalReference | null {
 }
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to `html`. */
-export function signalReferencesInHtml(html: string, prefix: string): SignalReference[] {
+export function signalReferencesInHtml(html: string, prefix: string, templates = true): SignalReference[] {
   const out: SignalReference[] = [];
-  for (const tag of tokenize(html).tags) {
+  for (const tag of tokenize(html, templates).tags) {
     if (tag.closing) continue;
     for (const attr of tag.attributes) {
       const spec = parseAttributeName(asciiLowercase(attr.name), prefix)?.spec;
@@ -96,7 +96,7 @@ export function signalReferencesInKotlin(src: string, prefix: string, opts: Pick
     const html = catalog.callSites.html[site.name];
     if (html) {
       const s = markupString(site, html);
-      if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix));
+      if (s && !s.unterminated) add(s, signalReferencesInHtml(s.text, prefix, false));
     }
   }
   const names = dslHelpers(src, undefined, sdkOf(opts).htmlDsl);
@@ -120,7 +120,7 @@ export function signalReferencesInKotlin(src: string, prefix: string, opts: Pick
   }
   for (const s of lex.strings) {
     if (claimed.has(s.start) || s.unterminated || !isHtmlString(src, s)) continue;
-    add(s, signalReferencesInHtml(s.text, prefix));
+    add(s, signalReferencesInHtml(s.text, prefix, false));
   }
   return out;
 }

@@ -17,8 +17,7 @@ import io.github.markusaugust.streamlord.core.InternalStreamlordApi
  * off and a `noscript` holds elements like a `div`; only a document parsed with scripting on, a
  * page as the browser loads it, reads its body as text ([SCRIPTING_RAW_TEXT]).
  */
-@InternalStreamlordApi
-public val RAW_TEXT: List<String> =
+internal val RAW_TEXT: List<String> =
     listOf("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "plaintext")
 
 /** [RAW_TEXT] as a document parsed with scripting on reads it, where a `noscript` is text too. */
@@ -28,8 +27,7 @@ internal val SCRIPTING_RAW_TEXT: List<String> = RAW_TEXT + "noscript"
 internal val CODE_TEXT: List<String> = listOf("script", "style")
 
 /** HTML's own white space, which alone ends a tag or an attribute name: narrower than Kotlin's `isWhitespace`. */
-@InternalStreamlordApi
-public const val HTML_SPACE: String = "\t\n\u000C\r "
+internal const val HTML_SPACE: String = "\t\n\u000C\r "
 
 /** Whether this is [HTML_SPACE]. */
 @InternalStreamlordApi
@@ -40,8 +38,7 @@ public fun Char.isHtmlSpace(): Boolean = this in HTML_SPACE
  * nowhere. A `script` ends where the tokenizer's script data states say, which is not always at
  * the first `</script>`; see [scriptEnd].
  */
-@InternalStreamlordApi
-public fun rawTextEnd(
+internal fun rawTextEnd(
     html: String,
     name: String,
     from: Int,
@@ -138,17 +135,8 @@ private fun scriptEnd(
 }
 
 /**
- * One past the end of the comment that opens at [lt]: `<!-->` and `<!--->` are whole comments,
- * and `-->` and `--!>` both close one. An unclosed comment runs to the end.
- */
-@InternalStreamlordApi
-public fun commentEnd(
-    html: String,
-    lt: Int,
-): Int = commentClose(html, lt).let { if (it < 0) html.length else it }
-
-/**
- * [commentEnd], or -1 when nothing closes the comment. One walk to the first closing sequence of
+ * One past the end of the comment that opens at [lt], or -1 when nothing closes it: `<!-->` and
+ * `<!--->` are whole comments, and `-->` and `--!>` both close one. One walk to the first closing sequence of
  * either kind, so a run of comments is read in time that grows with it, not with it squared.
  */
 internal fun commentClose(

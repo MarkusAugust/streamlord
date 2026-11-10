@@ -202,6 +202,27 @@ private fun parseArgs(
     return null
 }
 
+/** [a] up to the end of its last token, without the comments and whitespace after it: `x /* id */` as `x`. */
+internal fun uncommented(
+    src: String,
+    a: Arg,
+): Arg {
+    var i = a.start
+    var last = a.start
+    while (true) {
+        i = skipTrivia(src, i, a.end)
+        if (i >= a.end) break
+        i =
+            when {
+                isStringStart(src, i) -> readKotlinStringAt(src, i)?.end ?: (i + 1)
+                src[i] == '\'' -> charLiteralEnd(src, i)
+                else -> i + 1
+            }.coerceAtMost(a.end)
+        last = i
+    }
+    return if (last == a.end) a else a.copy(end = last, text = src.substring(a.start, last))
+}
+
 private fun makeArg(
     src: String,
     from: Int,
@@ -294,9 +315,6 @@ public fun lexKotlin(src: String): KotlinLex {
 /** Every string literal in the source that is not inside a comment, in order. */
 public fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
 
-// A template as the first tag name, `"<$tag>…"`, opens a tag all the same when a space, `>` or `/` follows
-// it; `"<$tag\\b"` and `"<$tag"` are search patterns.
-private val HTML_START = Regex("""^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)""", RegexOption.IGNORE_CASE)
 private val HTML_MARKER = Regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 private val PARAMETER_AFTER_MARKER = Regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
@@ -310,7 +328,7 @@ public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
-    if (HTML_START.containsMatchIn(s.text)) return true
+    if (textOpensWithTag(s.text)) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
     val after = before.substring(last.range.last + 1)

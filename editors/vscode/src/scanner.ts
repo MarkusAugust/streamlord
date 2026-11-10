@@ -1,4 +1,5 @@
 import { charLiteralEnd, isStringStart, readKotlinStringAt, type KotlinString } from "./kotlinStrings.ts";
+import { textOpensWithTag } from "./valueTypes.ts";
 
 /**
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
@@ -117,6 +118,22 @@ function parseArgs(src: string, openParen: number): { closeParen: number; args: 
   return null;
 }
 
+/** `a` up to the end of its last token, without the comments and whitespace after it: `x /* id *\/` as `x`. `uncommented` in Scanner.kt. */
+export function uncommented(src: string, a: Arg): Arg {
+  let i = a.start;
+  let last = a.start;
+  for (;;) {
+    i = skipTrivia(src, i, a.end);
+    if (i >= a.end) break;
+    if (isStringStart(src, i)) i = readKotlinStringAt(src, i)?.end ?? i + 1;
+    else if (src[i] === "'") i = charLiteralEnd(src, i);
+    else i++;
+    i = Math.min(i, a.end);
+    last = i;
+  }
+  return last === a.end ? a : { ...a, end: last, text: src.slice(a.start, last) };
+}
+
 function makeArg(src: string, from: number, to: number): Arg {
   let end = to;
   while (end > from && /\s/.test(src[end - 1] ?? "")) end--;
@@ -222,9 +239,6 @@ export function stringAt(src: string, offset: number, strings: KotlinString[] = 
   return null;
 }
 
-// A template as the first tag name, `"<$tag>…"`, opens a tag all the same when a space, `>` or `/` follows
-// it; `"<$tag\\b"` and `"<$tag"` are search patterns.
-const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
 
 /**
@@ -234,7 +248,7 @@ const HTML_MARKER = /@Language\(\s*"html"\s*\)|\/\/\s*language\s*=\s*html\b/gi;
  * string literal only.
  */
 export function isHtmlString(src: string, s: KotlinString): boolean {
-  if (HTML_START.test(s.text)) return true;
+  if (textOpensWithTag(s.text)) return true;
   const before = src.slice(Math.max(0, s.start - 240), s.start);
   const markers = [...before.matchAll(HTML_MARKER)];
   const last = markers[markers.length - 1];

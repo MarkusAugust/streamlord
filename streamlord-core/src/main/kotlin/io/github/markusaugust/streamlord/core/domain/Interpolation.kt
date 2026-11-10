@@ -45,10 +45,11 @@ public value class Trusted(
  * read as HTML and as the inside of an `<svg>` or `<math>`: a tag, an attribute value, a comment,
  * a CDATA section, the body of a `<script>`, `<textarea>` or `<title>`, a `<` at its very end, an
  * `<svg>` or a `<math>` and what is in them, a `<template>` and a `<select>`; and it may not end an
- * element it did not open. The hole has to stand outside all of those in the outer markup. Otherwise the fragment would move
- * every hole after it, `interpolate("<script>")` turning the next value into a program and
- * `interpolate("<svg>")` turning a `<title>` after it into one that holds elements, so it is
- * escaped like a string instead, and shows as the markup it is.
+ * element it did not open. The placeholder it fills has to stand outside all of those in the outer
+ * markup. Otherwise the fragment would move every placeholder after it, `interpolate("<script>")`
+ * turning the next value into a program and `interpolate("<svg>")` turning a `<title>` after it
+ * into one that holds elements, so it is escaped like a string instead, and shows as the markup it
+ * is.
  */
 @JvmInline
 public value class Html
@@ -62,7 +63,7 @@ public value class Html
 
 /**
  * The markup of each [Html] in turn, with [separator] between them: a list of rows, say, as the
- * one value of a hole.
+ * one value of a placeholder.
  *
  * ```kotlin
  * interpolate("<ul>%s</ul>", names.map { interpolate("<li>%s</li>", it) }.joinToHtml())
@@ -114,11 +115,11 @@ public enum class Position {
  * Raised when a value would land somewhere escaping cannot make safe.
  *
  * @property position Where it landed.
- * @property index Which value, counting the holes from zero.
+ * @property index Which value, counting the placeholders from zero.
  * @property attribute The attribute it landed in, when it landed in one.
  * @property loadsCode Whether that attribute is a URL its tag loads and runs, or treats as its own
- *   document, such as a script's `src`: a [Position.URL] where the literal before the hole has to
- *   fix the host, which a safe scheme does not.
+ *   document, such as a script's `src`: a [Position.URL] where the literal before the placeholder
+ *   has to fix the host, which a safe scheme does not.
  */
 public class UnsafeInterpolationException(
     public val position: Position,
@@ -136,7 +137,7 @@ public class UnsafeInterpolationException(
             if (loadsCode) {
                 return "Value $index would land in $attribute, a URL its tag loads and runs, where the markup before it " +
                     "does not fix the host, so any value could point the load at another origin, https or not. Write " +
-                    "the host into the markup before the hole, as in \"/js/%s\" or \"https://cdn.example.com/%s\", " +
+                    "the host into the markup before the placeholder, as in \"/js/%s\" or \"https://cdn.example.com/%s\", " +
                     "or, if you chose the URL yourself, wrap it in Trusted(...)."
             }
             val where =
@@ -195,12 +196,12 @@ public class UnsafeInterpolationException(
 }
 
 /**
- * Writes [values] into [format] at its `%s` holes, escaped, and refuses any hole that landed
- * somewhere escaping cannot make safe.
+ * Writes [values] into [format] at its `%s` placeholders, escaped, and refuses any value that
+ * landed somewhere escaping cannot make safe.
  *
  * The question is not where a value came from, which Streamlord cannot know by the time it is
  * handed a string. It is where the value lands, which is a fact about [format] alone: Kotlin has
- * already finished with the literal, so every `%s` in it is a hole the caller left on purpose and
+ * already finished with the literal, so every `%s` in it is a placeholder the caller left on purpose and
  * everything around it is markup the caller wrote. That is enough to say, of each value, whether
  * it becomes text, an attribute, part of a Datastar expression, or the shape of the markup.
  *
@@ -219,9 +220,9 @@ public class UnsafeInterpolationException(
  * takes a number only. A URL attribute (`href`, `src`, `action` and the like, and `values`,
  * `to` and `from` on SVG's animation elements) must come out, values and all, as a relative URL
  * or an `http`, `https`, `mailto` or `tel` one: `href="/heads/%s"` takes anything, and
- * `href="%s%s"` cannot be made into `javascript:` across its two holes. A URL the browser loads
+ * `href="%s%s"` cannot be made into `javascript:` across its two placeholders. A URL the browser loads
  * and runs, a script's `src`, a `<link>`'s `href` and the like, must have its host fixed by the
- * markup before the hole, as in `src="/js/%s"`. The URL a `<meta>` refresh reads from its
+ * markup before the placeholder, as in `src="/js/%s"`. The URL a `<meta>` refresh reads from its
  * `content` is held to the same schemes.
  *
  * A [Trusted] value is not judged, and is read as the markup it is: the other values are judged
@@ -236,14 +237,14 @@ public class UnsafeInterpolationException(
  * namespace among it, is judged as either.
  *
  * `%%` writes one `%`. A `%` followed by anything else is literal, so CSS and escaped URLs need
- * no ceremony; a hole is only ever `%s`, and a miscounted one fails here rather than quietly.
+ * no ceremony; a placeholder is only ever `%s`, and a miscounted one fails here rather than quietly.
  *
  * This is the rule the editors enforce as you type, where they can see the Kotlin source and its
- * `${'$'}{...}`. At render time the source is gone, so the holes have to be left standing. That is
+ * `${'$'}{...}`. At render time the source is gone, so the placeholders have to be left standing. That is
  * the whole of what this function asks of you.
  *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
- * @throws IllegalArgumentException if the number of values does not match the number of holes.
+ * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
  */
 public fun interpolate(
     @Language("HTML") format: String,
@@ -264,8 +265,8 @@ public fun interpolate(
 ): Html {
     val holes = holes(format)
     require(holes.size == values.size) {
-        "The markup has ${holes.size} %s ${if (holes.size == 1) "hole" else "holes"} and ${values.size} " +
-            "${if (values.size == 1) "value" else "values"} were given"
+        "The markup has ${holes.size} %s ${if (holes.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
+            "${if (values.size == 1) "value was" else "values were"} given"
     }
     if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 
@@ -286,7 +287,7 @@ public fun interpolate(
         val landing = landingOf(landscapes, hole)
         // Markup interpolate built is markup where it starts and ends in the data state in
         // every reading, so that it cannot move the holes after it; anywhere else it is characters.
-        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text) }) {
+        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text, hole) }) {
             out.append(value.text)
         } else {
             if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
@@ -484,6 +485,30 @@ public fun holeLandings(
 }
 
 /**
+ * Where [hole] lands in [markup] as the browser parses it as a patch: the one reading that follows
+ * the browser's element stack from HTML, with scripting off. Where [holeLandings] takes the
+ * strictest of every reading, so that nothing is let through that one of them would refuse, this
+ * is the reading the markup has, which an editor shows at the caret: in a `<textarea>` the text is
+ * text. It is [walkMarkup]'s, which the editors' checks read by as well, and with [templates] it
+ * skips the comments and tags of a template language as that does. A [HoleLanding.valueStart] is an
+ * offset into [markup].
+ */
+@InternalStreamlordApi
+public fun landingAsParsed(
+    markup: String,
+    hole: IntRange,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    templates: Boolean = false,
+): HoleLanding {
+    val written = Written(markup, listOf(hole), emptyMap(), percents = false)
+    val reading = Reading(tracked = true, context = NS_HTML, templates = templates)
+    val parsed = landscape(shadow(written.text, written.open), written.open, prefixes, reading)
+    val landing = landingOf(listOf(parsed), written.starts[0])
+    if (landing.valueStart < 0) return landing
+    return HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
+}
+
+/**
  * Whether the start of a URL attribute's value, the literal text before its first hole, already
  * settles the scheme, so that no value written after it can make the URL run: a `/`, `?` or `#`
  * before any `:`, or a whole scheme that only navigates. Read as [safeUrl] reads, after entities
@@ -570,13 +595,34 @@ private class Reading(
     val scripting: Boolean = false,
     val context: Int = NS_HTML,
     val htmlStaysOpen: Boolean = true,
+    val templates: Boolean = false,
+    val insideMarkup: Boolean = false,
+    val closesAll: Boolean = false,
 ) {
     fun scan(
         html: String,
         visitor: MarkupVisitor,
-    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen)
+    ): Boolean = scanMarkup(html, visitor, foreign, cdata, tracked, scripting, context, htmlStaysOpen, templates, insideMarkup, closesAll)
 
-    fun withScripting(): Reading = Reading(foreign, cdata, tracked, scripting = true, context = context, htmlStaysOpen = htmlStaysOpen)
+    /**
+     * This tracked reading, of a value written into markup where the content is of [namespace]: it has
+     * to close all it opens, and with [leaves], a tag that returns from that svg or math to HTML closes it.
+     */
+    fun of(
+        namespace: Int,
+        leaves: Boolean,
+        closesAll: Boolean = true,
+    ): Reading =
+        Reading(
+            tracked = true,
+            scripting = scripting,
+            context = namespace,
+            htmlStaysOpen = htmlStaysOpen,
+            insideMarkup = leaves,
+            closesAll = closesAll,
+        )
+
+    fun withScripting(): Reading = Reading(foreign, cdata, tracked, true, context, htmlStaysOpen, templates, insideMarkup, closesAll)
 }
 
 /**
@@ -599,8 +645,6 @@ private fun landscapes(
     prefixes: List<String>,
 ): List<Landscape> {
     val shadow = shadow(markup, holes)
-    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
-    val ordered = prefixes.sortedByDescending { it.length }
     val scripting = if (mentionsNoscript(shadow)) listOf(false, true) else listOf(false)
     val readings =
         scripting.map { Reading(scripting = it) } +
@@ -611,8 +655,20 @@ private fun landscapes(
             listOf(NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
+    return readings.map { landscape(shadow, holes, prefixes, it) }
+}
+
+/** The [shadow] of a markup with [holes] in it, read the one way [reading] gives. */
+private fun landscape(
+    shadow: String,
+    holes: List<IntRange>,
+    prefixes: List<String>,
+    reading: Reading,
+): Landscape {
+    // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
+    val ordered = prefixes.sortedByDescending { it.length }
     val holeEnds = holes.associate { it.first to it.last + 1 }
-    return readings.map { reading -> Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) } }
+    return Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) }
 }
 
 /** Whether a `noscript` may stand in [html], which only then reads differently with scripting on. */
@@ -756,10 +812,14 @@ private class Landscape(
     private val codeEnds = ArrayList<Int>()
     private val opaqueStarts = ArrayList<Int>()
     private val opaqueEnds = ArrayList<Int>()
+    private val textStarts = ArrayList<Int>()
+    private val textEnds = ArrayList<Int>()
+    private val textPlaces = ArrayList<TextPlace>()
 
     override fun attribute(
         tag: String,
         name: String,
+        nameStart: Int,
         valueStart: Int,
         valueEnd: Int,
         quoted: Boolean,
@@ -795,6 +855,16 @@ private class Landscape(
     ) {
         opaqueStarts += start
         opaqueEnds += end
+    }
+
+    override fun text(
+        start: Int,
+        end: Int,
+        place: TextPlace,
+    ) {
+        textStarts += start
+        textEnds += end
+        textPlaces += place
     }
 
     override fun declaration(
@@ -913,10 +983,46 @@ private class Landscape(
 
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
-     * into, with scripting on as well when it holds a `noscript`.
+     * into, with scripting on as well when it holds a `noscript`. A reading that follows the element
+     * stack reads it where it lands, at [hole], rather than where the reading starts, and there it
+     * leaves no element open at all: the format's end tags do not all reach one, as an object bounds
+     * them, an integration point stops an svg's, and an `<a>` is opened again after its parent closes.
      */
-    fun closes(html: String): Boolean =
-        reading.scan(html, Discard) && (reading.scripting || !mentionsNoscript(html) || reading.withScripting().scan(html, Discard))
+    fun closes(
+        html: String,
+        hole: Int,
+    ): Boolean {
+        fun closesIn(r: Reading) =
+            r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
+        // A reading that follows the element stack reads the value where it lands, not where the
+        // reading starts: read from inside an svg, the `<a>` of `<div>%s</div>` and an `<a><span>` is
+        // HTML. The fixed readings have no stack to know it by.
+        val at = indexOfSpan(hole, textStarts, textEnds)
+        if (!reading.tracked || at < 0) return closesIn(reading)
+        val place = textPlaces[at]
+        // Right in an integration point the value is HTML, whatever the reading started in.
+        if (place.integrationPoint) return closesIn(reading.of(NS_HTML, leaves = false)) && fits(html, place)
+        // Read from an svg or a math, a format's `<form>` or `<math>` is an element of that namespace,
+        // so that reading only checks the value closes, and leaves the rest to the reading from HTML.
+        // Straight in the patch's own svg or math it may leave nothing open, where an `<image>` or an
+        // `<input>` is an element left open; the reading that closes HTML elements by itself leaves that.
+        if (reading.context != NS_HTML) {
+            val top = place.namespace < 0
+            // Inside an element of the format whose name is HTML's, `<td>` or `<nav>`, the svg or math
+            // patch this reading supposes is not one an author writes, and the reading from HTML judges it.
+            if (!top && place.namespace != NS_HTML && place.parent !in FOREIGN_NAMES) return true
+            return closesIn(
+                reading.of(
+                    if (top) reading.context else place.namespace,
+                    leaves = false,
+                    closesAll =
+                        top && reading.htmlStaysOpen,
+                ),
+            )
+        }
+        val namespace = if (place.namespace < 0) NS_HTML else place.namespace
+        return closesIn(reading.of(namespace, leaves = namespace != NS_HTML)) && (namespace != NS_HTML || fits(html, place))
+    }
 
     fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 
@@ -944,3 +1050,131 @@ private class Landscape(
         return if (i >= 0 && at < ends[i]) i else -1
     }
 }
+
+/**
+ * Whether [html], written into HTML at [place], keeps the shape the walk reads it in, where the
+ * walk does not follow the tree builder: its table parts stand in its own table or in the element
+ * that holds them, and a `<table>` does not stand in a table mode, which it closes; no end tag of it
+ * reaches past an element that bounds the search, past a block a formatting element holds, or past
+ * a formatting element of another, which the browser opens again after it; no start tag of it closes
+ * the format's `p` while it has an element open; and it has no form where the format has one, whose
+ * form pointer the browser keeps.
+ */
+private fun fits(
+    html: String,
+    place: TextPlace,
+): Boolean = ValueShape(place).also { scanMarkup(html, it, tracked = true) }.fits
+
+/** The table parts, each with the elements that hold it. */
+private val TABLE_PARTS_IN =
+    mapOf(
+        "td" to setOf("tr"),
+        "th" to setOf("tr"),
+        "tr" to setOf("table", "tbody", "thead", "tfoot"),
+        "col" to setOf("colgroup"),
+        "caption" to setOf("table"),
+        "colgroup" to setOf("table"),
+        "tbody" to setOf("table"),
+        "thead" to setOf("table"),
+        "tfoot" to setOf("table"),
+    )
+
+/**
+ * The table parts that do no harm straight at a patch's top level or in a `<template>`, where the
+ * browser drops them or reads them as a table's: not a cell, which takes the format's rows with it,
+ * and not a bare `<col>`, which turns all that follows into a column group that drops it.
+ */
+private val TOP_LEVEL_PARTS = setOf("tr", "thead", "tbody", "tfoot", "caption", "colgroup")
+
+/** The elements whose content the tree builder reads in a table mode, where a `<table>` closes the open one. */
+private val TABLE_MODES = setOf("table", "tbody", "thead", "tfoot", "tr", "colgroup")
+
+/** The elements that bound the search of an end tag in scope, so it cannot close what is open outside them. */
+private val SCOPE_BOUNDS = setOf("applet", "caption", "html", "marquee", "object", "table", "td", "th", "template")
+
+/** The elements that bound the search of a table's end tags, in table scope. */
+private val TABLE_SCOPE_BOUNDS = setOf("html", "table", "template")
+
+private val FORMATTING = setOf("a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u")
+
+/** Reads the start and end tags of a value for [fits], keeping the elements it opens as they open and close. */
+private class ValueShape(
+    private val place: TextPlace,
+) : MarkupVisitor {
+    var fits = true
+    private val open = ArrayList<String>()
+
+    // Whether a `p` of the format is still open around the value, for a start tag of it to close.
+    private var outerParagraph = place.paragraphInScope
+
+    // The element a table part or a form of the value goes into: its own innermost table element, or where it lands.
+    private fun tableContext(): String? = open.lastOrNull { it == "table" || it in TABLE_PARTS_IN || it == "template" } ?: place.parent
+
+    override fun attribute(
+        tag: String,
+        name: String,
+        nameStart: Int,
+        valueStart: Int,
+        valueEnd: Int,
+        quoted: Boolean,
+    ) = Unit
+
+    override fun startTag(
+        name: String,
+        start: Int,
+        end: Int,
+        selfClosing: Boolean,
+        rawText: Boolean,
+    ) {
+        val holders = TABLE_PARTS_IN[name]
+        val context = tableContext()
+        val topLevel = (context == null || context == "template") && name in TOP_LEVEL_PARTS
+        if (holders != null && "table" !in open && context !in holders && !topLevel) fits = false
+        // In a table mode a `<table>` closes the open one first.
+        if (name == "table" && context in TABLE_MODES) fits = false
+        if (name == "form" && place.formOpen) fits = false
+        // A start tag that closes the format's `p` closes all the value has open inside it as well, and
+        // the value's end tags for those then reach the format.
+        // Inside the value's own svg or math, a `<section>` is an element of that namespace and closes no `p`.
+        if (outerParagraph && (name in CLOSES_P || name == "li" || name == "dd" || name == "dt") &&
+            open.none { it == "p" || it in SCOPE_BOUNDS || it == "button" || it == "svg" || it == "math" }
+        ) {
+            if (open.isNotEmpty()) fits = false
+            outerParagraph = false
+        }
+        if (name !in VOID) open += name
+    }
+
+    override fun endTag(
+        name: String,
+        start: Int,
+        end: Int,
+    ) {
+        if (name == "form" && place.formOpen) fits = false
+        val at = open.lastIndexOf(name)
+        if (at < 0) return
+        val inside = open.subList(at + 1, open.size)
+        if (name in FORMATTING && inside.any { it in SPECIAL }) fits = false
+        // A formatting element another end tag closes is opened again around the text after it.
+        if (inside.any { it in FORMATTING }) fits = false
+        // An object, a table or a cell opened inside bounds the end tag's search, which then closes
+        // nothing; a table's own end tags search only past a table or a template, and close its cells.
+        val bounds = if (name == "table" || name in TABLE_PARTS_IN) TABLE_SCOPE_BOUNDS else SCOPE_BOUNDS
+        if (inside.any { it in bounds }) fits = false
+        open.subList(at, open.size).clear()
+    }
+}
+
+/** The names of svg and MathML elements, inside which a reading from an svg or a math judges a value. */
+private val FOREIGN_NAMES =
+    (
+        "a animate animatemotion animatetransform circle clippath defs desc ellipse feblend fecolormatrix " +
+            "fecomponenttransfer fecomposite feconvolvematrix fediffuselighting fedisplacementmap fedistantlight " +
+            "fedropshadow feflood fefunca fefuncb fefuncg fefuncr fegaussianblur feimage femerge femergenode " +
+            "femorphology feoffset fepointlight fespecularlighting fespotlight fetile feturbulence filter foreignobject " +
+            "g image line lineargradient marker mask metadata mpath path pattern polygon polyline radialgradient rect " +
+            "script set stop style svg switch symbol text textpath title tspan use view " +
+            "math maction annotation annotation-xml menclose merror mfenced mfrac mi mmultiscripts mn mo mover mpadded " +
+            "mphantom mprescripts mroot mrow ms mspace msqrt mstyle msub msubsup msup mtable mtd mtext mtr munder " +
+            "munderover semantics none mglyph malignmark"
+    ).split(" ").toSet()

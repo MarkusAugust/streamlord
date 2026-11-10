@@ -13,7 +13,7 @@ const expected = JSON.parse(readFileSync(new URL("expected.json", dir), "utf8"))
   constants: string[];
   files: Record<string, { start: number; end: number; code: string; severity: string; message: string }[]>;
 };
-const CODES = new Set(["kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-holes"]);
+const CODES = new Set(["kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders"]);
 
 describe("the interpolation test project", () => {
   it("finds the constants the workspace index gives the analysis", () => {

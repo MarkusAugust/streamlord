@@ -2,6 +2,50 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.15.0
+
+- The messages and fixes for `interpolate` call a `%s` a placeholder. The error for a `%s` count
+  that does not match the values is `interpolate-placeholders`, where it was `interpolate-holes`,
+  so anything that names the old code needs the new one.
+- A type of your own, or of another library, named `Html` or `Trusted` is no longer taken for
+  Streamlord's markup. Where a value of it is joined into HTML, handed to `interpolate(...)` or
+  joined with `joinToString`, you get the warnings a value of any type the extension does not know
+  gets, where before it got none, and a `Trusted(...)` of another package is not let into a
+  `<script>`. That holds for `com.acme.Html` written out, and where the file takes the bare name
+  from elsewhere: `import com.acme.Html`, `import com.acme.Markup as Html`, or an `Html` it declares
+  itself. A star import of another package leaves the name Streamlord's, since the extension cannot
+  tell whether the package has one.
+- Streamlord's own `Html` and `Trusted` imported under another name,
+  `import io.github.markusaugust.streamlord.core.domain.Html as Page`, are markup: a value declared
+  `Page` or `List<Page>`, a call to `T(x)` for a `Trusted` imported as `T`, and a `val` set to one
+  are no longer asked for `interpolate(...)`. A name in backticks is the same name, in the import,
+  the type or the call.
+- A value declared `List<Html?>` or `List<out Html>` is markup when joined with `joinToString`, as
+  an `Html?` on its own is.
+- A comment after a value handed to `interpolate(...)`, `Trusted(x) /* id */`, is no longer read
+  as part of the value, so a `Trusted` there is let into a `<script>`.
+- An `interpolate` imported from another package, or declared in the file, is no longer checked as
+  Streamlord's, so its format no longer gets errors about placeholders it may not have.
+- A string literal that opens with a tag a template names, `"<$tag>x</$tag>"`, is markup, as it is
+  in IntelliJ, and is no longer asked for `interpolate(...)`. The template in the tag name is still
+  judged on its own.
+- Literals joined with `+` whose text opens with a doctype, `"\n" + "<!doctype html>..."`, are
+  checked as HTML. A vertical tab or a no-break space before the first `<` no longer makes a
+  literal markup.
+- Inside a `<textarea>` or a `<title>`, where the browser reads `<i data-text="1 +">` as text,
+  completion, hover and signature help no longer treat it as a Datastar expression. Inside an
+  `<svg>` the expression is still read.
+- In an HTML string in Kotlin, a template comment such as `{# #}`, `<#-- -->`, `<%-- --%>` or
+  `{{! }}` no longer hides the `data-*` attributes in it from the checks, since the browser reads
+  the tags in it as tags. In template and HTML files the checks still skip them, as the template
+  engine removes them, and completion, hover and signature help skip them now too.
+- Completion, hover and signature help read markup as the checks do, the browser's way, where they
+  read some nestings otherwise: an `<svg>` right inside a MathML `annotation-xml` is an svg, and an
+  end tag such as `</foreignObject>` closes nothing when a `<div>` stands between it and its
+  element.
+- In an HTML string in Kotlin, completion, hover and signature help find the expression in a tag
+  whose name is a template, `"<$tag data-text=\"...\">"`, as the checks did.
+
 ## 0.14.0
 
 - A helper called on a receiver, `headers.set("Cache-Control", "no-cache")` or
@@ -93,7 +137,7 @@ All notable changes to the Streamlord extension are recorded here.
 
 - Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
   judges it at run time and with core's own reading of the markup: `$name`, `${...}`, a value
-  joined with `+`, a literal inside a template and the holes of a `$$` literal, where only `$name`
+  joined with `+`, a literal inside a template and the values in a `$$` literal, where only `$name`
   was looked at before, and that with the same hint, "make sure it is escaped", wherever it stood.
   `unescaped-interpolation` is a value where escaping saves it, in element text, a quoted attribute
   or a URL whose literal start settles the scheme: a hint, a warning for a `String` and for markup
@@ -135,36 +179,37 @@ All notable changes to the Streamlord extension are recorded here.
   which wraps it in `Trusted(...)` and adds the import. The message says to declare markup `Html`
   or wrap it.
 - A call to `interpolate` is judged as it will run. A `%s` count that does not match the values is
-  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will
-  refuse where it lands is `unsafe-interpolation`, an error where the value is known to be refused
-  (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
-  Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
-  it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
-  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text
-  into the format, where a `%s` in it is a hole and a `%%` a per cent sign, and the fix makes it a
-  `%s` hole, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
-  `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection declared
-  one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
-  printed as text; a literal is text you chose to have escaped and says nothing. The format is read
-  as HTML, so a `%s` in it is a hole and not text. An unsigned number, a `UInt` or a `3u`, is no
-  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` hole in a
-  `data-*` expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template
-  writes one there, a hint.
+  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will refuse
+  where it lands is `unsafe-interpolation`, an error where the value is known to be refused (a
+  `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A Kotlin
+  template written into the format is `interpolate-template`, a warning, since Kotlin fills it in
+  before `interpolate` sees it, with a fix that makes it a `%s` placeholder and passes its value in
+  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text into
+  the format, where a `%s` in it is a placeholder and a `%%` a per cent sign, and the fix makes it a
+  `%s` placeholder, where `interpolate` writes it as it is. A `%s` in element text given markup held
+  as a `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection
+  declared one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template`
+  too, a warning, since `interpolate` escapes it and its tags are printed as text; a literal is text
+  you chose to have escaped and says nothing. The format is read as HTML, so a `%s` in it is a
+  placeholder and not text. An unsigned number, a `UInt` or a `3u`, is no `kotlin.Number`, which
+  `interpolate` refuses where only a number is let in: in a `%s` placeholder in a `data-*`
+  expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template writes
+  one there, a hint.
 - The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
   that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
-  `Trusted` outside element text, nor for a hole in element text that may hold markup, which
+  `Trusted` outside element text, nor for a value in element text that may be markup, which
   `interpolate` would escape, nor for a value that is a `List`, which a template writes as
   `[a, b]`. The rewrite doubles each per cent sign the literal writes.
-- A workspace index of `const val`s: a constant declared in another file is your own, where the
-  file does not declare something else of its name. A private constant is left out, since no
-  other file can see it, and so is a name that some file declares as a `val` or `var` other files
-  can see, a getter for one: `$title` is no longer silent everywhere because one file has a
-  `private const val title` and another a `val title get() = ...` that reads the request. Names
-  are resolved by their scope (lambda and loop parameters, local functions, destructuring and
-  constructor properties), and a hole is markup only when its whole value is: an HTML literal or a `+` chain that opens with one,
-  `interpolate(...)`, `Trusted(...)`, a value declared `Html` or `@Language("HTML")`, kotlinx.html
-  output, a `joinToString` over markup, or an `if`, a `when` or an `?:` whose every result is markup
-  or a literal.
+- A workspace index of `const val`s: a constant declared in another file is your own, where the file
+  does not declare something else of its name. A private constant is left out, since no other file
+  can see it, and so is a name that some file declares as a `val` or `var` other files can see, a
+  getter for one: `$title` is no longer silent everywhere because one file has a
+  `private const val title` and another a `val title get() = ...` that reads the request. Names are
+  resolved by their scope (lambda and loop parameters, local functions, destructuring and
+  constructor properties), and a value is markup only when the whole of it is: an HTML literal or a
+  `+` chain that opens with one, `interpolate(...)`, `Trusted(...)`, a value declared `Html` or
+  `@Language("HTML")`, kotlinx.html output, a `joinToString` over markup, or an `if`, a `when` or an
+  `?:` whose every result is markup or a literal.
 - The workspace index reads the files `analyzeProject` reads: it leaves out every hidden folder, such as `.idea` or a worktree under `.claude`, as well as `build`, `node_modules`, `dist`, `out` and `target`, also for a file changed on disk or opened from one.
 - In a `data-*` expression of an HTML string, `$count` where `count` is a number or a boolean is a
   hint that asks only whether the signal was meant, since the value is safe written in; it was a

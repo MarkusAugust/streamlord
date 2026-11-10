@@ -163,7 +163,19 @@ class InterpolationTest {
         assertTrue(
             assertFailsWith<IllegalArgumentException> { render("<li></li>", "a") }
                 .message!!
-                .contains("0 %s holes and 1 value"),
+                .contains("0 %s placeholders and 1 value"),
+        )
+    }
+
+    @Test
+    fun `a miscounted call says how many placeholders and values there are, in the singular for one`() {
+        assertEquals(
+            "The markup has 0 %s placeholders and 1 value was given",
+            assertFailsWith<IllegalArgumentException> { interpolate("<li></li>", "a") }.message,
+        )
+        assertEquals(
+            "The markup has 1 %s placeholder and 2 values were given",
+            assertFailsWith<IllegalArgumentException> { interpolate("<li>%s</li>", "a", "b") }.message,
         )
     }
 

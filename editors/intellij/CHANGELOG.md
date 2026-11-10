@@ -2,6 +2,50 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.13.0
+
+- The messages and fixes for `interpolate` call a `%s` a placeholder.
+- A type of your own, or of another library, named `Html` or `Trusted` is no longer taken for
+  Streamlord's markup. Where a value of it is joined into HTML, handed to `interpolate(...)` or
+  joined with `joinToString`, you get the warnings a value of any type the plugin does not know
+  gets, where before it got none, and a `Trusted(...)` of another package is not let into a
+  `<script>`. The plugin goes by the class it resolves, so this holds for `com.acme.Html` written
+  out, `import com.acme.Html`, `import com.acme.Markup as Html`, an `Html` of the file's own
+  package, one a star import brings in from another package, and one written in backticks. In K1
+  mode the plugin reads the type a declaration resolves to, as in K2.
+- A class of your own named `Trusted` no longer makes a value markup: the plugin reads a value as
+  Streamlord's `Trusted` by the type it resolves, as VS Code does.
+- Streamlord's own `Html` and `Trusted` imported under another name,
+  `import io.github.markusaugust.streamlord.core.domain.Html as Page`, are markup: a value declared
+  `Page` or `List<Page>`, a call to `T(x)` for a `Trusted` imported as `T`, and a `val` set to one
+  are no longer asked for `interpolate(...)`. A name in backticks is the same name, in the import,
+  the type or the call.
+- A value declared `List<Html?>` or `List<out Html>` is markup when joined with `joinToString`, as
+  an `Html?` on its own is.
+- A comment after a value handed to `interpolate(...)`, `Trusted(x) /* id */`, is no longer read
+  as part of the value, so a `Trusted` there is let into a `<script>`.
+- An `interpolate` imported from another package, or declared in the file, is no longer checked as
+  Streamlord's, so its format no longer gets errors about placeholders it may not have.
+- A string literal with a `|` margin is taken for markup only when `.trimMargin()` is called on it,
+  since the margin is part of the text otherwise.
+- Literals joined with `+` whose text opens with a doctype, `"\n" + "<!doctype html>..."`, are
+  checked as HTML. A vertical tab before the first `<` no longer makes a literal markup.
+- Inside a `<textarea>` or a `<title>`, where the browser reads `<i data-text="1 +">` as text,
+  completion, hover and parameter info no longer treat it as a Datastar expression. Inside an
+  `<svg>` the expression is still read.
+- Attribute names are no longer offered after a space inside a quoted value whose quote is still
+  open, as in `<i data-text="1 + d`.
+- In an HTML string in Kotlin, a template comment such as `{# #}`, `<#-- -->`, `<%-- --%>` or
+  `{{! }}` no longer hides the `data-*` attributes in it from the checks, since the browser reads
+  the tags in it as tags. In template and HTML files the checks still skip them, as the template
+  engine removes them, and completion, hover and parameter info skip them now too.
+- Completion, hover and parameter info read markup as the checks do, the browser's way, where they
+  read some nestings otherwise: an `<svg>` right inside a MathML `annotation-xml` is an svg, and an
+  end tag such as `</foreignObject>` closes nothing when a `<div>` stands between it and its
+  element.
+- In an HTML string in Kotlin, completion, hover and parameter info find the expression in a tag
+  whose name is a template, `"<$tag data-text=\"...\">"`, as the checks did.
+
 ## 0.12.0
 
 - Only the catalog's attributes are coloured as Datastar in HTML, in an HTML file and in an HTML
@@ -122,7 +166,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 
 - Every Kotlin value written into an HTML string is judged by where it lands, as `interpolate`
   judges it at run time and with core's own reading of the markup: `$name`, `${...}`, a value
-  joined with `+`, a literal inside a template and the holes of a `$$` literal, where only `$name`
+  joined with `+`, a literal inside a template and the values in a `$$` literal, where only `$name`
   was looked at before, and that with the same hint, "make sure it is escaped", wherever it stood.
   `unescaped-interpolation` is a value where escaping saves it, in element text, a quoted attribute
   or a URL whose literal start settles the scheme: a hint, a warning for a `String` and for markup
@@ -164,24 +208,25 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   which wraps it in `Trusted(...)` and adds the import. The message says to declare markup `Html`
   or wrap it.
 - A call to `interpolate` is judged as it will run. A `%s` count that does not match the values is
-  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will
-  refuse where it lands is `unsafe-interpolation`, an error where the value is known to be refused
-  (a `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A
-  Kotlin template written into the format is `interpolate-template`, a warning, since Kotlin fills
-  it in before `interpolate` sees it, with a fix that makes it a `%s` hole and passes its value in
-  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text
-  into the format, where a `%s` in it is a hole and a `%%` a per cent sign, and the fix makes it a
-  `%s` hole, where `interpolate` writes it as it is. A `%s` in element text given markup held as a
-  `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection declared
-  one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template` too, a warning, since `interpolate` escapes it and its tags are
-  printed as text; a literal is text you chose to have escaped and says nothing. The format is read
-  as HTML, so a `%s` in it is a hole and not text. An unsigned number, a `UInt` or a `3u`, is no
-  `kotlin.Number`, which `interpolate` refuses where only a number is let in: in a `%s` hole in a
-  `data-*` expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template
-  writes one there, a hint.
+  the error `interpolate-holes`, since the call throws. A `%s` whose value `interpolate` will refuse
+  where it lands is `unsafe-interpolation`, an error where the value is known to be refused (a
+  `String` in a `data-*` expression, a `Boolean` in `style`) and a warning where it is not. A Kotlin
+  template written into the format is `interpolate-template`, a warning, since Kotlin fills it in
+  before `interpolate` sees it, with a fix that makes it a `%s` placeholder and passes its value in
+  its place. That goes for an `Html` or a `Trusted` in element text too: Kotlin writes its text into
+  the format, where a `%s` in it is a placeholder and a `%%` a per cent sign, and the fix makes it a
+  `%s` placeholder, where `interpolate` writes it as it is. A `%s` in element text given markup held
+  as a `String`, `h.text`, `elements { }`, a `joinToString` over markup or over a collection
+  declared one of `Html` or `Trusted`, or a `val` set to any of these, is `interpolate-template`
+  too, a warning, since `interpolate` escapes it and its tags are printed as text; a literal is text
+  you chose to have escaped and says nothing. The format is read as HTML, so a `%s` in it is a
+  placeholder and not text. An unsigned number, a `UInt` or a `3u`, is no `kotlin.Number`, which
+  `interpolate` refuses where only a number is let in: in a `%s` placeholder in a `data-*`
+  expression or `style` it is an error, with a `toLong()` fix, and where a Kotlin template writes
+  one there, a hint.
 - The `interpolate(...)` rewrite is offered only where it keeps the page as it was: not for a value
   that may be null, which a template writes as `null` and `interpolate` as nothing, nor for a
-  `Trusted` outside element text, nor for a hole in element text that may hold markup, which
+  `Trusted` outside element text, nor for a value in element text that may be markup, which
   `interpolate` would escape, nor for a value that is a `List`, which a template writes as
   `[a, b]`. The rewrite doubles each per cent sign the literal writes.
 - The interpolation inspection asks the Kotlin plugin what each value is, and that comes before
@@ -189,7 +234,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
   declarations. A number or a boolean is safe where escaping is, and an `Int?` there too; a
   `String`, inferred or declared, is a `String`, and a `String?` or a Java `String` one that may be
   null, so the rewrite is not offered. An entry of a Kotlin enum that does not override `toString` is
-  your own. A hole is markup only when the whole value is: an HTML literal or a trimmed one,
+  your own. A value is markup only when the whole of it is: an HTML literal or a trimmed one,
   `interpolate(...)`, `Trusted(...)`, a value or function declared `Html` or `@Language("HTML")`,
   kotlinx.html output (`createHTML()`, `appendHTML()`, `elements { }`), a `joinToString` over
   markup, or a function, an `if`, a `when` or an `?:` whose every result is markup or a literal.

@@ -46,8 +46,8 @@ public class SignalPatchException(
  * indices: an index past the end extends it, a key that is not an index is dropped. The client
  * walks whatever the patch is with `for ... in`, so an array at the top level sets the keys `0`,
  * `1`, ..., a string sets one key per character, and a number, a boolean or `null` patches
- * nothing. And the store never hands back `null`: a `null` inside a stored array, and the hole a
- * deleted index leaves, read as `""` and are not missing to the next `onlyIfMissing`.
+ * nothing. And the store never hands back `null`: a `null` inside a stored array, and the empty slot
+ * a deleted index leaves, read as `""` and are not missing to the next `onlyIfMissing`.
  *
  * Keys are walked and kept in JavaScript's order, array indices ascending first, so `toJson()`
  * of the result holds the same keys in the same order, with the same values, as the client's
@@ -58,12 +58,13 @@ public class SignalPatchException(
  * `false` and `""` are 0, `"2"` and `[2]` are 2), shorter drops the tail and longer adds `""`;
  * one that does not come out a whole number of zero or more throws, as the browser's
  * `RangeError` does. This is the store as it reads once a binding has touched it: the client
- * fills a hole with `""` on the first read, so a hole is missing to `onlyIfMissing` only until then.
+ * fills an empty slot with `""` on the first read, so an empty slot is missing to `onlyIfMissing`
+ * only until then.
  *
  * A patch that throws, here or in the client, has its earlier keys applied: the exception is a
  * [SignalPatchException] that carries the store as the client keeps it. Two kinds of patch are
  * refused on purpose, with [SignalPatchException.refused] set, whatever the client does with them.
- * More than [holeLimit] indices past the end of an array, which would fill memory with the holes
+ * More than [emptySlotLimit] indices past the end of an array, which would fill memory with the empty slots
  * the client never allocates. And a key named `__proto__` anywhere in the patch, at any depth and
  * inside array values too, whatever it holds. Where its value is an object with keys, the client
  * mostly throws at that key, and the bindings on the page stop redrawing. Otherwise it gives the
@@ -86,7 +87,7 @@ public fun mergePatchAsClient(
     store: JsonObject,
     patch: JsonValue,
     ifMissing: Boolean = false,
-    holeLimit: Int = 10_000,
+    emptySlotLimit: Int = 10_000,
 ): JsonObject {
     val keys: Map<String, JsonValue> =
         when (patch) {
@@ -98,7 +99,7 @@ public fun mergePatchAsClient(
     val root = JsObject(LinkedHashMap<String, Any>(store))
     try {
         if (PROTO in store) throw Refusal(STORE_PROTO_REFUSED)
-        ClientMerge(ifMissing, holeLimit).fold(keys, root)
+        ClientMerge(ifMissing, emptySlotLimit).fold(keys, root)
     } catch (e: IllegalArgumentException) {
         val message = e.message ?: "The client cannot take this signal patch"
         throw SignalPatchException(message, freeze(root) as JsonObject, refused = e is Refusal)
@@ -169,7 +170,7 @@ private fun inJsOrderDeep(value: JsonValue): JsonValue =
 /** `mergePatch` and `mergeInner` in signals.ts, on the store as [open] lays it out. */
 private class ClientMerge(
     private val ifMissing: Boolean,
-    private val holeLimit: Int,
+    private val emptySlotLimit: Int,
 ) {
     fun fold(
         patch: Map<String, JsonValue>,
@@ -232,8 +233,10 @@ private class ClientMerge(
         if (key == "length") {
             val length = arrayLength(value)
             require(length != null) { "Invalid array length ${freeze(value).toJson()} in a signal patch" }
-            if (length > items.size + holeLimit) {
-                throw Refusal("Signal patch length $length is more than $holeLimit past the end of an array of ${items.size}$HOLES")
+            if (length > items.size + emptySlotLimit) {
+                throw Refusal(
+                    "Signal patch length $length is more than $emptySlotLimit past the end of an array of ${items.size}$EMPTY_SLOTS",
+                )
             }
             while (items.size > length) items.removeAt(items.size - 1)
             while (items.size < length) items.add(EMPTY)
@@ -241,8 +244,8 @@ private class ClientMerge(
         }
         // A key that is not an index is a property JSON.stringify leaves out.
         val index = arrayIndex(key) ?: return
-        if (index > items.size + holeLimit) {
-            throw Refusal("Signal patch index $index is more than $holeLimit past the end of an array of ${items.size}$HOLES")
+        if (index > items.size + emptySlotLimit) {
+            throw Refusal("Signal patch index $index is more than $emptySlotLimit past the end of an array of ${items.size}$EMPTY_SLOTS")
         }
         while (items.size <= index) items.add(EMPTY)
         items[index.toInt()] = value
@@ -332,7 +335,7 @@ internal const val STORE_PROTO_REFUSED =
     "The store holds a key named __proto__, which Datastar's client never holds; " +
         "Streamlord does not fold a patch into the object that has it"
 
-private const val HOLES = ": the client takes it, and Streamlord does not fill memory with the holes"
+private const val EMPTY_SLOTS = ": the client takes it, and Streamlord does not fill memory with the empty slots"
 
 /** Whether a key `__proto__` stands anywhere in [value]. */
 private fun holdsProto(value: JsonValue): Boolean =

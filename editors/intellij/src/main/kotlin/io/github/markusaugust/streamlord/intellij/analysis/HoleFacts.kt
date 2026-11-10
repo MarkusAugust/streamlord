@@ -1,10 +1,18 @@
 package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiMethod
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
-import io.github.markusaugust.streamlord.analysis.HoleFact
+import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.isMarkup
+import io.github.markusaugust.streamlord.analysis.isMarkupCollection
+import io.github.markusaugust.streamlord.analysis.ofResolvedClass
+import io.github.markusaugust.streamlord.analysis.ofTypeName
+import io.github.markusaugust.streamlord.analysis.opensWithTag
+import io.github.markusaugust.streamlord.analysis.writesItself
 import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.analyze
 import org.jetbrains.kotlin.analysis.api.types.KaClassType
@@ -18,7 +26,9 @@ import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtConstantExpression
+import org.jetbrains.kotlin.psi.KtConstructor
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
@@ -27,6 +37,8 @@ import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
+import org.jetbrains.kotlin.psi.KtNullableType
+import org.jetbrains.kotlin.psi.KtParenthesizedExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
@@ -34,6 +46,9 @@ import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.KtSafeQualifiedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import org.jetbrains.kotlin.psi.KtTypeElement
+import org.jetbrains.kotlin.psi.KtTypeReference
+import org.jetbrains.kotlin.psi.KtUserType
 import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.KtWhenExpression
 
@@ -51,28 +66,6 @@ object HoleFacts {
     private const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"
     private const val KOTLINX_STREAM = "kotlinx.html.stream"
 
-    /**
-     * A literal that opens with a tag, `<$tag ` among them when a space, `>` or `/` follows the
-     * template (`"<$tag\\b"` is a search pattern); `|` for a margin `trimMargin` removes.
-     */
-    private val HTML_OPENING =
-        Regex(
-            """^[\s|]*<(?:[A-Za-z]|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*)(?=[\s>/])|!--|!doctype)""",
-            RegexOption.IGNORE_CASE,
-        )
-    private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
-    private val UNSIGNED_TYPE = Regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
-
-    /** A collection of markup, as a declaration writes its type: what `joinToString` over Html is called on. */
-    private val MARKUP_COLLECTION_TYPE =
-        Regex(
-            """(?:kotlin\.collections\.|kotlin\.sequences\.)?""" +
-                """(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)""" +
-                """<(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(?:Html|Trusted)>\??""",
-        )
-    private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
-    private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
-    private val HTML_TYPE = Regex("""(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?Html\??""")
     private val TRIMS = setOf("trimIndent", "trimMargin")
     private val LISTS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
     private val MARKUP_CALLS = setOf("interpolate", "Trusted")
@@ -84,14 +77,15 @@ object HoleFacts {
     private const val CALL_DEPTH = 3
 
     /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its hole. */
-    fun of(file: KtFile): Map<TextRange, HoleFact> {
+    fun of(file: KtFile): Map<TextRange, ValueFact> {
         val holes = holes(file)
-        if (holes.isEmpty()) return emptyMap()
+        val arguments = interpolateArguments(file)
+        if (holes.isEmpty() && arguments.isEmpty()) return emptyMap()
         // The property the Kotlin plugin's own plugin.xml switches K1 on with; KotlinPluginModeProvider,
         // which reads it too, is scheduled for removal in 2026.2.
         val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
         return if (k1) {
-            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1)
+            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { typeFactK1(it).isMarkup() } + resolved(arguments, ::classK1)
         } else {
             analyze(file) {
                 judge(
@@ -99,9 +93,40 @@ object HoleFacts {
                     { it.evaluate() != null || enumEntry(it) },
                     { typeFact(it.expressionType) },
                     { markupElements(it.expressionType) },
-                )
+                    { typeFact(it.type).isMarkup() },
+                ) + resolved(arguments) { classOf(it.expressionType) }
             }
         }
+    }
+
+    /**
+     * The values handed to each `interpolate(...)` after its format, by their own range: the
+     * analysis reads them from the text, and is told only where the class says otherwise.
+     */
+    private fun interpolateArguments(file: KtFile): List<Pair<TextRange, KtExpression>> =
+        PsiTreeUtil
+            .collectElementsOfType(file, KtCallExpression::class.java)
+            .filter { it.calleeExpression?.text == "interpolate" }
+            .flatMap { call -> call.valueArguments.drop(1).mapNotNull { a -> a.getArgumentExpression()?.let { it.textRange to it } } }
+
+    /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */
+    private fun resolved(
+        values: List<Pair<TextRange, KtExpression>>,
+        qualified: (KtExpression) -> String?,
+    ): Map<TextRange, ValueFact> =
+        buildMap { for ((range, expr) in values) qualified(expr)?.let { ValueFact.ofResolvedClass(it) }?.let { put(range, it) } }
+
+    /** The qualified name of the class of [type], or null where it is none. */
+    private fun classOf(type: KaType?): String? {
+        val lower = (type as? KaFlexibleType)?.lowerBound ?: type
+        return (lower as? KaClassType)?.classId?.asFqNameString()
+    }
+
+    /** K1: the qualified name of the class a call constructs, or a reference's declaration is declared. */
+    private fun classK1(expr: KtExpression): String? {
+        constructedK1(expr)?.let { return it }
+        val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
+        return classK1(target.typeReference ?: return null)
     }
 
     /**
@@ -111,23 +136,24 @@ object HoleFacts {
     private fun judge(
         holes: List<Pair<TextRange, KtExpression>>,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> HoleFact?,
+        typed: (KtExpression) -> ValueFact?,
         markupElements: (KtExpression) -> Boolean,
-    ): Map<TextRange, HoleFact> {
-        val facts = HashMap<TextRange, HoleFact>()
-        val markup = Markup(markupElements)
+        markupType: (KtTypeReference) -> Boolean,
+    ): Map<TextRange, ValueFact> {
+        val facts = HashMap<TextRange, ValueFact>()
+        val markup = Markup(markupElements, markupType)
         for ((range, expr) in holes) {
             if (constant(expr)) {
-                facts[range] = HoleFact.CONSTANT
+                facts[range] = ValueFact.CONSTANT
                 continue
             }
             val fact = typed(expr)
             facts[range] =
                 when {
-                    fact == HoleFact.MARKUP -> fact
-                    isHelper(expr) && ownArguments(expr, constant, typed) -> HoleFact.CONSTANT
-                    markup.isMarkup(expr, CALL_DEPTH) -> HoleFact.MARKUP
-                    literalOnly(expr) -> HoleFact.CONSTANT
+                    fact.isMarkup() -> ValueFact.MARKUP
+                    isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
+                    markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
+                    literalOnly(expr) -> ValueFact.CONSTANT
                     else -> fact ?: continue
                 }
         }
@@ -142,13 +168,13 @@ object HoleFacts {
     private fun authorsOwn(
         expr: KtExpression?,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> HoleFact?,
+        typed: (KtExpression) -> ValueFact?,
     ): Boolean {
         val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
         if (constant(e) || literalOnly(e) || enumEntry(e)) return true
         if (isHelper(e)) return ownArguments(e, constant, typed)
         val fact = typed(e)
-        return fact == HoleFact.NUMBER || fact == HoleFact.BOOLEAN || fact == HoleFact.UNSIGNED
+        return fact.writesItself()
     }
 
     /**
@@ -158,7 +184,7 @@ object HoleFacts {
     private fun ownArguments(
         expr: KtExpression,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> HoleFact?,
+        typed: (KtExpression) -> ValueFact?,
     ): Boolean {
         val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false
         return call.valueArguments.all { argument ->
@@ -239,7 +265,7 @@ object HoleFacts {
         }
     }
 
-    private fun KaSession.typeFact(type: KaType?): HoleFact? {
+    private fun KaSession.typeFact(type: KaType?): ValueFact? {
         if (type == null) return null
         // A Java String may be null, and is a string all the same; a Java Integer is not a number that is safe.
         val lower = (type as? KaFlexibleType)?.lowerBound ?: type
@@ -247,30 +273,36 @@ object HoleFacts {
         return when {
             // A String? or a Java String: a Kotlin template writes null as "null", interpolate as nothing.
             lower.isStringType || lower.isCharSequenceType -> {
-                if (definite) HoleFact.STRING else HoleFact.NULLABLE_STRING
+                if (definite) ValueFact.STRING else ValueFact.NULLABLE_STRING
             }
 
             lower.isClass(HTML_CLASS) -> {
-                HoleFact.MARKUP
+                ValueFact.MARKUP
+            }
+
+            // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
+            definite && lower.isClass(TRUSTED_CLASS) -> {
+                ValueFact.MARKUP
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
             lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
                 lower.isClass(NUMBER_CLASS) -> {
-                if (definite) HoleFact.NUMBER else HoleFact.NULLABLE
+                if (definite) ValueFact.NUMBER else ValueFact.NULLABLE
             }
 
             // Digits too, but not a kotlin.Number: interpolate refuses one where only a number is let in.
             lower.isUIntType || lower.isULongType || lower.isUShortType || lower.isUByteType -> {
-                if (definite) HoleFact.UNSIGNED else HoleFact.NULLABLE
+                if (definite) ValueFact.UNSIGNED else ValueFact.NULLABLE
             }
 
             lower.isBooleanType -> {
-                if (definite) HoleFact.BOOLEAN else HoleFact.NULLABLE
+                if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
             }
 
+            // An Html or a Trusted of another package, which the text alone would take for Streamlord's.
             else -> {
-                null
+                classOf(lower)?.let { ValueFact.ofResolvedClass(it) }
             }
         }
     }
@@ -289,8 +321,44 @@ object HoleFacts {
     /** K1: a collection the declaration a reference resolves to writes out as one of Html or Trusted. */
     private fun markupElementsK1(expr: KtExpression): Boolean {
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return false
-        val type = target.typeReference?.text?.filterNot { it.isWhitespace() } ?: return false
-        return MARKUP_COLLECTION_TYPE.matches(type)
+        val ref = target.typeReference ?: return false
+        val element = unwrapped(ref)
+        val argument = (element as? KtUserType)?.typeArgumentsAsTypes?.singleOrNull()
+        return isMarkupCollection(ref.text) && (argument == null || typeFactK1(argument).isMarkup())
+    }
+
+    /** The type a nullable type reference wraps, or the reference's own. */
+    private fun unwrapped(ref: KtTypeReference): KtTypeElement? = ref.typeElement.let { (it as? KtNullableType)?.innerType ?: it }
+
+    /**
+     * K1: the fact of the type [ref] writes, by the class it resolves to, so an `Html` or a `Trusted`
+     * of another package is [ValueFact.OTHER]. Where it does not resolve, none: the analysis reads
+     * the declaration and the file's imports itself.
+     */
+    private fun typeFactK1(ref: KtTypeReference): ValueFact? {
+        val nullable = if (ref.typeElement is KtNullableType) "?" else ""
+        val qualified = classK1(ref) ?: return null
+        return ValueFact.ofResolvedClass(qualified) ?: ValueFact.ofTypeName(qualified + nullable)
+    }
+
+    /** K1: the qualified name of the class the type [ref] writes resolves to. */
+    private fun classK1(ref: KtTypeReference): String? =
+        when (val resolved = (unwrapped(ref) as? KtUserType)?.referenceExpression?.mainReference?.resolve()) {
+            is KtClassOrObject -> resolved.fqName?.asString()
+            is PsiClass -> resolved.qualifiedName
+            else -> null
+        }
+
+    /** K1: the qualified name of the class a call constructs, `Trusted(x)`; null for any other call. */
+    private fun constructedK1(expr: KtExpression): String? {
+        val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return null
+        return when (val target = (call.calleeExpression as? KtNameReferenceExpression)?.mainReference?.resolve()) {
+            is KtClassOrObject -> target.fqName?.asString()
+            is KtConstructor<*> -> target.getContainingClassOrObject().fqName?.asString()
+            is PsiClass -> target.qualifiedName
+            is PsiMethod -> if (target.isConstructor) target.containingClass?.qualifiedName else null
+            else -> null
+        }
     }
 
     /** K1: a `const val` the reference resolves to, or an enum entry. */
@@ -302,21 +370,21 @@ object HoleFacts {
     }
 
     /** K1: the type the declaration a reference resolves to writes out. */
-    private fun typeK1(expr: KtExpression): HoleFact? {
+    private fun typeK1(expr: KtExpression): ValueFact? {
+        constructedK1(expr)?.let { ValueFact.ofResolvedClass(it) }?.let { return it }
         // `a?.b` may be null whatever `b` declares.
         if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) return null
         val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
-        val type = target.typeReference?.text?.filterNot { it.isWhitespace() } ?: return null
-        val nullable = type.endsWith('?')
-        val bare = type.removeSuffix("?")
-        return when {
-            NUMBER_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.NUMBER
-            UNSIGNED_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.UNSIGNED
-            BOOLEAN_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE else HoleFact.BOOLEAN
-            STRING_TYPE.matches(bare) -> if (nullable) HoleFact.NULLABLE_STRING else HoleFact.STRING
-            HTML_TYPE.matches(type) -> HoleFact.MARKUP
-            else -> null
-        }
+        return typeFactK1(target.typeReference ?: return null)
+    }
+
+    /** Whether `.trimMargin()` is called on [literal], which then starts past its first `|`. */
+    private fun marginTrimmed(literal: KtExpression): Boolean {
+        var receiver: PsiElement = literal
+        while (receiver.parent is KtParenthesizedExpression) receiver = receiver.parent
+        val q = receiver.parent as? KtQualifiedExpression ?: return false
+        val call = q.selectorExpression as? KtCallExpression
+        return q.receiverExpression == receiver && call?.calleeExpression?.text == "trimMargin"
     }
 
     /** The name an expression's value comes from: `x`, `a.x`, `f()`, `a.f()`. */
@@ -374,10 +442,11 @@ object HoleFacts {
 
     /**
      * The reading of markup, with what the editor knows of the elements of a collection, Html or
-     * Trusted, for a `joinToString` without a transform.
+     * Trusted, for a `joinToString` without a transform, and of a type a declaration writes.
      */
     private class Markup(
         private val markupElements: (KtExpression) -> Boolean,
+        private val markupType: (KtTypeReference) -> Boolean,
     ) {
         private fun branchesMarkup(
             branches: List<KtExpression?>,
@@ -401,7 +470,7 @@ object HoleFacts {
             val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
             return when (e) {
                 is KtStringTemplateExpression -> {
-                    HTML_OPENING.containsMatchIn(e.text.trimStart('$', '"'))
+                    opensWithTag(e.text.trimStart('$', '"'), trimMargin = marginTrimmed(e))
                 }
 
                 // Every branch markup or a literal, and one at least markup: `if (b) "<b>x</b>" else ""`.
@@ -561,10 +630,7 @@ object HoleFacts {
             if (ref == null || depth == 0) return false
             val target = ref.mainReference.resolve() ?: return false
             if (target is KtAnnotated && languageHtml(target)) return true
-            if (target is KtCallableDeclaration) {
-                val type = target.typeReference?.text?.filterNot { it.isWhitespace() }
-                if (type != null && HTML_TYPE.matches(type)) return true
-            }
+            if (target is KtCallableDeclaration && target.typeReference?.let(markupType) == true) return true
             if (target is KtProperty) {
                 return !target.isVar && target.typeReference == null && isMarkup(target.initializer, depth - 1)
             }

@@ -1,6 +1,8 @@
 {
   "$comment": "The Datastar expression a caret stands in (expressionAtCaret): source is before + after with the caret between them, read as Kotlin when kotlin is true and as markup otherwise, with prefix the attribute prefix (data- when left out). expression is null outside one, or the expression before the caret as Datastar is handed it, Kotlin's escapes and character references decoded, whether actions belong there (an expression, not a signal name) and whether patch is in scope. Read by CompletionContextsTest.kt and completionContext.test.ts.",
   "cases": [
+    { "name": "an expression inside a Pebble comment in a Kotlin string, which the browser reads as text", "kotlin": true, "before": "val page = \"<p>{# <b data-text=\\\"1 + ", "after": "\\\"></b> #}</p>\"", "expression": { "before": "1 + ", "allowActions": true, "patchInScope": false } },
+    { "name": "an expression in a tag whose name is a Kotlin template", "kotlin": true, "before": "val page = \"<$t data-text=\\\"1 + ", "after": "\\\"></$t>\"", "expression": { "before": "1 + ", "allowActions": true, "patchInScope": false } },
     { "name": "an expression attribute in markup", "kotlin": false, "before": "<div data-on:click=\"@get(", "after": "\"></div>", "expression": { "before": "@get(", "allowActions": true, "patchInScope": false } },
     { "name": "a signal-name attribute takes no actions", "kotlin": false, "before": "<input data-bind=\"us", "after": "\">", "expression": { "before": "us", "allowActions": false, "patchInScope": false } },
     { "name": "patch is in scope in data-on-signal-patch", "kotlin": false, "before": "<div data-on-signal-patch=\"pat", "after": "\"></div>", "expression": { "before": "pat", "allowActions": true, "patchInScope": true } },
@@ -18,6 +20,9 @@
     { "name": "an attributes index whose value is still typed", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-on-signal-patch\"] = \"pa", "after": "", "expression": { "before": "pa", "allowActions": true, "patchInScope": true } },
     { "name": "the name of an attributes index is no expression", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-te", "after": "xt\"] = \"$x\" } }", "expression": null },
     { "name": "an attributes index for a non-expression attribute", "kotlin": true, "before": "fun FlowContent.f() { div { attributes[\"data-ignore-morph\"] = \"tr", "after": "ue\" } }", "expression": null },
-    { "name": "an attributes index inside a string is text", "kotlin": true, "before": "val s = \"\"\"attributes[\"data-text\"] = \"$co", "after": " x\"\"\"", "expression": null }
+    { "name": "an attributes index inside a string is text", "kotlin": true, "before": "val s = \"\"\"attributes[\"data-text\"] = \"$co", "after": " x\"\"\"", "expression": null },
+    { "name": "a textarea's content is text, in markup", "kotlin": false, "before": "<textarea><i data-text=\"1 + ", "after": "\"></i></textarea>", "expression": null },
+    { "name": "a textarea's content is text, in a Kotlin string", "kotlin": true, "before": "val page = \"\"\"<textarea><i data-text=\"1 + ", "after": "\"></i></textarea>\"\"\"", "expression": null },
+    { "name": "a textarea's content is text, past a template in a Kotlin string", "kotlin": true, "before": "val page = \"\"\"<textarea>${x}<i data-text=\"1 + ", "after": "\"></i></textarea>\"\"\"", "expression": null }
   ]
 }

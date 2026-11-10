@@ -10,7 +10,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
-import io.github.markusaugust.streamlord.analysis.HoleFact
+import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
@@ -50,6 +50,15 @@ class HoleTypesTest : StreamlordTestCase() {
             ("\${buttonAttributes()}" to "unsafe-interpolation") to "warning",
         )
 
+    /**
+     * Whether the Kotlin plugin runs in K1 mode, `test -PkotlinK1`. K1 reads only the types a
+     * declaration writes out, so where a type is inferred it gives no fact and the text decides.
+     */
+    private val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
+
+    /** The holes of [withTypes] whose type is inferred, which K1 leaves to the text. */
+    private val inferred = setOf("\$count", "\$name", "\$error")
+
     override fun setUp() {
         super.setUp()
         myFixture.enableInspections(KotlinInterpolationInspection())
@@ -72,7 +81,8 @@ class HoleTypesTest : StreamlordTestCase() {
                 (issues as JsonArray).objects().mapNotNull {
                     val hole = it.string("hole")!!
                     val key = hole to it.string("code")!!
-                    val severity = if (key in withTypes) withTypes[key] else it.string("severity")
+                    val typed = key in withTypes && !(k1 && hole in inferred)
+                    val severity = if (typed) withTypes[key] else it.string("severity")
                     severity?.let { s -> "${it.int("start")}-${it.int("end")} $hole $s" }
                 }
             assertEquals(name, wanted.joinToString("\n"), seen.joinToString("\n"))
@@ -98,70 +108,97 @@ class HoleTypesTest : StreamlordTestCase() {
                 .doHighlighting()
                 .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
                 .map { "${it.text} ${severity(it.severity)}" }
-        // An Int? prints digits or null, both safe in element text.
-        assertEquals(emptyList<String>(), seen)
+        // An Int? prints digits or null, both safe in element text. K1 cannot see that total is a number.
+        assertEquals(if (k1) listOf("\$total hint") else emptyList(), seen)
     }
 
     fun `test a hole is markup only when its whole value is`() {
         val facts = facts(MARKUP_PAGE)
         val wanted =
             mapOf(
-                "\${\"<b>\" + q}" to HoleFact.STRING,
-                "\${q + \"<b>\"}" to HoleFact.STRING,
-                "\${\"<p>\" + h + \"</p>\"}" to HoleFact.MARKUP,
-                "\${bold(q)}" to HoleFact.STRING,
-                "\${badge()}" to HoleFact.MARKUP,
-                "\${deep2()}" to HoleFact.MARKUP,
-                "\${deep1()}" to HoleFact.STRING,
-                "\${either(c)}" to HoleFact.MARKUP,
-                "\${mixed(c, q)}" to HoleFact.STRING,
-                "\${annotated()}" to HoleFact.MARKUP,
-                "\$frag" to HoleFact.MARKUP,
-                "\$h" to HoleFact.MARKUP,
-                "\${h.text}" to HoleFact.MARKUP,
-                "\$built" to HoleFact.MARKUP,
-                "\$fragment" to HoleFact.MARKUP,
-                "\${Trusted(q)}" to HoleFact.MARKUP,
-                "\${\"<li>\$q</li>\".trimIndent()}" to HoleFact.MARKUP,
-                "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to HoleFact.MARKUP,
-                "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${items.joinToString(\"\")}" to HoleFact.STRING,
-                "\${listOf(\"<b>a</b>\", q).joinToString()}" to HoleFact.STRING,
-                "\${if (c) \"<b>a</b>\" else q}" to HoleFact.STRING,
-                "\${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}" to HoleFact.MARKUP,
-                "\${createHTML().div { +q }}" to HoleFact.MARKUP,
-                "\${elements { span { +q } }}" to HoleFact.MARKUP,
-                "\${buildString { appendHTML().div { +q } }}" to HoleFact.MARKUP,
-                "\${post(\"/save\")}" to HoleFact.CONSTANT,
-                "\${signal(\"count\")}" to HoleFact.CONSTANT,
-                "\${increment(\"n\")}" to HoleFact.CONSTANT,
-                "\${n}" to HoleFact.NUMBER,
-            )
+                "\${\"<b>\" + q}" to ValueFact.STRING,
+                "\${q + \"<b>\"}" to ValueFact.STRING,
+                "\${\"<p>\" + h + \"</p>\"}" to ValueFact.MARKUP,
+                "\${bold(q)}" to ValueFact.STRING,
+                "\${badge()}" to ValueFact.MARKUP,
+                "\${deep2()}" to ValueFact.MARKUP,
+                "\${deep1()}" to ValueFact.STRING,
+                "\${either(c)}" to ValueFact.MARKUP,
+                "\${mixed(c, q)}" to ValueFact.STRING,
+                "\${annotated()}" to ValueFact.MARKUP,
+                "\$frag" to ValueFact.MARKUP,
+                "\$h" to ValueFact.MARKUP,
+                "\${h.text}" to ValueFact.MARKUP,
+                "\$built" to ValueFact.MARKUP,
+                "\$fragment" to ValueFact.MARKUP,
+                "\${Trusted(q)}" to ValueFact.MARKUP,
+                "\${\"<li>\$q</li>\".trimIndent()}" to ValueFact.MARKUP,
+                "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to ValueFact.MARKUP,
+                "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${items.joinToString(\"\")}" to ValueFact.STRING,
+                "\${listOf(\"<b>a</b>\", q).joinToString()}" to ValueFact.STRING,
+                "\${if (c) \"<b>a</b>\" else q}" to ValueFact.STRING,
+                "\${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}" to ValueFact.MARKUP,
+                "\${createHTML().div { +q }}" to ValueFact.MARKUP,
+                "\${elements { span { +q } }}" to ValueFact.MARKUP,
+                "\${buildString { appendHTML().div { +q } }}" to ValueFact.MARKUP,
+                "\${post(\"/save\")}" to ValueFact.CONSTANT,
+                "\${signal(\"count\")}" to ValueFact.CONSTANT,
+                "\${increment(\"n\")}" to ValueFact.CONSTANT,
+                "\${n}" to ValueFact.NUMBER,
+            ) +
+                // An expression's type, and a function's that no declaration writes out, are inferred.
+                if (k1) {
+                    listOf("\${\"<b>\" + q}", "\${q + \"<b>\"}", "\${bold(q)}", "\${deep1()}", "\${if (c) \"<b>a</b>\" else q}")
+                        .associateWith { null }
+                } else {
+                    emptyMap()
+                }
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
         // A string with no tag in it is not HTML, so nothing in it is typed.
         assertNull(facts["\$who"])
     }
 
+    fun `test a Trusted is markup by its resolved type, and a class of the same name is not`() {
+        val facts =
+            facts(
+                "import io.github.markusaugust.streamlord.core.domain.Trusted as Vouched\n" +
+                    "class Trusted(val s: String)\n" +
+                    "fun f(own: Trusted, v: Vouched, vs: List<Vouched>) = \"<p>\$own \$v \${vs.first()}</p>\"",
+            )
+        assertEquals(ValueFact.OTHER, facts["\$own"])
+        assertEquals(ValueFact.MARKUP, facts["\$v"])
+        // K1 does not infer what `first()` returns.
+        assertEquals(if (k1) null else ValueFact.MARKUP, facts["\${vs.first()}"])
+    }
+
+    fun `test a margin is passed over only where trimMargin is called on the literal`() {
+        val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
+        assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
+        // K1 does not infer the type of a `+`.
+        assertEquals(if (k1) null else ValueFact.STRING, facts["\${\"|<u>\" + q}"])
+    }
+
     fun `test a helper is the author's own only with the author's own arguments`() {
         val facts = facts(HELPER_PAGE)
         val wanted =
             mapOf(
-                "\${signal(\"count\")}" to HoleFact.CONSTANT,
-                "\${signal(KEY)}" to HoleFact.CONSTANT,
-                "\${signal(q)}" to HoleFact.STRING,
-                "\${signal(\"a\" + q)}" to HoleFact.STRING,
-                "\${statements(increment(\"a\"), toggle(\"b\"))}" to HoleFact.CONSTANT,
-                "\${statements(increment(\"a\"), signal(q))}" to HoleFact.STRING,
-                "\${post(\"/save\") { contentType = ContentType.FORM }}" to HoleFact.CONSTANT,
-                "\${post(\"/save\") { selector = q }}" to HoleFact.STRING,
-                "\${post(url)}" to HoleFact.STRING,
-                "\${signal(Tab.HOME.name)}" to HoleFact.CONSTANT,
-                "\${Tab.HOME}" to HoleFact.CONSTANT,
-                "\${Tab.HOME.name}" to HoleFact.CONSTANT,
-                "\${maybe}" to HoleFact.NULLABLE_STRING,
-                "\$q" to HoleFact.STRING,
-                "\${set(\"n\", n)}" to HoleFact.CONSTANT,
+                "\${signal(\"count\")}" to ValueFact.CONSTANT,
+                "\${signal(KEY)}" to ValueFact.CONSTANT,
+                "\${signal(q)}" to ValueFact.STRING,
+                "\${signal(\"a\" + q)}" to ValueFact.STRING,
+                "\${statements(increment(\"a\"), toggle(\"b\"))}" to ValueFact.CONSTANT,
+                "\${statements(increment(\"a\"), signal(q))}" to ValueFact.STRING,
+                "\${post(\"/save\") { contentType = ContentType.FORM }}" to ValueFact.CONSTANT,
+                "\${post(\"/save\") { selector = q }}" to ValueFact.STRING,
+                "\${post(url)}" to ValueFact.STRING,
+                "\${signal(Tab.HOME.name)}" to ValueFact.CONSTANT,
+                "\${Tab.HOME}" to ValueFact.CONSTANT,
+                "\${Tab.HOME.name}" to ValueFact.CONSTANT,
+                "\${maybe}" to ValueFact.NULLABLE_STRING,
+                "\$q" to ValueFact.STRING,
+                "\${set(\"n\", n)}" to ValueFact.CONSTANT,
             )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
@@ -173,15 +210,25 @@ class HoleTypesTest : StreamlordTestCase() {
         val facts = facts(UNSIGNED_PAGE)
         val wanted =
             mapOf(
-                "\${u}" to HoleFact.UNSIGNED,
-                "\${w}" to HoleFact.UNSIGNED,
-                "\${maybe}" to HoleFact.NULLABLE,
-                "\${n}" to HoleFact.NUMBER,
-                "\${rows.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${built.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${trusted.joinToString(\"\")}" to HoleFact.MARKUP,
-                "\${names.joinToString(\"\")}" to HoleFact.STRING,
-            )
+                "\${u}" to ValueFact.UNSIGNED,
+                "\${w}" to ValueFact.UNSIGNED,
+                "\${maybe}" to ValueFact.NULLABLE,
+                "\${n}" to ValueFact.NUMBER,
+                "\${rows.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${built.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${trusted.joinToString(\"\")}" to ValueFact.MARKUP,
+                "\${names.joinToString(\"\")}" to ValueFact.STRING,
+            ) +
+                // Inferred vals. K1 sees neither what w is nor the elements, so a joinToString is only the String it returns.
+                if (k1) {
+                    mapOf(
+                        "\${w}" to null,
+                        "\${built.joinToString(\"\")}" to ValueFact.STRING,
+                        "\${trusted.joinToString(\"\")}" to ValueFact.STRING,
+                    )
+                } else {
+                    emptyMap()
+                }
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
     }
@@ -214,7 +261,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
                 .map { it.familyName }
         assertTrue(fixes.joinToString(), fixes.contains("Convert u with toLong()"))
-        assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s hole, where interpolate writes it as it is"))
+        assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s placeholder, where interpolate writes it as it is"))
     }
 
     fun `test a level set in the profile lowers the errors and leaves the hints and warnings alone`() {
@@ -303,7 +350,7 @@ class HoleTypesTest : StreamlordTestCase() {
             .get()
 
     /** The facts of a page, by the text of each hole. */
-    private fun facts(text: String): Map<String, HoleFact> {
+    private fun facts(text: String): Map<String, ValueFact> {
         val file = myFixture.configureByText("Page.kt", text) as KtFile
         return background { HoleFacts.of(file) }.mapKeys { (range, _) -> range.substring(file.text) }
     }

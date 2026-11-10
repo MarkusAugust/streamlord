@@ -22,8 +22,45 @@ class HoleJudgementTest {
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
         val text = AnalyzeOptions(constants = setOf("LABEL"))
         assertEquals(emptyList(), interpolation(src, text))
-        val typed = text.copy(holeFact = { _, _ -> HoleFact.STRING })
+        val typed = text.copy(valueFact = { _, _ -> ValueFact.STRING })
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
+    }
+
+    /** The issues on [src] where the editor says the last [value] in it is [fact], as code and the text they cover. */
+    private fun told(
+        src: String,
+        value: String,
+        fact: ValueFact,
+    ): List<Pair<String, String>> {
+        val at = src.lastIndexOf(value)
+        val opts = AnalyzeOptions(valueFact = { start, end -> if (start == at && end == at + value.length) fact else null })
+        return analyzer.analyzeKotlin(src, opts).map { (it.code ?: "") to src.substring(it.start, it.end) }
+    }
+
+    @Test
+    fun `a Trusted the editor resolves to another package is no markup the text reads in place`() {
+        // A star import leaves the name Streamlord's to the text, which reads the literal as an open <a href=.
+        val src = "import com.acme.*\n\nfun f(x: String) = \"<div>\${Trusted(\"<a href=\")}\$x</div>\""
+        assertEquals(listOf("unsafe-interpolation" to "\$x"), told(src, "", ValueFact.STRING))
+        assertEquals(
+            listOf("unescaped-interpolation" to "\${Trusted(\"<a href=\")}", "unescaped-interpolation" to "\$x"),
+            told(src, "\${Trusted(\"<a href=\")}", ValueFact.OTHER),
+        )
+    }
+
+    @Test
+    fun `a Trusted the editor resolves to another package is not let into a script`() {
+        val src = "import com.acme.*\n\nfun f(x: String) = interpolate(\"<script>%s</script>\", Trusted(x))"
+        assertEquals(emptyList(), told(src, "", ValueFact.STRING))
+        assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "Trusted(x)", ValueFact.OTHER))
+    }
+
+    @Test
+    fun `the editor is asked about a value without the comment after it`() {
+        // Only the editor knows the value is a number, which a style takes.
+        val src = "fun f(n: Any) = interpolate(\"<div style=\\\"%s\\\"></div>\", n /* id */ // id\n)"
+        assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "", ValueFact.NUMBER))
+        assertEquals(emptyList(), told(src, "n", ValueFact.NUMBER))
     }
 
     @Test

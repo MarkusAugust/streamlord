@@ -10,8 +10,10 @@ import { PLACEHOLDER, readKotlinStringAt, type Interpolation, type KotlinString 
 import { laterFix, type Fix } from "./expression.ts";
 import { catalog } from "./catalog.ts";
 import { EXPRESSION_HELPERS, unshadowed, USES_HTML_DSL } from "./signalNameHyphens.ts";
+import { escapeRegExp } from "./signals.ts";
+import { declaredFact, isMarkupCollection, isTrustedType, opensWithTag } from "./valueTypes.ts";
+import { argKindOf, isConstant, isMarkupFact, isString, weakest, writesItself } from "./valueVerdict.ts";
 
-const HTML_START = /^\s*<(?:[A-Za-z]|__kt__(?=[\s>/])|!--|!doctype)/i;
 const IDENT = /^[\p{L}_][\p{L}\p{Nd}_]*$/u;
 
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */
@@ -291,6 +293,8 @@ interface Declaration {
   trusted?: boolean;
   /** The text a `val` set to `Trusted("...")` writes, the literal as the Kotlin compiler reads it. */
   trustedText?: string;
+  /** Whether the call it is set to names core's own under an alias the file imports, which no other import can take. */
+  aliased?: boolean;
   /** What it is set to the `.text` of, `interpolate(...)` or a name: markup held as a String when that is an Html. */
   textOf?: string;
   /** What the brackets after its type hold, `Html` of `List<Html>`. */
@@ -320,6 +324,10 @@ interface FileFacts {
   coreCalls?: Map<string, number[]>;
   /** Whether something other than core's domain takes each name in this file, by the name (`shadowedInFile`). */
   shadowed?: Map<string, boolean>;
+  /** The same with no star import counted, for what a name means here (`shadowsCore`). */
+  taken?: Map<string, boolean>;
+  /** The names the file imports names of core's domain under, each with the name it stands for (`coreAliases`). */
+  aliases?: ReadonlyMap<string, string>;
   /** Whether the file's imports show it uses the DSL: what decides when the host does not know. */
   usesDsl?: boolean;
   /** The type parameters the file declares, each with whether a value of it may be null. */
@@ -355,7 +363,9 @@ function codeMask(src: string, strings: readonly KotlinString[], mask: Uint8Arra
 }
 
 const NAME = String.raw`[\p{L}_][\p{L}\p{Nd}_]*`;
-const TYPE = String.raw`[\p{L}_][\p{L}\p{Nd}_.]*\??`;
+// A name in backticks too, as `` `Page` ``, which means the same name without them.
+const TICKED = "`[^`\\n]+`";
+const TYPE = String.raw`(?:[\p{L}_][\p{L}\p{Nd}_.]*|${TICKED})(?:\.(?:[\p{L}_][\p{L}\p{Nd}_]*|${TICKED}))*\??`;
 const VAL_AFTER = new RegExp(
   String.raw`\s*(?:<[^<>]*>\s*)?((?:${NAME}\s*\.\s*)*)(${NAME})(?:\s*:\s*(${TYPE}))?(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?`,
   "uy",
@@ -365,7 +375,7 @@ const TYPE_ARGUMENTS = String.raw`\s*<((?:[^<>]|<[^<>]*>)*)>`;
 const PARAMETER = new RegExp(String.raw`^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:[\p{L}]+\s+)*?)(${NAME})\s*:\s*(${TYPE})?(?:${TYPE_ARGUMENTS})?`, "u");
 const TYPE_ARGUMENTS_AFTER = new RegExp(TYPE_ARGUMENTS, "y");
 const VALUE_AFTER = /\s*=(?!=)\s*/y;
-const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*)\s*->`, "uy");
+const LAMBDA_PARAMETERS = new RegExp(String.raw`\s*((?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?${"`"}]+)?(?:\s*,\s*(?:\([^()]*\)|${NAME})(?:\s*:\s*[\p{L}\p{Nd}_.<>?${"`"}]+)?)*)\s*->`, "uy");
 const FOR_VARIABLE = new RegExp(String.raw`\s*(\([^()]*\)|${NAME})(?:\s*:\s*(${TYPE}))?\s+in\b`, "uy");
 const CONST_BEFORE = /\bconst[ \t]+(?:\p{L}+[ \t]+)*$/u;
 const PRIVATE_BEFORE = /\bprivate[ \t]+(?:\p{L}+[ \t]+)*$/u;
@@ -434,6 +444,7 @@ interface Frame {
  */
 function declarations(src: string, code: Uint8Array): Map<string, Declaration[]> {
   const names = new Map<string, Declaration[]>();
+  const aliases = aliasesIn(src, code);
   const add = (name: string, d: Declaration) => {
     if (name === "_") return;
     const list = names.get(name);
@@ -515,10 +526,10 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
           // `val String.shout`: an extension, read on a receiver and never by its name alone.
           if (m && !m[1]) {
             const at = end + m[0].indexOf(m[2] as string, (m[0].length - m[0].trimStart().length));
-            const markup = m[4] === undefined && m[5] === undefined && markupInitialiser(src, end + m[0].length);
-            TRUSTED_INITIALISER.lastIndex = end + m[0].length;
-            const trusted = markup && TRUSTED_INITIALISER.test(src);
-            const trustedText = trusted && word === "val" ? (literalTrusted(src, src.indexOf("Trusted", end + m[0].length)) ?? undefined) : undefined;
+            const initialiser = m[4] === undefined && m[5] === undefined ? markupInitialiser(src, end + m[0].length, aliases) : null;
+            const markup = initialiser !== null;
+            const trusted = initialiser?.name === "Trusted";
+            const trustedText = trusted && word === "val" ? (literalTrusted(src, initialiser.start) ?? undefined) : undefined;
             const textOf = m[4] === undefined && m[5] === undefined && !markup ? textInitialiser(src, end + m[0].length) : undefined;
             let after = end + m[0].length;
             let typeArguments: string | undefined;
@@ -537,7 +548,7 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
               const v = VALUE_AFTER.exec(src);
               if (v) valueAt = after + v[0].length;
             }
-            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, textOf, typeArguments, valueAt };
+            const d = { ...scope(at), type: m[3], literal: m[4], text: constant ? m[5] : undefined, string: m[5] !== undefined, markup, trusted, trustedText, aliased: initialiser?.aliased === true, textOf, typeArguments, valueAt };
             add(m[2] as string, d);
             if (owner.kind !== "top") owner.ends.push(d);
           }
@@ -645,20 +656,26 @@ function declarations(src: string, code: Uint8Array): Map<string, Declaration[]>
   return names;
 }
 
-const MARKUP_INITIALISER = /\s*=\s*(?:interpolate|Trusted)\s*\(/y;
-const TRUSTED_INITIALISER = /\s*=\s*Trusted\s*\(/y;
-const TRUSTED_TYPE = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Trusted$/u;
+const MARKUP_INITIALISER = /\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(/uy;
 const STATEMENT_END = /^[ \t]*(?:[\n\r;})\],]|\/\/|$)/;
 
-/** Whether what follows a declared name at `at` is `= interpolate(...)` or `= Trusted(...)`, the whole value: `val row = interpolate(...)`. */
-function markupInitialiser(src: string, at: number): boolean {
+/**
+ * Which of `interpolate` and `Trusted` what follows a declared name at `at` calls as the whole
+ * value, `val row = interpolate(...)`, under its name or one of `aliases`, where the call starts,
+ * and whether it is called by an alias; null for any other value. `markupInitialiser` in Interpolations.kt.
+ */
+function markupInitialiser(src: string, at: number, aliases: ReadonlyMap<string, string>): { name: string; start: number; aliased: boolean } | null {
   MARKUP_INITIALISER.lastIndex = at;
   const m = MARKUP_INITIALISER.exec(src);
-  if (!m) return false;
+  if (!m) return null;
+  const callee = m[2] as string;
+  const name = aliases.get(callee) ?? callee;
+  if (name !== "interpolate" && name !== "Trusted") return null;
   const open = at + m[0].length - 1;
   const e = src.slice(open, open + 20_000);
   const close = closing(e, depths(e), 0);
-  return close > 0 && STATEMENT_END.test(e.slice(close, close + 8));
+  if (close <= 0 || !STATEMENT_END.test(e.slice(close, close + 8))) return null;
+  return { name, start: at + m[0].indexOf(callee) - (m[1] as string).length, aliased: name !== callee };
 }
 
 const TEXT_OF_NAME = new RegExp(String.raw`\s*=\s*(${NAME})\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))`, "uy");
@@ -755,8 +772,6 @@ export function sdkOf(opts: { htmlDsl?: boolean | null; core?: boolean | null })
 /** What a declaration or a value shows: the facts of HoleFact the text alone can give. */
 export type TextKind = "number" | "unsigned" | "boolean" | "nullable" | "string" | "markup";
 
-/** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
-const UNSIGNED_TYPE = /^(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)$/;
 const UNSIGNED_SUFFIX = /[uU][lL]?$/;
 
 /**
@@ -771,22 +786,15 @@ export function declaredKind(src: string, name: string, at: number, nonNull = fa
   if (!d) return null;
   if (d.literal !== undefined) return d.literal === "true" || d.literal === "false" ? "boolean" : UNSIGNED_SUFFIX.test(d.literal) ? "unsigned" : "number";
   // Without core, Html, Trusted and interpolate are not Streamlord's, and nothing says what they hold.
-  if (d.markup) return core ? "markup" : null;
+  if (d.markup) return core && setToCore(src, d) ? "markup" : null;
   if (d.type === undefined) return null;
-  const type = d.type.replace(/\?$/, "");
-  // Digits too; an unsigned number that may be null is judged as any number that may be.
-  const scalar = /^(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)$/.test(type) ? "number" : /^(?:kotlin\.)?Boolean$/.test(type) ? "boolean" : UNSIGNED_TYPE.test(type) ? "unsigned" : null;
-  // Digits, true or false, or null: safe where anything is, and not where only a number or a boolean is.
-  if (scalar) return type === d.type || nonNull ? scalar : "nullable";
-  if (/^(?:kotlin\.)?(?:String|CharSequence)$/.test(type)) return "string";
-  // What interpolate returns: markup whose values have been through it.
-  if (core && /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*Html$/u.test(type)) return "markup";
-  // Markup the author vouched for, which a Kotlin template writes as it stands.
-  if (core && type === d.type && TRUSTED_TYPE.test(type)) return "markup";
-  return null;
+  // An Html or a Trusted the file takes from another package is no markup the analysis knows.
+  if (markupTypeShadowed(src, d.type)) return null;
+  return declaredFact(coreType(src, d.type), nonNull, core) as TextKind | null;
 }
 
-const TRUSTED_LITERAL = /Trusted\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/y;
+// The callee is Trusted or an alias of it, which the caller has read.
+const TRUSTED_LITERAL = /(`?)[\p{L}_][\p{L}\p{Nd}_]*\1\s*\(\s*(?:html\s*=\s*)?(?:"((?:[^"\\$\n]|\\.)*)"|"""((?:[^"$]|"(?!""))*)""")\s*\)/uy;
 
 /**
  * The text of `Trusted("...")` at `at`, or of `Trusted("""...""")` or `Trusted(html = ...)`, with
@@ -797,9 +805,9 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
   const m = TRUSTED_LITERAL.exec(src);
   if (!m || (whole && m[0].length !== src.length - at)) return null;
   // A raw string has no escapes.
-  if (m[2] !== undefined) return m[2];
+  if (m[3] !== undefined) return m[3];
   const escapes: Record<string, string> = { t: "\t", b: "\b", n: "\n", r: "\r" };
-  return (m[1] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
+  return (m[2] as string).replace(/\\(u[0-9A-Fa-f]{4}|.)/g, (_, e: string) => (e.length === 5 ? String.fromCharCode(Number.parseInt(e.slice(1), 16)) : (escapes[e] ?? e)));
 }
 
 /**
@@ -809,14 +817,20 @@ function literalTrusted(src: string, at: number, whole = false): string | null {
  */
 export function trustedLiteral(src: string, value: string, at: number): string | null {
   const t = value.trim();
-  if (IDENT.test(t)) return declarationOf(src, t, at)?.trustedText ?? null;
-  return literalTrusted(t, 0, true);
+  if (IDENT.test(t)) {
+    const d = declarationOf(src, t, at);
+    return d !== null && setToCore(src, d) ? (d.trustedText ?? null) : null;
+  }
+  const call = asCoreCall(src, t, "Trusted");
+  return call === null ? null : literalTrusted(call, 0, true);
 }
 
 /** Whether `name` at `at` is declared a `Trusted`, or set to `Trusted(...)` and nothing more: what interpolate lets in anywhere. */
 function trustedName(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
-  return d !== null && (d.trusted === true || (d.type !== undefined && TRUSTED_TYPE.test(d.type)));
+  if (d === null) return false;
+  if (d.type !== undefined && isTrustedType(coreType(src, d.type))) return !markupTypeShadowed(src, d.type);
+  return d.trusted === true && setToCore(src, d);
 }
 
 /**
@@ -939,7 +953,7 @@ function ownArgument(src: string, arg: string, at: number, constants: ReadonlySe
   const a = arg.replace(ARGUMENT_NAME, "").trim();
   if (a.startsWith("*")) return false;
   const kind = weakest(holeValues(a).map((v) => valueKind(src, v.text, at, constants, v.nonNull, sdk)));
-  return kind === "constant" || kind === "number" || kind === "boolean" || kind === "unsigned";
+  return writesItself(kind);
 }
 
 /**
@@ -976,7 +990,7 @@ export function valueKind(src: string, value: string, at: number, constants?: Re
   if (args) return args.every((a) => ownArgument(src, a, at, constants, sdk)) ? "constant" : "string";
   // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
   const call = lastCall(t);
-  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && valueKind(src, call.receiver, at, constants, false, sdk) === "constant") {
+  if (call?.receiver && call.lambda === null && TEXT_TRANSFORMS.has(call.name) && isConstant(valueKind(src, call.receiver, at, constants, false, sdk))) {
     if (call.args.trim() === "" || splitTop(call.args, ",").every((a) => ownArgument(src, a, at, constants, sdk))) return "constant";
   }
   const kind = callKind(src, t, at, constants, sdk);
@@ -1011,10 +1025,10 @@ function callKind(src: string, t: string, at: number, constants?: ReadonlySet<st
   const lambda = call.name === "ifBlank" || call.name === "ifEmpty";
   if (!(STRING_CHANGES.has(call.name) && call.lambda === null) && !(lambda && call.lambda !== null && call.args.trim() === "")) return null;
   // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-  if (valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants, false, sdk) !== "string") return null;
+  if (!isString(valueKind(src, call.receiver.replace(/\s*!!$/, ""), at, constants, false, sdk))) return null;
   if (!lambda) return "string";
   const result = valueKind(src, lambdaResult(call.lambda as string), at, constants, false, sdk);
-  return result === "string" || result === "constant" ? "string" : null;
+  return isString(result) || isConstant(result) ? "string" : null;
 }
 
 /** Whether `e` is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
@@ -1022,14 +1036,6 @@ function wholeOperand(e: string): boolean {
   const d = depths(e);
   for (let k = 0; k < e.length; k++) if (d[k] === 0 && !/[\p{L}\p{Nd}_.?!()[\]{}"']/u.test(e[k] as string)) return false;
   return true;
-}
-
-/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
-export function weakest(kinds: readonly (TextKind | "constant" | null)[]): TextKind | "constant" | null {
-  const order: (TextKind | "constant" | null)[] = ["string", null, "markup", "nullable", "unsigned", "boolean", "number", "constant"];
-  let worst = order.length - 1;
-  for (const k of kinds) worst = Math.min(worst, order.indexOf(k));
-  return order[worst] ?? null;
 }
 
 /** Whether `name` means, at `at`, a parameter or value marked `@Language("HTML")`. */
@@ -1050,7 +1056,7 @@ function htmlLiteral(t: string): boolean {
   const rest = t.slice(end);
   if (rest.trim() !== "" && !TRIM_CALL.test(rest)) return false;
   const content = t.slice(at + (t.startsWith('"""', at) ? 3 : 1), end);
-  return HTML_START.test(/trimMargin/.test(rest) ? content.replace(/^\s*\|/, "") : content);
+  return opensWithTag(content, /trimMargin/.test(rest));
 }
 
 /** The call that ends `t`, `receiver.name(args) { lambda }`, or null when `t` does not end in one. */
@@ -1087,7 +1093,7 @@ function lastCall(t: string): { name: string; receiver: string | null; args: str
 
 /** What a lambda gives: its last expression, without its parameters. */
 function lambdaResult(body: string): string {
-  const b = body.replace(/^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?]+)?)*\s*->/u, "");
+  const b = body.replace(/^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*\s*->/u, "");
   const d = depths(b);
   let from = 0;
   for (let k = 0; k < b.length; k++) {
@@ -1129,11 +1135,11 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
   if (htmlLiteral(t)) return true;
   const sum = splitTop(t, "+");
   if (sum.length > 1) return htmlLiteral((sum[0] as string).trim());
-  if (sdk.core && (wholeCall(t, "interpolate") || wholeCall(t, "Trusted"))) return true;
+  if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true;
   const textOf = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (sdk.core && textOf !== undefined && (wholeCall(textOf, "interpolate") || (IDENT.test(textOf) && declaredKind(src, textOf, at) === "markup"))) return true;
+  if (sdk.core && textOf !== undefined && (coreCall(src, textOf, "interpolate") || (IDENT.test(textOf) && isMarkupFact(declaredKind(src, textOf, at))))) return true;
   if (IDENT.test(t)) {
-    if (declaredKind(src, t, at, false, sdk.core) === "markup" || htmlNamed(src, t, at)) return true;
+    if (isMarkupFact(declaredKind(src, t, at, false, sdk.core)) || htmlNamed(src, t, at)) return true;
     // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
     const d = declarationOf(src, t, at);
     const init = d ? initialiser(src, d) : null;
@@ -1153,10 +1159,6 @@ export function markupValue(src: string, value: string, at: number, depth = 0, s
 /** How many names deep a value is followed to what it is set to. */
 const VALUE_DEPTH = 4;
 
-/** A collection, as a declaration names its type: what `joinToString` is called on. */
-const COLLECTION_TYPE = /^(?:kotlin\.collections\.|kotlin\.sequences\.)?(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)\??$/;
-const MARKUP_ELEMENT = /^(?:[\p{L}_][\p{L}\p{Nd}_]*\.)*(?:Html|Trusted)$/u;
-
 /**
  * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
  * markup, a name declared a `List<Html>`, or one set to such a collection.
@@ -1166,7 +1168,10 @@ function markupElements(src: string, receiver: string, at: number, depth: number
   if (IDENT.test(t)) {
     const d = declarationOf(src, t, at);
     if (!d) return false;
-    if (d.type !== undefined) return sdk.core && COLLECTION_TYPE.test(d.type) && MARKUP_ELEMENT.test(d.typeArguments?.trim() ?? "");
+    if (d.type !== undefined) {
+      const element = d.typeArguments?.replace(OUT_VARIANCE, "");
+      return sdk.core && element !== undefined && !markupTypeShadowed(src, element) && isMarkupCollection(`${d.type.replace(/\?$/, "")}<${coreType(src, element)}>`);
+    }
     const init = initialiser(src, d);
     return init !== null && depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk);
   }
@@ -1262,7 +1267,7 @@ export function markupValued(src: string, s: KotlinString, ip: Interpolation): b
 function heldAsMarkup(src: string, value: string, at: number): boolean {
   return (branches(value) ?? [value]).every((v) => {
     const t = v.trim();
-    if (IDENT.test(t)) return declaredKind(src, t, at) === "markup";
+    if (IDENT.test(t)) return isMarkupFact(declaredKind(src, t, at));
     const call = /^(?:interpolate|Trusted)\s*\(/.exec(t);
     return call !== null && closing(t, depths(t), call[0].length - 1) === t.length;
   });
@@ -1283,7 +1288,7 @@ export function markupHeldAsString(src: string, value: string, at: number): bool
 function markupText(src: string, name: string, at: number): boolean {
   const d = declarationOf(src, name, at);
   if (d?.textOf === undefined) return false;
-  return wholeCall(d.textOf, "interpolate") || (IDENT.test(d.textOf) && declaredKind(src, d.textOf, d.at) === "markup");
+  return wholeCall(d.textOf, "interpolate") || (IDENT.test(d.textOf) && isMarkupFact(declaredKind(src, d.textOf, d.at)));
 }
 
 /** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
@@ -1484,16 +1489,114 @@ export function coreNameUsable(src: string, name: string, sdk: Sdk, foreignCalls
 }
 
 /**
+ * Whether `name` in `src` means something other than core's own, read once per file by
+ * `shadowedInFile` with no star import counted: `shadowsCore` in Interpolations.kt.
+ */
+export function shadowsCore(src: string, name: string): boolean {
+  const facts = fileFacts(src);
+  facts.taken ??= new Map();
+  let taken = facts.taken.get(name);
+  if (taken === undefined) {
+    taken = shadowedInFile(src, facts.code, name, false);
+    facts.taken.set(name, taken);
+  }
+  return taken;
+}
+
+/**
+ * The names `src` imports names of core's domain under, each with the name it stands for:
+ * `import io.github.markusaugust.streamlord.core.domain.Html as Page` gives `Page` to `Html`. `coreAliases` in Interpolations.kt.
+ */
+export function coreAliases(src: string): ReadonlyMap<string, string> {
+  const facts = fileFacts(src);
+  facts.aliases ??= aliasesIn(src, facts.code);
+  return facts.aliases;
+}
+
+/** The aliases of `coreAliases`, read from the imports in the `code` of `src`. */
+function aliasesIn(src: string, code: Uint8Array): ReadonlyMap<string, string> {
+  const out = new Map<string, string>();
+  for (const line of keywordLines(src, code, "import")) {
+    const t = unticked(src.slice(line.start, line.codeEnd).trim().replace(/;$/, "").trim());
+    const m = CORE_ALIAS.exec(t);
+    if (m) out.set(m[2] as string, m[1] as string);
+  }
+  return out;
+}
+
+const CORE_ALIAS = new RegExp(`^${escapeRegExp(DOMAIN)}\\.([\\p{L}_][\\p{L}\\p{Nd}_]*)\\s+as\\s+([\\p{L}_][\\p{L}\\p{Nd}_]*)$`, "u");
+
+/** `written`, a declared type, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. `coreType` in Interpolations.kt. */
+function coreType(src: string, written: string): string {
+  const t = unticked(written).trim();
+  const bare = t.replace(/\?$/, "").trim();
+  const name = coreAliases(src).get(bare);
+  if (name !== "Html" && name !== "Trusted") return t;
+  return name + t.slice(bare.length);
+}
+
+/**
+ * `text` written with core's `name` where it starts with a call to it, under that name or an alias
+ * the file imports it by: `T(x)` as `Trusted(x)`. Null where `text` starts with no call to core's `name`.
+ */
+function asCoreCall(src: string, text: string, name: string): string | null {
+  const m = CALLEE.exec(text);
+  if (!m) return null;
+  const callee = m[2] as string;
+  const rest = text.slice(callee.length + 2 * (m[1] as string).length);
+  if (callee === name) return shadowsCore(src, name) ? null : name + rest;
+  return coreAliases(src).get(callee) === name ? name + rest : null;
+}
+
+// `List<out Html>` reads its elements as `List<Html>` does.
+const OUT_VARIANCE = /^\s*out\s+/;
+
+const CALLEE = /^(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(/u;
+
+/** `written` with its backticks dropped: `` `Page`? `` as `Page?`, the same name to Kotlin. `unticked` in Interpolations.kt. */
+function unticked(written: string): string {
+  return written.replace(/`/g, "");
+}
+
+/** Whether `text` is one call to core's `name`, under that name or an alias: `Trusted(x)`, `T(x)`. */
+function coreCall(src: string, text: string, name: string): boolean {
+  const call = asCoreCall(src, text, name);
+  return call !== null && wholeCall(call, name);
+}
+
+/** Whether `text` calls core's `Trusted` anywhere, under that name or an alias. */
+export function callsTrusted(src: string, text: string): boolean {
+  if (TRUSTED_CALL.test(text)) return true;
+  for (const [alias, name] of coreAliases(src)) {
+    if (name === "Trusted" && new RegExp(`(?:^|[^\\p{L}\\p{Nd}_.\`])(\`?)${alias}\\1\\s*\\(`, "u").test(text)) return true;
+  }
+  return false;
+}
+
+const TRUSTED_CALL = /(?:^|[^\p{L}\p{Nd}_.`])(`?)Trusted\1\s*\(/u;
+
+/** Whether `d` is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in `src` takes. `setToCore` in Interpolations.kt. */
+function setToCore(src: string, d: Declaration): boolean {
+  return d.markup === true && (d.aliased === true || !shadowsCore(src, d.trusted ? "Trusted" : "interpolate"));
+}
+
+/** Whether `written`, a declared type, is a bare `Html` or `Trusted` that means another type in `src`: `markupTypeShadowed` in Interpolations.kt. */
+function markupTypeShadowed(src: string, written: string): boolean {
+  const name = unticked(written).replace(/\s/g, "").replace(/\?$/, "");
+  return (name === "Html" || name === "Trusted") && shadowsCore(src, name);
+}
+
+/**
  * Whether something other than core's domain takes `name` in `src`: an import of it from elsewhere,
  * by name or as an alias, or a `fun`, `class`, `object`, `interface` or `typealias` of that name at
  * the top of the file. An import of core's own name settles it, since an explicit import wins.
- * A star import from outside Streamlord counts only where the file already uses the name: an
- * explicit import the fix adds wins over a star import, so the one risk is that it takes the name
- * from uses that meant the star import's. With no use there is nothing to take, and the import is
- * unambiguous.
+ * With `stars`, as a fix asks it, a star import from outside Streamlord counts where the file
+ * already uses the name: an explicit import the fix adds wins over a star import, so the one risk is
+ * that it takes the name from uses that meant the star import's. With no use there is nothing to
+ * take, and the import is unambiguous.
  */
-function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
-  const targets = keywordLines(src, code, "import").map((l) => src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim());
+function shadowedInFile(src: string, code: Uint8Array, name: string, stars = true): boolean {
+  const targets = keywordLines(src, code, "import").map((l) => unticked(src.slice(l.start, l.codeEnd).trim().replace(/;$/, "").trim()));
   if (targets.includes(`${DOMAIN}.${name}`)) return false;
   for (const t of targets) {
     const as = t.indexOf(" as ");
@@ -1502,10 +1605,10 @@ function shadowedInFile(src: string, code: Uint8Array, name: string): boolean {
       continue;
     }
     if (t.endsWith(`.${name}`)) return true;
-    if (t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
+    if (stars && t.endsWith(".*") && t !== `${DOMAIN}.*` && !t.startsWith("io.github.markusaugust.streamlord.") && usedInCode(src, code, name)) return true;
   }
-  const declared = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?${name}(?![\p{L}\p{Nd}_])`, "gu");
-  for (const m of src.matchAll(declared)) {
+  const declaration = new RegExp(String.raw`\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?(${"`"}?)${name}\1(?![\p{L}\p{Nd}_])`, "gu");
+  for (const m of src.matchAll(declaration)) {
     const at = m.index ?? 0;
     if (code[at] !== 1) continue;
     let depth = 0;
@@ -1805,16 +1908,16 @@ export function argKind(src: string, text: string, literal: boolean, at: number)
   if (t === "null") return "null";
   if (/^'(?:[^'\\]|\\.[^']*)'$/.test(t)) return "char";
   if (/^if\s*\(/.test(t) && literalOnly(t)) return t.includes('"') ? "string" : null;
-  if (wholeCall(t, "Trusted") || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
-  if (wholeCall(t, "interpolate")) return "markup";
+  if (coreCall(src, t, "Trusted") || (IDENT.test(t) && trustedName(src, t, at))) return "trusted";
+  if (coreCall(src, t, "interpolate")) return "markup";
   // The String of the Html: interpolate(...).text.
   const html = /^([\s\S]*?)\s*\.\s*text$/.exec(t)?.[1];
-  if (html !== undefined && wholeCall(html, "interpolate")) return "string";
+  if (html !== undefined && coreCall(src, html, "interpolate")) return "string";
   const called = callKind(src, t, at);
   if (called !== null) return called;
   const declared = IDENT.test(t) ? declaredKind(src, t, at) : null;
   // `val name = "Gorvek"`: a String, though no type is written.
   if (declared === null && IDENT.test(t) && declarationOf(src, t, at)?.string) return "string";
   // An Int? may be null, which interpolate admits only where anything is: not known here.
-  return declared === "nullable" ? null : declared;
+  return argKindOf(declared);
 }

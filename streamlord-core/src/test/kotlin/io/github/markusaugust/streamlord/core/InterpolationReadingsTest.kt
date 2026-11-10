@@ -55,10 +55,209 @@ class InterpolationReadingsTest {
 
     @Test
     fun `an Html that leaves foreign content, a template or a select open, or closes what it did not open, is written as text`() {
-        val open = listOf("<svg>", "<math>", "<svg><g>", "<svg><foreignObject>", "<math><mi>", "<template>", "<select>", "</svg>", "</div>")
+        // The last: the browser's adoption agency drops the inner span, so the `</span>` closes the span around the value.
+        val open =
+            listOf(
+                "<svg>",
+                "<math>",
+                "<svg><g>",
+                "<svg><foreignObject>",
+                "<math><mi>",
+                "<template>",
+                "<select>",
+                "</svg>",
+                "</div>",
+                "<b><span><div></b></div></span>",
+            )
         for (markup in open) {
-            val out = interpolate("<p>%s</p>", interpolate(markup)).text
-            assertFalse('<' in out.removePrefix("<p>").removeSuffix("</p>"), "$markup: $out")
+            val out = interpolate("<span>%s</span>", interpolate(markup)).text
+            assertFalse('<' in out.removePrefix("<span>").removeSuffix("</span>"), "$markup: $out")
+        }
+    }
+
+    // Where the value lands in svg or math, a tag that takes the browser back to HTML there closes
+    // the elements around it, and the markup after it is read as HTML.
+    @Test
+    fun `an Html that leaves the svg or math it lands in is written as text`() {
+        val formats =
+            listOf(
+                "<svg><g>%s</g></svg>",
+                "<svg>%s</svg>",
+                "<math><mrow>%s</mrow></math>",
+                "<svg><g><g>%s</g></g></svg>",
+                "<math><mi><svg>%s</svg></mi></math>",
+            )
+        val leaving = listOf("<em></em>", "<p>x</p>", "</p>", "<br>", "</br>", "<font color=red>x</font>", "<div></div>")
+        for (format in formats) {
+            for (markup in leaving) {
+                val out = interpolate(format, interpolate(markup)).text
+                assertFalse(markup in out, "$format with $markup: $out")
+            }
+        }
+    }
+
+    // Right in an integration point, an element the value leaves open is HTML, and the svg or math
+    // end tags of the format after it stop at the integration point and close nothing.
+    @Test
+    fun `an Html that leaves an element open right in an integration point is written as text`() {
+        val formats = listOf("<svg><foreignObject>%s</foreignObject></svg>", "<svg><desc>%s</desc></svg>", "<math><mi>%s</mi></math>")
+        for (format in formats) {
+            for (markup in listOf("<g/>", "<a/>", "<g>", "<span>x")) {
+                val out = interpolate(format, interpolate(markup)).text
+                assertFalse(markup in out, "$format with $markup: $out")
+            }
+        }
+    }
+
+    // An element a value leaves open is closed only by an end tag the browser lets reach it: an object,
+    // an applet and a marquee bound every search, an integration point stops the svg's end tags, and an
+    // `<a>` is opened again around the text after it. So a value is markup only when it leaves none open.
+    @Test
+    fun `an Html that leaves any element open is written as text`() {
+        val cases =
+            listOf(
+                "<main><div>%s</div></main>" to "<object>",
+                "<div>%s</div>" to "<applet>",
+                "<div>%s</div>" to "<marquee>",
+                "<div><div>%s</div></div>" to "<a>",
+                "<div>%s</div>" to "<p>x",
+                "<svg><foreignObject><form>%s</form></foreignObject></svg>" to "<g>",
+                "<svg><foreignObject><p>%s</p></foreignObject></svg>" to "<button>",
+                "<desc>%s</desc><g>after</g>" to "<g/>",
+                "<mi>%s</mi>" to "<a/>",
+            )
+        for ((format, markup) in cases) {
+            val out = interpolate(format, interpolate(markup)).text
+            assertFalse(markup in out, "$format with $markup: $out")
+        }
+    }
+
+    // Read from inside an svg or a math, a `form` or a `label` is an svg element, and an `<input>` in
+    // it one left open; the browser reads them as HTML, where the input is void.
+    @Test
+    fun `an Html of void elements in a form, a label or a media element is still markup`() {
+        val cases =
+            listOf(
+                "<form method=post>%s<button>Save</button></form>" to "<input name=email type=email>",
+                "<label>%s Remember me</label>" to "<input type=checkbox>",
+                "<table><tr><td>%s</td></tr></table>" to "<input type=checkbox name=a>",
+                "<form>%s</form>" to "<div><input name=a></div>",
+                "<video>%s</video>" to "<source src=a.mp4><track src=a.vtt>",
+                "<colgroup>%s</colgroup>" to "<col>",
+                "<button>%s</button>" to "<wbr>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
+    // A table part out of its place closes the table or the cell around it, or, as a first `<col>`,
+    // turns what follows into a column group that drops it; a formatting element's end tag leaves a
+    // block opened in it open; a form inside a form or a table moves the format's fields out of theirs;
+    // and straight in an svg patch an `<image>` or an `<input>` is an svg element left open.
+    @Test
+    fun `an Html that reshapes a table, a form or a formatting element is written as text`() {
+        val cases =
+            listOf(
+                "<table><tr><td>%s</td></tr></table>" to "<td></td>",
+                "<table><tr><td>%s</td></tr></table>" to "<col>",
+                "<table><tr><td><svg><desc>%s</desc></svg></td></tr></table>" to "<td></td>",
+                "<template>%sQ1</template>" to "<col>",
+                "Q0%s<p>Q1</p>" to "<col>",
+                "<div>%s</div>" to "<tr><td>a</td></tr>",
+                "<div>%sQ1</div>Q2" to "<b><div>x</b>",
+                "<div>%sQ1</div>Q2" to "<b><p>x</b>",
+                "<form>%s<input name=a></form>" to "<form></form>",
+                "<table>%s<tr><td>Q1</td></tr></table>Q2" to "<table></table>",
+                "<table><tr>%s<td>Q1</td></tr></table>Q2" to "<table></table>",
+                "<table><tr><td>%s</td><td>Q1</td></tr></table>" to "<table><table></table></table>",
+                "<table><colgroup>%s</colgroup><tr><td>Q1</td></tr></table>Q2" to "<table><td>x</table>",
+                "<div><form></div>%s" to "<form><input name=a></form>",
+                "<div>%sQ1</div>Q2" to "<div><object></div>",
+                // A formatting element an end tag of another closes is opened again after the value.
+                "<div>%sQ1</div>Q2" to "<noscript><b>x</noscript>",
+                "<div>%sQ1</div>Q2" to "<span><b>x</span>",
+                // The value's `<p>` closes the format's, and its own element with it, so its end tag reaches the format.
+                "<svg><foreignObject><p>%sQ1</p></foreignObject><text>Q2</text></svg>" to "<foreignObject><p>x</p></foreignObject>",
+                "<p>%s</p>" to "<span><p>x</p></span>",
+                "%s<text>Q1</text>" to "<image href=\"a.png\">",
+                "%s<text>Q1</text>" to "<input>",
+            )
+        for ((format, markup) in cases) {
+            val out = interpolate(format, interpolate(markup)).text
+            assertFalse(markup in out, "$format with $markup: $out")
+        }
+    }
+
+    @Test
+    fun `an Html of table parts in their place, of a whole form, or of formatting is still markup`() {
+        val cases =
+            listOf(
+                "<table><tr>%s</tr></table>" to "<td>a</td><td>b</td>",
+                "<table><tbody>%s</tbody></table>" to "<tr><td>a</td></tr>",
+                "<table>%s</table>" to "<caption>c</caption>",
+                "<table><colgroup>%s</colgroup></table>" to "<col>",
+                "<div>%s</div>" to "<table><tr><td>a</td></tr></table>",
+                "<table><tr><td>%s</td></tr></table>" to "<table><tr><td>x</td></tr></table>",
+                "<div>%s</div>" to "<b>x</b><div>y</div>",
+                "<div>%s</div>" to "<form><input name=a></form>",
+                "<table>%s</table>" to "<form></form>",
+                "<div>%s</div>" to "<table><form></form></table>",
+                "<table><tr><td>%s</td></tr></table>" to "<form><input name=a></form>",
+                "%s" to "<image href=\"a.png\"/>",
+                // At a patch's top level, or in a template, a row or a table section is no harm.
+                "%s" to "<tr id=r1><td>a</td><td>b</td></tr>",
+                "%s<p>after</p>" to "<thead><tr><td>a</td></tr></thead>",
+                // A table's end tags close its open cells and caption first.
+                "<div>%s</div>" to "<table><tr><td>a<td>b</table>",
+                "<div>%s</div>" to "<table><tr><td>a</tr></table>",
+                "<div>%s</div>" to "<table><caption>c</table>",
+                // Inside an svg a `<section>` closes no `<p>`; in a template a form sets no form pointer.
+                "<p>%s</p>" to "<svg><section></section></svg>",
+                "<template><form></template><div>%s</div>" to "<form><input name=a></form>",
+                "<template>%s</template>" to "<tr><td>a</td></tr>",
+                "%s" to "<colgroup><col></colgroup>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+        }
+    }
+
+    // Read from inside an svg or a math, an `<a>` or a `<button>` is an svg element a `<span>` in it
+    // leaves, so its end tag closed nothing there; where the value lands, in HTML, it is a link.
+    @Test
+    fun `an Html of a link, a button, a form or a section holding HTML is still markup`() {
+        val values =
+            listOf(
+                "<a href=\"/x\"><span>a</span></a>",
+                "<a href=x><img src=a></a>",
+                "<button><span>a</span></button>",
+                "<label><span>a</span></label>",
+                "<form><div>a</div></form>",
+                "<section><p>a</p></section>",
+                "<article><h2>t</h2><p>a</p></article>",
+            )
+        for (format in listOf("<div>%s</div>", "<li>%s</li>", "<table><tr><td>%s</td></tr></table>", "<nav>%s</nav>", "<main>%s</main>")) {
+            for (markup in values) {
+                assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
+            }
+        }
+    }
+
+    @Test
+    fun `an Html that stays in the svg or math it lands in is still markup`() {
+        val cases =
+            listOf(
+                "<svg>%s</svg>" to "<path d=\"M0 0\"/>",
+                "<svg><g>%s</g></svg>" to "<g><circle r=\"1\"/></g>",
+                "<math>%s</math>" to "<mi>x</mi>",
+                "<svg><foreignObject>%s</foreignObject></svg>" to "<p>x</p>",
+                "<math><mi>%s</mi></math>" to "<b>x</b>",
+                "<svg><g>%s</g></svg>" to "<font>x</font>",
+                "<math>%s</math>" to "<mrow><mi>x</mi></mrow>",
+            )
+        for ((format, markup) in cases) {
+            assertEquals(format.replace("%s", markup), interpolate(format, interpolate(markup)).text, "$format with $markup")
         }
     }
 
@@ -73,6 +272,8 @@ class InterpolationReadingsTest {
                 "<math><mi>x</mi></math>",
                 "<hr/>",
                 "<textarea>t</textarea><script>x</script>",
+                // The div stops the `</span>`, so it closes nothing around the value.
+                "<div></span></div>",
             )
         for (markup in closed) {
             assertEquals("<p>$markup</p>", interpolate("<p>%s</p>", interpolate(markup)).text, markup)
@@ -111,7 +312,8 @@ class InterpolationReadingsTest {
             refused("<p><pre></pre><style><dd>%s<li><li></li></style>%s", Trusted("<script>"), code).position,
         )
         assertEquals(Position.CODE, refused("<p><pre></pre><style><dd><script><li><li></li></style>%s", code).position)
-        assertEquals("<svg><p>a</p></svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
+        // Written into the svg itself, a `<p>` takes the browser out of it, and the `</svg>` after it is read in HTML.
+        assertEquals("<svg>&lt;p&gt;a&lt;/p&gt;</svg>", interpolate("<svg>%s</svg>", interpolate("<p>%s</p>", "a")).text)
     }
 
     // Inside foreign content an `<svg>` or `<math>` tag takes the namespace it stands in, so in a

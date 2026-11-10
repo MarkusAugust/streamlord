@@ -5,8 +5,8 @@
  */
 import { catalog } from "./catalog.ts";
 import { jsRegions, Region } from "./expression.ts";
-import { holeLandings } from "./holes.ts";
-import { decodeEntities } from "./markup.ts";
+import { landingAsParsed } from "./holes.ts";
+import { decodeEntities, withTemplateTagNames } from "./markup.ts";
 
 /** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
 export interface ValueAtCaret {
@@ -20,15 +20,19 @@ const CARET = "x";
 
 /**
  * The quoted attribute value `offset` stands in, in `markup` read as the browser reads it, or null.
- * The reading is `holeLandings`, so a value over several lines, in single quotes or in a script's
- * text is told as `interpolate` tells it.
+ * The reading is `landingAsParsed`, the browser's as it parses a patch and the one `tokenize` gives
+ * the checks, so a value over several lines, in single quotes or in a script's text is found, and the
+ * text of a `<textarea>` or a `<title>` is text, though `interpolate`, which takes the strictest
+ * reading, still judges a value there. With `templates`, as in a template file, a value in a
+ * template comment is not found, as the checks skip it.
  */
-export function valueAtCaret(markup: string, offset: number, prefix: string): ValueAtCaret | null {
+export function valueAtCaret(markup: string, offset: number, prefix: string, templates = true): ValueAtCaret | null {
   if (offset < 0 || offset > markup.length) return null;
   // A hole is at least one character wide, so the caret gets one of its own.
-  const probe = markup.slice(0, offset) + CARET + markup.slice(offset);
-  const landing = holeLandings(probe, [{ start: offset, end: offset + 1 }], [prefix])[0];
-  if (!landing?.attribute) return null;
+  const walked = withTemplateTagNames(markup);
+  const probe = walked.slice(0, offset) + CARET + walked.slice(offset);
+  const landing = landingAsParsed(probe, { start: offset, end: offset + 1 }, [prefix], templates);
+  if (!landing.attribute) return null;
   if (landing.valueStart < 0 || landing.valueStart > offset) return null;
   return { attribute: landing.attribute, valueStart: landing.valueStart, before: decodeEntities(markup.slice(landing.valueStart, offset)).text };
 }
