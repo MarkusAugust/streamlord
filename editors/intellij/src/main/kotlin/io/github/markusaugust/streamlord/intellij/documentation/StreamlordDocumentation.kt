@@ -1,11 +1,6 @@
 package io.github.markusaugust.streamlord.intellij.documentation
 
-import com.intellij.lang.documentation.AbstractDocumentationProvider
-import com.intellij.lang.html.HTMLLanguage
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiManager
-import com.intellij.psi.impl.FakePsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.actionCallAt
 import io.github.markusaugust.streamlord.analysis.actionDoc
@@ -17,59 +12,19 @@ import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
-import io.github.markusaugust.streamlord.intellij.completion.LookupDoc
-import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtValueArgument
 
 /**
- * Hover documentation for Datastar attributes in HTML (files and strings in Kotlin), for the
- * DSL functions of Streamlord and for actions inside strings. The Kotlin plugin's own KDoc is
- * left in charge of a call it can resolve; this provider speaks where nothing else does.
+ * What the catalog says of the word at a place in a file: a Datastar attribute in HTML (files and
+ * strings in Kotlin), a DSL function of Streamlord, an action or an option inside a string.
  */
-class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
-    override fun getCustomDocumentationElement(
-        editor: com.intellij.openapi.editor.Editor,
-        file: com.intellij.psi.PsiFile,
-        contextElement: PsiElement?,
-        targetOffset: Int,
-    ): PsiElement? {
-        // A DSL call the Kotlin plugin can resolve has KDoc of its own, which says more; this provider speaks where it cannot.
-        if (file is KtFile && contextElement != null && resolves(contextElement)) return null
-        val doc = documentationAt(file, targetOffset) ?: return null
-        return DocTarget(file, doc.first, doc.second)
-    }
-
-    override fun generateDoc(
-        element: PsiElement?,
-        originalElement: PsiElement?,
-    ): String? = (element as? DocTarget)?.html
-
-    /** An option or an event in the completion list, which carries its documentation. */
-    override fun getDocumentationElementForLookupItem(
-        psiManager: PsiManager,
-        `object`: Any?,
-        element: PsiElement?,
-    ): PsiElement? {
-        val doc = `object` as? LookupDoc ?: return null
-        val file = element?.containingFile ?: return null
-        return DocTarget(file, doc.html, doc.name)
-    }
-
-    private fun resolves(element: PsiElement): Boolean {
-        val ref = element.parent as? org.jetbrains.kotlin.psi.KtNameReferenceExpression ?: return false
-        return try {
-            ref.mainReference.resolve() != null
-        } catch (_: com.intellij.openapi.project.IndexNotReadyException) {
-            false
-        }
-    }
-
-    /** The documentation for the word at [offset]: its Markdown and the word, or null. */
-    fun documentationAt(
-        file: com.intellij.psi.PsiFile,
+object StreamlordDocumentation {
+    /** The documentation for the word at [offset] of [file]: its HTML and the word, or null. */
+    fun at(
+        file: PsiFile,
         offset: Int,
     ): Pair<String, String>? {
         val analysis = StreamlordAnalysis.getInstance(file.project)
@@ -131,23 +86,6 @@ class StreamlordDocumentationProvider : AbstractDocumentationProvider() {
         while (end < text.length && part(text[end])) end++
         if (end <= start) return null
         return text.substring(start, end) to end
-    }
-
-    /** A stand-in element carrying the documentation, so the platform has something to show it for. */
-    class DocTarget(
-        private val file: com.intellij.psi.PsiFile,
-        val html: String,
-        private val word: String,
-    ) : FakePsiElement() {
-        override fun getParent(): PsiElement = file
-
-        override fun getName(): String = word
-
-        override fun getManager(): PsiManager = file.manager
-
-        override fun isValid(): Boolean = file.isValid
-
-        override fun getText(): String = word
     }
 
     /** Whether [offset] is in a string handed straight to a call with one of [names]. */

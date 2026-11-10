@@ -56,18 +56,10 @@
             language="TEXT"
             implementationClass="io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler" />
 
-        <lang.documentationProvider
-            language="kotlin"
-            order="first"
-            implementationClass="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider" />
-        <lang.documentationProvider
-            language="HTML"
-            order="first"
-            implementationClass="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider" />
-        <lang.documentationProvider
-            language="TEXT"
-            order="first"
-            implementationClass="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider" />
+        <platform.backend.documentation.targetProvider
+            implementation="io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationTargetProvider" />
+        <platform.backend.documentation.lookupElementTargetProvider
+            implementation="io.github.markusaugust.streamlord.intellij.documentation.StreamlordLookupDocumentationTargetProvider" />
 
         <annotator language="HTML" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.HtmlDatastarAnnotator" />
         <annotator language="kotlin" implementationClass="io.github.markusaugust.streamlord.intellij.highlighting.KotlinDatastarAnnotator" />

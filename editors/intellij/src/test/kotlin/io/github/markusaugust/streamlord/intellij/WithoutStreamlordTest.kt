@@ -9,7 +9,7 @@ import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence
-import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.inspections.StreamlordMarkupInspection
@@ -45,23 +45,22 @@ abstract class WithoutDslTestCase : BasePlatformTestCase() {
     }
 
     fun `test hover leaves the kotlin helpers out`() {
-        val provider = StreamlordDocumentationProvider()
         myFixture.configureByText("page.html", "<div data-on:click=\"@post('/x')\"></div>")
-        val attr = provider.documentationAt(myFixture.file, 8)!!.first
+        val attr = StreamlordDocumentation.at(myFixture.file, 8)!!.first
         assertTrue(attr, attr.contains("<b>data-on</b>") && !attr.contains("Kotlin:"))
-        val action = provider.documentationAt(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!.first
+        val action = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!.first
         assertTrue(action, action.contains("@post(uri, options?)") && !action.contains("Kotlin:"))
         myFixture.configureByText("View.kt", "fun f() { dataOnClick(\"@post('/x', {retry: 'never'})\") }")
         val text = myFixture.file.text
-        assertNull(provider.documentationAt(myFixture.file, text.indexOf("dataOnClick") + 3))
-        assertNull(provider.documentationAt(myFixture.file, text.indexOf("@post") + 2))
-        assertNull(provider.documentationAt(myFixture.file, text.indexOf("retry") + 5))
+        assertNull(StreamlordDocumentation.at(myFixture.file, text.indexOf("dataOnClick") + 3))
+        assertNull(StreamlordDocumentation.at(myFixture.file, text.indexOf("@post") + 2))
+        assertNull(StreamlordDocumentation.at(myFixture.file, text.indexOf("retry") + 5))
     }
 
     // kotlinx.html's own way to write Datastar is Datastar whatever the SDK.
     fun `test hover documents an action in the attributes form`() {
         myFixture.configureByText("View.kt", "fun FlowContent.f() { button { attributes[\"data-on:click\"] = \"@post('/x')\" } }")
-        val doc = StreamlordDocumentationProvider().documentationAt(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!.first
+        val doc = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!.first
         assertTrue(doc, doc.contains("@post(uri, options?)") && !doc.contains("Kotlin:"))
     }
 
