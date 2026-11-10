@@ -3,8 +3,10 @@ package io.github.markusaugust.streamlord.intellij.navigation
 import com.intellij.codeInsight.TargetElementUtil
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
+import com.intellij.platform.ide.progress.runWithModalProgressBlocking
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -40,7 +42,7 @@ class SignalRenameHandler : RenameHandler {
         file: PsiFile?,
         dataContext: DataContext,
     ) {
-        val target = targetAt(dataContext) ?: return
+        val target = targetAt(project, dataContext) ?: return
         val editorAt = editor?.let(InjectedLanguageEditorUtil::getTopLevelEditor)
         PsiElementRenameHandler.rename(target, project, target, editorAt, PsiElementRenameHandler.DEFAULT_NAME.getData(dataContext))
     }
@@ -50,16 +52,28 @@ class SignalRenameHandler : RenameHandler {
         elements: Array<out PsiElement>,
         dataContext: DataContext,
     ) {
-        val target = elements.singleOrNull() as? SignalTarget ?: targetAt(dataContext) ?: return
+        val target = elements.singleOrNull() as? SignalTarget ?: targetAt(project, dataContext) ?: return
         val editor = CommonDataKeys.EDITOR.getData(dataContext)
         PsiElementRenameHandler.rename(target, project, target, editor, PsiElementRenameHandler.DEFAULT_NAME.getData(dataContext))
     }
 
-    private fun targetAt(dataContext: DataContext): SignalTarget? =
-        referenceAt(dataContext)?.let { SignalTarget.of(it.element.containingFile, it.signal).firstOrNull() }
-
-    private fun referenceAt(dataContext: DataContext): SignalPsiReference? {
+    /**
+     * The signal at the caret. The rename starts on the UI thread, and finding the signal reads the
+     * project and resolves calls, so it is found in the background while the UI thread waits.
+     */
+    private fun targetAt(
+        project: Project,
+        dataContext: DataContext,
+    ): SignalTarget? {
         val editor = CommonDataKeys.EDITOR.getData(dataContext) ?: return null
+        return runWithModalProgressBlocking(project, "Finding the signal") {
+            readAction { referenceIn(editor)?.let { SignalTarget.of(it.element.containingFile, it.signal).firstOrNull() } }
+        }
+    }
+
+    private fun referenceAt(dataContext: DataContext): SignalPsiReference? = CommonDataKeys.EDITOR.getData(dataContext)?.let(::referenceIn)
+
+    private fun referenceIn(editor: Editor): SignalPsiReference? {
         // In HTML injected into a Kotlin string the reference is the string's.
         for (e in listOf(editor, InjectedLanguageEditorUtil.getTopLevelEditor(editor)).distinct()) {
             val file = e.project?.let { PsiDocumentManager.getInstance(it).getPsiFile(e.document) }

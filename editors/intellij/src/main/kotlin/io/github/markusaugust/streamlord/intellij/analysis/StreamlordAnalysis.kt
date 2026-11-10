@@ -136,6 +136,7 @@ class StreamlordAnalysis(
         for (site in sites) {
             val foreign =
                 resolved.foreign[site.nameStart] ?: (!StreamlordResolve.mayBeStreamlord(file, site)).also {
+                    UiThreadWork.note()
                     resolves.incrementAndGet()
                     resolved.foreign[site.nameStart] = it
                 }

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
@@ -132,8 +133,8 @@ class ExpressionHelpTest : StreamlordTestCase() {
         assertTrue(docOf("data-on:click"), docOf("data-on:click").contains("developer.mozilla.org"))
     }
 
-    // The typed handler runs before the document is committed, so it reads the editor's text: what was just typed is there.
-    fun `test the typed handler reads the text as typed`() {
+    // The help for what was typed is worked out once it is in the file, which the typed handler runs ahead of.
+    fun `test what was typed is read once it is in the file`() {
         for ((name, text) in listOf(
             "l.html" to "<div data-on:click=\"<caret>\"></div>",
             "L.kt" to "fun f() { dataOnClick(\"<caret>\") }",
@@ -142,7 +143,8 @@ class ExpressionHelpTest : StreamlordTestCase() {
             val at = myFixture.caretOffset
             WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(at, "@get") }
             assertNull(name, DatastarCaret.expressionAt(myFixture.file, at + 4))
-            assertEquals(name, "@get", DatastarCaret.expressionAt(myFixture.file, at + 4, fromDocument = true)?.before)
+            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            assertEquals(name, "@get", DatastarCaret.expressionAt(myFixture.file, at + 4)?.before)
         }
     }
 

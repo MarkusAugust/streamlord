@@ -21,10 +21,8 @@ class DatastarTypedHandler : TypedHandlerDelegate() {
         file: PsiFile,
     ): Result {
         if (charTyped == '(' || charTyped == ',') {
-            // The handler runs before the character goes in and before the document is committed, so the text is the editor's.
-            if (DatastarCaret.expressionAt(file, editor.caretModel.offset, fromDocument = true)?.allowActions == true) {
-                AutoPopupController.getInstance(project).autoPopupParameterInfo(editor, null)
-            }
+            // The handler runs on the UI thread, before the character goes in: whether there is anything to show is found out after.
+            ExpressionHelp.getInstance(project).offerParameterInfo(editor, file)
             return Result.CONTINUE
         }
         if (charTyped !in TRIGGERS) return Result.CONTINUE

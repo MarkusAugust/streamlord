@@ -55,6 +55,7 @@ object ProjectLibraries {
         module: Module?,
         library: StreamlordLibrary,
     ): Boolean? {
+        UiThreadWork.note()
         // A scratch file or one in memory belongs to no module: what the project has is the best guess.
         val found =
             if (module != null) {
