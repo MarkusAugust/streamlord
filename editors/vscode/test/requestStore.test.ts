@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { files, Position, settings, unreadable, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
 import { RequestStore } from "../src/requestStore.ts";
+import { removeRequest, saveRequest } from "../src/requests.ts";
 import { RunningServers } from "../src/serverLog.ts";
 
 const ENV = "/ws/.streamlord/env.json";
@@ -31,10 +32,10 @@ const HAND_WRITTEN = `{
 const entry = (name: string, url: string) => `{\n      "name": "${name}",\n      "url": "${url}",\n      "method": "GET",\n      "signals": "",\n      "headers": ""\n    }`;
 const NOT_A_REQUESTS_FILE = '.streamlord/inspector.json is not a requests file: it must be an object with a "requests" list.';
 
-/** An open editor on the env file, holding `text` that is not saved. */
-function open(text: string): OpenDocument {
+/** An open editor on the file at `path`, the env file unless said, holding `text` that is not saved. */
+function open(text: string, path = ENV): OpenDocument {
   const doc: OpenDocument = {
-    uri: Uri.file(ENV),
+    uri: Uri.file(path),
     text,
     getText: () => doc.text,
     offsetAt: (p: Position) => {
@@ -220,6 +221,116 @@ describe("request store", () => {
     assert.equal(s.requestsPathProblem(), null);
     await s.save(request("a"));
     assert.deepEqual([...files.keys()], [ENV, "/ws/tools/requests.json"]);
+  });
+
+  it("reads the requests file as an open editor holds it, saved or not", async () => {
+    files.set(REQUESTS, bytes('{"requests": [{"name": "feed", "url": "/feed"}]}'));
+    const s = store();
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["feed"]);
+    const doc = open('{"requests": [{"name": "feed", "url": "/feed"}, {"name": "typed", "url": "/typed"}]}', REQUESTS);
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["feed", "typed"]);
+    doc.text = '{"requests": [{"name": "typed", "url": "/typed"}]}';
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["typed"]);
+  });
+
+  it("reads the requests file the setting names as an open editor holds it", async () => {
+    settings.set("streamlord.inspector.requestsFile", "requests/inspector.json");
+    files.set("/ws/requests/inspector.json", bytes('{"requests": []}'));
+    open('{"requests": [{"name": "typed", "url": "/typed"}]}', "/ws/requests/inspector.json");
+    assert.deepEqual((await store().saved()).map((r) => r.name), ["typed"]);
+  });
+
+  /** An open editor on the requests file, with an entry typed and not saved, and a count of the edits made in it. */
+  function typedInEditor() {
+    const onDisk = '{\n  "version": 1,\n  "requests": [\n    ' + entry("feed", "/feed") + "\n  ]\n}\n";
+    files.set(REQUESTS, bytes(onDisk));
+    const typed = onDisk.replace(entry("feed", "/feed"), `${entry("feed", "/feed")},\n    ${entry("typed", "/typed")}`);
+    const doc = open(typed, REQUESTS);
+    const edits = { count: 0 };
+    const applyEdit = workspace.applyEdit;
+    workspace.applyEdit = (edit) => {
+      edits.count++;
+      return applyEdit(edit);
+    };
+    return { onDisk, typed, doc, edits, restore: () => (workspace.applyEdit = applyEdit) };
+  }
+
+  it("saves into the open editor of the requests file as one edit, keeping what is typed there and leaving the disk alone", async () => {
+    const { onDisk, typed, doc, edits, restore } = typedInEditor();
+    try {
+      await store().save(request("a"));
+      assert.equal(doc.text, saveRequest(typed, request("a")).text);
+      assert.equal(edits.count, 1);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      restore();
+    }
+  });
+
+  it("deletes from the open editor of the requests file as one edit, keeping what is typed there and leaving the disk alone", async () => {
+    const { onDisk, typed, doc, edits, restore } = typedInEditor();
+    try {
+      await store().delete("feed");
+      assert.equal(doc.text, removeRequest(typed, "feed").text);
+      assert.ok(doc.text.includes('"name": "typed"'), doc.text);
+      assert.equal(edits.count, 1);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      restore();
+    }
+  });
+
+  it("deletes an entry that is typed in the open editor and not saved", async () => {
+    const { onDisk, typed, doc, restore } = typedInEditor();
+    try {
+      await store().delete("typed");
+      assert.equal(doc.text, removeRequest(typed, "typed").text);
+      assert.ok(!doc.text.includes('"name": "typed"'), doc.text);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      restore();
+    }
+  });
+
+  /** Make the open editors refuse every edit, as `workspace.applyEdit` does when it resolves to false; the returned function undoes it. */
+  function editorsRefuse(): () => void {
+    const applyEdit = workspace.applyEdit;
+    workspace.applyEdit = async () => false;
+    return () => (workspace.applyEdit = applyEdit);
+  }
+
+  it("refuses a save and a delete the open editor of the requests file does not take, naming the file, and tells of no change", async () => {
+    const { onDisk, typed, doc, restore } = typedInEditor();
+    const undo = editorsRefuse();
+    try {
+      const s = store();
+      let changes = 0;
+      s.onDidChange(() => changes++);
+      const names = { message: /\.streamlord\/inspector\.json/ };
+      await assert.rejects(s.save(request("a")), names);
+      await assert.rejects(s.delete("feed"), names);
+      assert.equal(changes, 0);
+      assert.equal(doc.text, typed);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      undo();
+      restore();
+    }
+  });
+
+  it("refuses Edit variables and Use baseUrl the open editor of the env file does not take, naming the file", async () => {
+    const doc = open('{"baseUrl": "http://unsaved:2"}');
+    const undo = editorsRefuse();
+    try {
+      const s = store();
+      const names = { message: /\.streamlord\/env\.json/ };
+      await assert.rejects(s.defineVariables(["signals"]), names);
+      await assert.rejects(s.useBaseUrl("http://localhost:9102"), names);
+      assert.equal(doc.text, '{"baseUrl": "http://unsaved:2"}');
+      assert.equal(disk(), '{"baseUrl": "http://disk:1"}');
+    } finally {
+      undo();
+    }
   });
 
   it("refuses a save and a delete when the setting names a path with a problem, and writes nothing", async () => {

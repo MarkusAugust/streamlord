@@ -185,9 +185,10 @@ public object Requests {
                             }
 
                             is JsonObject -> {
-                                headers.entries.joinToString(
-                                    "\n",
-                                ) { (k, v) -> "$k: ${(v as? JsonString)?.value ?: v.toJson()}" }
+                                val raw = rawHeaders(json, index)
+                                headers.entries.joinToString("\n") { (k, v) ->
+                                    "$k: ${(v as? JsonString)?.value ?: compactJson(raw[k] ?: v.toJson())}"
+                                }
                             }
 
                             else -> {
@@ -1163,6 +1164,54 @@ public object Requests {
             }
         }
         return found
+    }
+
+    /**
+     * The source text of each member of `requests[index].headers`; the last of a key counts, as with
+     * the parser. A value that is not text is read as written: a writer of its own would spell `1.0`,
+     * escapes and a second key of a name its own way.
+     */
+    private fun rawHeaders(
+        text: String,
+        index: Int,
+    ): Map<String, String> {
+        val scan = JsonScan(text)
+        val found = HashMap<String, String>()
+        scan.members(scan.skipSpace(0)) { key, start, _ ->
+            if (key != "requests" || text[start] != '[') return@members
+            var i = index
+            scan.elements(start) { elementStart, elementEnd ->
+                if (i-- == 0 && text[elementStart] == '{') {
+                    scan.members(elementStart) { k, s, _ ->
+                        if (k == "headers" && text[s] == '{') {
+                            found.clear()
+                            scan.members(s) { name, vs, ve -> found[name] = text.substring(vs, ve) }
+                        }
+                    }
+                }
+                elementEnd
+            }
+        }
+        return found
+    }
+
+    /** JSON as written, less the white space between its parts. */
+    private fun compactJson(text: String): String {
+        val out = StringBuilder()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '"') {
+                var end = i + 1
+                while (end < text.length && text[end] != '"') end += if (text[end] == '\\') 2 else 1
+                out.append(text, i, minOf(end + 1, text.length))
+                i = end + 1
+            } else {
+                if (c !in " \t\n\r") out.append(c)
+                i++
+            }
+        }
+        return out.toString()
     }
 
     /** Just enough of a JSON scanner to find the span of a member of valid JSON; [text] must have parsed already. */

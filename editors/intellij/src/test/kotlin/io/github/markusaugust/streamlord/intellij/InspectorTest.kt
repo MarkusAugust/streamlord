@@ -2,12 +2,21 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessOutputTypes
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ui.TestDialog
+import com.intellij.openapi.ui.TestDialogManager
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.replaceService
+import com.intellij.toolWindow.ToolWindowHeadlessManagerImpl
 import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
@@ -1738,6 +1747,661 @@ class InspectorTest : BasePlatformTestCase() {
             assertEquals(emptyList<String>(), errors)
         } finally {
             server.close()
+        }
+    }
+
+    /** The tool window's queue as a test holds it: what it is given runs on the UI thread, or waits in [held] while [holding]. */
+    private class Queue {
+        @Volatile var holding = false
+        val held = CopyOnWriteArrayList<Runnable>()
+
+        /** Run what waits, in the order it came, and let what comes after run as it comes. */
+        fun release() {
+            holding = false
+            val waiting = held.toList()
+            held.clear()
+            waiting.forEach { it.run() }
+        }
+    }
+
+    /** Let the tool window's queue run, as it does in the IDE; in a test it drops what it is given. */
+    private fun toolWindowRuns(): Queue {
+        val queue = Queue()
+        val manager =
+            object : ToolWindowHeadlessManagerImpl(project) {
+                override fun invokeLater(runnable: Runnable) {
+                    if (queue.holding) queue.held += runnable else ApplicationManager.getApplication().invokeLater(runnable)
+                }
+            }
+        project.replaceService(ToolWindowManager::class.java, manager, testRootDisposable)
+        return queue
+    }
+
+    /** Run the UI thread until [done] or [seconds] have passed, and say whether it is done. */
+    private fun within(
+        seconds: Long,
+        done: () -> Boolean,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (!done() && System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+        return done()
+    }
+
+    /** Run the UI thread until [done], or fail with [what]. */
+    private fun until(
+        what: () -> String,
+        seconds: Long = 10,
+        done: () -> Boolean,
+    ) = assertTrue(what(), within(seconds, done))
+
+    /** Run the UI thread for [millis], so what is on its way arrives. */
+    private fun settle(millis: Long = 300) {
+        val deadline = System.currentTimeMillis() + millis
+        while (System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+    }
+
+    /** The names of the saved requests in the request list, in its order. */
+    private fun savedNames(panel: InspectorPanel): List<String> {
+        val list = UIUtil.findComponentsOfType(panel, JComboBox::class.java).single { it.getItemAt(0) !is String }
+        return (1 until list.itemCount).map { list.getItemAt(it).toString() }.filter { !it.startsWith("recent: ") }
+    }
+
+    /** The lines of text in the event list, newest first. */
+    private fun lines(events: JScrollPane) = UIUtil.findComponentsOfType(events, JTextArea::class.java).filter { !it.isEditable }
+
+    /** The requests file as the store writes it, holding feed; [typed] is it with an entry typed and not saved. */
+    private val written = "{\n  \"version\": 1,\n  \"requests\": [\n    ${entry("feed", "/feed")}\n  ]\n}\n"
+
+    private val typed = written.replace(entry("feed", "/feed"), "${entry("feed", "/feed")},\n    ${entry("typed", "/typed")}")
+
+    /** Drop what is typed in the editor of [file] and not saved, so the next test reads the file. */
+    private fun forget(file: VirtualFile) {
+        val documents = FileDocumentManager.getInstance()
+        documents.getCachedDocument(file)?.let { documents.reloadFromDisk(it) }
+    }
+
+    fun `test the saved requests follow what an open editor holds of the requests file, saved or not`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        try {
+            assertEquals(listOf("feed"), store.saved().map { it.name })
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            assertEquals(listOf("feed", "typed"), store.saved().map { it.name })
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("""{"requests": [{"name": "typed", "url": "/typed"}]}""") }
+            assertEquals(listOf("typed"), store.saved().map { it.name })
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save and a delete change the open editor of the requests file, keeping what is typed there and leaving the disk alone`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val documents = FileDocumentManager.getInstance()
+        val document = documents.getDocument(file)!!
+        try {
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            val a = SavedRequest("a", "/a", "GET", "", "")
+            store.save(a)
+            val withA = Requests.saveRequest(typed, a, Requests.REQUESTS_FILE).text!!
+            assertEquals(withA, document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+            assertTrue(documents.isDocumentUnsaved(document))
+
+            store.delete("feed")
+            val withoutFeed = Requests.removeRequest(withA, "feed", Requests.REQUESTS_FILE).text!!
+            assertEquals(withoutFeed, document.text)
+            store.delete("typed")
+            assertEquals(Requests.removeRequest(withoutFeed, "typed", Requests.REQUESTS_FILE).text, document.text)
+            assertFalse(document.text, "\"typed\"" in document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save into the open editor of the requests file is one edit that can be undone`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        try {
+            myFixture.openFileInEditor(file)
+            val document = myFixture.editor.document
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            store.save(SavedRequest("a", "/a", "GET", "", ""))
+            assertTrue(document.text, "\"a\"" in document.text)
+            val editor = FileEditorManager.getInstance(project).getSelectedEditor(file)!!
+            UndoManager.getInstance(project).undo(editor)
+            assertEquals(typed, document.text)
+        } finally {
+            forget(file)
+            FileEditorManager.getInstance(project).closeFile(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the requests file typed in after a save was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        try {
+            val planned = store.saving(SavedRequest("a", "/a", "GET", "", ""))
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            val e = assertFailsWith<IllegalStateException> { store.apply(planned) }
+            assertEquals("${Requests.REQUESTS_FILE} changed in the meantime. Try again.", e.message)
+            assertEquals(typed, document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    /** The setting, and the file it names: written as the default, as a path of its own, and as that path spelt otherwise. */
+    private val requestsPaths =
+        listOf(
+            Requests.REQUESTS_FILE to Requests.REQUESTS_FILE,
+            "requests/inspector.json" to "requests/inspector.json",
+            "./requests/inspector.json" to "requests/inspector.json",
+            "requests//inspector.json" to "requests/inspector.json",
+        )
+
+    fun `test the request list follows the requests file as it is typed, however the settings write its path`() {
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        val found = ArrayList<String>()
+        try {
+            for ((setting, path) in requestsPaths) {
+                settings.state.requestsFile = setting
+                val file = write(path, written)
+                try {
+                    val panel = InspectorPanel(project, testRootDisposable)
+                    await(panel.pushRequests(null))
+                    if (savedNames(panel) != listOf("feed")) found += "$setting reads ${savedNames(panel)}"
+                    val document = FileDocumentManager.getInstance().getDocument(file)!!
+                    WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+                    if (!within(3) { savedNames(panel) == listOf("feed", "typed") }) found += "$setting as typed lists ${savedNames(panel)}"
+                } finally {
+                    forget(file)
+                    remove(path)
+                }
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove("requests")
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    fun `test the request list follows a change on disk, however the settings write its path`() {
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        val found = ArrayList<String>()
+        try {
+            for ((setting, path) in requestsPaths) {
+                settings.state.requestsFile = setting
+                write(path, written)
+                try {
+                    val panel = InspectorPanel(project, testRootDisposable)
+                    await(panel.pushRequests(null))
+                    if (savedNames(panel) != listOf("feed")) found += "$setting reads ${savedNames(panel)}"
+                    write(path, typed)
+                    if (!within(3) { savedNames(panel) == listOf("feed", "typed") }) {
+                        found +=
+                            "$setting after a change on disk lists ${savedNames(panel)}"
+                    }
+                } finally {
+                    remove(path)
+                }
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove("requests")
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    /** A server that opens a stream on each request and holds it until the client closes it. */
+    private class Streaming : AutoCloseable {
+        private val server = java.net.ServerSocket(0)
+        private val sockets = CopyOnWriteArrayList<java.net.Socket>()
+        private val byPath = java.util.concurrent.ConcurrentHashMap<String, java.net.Socket>()
+        val port = server.localPort
+
+        /** The path of each request without its query, in the order they came. */
+        val paths = CopyOnWriteArrayList<String>()
+
+        /** Break the connection of the request to [path], as a network that fails does: the client reads an error, not an end. */
+        fun drop(path: String) {
+            byPath[path]?.apply {
+                setSoLinger(true, 0)
+                close()
+            }
+        }
+
+        init {
+            Thread {
+                runCatching {
+                    while (true) {
+                        val socket = server.accept()
+                        sockets += socket
+                        Thread {
+                            runCatching {
+                                val input = socket.getInputStream().bufferedReader()
+                                var line = input.readLine()
+                                val path =
+                                    line
+                                        .orEmpty()
+                                        .split(' ')
+                                        .getOrElse(1) { "" }
+                                        .substringBefore('?')
+                                byPath[path] = socket
+                                paths += path
+                                while (!line.isNullOrEmpty()) line = input.readLine()
+                                socket.getOutputStream().apply {
+                                    write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n: open\n\n".toByteArray())
+                                    flush()
+                                }
+                                // Held open until the client closes it, which ends the read.
+                                input.readText()
+                            }
+                        }.apply {
+                            isDaemon = true
+                            start()
+                        }
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+        }
+
+        override fun close() {
+            sockets.forEach { runCatching { it.close() } }
+            server.close()
+        }
+    }
+
+    // The earlier stream's close is held until what came after it is done, as a slow close of a stream may come.
+    fun `test an earlier request does not speak for the one after it`() {
+        val queue = toolWindowRuns()
+        Streaming().use { server ->
+            write(Requests.ENV_FILE, """{"baseUrl": "http://127.0.0.1:${server.port}"}""")
+            try {
+                val panel = InspectorPanel(project, testRootDisposable)
+                await(panel.pushRequests(null))
+                val events = events(panel)
+                val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+                val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+                val stop = button(panel, "Stop")
+                val found = ArrayList<String>()
+
+                fun open() {
+                    url.text = "{{baseUrl}}/feed"
+                    button(panel, "Connect").doClick()
+                    until({ "the stream does not open: ${status.text}" }) { status.text.startsWith("open") }
+                    settle(100)
+                    queue.holding = true
+                }
+
+                fun heldClose(what: String) {
+                    if (!within(5) { queue.held.isNotEmpty() }) found += "$what: the earlier stream told nothing as it closed"
+                    settle(200)
+                    queue.release()
+                    settle(100)
+                }
+
+                open()
+                val before = lines(events).toSet()
+                url.text = "{{nope}}/x"
+                button(panel, "Connect").doClick()
+                until({ "the new request shows no error line" }) { lines(events).any { it !in before } }
+                heldClose("Connect")
+                if (status.text != "error" || status.toolTipText != "error<br>{{nope}}/x") {
+                    found += "after Connect the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (stop.isEnabled) found += "after Connect Stop is enabled"
+
+                open()
+                stop.doClick()
+                heldClose("Stop")
+                if (status.text != "idle" ||
+                    status.toolTipText != "idle"
+                ) {
+                    found += "after Stop the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (stop.isEnabled) found += "after Stop Stop is enabled"
+                assertEquals("", found.joinToString("\n"))
+            } finally {
+                queue.release()
+                remove(Requests.ENV_FILE)
+                InspectorState.getInstance(project).loadState(InspectorState.State())
+            }
+        }
+    }
+
+    /** A panel over a server that streams, with what the tests of more than one request look at. */
+    private inner class Streams(
+        val server: Streaming,
+    ) {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events: JScrollPane
+        val status: JLabel
+        val url: JBTextField
+        val stop: JButton
+
+        init {
+            await(panel.pushRequests(null))
+            events = events(panel)
+            status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+            url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+            stop = button(panel, "Stop")
+        }
+
+        fun connect(path: String) {
+            url.text = "{{baseUrl}}$path"
+            button(panel, "Connect").doClick()
+        }
+
+        /** Connect to [path] and wait until its stream is open. */
+        fun open(path: String) {
+            connect(path)
+            until({ "$path does not open: ${status.text} ${status.toolTipText}" }) { isOpen(path) }
+            settle(100)
+        }
+
+        fun isOpen(path: String) = status.text.startsWith("open") && status.toolTipText.endsWith("<br>http://127.0.0.1:${server.port}$path")
+    }
+
+    /** Run [test] over a server that streams, with the env file pointing at it. */
+    private fun streams(test: (Streams, Queue) -> Unit) {
+        val queue = toolWindowRuns()
+        Streaming().use { server ->
+            write(Requests.ENV_FILE, """{"baseUrl": "http://127.0.0.1:${server.port}"}""")
+            try {
+                test(Streams(server), queue)
+            } finally {
+                queue.release()
+                remove(Requests.ENV_FILE)
+                InspectorState.getInstance(project).loadState(InspectorState.State())
+            }
+        }
+    }
+
+    /** Wait, without running the UI thread, until the queue holds something or [seconds] have passed. */
+    private fun heldWithin(
+        queue: Queue,
+        seconds: Long,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (queue.held.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(5)
+        // What else the same close tells comes right after.
+        Thread.sleep(200)
+        return queue.held.isNotEmpty()
+    }
+
+    fun `test Stop and Connect stop a request still being prepared`() =
+        streams { s, _ ->
+            s.open("/feed")
+            // Stop is enabled by the stream that is open, and clicked before the request after it is prepared.
+            s.connect("/stopped")
+            s.stop.doClick()
+            settle(500)
+            val found = ArrayList<String>()
+            if (s.status.text != "idle" ||
+                s.status.toolTipText != "idle"
+            ) {
+                found += "after Stop the status is ${s.status.text} ${s.status.toolTipText}"
+            }
+
+            s.open("/feed")
+            s.connect("/first")
+            s.connect("/second")
+            if (!within(5) { s.isOpen("/second") }) found += "the second Connect does not open: ${s.status.text} ${s.status.toolTipText}"
+            settle(300)
+            if (s.server.paths != listOf("/feed", "/feed", "/second")) found += "the server was sent ${s.server.paths}"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    // Stop and the next Connect are clicked before the UI thread runs again, so the variables of the first are not read back yet.
+    fun `test a request stopped or replaced while its variables are read shows no error`() =
+        streams { s, _ ->
+            val found = ArrayList<String>()
+            s.open("/feed")
+            var before = lines(s.events).toSet()
+            s.url.text = "{{nope}}/x"
+            button(s.panel, "Connect").doClick()
+            s.stop.doClick()
+            settle(500)
+            if (s.status.text != "idle" ||
+                s.status.toolTipText != "idle"
+            ) {
+                found += "after Stop the status is ${s.status.text} ${s.status.toolTipText}"
+            }
+            lines(s.events).filter { it !in before }.map { it.text }.let {
+                if (it.isNotEmpty()) {
+                    found +=
+                        "after Stop the event list shows $it"
+                }
+            }
+
+            s.open("/feed")
+            before = lines(s.events).toSet()
+            s.url.text = "{{nope}}/x"
+            button(s.panel, "Connect").doClick()
+            s.connect("/b")
+            if (!within(5) { s.isOpen("/b") }) found += "the second Connect does not open: ${s.status.text} ${s.status.toolTipText}"
+            settle(300)
+            if (!s.isOpen("/b")) found += "after the second Connect the status is ${s.status.text} ${s.status.toolTipText}"
+            lines(s.events).filter { it !in before }.map { it.text }.let {
+                if (it.isNotEmpty()) {
+                    found +=
+                        "after the second Connect the event list shows $it"
+                }
+            }
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    // The earlier stream's close is held until the request after it is open, as a slow close of a stream may come.
+    fun `test a later request that is open keeps its status when the earlier stream's close comes after it`() =
+        streams { s, queue ->
+            s.open("/feed")
+            val before = lines(s.events).toSet()
+            queue.holding = true
+            s.connect("/b")
+            // The UI thread does not run meanwhile, so only the earlier stream's close can come.
+            val closed = heldWithin(queue, 5)
+            val earlier = queue.held.toList()
+            queue.held.clear()
+            queue.holding = false
+            until({ "/b does not open: ${s.status.text} ${s.status.toolTipText}" }) { s.isOpen("/b") }
+            earlier.forEach { it.run() }
+            settle(200)
+            val found = ArrayList<String>()
+            if (!closed) found += "the earlier stream told nothing as it closed"
+            if (!s.isOpen("/b")) found += "the status is ${s.status.text} with the tooltip ${s.status.toolTipText}"
+            if (!s.stop.isEnabled) found += "Stop is disabled"
+            val shown = lines(s.events).filter { it !in before }.map { it.text }
+            if (shown.isNotEmpty()) found += "the event list shows $shown"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    fun `test a later request that is open keeps its status when the earlier stream's error comes after it`() =
+        streams { s, queue ->
+            s.open("/feed")
+            val before = lines(s.events).toSet()
+            queue.holding = true
+            s.server.drop("/feed")
+            val failed = heldWithin(queue, 5)
+            val earlier = queue.held.toList()
+            queue.held.clear()
+            queue.holding = false
+            s.open("/b")
+            earlier.forEach { it.run() }
+            settle(200)
+            val found = ArrayList<String>()
+            if (!failed) found += "the earlier stream told nothing as it broke"
+            if (!s.isOpen("/b")) found += "the status is ${s.status.text} with the tooltip ${s.status.toolTipText}"
+            if (!s.stop.isEnabled) found += "Stop is disabled"
+            val shown = lines(s.events).filter { it !in before }.map { it.text }
+            if (shown.isNotEmpty()) found += "the event list shows $shown"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    fun `test an error that keeps a request from being sent or ends it says error, with the URL of that request`() {
+        toolWindowRuns()
+        val port = java.net.ServerSocket(0).use { it.localPort }
+
+        // [sent] is the URL as filled in, or as written when filling it in is what failed.
+        class Case(
+            val what: String,
+            val env: String,
+            val url: String,
+            val sent: String,
+            val says: String,
+            val signals: String = "",
+            val headers: String = "",
+        )
+        val h = """{"baseUrl": "http://h:1"}"""
+        val closed = """{"baseUrl": "http://127.0.0.1:$port"}"""
+        val cases =
+            listOf(
+                Case("an env file that is not valid", "[]", "{{baseUrl}}/x?a=1&b=2", "{{baseUrl}}/x?a=1&b=2", "env.json is not valid"),
+                Case("a variable that is unknown", h, "{{nope}}/x", "{{nope}}/x", "{{nope}} is not set"),
+                Case(
+                    "a variable that is misplaced",
+                    h,
+                    "{{baseUrl}}/x",
+                    "{{baseUrl}}/x",
+                    "belongs in the URL field",
+                    signals = "{{baseUrl}}",
+                ),
+                Case(
+                    "a variable that is not set",
+                    """{"baseUrl": "http://h:1", "params": {"id": ""}}""",
+                    "{{baseUrl}}/x/{{id}}",
+                    "{{baseUrl}}/x/{{id}}",
+                    "{{id}} is empty",
+                ),
+                Case("signals that are not valid JSON", h, "{{baseUrl}}/x", "http://h:1/x", "Signals are not valid JSON", signals = "{"),
+                Case("a URL that cannot be sent", h, "{{baseUrl}}/x?filter[name]=1", "http://h:1/x?filter[name]=1", "The URL holds ["),
+                Case(
+                    "a header the HTTP client will not set",
+                    closed,
+                    "{{baseUrl}}/x",
+                    "http://127.0.0.1:$port/x",
+                    "Cannot send the request",
+                    headers = "Expect: 100-continue",
+                ),
+                Case("a failed connection", closed, "{{baseUrl}}/x", "http://127.0.0.1:$port/x", "Connection refused"),
+            )
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val events = events(panel)
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+        val (signals, headers) = UIUtil.findComponentsOfType(form(panel), JBTextArea::class.java).filter { it.isEditable }
+        val stop = button(panel, "Stop")
+        val found = ArrayList<String>()
+        try {
+            for (c in cases) {
+                write(Requests.ENV_FILE, c.env)
+                url.text = c.url
+                signals.text = c.signals
+                headers.text = c.headers
+                setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/old")
+                val before = lines(events).toSet()
+                button(panel, "Connect").doClick()
+                until({ "${c.what} shows no error line" }) { lines(events).any { it !in before } }
+                // A connection that failed is closed after its error is told.
+                settle()
+                val line = lines(events).filter { it !in before }.joinToString(" | ") { it.text }
+                if (c.says !in line) found += "${c.what}: the error line says $line"
+                val tooltip = "error<br>${StringUtil.escapeXmlEntities(c.sent)}"
+                if (status.text != "error" || status.toolTipText != tooltip) {
+                    found += "${c.what}: the status is ${status.text} with the tooltip ${status.toolTipText}, not $tooltip"
+                }
+                if (stop.isEnabled) found += "${c.what}: Stop is enabled"
+            }
+        } finally {
+            remove(Requests.ENV_FILE)
+            InspectorState.getInstance(project).loadState(InspectorState.State())
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    fun `test an error that is not about the request leaves the status of an open stream as it was`() {
+        // What the panel does later on the UI thread runs, so a status it sets there is seen.
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        write(Requests.REQUESTS_FILE, written)
+        // Not a JSON object, so neither Edit variables nor Use baseUrl can change it.
+        write(Requests.ENV_FILE, "[]")
+        val input = TestDialogManager.setTestInputDialog { "a" }
+        val dialog = TestDialogManager.setTestDialog(TestDialog.YES)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(SavedRequest("feed", "/feed", "GET", "", "")))
+            val events = events(panel)
+            val editVariables = UIUtil.findComponentsOfType(panel, ActionLink::class.java).single { it.text == "Edit variables" }
+            showError(panel, "The server is elsewhere.", useBaseUrl = "http://localhost:9")
+            val useBaseUrl =
+                UIUtil.findComponentsOfType(events, ActionLink::class.java).single {
+                    it.text ==
+                        "Use http://localhost:9 in ${Requests.ENV_FILE}"
+                }
+            // A path that leaves the project: Save and Delete are refused, and the default file is still read.
+            settings.state.requestsFile = "../elsewhere/inspector.json"
+            val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+            fun patch(signals: String) =
+                apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+            val failures =
+                listOf<Pair<String, () -> Unit>>(
+                    "a Save that fails" to { button(panel, "Save").doClick() },
+                    "a Delete that fails" to { button(panel, "Delete").doClick() },
+                    "Copy as curl with a variable not set" to {
+                        url.text = "{{nope}}/x"
+                        button(panel, "Copy as curl").doClick()
+                    },
+                    "Edit variables that fails" to { editVariables.doClick() },
+                    "Use baseUrl that fails" to { useBaseUrl.doClick() },
+                    "a signal patch the signal store cannot take" to {
+                        patch("""{"a":[1,2]}""")
+                        patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
+                    },
+                )
+            val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "error" || it.text == "idle" }
+            val stop = button(panel, "Stop")
+            val found = ArrayList<String>()
+            for ((what, fail) in failures) {
+                setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/feed")
+                val before = lines(events).toSet()
+                fail()
+                until({ "$what shows no error line" }) { lines(events).any { it !in before } }
+                settle(100)
+                if (status.text != "open · 200 OK" || status.toolTipText != "open · 200 OK<br>http://h/feed") {
+                    found += "$what: the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (!stop.isEnabled) found += "$what: Stop is disabled"
+            }
+            assertEquals("", found.joinToString("\n"))
+        } finally {
+            TestDialogManager.setTestInputDialog(input)
+            TestDialogManager.setTestDialog(dialog)
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.ENV_FILE)
+            remove(Requests.REQUESTS_FILE)
         }
     }
 

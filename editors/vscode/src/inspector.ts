@@ -85,17 +85,21 @@ export class Inspector {
 
   /**
    * The request with its variables filled in, or null after the reason is posted: an invalid
-   * env file, or a variable that is unknown, misplaced or not set.
+   * env file, or a variable that is unknown, misplaced or not set. With `sending`, the reason is
+   * the status of the request, whose URL is as written since it could not be filled in; `current`
+   * says whether it is still the request of the panel once the env file is read.
    */
-  private async resolve(raw: SavedRequest): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+  private async resolve(raw: SavedRequest, sending = false, current = () => true): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+    const requestUrl = sending ? raw.url : undefined;
     const env = await this.store.environment();
+    if (!current()) return null;
     if (env.errors.length) {
-      this.post({ type: "error", message: env.errors.join(" "), define: [] });
+      this.post({ type: "error", message: env.errors.join(" "), define: [], requestUrl });
       return null;
     }
     const { request, errors, unset } = resolveRequest(raw, env.vars);
     if (errors.length) {
-      this.post({ type: "error", message: errors.join(" "), define: unset });
+      this.post({ type: "error", message: errors.join(" "), define: unset, requestUrl });
       return null;
     }
     return { request, vars: env.vars };
@@ -184,23 +188,28 @@ export class Inspector {
 
   private async connect(raw: SavedRequest): Promise<void> {
     this.stop();
-    const resolved = await this.resolve(raw);
-    if (!resolved) return;
+    // Made before the request is prepared, so a Stop or the next Connect meanwhile keeps it from being sent.
+    const abort = new AbortController();
+    this.abort = abort;
+    // A request stopped, or followed by another, no longer speaks for the status: its close can come late.
+    const current = () => !abort.signal.aborted;
+    const resolved = await this.resolve(raw, true, current);
+    if (!resolved || !current()) return;
     const { request, vars } = resolved;
     try {
       JSON.parse(compactSignals(request.signals));
     } catch (e) {
-      this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}` });
+      this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}`, requestUrl: request.url });
       return;
     }
     await this.store.addRecent(raw);
     void this.pushRequests();
+    if (!current()) return;
     const since = Date.now();
-    this.abort = new AbortController();
     await openStream(
       { url: request.url, method: request.method, signals: request.signals, headers: parseHeaderLines(request.headers) },
       {
-        onStatus: (status, detail) => this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
+        onStatus: (status, detail) => current() && this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
         onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),
         onNonSse: (r) => {
           const status = Number.parseInt(r.http, 10);
@@ -216,16 +225,16 @@ export class Inspector {
           this.post({ type: "frame", frame });
         },
         onError: (message) => {
+          if (!current()) return;
           const unreachable = /^(Connection refused|Host not found)/.test(message);
           const server = this.running.current();
           const hint = unreachable ? unreachableHint(raw.url, vars, server) : null;
           const elsewhere = unreachable ? baseUrlSuggestion(vars, server) : null;
-          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere });
-          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined });
-          this.post({ type: "status", status: "idle" });
+          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere, requestUrl: request.url });
+          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined, requestUrl: request.url });
         },
       },
-      this.abort.signal,
+      abort.signal,
     );
   }
 
@@ -458,7 +467,9 @@ function html(cspSource: string): string {
       // A missing variable is added to the env file in one click; an unreachable server opens it to change baseUrl.
       if (m.define) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = m.define.length ? 'Add to .streamlord/env.json' : 'Edit variables'; b.addEventListener('click', () => vscode.postMessage({ type: 'defineVariables', names: m.define })); p.append(b); }
       if (m.useBaseUrl) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = 'Use ' + m.useBaseUrl + ' in .streamlord/env.json'; b.addEventListener('click', () => vscode.postMessage({ type: 'useBaseUrl', url: m.useBaseUrl })); p.append(b); }
-      frames.prepend(p); $('status').className = 'status error'; $('status').textContent = 'error';
+      frames.prepend(p);
+      // An error of the request sent is its status; any other leaves the status of the stream as it is.
+      if (m.requestUrl !== undefined) { const s = $('status'); s.className = 'status error'; s.textContent = 'error'; s.title = m.requestUrl; }
     }
     if (m.type === 'completions') showCompletions(m);
     if (m.type === 'signals') { $('store').textContent = JSON.stringify(m.signals, null, 2); }
