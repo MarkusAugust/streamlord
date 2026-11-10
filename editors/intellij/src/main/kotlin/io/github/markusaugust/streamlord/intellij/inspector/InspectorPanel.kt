@@ -5,6 +5,8 @@ import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.asContextElement
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -13,7 +15,9 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListenerBackgroundable
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.JBColor
@@ -76,13 +80,15 @@ class InspectorPanel(
     private val scope = InspectorService.getInstance(project).scopeFor(parentDisposable)
     private val client = StreamClient(scope)
 
-    /** The saved requests and the variables as last read, off the UI thread; what the form shows and Connect sends. */
-    private var saved: List<SavedRequest> = emptyList()
+    /** The variables as last read, off the UI thread; what the form shows. Connect and the curl export read them again first. */
     private var environment = RequestStore.Environment(emptyList(), emptyList())
 
     /** The request to select once the list is read again, and the read under way. */
     private var selecting: SavedRequest? = null
     private var reading: Job? = null
+
+    /** A Connect that is reading the variables before it sends. */
+    private var connecting: Job? = null
     private var connection: StreamClient.Connection? = null
     private var signals: JsonObject = JsonObject.EMPTY
     private var count = 0
@@ -177,8 +183,9 @@ class InspectorPanel(
         headersField.document.addDocumentListener(watch)
         method.addActionListener { refresh() }
         project.messageBus.connect(parentDisposable).subscribe(
-            com.intellij.openapi.vfs.VirtualFileManager.VFS_CHANGES,
-            object : BulkFileListener {
+            // Off the UI thread: it looks at paths and nothing else.
+            VirtualFileManager.VFS_CHANGES_BG,
+            object : BulkFileListenerBackgroundable {
                 override fun after(events: List<VFileEvent>) {
                     if (events.any { it.path.contains("/.streamlord/") && it.path.endsWith(".json") }) {
                         later { pushRequests(null) }
@@ -204,9 +211,9 @@ class InspectorPanel(
             .register(parentDisposable) { stop() }
         val vars = { environment.vars }
         val typing = { !filling }
-        VariableCompletion(url, Requests.Field.URL, vars, typing)
-        VariableCompletion(signalsField, Requests.Field.SIGNALS, vars, typing)
-        VariableCompletion(headersField, Requests.Field.HEADERS, vars, typing)
+        VariableCompletion(url, Requests.Field.URL, vars, typing, ::later)
+        VariableCompletion(signalsField, Requests.Field.SIGNALS, vars, typing, ::later)
+        VariableCompletion(headersField, Requests.Field.HEADERS, vars, typing, ::later)
         pushRequests(store.lastUsed() ?: SavedRequest("", "{{baseUrl}}/"))
     }
 
@@ -338,7 +345,6 @@ class InspectorPanel(
         saved: List<SavedRequest>,
         env: RequestStore.Environment,
     ) {
-        this.saved = saved
         environment = env
         val recent = store.recent()
         variablesView.text = Requests.describeVariables(env.vars)
@@ -397,8 +403,7 @@ class InspectorPanel(
             )
                 ?: return
         if (name.isBlank()) return
-        write("Could not save the request.") {
-            store.save(current.copy(name = name))
+        change("Could not save the request.", { store.saving(current.copy(name = name)) }) { _, _ ->
             pushRequests(current.copy(name = name))
         }
     }
@@ -409,8 +414,7 @@ class InspectorPanel(
         if (!choice.saved) return
         val ok = Messages.showYesNoDialog(project, "Delete saved request “$name”?", "Delete Request", "Delete", "Cancel", null)
         if (ok != Messages.YES) return
-        write("Could not delete the request.") {
-            store.delete(name)
+        change("Could not delete the request.", { store.deleting(name) }) { _, _ ->
             pushRequests(SavedRequest("", url.text, method.selectedItem as String, signalsField.text, headersField.text))
         }
     }
@@ -434,19 +438,21 @@ class InspectorPanel(
     }
 
     private fun copyCurl() {
-        val (request, _) = resolve(fields()) ?: return
-        try {
-            CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(Requests.toCurl(request)))
-            notify("Streamlord: curl command copied.")
-        } catch (e: Exception) {
-            error(e.message ?: "Could not build the curl command.")
+        val raw = fields()
+        withVariables {
+            val (request, _) = resolve(raw) ?: return@withVariables
+            try {
+                CopyPasteManager.getInstance().setContents(java.awt.datatransfer.StringSelection(Requests.toCurl(request)))
+                notify("Streamlord: curl command copied.")
+            } catch (e: Exception) {
+                error(e.message ?: "Could not build the curl command.")
+            }
         }
     }
 
     /** Add [names] to the env file, creating it when it is missing, and open it. */
     private fun editVariables(names: List<String>) {
-        write("Could not open ${Requests.ENV_FILE}.") {
-            val (file, extended) = store.defineVariables(names)
+        change("Could not open ${Requests.ENV_FILE}.", { store.definingVariables(names) }) { file, extended ->
             OpenFileDescriptor(project, file).navigate(true)
             if (!extended) error("${Requests.ENV_FILE} is not a JSON object, so nothing was added to it.")
         }
@@ -455,6 +461,10 @@ class InspectorPanel(
     private fun connect() {
         stop()
         val raw = fields()
+        connecting = withVariables { send(raw) }
+    }
+
+    private fun send(raw: SavedRequest) {
         val (request, vars) = resolve(raw) ?: return
         try {
             JsonParser.parse(Requests.compactSignals(request.signals))
@@ -515,25 +525,43 @@ class InspectorPanel(
     }
 
     private fun stop() {
+        connecting?.cancel()
+        connecting = null
         connection?.close()
         connection = null
     }
 
     /**
-     * Change the project's files as [change] says, on the UI thread in a context that may write, and
-     * show [failure] or the reason given when it cannot be done.
+     * Change a file of the project: [plan] reads it under a read action in the background, the UI thread
+     * writes what was planned, and [done] gets the file and whether it holds the change. Shows
+     * [failure], or the reason given, when it cannot be done.
      */
-    private fun write(
+    private fun change(
         failure: String,
-        change: () -> Unit,
+        plan: () -> RequestStore.Change,
+        done: (VirtualFile, Boolean) -> Unit,
     ): Job =
-        scope.launch(Dispatchers.EDT) {
+        scope.launch(ModalityState.current().asContextElement()) {
             try {
-                change()
+                val planned = readAction(plan)
+                withContext(Dispatchers.EDT) {
+                    val (file, changed) = store.apply(planned)
+                    done(file, changed)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error(e.message ?: failure)
+                withContext(Dispatchers.EDT) { error(e.message ?: failure) }
+            }
+        }
+
+    /** Read the variables again, as the files and the settings have them now, and then do [use] with them on the UI thread. */
+    private fun withVariables(use: () -> Unit): Job =
+        scope.launch(ModalityState.current().asContextElement()) {
+            val env = readAction { store.environment() }
+            withContext(Dispatchers.EDT) {
+                environment = env
+                use()
             }
         }
 
@@ -682,8 +710,7 @@ class InspectorPanel(
 
     /** Set the env file's `baseUrl` to [url] and open the file, so the change is seen where it was made. */
     private fun useBaseUrl(url: String) {
-        write("Could not open ${Requests.ENV_FILE}.") {
-            val (file, changed) = store.useBaseUrl(url)
+        change("Could not open ${Requests.ENV_FILE}.", { store.usingBaseUrl(url) }) { file, changed ->
             OpenFileDescriptor(project, file).navigate(true)
             if (!changed) error("${Requests.ENV_FILE} is not a JSON object, so baseUrl was not changed.")
         }

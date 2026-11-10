@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -48,6 +49,20 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
+    private fun RequestStore.save(request: SavedRequest) = apply(saving(request))
+
+    private fun RequestStore.delete(name: String) = apply(deleting(name))
+
+    private fun RequestStore.defineVariables(keys: List<String>) = apply(definingVariables(keys))
+
+    private fun RequestStore.useBaseUrl(url: String) = apply(usingBaseUrl(url))
+
+    private fun pump(
+        body: java.io.InputStream,
+        handlers: StreamClient.Handlers,
+        aborted: java.util.concurrent.atomic.AtomicBoolean,
+    ) = runBlocking { StreamClient.pump(body, handlers, aborted) }
+
     /** Wait for what the panel reads off the UI thread, letting the UI thread take the result. */
     private fun await(job: Job) {
         val deadline = System.currentTimeMillis() + 10_000
@@ -55,7 +70,7 @@ class InspectorTest : BasePlatformTestCase() {
             PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
             Thread.sleep(5)
         }
-        assertTrue("the panel did not finish reading", job.isCompleted)
+        assertTrue("the panel did not finish reading", job.isCompleted && !job.isCancelled)
     }
 
     fun `test the client reads a datastar stream as the browser would`() {
@@ -565,7 +580,7 @@ class InspectorTest : BasePlatformTestCase() {
     /** Comments after the last message come back when the stream ends, through the parser's finish. */
     fun `test the comments that end a stream after its last message are shown`() {
         val comments = CopyOnWriteArrayList<String>()
-        StreamClient.pump(
+        pump(
             "data: x\n\n: bye\n".byteInputStream(),
             object : StreamClient.Handlers {
                 override fun onComment(text: String) {
@@ -599,7 +614,7 @@ class InspectorTest : BasePlatformTestCase() {
                 }
             }
         val frames = CopyOnWriteArrayList<DatastarFrame>()
-        StreamClient.pump(
+        pump(
             trickle,
             object : StreamClient.Handlers {
                 override fun onFrame(frame: DatastarFrame) {
@@ -795,10 +810,29 @@ class InspectorTest : BasePlatformTestCase() {
         assertTrue(names().toString(), "feed" in names())
     }
 
-    fun `test a request under way ends when its scope does`() {
+    // A save is planned in the background and written on the UI thread: what changed in between is not written over.
+    fun `test a file changed after a save was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        store.save(SavedRequest("feed", "/feed", "GET", "", ""))
+        val planned = store.saving(SavedRequest("count", "/count", "GET", "", ""))
+        store.save(SavedRequest("pulled", "/pulled", "GET", "", ""))
+
+        try {
+            store.apply(planned)
+            fail("the save wrote over a file that had changed")
+        } catch (e: IllegalStateException) {
+            assertEquals("${Requests.REQUESTS_FILE} changed in the meantime. Try again.", e.message)
+        }
+        assertEquals(listOf("feed", "pulled"), store.saved().map { it.name })
+    }
+
+    // The server takes the connection and never answers, so the request is waiting when its scope ends.
+    fun `test a request waiting for the server ends quietly when its scope does`() {
         val server = java.net.ServerSocket(0)
         try {
+            val connecting = CountDownLatch(1)
             val closed = CountDownLatch(1)
+            val errors = java.util.concurrent.CopyOnWriteArrayList<String>()
             val scope = CoroutineScope(SupervisorJob())
             StreamClient(scope).open(
                 "http://127.0.0.1:${server.localPort}/never",
@@ -811,12 +845,20 @@ class InspectorTest : BasePlatformTestCase() {
                         http: String?,
                         contentType: String?,
                     ) {
-                        if (status == StreamClient.Status.CONNECTING) scope.cancel()
+                        if (status == StreamClient.Status.CONNECTING) connecting.countDown()
                         if (status == StreamClient.Status.CLOSED) closed.countDown()
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
                     }
                 },
             )
+            assertTrue(connecting.await(10, TimeUnit.SECONDS))
+            Thread.sleep(300)
+            scope.cancel()
             assertTrue(closed.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
         } finally {
             server.close()
         }

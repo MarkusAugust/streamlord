@@ -7,9 +7,13 @@ import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import java.io.InputStream
@@ -22,7 +26,6 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.channels.UnresolvedAddressException
 import java.time.Duration
-import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -99,15 +102,11 @@ class StreamClient(
     ): Connection {
         val aborted = AtomicBoolean(false)
         val holder = AtomicReferenceStream()
-        // The HTTP client blocks its thread; interrupting it is how a cancelled request lets go of one.
-        val job =
-            scope.launch(Dispatchers.IO) {
-                runInterruptible { run(url, method, signals, headers, handlers, aborted, holder) }
-            }
+        val job = scope.launch { run(url, method, signals, headers, handlers, aborted, holder) }
         return Connection(job, aborted, holder)
     }
 
-    private fun run(
+    private suspend fun run(
         url: String,
         method: String,
         signals: String,
@@ -146,16 +145,18 @@ class StreamClient(
         handlers.onStatus(Status.CONNECTING)
         try {
             val response =
-                try {
-                    client.send(request, HttpResponse.BodyHandlers.ofInputStream())
-                } catch (e: ConnectException) {
-                    /*
-                     * localhost is 127.0.0.1 first, and Java's client tries no other address. A
-                     * server listening on ::1 alone is reached by curl and the browser, and by the
-                     * VS Code inspector, so it is tried here before the refusal is reported.
-                     */
-                    val v6 = ipv6Loopback(target) ?: throw e
-                    client.send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
+                blocking {
+                    try {
+                        client.send(request, HttpResponse.BodyHandlers.ofInputStream())
+                    } catch (e: ConnectException) {
+                        /*
+                         * localhost is 127.0.0.1 first, and Java's client tries no other address. A
+                         * server listening on ::1 alone is reached by curl and the browser, and by the
+                         * VS Code inspector, so it is tried here before the refusal is reported.
+                         */
+                        val v6 = ipv6Loopback(target) ?: throw e
+                        client.send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
+                    }
                 }
             response.body().use { body ->
                 // Held before anything is read, so a close from here on ends the read; one that came while the
@@ -173,7 +174,7 @@ class StreamClient(
                     val text =
                         Requests.unreadBody(response.statusCode(), contentType) ?: run {
                             // Up to the limit, so a large response does not land in memory whole.
-                            val bytes = body.readNBytes(Requests.NON_STREAM_LIMIT + 1)
+                            val bytes = blocking { body.readNBytes(Requests.NON_STREAM_LIMIT + 1) }
                             val read = String(bytes, 0, minOf(bytes.size, Requests.NON_STREAM_LIMIT), Charsets.UTF_8)
                             if (bytes.size > Requests.NON_STREAM_LIMIT) read + Requests.NON_STREAM_CUT else read
                         }
@@ -192,12 +193,10 @@ class StreamClient(
             }
             handlers.onStatus(Status.CLOSED)
         } catch (e: Exception) {
-            if (aborted.get() || e is CancellationException || e is InterruptedException) {
-                handlers.onStatus(Status.CLOSED)
-                return
-            }
-            handlers.onError(describe(e, url))
+            // A request that was closed, or whose scope ended, has not failed, however the read under way put it.
+            if (!aborted.get() && e !is CancellationException && currentCoroutineContext().isActive) handlers.onError(describe(e, url))
             handlers.onStatus(Status.CLOSED)
+            currentCoroutineContext().ensureActive()
         }
     }
 
@@ -227,7 +226,7 @@ class StreamClient(
          * UTF-8 into U+FFFD, as the browser's decoder does. It is not closed here: closing it waits for a read
          * under way, and [Connection.close] ends one by closing [body] itself.
          */
-        internal fun pump(
+        internal suspend fun pump(
             body: InputStream,
             handlers: Handlers,
             aborted: AtomicBoolean,
@@ -245,7 +244,7 @@ class StreamClient(
             }
             // A byte order mark is the parser's to drop, before each field as the client drops it.
             while (!aborted.get()) {
-                val n = reader.read(buffer)
+                val n = blocking { reader.read(buffer) }
                 if (n < 0) {
                     parser.finish()?.let(::show)
                     break
@@ -253,6 +252,12 @@ class StreamClient(
                 parser.feed(String(buffer, 0, n)).forEach(::show)
             }
         }
+
+        /**
+         * Network I/O, which blocks its thread: on the IO dispatcher for as long as it lasts and no longer, and
+         * interrupted when the request is cancelled, which is how a blocked read lets go.
+         */
+        private suspend fun <T> blocking(io: () -> T): T = runInterruptible(Dispatchers.IO) { io() }
 
         private val LOCALHOST = Regex("""^(https?://(?:[^@/?#]*@)?)localhost(?=[:/?#]|$)""", RegexOption.IGNORE_CASE)
 
