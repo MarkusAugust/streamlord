@@ -12,6 +12,7 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -228,6 +229,19 @@ class InspectorTest : BasePlatformTestCase() {
             Thread.sleep(5)
         }
         assertTrue("the panel did not finish reading", job.isCompleted && !job.isCancelled)
+    }
+
+    /** What an answer does: the status, and the URL it came from. The tool window's queue does not run in a test. */
+    private fun setStatus(
+        panel: InspectorPanel,
+        text: String,
+        status: StreamClient.Status?,
+        url: String?,
+    ) {
+        panel.javaClass
+            .getDeclaredMethod("setStatus", String::class.java, StreamClient.Status::class.java, String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, text, status, url)
     }
 
     /** The form above the event list: the fields and the row of action buttons. */
@@ -1249,13 +1263,67 @@ class InspectorTest : BasePlatformTestCase() {
         val panel = InspectorPanel(project, testRootDisposable)
         await(panel.pushRequests(null))
         val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
-        // What an answer does: the status, and the URL it came from. The tool window's queue does not run in a test.
-        panel.javaClass
-            .getDeclaredMethod("setStatus", String::class.java, StreamClient.Status::class.java, String::class.java)
-            .apply { isAccessible = true }
-            .invoke(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x?a=1&lt=2<b>\"q\"&amp;")
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x?a=1&lt=2<b>")
         assertEquals("open · 200 OK", status.text)
-        assertEquals("http://h/x?a=1&amp;lt=2&lt;b&gt;&quot;q&quot;&amp;amp;", status.toolTipText)
+        assertEquals("open · 200 OK<br>http://h/x?a=1&amp;lt=2&lt;b&gt;", status.toolTipText)
+
+        // The tooltip is of the status that shows: the URL of an earlier request does not stay on it.
+        setStatus(panel, "error", null, null)
+        assertEquals("error", status.toolTipText)
+
+        // A content type is the server's text, as much as the URL is the file's.
+        setStatus(panel, "open · 200 OK · text/<i>\"x\"</i>&", StreamClient.Status.OPEN, "http://h/\"q\"&amp;")
+        assertEquals("open · 200 OK · text/&lt;i&gt;&quot;x&quot;&lt;/i&gt;&amp;<br>http://h/&quot;q&quot;&amp;amp;", status.toolTipText)
+        setStatus(panel, "idle", null, null)
+        assertEquals("idle", status.toolTipText)
+    }
+
+    // A status with a content type is longer than the row has room for in a narrow panel, and the buttons are what is clicked.
+    fun `test a long status gives way to the action buttons`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        val statuses =
+            listOf(
+                "open · 200 OK · text/event-stream; charset=utf-8" to StreamClient.Status.OPEN,
+                "error · 500 Internal Server Error · application/problem+json; charset=utf-8" to null,
+            )
+        val found = ArrayList<String>()
+        for ((text, kind) in statuses) {
+            setStatus(panel, text, kind, "http://h/x")
+            for (width in listOf(360, 460, 900, 360)) {
+                layOut(panel, width)
+                val at = "at $width with ${text.substringBefore(' ')}"
+                val form = form(panel).bounds
+                val label = boundsIn(panel, status)
+                found += outside(panel).map { "$it $at" }
+                if (label.width <= 0 || label.x < 0 || !form.contains(label)) found += "the status at $label outside the form at $form $at"
+                if (label.width > JBUI.scale(160)) found += "the status is ${label.width} wide $at"
+                for (name in ACTION_BUTTONS) {
+                    val button = button(panel, name)
+                    val b = boundsIn(panel, button)
+                    if (b.width <
+                        button.preferredSize.width
+                    ) {
+                        found += "$name is ${b.width} wide and asks for ${button.preferredSize.width} $at"
+                    }
+                    if (label.x < b.x + b.width &&
+                        label.y < b.y + b.height
+                    ) {
+                        found += "the status at $label is not right of or below $name at $b $at"
+                    }
+                }
+            }
+        }
+        assertEquals("", found.joinToString("\n"))
+
+        setStatus(panel, "idle", null, null)
+        layOut(panel, 900)
+        val idle = boundsIn(panel, status)
+        val right = form(panel).x + form(panel).width
+        assertTrue("$idle, the form ends at $right", right - (idle.x + idle.width) in 0..16)
+        val connect = boundsIn(panel, button(panel, "Connect"))
+        assertTrue("$idle beside $connect", idle.y + idle.height / 2 in connect.y..connect.y + connect.height)
     }
 
     fun `test the modified marker asks for the width of its text in the font it has`() {

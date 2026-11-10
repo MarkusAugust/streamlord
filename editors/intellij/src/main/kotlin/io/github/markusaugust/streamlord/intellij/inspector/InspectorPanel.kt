@@ -56,7 +56,6 @@ import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.Font
-import java.awt.KeyboardFocusManager
 import java.awt.Rectangle
 import java.time.Instant
 import java.time.ZoneId
@@ -140,7 +139,20 @@ class InspectorPanel(
 
             override fun getMinimumSize(): Dimension = place()
         }.apply { foreground = JBColor.namedColor("Label.warningForeground", JBColor.ORANGE) }
-    private val status = plainLabel("idle")
+
+    /** Cut when it is long, so the buttons beside it keep their room; its tooltip has it whole. */
+    private val status =
+        object : JBLabel() {
+            override fun getPreferredSize(): Dimension =
+                super.getPreferredSize().let {
+                    Dimension(minOf(it.width, JBUI.scale(STATUS_WIDTH)), it.height)
+                }
+
+            override fun getMinimumSize(): Dimension = Dimension(0, super.getMinimumSize().height)
+        }.apply {
+            putClientProperty("html.disable", true)
+            text = "idle"
+        }
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
     private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
     private val variablesView = JBTextArea("").mono().apply { isEditable = false }
@@ -328,7 +340,7 @@ class InspectorPanel(
                     },
                 )
             }
-        // The status keeps to the right end of the row, where a longer one takes room from the buttons and moves nothing else.
+        // The status keeps to the right end of the row, and is cut before it takes the room of the buttons.
         val row =
             JPanel(BorderLayout(JBUI.scale(GAP), 0)).apply {
                 add(actions, BorderLayout.CENTER)
@@ -354,9 +366,6 @@ class InspectorPanel(
             lineWrap = true
             wrapStyleWord = true
             font = JBFont.label()
-            // Tab goes on to the next component, as from a label; a text area keeps the key to itself.
-            setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, null)
-            setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, null)
         }
 
         /** As high as its text is at the width it has, and asking for little width itself: a text area asks for the width it was last given, and would hold a form at it. */
@@ -779,7 +788,7 @@ class InspectorPanel(
 
     // ---- rendering -----------------------------------------------------------------------------
 
-    /** Show the status; with [url], the request it is the status of is its tooltip. */
+    /** Show the status; its tooltip has it whole, with [url] when it is the status of a request. */
     private fun setStatus(
         text: String,
         s: StreamClient.Status?,
@@ -787,7 +796,7 @@ class InspectorPanel(
     ) {
         status.text = text
         // The IDE renders a tooltip as HTML, whatever it starts with, and a URL comes from a shared file.
-        if (url != null) status.toolTipText = StringUtil.escapeXmlEntities(url)
+        status.toolTipText = listOfNotNull(text, url).joinToString("<br>") { StringUtil.escapeXmlEntities(it) }
         status.foreground =
             when (s) {
                 StreamClient.Status.OPEN -> JBColor.namedColor("Label.successForeground", JBColor(0x368746, 0x50A661))
@@ -992,6 +1001,7 @@ class InspectorPanel(
         private const val GAP = 6
         private const val FIELD_COLUMNS = 12
         private const val FIELD_WIDTH = 60
+        private const val STATUS_WIDTH = 160
 
         /** How long a failed request waits for the server to finish logging why. */
         private const val LOG_GRACE_MS = 400L
