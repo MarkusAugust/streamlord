@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.impl.LoadTextUtil
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
@@ -355,6 +356,8 @@ class SignalIndex(
         if (counts == refreshedAt) return
         val seen = HashSet<String>()
         for (vf in projectFiles(counts.drop(1))) {
+            // Reading a file is no PSI work, so nothing else asks: a write that waits must be able to stop this read.
+            ProgressManager.checkCanceled()
             if (!vf.isValid) continue
             val language = languageOf(vf) ?: continue
             seen += vf.path
