@@ -1138,31 +1138,46 @@ public object Requests {
      * What is wrong with a configured requests-file path, or null: it has to stay inside the
      * project, since the setting may come from a checked-in file.
      */
-    public fun requestsPathProblem(path: String): String? =
+    public fun requestsPathProblem(path: String): String? = requestsPathProblem(path, "project")
+
+    /** The same, with [folder] as what the editor calls the folder the path starts from: a project, a workspace. */
+    public fun requestsPathProblem(
+        path: String,
+        folder: String,
+    ): String? =
         when {
-            empty(path) -> null
+            empty(path) -> {
+                null
+            }
 
-            path.startsWith(
-                "/",
-            ) ||
-                path.startsWith(
-                    "\\",
-                ) || DRIVE.containsMatchIn(path) -> "The requests file $path is not inside the project: use a project-relative path."
+            path.startsWith("/") || path.startsWith("\\") || DRIVE.containsMatchIn(path) -> {
+                "The requests file $path is not inside the $folder: use a $folder-relative path."
+            }
 
-            path.split('/', '\\').any { it == ".." } -> "The requests file $path leaves the project: use a path without .. in it."
+            path.split('/', '\\').any { it == ".." } -> {
+                "The requests file $path leaves the $folder: use a path without .. in it."
+            }
 
-            '\\' in path -> "The requests file $path holds a backslash: write the path with /."
+            '\\' in path -> {
+                "The requests file $path holds a backslash: write the path with /."
+            }
 
-            path.endsWith("/") -> "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+            path.endsWith("/") -> {
+                "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+            }
 
             path
                 .trim(' ', '\t', '\r', '\n')
                 .split('/')
                 .filter { it.isNotEmpty() && it != "." }
                 .joinToString("/")
-                .lowercase() == ENV_FILE -> "The requests file cannot be $ENV_FILE: that file holds the variables."
+                .lowercase() == ENV_FILE -> {
+                "The requests file cannot be $ENV_FILE: that file holds the variables."
+            }
 
-            else -> null
+            else -> {
+                null
+            }
         }
 
     private val DRIVE = regex("""^[A-Za-z]:""")

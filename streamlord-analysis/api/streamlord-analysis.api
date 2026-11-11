@@ -780,6 +780,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public final fun requestKey (Lio/github/markusaugust/streamlord/analysis/SavedRequest;)Ljava/lang/String;
 	public final fun requestUrl (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun requestsPathProblem (Ljava/lang/String;)Ljava/lang/String;
+	public final fun requestsPathProblem (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public final fun resolveRequest (Lio/github/markusaugust/streamlord/analysis/SavedRequest;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/Requests$Resolved;
 	public final fun routeHeaders (Lio/github/markusaugust/streamlord/analysis/Route;)Ljava/lang/String;
 	public final fun routeOptional (Lio/github/markusaugust/streamlord/analysis/Route;)Ljava/util/List;
