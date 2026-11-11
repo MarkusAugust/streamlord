@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<body>
+  <!-- The signals are defined in kotlin/Views.kt and kotlin/Fragments.kt. -->
+  <section id="dashboard">
+    <h1 data-text="$heroName"></h1>
+    <p data-text="$hero.strength + $hero.wisdom"></p>
+    <p data-show="$questOpen" data-class:urgent="$quests.urgent > 0">Quests</p>
+    <button data-on:click="$questOpen = !$questOpen; @post('/quests/' + $selectedQuest)">Open</button>
+    <input data-bind:search-text>
+    <span data-text="$searchText.length"></span>
+    <span data-text="$nobodyDefinesThis"></span>
+    <span data-text="$hero.nobodyDefinesThis"></span>
+  </section>
+</body>
+</html>

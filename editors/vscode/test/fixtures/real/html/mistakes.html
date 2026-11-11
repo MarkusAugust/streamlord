@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<body data-signals:draft="''" data-signals:saving="false">
+  <button data-on:click="@GET('/x')">an action in the wrong case</button>
+  <button data-on:click="@get ('/x')">a space before the parenthesis</button>
+  <button data-on:click="@fetch('/x')">an action Datastar has not got</button>
+  <button data-on:click="$draft +">a syntax error</button>
+  <button data-on:click="  ">an empty expression</button>
+  <button data-on:click>no value</button>
+  <button data-on="x()">no key</button>
+  <button data-onn:click="x()">a misspelt attribute</button>
+  <button data-on-click="x()">the old hyphen form</button>
+  <button data-on:click__debunce.500ms="x()">a misspelt modifier</button>
+  <button data-on:click__debounce.5x="x()">a modifier argument that is no time</button>
+  <button data-on:myEvent="x()">a camelCase event</button>
+  <button data-star-on:click="x()">the prefix of the aliased bundle</button>
+  <p data-text:x="$draft">a key where none is taken</p>
+  <p data-text="$my-draft">a hyphen in a signal name</p>
+  <p data-text="$drafty">a signal nothing defines</p>
+  <p data-text="/$draft/.test('x')">a signal inside a regular expression</p>
+  <p data-text="((n) => { const d = n * 2; return d })(21)">a semicolon in an arrow body</p>
+  <p data-text="patch.a" data-show="evt">names only other attributes are handed</p>
+  <p data-computed="$draft + 1">a computed without a key or an object</p>
+  <input data-bind="$draft">
+  <input data-bind="{draft}">
+  <input data-bind:draft="other">
+  <span data-indicator></span>
+  <span data-indicator:saving="saving"></span>
+  <span data-indicator:idle></span>
+  <pre data-json-signals="{include: '//i'}"></pre>
+  <div data-ignore="yes">a value where none is taken</div>
+  <div data-nonce="abc">a nonce outside the html element</div>
+  <div data-init__delay="1"></div>
+  <div data-persist>a Pro attribute</div>
+  <button data-on:click="@clipboard('x')">a Pro action</button>
+  <button data-on:click="$unused = 1">a signal written and never read</button>
+  <button data-on:click="@post('/save', {contentTyp: 'form', retry: 'sometimes'})">options that are none</button>
+</body>
+</html>
