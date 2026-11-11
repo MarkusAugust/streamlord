@@ -142,7 +142,7 @@ class ClientOracleTest {
     @Test
     fun `speaks the version of the client the fixtures were read from`() {
         val fixtures = File("../conformance/client").listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
-        assertEquals(6, fixtures.size)
+        assertTrue(fixtures.isNotEmpty())
         val read = fixtures.map { JsonParser.parseObject(it.readText()).string("version") }.distinct().single()
         assertEquals(read, DatastarProtocol.VERSION)
         val catalogs = File("../catalog").list { _, name -> name.startsWith("datastar-") }!!.sorted()

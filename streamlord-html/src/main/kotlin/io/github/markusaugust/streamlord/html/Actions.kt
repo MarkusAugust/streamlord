@@ -54,21 +54,6 @@ public class FetchOptions {
     /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`. Overrides [payload]. */
     public var payloadExpr: String? = null
 
-    /**
-     * Options the client applies to a non-SSE response regardless of its `datastar-*` headers.
-     *
-     * Datastar's client names this option in its types and does not act on it: `fetch.ts` never
-     * reads `responseOverrides` from the action's arguments, so the response is patched by its
-     * headers alone, and the reference does not list the option. Set the `datastar-*` headers on
-     * the response instead, which `respondElements` does.
-     */
-    public var responseOverrides: ResponseOverrides? = null
-
-    /** Configure [responseOverrides] inline. */
-    public fun responseOverrides(block: ResponseOverrides.() -> Unit) {
-        responseOverrides = ResponseOverrides().apply(block)
-    }
-
     public enum class ContentType(
         public val wire: String,
     ) {
@@ -91,30 +76,6 @@ public class FetchOptions {
         AUTO("auto"),
         CLEANUP("cleanup"),
         DISABLED("disabled"),
-    }
-
-    /**
-     * Overrides for non-SSE responses: the element options for a `text/html` body, or
-     * `onlyIfMissing` for an `application/json` body.
-     */
-    public class ResponseOverrides {
-        public var selector: String? = null
-        public var mode: ElementPatchMode? = null
-        public var namespace: ElementNamespace? = null
-        public var useViewTransition: Boolean? = null
-        public var onlyIfMissing: Boolean? = null
-
-        internal fun toJs(): String? {
-            val entries =
-                buildList {
-                    selector?.let { add("selector: ${js(it)}") }
-                    mode?.let { add("mode: ${js(it.wire)}") }
-                    namespace?.let { add("namespace: ${js(it.wire)}") }
-                    useViewTransition?.let { add("useViewTransition: $it") }
-                    onlyIfMissing?.let { add("onlyIfMissing: $it") }
-                }
-            return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
-        }
     }
 
     /** Render as a JavaScript object literal, or `null` when every option is at its default. */
@@ -140,7 +101,6 @@ public class FetchOptions {
                 }
                 requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
                 (payloadExpr ?: payload?.let { JsLiteral.write(it) })?.let { add("payload: $it") }
-                responseOverrides?.toJs()?.let { add("responseOverrides: $it") }
             }
         return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
     }

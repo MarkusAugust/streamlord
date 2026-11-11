@@ -1244,45 +1244,6 @@ class DslAsTheClientReadsItTest {
                     )
                 }
             },
-            dslCase(
-                "post with response overrides the client does not read",
-                "post",
-                probe =
-                    mapOf(
-                        "rounds" to 1,
-                        "respond" to
-                            mapOf("status" to 200, "headers" to mapOf("Content-Type" to "text/html"), "body" to "<div id=\"t\">new</div>"),
-                    ),
-                expect = {
-                    listens("button", "click")
-                    request("POST", "http://localhost/x", "{}", JSON_BODY)
-                    heard("button", "click", 0)
-                    // Datastar 1.0.5's fetch never takes responseOverrides from the options, so the
-                    // element is morphed by its id, as the headers alone say.
-                    text("t", "new")
-                    listensPlain("AbortSignal", "abort")
-                },
-            ) {
-                div {
-                    id = "t"
-                    +"old"
-                }
-                div {
-                    id = "other"
-                    +"other"
-                }
-                button {
-                    dataOnClick(
-                        post("/x") {
-                            responseOverrides {
-                                selector = "#other"
-                                mode =
-                                    io.github.markusaugust.streamlord.core.domain.ElementPatchMode.INNER
-                            }
-                        },
-                    )
-                }
-            },
             // Two clicks on requests that are never answered: by default the second cancels the first.
             dslCase(
                 "get cancels the request before it",

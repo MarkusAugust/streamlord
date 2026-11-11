@@ -18,6 +18,11 @@ All notable changes to Streamlord are recorded here. The format follows
   take it after `useViewTransition`. Kotlin source that names its arguments compiles as before; a
   call that passes what comes after `useViewTransition` by position, and code compiled against the
   old signatures, needs a change or a rebuild.
+- `FetchOptions.responseOverrides` and the class `ResponseOverrides` in streamlord-html are gone,
+  and the editors no longer offer `responseOverrides` among a backend action's options. Datastar's
+  client never read the option, so it changed nothing on the page, and the reference no longer
+  lists it. Set the `datastar-*` headers on the response instead, which `respondElements` and
+  `datastarElements` do from their own arguments.
 - `ClientRewrite.runs` in streamlord-core (internal API) is a list of `Run`, each with where its
   string or template literal opens, where it was a list of ranges.
 

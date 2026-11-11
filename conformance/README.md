@@ -38,6 +38,7 @@ globals it touches at module load, and calls the exported functions. The fixture
 | `tags.json` | `utils/tags.ts`: `tagToMs`, `tagHas`, `tagFirst`; `utils/timing.ts`: `modifyTiming` | what the client reads from a modifier's tags, and a trace of the timers it sets and the calls it makes for each timing modifier of `data-on:click` |
 | `signal-store.json` | `utils/paths.ts`: `pathToObj`; `engine/signals.ts`: `mergePatch`, `filtered`; `utils/text.ts`: `isStringTrue` | the object a list of paths becomes and what `Object.prototype` gains on the way, the root after a store is merged and what `filtered` sends of it with the fetch default exclude, and which values read as `true` |
 | `plugins.json` | `plugins/attributes/*.ts`: the argument each passes to `attribute()` | each plugin's `requirement`, `returnsValue` and `argNames`, recorded by bundling the plugins with an `@engine` whose `attribute()` records it; `CatalogTest` holds the catalog to them |
+| `fetch-options.json` | `plugins/actions/fetch.ts`: what each backend action reads from its options | the option names each of `@get`, `@post`, `@put`, `@patch`, `@delete` and `@query` reads, recorded by running it with a Proxy for its options; `ClientOracleTest` holds the catalog's fetch options to them |
 
 The tests are the `ClientOracleTest` of each Kotlin module and `clientOracle.test.ts` in the
 editor. Where Streamlord deliberately reads a thing differently, the test says so next to the
@@ -121,8 +122,7 @@ commands above. Then they hold the `read` to what the case means, written by han
 terms and never computed with the DSL's own code: the event the client must listen to, the signal
 it must store, the class it must set, the wait it must take, the request it must send. Listeners,
 timers, requests, errors and the store compare whole, so an extra listener fails too, and so does
-a timer the clock never reached. A case that writes an option the client ignores, such as
-`responseOverrides`, holds the reading that it changed nothing. Each test
+a timer the clock never reached. Each test
 also holds the cases to the catalog: every attribute in each of its forms, every modifier, every
 tag of a duration modifier, every value of an enum one, every action, every fetch option and every
 Kotlin function must be reached by a case, counted from the attributes the client parsed, with an
