@@ -110,6 +110,16 @@ kotlin {
     }
 }
 
+// The JVM tests of the two modules hold bounds on time, and the Kotlin/JS compiler takes every
+// core it is given: in a build that runs both, it waits for them.
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("KotlinJs") }.configureEach {
+    mustRunAfter(core.tasks.withType<Test>(), analysis.tasks.withType<Test>())
+}
+
+// Nothing here is assembled for anyone but the extension, which asks for `port`: a build of the
+// repository compiles this project once, for its tests.
+tasks.named("assemble") { setDependsOn(emptyList<Any>()) }
+
 /*
  * The library as the extension imports it: the two modules and the TypeScript types the compiler
  * wrote for the port. Kotlin marks each interface it exports with a property no TypeScript object

@@ -40,6 +40,7 @@ public actual fun Regex.groupRange(
     match: MatchResult,
     group: Int,
 ): IntRange? {
+    if (indexed.size >= 4096) indexed.clear()
     val again =
         indexed.getOrPut(this) {
             js("RegExp")(pattern, if (RegexOption.IGNORE_CASE in options) "duyi" else "duy")
