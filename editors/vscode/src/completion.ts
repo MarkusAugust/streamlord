@@ -101,14 +101,13 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
     const before = string ? tagBeforeCaretInString(string, offset, prefix) : tagBeforeCaret(src, offset, prefix);
     if (before === null) return [];
-    // On an attribute name inside a tag: <div data-on:cl|
-    // What comes before is whitespace-separated runs of plain characters and quoted strings, each
-    // character read one way only. Telling names from values instead made `<a != != …` backtrack
-    // exponentially, and anything stricter than this loses template code and Kotlin's \" quotes.
-    const inName = /<([A-Za-z][A-Za-z0-9:-]*)(?:\s+(?:[^\s<>"']|"[^"]*"|'[^']*')+)*\s+([^\s<>="']*)$/.exec(before);
-    if (!inName) return [];
-    const partial = inName[2] ?? "";
-    const tagName = (inName[1] ?? "").toLowerCase();
+    // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret
+    // is in the tag and in no value; the name is what follows the last white space or slash, after
+    // the tag's own name, and one holding `=` is an unquoted value: as StreamlordCompletionContributor.kt reads it.
+    const head = /^<([A-Za-z][^\s/>]*)/.exec(before);
+    const partial = /[^\s/]*$/.exec(before)?.[0] ?? "";
+    if (!head || before.length - partial.length <= head[0].length || /[="'<>]/.test(partial)) return [];
+    const tagName = (head[1] ?? "").toLowerCase();
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
     // The event of data-on, which VS Code's HTML service knows nothing of, in any file.
     if (partial.toLowerCase().startsWith(`${prefix}on:`)) return this.eventItems(partial.slice(prefix.length + 3), src, offset, position);

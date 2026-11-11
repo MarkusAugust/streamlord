@@ -255,14 +255,38 @@ class CompletionTest : StreamlordTestCase() {
                 "// language=HTML\nval s = \"<div\" + \" data-on:click__<caret>\"",
                 "// language=HTML\nval s = \"<div\\n\" + \"  data-on:click__<caret>\"",
             )
+        assertModifiersInjected(sources)
+    }
+
+    /** That each Kotlin source puts its caret in injected HTML and gets the modifiers of data-on, listing every one that does not. */
+    private fun assertModifiersInjected(sources: List<String>) {
         val wrong =
             sources.mapIndexedNotNull { n, source ->
-                myFixture.configureByText("Joined$n.kt", source)
+                myFixture.configureByText("Injected$n.kt", source)
                 val injected = caretInInjectedHtml()
                 val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
                 if (injected && items == onModifiers) null else "$source -> injected $injected, $items"
             }
         assertEmpty(wrong.joinToString("\n"), wrong)
+    }
+
+    fun `test a backslash in a raw string is text`() {
+        assertModifiersInjected(
+            listOf(
+                "// language=HTML\nval s = \"\"\"<div a=\\\" data-on:click__<caret>\"\"\"",
+                "// language=HTML\nval s = \"\"\"<div a=\\n data-on:click__<caret>\"\"\"",
+            ),
+        )
+    }
+
+    fun `test an escaped backslash in an ordinary string stays one`() {
+        assertModifiersInjected(listOf("// language=HTML\nval s = \"<div a=\\\\ data-on:click__<caret>\""))
+    }
+
+    fun `test a sum of a raw and an ordinary literal reads each by its own rule`() {
+        assertModifiersInjected(
+            listOf("// language=HTML\nval s = \"\"\"<div a=\\\" \"\"\" + \" data-show=\\\"x\\\" data-on:click__<caret>\""),
+        )
     }
 
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {

@@ -85,7 +85,15 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     offerAttributeNames = !yieldNames,
                     valueFile = file,
                     // A fragment injected into Kotlin holds the strings' escapes, joined over every literal of the markup.
-                    kotlinEscapes = hostFile is KtFile,
+                    kotlinEscapes =
+                        (hostFile as? KtFile)?.let { kt ->
+                            val strings = analysis.analyzer.lex(kt.text).strings
+                            // An ordinary literal escapes with a backslash; in a raw one it is text.
+                            { at: Int ->
+                                val host = manager.injectedToHost(file, at)
+                                strings.firstOrNull { host >= it.contentStart && host < it.contentEnd }?.raw == false
+                            }
+                        },
                 ).complete()
             }
         }
@@ -216,8 +224,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
         val valueFile: PsiFile?,
         /** The HTML string in Kotlin the caret is in, read decoded; without it [src] is markup. */
         val string: KotlinString? = null,
-        /** Whether [src] is markup injected into Kotlin, holding the strings' escapes as written. */
-        val kotlinEscapes: Boolean = false,
+        /** For markup injected into Kotlin, which holds the strings' escapes as written: whether an offset in [src] is in an ordinary literal. */
+        val kotlinEscapes: ((Int) -> Boolean)? = null,
     ) {
         val catalog: Catalog = analysis.catalog
         val prefix: String = analysis.prefix
@@ -235,18 +243,16 @@ class StreamlordCompletionContributor : CompletionContributor() {
             val before =
                 when {
                     string != null -> tagBeforeCaret(string, offset, prefix)
-                    kotlinEscapes -> tagBeforeCaret(withoutKotlinEscapes(src), offset, prefix, templates = false)
+                    kotlinEscapes != null -> tagBeforeCaret(withoutKotlinEscapes(src, kotlinEscapes), offset, prefix, templates = false)
                     else -> tagBeforeCaret(src, offset, prefix)
                 } ?: return false
-            // On an attribute name inside a tag: <div data-on:cl|. What comes before is whitespace-separated runs of
-            // plain characters and quoted strings, as completion.ts reads it, so a quote left open is a value, not a name.
-            val inName =
-                Regex(
-                    """<([A-Za-z][A-Za-z0-9:-]*)(?:\s+(?:[^\s<>"']|"[^"]*"|'[^']*')+)*\s+([^\s<>="']*)$""",
-                ).find(before)
-                    ?: return false
-            val partial = inName.groupValues[2]
-            val tagName = inName.groupValues[1].lowercase()
+            // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret is in
+            // the tag and in no value; the name is what follows the last white space or slash, after the tag's own name,
+            // and one holding `=` is an unquoted value, as completion.ts reads it.
+            val head = Regex("""^<([A-Za-z][^\s/>]*)""").find(before) ?: return false
+            val partial = Regex("""[^\s/]*$""").find(before)?.value.orEmpty()
+            if (before.length - partial.length <= head.value.length || partial.any { it in "=\"'<>" }) return false
+            val tagName = head.groupValues[1].lowercase()
             if ("__" in partial) {
                 modifierItems(partial)
                 return false
@@ -541,10 +547,15 @@ private fun CompletionResultSet.addFixed(element: LookupElement) = addElement(Fi
 /**
  * [markup] with each Kotlin escape in it read as what it stands for, at the same length, so offsets
  * into it still hold: in `\"`, `\'`, `\$` and `\\` the backslash is a space before the character,
- * and `\n`, `\t`, `\r` and `\b` are white space.
+ * and `\n`, `\t`, `\r` and `\b` are white space. A backslash at an offset [escapes] does not take,
+ * one in a raw literal, is text.
  */
-internal fun withoutKotlinEscapes(markup: String): String =
+internal fun withoutKotlinEscapes(
+    markup: String,
+    escapes: (Int) -> Boolean,
+): String =
     Regex("""\\(.)""").replace(markup) { m ->
+        if (!escapes(m.range.first)) return@replace m.value
         when (val escaped = m.groupValues[1]) {
             "\"", "'", "$", "\\" -> " $escaped"
             "n", "t", "r", "b" -> "  "
