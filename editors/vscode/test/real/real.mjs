@@ -76,6 +76,8 @@ async function runEditor() {
   const child = spawn(
     code,
     [
+      // First: Code's command line takes the word after a switch it does not know, such as Chromium's below, for that switch's value.
+      workspace,
       `--extensionDevelopmentPath=${extension}`,
       `--extensionDevelopmentPath=${join(here, "languages")}`,
       `--extensionTestsPath=${join(here, "host.js")}`,
@@ -88,7 +90,6 @@ async function runEditor() {
       // Chromium slows the timers of a window that is covered or in the background, and the run with them.
       "--disable-renderer-backgrounding",
       "--disable-backgrounding-occluded-windows",
-      workspace,
     ],
     { env, stdio: ["ignore", "ignore", "pipe"] },
   );
