@@ -90,8 +90,9 @@ jobs:
               editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
               # The site highlights its code with the extension's grammars and palette, and shows its icon.
               editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;
-              # The analysis compiled to JavaScript: a project of the Gradle build, which builds and tests it.
-              editors/vscode/analysis-js/*) vscode=true; kotlin=true ;;
+              # The analysis compiled to JavaScript: a project of the Gradle build, which builds and tests
+              # it, and which the plugin's build and the image's configure with every other project.
+              editors/vscode/analysis-js/*) vscode=true; kotlin=true; intellij=true; image=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
               # The catalog feeds the analysis, which the image bundles for /judge, VS Code's generated
