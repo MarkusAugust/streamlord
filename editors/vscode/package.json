@@ -232,7 +232,8 @@
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build",
     "test:live": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
-    "generate": "node scripts/generate.mjs"
+    "generate": "node scripts/generate.mjs",
+    "real": "node test/real/real.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
