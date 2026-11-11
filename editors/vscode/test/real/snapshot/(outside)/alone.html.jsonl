@@ -6,7 +6,9 @@
 {"what":"hover","at":"2:2-2:3","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"2:2-2:3"}]}
 {"what":"hover","at":"2:4-2:13","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"2:4-2:13"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"2:4-2:13"}]}
 {"what":"hover","at":"2:22-2:23","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"2:22-2:23"}]}
+{"what":"definition","at":"1:19-1:24","answers":[{"file":"(outside)/alone.html","range":"1:19-1:24"}]}
+{"what":"references","at":"1:19-1:24","answers":[{"file":"(outside)/alone.html","range":"1:19-1:24"}]}
 {"what":"rename","at":"1:1-1:18","error":"No signal here to rename."}
 {"what":"rename","at":"1:19-1:24","placeholder":"alone","range":"1:19-1:24"}
 {"what":"rename","at":"1:25-3:1","error":"No signal here to rename."}
-{"what":"renamed","at":"1:19-1:24","edits":[],"to":"renamedSignal"}
+{"what":"renamed","at":"1:19-1:24","edits":[{"file":"(outside)/alone.html","range":"1:19-1:24","text":"renamed-signal"}],"to":"renamedSignal"}
