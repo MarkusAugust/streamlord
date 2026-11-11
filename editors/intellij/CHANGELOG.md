@@ -2,6 +2,61 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.14.0
+
+- An attribute on a line of its own, in a tag opened on a line above, gets its completions: the
+  events after `data-on:`, the modifiers after `__` and their values, and in a Kotlin string the
+  attribute names as well. Completion read only the caret's line, so it found no tag there and
+  offered nothing. The tag is now read as the browser reads the markup, so the text of a
+  `<script>`, `<style>`, `<textarea>` or `<title>`, a comment and a quoted value hold no tag.
+- HTML injected into Kotlin is read whole, also when it is joined from several strings, with
+  the escapes of an ordinary string read as what they stand for and a backslash in a `"""` string
+  read as text.
+- The Stream Inspector reads `.streamlord/inspector.json` as an open editor has it, saved or not,
+  as it reads `env.json`, and the Request list follows it as you type. **Save** and **Delete**
+  change the open editor's text as one edit that can be undone, where they wrote the file
+  underneath it and what was typed and not saved was lost. A requests file at a path the settings
+  name outside `.streamlord/` is followed as well, however the path is written.
+- **Save** and **Delete** change only the one entry and leave the rest of the requests file byte
+  for byte, where they wrote it anew and dropped an entry without a `url`, members of your own
+  such as a `"note"`, and the object form of `signals` and `headers`. Nothing is written when a
+  request is saved as it was read.
+- A requests file whose root is a list, whose `requests` is no list or whose `version` is not 1 is
+  said to be no requests file and left alone, where the next save wrote over it. An empty file is
+  a file without requests.
+- The inspector says under the Request list what it does not read: an entry without a `name` or a
+  `url`, and a second entry of a name, which a save of that name used to delete. It says there as
+  well when the setting for the requests file names a path it refuses. The setting no longer takes
+  `.streamlord/env.json`, a path with a backslash or one that ends in `/`.
+- A header value in `inspector.json` that is an object or a list is read as it is written, less
+  its white space, so both editors send the same header.
+- The status says "error" only for an error that keeps the request from being sent or ends it,
+  and its tooltip names that request's URL. A failed Save, Delete, Edit variables, Use baseUrl,
+  Copy as curl or signal patch while a stream was open set it to "error" though the stream went
+  on. A request that was stopped, or followed by another, no longer sets the status or shows an
+  error when its close or its error comes late.
+- The URL shown under the URL field is the one that is sent, with its params encoded.
+- **Save** and **Delete** stay where they are when "modified" appears beside them. They moved to
+  the left, so a click where Save stood hit Delete.
+- The inspector applies the settings at once: the requests file and the default base URL are read
+  again when the settings are applied, and Connect and Copy as curl read the variables again first.
+  The settings page says in the field when it refuses the path of the requests file.
+- A long error in the inspector's list of events is read whole, on as many lines as it takes, and
+  so is the URL under the URL field. The fields give way in a narrow tool window and the action
+  buttons go on to a second line, where Save and Delete were laid out past the edge.
+- The tooltip of the inspector's status shows the URL as written, where a URL with `&copy=1`
+  showed a copyright sign and markup in a URL from a shared requests file was rendered. It is set
+  anew with each status, where it kept the URL of an earlier request.
+- **Stop** is disabled until a request is connecting or open, and after a request fails.
+- The plugin no longer asks the indexes or reads files on the UI thread where it did: the
+  inspector reads its files and sends its requests in the background, typing `(` or `,` asks in
+  the background whether there is parameter info to show, and a signal rename finds its signal
+  under a progress bar. Open Stream Inspector works while the IDE indexes, the signal index stops
+  for a write that waits on it, and Re-index Signals can be cancelled from the status bar.
+- The documentation for Datastar attributes and actions goes through the platform's
+  Documentation Target API. Where another plugin documents the same `data-*` attribute, both
+  answers are shown, where that answer hid Streamlord's.
+
 ## 0.13.0
 
 - The messages and fixes for `interpolate` call a `%s` a placeholder.
