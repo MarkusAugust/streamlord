@@ -870,7 +870,7 @@ export function requestUrl(url: string, method: string, signalsJson: string): st
   const fragment = hash < 0 ? "" : url.slice(hash);
   const beforeFragment = hash < 0 ? url : url.slice(0, hash);
   const mark = beforeFragment.indexOf("?");
-  // The client sets the parameter (fetch.ts:149 in 1.0.4): URLSearchParams.set puts it where the
+  // The client sets the parameter (fetch.ts:149 in 1.0.5): URLSearchParams.set puts it where the
   // first one stands, written with a value or without, drops the others, and appends it if there is none.
   // It reads a name as a form does, `+` as a space and %XX as a byte, so data%73tar is the parameter too;
   // a byte past ASCII stays one character, which is enough to tell it from datastar.
@@ -899,7 +899,7 @@ export function parseHeaderLines(text: string): Record<string, string> {
   return Object.fromEntries(out);
 }
 
-/** What Datastar's client sends as Accept, and so what the inspector sends (fetch.ts:82 in 1.0.4). */
+/** What Datastar's client sends as Accept, and so what the inspector sends (fetch.ts:82 in 1.0.5). */
 export const ACCEPT = "text/event-stream, text/html, application/json";
 
 /** How much of a response without a stream the inspector reads and shows. */
@@ -929,7 +929,7 @@ export function readsAsStream(status: number, contentType: string | null): boole
 }
 
 /**
- * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
+ * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.5), then the user's,
  * which replace one of the same name. The client's `Object.assign` replaces only the same spelling
  * and `fetch` then joins the two values; the inspector sends the user's alone.
  */

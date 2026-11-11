@@ -1257,7 +1257,7 @@ class DslAsTheClientReadsItTest {
                     listens("button", "click")
                     request("POST", "http://localhost/x", "{}", JSON_BODY)
                     heard("button", "click", 0)
-                    // Datastar 1.0.4's fetch never takes responseOverrides from the options, so the
+                    // Datastar 1.0.5's fetch never takes responseOverrides from the options, so the
                     // element is morphed by its id, as the headers alone say.
                     text("t", "new")
                     listensPlain("AbortSignal", "abort")

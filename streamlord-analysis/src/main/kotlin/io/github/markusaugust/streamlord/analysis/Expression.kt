@@ -386,7 +386,7 @@ private fun delimitedEnd(
 
 /**
  * The statements of a value-returning expression, as `statementRe` of Datastar's `genRx` matches
- * them (engine.ts:415-416 in 1.0.4): runs of anything but `;`, where a quoted string, a regex
+ * them (engine.ts in 1.0.5): runs of anything but `;`, where a quoted string, a regex
  * literal and a no-argument IIFE are stepped over whole, `;` and all. Written as a scan rather than
  * the client's one regular expression, which Java's engine recurses on and overflows for a few
  * kilobytes of text; the two agree token for token, since each alternative is tried in the client's
@@ -430,10 +430,17 @@ internal fun clientSignalReads(text: String): List<Rewrite> {
 }
 
 /**
- * The function body Datastar compiles from [text] (engine.ts:385-430 in 1.0.4). The text is
- * trimmed as JavaScript trims. With [returnsValue] it is split into statements, the last of them
- * wrapped in `return (...);` unless it starts with `return`, and the statements joined with `;\n`;
- * the separators and the wrapping map to where the statement started or ended.
+ * Whether [trimmed] opens with `return` and white space, the client's `/^return\s/`: a function
+ * body the author wrote, which `genRx` compiles as it stands and does not split into statements.
+ */
+internal fun opensWithReturn(trimmed: String): Boolean = trimmed.startsWith("return") && trimmed.getOrNull(6)?.isJsWhitespace() == true
+
+/**
+ * The function body Datastar compiles from [text] (engine.ts, `genRx`, in 1.0.5). The text is
+ * trimmed as JavaScript trims. With [returnsValue], unless it opens with `return`, it is split
+ * into statements, the last of them wrapped in `return (...);` unless it starts with `return`, and
+ * the statements joined with `;\n`; the separators and the wrapping map to where the statement
+ * started or ended. A text with no statement in it, only `;`, is compiled as it stands.
  */
 internal fun clientScript(
     text: String,
@@ -463,10 +470,10 @@ internal fun clientScript(
     if (start < 0) return ClientScript("", intArrayOf(text.length))
     val end = text.indexOfLast { !it.isJsWhitespace() } + 1
     val trimmed = text.substring(start, end)
-    if (!returnsValue) {
+    val statements = if (returnsValue && !opensWithReturn(trimmed)) clientStatements(trimmed) else emptyList()
+    if (statements.isEmpty()) {
         append(trimmed, start)
     } else {
-        val statements = clientStatements(trimmed)
         statements.forEachIndexed { i, r ->
             val statement = trimmed.substring(r)
             if (i > 0) synthetic(";\n", start + r.first - 1)
@@ -566,7 +573,7 @@ private fun keyOpens(
 
 /**
  * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804 in 1.0.5) cuts one `/` from
  * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
  * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
  * template literal counts when it holds no `${`. A scan rather than one regular expression, which
@@ -809,11 +816,11 @@ public class ExpressionValidator(
             if (next == '$') continue
             if (WORD_CHAR.matches(next.toString())) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
-                val run = rewritten.runs.firstOrNull { p in it }
+                val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =
                     run?.let {
-                        val q = js[it.first]
-                        ": its pattern takes the $q${placeOf(regions[it.first])} before it for the start of a string, " +
+                        val q = js[it.quote]
+                        ": its pattern takes the $q${placeOf(regions[it.quote])} before it for the start of a string, " +
                             "and leaves everything up to the next $q as written"
                     } ?: ""
                 val (start, end) = span(p, p + written.length)
@@ -845,7 +852,7 @@ public class ExpressionValidator(
         }
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
-        if (returnsValue == true && err == null) issues += statementSplitIssue(text)
+        if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
         issues += filterSignalsIssues(text)
         return issues
     }
@@ -882,7 +889,8 @@ public class ExpressionValidator(
         val why =
             when {
                 region == Region.TEMPLATE -> {
-                    ", because the literal also holds a \${...}, so the text holds that"
+                    ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, " +
+                        "so the text holds that"
                 }
 
                 region == Region.REGEX -> {

@@ -175,7 +175,7 @@ export class SignalPatchError extends Error {
 }
 
 /**
- * The store as the Datastar 1.0.4 client reads it after a signal patch: `mergePatch` and
+ * The store as the Datastar 1.0.5 client reads it after a signal patch: `mergePatch` and
  * `mergeInner` in the client's `signals.ts`, which differ from RFC 7386 in four ways. `onlyIfMissing`
  * is honoured leaf by leaf, so a nested object is still walked and only the values already there
  * are kept. An object patched onto an array keeps the array and sets its indices: an index past the

@@ -21,14 +21,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** What Datastar 1.0.4's client takes from a stream or a response, and what it fails on. */
+/** What Datastar 1.0.5's client takes from a stream or a response, and what it fails on. */
 class ProtocolAsTheClientTakesItTest {
     @Test
     fun `a frame built by hand can send the empty id that drops last-event-id`() {
         assertEquals("event: x\nid: \n\n", SseFrame("x", id = "").render())
     }
 
-    // Chrome on the 1.0.4 bundle: an outer or replace without a selector takes only elements, so a
+    // Chrome on the 1.0.5 bundle: an outer or replace without a selector takes only elements, so a
     // no-break space there leaves the page as it was; with a selector, or appended, it is text.
     @Test
     fun `elements that show as blank are refused where the client takes only elements`() {

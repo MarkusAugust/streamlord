@@ -355,7 +355,7 @@ export function expressionError(js: string): { pos: number; raisedAt: number; me
 
 /**
  * One statement of a value-returning expression: `statementRe` of Datastar's `genRx` as the client
- * writes it (engine.ts:415-416 in 1.0.4). Everything up to a `;` that is not inside quotes, a regex
+ * writes it (engine.ts in 1.0.5). Everything up to a `;` that is not inside quotes, a regex
  * literal or a no-argument IIFE.
  */
 const STATEMENT = /(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+/gm;
@@ -374,19 +374,34 @@ export interface Rewrite {
   name: string;
 }
 
+/**
+ * A stretch the client stepped over and left as written: a quoted string, or the text of a template
+ * literal between its `${...}`. `quote` is where that string or template literal opens.
+ */
+export interface Run {
+  start: number;
+  end: number;
+  quote: number;
+}
+
 /** The text as the client rewrites it, what it rewrote, and the quoted runs it stepped over and left as written. */
 export interface ClientRewrite extends ClientScript {
   rewrites: Rewrite[];
-  runs: { start: number; end: number }[];
+  runs: Run[];
 }
 
 /**
- * The client's rewrite of an expression, the pattern as the client writes it (engine.ts:448-449 in
- * 1.0.4): a quoted string or a template literal without `${` is stepped over and left as written, a
- * `${...}` with no brace inside has its signals and actions rewritten, and outside them a
- * `$name.path` becomes `$['name']['path']` and an `@name(` a call of the action dispatcher.
+ * The client's rewrite of an expression, the pattern as the client writes it (engine.ts, `genRx`,
+ * in 1.0.5): a quoted string is stepped over and left as written, and so is a template literal,
+ * matched whole, but for each `${...}` in it with no brace inside, whose signals and actions are
+ * rewritten; outside them a `$name.path` becomes `$['name']['path']` and an `@name(` a call of the
+ * action dispatcher. A template literal the pattern does not match, one whose `${` holds a brace,
+ * is read as code.
  */
-const CLIENT_REWRITE = /(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(/g;
+const CLIENT_REWRITE = /(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`(?:\\.|[^`\\$]|\$(?!\{)|\$\{[^{}]*\})*`)|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(/g;
+
+/** A `${...}` with no brace inside: what the client replaces in a template literal it matched, wherever it stands in it. */
+const CLIENT_INTERPOLATION = /\$\{([^{}]*)\}/g;
 
 /** Inside a `${...}` the client rewrites signals first and actions after, each with its own pattern. */
 const CLIENT_SIGNAL = /\$(\w+(?:[.-]\w+)*)/g;
@@ -405,7 +420,7 @@ export function clientRewrite(text: string): ClientRewrite {
   let js = "";
   const origin: number[] = [];
   const rewrites: Rewrite[] = [];
-  const runs: { start: number; end: number }[] = [];
+  const runs: Run[] = [];
   const copy = (from: number, to: number) => {
     for (let k = from; k < to; k++) {
       origin.push(k);
@@ -441,15 +456,23 @@ export function clientRewrite(text: string): ClientRewrite {
     const at = m.index;
     const end = at + m[0].length;
     copy(i, at);
-    if (m[1] !== undefined) {
-      copy(at, at + 2);
-      interpolation(at + 2, end - 1);
-      copy(end - 1, end);
-    } else if (m[2] !== undefined) put({ kind: "signal", start: at, end, name: m[2] });
-    else if (m[3] !== undefined) put({ kind: "action", start: at, end, name: m[3] });
-    else {
+    if (m[1] !== undefined) put({ kind: "signal", start: at, end, name: m[1] });
+    else if (m[2] !== undefined) put({ kind: "action", start: at, end, name: m[2] });
+    else if (m[0][0] === "`") {
+      let written = at;
+      for (const inner of m[0].matchAll(CLIENT_INTERPOLATION)) {
+        const open = at + inner.index;
+        const close = open + inner[0].length - 1;
+        copy(written, open + 2);
+        runs.push({ start: written, end: open + 2, quote: at });
+        interpolation(open + 2, close);
+        written = close;
+      }
+      copy(written, end);
+      runs.push({ start: written, end, quote: at });
+    } else {
       copy(at, end);
-      runs.push({ start: at, end });
+      runs.push({ start: at, end, quote: at });
     }
     i = end;
   }
@@ -469,10 +492,17 @@ export function clientSignalReads(text: string): Rewrite[] {
 }
 
 /**
- * The function body Datastar compiles from `text` (engine.ts:385-430 in 1.0.4). The text is
- * trimmed. With `returnsValue` it is split into statements, the last of them wrapped in
- * `return (...);` unless it starts with `return`, and the statements joined with `;\n`; the
- * separators and the wrapping map to where the statement started or ended.
+ * Whether `trimmed` opens with `return` and white space, the client's own test: a function body the
+ * author wrote, which `genRx` compiles as it stands and does not split into statements.
+ */
+export const opensWithReturn = (trimmed: string): boolean => /^return\s/.test(trimmed);
+
+/**
+ * The function body Datastar compiles from `text` (engine.ts, `genRx`, in 1.0.5). The text is
+ * trimmed. With `returnsValue`, unless it opens with `return`, it is split into statements, the
+ * last of them wrapped in `return (...);` unless it starts with `return`, and the statements joined
+ * with `;\n`; the separators and the wrapping map to where the statement started or ended. A text
+ * with no statement in it, only `;`, is compiled as it stands.
  */
 export function clientScript(text: string, returnsValue: boolean): ClientScript {
   let js = "";
@@ -489,9 +519,9 @@ export function clientScript(text: string, returnsValue: boolean): ClientScript 
   if (trimmed.length === 0) return { js: "", origin: [text.length] };
   const start = text.indexOf(trimmed);
   const end = start + trimmed.length;
-  if (!returnsValue) append(trimmed, start);
+  const statements = returnsValue && !opensWithReturn(trimmed) ? [...trimmed.matchAll(STATEMENT)] : [];
+  if (statements.length === 0) append(trimmed, start);
   else {
-    const statements = [...trimmed.matchAll(STATEMENT)];
     statements.forEach((m, i) => {
       if (i > 0) synthetic(";\n", start + m.index - 1);
       const last = m[0].trim();
@@ -574,7 +604,7 @@ export interface StringPattern {
 
 /**
  * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804 in 1.0.5) cuts one `/` from
  * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
  * the object between `from` and `to` count: not `xinclude`, nor a key in a string or a comment. A
  * template literal counts when it holds no `${`. A scan rather than one regular expression, which
@@ -760,7 +790,7 @@ function validateText(text: string, returnsValue: boolean | undefined, hyphenate
             : "";
       const why =
         region === Region.TEMPLATE
-          ? ", because the literal also holds a ${...}, so the text holds that"
+          ? ", because a ${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
           : region === Region.REGEX
             ? ", which changes the pattern"
             : script.js[(starts ??= stringStarts(regions))[r.start]!] === (r.kind === "signal" ? "'" : '"')
@@ -840,7 +870,7 @@ function validateText(text: string, returnsValue: boolean | undefined, hyphenate
       const written = CLIENT_SIGNAL_HERE.exec(script.js)?.[0] ?? "$";
       const run = rewritten.runs.find((q) => q.start <= p && p < q.end);
       const why = run
-        ? `: its pattern takes the ${script.js[run.start]}${placeOf(regions[run.start] ?? Region.CODE)} before it for the start of a string, and leaves everything up to the next ${script.js[run.start]} as written`
+        ? `: its pattern takes the ${script.js[run.quote]}${placeOf(regions[run.quote] ?? Region.CODE)} before it for the start of a string, and leaves everything up to the next ${script.js[run.quote]} as written`
         : "";
       issues.push({
         ...span(p, p + written.length),
@@ -864,7 +894,7 @@ function validateText(text: string, returnsValue: boolean | undefined, hyphenate
   }
 
   // A `;` inside brackets splits the expression all the same, and what it computed is lost.
-  if (returnsValue === true && !syntaxError) {
+  if (returnsValue === true && !syntaxError && !opensWithReturn(text.trim())) {
     const textRegions = jsRegions(text);
     let depth = 0;
     const splits = new Set(statementSplits(text));

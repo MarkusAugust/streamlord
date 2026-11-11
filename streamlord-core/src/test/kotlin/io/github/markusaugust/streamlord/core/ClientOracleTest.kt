@@ -20,7 +20,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.4
+ * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.5
  * client's `mergePatch` and `filtered` (engine/signals.ts), `pathToObj` (utils/paths.ts) and
  * `isStringTrue` (utils/text.ts) run by `conformance/generate/client.mjs`, and to
  * `conformance/client/expressions.json`, the body `genRx` (engine/engine.ts) compiles.

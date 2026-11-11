@@ -26,13 +26,19 @@ public sealed interface DatastarResponse {
     public val headers: Map<String, String>
 }
 
-/** A `text/html` body patched as elements. Mirrors [PatchElements]. */
+/**
+ * A `text/html` body patched as elements. Mirrors [PatchElements].
+ *
+ * @property viewTransitionSelector CSS selector of the element to run the view transition on. Only
+ *   sent when [useViewTransition] is `true`, and read by the client from Datastar 1.0.5 on.
+ */
 public data class ElementsResponse(
     @Language("HTML") val elements: String,
     val selector: String? = null,
     val mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     val namespace: ElementNamespace = ElementNamespace.DEFAULT,
     val useViewTransition: Boolean = false,
+    val viewTransitionSelector: String? = null,
 ) : DatastarResponse {
     init {
         // An inner patch of nothing empties its target, and a remove needs no elements at all.
@@ -40,12 +46,15 @@ public data class ElementsResponse(
             throw DatastarEventValidationException("elements must not be blank")
         }
         selector?.let { Wire.selector(it) }
+        viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
         // A header travels as Latin-1 to the client, which reads it so, and some servers send UTF-8
         // and others drop what Latin-1 lacks: only printable ASCII arrives as written.
-        selector?.firstOrNull { it !in ' '..'~' }?.let {
-            throw DatastarEventValidationException(
-                "A selector in a response header must be printable ASCII, not U+%04X; send it in a stream instead".format(it.code),
-            )
+        for (inHeader in listOfNotNull(selector, viewTransitionSelector)) {
+            inHeader.firstOrNull { it !in ' '..'~' }?.let {
+                throw DatastarEventValidationException(
+                    "A selector in a response header must be printable ASCII, not U+%04X; send it in a stream instead".format(it.code),
+                )
+            }
         }
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
@@ -60,7 +69,10 @@ public data class ElementsResponse(
                 selector?.let { put(DatastarProtocol.Headers.SELECTOR, it) }
                 if (mode != ElementPatchMode.DEFAULT) put(DatastarProtocol.Headers.MODE, mode.wire)
                 if (namespace != ElementNamespace.DEFAULT) put(DatastarProtocol.Headers.NAMESPACE, namespace.wire)
-                if (useViewTransition) put(DatastarProtocol.Headers.USE_VIEW_TRANSITION, "true")
+                if (useViewTransition) {
+                    put(DatastarProtocol.Headers.USE_VIEW_TRANSITION, "true")
+                    viewTransitionSelector?.let { put(DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR, it) }
+                }
             }
 }
 
@@ -71,7 +83,8 @@ public fun ElementsResponse(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
-): ElementsResponse = ElementsResponse(elements.text, selector, mode, namespace, useViewTransition)
+    viewTransitionSelector: String? = null,
+): ElementsResponse = ElementsResponse(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector)
 
 /** An `application/json` body patched as signals. Mirrors [PatchSignals]. */
 public data class SignalsResponse(

@@ -40,7 +40,7 @@ both scripts run and the paragraph is there.
 
 U+2028 and U+2029 are line terminators in JavaScript and ordinary characters in JSON. Since
 ES2019 a string literal may hold them, so in a current browser a raw one does no harm: in
-Chrome 155 with Datastar 1.0.4, `data-signals:r` set to `'{"s":"a<U+2028>b<U+2029>c"}'`, with the
+Chrome 155 with Datastar 1.0.5, `data-signals:r` set to `'{"s":"a<U+2028>b<U+2029>c"}'`, with the
 raw characters, gives the same five-character string as the escaped form. An engine older than
 Chrome 66, Firefox 62 or Safari 12, and Edge before 79, ends the string at the character and
 throws `SyntaxError`, and so does a tool that reads JavaScript by the older rules. Written as
@@ -58,7 +58,7 @@ written in a string or a template, a quote in a value cannot end it.
 ## Signal names the client cannot hold
 
 Every object in a browser already has `constructor`, `toString` and ten other properties from
-`Object.prototype`. In Datastar 1.0.4's store, what `__proto__` holds becomes the prototype of the
+`Object.prototype`. In Datastar 1.0.5's store, what `__proto__` holds becomes the prototype of the
 object holding it. With `{"x": 1}`, `{"0": 1}` or `{"length": 5}` under it the merge throws
 halfway, and the bindings already on the page stop redrawing until it is reloaded. With `{}` or
 `{"x": null}` it throws nothing, and a second `__proto__` under the first throws nothing either:
@@ -270,7 +270,7 @@ own CSP writer takes one fixed string and cannot.
 
 ### Three things the client does that will catch you out
 
-All three are in Datastar 1.0.4's `engine/csp.ts`, and none of them announce themselves:
+All three are in Datastar 1.0.5's `engine/csp.ts`, and none of them announce themselves:
 
 - **The nonce is read once, from `<html>`, when the client loads**, and the attribute is removed
   immediately after. A nonce patched into the page later does nothing, because CSP mode was

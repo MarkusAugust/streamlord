@@ -12,7 +12,7 @@ import kotlin.test.fail
 
 /**
  * Holds what [Casing] writes and refuses to `conformance/client/casing.json` and
- * `conformance/client/attribute-keys.json`, the output of the Datastar 1.0.4 client's
+ * `conformance/client/attribute-keys.json`, the output of the Datastar 1.0.5 client's
  * `modifyCasing` (utils/text.ts) and `parseAttributeKey` (engine/engine.ts) run by
  * `conformance/generate/client.mjs`. The client's casing itself is core's, held by ClientCasingTest.
  */

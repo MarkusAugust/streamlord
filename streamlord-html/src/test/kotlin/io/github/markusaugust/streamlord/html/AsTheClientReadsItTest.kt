@@ -19,7 +19,7 @@ import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-/** What the DSL writes, held to what Datastar 1.0.4's client and the browser make of it. */
+/** What the DSL writes, held to what Datastar 1.0.5's client and the browser make of it. */
 class AsTheClientReadsItTest {
     private fun click(modifiers: OnModifiers.() -> Unit) = elements { button { dataOnClick("x()", modifiers) } }
 
@@ -227,7 +227,7 @@ class AsTheClientReadsItTest {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataSignals("a" to mapOf("b.c" to 1)) } } }
     }
 
-    // Measured against the 1.0.4 store: __proto__ throws midway through a batch, and constructor
+    // Measured against the 1.0.5 store: __proto__ throws midway through a batch, and constructor
     // with an object under it reaches Object.prototype.
     @Test
     fun `a name the client cannot hold is refused`() {
@@ -298,7 +298,7 @@ class AsTheClientReadsItTest {
         assertEquals("/it\\x27s \\x22a\\x22 \\x60b\\x60 \\x26 c\\x5c/", regex)
     }
 
-    // Run through modifyCasing from the 1.0.4 source: no key over {a, b, -} up to nine
+    // Run through modifyCasing from the 1.0.5 source: no key over {a, b, -} up to nine
     // characters, with any chain of up to three __case values, gives a name of the shape aB-b.
     @Test
     fun `an event or class name mixing capitals with a hyphen before a lower-case letter is refused`() {

@@ -466,7 +466,7 @@ export function signalPathProblem(path: string, objectUnder = false): string | n
     : `has the part ${part}, which every object already has, so the client writes into the built-in one instead of holding a signal`;
 }
 
-/** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:449 in 1.0.4). */
+/** What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-` (engine.ts:546 in 1.0.5). */
 const REACHABLE_NAME = /^[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*$/;
 
 /** `$['my key']`, the read that reaches a signal at `parts` whatever its name: the client leaves a `$[` as written. */

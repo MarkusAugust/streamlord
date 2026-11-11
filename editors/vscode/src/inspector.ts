@@ -238,7 +238,7 @@ export class Inspector {
     );
   }
 
-  /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
+  /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.5). */
   private applyFrame(frame: DatastarFrame): void {
     if (frame.event !== "datastar-patch-signals" || !frame.args.signals) return;
     let patch: unknown;

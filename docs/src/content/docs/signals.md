@@ -289,7 +289,7 @@ folds a patch the way the client does.
 A patch the client fails on partway, such as a `length` an array cannot take, makes
 `mergePatchAsClient` throw `SignalPatchException` with the store as the client keeps it, the keys
 before the failing one applied, and both Stream Inspectors show that store and the reason. In
-the browser the damage outlasts the patch: Datastar 1.0.4 leaves its update batch open after the
+the browser the damage outlasts the patch: Datastar 1.0.5 leaves its update batch open after the
 throw, so the bindings already on the page stop redrawing until it is reloaded. Measured in
 Chrome, a `data-text` stayed where it was while clicks moved its signal on, while element
 patches still landed and a binding added after the throw showed the current value.

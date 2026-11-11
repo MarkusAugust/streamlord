@@ -28,7 +28,7 @@ import kotlinx.html.title
 import kotlinx.html.unsafe
 
 /** The Datastar client, from the same place the documentation's own pages take it. */
-private const val DATASTAR = "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
+private const val DATASTAR = "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.5/bundles/datastar.js"
 
 /**
  * The policy this page is served under.

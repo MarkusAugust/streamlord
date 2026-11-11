@@ -31,16 +31,26 @@ public data class Rewrite(
     public val written: String get() = if (signal) signalPath(name) else actionCall(name)
 }
 
+/**
+ * A stretch the client stepped over and left as written: a quoted string, or the text of a template
+ * literal between its `${...}`. [quote] is where that string or template literal opens.
+ */
+@InternalStreamlordApi
+public class Run(
+    public val range: IntRange,
+    public val quote: Int,
+)
+
 /** The text as the client rewrites it, what it rewrote, and the quoted runs it stepped over and left as written. */
 @InternalStreamlordApi
 public class ClientRewrite(
     js: String,
     origin: IntArray,
     public val rewrites: List<Rewrite>,
-    public val runs: List<IntRange>,
+    public val runs: List<Run>,
 ) : ClientScript(js, origin)
 
-/** The client's signal pattern (engine.ts:449 in 1.0.4): `\w` and `.`/`-` joined parts. */
+/** The client's signal pattern (engine.ts, `genRx`, in 1.0.5): `\w` and `.`/`-` joined parts. */
 @InternalStreamlordApi
 public val CLIENT_SIGNAL: Regex = Regex("""\$(\w+(?:[.-]\w+)*)""")
 
@@ -76,7 +86,18 @@ private fun quotedEnd(
     return null
 }
 
-/** The end of a template literal with no `${` in it, as the client's pattern matches one; null otherwise. */
+/** Where the `${` at [from] closes, when no brace stands inside it and it closes before [limit]; null otherwise. */
+private fun interpolationClose(
+    text: String,
+    from: Int,
+    limit: Int,
+): Int? = text.indexOfAny(charArrayOf('{', '}'), from + 2).takeIf { it in 0 until limit && text[it] == '}' }
+
+/**
+ * The end of a template literal as the client's pattern matches one whole,
+ * `` `(?:\\.|[^`\\$]|\$(?!\{)|\$\{[^{}]*\})*` ``: a `${` in it has to close with no brace inside. Null
+ * when the pattern would not match here.
+ */
 private fun templateEnd(
     text: String,
     from: Int,
@@ -87,7 +108,7 @@ private fun templateEnd(
         when {
             c == '`' -> return j + 1
             c == '\\' -> if (j + 1 < text.length && !text[j + 1].isLineTerminator()) j += 2 else return null
-            c == '$' && text.getOrNull(j + 1) == '{' -> return null
+            c == '$' && text.getOrNull(j + 1) == '{' -> j = (interpolationClose(text, j, text.length) ?: return null) + 1
             else -> j++
         }
     }
@@ -95,11 +116,12 @@ private fun templateEnd(
 }
 
 /**
- * The text as the client writes it before compiling, with what it rewrote (engine.ts:448-449 in
- * 1.0.4). The client does it with one pattern: a quoted string or a template literal without `${`
- * is stepped over and left as written, a `${...}` with no brace inside has its signals and then its
- * actions rewritten, and outside them a `$name.path` becomes `$['name']['path']` and an `@name(` a
- * call of the action dispatcher. Here it is a scan, since Java's engine recurses on that pattern's
+ * The text as the client writes it before compiling, with what it rewrote (engine.ts, `genRx`, in
+ * 1.0.5). The client does it with one pattern: a quoted string is stepped over and left as
+ * written, and so is a template literal, matched whole, but for each `${...}` in it with no brace
+ * inside, whose signals and then actions are rewritten; outside them a `$name.path` becomes
+ * `$['name']['path']` and an `@name(` a call of the action dispatcher. A template literal the
+ * pattern does not match, one whose `${` holds a brace, is read as code. Here it is a scan, since Java's engine recurses on that pattern's
  * loops and overflows on a long string of escapes; the alternatives are tried in the client's order
  * at every offset, and `ClientRewriteTest` holds the scan to the client's pattern as written. Every
  * character of a rewritten reference maps back to where the reference began.
@@ -109,7 +131,7 @@ public fun clientRewrite(text: String): ClientRewrite {
     val js = StringBuilder()
     val origin = ArrayList<Int>(text.length + 16)
     val rewrites = ArrayList<Rewrite>()
-    val runs = ArrayList<IntRange>()
+    val runs = ArrayList<Run>()
 
     fun copy(
         from: Int,
@@ -150,6 +172,29 @@ public fun clientRewrite(text: String): ClientRewrite {
         }
         copy(i, to)
     }
+
+    // The client replaces every `${...}` without a brace inside in the literal it matched, wherever it stands in it.
+    fun template(
+        from: Int,
+        to: Int,
+    ) {
+        var written = from
+        var p = text.indexOf("\${", from)
+        while (p in 0 until to) {
+            val close = interpolationClose(text, p, to)
+            if (close == null) {
+                p = text.indexOf("\${", p + 1)
+                continue
+            }
+            copy(written, p + 2)
+            runs += Run(written until p + 2, from)
+            interpolation(p + 2, close)
+            written = close
+            p = text.indexOf("\${", close)
+        }
+        copy(written, to)
+        runs += Run(written until to, from)
+    }
     var i = 0
     while (i < text.length) {
         val c = text[i]
@@ -158,27 +203,12 @@ public fun clientRewrite(text: String): ClientRewrite {
                 c == '"' || c == '\'' -> {
                     quotedEnd(text, i, c)?.also {
                         copy(i, it)
-                        runs += i until it
+                        runs += Run(i until it, i)
                     }
                 }
 
                 c == '`' -> {
-                    templateEnd(text, i)?.also {
-                        copy(i, it)
-                        runs += i until it
-                    }
-                }
-
-                c == '$' && text.getOrNull(i + 1) == '{' -> {
-                    val close = text.indexOfAny(charArrayOf('{', '}'), i + 2)
-                    if (close < 0 || text[close] != '}') {
-                        null
-                    } else {
-                        copy(i, i + 2)
-                        interpolation(i + 2, close)
-                        copy(close, close + 1)
-                        close + 1
-                    }
+                    templateEnd(text, i)?.also { template(i, it) }
                 }
 
                 c == '$' -> {

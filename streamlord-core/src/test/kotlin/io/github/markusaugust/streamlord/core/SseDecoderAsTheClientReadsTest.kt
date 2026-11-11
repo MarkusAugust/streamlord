@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 /**
  * The decoder is what a test trusts to say what the client received, so it has to read a stream
- * the way Datastar's client does (fetch.ts in 1.0.4). Each case here is one where it used to be
+ * the way Datastar's client does (fetch.ts in 1.0.5). Each case here is one where it used to be
  * more forgiving, or less.
  */
 class SseDecoderAsTheClientReadsTest {
@@ -187,7 +187,7 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     /**
-     * Each frame in `conformance/dom/decoder-cases.json` is run through the free Datastar 1.0.4
+     * Each frame in `conformance/dom/decoder-cases.json` is run through the free Datastar 1.0.5
      * bundle in happy-dom by `conformance/generate/dom.mjs`, through the client's own fetch path,
      * on a page holding `<div id="wrap"><div id="target">old</div></div>` and the signal
      * `keep: 1`, with `startViewTransition` counting its calls. None made the client throw,

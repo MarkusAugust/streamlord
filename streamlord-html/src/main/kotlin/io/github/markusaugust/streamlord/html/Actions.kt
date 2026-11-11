@@ -30,10 +30,10 @@ public class FetchOptions {
     public var openWhenHidden: Boolean? = null
 
     /**
-     * Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. Datastar 1.0.4's client
-     * retries a request that fails on the network, before or during the response, whatever this
-     * says, so `'never'` acts as `'auto'` does: neither retries an answer, both retry a failed
-     * request, up to [retryMaxCount] times in a row.
+     * Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. `'auto'` retries a
+     * request that fails on the network, before or during the response, and no answer; `'never'`
+     * retries nothing, and the action fails with the first error. A retry is made at most
+     * [retryMaxCount] times over the whole action.
      */
     public var retry: Retry? = null
 
@@ -57,7 +57,7 @@ public class FetchOptions {
     /**
      * Options the client applies to a non-SSE response regardless of its `datastar-*` headers.
      *
-     * Datastar 1.0.4 documents this option and its client does not act on it: `fetch.ts` never
+     * Datastar 1.0.5 documents this option and its client does not act on it: `fetch.ts` never
      * reads `responseOverrides` from the action's arguments, so the response is patched by its
      * headers alone. It is written out as documented and takes effect when the client reads it.
      * Until then, set the `datastar-*` headers on the response, which `respondElements` does.

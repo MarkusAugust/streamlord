@@ -294,8 +294,9 @@ public suspend fun ApplicationCall.respondElements(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
 ) {
-    respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition))
+    respondDatastar(ElementsResponse(elements, selector, mode, namespace, useViewTransition, viewTransitionSelector))
 }
 
 /** [respondElements] for markup [io.github.markusaugust.streamlord.core.domain.interpolate] built. */
@@ -305,8 +306,9 @@ public suspend fun ApplicationCall.respondElements(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
 ) {
-    respondElements(elements.text, selector, mode, namespace, useViewTransition)
+    respondElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector)
 }
 
 /** Respond with a JSON object to be patched as signals, without opening a stream. Always `200 OK`. */

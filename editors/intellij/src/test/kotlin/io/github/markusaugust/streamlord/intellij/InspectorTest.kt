@@ -1187,7 +1187,7 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
     }
 
-    // Measured in headless Chrome with the 1.0.4 bundle: the characters that may stand on both sides
+    // Measured in headless Chrome with the 1.0.5 bundle: the characters that may stand on both sides
     // of `true` in onlyIfMissing and still make it true.
     fun `test onlyIfMissing is trimmed as JavaScript trims it`() {
         val measured =

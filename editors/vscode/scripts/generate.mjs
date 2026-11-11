@@ -12,7 +12,7 @@ import { domEventsFile, pinnedLibDom } from "./domEvents.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
-const catalog = JSON.parse(readFileSync(join(root, "../../catalog/datastar-1.0.4.json"), "utf8"));
+const catalog = JSON.parse(readFileSync(join(root, "../../catalog/datastar-1.0.5.json"), "utf8"));
 const groups = catalog.modifierGroups;
 
 const expand = (mods) => mods.flatMap((m) => (m.$ref ? groups[m.$ref] : [m]));

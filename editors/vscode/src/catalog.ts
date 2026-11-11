@@ -1,4 +1,4 @@
-import raw from "../../../catalog/datastar-1.0.4.json" with { type: "json" };
+import raw from "../../../catalog/datastar-1.0.5.json" with { type: "json" };
 import domEventsFile from "../../../catalog/dom-events.json" with { type: "json" };
 
 export type ModifierType = "flag" | "duration" | "enum" | "int" | "ident" | "idents";
@@ -20,7 +20,7 @@ export interface AttributeSpec {
   forms: string[];
   keyed: boolean;
   keyRequired: boolean;
-  /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+  /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.5). */
   keys: string[];
   /**
    * How Datastar reads the key, which the browser has lowercased: `camel` turns `foo-bar` into
@@ -88,10 +88,10 @@ export interface Catalog {
   attributesByKotlin: Map<string, AttributeSpec>;
   actions: ActionSpec[];
   actionsByName: Map<string, ActionSpec>;
-  /** `doc`: what the option does, as Datastar 1.0.4's fetch.ts reads it. */
+  /** `doc`: what the option does, as Datastar 1.0.5's fetch.ts reads it. */
   fetchOptions: { name: string; type: string; default: string; doc?: string }[];
   fetchEvents: string[];
-  /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+  /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
   datastarEvents: { name: string; doc: string }[];
   /** The DOM events an element can be listened to for, from catalog/dom-events.json. */
   domEvents: { name: string; mdn: string | null }[];

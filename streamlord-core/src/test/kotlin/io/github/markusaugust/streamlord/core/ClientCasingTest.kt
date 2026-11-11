@@ -12,7 +12,7 @@ import kotlin.test.fail
 
 /**
  * Holds [ClientCasing] to `conformance/client/casing.json` and `attribute-keys.json`, the output
- * of the Datastar 1.0.4 client's `modifyCasing` and `camel` (utils/text.ts) and
+ * of the Datastar 1.0.5 client's `modifyCasing` and `camel` (utils/text.ts) and
  * `parseAttributeKey` (engine/engine.ts) run by `conformance/generate/client.mjs`.
  */
 class ClientCasingTest {

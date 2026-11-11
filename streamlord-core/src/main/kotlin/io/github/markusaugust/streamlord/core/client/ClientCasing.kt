@@ -3,7 +3,7 @@ package io.github.markusaugust.streamlord.core.client
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 
 /**
- * How Datastar 1.0.4's client cases an attribute key, and which key gives a name back. The DSL
+ * How Datastar 1.0.5's client cases an attribute key, and which key gives a name back. The DSL
  * writes keys with it and the analysis reads them with it; `conformance/client/casing.json` and
  * `attribute-keys.json`, the client's own functions run over fixed inputs, hold it to the client.
  */

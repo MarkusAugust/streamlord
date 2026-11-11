@@ -53,7 +53,7 @@ public data class AttributeSpec(
      * written, as the body of an event handler.
      */
     val returnsValue: Boolean = false,
-    /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+    /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.5). */
     val keys: List<String> = emptyList(),
     /** The names the expression is handed besides `el`: `evt` in `data-on`, `patch` in `data-on-signal-patch`. */
     val argNames: List<String> = emptyList(),
@@ -96,7 +96,7 @@ public data class FetchOption(
     val name: String,
     val type: String,
     val default: String,
-    /** What the option does, as Datastar 1.0.4's `fetch.ts` reads it. */
+    /** What the option does, as Datastar 1.0.5's `fetch.ts` reads it. */
     val doc: String = "",
 )
 
@@ -140,7 +140,7 @@ public class Catalog private constructor(
     public val fetchOptions: List<FetchOption>
     public val fetchEvents: List<String>
 
-    /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+    /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
     public val datastarEvents: List<DocumentEvent> =
         (raw.array("datastarEvents")?.objects() ?: emptyList()).map { DocumentEvent(it.string("name") ?: "", it.string("doc") ?: "") }
 

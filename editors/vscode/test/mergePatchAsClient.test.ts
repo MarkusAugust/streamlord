@@ -5,7 +5,7 @@ import { mergePatchAsClient, PROTO_REFUSED, SignalPatchError, STORE_PROTO_REFUSE
 
 /**
  * The scenarios of streamlord-core's `MergePatchAsClientTest`, read from `conformance/dom/` so both
- * folds answer to the same cases. Each was run through `mergePatch` from the Datastar 1.0.4 source
+ * folds answer to the same cases. Each was run through `mergePatch` from the Datastar 1.0.5 source
  * (engine/signals.ts), and `client` is `JSON.stringify` of its root after each step, or `THROWS`
  * and the root once the step threw. A step with `refused` is one the fold refuses on purpose, a key
  * `__proto__` anywhere in the patch; its `kept` is the client's root after the patch cut before the
@@ -49,7 +49,7 @@ describe("mergePatchAsClient", () => {
     }
   });
 
-  // Measured against the 1.0.4 source: the client gives the object a foreign prototype, then
+  // Measured against the 1.0.5 source: the client gives the object a foreign prototype, then
   // throws on some later keys, replaces the object on a later patch, or pollutes String.prototype.
   it("refuses a key __proto__ anywhere in the patch, whatever it holds", () => {
     const store = { o: { k: 1 }, a: [1] };

@@ -6,15 +6,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * What the client's own rewrite (engine.ts:448-449 in 1.0.4) makes of each expression, held
- * against the port. The expected texts are what the client compiled in Chrome.
+ * What the client's own rewrite (engine.ts, `genRx`, in 1.0.5) makes of each expression, held
+ * against the port. The expected texts are what the client's pattern gives; what the client
+ * compiled from 364 expressions is in `conformance/client/expressions.json`, and `ClientOracleTest`
+ * holds the port to it.
  */
 class ClientRewriteTest {
     @Test
     fun `signals and actions are rewritten as the client rewrites them, and quoted text is left alone`() {
         val cases =
             listOf(
-                "'\$a-b' + `\$c-d \${\$e-f}`" to "'\$a-b' + `\$['c-d'] \${\$['e-f']}`",
+                "'\$a-b' + `\$c-d \${\$e-f}`" to "'\$a-b' + `\$c-d \${\$['e-f']}`",
                 "\$items.map(\$i => \$i.name)" to "\$['items']['map'](\$['i'] => \$['i']['name'])",
                 "\"\$x\" + \$y" to "\"\$x\" + \$['y']",
                 "`a \${\$x} b`" to "`a \${\$['x']} b`",
@@ -24,11 +26,14 @@ class ClientRewriteTest {
                 "x = {\$a: 1}" to "x = {\$['a']: 1}",
                 "\$count++ // \$z" to "\$['count']++ // \$['z']",
                 "'it\\'s \$x' + \$y" to "'it\\'s \$x' + \$['y']",
-                "`\\\${\$x}`" to "`\\\${\$x}`",
+                // The client replaces every ${...} in the literal it matched, one after a backslash too.
+                "`\\\${\$x}`" to "`\\\${\$['x']}`",
                 "`\${\$a} and \${\$b}` + `\${ {a:1}.a }`" to "`\${\$['a']} and \${\$['b']}` + `\${ {a:1}.a }`",
-                // The text of a template literal that also holds a ${...} is rewritten too.
-                "`total: \$total \${\$a}`" to "`total: \$['total'] \${\$['a']}`",
-                "`mail @home(x) \${\$a}`" to "`mail __action(\"home\",evt,x) \${\$['a']}`",
+                // The text of a template literal stays as written, whatever its ${...} hold.
+                "`total: \$total \${\$a}`" to "`total: \$total \${\$['a']}`",
+                "`mail @home(x) \${\$a}`" to "`mail @home(x) \${\$['a']}`",
+                // A ${...} with a brace inside keeps the pattern from matching the literal, whose text is then read as code.
+                "`total: \$total \${ {a: 1}.a }`" to "`total: \$['total'] \${ {a: 1}.a }`",
                 // A quote in a comment opens a string to the client's pattern, and the signal after it stays as written.
                 "\$a = 1 // don't\n\$b = 'x'" to "\$['a'] = 1 // don't\n\$b = 'x'",
                 "\$a@get('/x')" to "\$['a']__action(\"get\",evt,'/x')",
@@ -93,17 +98,18 @@ class ClientRewriteTest {
     }
 
     private companion object {
-        /** `statementRe`, engine.ts:415-416 in 1.0.4. */
+        /** `statementRe` of `genRx`, engine.ts in 1.0.5. */
         val STATEMENT_RE =
             Regex(
                 """(?:\/(?:\\\/|[^/])*\/|"(?:\\"|[^"])*"|'(?:\\'|[^'])*'|`(?:\\`|[^`])*`|\(\s*(?:(?:function)\s*\(\s*\)|(?:\(\s*\))\s*=>)\s*(?:\{[\s\S]*?\}|[^;){]*)\s*\)\s*\(\s*\)|[^;])+""",
             )
 
-        /** The rewrite, engine.ts:448-449 in 1.0.4. */
+        /** The rewrite of `genRx`, engine.ts in 1.0.5. */
         val REWRITE_RE =
             Regex(
-                """(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`[^`\\$]*(?:(?:\\.|\$(?!\{))[^`\\$]*)*`)|\$\{([^{}]*)\}|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(""",
+                """(?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|`(?:\\.|[^`\\$]|\$(?!\{)|\$\{[^{}]*\})*`)|\$(\w+(?:[.-]\w+)*)|@([A-Za-z_$][\w$]*)\(""",
             )
+        val INTERPOLATION_RE = Regex("""\$\{([^{}]*)\}""")
         val SIGNAL_RE = Regex("""\$(\w+(?:[.-]\w+)*)""")
         val ACTION_RE = Regex("""@([A-Za-z_$][\w$]*)\(""")
 
@@ -111,16 +117,17 @@ class ClientRewriteTest {
 
         fun rewriteAsWritten(expr: String): String =
             REWRITE_RE.replace(expr) { m ->
-                val interpolation = m.groups[1]
-                val signal = m.groups[2]
-                val action = m.groups[3]
+                val signal = m.groups[1]
+                val action = m.groups[2]
                 when {
-                    interpolation != null -> {
-                        val inner =
-                            SIGNAL_RE
-                                .replace(interpolation.value) { path(it.groupValues[1]) }
-                                .let { s -> ACTION_RE.replace(s) { "__action(\"${it.groupValues[1]}\",evt," } }
-                        "\${$inner}"
+                    m.value.startsWith("`") -> {
+                        INTERPOLATION_RE.replace(m.value) { inner ->
+                            val rewritten =
+                                SIGNAL_RE
+                                    .replace(inner.groupValues[1]) { path(it.groupValues[1]) }
+                                    .let { s -> ACTION_RE.replace(s) { "__action(\"${it.groupValues[1]}\",evt," } }
+                            "\${$rewritten}"
+                        }
                     }
 
                     signal != null -> {
