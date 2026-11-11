@@ -20,7 +20,7 @@ import kotlin.test.fail
 
 /**
  * Holds the analysis to the fixtures under `conformance/client/`, each the output of a function
- * of the Datastar 1.0.4 client run by `conformance/generate/client.mjs`: `casing.json`
+ * of the Datastar client run by `conformance/generate/client.mjs`: `casing.json`
  * (`modifyCasing` in utils/text.ts), `attribute-keys.json` (`parseAttributeKey` in
  * engine/engine.ts), `expressions.json` (the body `genRx` compiles), `tags.json` (`tagToMs` and
  * `modifyTiming`) and `signal-store.json` (`pathToObj` and `filtered`).
@@ -118,13 +118,155 @@ class ClientOracleTest {
     @Test
     fun `writes the function body genRx compiles`() {
         val cases = group("expressions.json", "rewrites")
-        assertEquals(322, cases.size)
+        assertEquals(364, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             val returnsValue = case.boolean("returnsValue")!!
             val js = clientRewrite(clientScript(expression, returnsValue).js).js
             assertEquals(case.string("js"), js, "$expression with returnsValue $returnsValue")
         }
+    }
+
+    /** The issues the markup check gives [expression] where its value is used, `data-text`, or where it is only run, `data-on:click`. */
+    private fun judged(
+        expression: String,
+        returnsValue: Boolean,
+    ): Pair<String, List<Issue>> {
+        val attribute = if (returnsValue) "data-text" else "data-on:click"
+        val html = "<div $attribute=\"${expression.replace("&", "&amp;").replace("\"", "&quot;")}\"></div>"
+        return html to analyzer.analyzeHtml(html)
+    }
+
+    /** What the check reports under another code than `expression-syntax`, each with the one it uses. */
+    private val brokenUnderAnotherCode = mapOf("@get ('/x')" to "action-space")
+
+    /**
+     * `expressions.json`: `compiles` says whether JavaScript took the body `genRx` wrote. The check
+     * calls an expression broken exactly there, so an action after a template literal, which the
+     * client rewrites from 1.0.5 on, is not an error.
+     */
+    @Test
+    fun `calls an expression broken where the body genRx writes does not compile, and nowhere else`() {
+        val wrong = ArrayList<String>()
+        for (case in group("expressions.json", "rewrites")) {
+            val expression = case.string("expression")!!
+            val returnsValue = case.boolean("returnsValue")!!
+            val codes = judged(expression, returnsValue).second.map { it.code }
+            val compiles = case.boolean("compiles")!!
+            val other = brokenUnderAnotherCode[expression]
+            if (other != null) {
+                assertEquals(false, compiles, expression)
+                assertContains(codes, other, expression)
+                continue
+            }
+            if (("expression-syntax" in codes) == compiles) {
+                val verdict = if (compiles) "compiles" else "does not compile"
+                wrong += "$expression with returnsValue $returnsValue: the client's body $verdict: ${case.string("js")}"
+            }
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /** `expressions.json`: a reference the check says the client does not read stands in the body as it was written. */
+    @Test
+    fun `says a signal is not read only where genRx leaves it as written`() {
+        val wrong = ArrayList<String>()
+        var said = 0
+        for (case in group("expressions.json", "rewrites")) {
+            val expression = case.string("expression")!!
+            val (html, issues) = judged(expression, case.boolean("returnsValue")!!)
+            for (issue in issues.filter { it.code == "signal-not-read" }) {
+                said++
+                val reference = html.substring(issue.start, issue.end)
+                if (reference !in case.string("js")!!) wrong += "$expression: the client rewrote $reference: ${case.string("js")}"
+            }
+        }
+        assertEquals(emptyList(), wrong)
+        assertTrue(said >= 6, "only $said references said not to be read")
+    }
+
+    /**
+     * `expressions.json`: where the client compiles the same body whether the value is used or not, it
+     * split nothing, as for an expression that starts with `return` from 1.0.5 on, and the check has
+     * no split to warn of.
+     */
+    @Test
+    fun `warns of a value lost at a semicolon only where genRx splits there`() {
+        val cases = group("expressions.json", "rewrites")
+        val run = cases.filter { it.boolean("returnsValue") == false }.associate { it.string("expression")!! to it.string("js")!! }
+        val wrong = ArrayList<String>()
+        var warned = 0
+        for (case in cases.filter { it.boolean("returnsValue") == true }) {
+            val expression = case.string("expression")!!
+            if (judged(expression, true).second.none { it.code == "statement-split" }) continue
+            warned++
+            if (case.string("js") == run.getValue(expression)) wrong += "$expression: the client compiles it whole: ${case.string("js")}"
+        }
+        assertEquals(emptyList(), wrong)
+        assertTrue(warned >= 2, "only $warned expressions warned of")
+    }
+
+    private val dslCases: Map<String, JsonObject> =
+        JsonParser
+            .parseObject(File("../conformance/dsl/free.json").readText())
+            .array("cases")!!
+            .objects()
+            .associateBy { it.string("name")!! }
+
+    /** The reading of the case in `conformance/dsl/free.json` whose name starts with [name]. */
+    private fun reading(name: String): JsonObject =
+        dslCases.entries
+            .singleOrNull { it.key.startsWith(name) }
+            ?.value
+            ?.obj("read") ?: fail("no one case in free.json starts with: $name")
+
+    /**
+     * `conformance/dsl/free.json`: what the client did with `retry`, `retryInterval` and
+     * `retryMaxCount`, against what the catalog tells a reader of a hover about them. Each claim
+     * here was true of 1.0.4 and the reading named beside it shows 1.0.5 doing otherwise.
+     */
+    @Test
+    fun `describes the retry options as the client acts on them`() {
+        val doc = Catalog.default.fetchOptions.associate { it.name to it.doc }
+
+        // retry: 'never' sends one request when it fails on the network, and one when its stream breaks.
+        assertEquals(1, reading("get never retried gives up on a request that fails").array("requests")!!.size)
+        assertEquals(1, reading("get never retried gives up on a stream that breaks").array("requests")!!.size)
+        for (claim in listOf("is retried whatever this says", "'auto' and 'never' act alike")) {
+            assertTrue(claim !in doc.getValue("retry"), "retry: the catalog still says \"$claim\"")
+        }
+
+        // retryMaxCount 2 allows two retries over the whole action, though every answer was a 200.
+        for (case in listOf("get retried always stops at retryMaxCount", "get whose stream breaks counts every retry")) {
+            assertEquals(3, reading(case).array("requests")!!.size, case)
+        }
+        for (claim in listOf("in a row", "a 200 answer starts the count again")) {
+            assertTrue(claim !in doc.getValue("retryMaxCount"), "retryMaxCount: the catalog still says \"$claim\"")
+        }
+
+        // The wait grows from 100 to 200 across a 200 answer whose stream breaks, and is 100 again only after a stream that ended.
+        assertEquals(
+            """[["setTimeout",100],["setTimeout",200]]""",
+            reading("get whose stream breaks counts every retry")["timers"]!!.toJson(),
+        )
+        assertEquals(
+            """[["setTimeout",100],["setTimeout",100]]""",
+            reading("get retried always stops at retryMaxCount")["timers"]!!.toJson(),
+        )
+        assertTrue(
+            "set back by a 200 answer" !in doc.getValue("retryInterval"),
+            "retryInterval: the catalog still says a 200 answer sets it back",
+        )
+    }
+
+    /** The catalog is the one for the client the fixtures were read from, and none of its text names another version. */
+    @Test
+    fun `carries the catalog of the client the fixtures were read from`() {
+        val read = fixture("expressions.json").string("version")!!
+        assertEquals(read, JsonParser.parseObject(File("../conformance/dsl/free.json").readText()).string("version"))
+        assertEquals(read, CatalogText.VERSION)
+        val named = Regex("""\b\d+\.\d+\.\d+\b""").findAll(CatalogText.JSON).map { it.value }.toSet()
+        assertEquals(setOf(read), named, "the Datastar versions the catalog's text names")
     }
 
     private val readsMs = Regex("""as (\d+) ms""")

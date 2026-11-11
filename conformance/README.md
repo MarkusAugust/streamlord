@@ -3,7 +3,7 @@
 What the Datastar client and the servers do, recorded by running the client's own code and the
 adapters on real servers, so that every claim Streamlord makes is held to that rather than to a
 reading of a source. The fixtures under `client/` are JSON objects whose `$comment` names the
-reference file and function that produced them and whose `cases` pair an input with the client's
+reference file and function that produced them, whose `version` is the client's, and whose `cases` pair an input with the client's
 output; those under `dom/` are arrays, shaped as their section says; those under `dsl/` are
 objects whose `cases` each hold a call and its reading; those under `wire/` are text. The tests
 that read them live in the module they hold: `streamlord-core`, `streamlord-analysis`,
@@ -55,15 +55,17 @@ client's own action, line parser and watchers run. The fixtures under `dom/`:
 | File | What it holds |
 | --- | --- |
 | `decoder-cases.json` | frames: the `argsRaw` the client parsed, the page's body afterwards, the store, and how many view transitions it started |
+| `response-cases.json` | answers that are not a stream, `text/html` and `application/json` with their `datastar-*` headers: the `argsRaw` the client read from the headers and the body, the page afterwards, the store, and how many view transitions it started; a header the client does not read leaves nothing in `argsRaw` |
 | `merge-differential.json` | scenarios of signal patches, step by step: the root after each, or `THROWS` and the root once a step threw; a step the Kotlin fold refuses on purpose (`__proto__`) is marked `refused` with what the client kept |
 | `store-cases.json` | short scenarios of signal patches, a merge, a `null` that deletes, `onlyIfMissing`, arrays and their `length`, and patches that are not objects, each with what the store holds afterwards |
 | `script-escapes.json` | script bodies and their escaped forms, as parse5 reads them inside the client's `<body><template>` wrapper and in the whole-document path, and whether the client's `</body>`, `</head>`, `</html>` tests match. parse5 stands in for the browser's `DOMParser`; the three tests are the client's own regular expressions, applied to the text with its svg elements removed as patchElements.ts applies them |
 | `comment-ends.json` | comment openings and endings, and whether what follows them is an element, as parse5 reads them inside the client's wrapper: happy-dom ends `<!-->` and `<!--->` elsewhere than the HTML standard does, so these come from parse5 |
 
-The inputs are read from the fixtures themselves (the `sse` texts and the `steps`) and from a
+The inputs are read from the fixtures themselves (the `sse` texts, the `steps`, and each answer's
+`contentType`, `headers` and `body`) and from a
 list at the end of `dom.mjs` for the script and comment bodies; the generator writes everything else, and a
 run leaves the files byte for byte as they are until the client changes. The tests are
-`SseDecoderAsTheClientReadsTest`, which reads `comment-ends.json` too, `MergePatchAsClientTest` and
+`SseDecoderAsTheClientReadsTest`, which reads `comment-ends.json` too, `ResponseAsTheClientReadsTest`, `MergePatchAsClientTest` and
 `ScriptEscapesAsTheParserReadsTest` in `streamlord-core`, and `mergePatchAsClient.test.ts` in the editor.
 
 ```sh
@@ -101,8 +103,10 @@ of the bundles and of `dsl.mjs` with `common.mjs`, and the test refuses a readin
 
 A `probe` may `set` a property on an element before its events, `dispatch` a list of events in
 place of one per listener, send each in a `burst`, in `rounds`, `respond` to the fetch (with an
-answer, or `fail` for a request that never reaches the server, or `hang` for one never answered),
-`eval` a script in the page, such as a signal patch, list the `intersect` entries an observer
+answer, or `fail` for a request that never reaches the server, or `hang` for one never answered, or
+`breaks` for an answer whose body fails as it is read),
+`eval` a script in the page, such as a signal patch, run a script `between` an event and the first
+timer it left, such as one that removes the element or hides the page, list the `intersect` entries an observer
 sees in place of enter, leave and enter again, or `patch` new elements in through the client's
 own `datastar-patch-elements`, as the server sends them. A Pro attribute has no plugin in the free
 client: for each name in `proAttributes` the script registers one that records the key, modifiers

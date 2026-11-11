@@ -204,6 +204,18 @@ const expressions = [
   "$items[$i-1]", "$items[$i - 1]", "$a[$b['c-d']]", "$a[$b-c['d']]", "$a[`${$b-c}`]", "$a[`${'x-y'}`]",
   "$a[1-2]", "$a-b[0]", "$a[0].b-c", "$a.b-c['d-e']", "$a[$b][$c-d]", "$a['['].b-c", "$a[']'].b",
   "$a[`x]-${$b}`]", "$a[`${']'}-x`]", "$items.length-1", "$a-$b",
+  // What follows a template literal that holds an interpolation: 1.0.4 took the literal's closing
+  // backtick for the opening of another and left everything up to the next backtick as written.
+  "`${$a}` + $b", "`${$a}` + @peek(() => $b) + `${$c}`", "$x = `${$a}`; @get('/x'); $y = `${$c}`",
+  "`${$a}`; $b; `${$c}`", "`${ {a: $x}.a }` + $y + `z`", "`${`${$x}`}` + $y",
+  // A leading return and white space is a function body written out: 1.0.4 split it at each ; and
+  // wrote return before its last statement as well.
+  "return $a; $b", "return\n$a; $b", "  return $a; $b", "return($a); $b", "return;$a", "return", "return ",
+  "return (() => { $a = 1; return $b })()", "return $a; return $b",
+  "((n) => { const d = n * 2; return d })($a)", "return ((n) => { const d = n * 2; return d })($a)",
+  "[1, 2].map((n) => { $a = n; return n })", "return [1, 2].map((n) => { $a = n; return n })",
+  // Nothing but semicolons: 1.0.4 compiled an empty body where a value is returned.
+  ";;", "; ;",
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */
@@ -535,7 +547,9 @@ const files = {
 
 mkdirSync(out, { recursive: true });
 for (const [name, content] of Object.entries(files)) {
-  writeFileSync(path.join(out, name), ascii(`${JSON.stringify(content, null, 2)}\n`));
+  // The version on its own, so a test can hold what Streamlord says it speaks to what was read.
+  const { $comment, ...rest } = content;
+  writeFileSync(path.join(out, name), ascii(`${JSON.stringify({ $comment, version, ...rest }, null, 2)}\n`));
   const count = Array.isArray(content.cases) ? content.cases.length : Object.values(content.cases).map((c) => c.length).join("+");
   console.log(`${name}: ${count} cases`);
 }

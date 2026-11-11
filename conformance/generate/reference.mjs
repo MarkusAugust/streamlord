@@ -8,9 +8,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const VERSION = '1.0.4'
+const VERSION = '1.0.5'
 // sha256 of the tag's archive. A tag that moved gives another, and the fixtures were made from this one.
-const SHA256 = '6417660c11cfc3c820c3ca25bd96449cfb3df3134b9b4a63b13f0831883165fb'
+const SHA256 = 'fc8d7a78103ffd357a73440c327e7b38c063a325036721fb4a970d1f10f6390f'
 const ARCHIVE = `https://github.com/starfederation/datastar/archive/refs/tags/v${VERSION}.tar.gz`
 
 const here = dirname(fileURLToPath(import.meta.url))

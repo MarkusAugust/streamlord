@@ -1,7 +1,8 @@
 // Regenerates the fixtures under conformance/dom by running the free Datastar client in
 // happy-dom. Run by hand when the reference changes: `npm run dom`. The case inputs are read from
 // the fixtures themselves (each case's `sse`, each scenario's `store` and `steps`, and the script
-// bodies listed at the end of this file); everything else in them is written by this script.
+// bodies listed at the end of this file; each answer's `contentType`, `headers` and `body`);
+// everything else in them is written by this script.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import vm from 'node:vm'
@@ -81,6 +82,45 @@ const runFrame = async ({ name, sse }) => {
     argsRaw: events[0],
     viewTransitions: harness.viewTransitions(),
     body: document.body.innerHTML,
+    signals: JSON.parse(harness.store()),
+  }
+  await page.close()
+  return result
+}
+
+// One answer that is not a stream through the client's own fetch path, on the same page as a
+// frame: a fetch that answers with the case's body, content type and headers, and @get run by
+// data-init. What the client read from the headers is the argsRaw of the event it dispatched.
+const runResponse = async ({ name, contentType, headers, body: sent }) => {
+  const page = openPage('<div id="wrap"><div id="target">old</div></div>')
+  const { window, harness, errors } = page
+  const { document } = window
+  await window.happyDOM.waitUntilComplete()
+  harness.patch('{"keep":1}', false)
+
+  window.fetch = async () => new Response(new TextEncoder().encode(sent), { headers: { ...headers, 'Content-Type': contentType } })
+  const events = []
+  const finished = new Promise((resolve) => {
+    document.addEventListener('datastar-fetch', ({ detail }) => {
+      if (detail.type.startsWith('datastar-')) events.push(detail.argsRaw)
+      if (detail.type === 'finished') resolve()
+    })
+  })
+  const trigger = document.createElement('div')
+  trigger.setAttribute('data-init', "@get('/answer')")
+  document.head.append(trigger)
+  await finished
+
+  if (errors.length) throw new Error(`${name}: the client threw: ${errors.map((e) => e.message ?? e).join('; ')}`)
+  if (events.length !== 1) throw new Error(`${name}: ${events.length} Datastar events, the fixture holds one per case`)
+  const result = {
+    name,
+    contentType,
+    headers,
+    body: sent,
+    argsRaw: events[0],
+    viewTransitions: harness.viewTransitions(),
+    page: document.body.innerHTML,
     signals: JSON.parse(harness.store()),
   }
   await page.close()
@@ -268,6 +308,12 @@ const write = (name, text) => {
 const decoder = []
 for (const { name, sse } of read('decoder-cases.json')) decoder.push(await runFrame({ name, sse }))
 write('decoder-cases.json', onePerLine(decoder))
+
+const responses = []
+for (const { name, contentType, headers, body } of read('response-cases.json')) {
+  responses.push(await runResponse({ name, contentType, headers, body }))
+}
+write('response-cases.json', onePerLine(responses))
 
 const merge = []
 for (const scenario of read('merge-differential.json')) merge.push(await runScenario(scenario))

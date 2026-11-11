@@ -1,5 +1,6 @@
 {
-  "$comment": "tagToMs, tagHas and tagFirst from utils/tags.ts of the Datastar 1.0.4 client over each tag set, and modifyTiming from utils/timing.ts over the modifiers of data-on:click as parseAttributeKey reads them: the wrapped callback is called with a and b, then each timer the client set is fired in order, with setTimeout and clearTimeout replaced to record. A NaN, which JSON cannot hold, is written as null in tagToMs and as NaNms in a trace.",
+  "$comment": "tagToMs, tagHas and tagFirst from utils/tags.ts of the Datastar 1.0.5 client over each tag set, and modifyTiming from utils/timing.ts over the modifiers of data-on:click as parseAttributeKey reads them: the wrapped callback is called with a and b, then each timer the client set is fired in order, with setTimeout and clearTimeout replaced to record. A NaN, which JSON cannot hold, is written as null in tagToMs and as NaNms in a trace.",
+  "version": "1.0.5",
   "cases": {
     "tags": [
       {

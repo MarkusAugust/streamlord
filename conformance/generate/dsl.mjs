@@ -30,6 +30,10 @@ const bundleFor = (prefix) => (prefix === 'data-star-' ? 'datastar-aliased.js' :
 // and the probe an expression calls to show that it ran.
 const harness = `
   globalThis.MathMLElement ??= class MathMLElement {}
+  // happy-dom has no reportError, which the client hands an attribute's error from 1.0.5 on; a
+  // browser sends what it is given to the window as an error event.
+  globalThis.reportError ??= (error) =>
+    window.dispatchEvent(new window.ErrorEvent('error', { error, message: String(error?.message ?? error) }))
   const labels = new Map()
   // happy-dom 18.0.1 hands out a form as a Proxy from its constructor, while closest() returns the
   // object behind it, so a node not found by identity is matched by its parent and its markup.
@@ -103,7 +107,8 @@ const harness = `
     record.probes.push(args.map((a) => (a instanceof Event ? a.type : a)))
   }
   // The answer every request gets: a status, headers and a body; or fail, a request that never
-  // reaches the server; or hang, one that is never answered, so a later one can cancel it.
+  // reaches the server; or hang, one that is never answered, so a later one can cancel it; or
+  // breaks, a status and headers whose body fails as it is read.
   let respond = { status: 204 }
   const signals = []
   window.fetch = async (url, init = {}) => {
@@ -114,6 +119,11 @@ const harness = `
     signals.push(init.signal ?? null)
     if (respond.fail) throw new TypeError('Failed to fetch')
     if (respond.hang) return new Promise(() => {})
+    // An answer that arrives and whose body then fails, as a connection dropped mid-stream does.
+    if (respond.breaks) {
+      const body = new ReadableStream({ start: (controller) => controller.error(new TypeError('network error')) })
+      return new Response(body, { status: respond.status, headers: respond.headers ?? {} })
+    }
     return new Response(respond.body ?? '', { status: respond.status, headers: respond.headers ?? {} })
   }
   globalThis.harness = {
@@ -372,6 +382,17 @@ const runCase = async (c, pro) => {
         }
       }
       const sync = h.record.probes.length - before
+      // A case's between runs once the event's own work has settled and before any timer falls
+      // due: the element is removed, or the page hidden, while the client still waits.
+      if (c.probe?.between) {
+        await settle()
+        try {
+          vm.runInContext(c.probe.between, window)
+        } catch (e) {
+          h.record.errors.push(String(e?.message ?? e).split('\n')[0])
+        }
+        await settle()
+      }
       await drain(h)
       document.documentElement.removeEventListener(type, watch)
       fired.push({ at, type, round, sync, total: h.record.probes.length - before, defaultPrevented: event.defaultPrevented, bubbled: reached.length > 0 })
