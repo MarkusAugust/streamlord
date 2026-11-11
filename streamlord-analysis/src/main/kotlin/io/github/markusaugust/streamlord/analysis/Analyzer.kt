@@ -252,7 +252,7 @@ public class Analyzer(
         val lex = lex(src)
         val facts = fileFacts(src, lex)
         val foreign = foreignCalls(opts)
-        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign)
+        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
         val dsl = Sdk.of(opts).htmlDsl
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
@@ -268,7 +268,7 @@ public class Analyzer(
             issues += checkKeyCaseSite(site, src)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src)) {
-                for (x in lex.strings) if (x.start >= judged.start && x.end <= judged.end) claimed += x.start
+                for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
             }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
@@ -278,7 +278,7 @@ public class Analyzer(
         for (site in findCallSites(src, INTERPOLATE, lex)) {
             if (foreign(site.name, site.nameStart) || otherInterpolate) continue
             val format = interpolateFormat(site, src) ?: continue
-            for (x in lex.strings) if (x.start >= format.second.start && x.end <= format.second.end) claimed += x.start
+            for (x in lex.stringsIn(format.second.start, format.second.end)) claimed += x.start
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
@@ -300,11 +300,11 @@ public class Analyzer(
         }
         // A literal joined to values with `+` is read as one string with a hole for each value.
         val chained = HashSet<Int>()
-        val topLevel = lex.strings.toHashSet()
+        val topLevel = lex.strings.mapTo(HashSet()) { it.start }
         for (s in withNested(lex.strings)) {
             if (s.start in claimed || s.start in chained || s.unterminated) continue
             // A literal inside a template is joined to its neighbours in the template's code.
-            val chain = chainFrom(src, s, if (s in topLevel) lex.mask else facts.code)
+            val chain = chainFrom(src, s, if (s.start in topLevel) lex.mask else facts.code)
             val whole = chain ?: s
             if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
@@ -396,7 +396,8 @@ public class Analyzer(
         src: String,
         language: SourceLanguage,
         foreign: (String, Int) -> Boolean = { _, _ -> false },
-    ): Set<String> = collectSignalDefinitions(src, language, foreign).filterTo(HashSet()) { '-' in it }
+        lex: KotlinLex? = null,
+    ): Set<String> = collectSignalDefinitions(src, language, foreign, lex).filterTo(HashSet()) { '-' in it }
 
     /**
      * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
@@ -1089,10 +1090,11 @@ public class Analyzer(
         text.append(view, cut, view.length)
         val markup = text.toString()
         val open = holes.indices.filter { it !in known }
-        val written by lazy {
-            holeLandings(markup, open.map { starts[it] until starts[it] + holes[it].last + 1 - holes[it].first }, prefixes)
-        }
-        return HoleReading(landings) { j, to -> markup.substring(written[open.indexOf(j)].valueStart, starts[to]) }
+        val written =
+            lazy(LazyThreadSafetyMode.NONE) {
+                holeLandings(markup, open.map { starts[it] until starts[it] + holes[it].last + 1 - holes[it].first }, prefixes)
+            }
+        return HoleReading(landings) { j, to -> markup.substring(written.value[open.indexOf(j)].valueStart, starts[to]) }
     }
 
     private fun codeUrlMessage(

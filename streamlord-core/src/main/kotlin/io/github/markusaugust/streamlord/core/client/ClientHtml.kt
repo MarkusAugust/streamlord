@@ -32,7 +32,7 @@ internal const val HTML_SPACE: String = "\t\n\u000C\r "
 
 /** Whether this is [HTML_SPACE]. */
 @InternalStreamlordApi
-public fun Char.isHtmlSpace(): Boolean = this in HTML_SPACE
+public fun Char.isHtmlSpace(): Boolean = this == ' ' || this == '\n' || this == '\t' || this == '\r' || this == '\u000C'
 
 /**
  * Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when

@@ -67,6 +67,20 @@ public class KotlinLex(
         }
         return null
     }
+
+    /** The literals that lie wholly from [start] up to [end], found by where they start, since [strings] is in source order. */
+    internal fun stringsIn(
+        start: Int,
+        end: Int,
+    ): List<KotlinString> {
+        var i = strings.binarySearch { it.start.compareTo(start) }.let { if (it < 0) -it - 1 else it }
+        val out = ArrayList<KotlinString>()
+        while (i < strings.size && strings[i].start < end) {
+            if (strings[i].end <= end) out += strings[i]
+            i++
+        }
+        return out
+    }
 }
 
 private val FUN_BEFORE = regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")

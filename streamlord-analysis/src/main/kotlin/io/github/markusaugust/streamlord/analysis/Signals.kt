@@ -131,9 +131,10 @@ private val VALUE_TYPES =
 internal fun encodedSignalTypes(
     src: String,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+    lex: KotlinLex = lexKotlin(src),
 ): Set<String> {
     val out = LinkedHashSet<String>()
-    for (site in findCallSites(src, setOf("dataSignals"))) {
+    for (site in findCallSites(src, setOf("dataSignals"), lex)) {
         if (foreign(site.name, site.nameStart)) continue
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
@@ -320,7 +321,7 @@ public fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
     foreign: Set<String>,
-): Set<String> = collectSignalDefinitions(src, language) { name, _ -> name in foreign }
+): Set<String> = collectSignalDefinitions(src, language, { name, _ -> name in foreign })
 
 /** No call is somebody else's: what a definition is read with when the host says nothing. */
 private val NOT_FOREIGN: (String, Int) -> Boolean = { _, _ -> false }
@@ -333,16 +334,19 @@ internal fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
     foreign: (name: String, nameStart: Int) -> Boolean,
+    given: KotlinLex? = null,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
-    for (d in definedAt(src, language, spread, foreign)) out += d.name
+    // One reading of a Kotlin file for every call looked for in it.
+    val lex = given ?: if (language == SourceLanguage.KOTLIN) lexKotlin(src) else null
+    for (d in definedAt(src, language, spread, foreign, lex)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
         // A page declared from a class defines what its codec writes: the properties for a
         // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
-        for (type in encodedSignalTypes(src, foreign)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+        for (type in encodedSignalTypes(src, foreign, lex!!)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
     }
     return out
 }
@@ -363,7 +367,7 @@ public fun signalDeclarations(
     language: SourceLanguage,
     foreign: Set<String>,
 ): List<SignalDeclaration> =
-    definedAt(src, language, Spread()) { name, _ -> name in foreign }.sortedWith(compareBy({ it.start }, { it.end }))
+    definedAt(src, language, Spread(), { name, _ -> name in foreign }).sortedWith(compareBy({ it.start }, { it.end }))
 
 /**
  * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
@@ -441,8 +445,9 @@ private fun definedAt(
     language: SourceLanguage,
     spread: Spread,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+    lex: KotlinLex? = null,
 ): List<SignalDeclaration> {
-    val out = ArrayList(declared(src, language, spread, foreign))
+    val out = ArrayList(declared(src, language, spread, foreign, lex))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
@@ -466,10 +471,12 @@ private fun declared(
     language: SourceLanguage,
     spread: Spread,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+    given: KotlinLex? = null,
 ): List<SignalDeclaration> {
     val out = ArrayList<SignalDeclaration>()
     if (language == SourceLanguage.KOTLIN) {
-        for (site in findCallSites(src, PAIR_CALLS)) {
+        val lex = given ?: lexKotlin(src)
+        for (site in findCallSites(src, PAIR_CALLS, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->

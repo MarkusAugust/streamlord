@@ -664,7 +664,8 @@ private fun landscapes(
             listOf(NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
-    return readings.map { landscape(shadow, holes, prefixes, it) }
+    val holeEnds = holes.associate { it.first to it.last + 1 }
+    return readings.map { landscape(shadow, holes, prefixes, it, holeEnds) }
 }
 
 /** The [shadow] of a markup with [holes] in it, read the one way [reading] gives. */
@@ -673,10 +674,10 @@ private fun landscape(
     holes: List<IntRange>,
     prefixes: List<String>,
     reading: Reading,
+    holeEnds: Map<Int, Int> = holes.associate { it.first to it.last + 1 },
 ): Landscape {
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
-    val holeEnds = holes.associate { it.first to it.last + 1 }
     return Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) }
 }
 

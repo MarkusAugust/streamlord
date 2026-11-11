@@ -147,7 +147,7 @@ internal fun secondArgument(
 ): SecondArgument {
     if (arg == null) return SecondArgument.UNKNOWN
     if (arg.string != null) return SecondArgument.EXPRESSION
-    val strings = lex.strings.filter { it.start >= arg.start && it.end <= arg.end }
+    val strings = lex.stringsIn(arg.start, arg.end)
     val code =
         arg.text
             .mapIndexed {

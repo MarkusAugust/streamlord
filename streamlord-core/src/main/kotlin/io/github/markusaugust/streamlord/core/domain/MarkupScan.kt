@@ -129,7 +129,9 @@ public class TextPlace(
 )
 
 /** The characters that end a tag name, and so an end tag's name as well. */
-private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
+private fun Char?.endsName(): Boolean = this == null || this.endsName()
+
+private fun Char.endsName(): Boolean = isHtmlSpace() || this == '/' || this == '>'
 
 private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' || this in 'A'..'Z')
 
