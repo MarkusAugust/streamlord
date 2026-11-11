@@ -335,6 +335,18 @@ describe("an attribute on its own line", () => {
     assert.deepEqual(labels(`<!---> <div\n data-on:click__`), oneLine, "<!--->");
   });
 
+  it("reads a / in an unquoted value as the value's, and one outside a value as a new attribute", () => {
+    const modifiers = labels(`<div data-on:click__`);
+    for (const inValue of ["<a href=/api/data-", "<a href=x/data-on:click__"]) {
+      assert.deepEqual(labels(inValue, "pebble"), [], `${inValue} in a template`);
+      assert.deepEqual(inKotlin(inValue), [], `${inValue} in a Kotlin string`);
+    }
+    for (const outside of ["<div/data-on:click__", "<div a/data-on:click__", `<div a="x"/data-on:click__`]) {
+      assert.deepEqual(labels(outside), modifiers, `${outside} in html`);
+      assert.deepEqual(inKotlin(outside), modifiers, `${outside} in a Kotlin string`);
+    }
+  });
+
   it("reads Kotlin's escaped quotes in an ordinary string as quotes", () => {
     const src = `val x = "<div data-show=\\"\\$a > 1\\" data-on:click__"`;
     assert.ok(labels(src, "kotlin", src.length - 1).includes("debounce"), src);

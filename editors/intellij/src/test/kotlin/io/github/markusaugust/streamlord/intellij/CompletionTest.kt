@@ -289,6 +289,48 @@ class CompletionTest : StreamlordTestCase() {
         )
     }
 
+    fun `test a slash in an unquoted value is the value's, and one outside a value starts a new attribute`() {
+        val inValue = listOf("<a href=/api/data-", "<a href=x/data-on:click__")
+        val offered =
+            inValue.flatMapIndexed { n, markup ->
+                listOf(
+                    "html" to itemsIn("value$n.html", "$markup<caret>"),
+                    "kotlin" to
+                        run {
+                            myFixture.configureByText("Value$n.kt", "fun side() = \"\"\"$markup<caret>\"\"\"")
+                            assertTrue("$markup in a Kotlin string is injected HTML", caretInInjectedHtml())
+                            myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                        },
+                ).filter { (_, items) -> "data-on" in items || "debounce" in items }.map { (where, items) -> "$markup in $where -> $items" }
+            }
+        val outside = listOf("<div/data-on:click__", "<div a/data-on:click__", "<div a=\"x\"/data-on:click__")
+        // The platform adds the words of the file here (div, data, on); the modifiers must all come, in order.
+        val missing =
+            outside.mapIndexedNotNull { n, markup ->
+                val items = itemsIn("outside$n.html", "$markup<caret>")
+                if (items.filter { it in onModifiers } == onModifiers) null else "$markup in html -> $items"
+            }
+        val notInKotlin =
+            outside.mapIndexedNotNull { n, markup ->
+                myFixture.configureByText("Outside$n.kt", "fun side() = \"\"\"$markup<caret>\"\"\"")
+                val injected = caretInInjectedHtml()
+                val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                if (injected &&
+                    items.filter { it in onModifiers } == onModifiers
+                ) {
+                    null
+                } else {
+                    "$markup in kotlin -> injected $injected, $items"
+                }
+            }
+        // After the outside cases, so one run shows every shape that is read wrong.
+        assertEmpty((missing + notInKotlin + offered).joinToString("\n"), missing + notInKotlin + offered)
+    }
+
+    fun `test an escape first in a later literal is an escape`() {
+        assertModifiersInjected(listOf("// language=HTML\nval s = \"<div\" + \"\\ndata-on:click__<caret>\""))
+    }
+
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {
         myFixture.configureByText("page.html", "<div data-on-signal-patch=\"pat<caret>\"></div>")
         // The one item is inserted straight away.

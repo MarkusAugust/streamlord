@@ -247,10 +247,10 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     else -> tagBeforeCaret(src, offset, prefix)
                 } ?: return false
             // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret is in
-            // the tag and in no value; the name is what follows the last white space or slash, after the tag's own name,
-            // and one holding `=` is an unquoted value, as completion.ts reads it.
+            // the tag and in no quoted value; the name is what follows the last white space, or a slash outside a value,
+            // after the tag's own name, as completion.ts reads it.
             val head = Regex("""^<([A-Za-z][^\s/>]*)""").find(before) ?: return false
-            val partial = Regex("""[^\s/]*$""").find(before)?.value.orEmpty()
+            val partial = nameAtEnd(Regex("""\S*$""").find(before)?.value.orEmpty()) ?: return false
             if (before.length - partial.length <= head.value.length || partial.any { it in "=\"'<>" }) return false
             val tagName = head.groupValues[1].lowercase()
             if ("__" in partial) {
@@ -562,3 +562,30 @@ internal fun withoutKotlinEscapes(
             else -> m.value
         }
     }
+
+/**
+ * The attribute name [token], a run without white space in a tag, ends with, or null when it ends in
+ * an unquoted value: a `/` outside a value starts a new attribute, and one inside an unquoted value,
+ * as in `href=/api/x`, is the value's. nameAtEnd in completion.ts.
+ */
+internal fun nameAtEnd(token: String): String? {
+    var start = 0
+    var value = false
+    var quote = 0.toChar()
+    for (i in token.indices) {
+        val c = token[i]
+        if (quote != 0.toChar()) {
+            if (c == quote) {
+                quote = 0.toChar()
+                value = false
+            }
+        } else if (value) {
+            if (token.getOrNull(i - 1) == '=' && (c == '"' || c == '\'')) quote = c
+        } else if (c == '=') {
+            value = true
+        } else if (c == '/') {
+            start = i + 1
+        }
+    }
+    return if (value || quote != 0.toChar()) null else token.substring(start)
+}

@@ -20,6 +20,30 @@ const ALL_SITES: ReadonlySet<string> = new Set([
 ]);
 const SELECTOR_ARG_NAMES = new Set(["selector", "viewTransitionSelector"]);
 
+/**
+ * The attribute name `token`, a run without white space in a tag, ends with, or null when it ends in
+ * an unquoted value: a `/` outside a value starts a new attribute, and one inside an unquoted value,
+ * as in `href=/api/x`, is the value's. nameAtEnd in StreamlordCompletionContributor.kt.
+ */
+function nameAtEnd(token: string): string | null {
+  let start = 0;
+  let value = false;
+  let quote = "";
+  for (let i = 0; i < token.length; i++) {
+    const c = token[i];
+    if (quote !== "") {
+      if (c === quote) {
+        quote = "";
+        value = false;
+      }
+    } else if (value) {
+      if (token[i - 1] === "=" && (c === '"' || c === "'")) quote = c;
+    } else if (c === "=") value = true;
+    else if (c === "/") start = i + 1;
+  }
+  return value || quote !== "" ? null : token.slice(start);
+}
+
 /** Completions for Datastar expressions in Kotlin strings, and for data-* attributes in HTML. */
 export class StreamlordCompletionProvider implements vscode.CompletionItemProvider {
   constructor(private readonly signals: SignalIndex, private readonly prefix: () => string) {}
@@ -102,11 +126,12 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const before = string ? tagBeforeCaretInString(string, offset, prefix) : tagBeforeCaret(src, offset, prefix);
     if (before === null) return [];
     // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret
-    // is in the tag and in no value; the name is what follows the last white space or slash, after
-    // the tag's own name, and one holding `=` is an unquoted value: as StreamlordCompletionContributor.kt reads it.
+    // is in the tag and in no quoted value; the name is what follows the last white space, or a slash
+    // outside a value, after the tag's own name: nameAtEnd in StreamlordCompletionContributor.kt.
     const head = /^<([A-Za-z][^\s/>]*)/.exec(before);
-    const partial = /[^\s/]*$/.exec(before)?.[0] ?? "";
-    if (!head || before.length - partial.length <= head[0].length || /[="'<>]/.test(partial)) return [];
+    const token = /\S*$/.exec(before)?.[0] ?? "";
+    const partial = nameAtEnd(token);
+    if (!head || partial === null || before.length - partial.length <= head[0].length || /[="'<>]/.test(partial)) return [];
     const tagName = (head[1] ?? "").toLowerCase();
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
     // The event of data-on, which VS Code's HTML service knows nothing of, in any file.
