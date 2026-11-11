@@ -113,6 +113,12 @@ describe("what crosses the port", () => {
     assert.equal(codes(["count", "cuont"]).includes("unknown-signal"), false);
   });
 
+  it("names the prefix setting as VS Code names it", () => {
+    const [issue] = diagnose(`<div data-star-on:click="x()"></div>`, false, "data-", [], null);
+    assert.equal(issue?.code, "prefix-mismatch");
+    assert.equal(issue?.message, "This is an aliased Datastar attribute, but the prefix is set to data-. Check streamlord.attributePrefix.");
+  });
+
   it("reads a Kotlin file with the modules its imports show", () => {
     const call = `fun page() = div { dataText("1 +") }`;
     const withDsl = `import io.github.markusaugust.streamlord.html.dataText\n${call}`;

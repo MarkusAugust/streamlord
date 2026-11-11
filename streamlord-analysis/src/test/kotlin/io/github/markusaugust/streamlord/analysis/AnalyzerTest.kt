@@ -210,4 +210,19 @@ class TokensTest {
         assertNull(tokenizeAttributeName("class", "data-"))
         assertEquals(listOf(NamePart.PREFIX, NamePart.PLUGIN), tokenizeAttributeName("data-text", "data-")!!.map { it.part })
     }
+
+    @Test
+    fun `an aliased attribute under the default prefix names the setting as the editor names it`() {
+        val said = "This is an aliased Datastar attribute, but the prefix is set to data-. Check"
+        val vscode = AnalyzeOptions(prefixSetting = "streamlord.attributePrefix")
+        val html = "<div data-star-on:click=\"x()\"></div>"
+        val kotlin = "fun f() = \"\"\"<p data-star-text=\"1\"></p>\"\"\""
+
+        fun message(issues: List<Issue>) = issues.single { it.code == "prefix-mismatch" }.message
+
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeHtml(html, AnalyzeOptions())))
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeKotlin(kotlin, AnalyzeOptions())))
+        assertEquals("$said streamlord.attributePrefix.", message(analyzer.analyzeHtml(html, vscode)))
+        assertEquals("$said streamlord.attributePrefix.", message(analyzer.analyzeKotlin(kotlin, vscode)))
+    }
 }
