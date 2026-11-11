@@ -332,4 +332,11 @@ describe("html injection grammar", () => {
     assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k !== "expression"));
     assert.deepEqual(names(grammar.repository["datastar-attribute-bare"].match), of(() => true));
   });
+
+  it("knows exactly the catalog's fetch options, and filterSignals' two keys", () => {
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { fetchOptions: { name: string }[] };
+    const grammar = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
+    const keys = /^\\b\(([A-Za-z|]+)\)/.exec(grammar.repository["option-keys"].match)?.[1]?.split("|").sort();
+    assert.deepEqual(keys, [...catalog.fetchOptions.map((o) => o.name), "include", "exclude"].sort());
+  });
 });

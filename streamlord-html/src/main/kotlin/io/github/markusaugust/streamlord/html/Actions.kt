@@ -1,7 +1,5 @@
 package io.github.markusaugust.streamlord.html
 
-import io.github.markusaugust.streamlord.core.domain.ElementNamespace
-import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import kotlin.time.Duration
 
 /**

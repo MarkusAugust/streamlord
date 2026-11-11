@@ -523,6 +523,9 @@ for (const { name, apply } of globalThis.registeredActions) {
       if (typeof key === "string" && !reads.includes(key)) reads.push(key);
       return undefined;
     },
+    // A client that spread or listed its options would read them unseen.
+    has: () => { throw new Error(`@${name} asks which options it was given`); },
+    ownKeys: () => { throw new Error(`@${name} lists the options it was given`); },
   });
   const noUrl = new Error("FetchNoUrlProvided");
   const ctx = { el: {}, evt: undefined, error: () => noUrl, cleanups: new Map() };
