@@ -46,8 +46,8 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   written in a DSL call, `dataSignals("foo-bar", …)` or `signal("form.first-name")`, is an error,
   since the SDK refuses it at runtime, with the camelCase fix.
 - What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
-  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
-  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  `@name(` in the text of a template literal whose `${...}` holds a brace, or inside a regular
+  expression, is rewritten there too; a `'` in a comment or a regular expression
   pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
   signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
 - Signal names Datastar's client cannot hold or no `$name` reaches: `__proto__` anywhere in the

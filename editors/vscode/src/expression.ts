@@ -436,11 +436,15 @@ export function clientRewrite(text: string): ClientRewrite {
   const interpolation = (from: number, to: number) => {
     const inner = text.slice(from, to);
     const found: Rewrite[] = [...inner.matchAll(CLIENT_SIGNAL)].map((m) => ({ kind: "signal", start: from + m.index, end: from + m.index + m[0].length, name: m[1] ?? "" }));
+    const signals = found.length;
     // An action the signal pass has already rewritten a part of is no longer there to match.
+    // Both lists come in the order of the text, so each signal is looked at once.
+    let k = 0;
     for (const m of inner.matchAll(CLIENT_ACTION)) {
       const start = from + m.index;
       const end = start + m[0].length;
-      if (!found.some((f) => f.start < end && start < f.end)) found.push({ kind: "action", start, end, name: m[1] ?? "" });
+      while (k < signals && found[k]!.end <= start) k++;
+      if (k === signals || found[k]!.start >= end) found.push({ kind: "action", start, end, name: m[1] ?? "" });
     }
     found.sort((a, b) => a.start - b.start);
     let i = from;
@@ -479,6 +483,21 @@ export function clientRewrite(text: string): ClientRewrite {
   copy(i, text.length);
   origin.push(text.length);
   return { js, origin, rewrites, runs };
+}
+
+const BRACED_INTERPOLATION = /\$\{[^{}]*\{/;
+
+/** Why the client rewrote the reference at `at`, which JavaScript reads as the text of a template literal. */
+function templateWhy(js: string, runs: Run[], at: number): string {
+  // Between two runs of one literal lies a ${...} of a literal the client took whole.
+  if (runs.some((a, i) => { const b = runs[i + 1]; return b !== undefined && a.quote === b.quote && at >= a.end && at < b.start; })) {
+    return ", because it stands inside a ${...}, where Datastar rewrites the text of an inner template literal too, so the text holds that";
+  }
+  const open = js.lastIndexOf("`", at);
+  const next = js.indexOf("`", at);
+  return open >= 0 && BRACED_INTERPOLATION.test(js.slice(open, next < 0 ? js.length : next))
+    ? ", because a ${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
+    : ", because Datastar does not take this template literal whole and reads its text as code, so the text holds that";
 }
 
 /**
@@ -790,7 +809,7 @@ function validateText(text: string, returnsValue: boolean | undefined, hyphenate
             : "";
       const why =
         region === Region.TEMPLATE
-          ? ", because a ${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
+          ? templateWhy(script.js, rewritten.runs, r.start)
           : region === Region.REGEX
             ? ", which changes the pattern"
             : script.js[(starts ??= stringStarts(regions))[r.start]!] === (r.kind === "signal" ? "'" : '"')
@@ -869,7 +888,10 @@ function validateText(text: string, returnsValue: boolean | undefined, hyphenate
       CLIENT_SIGNAL_HERE.lastIndex = p;
       const written = CLIENT_SIGNAL_HERE.exec(script.js)?.[0] ?? "$";
       const run = rewritten.runs.find((q) => q.start <= p && p < q.end);
-      const why = run
+      // A later stretch of a literal the client took whole: JavaScript is still in the ${...} the client ended.
+      const why = run && run.start !== run.quote
+        ? ": a } before it ends the ${...} for Datastar's pattern, which leaves what follows as written"
+        : run
         ? `: its pattern takes the ${script.js[run.quote]}${placeOf(regions[run.quote] ?? Region.CODE)} before it for the start of a string, and leaves everything up to the next ${script.js[run.quote]} as written`
         : "";
       issues.push({

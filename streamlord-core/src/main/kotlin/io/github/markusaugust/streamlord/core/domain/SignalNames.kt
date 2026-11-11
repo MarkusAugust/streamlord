@@ -170,9 +170,10 @@ public object SignalNames {
         return out.toString()
     }
 
-    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and a
-    // template literal without `${`, so their text is in strings; the text of one with `${` it reads
-    // as code, which JavaScript does not, so the scan steps over that text itself.
+    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and
+    // the text of a template literal it takes whole, so those are in runs; the text of one whose
+    // `${` holds a brace it reads as code, which JavaScript does not, so the scan steps over that
+    // text itself.
     private fun wrongHyphens(text: String): Set<Int> {
         val read = clientRewrite(text)
         val references = read.rewrites.filter { it.signal }

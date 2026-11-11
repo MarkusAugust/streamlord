@@ -157,11 +157,15 @@ public fun clientRewrite(text: String): ClientRewrite {
         val inner = text.substring(from, to)
         val found = ArrayList<Rewrite>()
         for (m in CLIENT_SIGNAL.findAll(inner)) found += Rewrite(true, from + m.range.first, from + m.range.last + 1, m.groupValues[1])
+        val signals = found.size
         // An action the signal pass has already rewritten a part of is no longer there to match.
+        // Both lists come in the order of the text, so each signal is looked at once.
+        var k = 0
         for (m in CLIENT_ACTION.findAll(inner)) {
             val start = from + m.range.first
             val end = from + m.range.last + 1
-            if (found.none { it.start < end && start < it.end }) found += Rewrite(false, start, end, m.groupValues[1])
+            while (k < signals && found[k].end <= start) k++
+            if (k == signals || found[k].start >= end) found += Rewrite(false, start, end, m.groupValues[1])
         }
         found.sortBy { it.start }
         var i = from
@@ -179,18 +183,19 @@ public fun clientRewrite(text: String): ClientRewrite {
         to: Int,
     ) {
         var written = from
-        var p = text.indexOf("\${", from)
-        while (p in 0 until to) {
-            val close = interpolationClose(text, p, to)
+        var p = from
+        // The search stays inside the literal: one that ran on to the end of the text would be run again for every literal.
+        while (p < to - 1) {
+            val close = if (text[p] == '$' && text[p + 1] == '{') interpolationClose(text, p, to) else null
             if (close == null) {
-                p = text.indexOf("\${", p + 1)
+                p++
                 continue
             }
             copy(written, p + 2)
             runs += Run(written until p + 2, from)
             interpolation(p + 2, close)
             written = close
-            p = text.indexOf("\${", close)
+            p = close
         }
         copy(written, to)
         runs += Run(written until to, from)

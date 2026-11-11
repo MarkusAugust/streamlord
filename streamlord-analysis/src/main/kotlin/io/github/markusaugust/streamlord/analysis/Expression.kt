@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.ClientScript
 import io.github.markusaugust.streamlord.core.client.Rewrite
+import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 
@@ -18,6 +19,9 @@ private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
 private val WORD_CHAR = Regex("""\w""")
+
+/** A `${` with a brace inside before it closes: what keeps the client's pattern from taking a template literal whole. */
+private val BRACED_INTERPOLATION = Regex("""\$\{[^{}]*\{""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
 internal fun quoteAt(
@@ -798,7 +802,16 @@ public class ExpressionValidator(
             val written = js.substring(r.start, if (r.signal) r.end else r.end - 1)
             val (start, end) = span(r.start, r.start + written.length)
             if (region != Region.CODE) {
-                issues += literalRewritten(r, written, region, js.getOrNull(starts[r.start]), start, end)
+                issues +=
+                    literalRewritten(
+                        r,
+                        written,
+                        region,
+                        js.getOrNull(starts[r.start]),
+                        start,
+                        end,
+                        templateWhy(js, rewritten.runs, r.start),
+                    )
                 continue
             }
             if (r.signal) {
@@ -819,6 +832,12 @@ public class ExpressionValidator(
                 val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =
                     run?.let {
+                        // A later stretch of a literal the client took whole: JavaScript is still in the ${...} the client ended.
+                        if (it.range.first !=
+                            it.quote
+                        ) {
+                            return@let ": a } before it ends the \${...} for Datastar's pattern, which leaves what follows as written"
+                        }
                         val q = js[it.quote]
                         ": its pattern takes the $q${placeOf(regions[it.quote])} before it for the start of a string, " +
                             "and leaves everything up to the next $q as written"
@@ -857,6 +876,26 @@ public class ExpressionValidator(
         return issues
     }
 
+    /** Why the client rewrote the reference at [at], which JavaScript reads as the text of a template literal. */
+    private fun templateWhy(
+        js: String,
+        runs: List<Run>,
+        at: Int,
+    ): String {
+        // Between two runs of one literal lies a ${...} of a literal the client took whole.
+        if (runs.zipWithNext().any { (a, b) -> a.quote == b.quote && at > a.range.last && at < b.range.first }) {
+            return ", because it stands inside a \${...}, where Datastar rewrites the text of an inner template literal too, " +
+                "so the text holds that"
+        }
+        val open = js.lastIndexOf('`', at)
+        val close = js.indexOf('`', at).let { if (it < 0) js.length else it }
+        return if (open >= 0 && BRACED_INTERPOLATION.containsMatchIn(js.substring(open, close))) {
+            ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
+        } else {
+            ", because Datastar does not take this template literal whole and reads its text as code, so the text holds that"
+        }
+    }
+
     private fun literalRewritten(
         r: Rewrite,
         written: String,
@@ -864,6 +903,7 @@ public class ExpressionValidator(
         quote: Char?,
         start: Int,
         end: Int,
+        template: String,
     ): Issue {
         val becomes = if (r.signal) r.written else "${r.written}...)"
         val advice =
@@ -889,8 +929,7 @@ public class ExpressionValidator(
         val why =
             when {
                 region == Region.TEMPLATE -> {
-                    ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, " +
-                        "so the text holds that"
+                    template
                 }
 
                 region == Region.REGEX -> {
