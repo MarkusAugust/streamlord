@@ -123,10 +123,13 @@ private fun options(
     kotlin: Boolean,
     prefix: String,
 ): AnalyzeOptions {
-    if (!kotlin) return AnalyzeOptions(prefix = prefix)
+    if (!kotlin) return AnalyzeOptions(prefix = prefix, prefixSetting = PREFIX_SETTING)
     val modules = analyzer.modulesOf(src)
-    return AnalyzeOptions(prefix = prefix, htmlDsl = modules.htmlDsl, core = modules.core)
+    return AnalyzeOptions(prefix = prefix, htmlDsl = modules.htmlDsl, core = modules.core, prefixSetting = PREFIX_SETTING)
 }
+
+/** The prefix setting by the id VS Code's settings are searched by. */
+private const val PREFIX_SETTING = "streamlord.attributePrefix"
 
 private fun reads(
     src: String,

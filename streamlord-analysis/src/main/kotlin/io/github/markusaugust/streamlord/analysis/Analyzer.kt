@@ -32,7 +32,12 @@ public data class AnalyzeOptions(
     val core: Boolean? = null,
     /** Where the name of each call starts ([CallSite.nameStart]) that the host knows is not Streamlord's. */
     val foreignCalls: Set<Int> = emptySet(),
+    /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
+    val prefixSetting: String = PREFIX_SETTING,
 )
+
+/** The setting as the IntelliJ plugin's settings page shows it. */
+internal const val PREFIX_SETTING: String = "the Streamlord attribute prefix setting"
 
 /** Which of Streamlord's modules the analysed file can use, as [AnalyzeOptions] says. */
 internal class Sdk private constructor(
@@ -440,7 +445,7 @@ public class Analyzer(
             } else {
                 value!!.toSource(start - valueStart, end - valueStart)
             }
-        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true)) {
+        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true, prefixSetting = opts.prefixSetting)) {
             val inName = i.end <= name.length
             if (!inName && !judgeValue) continue
             val r = range(i.start, i.end)
@@ -572,7 +577,7 @@ public class Analyzer(
         val issues = ArrayList<Issue>()
         for (tag in tokenize(src, templates).tags) {
             if (tag.closing) continue
-            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated)
+            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated, prefixSetting = opts.prefixSetting)
         }
         return issues
     }
@@ -1793,7 +1798,7 @@ public class Analyzer(
                     src,
                     markup.validateMarkup(
                         view,
-                        MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated, templates = false),
+                        MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated, templates = false, prefixSetting = opts.prefixSetting),
                     ),
                 )
         }

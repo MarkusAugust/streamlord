@@ -427,6 +427,8 @@ public data class MarkupOptions(
     val hyphenatedSignals: Set<String> = emptySet(),
     /** Whether the markup is a template's or an HTML file's, whose template comments and tags are skipped, rather than a Kotlin string's. */
     val templates: Boolean = true,
+    /** As [AnalyzeOptions.prefixSetting]. */
+    val prefixSetting: String = PREFIX_SETTING,
 )
 
 /**
@@ -669,7 +671,7 @@ public class MarkupValidator(
             if (!tag.selfClosing) stack += tag
             if (opts.checkAttributes) {
                 issues +=
-                    validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end), opts.hyphenatedSignals)
+                    validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end), opts.hyphenatedSignals, prefixSetting = opts.prefixSetting)
             }
         }
         for (unclosed in stack) {
@@ -746,6 +748,7 @@ public class MarkupValidator(
         tagSource: String?,
         hyphenatedSignals: Set<String> = emptySet(),
         kotlin: Boolean = false,
+        prefixSetting: String = PREFIX_SETTING,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -755,7 +758,7 @@ public class MarkupValidator(
                     Issue(
                         attr.nameStart,
                         attr.nameEnd,
-                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check the Streamlord attribute prefix setting.",
+                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check $prefixSetting.",
                         Severity.WARNING,
                         "prefix-mismatch",
                     )
