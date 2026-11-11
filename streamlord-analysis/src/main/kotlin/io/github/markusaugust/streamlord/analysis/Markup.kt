@@ -671,7 +671,13 @@ public class MarkupValidator(
             if (!tag.selfClosing) stack += tag
             if (opts.checkAttributes) {
                 issues +=
-                    validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end), opts.hyphenatedSignals, prefixSetting = opts.prefixSetting)
+                    validateAttributes(
+                        tag,
+                        opts.prefix,
+                        html.substring(tag.start, tag.end),
+                        opts.hyphenatedSignals,
+                        prefixSetting = opts.prefixSetting,
+                    )
             }
         }
         for (unclosed in stack) {

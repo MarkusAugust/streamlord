@@ -577,7 +577,14 @@ public class Analyzer(
         val issues = ArrayList<Issue>()
         for (tag in tokenize(src, templates).tags) {
             if (tag.closing) continue
-            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated, prefixSetting = opts.prefixSetting)
+            issues +=
+                markup.validateAttributes(
+                    tag,
+                    opts.prefix,
+                    src.substring(tag.start, tag.end),
+                    hyphenated,
+                    prefixSetting = opts.prefixSetting,
+                )
         }
         return issues
     }
@@ -1798,7 +1805,14 @@ public class Analyzer(
                     src,
                     markup.validateMarkup(
                         view,
-                        MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated, templates = false, prefixSetting = opts.prefixSetting),
+                        MarkupOptions(
+                            requireIds,
+                            opts.prefix,
+                            opts.checkHtmlAttributes,
+                            hyphenated,
+                            templates = false,
+                            prefixSetting = opts.prefixSetting,
+                        ),
                     ),
                 )
         }

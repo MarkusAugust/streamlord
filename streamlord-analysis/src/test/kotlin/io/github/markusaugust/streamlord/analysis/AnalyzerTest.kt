@@ -225,5 +225,4 @@ class TokensTest {
         assertNull(tokenizeAttributeName("class", "data-"))
         assertEquals(listOf(NamePart.PREFIX, NamePart.PLUGIN), tokenizeAttributeName("data-text", "data-")!!.map { it.part })
     }
-
 }
