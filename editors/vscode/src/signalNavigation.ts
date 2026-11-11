@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { INDEXED_SCHEMES, placesIn, textOf, type Places, type SignalIndex } from "./signalIndex.ts";
-import { namesSignal, renameRefusal, signalSites, siteAt, siteRenameText, type SignalSite } from "./signalSites.ts";
+import { renameRefusal, renameText, signalSiteAt, signalSitesNaming, type SignalSite } from "./analysis.ts";
 
 /** The index as the providers use it: what the workspace defines, and where each file names signals. */
 type Index = Pick<SignalIndex, "allDefinitions" | "allPlaces">;
@@ -46,7 +46,7 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
     const refusal = renameRefusal(site);
     if (refusal) throw new Error(refusal);
     const old = site.signal;
-    if (newName !== old && this.index.allDefinitions().has(newName)) throw new Error(`The workspace already defines the signal '${newName}'.`);
+    if (newName !== old && this.index.allDefinitions().includes(newName)) throw new Error(`The workspace already defines the signal '${newName}'.`);
     const edit = new vscode.WorkspaceEdit();
     const byFile = new Map<string, Found[]>();
     for (const found of await this.sitesOf(old, true)) byFile.set(found.uri, [...(byFile.get(found.uri) ?? []), found]);
@@ -54,9 +54,9 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
       const text = await textOf(uri);
       if (text === null) continue;
       for (const { site: s, places } of sites) {
-        const written = siteRenameText(text, s, old, newName);
+        const written = renameText(text, s, old, newName);
         const file = uri.slice(uri.lastIndexOf("/") + 1);
-        if (written === null) throw new Error(`'${text.slice(s.start, s.end)}' in ${file} cannot be written so that it names '${newName}'.`);
+        if (written === null || written === undefined) throw new Error(`'${text.slice(s.start, s.end)}' in ${file} cannot be written so that it names '${newName}'.`);
         edit.replace(vscode.Uri.parse(uri), rangeIn(places, s), written);
       }
     }
@@ -68,7 +68,7 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
     if (!INDEXED_SCHEMES.has(document.uri.scheme)) return null;
     const language = document.languageId === "kotlin" ? "kotlin" : "html";
     const places = placesIn(document.getText(), language, this.prefix());
-    return siteAt(signalSites(places.reads, places.declarations, this.index.allDefinitions()), document.offsetAt(position));
+    return signalSiteAt(places.names, this.index.allDefinitions(), document.offsetAt(position)) ?? null;
   }
 
   /** Every site in the workspace that names `name`, and with `under` every one that defines a signal under it. */
@@ -76,7 +76,7 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
     const defined = this.index.allDefinitions();
     const out: Found[] = [];
     for (const [uri, places] of await this.index.allPlaces()) {
-      for (const site of signalSites(places.reads, places.declarations, defined)) if (namesSignal(site, name, under)) out.push({ uri, site, places });
+      for (const site of signalSitesNaming(places.names, defined, name, under)) out.push({ uri, site, places });
     }
     return out;
   }

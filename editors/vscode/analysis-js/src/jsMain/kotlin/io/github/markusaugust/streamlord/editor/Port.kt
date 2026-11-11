@@ -566,6 +566,10 @@ fun attributeNamed(
         ?.spec
         ?.let { attributes[it.name] }
 
+/** The attribute the DSL function [helper] writes, or null. */
+@JsExport
+fun attributeOfHelper(helper: String): Attribute? = analyzer.catalog.attributesByKotlin[helper]?.let { attributes[it.name] }
+
 /** What the attribute [name] is and does, in Markdown; [withKotlin] names its DSL helpers too. */
 @JsExport
 fun attributeDoc(

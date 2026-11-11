@@ -1,34 +1,38 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { MockDocument } from "./vscode-mock.ts";
-import { analyzeKotlin } from "../src/analyze.ts";
+import { canCallDsl, diagnose, inHtmlString, signalsOf } from "../src/analysis.ts";
 import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
-import { kotlinModules } from "../src/modules.ts";
 import { placesIn } from "../src/signalIndex.ts";
 import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
-import { collectSignals } from "../src/signals.ts";
 
 const DSL = "import io.github.markusaugust.streamlord.html.*\n";
 
 describe("which Streamlord modules a Kotlin file can use", () => {
   it("calls the DSL only through its import or from inside its package", () => {
-    assert.deepEqual(kotlinModules("fun f() = 1"), { core: null, htmlDsl: false });
-    assert.deepEqual(kotlinModules(DSL), { core: null, htmlDsl: true });
-    assert.deepEqual(kotlinModules("import io.github.markusaugust.streamlord.html.signal as s\n"), { core: null, htmlDsl: true });
-    assert.deepEqual(kotlinModules("package io.github.markusaugust.streamlord.html\n"), { core: null, htmlDsl: true });
-    assert.deepEqual(kotlinModules("import kotlinx.html.*\n"), { core: null, htmlDsl: false });
-    assert.deepEqual(kotlinModules("\uFEFF" + DSL), { core: null, htmlDsl: true });
+    assert.equal(canCallDsl("fun f() = 1"), false);
+    assert.equal(canCallDsl(DSL), true);
+    assert.equal(canCallDsl("import io.github.markusaugust.streamlord.html.signal as s\n"), true);
+    assert.equal(canCallDsl("package io.github.markusaugust.streamlord.html\n"), true);
+    assert.equal(canCallDsl("import kotlinx.html.*\n"), false);
+    assert.equal(canCallDsl("\uFEFF" + DSL), true);
     // As the colours read it: an import in a comment or a raw string imports nothing.
-    assert.deepEqual(kotlinModules("/*\n" + DSL + "*/\n"), { core: null, htmlDsl: false });
-    assert.deepEqual(kotlinModules('val sample = """\n' + DSL + '"""\n'), { core: null, htmlDsl: false });
+    assert.equal(canCallDsl("/*\n" + DSL + "*/\n"), false);
+    assert.equal(canCallDsl('val sample = """\n' + DSL + '"""\n'), false);
   });
 
   // Whether the project has core no text proves, so core stays unknown and is taken for there, but for the official SDK.
   it("has no Streamlord where the file uses the official SDK alone", () => {
     const official = "import dev.datastar.kotlin.sdk.blocking.ServerSentEventGenerator\n";
-    assert.deepEqual(kotlinModules(official), { core: false, htmlDsl: false });
-    assert.deepEqual(kotlinModules(official + "import io.github.markusaugust.streamlord.ktor.respondDatastar\n"), { core: null, htmlDsl: false });
+    const streamlord = "import io.github.markusaugust.streamlord.ktor.respondDatastar\n";
+    // The markup handed to patchElements is Streamlord's to read only where the file may have core.
+    const handed = `fun f(sse: Any) = sse.patchElements("data-text")`;
+    const inMarkup = (imports: string) => inHtmlString(imports + handed, (imports + handed).indexOf("data-text") + 2);
+    assert.equal(canCallDsl(official), false);
+    assert.equal(inMarkup(official), false);
+    assert.equal(inMarkup(official + streamlord), true);
+    assert.equal(canCallDsl(official + streamlord), false);
   });
 });
 
@@ -38,15 +42,15 @@ describe("a DSL-named call in a file without the DSL", () => {
   const doc = new MockDocument(src, "kotlin");
 
   it("gets no trap and reads no signal", () => {
-    const issues = (text: string) => analyzeKotlin(text, { prefix: "data-", checkHtmlAttributes: true, ...kotlinModules(text) });
+    const issues = (text: string) => diagnose(text, true, "data-", [], null);
     assert.deepEqual(issues(src), []);
     assert.ok(issues(DSL + src).some((i) => i.message.includes("Kotlin")), issues(DSL + src).map((i) => i.message).join());
-    assert.deepEqual(placesIn(src, "kotlin", "data-").reads, []);
-    assert.deepEqual(placesIn(DSL + src, "kotlin", "data-").reads.map((r) => r.name), ["total"]);
+    assert.deepEqual(placesIn(src, "kotlin", "data-").names.reads, []);
+    assert.deepEqual(placesIn(DSL + src, "kotlin", "data-").names.reads.map((r) => r.name), ["total"]);
   });
 
   it("gets no completion, hover or signature help", () => {
-    const index = { all: () => collectSignals(`<div data-signals:count="0"></div>`, "html"), forFile: () => new Set<string>() };
+    const index = { all: () => new Set(signalsOf(`<div data-signals:count="0"></div>`, false).signals), forFile: () => new Set<string>() };
     const completion = new StreamlordCompletionProvider(index as never, () => "data-");
     assert.deepEqual(completion.provideCompletionItems(doc as never, doc.positionAt(src.indexOf("count")) as never), []);
     const hover = new StreamlordHoverProvider(() => "data-");
@@ -65,7 +69,7 @@ describe("a DSL-named call in a file without the DSL", () => {
 });
 
 describe("kotlinx.html's attributes form and HTML strings, whatever the file has", () => {
-  const index = { all: () => collectSignals(`<div data-signals:count="0"></div>`, "html"), forFile: () => new Set<string>() };
+  const index = { all: () => new Set(signalsOf(`<div data-signals:count="0"></div>`, false).signals), forFile: () => new Set<string>() };
   const completion = new StreamlordCompletionProvider(index as never, () => "data-");
   const labels = (src: string, at: number) => completion.provideCompletionItems(new MockDocument(src, "kotlin") as never, new MockDocument(src, "kotlin").positionAt(at) as never).map((i) => String(i.label));
 

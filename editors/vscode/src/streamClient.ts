@@ -1,5 +1,4 @@
-import { bodyless, compactSignals, NON_STREAM_CUT, NON_STREAM_LIMIT, readsAsStream, requestHeaders, requestUrl, sendableUrl, unreadBody } from "./requests.ts";
-import { decodeDatastar, SseParser, type DatastarFrame, type SseMessage } from "./sse.ts";
+import { responseReading, streamRequest, StreamReader, type DatastarFrame, type StreamEvent } from "./analysis.ts";
 
 /**
  * The network half of the Stream Inspector, free of any editor API so it can be tested against a
@@ -25,21 +24,9 @@ export interface StreamHandlers {
 }
 
 export function buildRequest(req: StreamRequest): { url: string; init: RequestInit } | { error: string } {
-  // Judged as written, so the message shows the user's URL and not the one with the signals added.
-  const written = sendableUrl(req.url);
-  if ("error" in written) return written;
-  const signalsJson = compactSignals(req.signals ?? "");
-  // Judged on the compacted text, which is what goes out: a lone no-break space is not blank to it.
-  try {
-    JSON.parse(signalsJson);
-  } catch (e) {
-    return { error: `Signals are not valid JSON: ${(e as Error).message}` };
-  }
-  const sendable = sendableUrl(requestUrl(req.url, req.method, signalsJson));
-  if ("error" in sendable) return sendable;
-  // The user's headers come last and replace the client's own, Content-Type included, as they do in the client.
-  const headers = requestHeaders(req.method, req.headers ?? {});
-  return { url: sendable.url, init: { method: req.method.toUpperCase(), headers, body: bodyless(req.method) ? undefined : signalsJson } };
+  const built = streamRequest(req.url, req.method, req.signals, req.headers ?? {});
+  if (built.error || !built.url || !built.method) return { error: built.error ?? "" };
+  return { url: built.url, init: { method: built.method, headers: built.headers, body: built.body ?? undefined } };
 }
 
 /** Open the stream and pump events to the handlers until it closes, errors or is aborted. */
@@ -54,10 +41,11 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
     const response = await fetch(built.url, { ...built.init, signal });
     const ct = response.headers.get("content-type") ?? "";
     handlers.onStatus?.("open", { http: `${response.status} ${response.statusText}`, contentType: ct });
-    if (!readsAsStream(response.status, ct)) {
-      const unread = unreadBody(response.status, ct);
+    const reading = responseReading(response.status, ct);
+    if (!reading.stream) {
+      const unread = reading.unread;
       if (unread) await response.body?.cancel();
-      const text = unread ?? (await readLimited(response));
+      const text = unread ?? (await readLimited(response, reading.limit, reading.cut));
       const datastarHeaders: Record<string, string> = {};
       response.headers.forEach((v, k) => {
         if (k.startsWith("datastar-")) datastarHeaders[k] = v;
@@ -70,25 +58,23 @@ export async function openStream(req: StreamRequest, handlers: StreamHandlers, s
       handlers.onStatus?.("closed");
       return;
     }
-    const parser = new SseParser();
+    const stream = new StreamReader();
     const reader = response.body.getReader();
-    // The byte order mark is the parser's to drop, before each field as the client drops it.
+    // The byte order mark is the stream reader's to drop, before each field as the client drops it.
     const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
-    const show = (msg: SseMessage) => {
-      if (msg.comments.length && msg.data.length === 0 && msg.event === "message" && msg.id === null && msg.retry === null) {
-        handlers.onComment?.(msg.comments.join("\n"));
-      } else {
-        handlers.onFrame?.(decodeDatastar(msg));
+    const show = (events: StreamEvent[]) => {
+      for (const event of events) {
+        if (event.frame) handlers.onFrame?.(event.frame);
+        else handlers.onComment?.(event.comment ?? "");
       }
     };
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      for (const msg of parser.feed(decoder.decode(value, { stream: true }))) show(msg);
+      show(stream.feed(decoder.decode(value, { stream: true })));
     }
-    for (const msg of parser.feed(decoder.decode())) show(msg);
-    const trailing = parser.finish();
-    if (trailing) show(trailing);
+    show(stream.feed(decoder.decode()));
+    show(stream.finish());
     handlers.onStatus?.("closed");
   } catch (e) {
     if ((e as Error).name === "AbortError") {
@@ -115,18 +101,18 @@ export function describeError(e: unknown): string {
 }
 
 /** The body as text, read up to the limit, so a large response does not land in memory whole. */
-async function readLimited(response: Response): Promise<string> {
+async function readLimited(response: Response, limit: number, cutMark: string): Promise<string> {
   if (!response.body) return "";
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
-  while (size <= NON_STREAM_LIMIT) {
+  while (size <= limit) {
     const { value, done } = await reader.read();
     if (done) break;
     chunks.push(value);
     size += value.length;
   }
-  const cut = size > NON_STREAM_LIMIT;
+  const cut = size > limit;
   if (cut) await reader.cancel();
   const bytes = new Uint8Array(size);
   let at = 0;
@@ -134,6 +120,6 @@ async function readLimited(response: Response): Promise<string> {
     bytes.set(chunk, at);
     at += chunk.length;
   }
-  const text = new TextDecoder().decode(cut ? bytes.subarray(0, NON_STREAM_LIMIT) : bytes);
-  return cut ? text + NON_STREAM_CUT : text;
+  const text = new TextDecoder().decode(cut ? bytes.subarray(0, limit) : bytes);
+  return cut ? text + cutMark : text;
 }

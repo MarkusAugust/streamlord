@@ -5,9 +5,7 @@ import { MockDocument, Position } from "./vscode-mock.ts";
 import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
 import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
-import { analyzeHtml } from "../src/analyze.ts";
-import { collectSelectors } from "../src/selectors.ts";
-import { collectSignals } from "../src/signals.ts";
+import { diagnose, signalsOf } from "../src/analysis.ts";
 
 /** A stand-in for SignalIndex over a fixed set of documents. */
 class FakeIndex {
@@ -18,22 +16,23 @@ class FakeIndex {
   }
   all() {
     const out = new Set<string>();
-    for (const f of this.files.values()) for (const s of collectSignals(f.text, f.lang)) out.add(s);
+    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin").signals) out.add(s);
     return out;
   }
   forFile(uri: string) {
     const f = this.files.get(uri);
-    return f ? collectSignals(f.text, f.lang) : new Set<string>();
+    return new Set(f ? signalsOf(f.text, f.lang === "kotlin").signals : []);
   }
   selectorsForFile(uri: string) {
     const f = this.files.get(uri);
-    return f ? collectSelectors(f.text) : { ids: new Set<string>(), classes: new Set<string>() };
+    const found = f && signalsOf(f.text, f.lang === "kotlin");
+    return { ids: new Set(found?.ids), classes: new Set(found?.classes) };
   }
   allSelectors() {
     const ids = new Set<string>();
     const classes = new Set<string>();
     for (const f of this.files.values()) {
-      const s = collectSelectors(f.text);
+      const s = signalsOf(f.text, f.lang === "kotlin");
       for (const i of s.ids) ids.add(i);
       for (const c of s.classes) classes.add(c);
     }
@@ -424,7 +423,7 @@ describe("hover provider", () => {
 describe("playground html template", () => {
   it("matches the expectations written in the file", () => {
     const html = readFileSync(new URL("./fixtures/template.html", import.meta.url), "utf8");
-    const codes = analyzeHtml(html, { prefix: "data-", checkHtmlAttributes: true }).map((i) => i.code);
+    const codes = diagnose(html, false, "data-", [], null).map((i) => i.code);
     assert.deepEqual(codes, ["unknown-modifier", "modifier-args", "missing-key", "unknown-attribute", "expression-syntax", "pro-attribute", "pro-attribute", "prefix-mismatch"]);
   });
 });

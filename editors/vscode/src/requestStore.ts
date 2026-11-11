@@ -1,6 +1,22 @@
 import * as vscode from "vscode";
-import { ENV_FILE, emptyRequestsFile, mergeVariables, parseEnv, parseRequestsFile, pushRecent, removeRequest, REQUESTS_FILE, requestsPathProblem, saveRequest, withBaseUrl, withEnvVariables, type RequestsEdit, type RequestsFile, type SavedRequest, type Variable } from "./requests.ts";
+import {
+  environment,
+  inspectorFiles,
+  parseRequestsFile,
+  pushRecent,
+  removeRequest,
+  requestsPathProblem,
+  saveRequest,
+  withBaseUrl,
+  withEnvVariables,
+  type Environment,
+  type RequestsEdit,
+  type RequestsFile,
+  type SavedRequest,
+} from "./analysis.ts";
 import type { RunningServers } from "./serverLog.ts";
+
+const { requests: REQUESTS_FILE, env: ENV_FILE } = inspectorFiles();
 
 /**
  * Where inspector requests live: saved ones in `.streamlord/inspector.json` in the workspace,
@@ -80,7 +96,7 @@ export class RequestStore implements vscode.Disposable {
 
   /** What is wrong with the path the setting names, or null; the default file is read meanwhile. */
   requestsPathProblem(): string | null {
-    return requestsPathProblem(this.configuredRequestsPath());
+    return requestsPathProblem(this.configuredRequestsPath()) ?? null;
   }
 
   /** The text of the requests file as an open editor has it, saved or not, or null when there is none. A file that is there and cannot be read throws: it is no missing file. */
@@ -103,9 +119,9 @@ export class RequestStore implements vscode.Disposable {
     try {
       text = await this.requestsText();
     } catch (e) {
-      return { ...emptyRequestsFile(), error: (e as Error).message };
+      return { ...parseRequestsFile(null, this.requestsRel()), error: (e as Error).message };
     }
-    return text === null ? emptyRequestsFile() : parseRequestsFile(text, this.requestsRel());
+    return parseRequestsFile(text, this.requestsRel());
   }
 
   /** The change under way, which the next one waits for: two at once would each write over what the other read. */
@@ -140,7 +156,7 @@ export class RequestStore implements vscode.Disposable {
       throw unreadable((e as Error).message);
     }
     const next = edit(text, this.requestsRel());
-    if (next.text === null) throw unreadable(next.error);
+    if (next.text === null || next.text === undefined) throw unreadable(next.error ?? null);
     if (next.text === (text ?? "")) return;
     await this.writeText(uri, next.text, this.requestsRel());
     this.onChange.fire();
@@ -176,11 +192,11 @@ export class RequestStore implements vscode.Disposable {
    * from the settings when it does not, and what is wrong with the file. An invalid file sets
    * nothing: a request is not sent half filled.
    */
-  async environment(): Promise<{ vars: Variable[]; errors: string[] }> {
+  async environment(): Promise<Environment> {
     const text = await this.envText();
-    const env = parseEnv(text ?? "{}");
     const defaultUrl = vscode.workspace.getConfiguration("streamlord").get<string>("inspector.defaultUrl", "http://localhost:8080/");
-    return { vars: mergeVariables(defaultUrl, env.errors.length ? parseEnv("{}") : env, this.running.current()), errors: env.errors };
+    const server = this.running.current();
+    return environment(text, defaultUrl, server?.url, server?.name);
   }
 
   /** The file as an open editor has it, so the panel uses what is on screen, saved or not. */
@@ -209,7 +225,7 @@ export class RequestStore implements vscode.Disposable {
     if (!uri) throw new Error(`Open a folder to keep variables; they live in ${ENV_FILE} in the workspace.`);
     const text = await this.envText();
     const baseUrl = (await this.environment()).vars.find((v) => v.name === "baseUrl")?.value ?? "";
-    return this.write(uri, text, withEnvVariables(text, keys, baseUrl));
+    return this.write(uri, text, withEnvVariables(text, keys, baseUrl) ?? null);
   }
 
   /** Set `baseUrl` in `.streamlord/env.json` to `url`, leaving the rest as written, and return it to be opened. */
@@ -217,7 +233,7 @@ export class RequestStore implements vscode.Disposable {
     const uri = this.fileUri(ENV_FILE);
     if (!uri) throw new Error(`Open a folder to keep variables; they live in ${ENV_FILE} in the workspace.`);
     const text = await this.envText();
-    return this.write(uri, text, withBaseUrl(text, url));
+    return this.write(uri, text, withBaseUrl(text, url) ?? null);
   }
 
   /** Write `next` over the env file's `text`, or leave it when nothing changes; `extended` is false when it could not be changed. */

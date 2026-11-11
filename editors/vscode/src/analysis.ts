@@ -4,4 +4,4 @@
  * reach it through; its functions and types are those of Port.kt and InspectorPort.kt there, and
  * `npm run analysis` builds it.
  */
-export * from "../analysis-js/build/dist/js/productionLibrary/streamlord-analysis-js.mjs";
+export * from "../analysis-js/build/port/streamlord-analysis-js.mjs";

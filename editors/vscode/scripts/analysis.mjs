@@ -9,5 +9,5 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const gradlew = process.platform === "win32" ? "gradlew.bat" : "./gradlew";
-const done = spawnSync(gradlew, [":analysis-js:jsNodeProductionLibraryDistribution", "--quiet", "--console=plain"], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
+const done = spawnSync(gradlew, [":analysis-js:port", "--quiet", "--console=plain"], { cwd: root, stdio: "inherit", shell: process.platform === "win32" });
 process.exit(done.status ?? 1);

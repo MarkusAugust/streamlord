@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { mergeVariables, parseEnv, variableValues, type SavedRequest } from "../src/requests.ts";
+import { environment, type DatastarFrame, type SavedRequest } from "../src/analysis.ts";
 import { twinCases } from "./twins.ts";
 import { createServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
@@ -9,7 +9,6 @@ import type { AddressInfo } from "node:net";
 import { Inspector } from "../src/inspector.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
-import type { DatastarFrame } from "../src/sse.ts";
 import { files, Position, settings, unreadable, Uri, window, workspace, type OpenDocument } from "./vscode-mock.ts";
 
 /**
@@ -185,7 +184,7 @@ describe("inspector page", () => {
     for (const c of cases) {
       it(c.name, () => {
         const { requests, element } = running();
-        requests({ variables: variableValues(mergeVariables(c.defaultUrl, parseEnv(c.env), c.running ?? null)) });
+        requests({ variables: environment(c.env, c.defaultUrl, c.running?.url, c.running?.name).values });
         element("url").type(c.url);
         assert.equal(element("resolved").textContent, c.expected);
       });
@@ -194,7 +193,7 @@ describe("inspector page", () => {
 
   it("follows the variables when they change under a URL that is already typed", () => {
     const { requests, element } = running();
-    const variables = (id: string) => variableValues(mergeVariables("http://localhost:8080/", parseEnv(JSON.stringify({ params: { id } })), null));
+    const variables = (id: string) => environment(JSON.stringify({ params: { id } }), "http://localhost:8080/", null, null).values;
     requests({ variables: variables("4 2/x"), current: { url: "{{baseUrl}}/feed/{{id}}" } });
     assert.equal(element("resolved").textContent, "http://localhost:8080/feed/4%202%2Fx");
     requests({ variables: variables("7") });

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { openStream } from "../../src/streamClient.ts";
-import type { DatastarFrame } from "../../src/sse.ts";
+import type { DatastarFrame } from "../../src/analysis.ts";
 
 /**
  * Runs the Stream Inspector's client against the repository's own demo service

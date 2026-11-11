@@ -8,7 +8,6 @@ import io.github.markusaugust.streamlord.analysis.ServerLog
 import io.github.markusaugust.streamlord.analysis.SseMessage
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
-import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
@@ -105,7 +104,7 @@ fun inspectorFiles(): InspectorFiles = plain("requests" to Requests.REQUESTS_FIL
 
 /** Why [path] cannot be the requests file, or null. */
 @JsExport
-fun requestsPathProblem(path: String): String? = Requests.requestsPathProblem(path)
+fun requestsPathProblem(path: String): String? = Requests.requestsPathProblem(path, "workspace")
 
 /** The requests in the text of the file at [path]; a file that is not there holds none. */
 @JsExport
@@ -438,8 +437,6 @@ fun applySignalPatch(
         plain("store" to store.toJson(), "refused" to false)
     } catch (e: SignalPatchException) {
         plain("store" to e.store.toJson(), "error" to e.message, "refused" to e.refused)
-    } catch (e: JsonParseException) {
-        plain("store" to storeJson, "error" to e.message, "refused" to false)
     }
 
 // ---- A server's log ----------------------------------------------------------------------------

@@ -109,3 +109,28 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 }
+
+/*
+ * The library as the extension imports it: the two modules and the TypeScript types the compiler
+ * wrote for the port. Kotlin marks each interface it exports with a property no TypeScript object
+ * has, so that none is implemented there; the port's interfaces are plain data, which the
+ * extension writes too (a request from the inspector's page, a frame in a test), so the mark is
+ * taken out.
+ */
+val port =
+    tasks.register("port") {
+        description = "Writes the library and its TypeScript types where the VS Code extension imports them."
+        group = "build"
+        val library = tasks.named("jsNodeProductionLibraryDistribution").map { it.outputs.files.singleFile }
+        val into = layout.buildDirectory.dir("port")
+        inputs.dir(library).withPathSensitivity(PathSensitivity.RELATIVE)
+        outputs.dir(into)
+        doLast {
+            val out = into.get().asFile
+            out.deleteRecursively()
+            out.mkdirs()
+            for (name in listOf("streamlord-analysis-js.mjs", "kotlin-kotlin-stdlib.mjs")) library.get().resolve(name).copyTo(out.resolve(name))
+            val mark = Regex("""\n *readonly __doNotUseOrImplementIt: \{[^}]*\};""")
+            out.resolve("streamlord-analysis-js.d.mts").writeText(mark.replace(library.get().resolve("streamlord-analysis-js.d.mts").readText(), ""))
+        }
+    }

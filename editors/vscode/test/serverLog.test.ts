@@ -1,22 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isProblem, RunningServers, startedAt } from "../src/serverLog.ts";
-import { twinCases } from "./twins.ts";
-
-/** A case of `fixtures/twins/server-log.json`, which ServerLogTest.kt in streamlord-analysis reads too. */
-interface Case {
-  name: string;
-  call: "startedAt" | "isProblem";
-  line: string;
-  expected: string | boolean | null;
-}
+import { RunningServers } from "../src/serverLog.ts";
 
 describe("server log", () => {
-  for (const c of twinCases<Case>("server-log.json")) {
-    const read = { startedAt, isProblem }[c.call];
-    it(c.name, () => assert.equal(read(c.line), c.expected, c.name));
-  }
-
   // The steps of the IntelliJ plugin's test of its own RunningServers.
   it("follows a server that starts, logs and stops", () => {
     const servers = new RunningServers();

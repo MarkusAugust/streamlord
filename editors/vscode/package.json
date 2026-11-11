@@ -225,7 +225,7 @@
   },
   "scripts": {
     "analysis": "node scripts/analysis.mjs",
-    "build": "npm run analysis && node scripts/generate.mjs && node esbuild.mjs",
+    "build": "node scripts/generate.mjs && npm run analysis && node esbuild.mjs",
     "watch": "npm run analysis && node esbuild.mjs --watch",
     "typecheck": "npm run analysis && tsc --noEmit",
     "test": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
@@ -233,9 +233,6 @@
     "vscode:prepublish": "npm run build",
     "test:live": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
     "generate": "node scripts/generate.mjs"
-  },
-  "dependencies": {
-    "acorn": "8.19.0"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

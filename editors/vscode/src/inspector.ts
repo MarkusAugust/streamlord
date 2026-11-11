@@ -1,10 +1,26 @@
 import * as vscode from "vscode";
-import { baseUrlSuggestion, compactSignals, describeVariables, emptyBodyHint, ENV_FILE, newRequestLabel, parseHeaderLines, resolveRequest, routeHeaders, routeUrl, toCurl, unreachableHint, variableCompletions, variableValues, type EnvKey, type Field, type SavedRequest, type Variable } from "./requests.ts";
+import {
+  applySignalPatch,
+  baseUrlSuggestion,
+  compactSignals,
+  emptyBodyHint,
+  inspectorFiles,
+  newRequestLabel,
+  parseHeaderLines,
+  resolveRequest,
+  toCurl,
+  unreachableHint,
+  variableCompletions,
+  type DatastarFrame,
+  type Route,
+  type SavedRequest,
+  type Variable,
+} from "./analysis.ts";
 import type { RequestStore } from "./requestStore.ts";
 import type { RunningServers } from "./serverLog.ts";
-import type { Route } from "./routes.ts";
-import { mergePatchAsClient, SignalPatchError, type DatastarFrame } from "./sse.ts";
 import { openStream } from "./streamClient.ts";
+
+const ENV_FILE = inspectorFiles().env;
 
 /**
  * The Stream Inspector: a webview that opens a Datastar request against your running server and
@@ -57,7 +73,7 @@ export class Inspector {
   openWithRoute(route?: Route): void {
     // The command palette can run the command without a route; it then opens the inspector as it was.
     if (!route) return this.open();
-    this.open({ name: "", method: route.method, url: routeUrl(route), signals: "", headers: routeHeaders(route) });
+    this.open(route.request);
   }
 
   private post(message: unknown): void {
@@ -73,11 +89,11 @@ export class Inspector {
       type: "requests",
       saved,
       // Why the file is not read, or which of its entries are not: they stay in the file, and the user is told.
-      requestProblems: [...(pathProblem === null ? [] : [`${pathProblem} The default file is shown.`]), ...(file.error !== undefined ? [file.error] : file.skipped)],
+      requestProblems: [...(pathProblem === null ? [] : [`${pathProblem} The default file is shown.`]), ...(file.error ? [file.error] : file.skipped)],
       recent,
       newLabel: newRequestLabel(saved.length, recent.length),
-      variables: variableValues(env.vars),
-      variablesText: describeVariables(env.vars),
+      variables: env.values,
+      variablesText: env.described,
       variableErrors: env.errors,
       current,
     });
@@ -217,7 +233,7 @@ export class Inspector {
           // The server logs the reason as it answers, and a little after; wait for it before drawing the card.
           setTimeout(() => {
             const problems = this.running.problemsSince(since);
-            this.post({ type: "nonsse", ...r, problems, hint: problems.length ? null : emptyBodyHint(status, r.body) });
+            this.post({ type: "nonsse", ...r, problems, hint: problems.length ? null : (emptyBodyHint(status, r.body) ?? null) });
           }, LOG_GRACE_MS);
         },
         onFrame: (frame) => {
@@ -228,8 +244,8 @@ export class Inspector {
           if (!current()) return;
           const unreachable = /^(Connection refused|Host not found)/.test(message);
           const server = this.running.current();
-          const hint = unreachable ? unreachableHint(raw.url, vars, server) : null;
-          const elsewhere = unreachable ? baseUrlSuggestion(vars, server) : null;
+          const hint = unreachable ? (unreachableHint(raw.url, vars, server?.url, server?.name) ?? null) : null;
+          const elsewhere = unreachable ? (baseUrlSuggestion(vars, server?.url, server?.name) ?? null) : null;
           if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere, requestUrl: request.url });
           else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined, requestUrl: request.url });
         },
@@ -241,30 +257,26 @@ export class Inspector {
   /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.5). */
   private applyFrame(frame: DatastarFrame): void {
     if (frame.event !== "datastar-patch-signals" || !frame.args.signals) return;
-    let patch: unknown;
     try {
-      patch = JSON.parse(frame.args.signals);
+      JSON.parse(frame.args.signals);
     } catch {
       // invalid JSON in the stream is shown raw; the frame itself is still posted
       return;
     }
     try {
-      this.signals = mergePatchAsClient(this.signals, patch, (frame.args.onlyIfMissing ?? "").trim() === "true");
-      this.post({ type: "signals", signals: this.signals });
-    } catch (e) {
+      const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, (frame.args.onlyIfMissing ?? "").trim() === "true");
       // The client keeps the keys it set before the one it failed on, and so does the store shown. A
       // throw also leaves its update batch open (signals.ts:747-762), so the bindings on the page stop
       // redrawing.
-      if (!(e instanceof SignalPatchError)) {
-        this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
-        return;
-      }
-      this.signals = e.store;
+      this.signals = JSON.parse(patched.store);
       this.post({ type: "signals", signals: this.signals });
-      const message = e.refused
-        ? `Streamlord refuses this signal patch on purpose: ${e.message}. ${REFUSED}`
-        : `The signal store cannot take this patch: ${e.message}. ${CLIENT_THROWS}`;
+      if (!patched.error) return;
+      const message = patched.refused
+        ? `Streamlord refuses this signal patch on purpose: ${patched.error}. ${REFUSED}`
+        : `The signal store cannot take this patch: ${patched.error}. ${CLIENT_THROWS}`;
       this.post({ type: "error", message });
+    } catch (e) {
+      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
     }
   }
 }
@@ -279,7 +291,7 @@ type Message =
   | { type: "curl"; request: SavedRequest }
   | { type: "defineVariables"; names: string[] }
   | { type: "useBaseUrl"; url: string }
-  | { type: "complete"; seq: number; field: Field; text: string; caret: number };
+  | { type: "complete"; seq: number; field: "url" | "signals" | "headers"; text: string; caret: number };
 
 function suggestName(r: SavedRequest): string {
   try {

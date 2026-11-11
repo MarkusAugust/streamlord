@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Inspector } from "../src/inspector.ts";
-import type { DatastarFrame } from "../src/sse.ts";
+import type { DatastarFrame } from "../src/analysis.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
 import { files, Position, settings, unreadable, Uri, workspace } from "./vscode-mock.ts";
