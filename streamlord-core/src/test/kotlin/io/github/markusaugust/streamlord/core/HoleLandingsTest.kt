@@ -103,8 +103,11 @@ class HoleLandingsTest {
         val (name, url) = holeLandings("<a %s=\"x%s\">", listOf(3..4, 8..9), known = mapOf(0 to "href"))
         assertEquals(Position.TEXT, name.position)
         assertEquals(null, name.attribute)
+        assertEquals(listOf<Any>(-1, false, -1), listOf(name.valueStart, name.loadsCode, name.tagStart))
         assertEquals(Position.URL, url.position)
         assertEquals(7, url.valueStart)
+        // Known text with a quote in it ends the value, so what was a URL is text to the browser.
+        assertEquals(Position.TEXT, holeLandings("<a href=\"%s\">", listOf(9..10), known = mapOf(0 to "/x\" title=\"")).single().position)
     }
 
     @Test
