@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * What the client's own rewrite (engine.ts, `genRx`, in 1.0.5) makes of each expression, held
@@ -97,6 +98,60 @@ class ClientRewriteTest {
         }
     }
 
+    // The first differential seldom draws a template literal the client matches whole with a reference
+    // in a ${...}. These texts are built around one: one to three ${...} holding signals and
+    // actions, escapes, a ${ after a backslash, a ${ holding a brace, backticks inside, and the
+    // line terminators the client's `.` does not match.
+    @Test
+    fun `the scan agrees with the client's pattern on template literals with interpolations`() {
+        val random = Random(1005)
+
+        fun pick(pieces: List<String>): String = pieces[random.nextInt(pieces.size)]
+
+        fun some(
+            pieces: List<String>,
+            most: Int,
+        ): String = (0 until random.nextInt(most + 1)).joinToString("") { pick(pieces) }
+        val references = listOf("\$a", "\$b.c", "\$a-b", "\$0", "@get(", "@x(\$a", "@\$a(", "\$a@get(")
+        val inner = references + listOf(")", " ", " + ", "1", "a", "'", "\"", "\$", "@", ".", "-", "\n", "\r", " ", " ")
+        val rare = listOf("{", "}", "{a: \$a}", "`", "`\$a`", "\\", "/* } */", "'}'")
+        val escapes = listOf("\\`", "\\\\", "\\\$", "\\\${", "\\n", "\\{")
+        val words = listOf("a", "b ", " ", "\$a", "\$a.b", "\$", "@get(", "'", "\"", "{", "}", "\n", "\r", " ", " ")
+        val code =
+            references + listOf(")", " ", " + ", "; ", "'", "\"", "'s \$a'", "\"\$b\"", "// ", "/* ", " */", "{", "}", "\n", "\\", "1")
+
+        fun interpolation(): String =
+            "\${" +
+                (0 until random.nextInt(1, 5)).joinToString("") {
+                    when (random.nextInt(20)) {
+                        0 -> pick(rare)
+                        in 1..10 -> pick(references)
+                        else -> pick(inner)
+                    }
+                } + "}"
+
+        fun text(): String = if (random.nextInt(4) == 0) pick(escapes) else some(words, 3)
+
+        fun template(): String =
+            "`" + text() + (0 until random.nextInt(1, 4)).joinToString("") { interpolation() + text() } +
+                (if (random.nextInt(25) == 0) "" else "`")
+
+        var matched = 0
+        val count = 20000
+        repeat(count) {
+            val text = some(code, 6) + template() + some(code, 6) + (if (random.nextInt(5) == 0) template() else "")
+            if (REWRITE_RE.findAll(text).any { m ->
+                    m.value.startsWith("`") &&
+                        INTERPOLATION_RE.findAll(m.value).any { REFERENCE_RE in it.value }
+                }
+            ) {
+                matched++
+            }
+            assertEquals(rewriteAsWritten(text), clientRewrite(text).js, text)
+        }
+        assertTrue(matched > count / 2, "$matched of $count texts held a matched template literal with a reference in a \${...}")
+    }
+
     private companion object {
         /** `statementRe` of `genRx`, engine.ts in 1.0.5. */
         val STATEMENT_RE =
@@ -112,6 +167,7 @@ class ClientRewriteTest {
         val INTERPOLATION_RE = Regex("""\$\{([^{}]*)\}""")
         val SIGNAL_RE = Regex("""\$(\w+(?:[.-]\w+)*)""")
         val ACTION_RE = Regex("""@([A-Za-z_$][\w$]*)\(""")
+        val REFERENCE_RE = Regex("""\$\w|@[A-Za-z_$][\w$]*\(""")
 
         fun path(name: String): String = name.split('.').fold("\$") { p, part -> "$p['$part']" }
 
