@@ -61,6 +61,8 @@ export class SignalIndex implements vscode.Disposable {
   ) {
     this.disposables.push(
       this.changed,
+      // A file no folder of the workspace holds is found only here, and it may define a signal as any other.
+      vscode.workspace.onDidOpenTextDocument((d) => this.update(d)),
       vscode.workspace.onDidSaveTextDocument((d) => this.update(d)),
       vscode.workspace.onDidChangeTextDocument((e) => this.update(e.document)),
       // A closed document's unsaved edits are gone; what counts is the disk again.
