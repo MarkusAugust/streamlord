@@ -254,7 +254,9 @@ npm run package    # streamlord-<version>.vsix
 
 A rule of the analysis is changed in Kotlin, under `streamlord-analysis` or `streamlord-core` at
 the repository root, and tested there: `./gradlew build` runs those tests on the JVM and on Node.
-What the extension may call is `Port.kt` and `InspectorPort.kt` in `analysis-js`.
+What the extension may call is `Port.kt` and `InspectorPort.kt` in `analysis-js`. `npm run watch`
+builds the Kotlin once and then watches the TypeScript alone: after a Kotlin change, `npm run
+analysis` in a second terminal, and the watch bundles what it wrote.
 
 `test:live` needs the repository's demo running: `./gradlew :demo:run` from the repository root,
 then `npm run test:live` here.
