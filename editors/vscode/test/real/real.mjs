@@ -250,12 +250,15 @@ function differences(rendered) {
     report.push(`=== ${name}`);
     const gone = a.map((l, i) => [i + 1, l]).filter(([, l]) => !inB.has(l));
     const come = b.map((l, i) => [i + 1, l]).filter(([, l]) => !inA.has(l));
+    // Records of one place, such as a file's diagnostics, pair off in the order they stand.
+    const paired = new Set();
     for (const [i, l] of gone) {
-      const twin = come.find(([, x]) => place(x) === place(l));
+      const twin = come.find((x) => !paired.has(x) && place(x[1]) === place(l));
       report.push(`- ${i}: ${clip(l)}`);
       if (twin) report.push(`+ ${twin[0]}: ${clip(twin[1])}`, ...lists(l, twin[1]));
+      if (twin) paired.add(twin);
     }
-    for (const [i, l] of come) if (!gone.some(([, x]) => place(x) === place(l))) report.push(`+ ${i}: ${clip(l)}`);
+    for (const x of come) if (!paired.has(x)) report.push(`+ ${x[0]}: ${clip(x[1])}`);
     if (a.every((l) => inB.has(l)) && b.every((l) => inA.has(l))) report.push("  the same lines in another order or number");
   }
   return report;
