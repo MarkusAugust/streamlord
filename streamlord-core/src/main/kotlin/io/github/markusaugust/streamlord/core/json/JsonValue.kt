@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.core.json
 
-import java.math.BigDecimal
+import io.github.markusaugust.streamlord.core.Decimal
+import io.github.markusaugust.streamlord.core.decimalOrNull
+import io.github.markusaugust.streamlord.core.exactLongOrNull
 
 /**
  * A JSON value as the built-in parser sees it. Immutable and dependency-free.
@@ -56,7 +58,7 @@ public class JsonObject(
 
     public fun double(key: String): Double? = (this[key] as? JsonNumber)?.toDouble()
 
-    public fun decimal(key: String): BigDecimal? = (this[key] as? JsonNumber)?.toBigDecimalOrNull()
+    public fun decimal(key: String): Decimal? = (this[key] as? JsonNumber)?.toBigDecimalOrNull()
 
     public fun obj(key: String): JsonObject? = this[key] as? JsonObject
 
@@ -135,13 +137,13 @@ public data class JsonNumber(
 
     public fun toIntOrNull(): Int? = toLongOrNull()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
 
-    public fun toLongOrNull(): Long? = text.toLongOrNull() ?: runCatching { BigDecimal(text).longValueExact() }.getOrNull()
+    public fun toLongOrNull(): Long? = text.toLongOrNull() ?: exactLongOrNull(text)
 
     public fun toDouble(): Double = text.toDouble()
 
-    public fun toBigDecimalOrNull(): BigDecimal? = runCatching { BigDecimal(text) }.getOrNull()
+    public fun toBigDecimalOrNull(): Decimal? = decimalOrNull(text)
 
-    public fun toBigDecimal(): BigDecimal = toBigDecimalOrNull() ?: throw ArithmeticException("Number '$text' is outside BigDecimal range")
+    public fun toBigDecimal(): Decimal = toBigDecimalOrNull() ?: throw ArithmeticException("Number '$text' is outside BigDecimal range")
 
     /** A `Long` when the number is integral and fits, otherwise a `Double`; a negative zero, which a `Long` cannot carry, as `-0.0`. */
     override fun toKotlin(): Number = if (text.startsWith('-') && toDouble() == 0.0) -0.0 else toLongOrNull() ?: toDouble()

@@ -195,7 +195,7 @@ public object JsonParser {
             repeat(4) {
                 // Character.digit also accepts the digits of other scripts, which RFC 8259 does not.
                 val c = s[i++]
-                val d = if (c < '\u0080') Character.digit(c, 16) else -1
+                val d = if (c < '\u0080') c.digitToIntOrNull(16) ?: -1 else -1
                 if (d < 0) fail("Invalid hex digit in unicode escape")
                 code = (code shl 4) or d
             }

@@ -281,7 +281,7 @@ public fun decodeEntities(value: String): DecodedValue {
 
 /** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
 private fun codePoint(cp: Int): String =
-    if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else String(Character.toChars(WINDOWS_1252[cp] ?: cp))
+    if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else codePointString(WINDOWS_1252[cp] ?: cp)
 
 // The numeric references the HTML standard reads as windows-1252 rather than as C1 controls: `&#128;` is the euro sign.
 private val WINDOWS_1252 =

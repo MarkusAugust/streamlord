@@ -72,7 +72,7 @@ public class SseParser {
 
 public fun decodeDatastar(
     msg: SseMessage,
-    receivedAt: Long = System.currentTimeMillis(),
+    receivedAt: Long = currentTimeMillis(),
 ): DatastarFrame {
     val groups = LinkedHashMap<String, MutableList<String>>()
     // Joined as the client joins them, which drops empty lines before the first that has text,

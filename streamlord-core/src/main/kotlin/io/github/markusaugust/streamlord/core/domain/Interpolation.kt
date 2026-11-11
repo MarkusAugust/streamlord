@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import org.intellij.lang.annotations.Language
+import kotlin.jvm.JvmInline
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -711,7 +712,7 @@ private fun shadow(
     for (hole in holes) {
         for (i in hole) chars[i] = if (i == hole.first) 'd' else 's'
     }
-    return String(chars)
+    return chars.concatToString()
 }
 
 /** The offset of each `%s`, in order. `%%` is one escaped per cent and never a hole. */

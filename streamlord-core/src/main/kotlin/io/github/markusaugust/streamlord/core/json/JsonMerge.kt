@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.json
 
+import kotlin.math.floor
+
 /**
  * RFC 7386 JSON merge patch, which is what a Datastar signal patch is.
  *
@@ -130,13 +132,13 @@ private fun open(value: Any?): Any? =
 private fun freeze(value: Any): JsonValue =
     when (value) {
         is JsArray -> {
-            value.items.replaceAll(::freeze)
+            for (i in value.items.indices) value.items[i] = freeze(value.items[i])
             @Suppress("UNCHECKED_CAST")
             JsonArray(value.items as List<JsonValue>).also { it.jsOrdered = true }
         }
 
         is JsObject -> {
-            value.fields.replaceAll { _, v -> freeze(v) }
+            for (field in value.fields.entries) field.setValue(freeze(field.value))
             @Suppress("UNCHECKED_CAST")
             JsonObject(inJsOrder(value.fields as Map<String, JsonValue>)).also { it.jsOrdered = true }
         }
@@ -279,7 +281,7 @@ private fun arrayIndex(key: String): Long? = key.toLongOrNull()?.takeIf { it >= 
 /** What `array.length = value` takes [value] for, or `null` where the browser throws a `RangeError`. */
 private fun arrayLength(value: Any): Long? {
     val number = jsNumber(value)
-    return if (number >= 0 && number <= 4294967295.0 && number == Math.floor(number)) number.toLong() else null
+    return if (number >= 0 && number <= 4294967295.0 && number == floor(number)) number.toLong() else null
 }
 
 /** JavaScript's `Number(value)`, for a value of the store. */

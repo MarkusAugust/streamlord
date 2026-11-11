@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import kotlin.concurrent.Volatile
+
 /*
  * The pieces of the interpolation judgement that are about Kotlin rather than about Datastar:
  * which values are joined into an HTML string, which of them the analysis can see are safe or
@@ -302,20 +304,20 @@ internal class FileFacts(
     val names: Map<String, List<Declaration>>,
 ) {
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
-    val importEdits: MutableMap<String, List<Edit>> = java.util.concurrent.ConcurrentHashMap()
+    val importEdits: MutableMap<String, List<Edit>> = sharedMap()
 
     /** The helpers a hole may call that no import from elsewhere shadows, whether or not the file uses the DSL. */
     @Volatile
     var helpers: Set<String>? = null
 
     /** Where each call of a name of core's domain starts, by the name. */
-    val coreCalls: MutableMap<String, List<Int>> = java.util.concurrent.ConcurrentHashMap()
+    val coreCalls: MutableMap<String, List<Int>> = sharedMap()
 
     /** Whether something other than core's domain takes each name in this file, by the name ([shadowedInFile]). */
-    val shadowed: MutableMap<String, Boolean> = java.util.concurrent.ConcurrentHashMap()
+    val shadowed: MutableMap<String, Boolean> = sharedMap()
 
     /** The same with no star import counted, for what a name means here rather than what a fix may add ([shadowsCore]). */
-    val taken: MutableMap<String, Boolean> = java.util.concurrent.ConcurrentHashMap()
+    val taken: MutableMap<String, Boolean> = sharedMap()
 
     /** The names the file imports names of core's domain under, each with the name it stands for ([coreAliases]). */
     @Volatile
@@ -519,7 +521,7 @@ private fun markupInitialiser(
     aliases: Map<String, String>,
 ): Triple<String, Int, Boolean>? {
     val m = MARKUP_INITIALISER.matchAt(src, at) ?: return null
-    val callee = m.groups[2]!!
+    val callee = MARKUP_INITIALISER.groupAt(src, m, 2)!!
     val name = aliases[callee.value] ?: callee.value
     if (name != "interpolate" && name != "Trusted") return null
     val open = m.range.last
@@ -724,13 +726,13 @@ private fun declarations(
                         val m = VAL_AFTER.matchAt(src, end)
                         // `val String.shout`: an extension, read on a receiver and never by its name alone.
                         if (m != null && m.groupValues[1].isEmpty()) {
-                            val at = m.groups[2]!!.range.first
+                            val at = VAL_AFTER.groupRange(src, m, 2)!!.first
                             val bare = m.groups[4] == null && m.groups[5] == null
                             val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
                             val markup = initialiser != null
                             val trusted = initialiser?.first == "Trusted"
                             val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
-                            val arguments = m.groups[3]?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.range.last + 1) }
+                            val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
                             // The value of a `val` set once, which a name then stands for.
                             val valueAt =
                                 if (word == "val" && bare && !markup) {
@@ -2050,7 +2052,7 @@ internal fun asCoreCall(
 ): String? {
     val m = CALLEE.find(text) ?: return null
     val callee = m.groupValues[2]
-    val rest = text.substring(m.groups[2]!!.range.last + 1 + m.groupValues[1].length)
+    val rest = text.substring(CALLEE.groupRange(text, m, 2)!!.last + 1 + m.groupValues[1].length)
     return when {
         callee == name -> if (shadowsCore(src, name)) null else name + rest
         coreAliases(src)[callee] == name -> name + rest

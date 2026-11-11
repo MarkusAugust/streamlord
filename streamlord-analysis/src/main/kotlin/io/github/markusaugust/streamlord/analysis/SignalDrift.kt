@@ -155,8 +155,9 @@ internal fun serializableProperties(src: String): Map<String, List<SignalPropert
         if (close < 0) continue
 
         val properties = ArrayList<SignalProperty>()
-        for (property in PROPERTY_NAME.findAll(src.substring(open, close))) {
-            val group = property.groups[1] ?: property.groups[2] ?: continue
+        val list = src.substring(open, close)
+        for (property in PROPERTY_NAME.findAll(list)) {
+            val group = PROPERTY_NAME.groupAt(list, property, 1) ?: PROPERTY_NAME.groupAt(list, property, 2) ?: continue
             properties += SignalProperty(group.value, open + group.range.first, open + group.range.last + 1)
         }
         out[name] = properties

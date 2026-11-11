@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.formEncoded
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import java.net.URLEncoder
 
 /**
  * The request Datastar 1.0.5's `@get` and its kin send with the default JSON content type
@@ -54,7 +54,7 @@ public object ClientRequest {
                     .toString()
             } == DatastarProtocol.SIGNALS_PARAMETER
         val pairs = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() }
-        val param = DatastarProtocol.SIGNALS_PARAMETER + "=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8)
+        val param = DatastarProtocol.SIGNALS_PARAMETER + "=" + formEncoded(wellFormed(signalsJson))
         val first = pairs.indexOfFirst(::ours)
         val query =
             if (first < 0) {

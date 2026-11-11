@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import kotlin.concurrent.Volatile
 
 /**
  * The prefix every Datastar attribute starts with.

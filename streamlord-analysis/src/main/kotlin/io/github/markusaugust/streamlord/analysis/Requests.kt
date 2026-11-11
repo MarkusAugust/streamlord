@@ -2,6 +2,11 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.client.ClientRequest
+import io.github.markusaugust.streamlord.core.client.charCount
+import io.github.markusaugust.streamlord.core.client.codePointFrom
+import io.github.markusaugust.streamlord.core.client.codePointString
+import io.github.markusaugust.streamlord.core.client.hex
+import io.github.markusaugust.streamlord.core.formEncoded
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -9,7 +14,6 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import java.net.URLEncoder
 
 /*
  * Saved requests for the Stream Inspector: the file format, variable substitution, the recent
@@ -152,10 +156,24 @@ public object Requests {
             list.mapIndexed { index, item ->
                 val missing =
                     when {
-                        item !is JsonObject -> "it is not an object"
-                        item.string("name") == null -> "it has no \"name\""
-                        item.string("url") == null -> "it has no \"url\""
-                        else -> named.putIfAbsent(nameKey(item.string("name")!!), index + 1)?.let { "request $it has its name" }
+                        item !is JsonObject -> {
+                            "it is not an object"
+                        }
+
+                        item.string("name") == null -> {
+                            "it has no \"name\""
+                        }
+
+                        item.string("url") == null -> {
+                            "it has no \"url\""
+                        }
+
+                        else -> {
+                            val key = nameKey(item.string("name")!!)
+                            val first = named[key]
+                            if (first == null) named[key] = index + 1
+                            first?.let { "request $it has its name" }
+                        }
                     }
                 if (missing != null) {
                     skipped += "Request ${index + 1} in $path is not read: $missing."
@@ -385,7 +403,12 @@ public object Requests {
      */
     private fun nameKey(name: String): String {
         val out = StringBuilder(name.length)
-        name.codePoints().forEach { out.append(Character.toString(it).lowercase()) }
+        var i = 0
+        while (i < name.length) {
+            val cp = name.codePointFrom(i)
+            out.append(codePointString(cp).lowercase())
+            i += charCount(cp)
+        }
         return out.toString()
     }
 
@@ -1012,14 +1035,14 @@ public object Requests {
 
                 c.code > 0x7f -> {
                     val pair = c.isHighSurrogate() && i + 1 < target.length && target[i + 1].isLowSurrogate()
-                    val cp = if (pair) target.codePointAt(i) else c.code
+                    val cp = if (pair) target.codePointFrom(i) else c.code
                     // A surrogate without its partner goes out as U+FFFD, as TextEncoder sends it.
-                    val char = if (Character.isSurrogate(c) && !pair) "\uFFFD" else String(Character.toChars(cp))
+                    val char = if (c.isSurrogate() && !pair) "\uFFFD" else codePointString(cp)
                     if (i < authorityEnd) {
                         return refuse("The host holds $char, which cannot be sent as written. Write the host in its xn-- form.")
                     }
                     out.append(escape(char))
-                    i += Character.charCount(cp)
+                    i += charCount(cp)
                     continue
                 }
 
@@ -1077,7 +1100,7 @@ public object Requests {
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
     /** UTF-8 escapes in capitals. */
-    private fun escape(s: String): String = s.toByteArray(Charsets.UTF_8).joinToString("") { "%%%02X".format(it.toInt() and 0xff) }
+    private fun escape(s: String): String = s.encodeToByteArray().joinToString("") { "%" + hex(it.toInt() and 0xff, 2).uppercase() }
 
     /**
      * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.5), then the user's,
@@ -1328,8 +1351,7 @@ public object Requests {
 
     /** `encodeURIComponent`: percent-encodes everything but the unreserved characters and `!'()*`. */
     private fun encodeSegment(s: String): String =
-        URLEncoder
-            .encode(ClientRequest.wellFormed(s), Charsets.UTF_8)
+        formEncoded(ClientRequest.wellFormed(s))
             .replace("+", "%20")
             .replace("%21", "!")
             .replace("%27", "'")

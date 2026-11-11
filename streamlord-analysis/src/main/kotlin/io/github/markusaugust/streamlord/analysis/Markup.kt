@@ -13,7 +13,9 @@ import io.github.markusaugust.streamlord.core.domain.TextPlace
 import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.radixDouble
 import kotlin.math.abs
+import kotlin.math.floor
 
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -55,7 +57,7 @@ private fun jsNumber(tag: String): Double? {
             "o" -> 8
             else -> 2
         }
-    return m.groupValues[2].toBigIntegerOrNull(radix)?.toDouble()
+    return radixDouble(m.groupValues[2], radix)
 }
 
 /** What JavaScript's `parseFloat` reads from the start of a tag: digits, and an exponent if one follows. */
@@ -1601,7 +1603,7 @@ public class MarkupValidator(
                     // __debounce.1.5s: the dot ends the duration, which the client reads as 1 ms.
                     val seconds = next.endsWith("s") && !next.endsWith("ms")
                     val ms = "$d.${next.removeSuffix("ms").removeSuffix("s")}".toDouble() * if (seconds) 1000 else 1
-                    val whole = if (ms == Math.floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
+                    val whole = if (ms == floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
                     // With a flag it does not know after it, the whole duration would fail in turn, so it is no fix.
                     val fixable = whole != null && flags.drop(1).all { it in spec.flags }
                     fail(

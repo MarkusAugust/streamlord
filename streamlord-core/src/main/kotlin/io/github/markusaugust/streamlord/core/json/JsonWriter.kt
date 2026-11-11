@@ -2,8 +2,9 @@ package io.github.markusaugust.streamlord.core.json
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.SignalsCodecException
-import java.math.BigDecimal
-import java.math.BigInteger
+import io.github.markusaugust.streamlord.core.bigNumberText
+import io.github.markusaugust.streamlord.core.client.hex
+import io.github.markusaugust.streamlord.core.typeName
 
 /**
  * Writes plain Kotlin values as compact JSON, with no dependencies.
@@ -145,7 +146,7 @@ public object JsonWriter {
                 is BooleanArray -> all(value.asIterable(), depth)
 
                 else -> throw SignalsCodecException(
-                    "${style.name} cannot hold ${value::class.qualifiedName}. ${style.instead}",
+                    "${style.name} cannot hold ${typeName(value)}. ${style.instead}",
                 )
             }
         }
@@ -215,16 +216,17 @@ public object JsonWriter {
         sb: StringBuilder,
         n: Number,
     ) {
+        bigNumberText(n, PLAIN_SCALE)?.let {
+            sb.append(it)
+            return
+        }
         when (n) {
-            is Int, is Long, is Short, is Byte, is BigInteger -> sb.append(n.toString())
+            is Int, is Long, is Short, is Byte -> sb.append(n.toString())
 
             is Double -> sb.append(finite(n))
 
             // Its own shortest form: widened to a Double, 0.1f is written as 0.10000000149011612.
             is Float -> finite(n.toDouble()).let { sb.append(n.toString()) }
-
-            // Plain notation reads better, and for a scale like 2000000000 it is two billion zeros.
-            is BigDecimal -> sb.append(if (n.scale() in -PLAIN_SCALE..PLAIN_SCALE) n.toPlainString() else n.toString())
 
             else -> sb.append(finite(n.toDouble()))
         }
@@ -295,7 +297,7 @@ public object JsonWriter {
                     ) {
                         sb.append(c)
                     } else {
-                        sb.append("\\u%04x".format(c.code))
+                        sb.append("\\u").append(hex(c.code, 4))
                     }
                 }
 
@@ -305,12 +307,12 @@ public object JsonWriter {
                     ) {
                         sb.append(c)
                     } else {
-                        sb.append("\\u%04x".format(c.code))
+                        sb.append("\\u").append(hex(c.code, 4))
                     }
                 }
 
                 else -> {
-                    if (c < ' ') sb.append("\\u%04x".format(c.code)) else sb.append(c)
+                    if (c < ' ') sb.append("\\u").append(hex(c.code, 4)) else sb.append(c)
                 }
             }
             previous = c

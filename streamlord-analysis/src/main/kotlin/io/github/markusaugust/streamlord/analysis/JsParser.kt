@@ -1,5 +1,9 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.charCount
+import io.github.markusaugust.streamlord.core.client.codePointFrom
+import io.github.markusaugust.streamlord.core.client.codePointString
+
 /**
  * A syntax check for JavaScript, enough to judge a Datastar expression. It follows acorn step by
  * step (script mode, the latest ECMAScript, `return` and `new.target` allowed at the top level and
@@ -22,7 +26,7 @@ public object JsParser {
     public fun check(source: String) {
         try {
             Parser(source).parseProgram()
-        } catch (_: StackOverflowError) {
+        } catch (_: StackExhausted) {
             throw JsSyntaxError("Not enough stack space to parse input", 0, source.length)
         }
     }
@@ -223,7 +227,7 @@ private class VarDeclaration(
 }
 
 /** Thrown out of an escape sequence that a tagged template may contain and an untagged one may not. */
-private class InvalidTemplateEscape : RuntimeException(null, null, false, false)
+private class InvalidTemplateEscape : Traceless()
 
 private class Parser(
     private val src: String,
@@ -319,7 +323,7 @@ private class Parser(
         return false
     }
 
-    private fun codePointAt(i: Int): Int = if (i < src.length) src.codePointAt(i) else -1
+    private fun codePointAt(i: Int): Int = if (i < src.length) src.codePointFrom(i) else -1
 
     /** The offset after any white space and comments that start at [from], without reading tokens. */
     private fun skipBlank(from: Int): Int {
@@ -497,7 +501,7 @@ private class Parser(
         if (isIdStart(ch)) {
             val start = next
             do {
-                next += Character.charCount(ch)
+                next += charCount(ch)
                 ch = codePointAt(next)
             } while (isIdChar(ch))
             if (ch == '\\'.code) return true
@@ -535,7 +539,7 @@ private class Parser(
         if (!isIdStart(ch) && ch != '\\'.code) return false
         val start = next
         do {
-            next += Character.charCount(ch)
+            next += charCount(ch)
             ch = codePointAt(next)
         } while (isIdChar(ch))
         if (ch == '\\'.code) return true
@@ -2252,7 +2256,7 @@ private class Parser(
             skipSpace()
             val start = pos
             if (pos >= src.length) return token(T.EOF, "", start)
-            val code = src.codePointAt(pos)
+            val code = src.codePointFrom(pos)
             if (isIdStart(code) || code == '\\'.code) {
                 val word = readWord1()
                 return JsToken(if (word in KEYWORDS) T.KEYWORD else T.NAME, word, start, pos, hasLineBreak(lastTokEnd, start), containsEsc)
@@ -2373,10 +2377,10 @@ private class Parser(
         val word = StringBuilder()
         var first = true
         while (pos < src.length) {
-            val ch = src.codePointAt(pos)
+            val ch = src.codePointFrom(pos)
             if (isIdChar(ch)) {
-                word.appendCodePoint(ch)
-                pos += Character.charCount(ch)
+                word.append(codePointString(ch))
+                pos += charCount(ch)
             } else if (ch == '\\'.code) {
                 containsEsc = true
                 val escapeStart = pos
@@ -2384,7 +2388,7 @@ private class Parser(
                 pos++
                 val escaped = readCodePoint()
                 if (!(if (first) isIdStart(escaped) else isIdChar(escaped))) invalidStringToken(escapeStart, "Invalid Unicode escape")
-                word.appendCodePoint(escaped)
+                word.append(codePointString(escaped))
             } else {
                 break
             }
@@ -2689,7 +2693,7 @@ private class RegExpValidator(
         if (i >= source.length) return -1
         val c = source[i]
         if (!(forceU || switchU) || !c.isHighSurrogate() || i + 1 >= source.length || !source[i + 1].isLowSurrogate()) return c.code
-        return Character.toCodePoint(c, source[i + 1])
+        return source.codePointFrom(i)
     }
 
     private fun nextIndex(
@@ -2935,8 +2939,8 @@ private class RegExpValidator(
             lastStringValue = ""
             return false
         }
-        name.appendCodePoint(lastIntValue)
-        while (eatRegExpIdentifierChar(start = false)) name.appendCodePoint(lastIntValue)
+        name.append(codePointString(lastIntValue))
+        while (eatRegExpIdentifierChar(start = false)) name.append(codePointString(lastIntValue))
         lastStringValue = name.toString()
         return true
     }
@@ -3435,7 +3439,7 @@ private fun isIdStart(c: Int): Boolean =
     when {
         c < 0 -> false
         c < 0x80 -> c == '$'.code || c == '_'.code || c in 'a'.code..'z'.code || c in 'A'.code..'Z'.code
-        else -> Character.isUnicodeIdentifierStart(c)
+        else -> startsName(c)
     }
 
 /** The two joiners are allowed inside a name; the other invisible format characters are not. */
@@ -3443,10 +3447,10 @@ private fun isIdChar(c: Int): Boolean =
     when {
         c < 0 -> false
         c < 0x80 -> isIdStart(c) || c in '0'.code..'9'.code
-        else -> c == 0x200C || c == 0x200D || (Character.isUnicodeIdentifierPart(c) && !Character.isIdentifierIgnorable(c))
+        else -> c == 0x200C || c == 0x200D || continuesName(c)
     }
 
-private fun codePointToString(c: Int): String = if (Character.isValidCodePoint(c)) String(Character.toChars(c)) else ""
+private fun codePointToString(c: Int): String = if (c in 0..0x10FFFF) codePointString(c) else ""
 
 private val UNICODE_BINARY: Set<String> = "$UNICODE_BINARY_PROPERTIES $UNICODE_GENERAL_CATEGORIES".split(' ').toSet()
 

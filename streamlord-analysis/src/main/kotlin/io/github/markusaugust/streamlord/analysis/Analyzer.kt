@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
+import kotlin.concurrent.Volatile
 
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
@@ -227,22 +228,15 @@ public class Analyzer(
      * [failures] keeps those that should fail a build.
      */
     public fun analyzeProject(
-        root: java.io.File,
+        root: SourceFolder,
         opts: AnalyzeOptions = AnalyzeOptions(),
     ): List<ProjectIssue> {
-        val files =
-            root
-                .walkTopDown()
-                .onEnter { it == root || (it.name !in SKIPPED_FOLDERS && !it.name.startsWith(".")) }
-                .filter { it.isFile && it.extension == "kt" }
-                .sortedBy { it.invariantSeparatorsPath }
-                .map { it to it.readText() }
-                .toList()
+        val files = sourcesUnder(root, SKIPPED_FOLDERS)
         val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
         return files.flatMap { (file, source) ->
             analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
                 val (line, column) = issue.position(source)
-                ProjectIssue(file, line, column, issue)
+                projectIssue(file, line, column, issue)
             }
         }
     }

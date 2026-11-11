@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.json.JsonShape
 import kotlin.time.Duration
@@ -31,7 +32,7 @@ public object Wire {
      * how the built-in writer and `JSON.stringify` keep one: UTF-8 cannot carry it, and the bytes
      * would otherwise read `?`. In valid JSON such a surrogate can only stand inside a string.
      */
-    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u%04x".format(it.code) }
+    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u" + hex(it.code, 4) }
 
     /**
      * [html] with each surrogate that lacks its other half as U+FFFD, the replacement character the
@@ -136,7 +137,7 @@ public object Wire {
         if (value.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
         value.firstOrNull { it !in ' '..'~' }?.let {
             throw DatastarEventValidationException(
-                "eventId must be printable ASCII, not U+%04X: it goes back as the last-event-id header".format(it.code),
+                "eventId must be printable ASCII, not U+${hex(it.code, 4).uppercase()}: it goes back as the last-event-id header",
             )
         }
         if (value.first() == ' ' || value.last() == ' ') {
@@ -208,6 +209,6 @@ public object Wire {
         val comment = ended.indexOf("<!--")
         if (comment < 0) return ended
         return ended.substring(0, comment) +
-            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x%02x".format(it.groupValues[1][0].code) }
+            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x" + hex(it.groupValues[1][0].code, 2) }
     }
 }

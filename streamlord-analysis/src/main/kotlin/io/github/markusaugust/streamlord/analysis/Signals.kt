@@ -205,14 +205,26 @@ private val MAP_CALL = Regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
 /** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
 private fun argumentKeys(text: String): List<SignalDeclaration> {
-    PAIR.find(text)?.let { return listOf(declarationAt(it.groups[1]!!, 0)) }
+    PAIR.find(text)?.let { return listOf(declarationAt(PAIR.groupAt(text, it, 1)!!, 0)) }
     if (!MAP_CALL.containsMatchIn(text)) return emptyList()
     val map = findCallSites(text, MAP_CALLS).firstOrNull() ?: return emptyList()
-    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(it.groups[1]!!, a.start) } }
+    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(PAIR.groupAt(a.text, it, 1)!!, a.start) } }
 }
 
+/** A group of a match with where it stands, which a `MatchGroup` says on the JVM alone. */
+internal class GroupAt(
+    val value: String,
+    val range: IntRange,
+)
+
+internal fun Regex.groupAt(
+    input: CharSequence,
+    match: MatchResult,
+    group: Int,
+): GroupAt? = match.groups[group]?.let { GroupAt(it.value, groupRange(input, match, group)!!) }
+
 private fun declarationAt(
-    group: MatchGroup,
+    group: GroupAt,
     offset: Int,
     name: String = group.value,
 ): SignalDeclaration = SignalDeclaration(offset + group.range.first, offset + group.range.last + 1, name)
@@ -438,7 +450,7 @@ private fun definedAt(
             }
         }
     }
-    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(m.groups[1]!!, 0)
+    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
     return out.filter { PLACEHOLDER !in it.name }.distinct()
 }
 
@@ -471,7 +483,7 @@ private fun declared(
                         }
                     }
                 }
-                val name = NAME.find(a.text)?.groups?.get(1) ?: return@forEachIndexed
+                val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (site.name == "removeSignals") out += declarationAt(name, a.start)
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += declarationAt(name, a.start)
@@ -484,14 +496,14 @@ private fun declared(
                 if (foreign(name, m.range.first)) continue
                 // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
                 if (name in SIGNAL_NAME_HELPERS && onReceiver(src, m.range.first)) continue
-                out += declarationAt(m.groups[1]!!, 0)
+                out += declarationAt(re.groupAt(src, m, 1)!!, 0)
             }
         }
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
     for (m in KEYED_ATTRIBUTE.findAll(src)) {
-        val written = m.groups[1]!!
+        val written = KEYED_ATTRIBUTE.groupAt(src, m, 1)!!
         val key = written.value.substringBefore("__")
         out +=
             SignalDeclaration(
@@ -501,9 +513,12 @@ private fun declared(
                 SignalDeclaration.Kind.KEY,
             )
     }
-    for (m in VALUE_ATTRIBUTE.findAll(src)) out += declarationAt(m.groups[1] ?: m.groups[2]!!, 0)
+    for (m in VALUE_ATTRIBUTE.findAll(src)) {
+        out +=
+            declarationAt(VALUE_ATTRIBUTE.groupAt(src, m, 1) ?: VALUE_ATTRIBUTE.groupAt(src, m, 2)!!, 0)
+    }
     for (m in OBJECT_ATTRIBUTE.findAll(src)) {
-        val body = m.groups[1] ?: m.groups[2]!!
+        val body = OBJECT_ATTRIBUTE.groupAt(src, m, 1) ?: OBJECT_ATTRIBUTE.groupAt(src, m, 2)!!
         for (k in objectKeys(body.value, spread)) {
             val start = body.range.first + k.nameStart
             out += SignalDeclaration(start, start + k.key.length, k.path, SignalDeclaration.Kind.OBJECT_KEY)

@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.core.json
 
-import java.math.BigInteger
+import io.github.markusaugust.streamlord.core.radixDouble
 
 /** Text read the way JavaScript reads it, where Kotlin's own functions differ. */
 internal object JsText {
@@ -10,7 +10,7 @@ internal object JsText {
      */
     fun isSpace(c: Char): Boolean =
         c == '\t' || c == '\n' || c == '\u000B' || c == '\u000C' || c == '\r' || c == '\uFEFF' ||
-            c == '\u2028' || c == '\u2029' || Character.getType(c) == Character.SPACE_SEPARATOR.toInt()
+            c == '\u2028' || c == '\u2029' || c.category == CharCategory.SPACE_SEPARATOR
 
     /** `String.prototype.trim()`. */
     fun trim(s: String): String = s.trim(::isSpace)
@@ -34,6 +34,6 @@ internal object JsText {
                 "o" -> 8
                 else -> 2
             }
-        return runCatching { BigInteger(radix.groupValues[2], base).toDouble() }.getOrDefault(Double.NaN)
+        return radixDouble(radix.groupValues[2], base) ?: Double.NaN
     }
 }
