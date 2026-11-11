@@ -224,13 +224,14 @@
     ]
   },
   "scripts": {
-    "build": "node scripts/generate.mjs && node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
+    "analysis": "node scripts/analysis.mjs",
+    "build": "npm run analysis && node scripts/generate.mjs && node esbuild.mjs",
+    "watch": "npm run analysis && node esbuild.mjs --watch",
+    "typecheck": "npm run analysis && tsc --noEmit",
+    "test": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build",
-    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
+    "test:live": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
     "generate": "node scripts/generate.mjs"
   },
   "dependencies": {
