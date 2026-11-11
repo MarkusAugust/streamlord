@@ -53,7 +53,7 @@ public data class Token(
 private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
 
 // The options of a backend action, and the keys of two of them that hold objects: filterSignals'
-// include and exclude, and responseOverrides' (fetch.ts:268-271 in 1.0.4).
+// include and exclude, and responseOverrides' (fetch.ts:264-274 in 1.0.5).
 private val OPTION_KEYS =
     Catalog.default.fetchOptions
         .map { it.name }

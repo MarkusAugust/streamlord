@@ -1064,7 +1064,7 @@ function checkExpressionSite(site: CallSite, spec: CallSiteSpec, src: string, hy
 /**
  * The templates of a literal Datastar runs as an expression, and the values joined to it with
  * `+`. `$name` where a signal could stand is the trap. Any other template, `${expr}`, one inside
- * a JavaScript string (`@post('/x/$id')`, where Datastar leaves a `$` alone, engine.ts:448 in
+ * a JavaScript string (`@post('/x/$id')`, where Datastar leaves a `$` alone, engine.ts:546 in
  * 1.0.5), or one in a `$$` literal, writes the Kotlin value into code Datastar runs: a `'` in text
  * from outside ends the string and the rest runs. A number or a boolean is safe there, as
  * `interpolate` lets in.

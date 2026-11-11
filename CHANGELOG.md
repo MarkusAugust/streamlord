@@ -11,7 +11,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
   `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
   `DatastarProtocol.VERSION` is `1.0.5`. A page that still loads the 1.0.4 bundle works as before,
-  but the editors now judge an expression as 1.0.5 compiles it.
+  but the editors now judge an expression as 1.0.5 compiles it. The documentation site and the
+  demo load the 1.0.5 bundle.
 - `ElementsResponse` has a sixth value, `viewTransitionSelector`, and `respondElements` in
   streamlord-ktor, `datastarElements` in streamlord-spring and `elementsResponse` in streamlord-html
   take it after `useViewTransition`. Kotlin source that names its arguments compiles as before; a

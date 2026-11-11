@@ -57,10 +57,10 @@ public class FetchOptions {
     /**
      * Options the client applies to a non-SSE response regardless of its `datastar-*` headers.
      *
-     * Datastar 1.0.5 documents this option and its client does not act on it: `fetch.ts` never
+     * Datastar's client names this option in its types and does not act on it: `fetch.ts` never
      * reads `responseOverrides` from the action's arguments, so the response is patched by its
-     * headers alone. It is written out as documented and takes effect when the client reads it.
-     * Until then, set the `datastar-*` headers on the response, which `respondElements` does.
+     * headers alone, and the reference does not list the option. Set the `datastar-*` headers on
+     * the response instead, which `respondElements` does.
      */
     public var responseOverrides: ResponseOverrides? = null
 

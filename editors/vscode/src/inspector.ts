@@ -253,7 +253,7 @@ export class Inspector {
       this.post({ type: "signals", signals: this.signals });
     } catch (e) {
       // The client keeps the keys it set before the one it failed on, and so does the store shown. A
-      // throw also leaves its update batch open (signals.ts:695-708), so the bindings on the page stop
+      // throw also leaves its update batch open (signals.ts:747-762), so the bindings on the page stop
       // redrawing.
       if (!(e instanceof SignalPatchError)) {
         this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });

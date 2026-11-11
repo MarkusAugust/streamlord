@@ -817,7 +817,7 @@ class InspectorPanel(
             storeView.text = pretty(signals)
         } catch (e: SignalPatchException) {
             // The client keeps the keys it set before the one it failed on, and so does the store
-            // shown. A throw also leaves its update batch open (signals.ts:695-708), so the bindings
+            // shown. A throw also leaves its update batch open (signals.ts:747-762), so the bindings
             // on the page stop redrawing.
             signals = e.store
             storeView.text = pretty(signals)

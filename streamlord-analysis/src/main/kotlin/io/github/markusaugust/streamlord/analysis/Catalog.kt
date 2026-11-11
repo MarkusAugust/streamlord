@@ -147,7 +147,7 @@ public class Catalog private constructor(
     /** The DOM events an element can be listened to for, from `catalog/dom-events.json`, which no Datastar version changes. */
     public val domEvents: List<DomEvent> get() = DOM_EVENTS
 
-    /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
+    /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:567). */
     public val compiledParameters: List<String>
     public val patchModes: List<String>
     public val expressionCallSites: Map<String, CallSiteSpec>

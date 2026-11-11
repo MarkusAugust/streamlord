@@ -62,7 +62,7 @@ class SseDecoderAsTheClientReadsTest {
         assertEquals(emptyList(), SseDecoder.decode("event: other\ndata: x\n\n"))
     }
 
-    // The client takes id and retry from every message, Datastar's or not (fetch.ts:421, :427).
+    // The client takes id and retry from every message, Datastar's or not (fetch.ts:422, :428).
     @Test
     fun `id and retry are checked on every message, since the client takes them from every one`() {
         assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("event: other\nretry: soon\ndata: x\n\n") }
@@ -136,7 +136,7 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     // The client decodes each field and each value on its own, and each decode drops a leading
-    // byte order mark (fetch.ts:406-408).
+    // byte order mark (fetch.ts:408-410).
     @Test
     fun `a byte order mark before a field or a value is dropped`() {
         assertEquals(PatchSignals("{}"), SseDecoder.decodeOne("\uFEFFevent: datastar-patch-signals\ndata: signals {}\n\n"))
@@ -144,13 +144,13 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     // The client stores it and sends it back as last-event-id, which a header cannot carry, so
-    // every reconnect fails (fetch.ts:554, :683).
+    // every reconnect fails (fetch.ts:556, :695).
     @Test
     fun `an id with a NUL in it is malformed`() {
         assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("id: a\u0000b\n" + signals + "\n") }
     }
 
-    // fetch.ts:403 reads a field only up to a colon; a line without one is skipped.
+    // fetch.ts:404 reads a field only up to a colon; a line without one is skipped.
     @Test
     fun `a line without a colon is ignored`() {
         assertEquals(

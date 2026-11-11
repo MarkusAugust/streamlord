@@ -95,7 +95,7 @@ export interface Catalog {
   datastarEvents: { name: string; doc: string }[];
   /** The DOM events an element can be listened to for, from catalog/dom-events.json. */
   domEvents: { name: string; mdn: string | null }[];
-  /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
+  /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:567). */
   compiledParameters: string[];
   patchModes: string[];
   /** The calls whose arguments are signals by name, each with the flags the catalog gives it: `names`, `json`. */
