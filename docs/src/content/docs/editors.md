@@ -118,7 +118,7 @@ a signals class, which Kotlin's own rename renames. In `$user.name.length` each 
 signal: the caret on `user` renames `user`, on `name` it renames `user.name`.
 
 **Help inside an expression.** Put the caret in the options of a backend action and completion
-offers the ones not yet written, each with what Datastar 1.0.4 does with it; hovering one says the
+offers the ones not yet written, each with what Datastar 1.0.5 does with it; hovering one says the
 same. Parameter info shows the action's parameters with the one the caret is on: Parameter Info in
 IntelliJ (⌘P on macOS, Ctrl+P elsewhere), Trigger Parameter Hints in VS Code (⇧⌘Space on macOS,
 Ctrl+Shift+Space elsewhere), and on typing `(` or `,`. After `data-on:` come Datastar's own events,
@@ -131,9 +131,8 @@ IDE closes it for you.
 <div data-on:datastar-fetch="evt.detail.type === 'error' && ($failed = true)"></div>
 ```
 
-`retry` here is worth the hover: in 1.0.4 a request that fails on the network is retried
-whatever it says, so `'auto'` and `'never'` act alike, and `'error'` is what also retries a 4xx or
-5xx answer.
+`retry` here is worth the hover: `'auto'` retries only a request that fails on the network,
+`'error'` is what also retries a 4xx or 5xx answer, and `'never'` retries nothing.
 
 **Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
 of your Kotlin or your HTML, which belong to your theme. In IntelliJ the Datastar tokens take
@@ -226,7 +225,7 @@ have a schema, so the editor marks a mistake as you type it.
 
 ## One implementation, two editors
 
-Everything they know comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to
+Everything they know comes from `catalog/datastar-1.0.5.json`, which the SDK's own tests bind to
 the DSL, so the catalog cannot drift from the library without a test failing.
 
 The checks live once, in `streamlord-analysis`: a Kotlin module with no dependency beyond

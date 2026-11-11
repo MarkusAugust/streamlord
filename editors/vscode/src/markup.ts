@@ -515,7 +515,7 @@ function emptyKeyAdvice(spec: AttributeSpec, prefix: string, hasValue: boolean, 
   }
 }
 
-/** The cases the 1.0.4 client has a function for (utils/text.ts); any other value leaves the key as it is. */
+/** The cases the 1.0.5 client has a function for (utils/text.ts); any other value leaves the key as it is. */
 const camelCase = (s: string): string => s.replace(/-[a-z]/g, (x) => x[1]!.toUpperCase());
 const CASE_FNS = new Map<string, (s: string) => string>([
   ["camel", camelCase],
@@ -586,12 +586,12 @@ export function keyReading(spec: AttributeSpec, name: string, wire: string): str
 /**
  * What a raw key with a capital can do, said once, where it applies: an attribute keeps its name in
  * the object form (attr.ts sets the key as written); a style property has no form that keeps one,
- * since the object form writes the key kebab-case (style.ts:50 in 1.0.4).
+ * since the object form writes the key kebab-case (style.ts:50 in 1.0.5).
  */
 export function rawKeyNote(spec: AttributeSpec, prefix: string, key: string): string {
   if (keyKind(spec) !== "raw" || spec.valueKind !== "expression") return "";
   if (spec.name === "style") {
-    // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
+    // The object form writes a key kebab-case too (style.ts:50 in 1.0.5), so no form keeps a capital.
     return key.startsWith("--")
       ? ` No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${kebab(key)}.`
       : ` A CSS property is written in kebab-case: ${prefix}${spec.name}:${kebab(key)}.`;
@@ -889,7 +889,7 @@ function valueEnd(body: string, regions: Uint8Array, from: number): number {
 }
 
 /**
- * `data-computed` without a key takes an object of functions (computed.ts in 1.0.4): any other value
+ * `data-computed` without a key takes an object of functions (computed.ts in 1.0.5): any other value
  * declares nothing, and a value under a key that is no function raises ComputedExpectedFunction.
  * Only a value sure to be no function is judged: `fns`, `{total: $a ? f : g}` and
  * `{total: new Function(...)}` may well give one.

@@ -603,7 +603,7 @@ public fun keyReading(
 /**
  * What a raw key with a capital can do, said once, where it applies: an attribute keeps its name in
  * the object form (attr.ts sets the key as written); a style property has no form that keeps one,
- * since the object form writes the key kebab-case (style.ts:50 in 1.0.4).
+ * since the object form writes the key kebab-case (style.ts:50 in 1.0.5).
  */
 public fun rawKeyNote(
     spec: AttributeSpec,
@@ -615,7 +615,7 @@ public fun rawKeyNote(
             ""
         }
 
-        // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
+        // The object form writes a key kebab-case too (style.ts:50 in 1.0.5), so no form keeps a capital.
         spec.name == "style" && key.startsWith("--") -> {
             " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${ClientCasing.kebab(key)}."
         }
@@ -1253,7 +1253,7 @@ public class MarkupValidator(
     }
 
     /**
-     * `data-computed` without a key takes an object of functions (computed.ts in 1.0.4): any other
+     * `data-computed` without a key takes an object of functions (computed.ts in 1.0.5): any other
      * value declares nothing, and a value under a key that is no function raises ComputedExpectedFunction.
      * Only a value sure to be no function is judged: `fns`, `{total: $a ? f : g}` and
      * `{total: new Function(...)}` may well give one.

@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.ClientScript
 import io.github.markusaugust.streamlord.core.client.Rewrite
+import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 
@@ -18,6 +19,9 @@ private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
 private val WORD_CHAR = Regex("""\w""")
+
+/** A `${` with a brace inside before it closes: what keeps the client's pattern from taking a template literal whole. */
+private val BRACED_INTERPOLATION = Regex("""\$\{[^{}]*\{""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
 internal fun quoteAt(
@@ -386,7 +390,7 @@ private fun delimitedEnd(
 
 /**
  * The statements of a value-returning expression, as `statementRe` of Datastar's `genRx` matches
- * them (engine.ts:415-416 in 1.0.4): runs of anything but `;`, where a quoted string, a regex
+ * them (engine.ts in 1.0.5): runs of anything but `;`, where a quoted string, a regex
  * literal and a no-argument IIFE are stepped over whole, `;` and all. Written as a scan rather than
  * the client's one regular expression, which Java's engine recurses on and overflows for a few
  * kilobytes of text; the two agree token for token, since each alternative is tried in the client's
@@ -430,10 +434,17 @@ internal fun clientSignalReads(text: String): List<Rewrite> {
 }
 
 /**
- * The function body Datastar compiles from [text] (engine.ts:385-430 in 1.0.4). The text is
- * trimmed as JavaScript trims. With [returnsValue] it is split into statements, the last of them
- * wrapped in `return (...);` unless it starts with `return`, and the statements joined with `;\n`;
- * the separators and the wrapping map to where the statement started or ended.
+ * Whether [trimmed] opens with `return` and white space, the client's `/^return\s/`: a function
+ * body the author wrote, which `genRx` compiles as it stands and does not split into statements.
+ */
+internal fun opensWithReturn(trimmed: String): Boolean = trimmed.startsWith("return") && trimmed.getOrNull(6)?.isJsWhitespace() == true
+
+/**
+ * The function body Datastar compiles from [text] (engine.ts, `genRx`, in 1.0.5). The text is
+ * trimmed as JavaScript trims. With [returnsValue], unless it opens with `return`, it is split
+ * into statements, the last of them wrapped in `return (...);` unless it starts with `return`, and
+ * the statements joined with `;\n`; the separators and the wrapping map to where the statement
+ * started or ended. A text with no statement in it, only `;`, is compiled as it stands.
  */
 internal fun clientScript(
     text: String,
@@ -463,10 +474,10 @@ internal fun clientScript(
     if (start < 0) return ClientScript("", intArrayOf(text.length))
     val end = text.indexOfLast { !it.isJsWhitespace() } + 1
     val trimmed = text.substring(start, end)
-    if (!returnsValue) {
+    val statements = if (returnsValue && !opensWithReturn(trimmed)) clientStatements(trimmed) else emptyList()
+    if (statements.isEmpty()) {
         append(trimmed, start)
     } else {
-        val statements = clientStatements(trimmed)
         statements.forEachIndexed { i, r ->
             val statement = trimmed.substring(r)
             if (i > 0) synthetic(";\n", start + r.first - 1)
@@ -566,7 +577,7 @@ private fun keyOpens(
 
 /**
  * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804 in 1.0.5) cuts one `/` from
  * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
  * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
  * template literal counts when it holds no `${`. A scan rather than one regular expression, which
@@ -791,7 +802,16 @@ public class ExpressionValidator(
             val written = js.substring(r.start, if (r.signal) r.end else r.end - 1)
             val (start, end) = span(r.start, r.start + written.length)
             if (region != Region.CODE) {
-                issues += literalRewritten(r, written, region, js.getOrNull(starts[r.start]), start, end)
+                issues +=
+                    literalRewritten(
+                        r,
+                        written,
+                        region,
+                        js.getOrNull(starts[r.start]),
+                        start,
+                        end,
+                        templateWhy(js, rewritten.runs, r.start),
+                    )
                 continue
             }
             if (r.signal) {
@@ -809,11 +829,17 @@ public class ExpressionValidator(
             if (next == '$') continue
             if (WORD_CHAR.matches(next.toString())) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
-                val run = rewritten.runs.firstOrNull { p in it }
+                val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =
                     run?.let {
-                        val q = js[it.first]
-                        ": its pattern takes the $q${placeOf(regions[it.first])} before it for the start of a string, " +
+                        // A later stretch of a literal the client took whole: JavaScript is still in the ${...} the client ended.
+                        if (it.range.first !=
+                            it.quote
+                        ) {
+                            return@let ": a } before it ends the \${...} for Datastar's pattern, which leaves what follows as written"
+                        }
+                        val q = js[it.quote]
+                        ": its pattern takes the $q${placeOf(regions[it.quote])} before it for the start of a string, " +
                             "and leaves everything up to the next $q as written"
                     } ?: ""
                 val (start, end) = span(p, p + written.length)
@@ -845,9 +871,29 @@ public class ExpressionValidator(
         }
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
-        if (returnsValue == true && err == null) issues += statementSplitIssue(text)
+        if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
         issues += filterSignalsIssues(text)
         return issues
+    }
+
+    /** Why the client rewrote the reference at [at], which JavaScript reads as the text of a template literal. */
+    private fun templateWhy(
+        js: String,
+        runs: List<Run>,
+        at: Int,
+    ): String {
+        // Between two runs of one literal lies a ${...} of a literal the client took whole.
+        if (runs.zipWithNext().any { (a, b) -> a.quote == b.quote && at > a.range.last && at < b.range.first }) {
+            return ", because it stands inside a \${...}, where Datastar rewrites the text of an inner template literal too, " +
+                "so the text holds that"
+        }
+        val open = js.lastIndexOf('`', at)
+        val close = js.indexOf('`', at).let { if (it < 0) js.length else it }
+        return if (open >= 0 && BRACED_INTERPOLATION.containsMatchIn(js.substring(open, close))) {
+            ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
+        } else {
+            ", because Datastar does not take this template literal whole and reads its text as code, so the text holds that"
+        }
     }
 
     private fun literalRewritten(
@@ -857,6 +903,7 @@ public class ExpressionValidator(
         quote: Char?,
         start: Int,
         end: Int,
+        template: String,
     ): Issue {
         val becomes = if (r.signal) r.written else "${r.written}...)"
         val advice =
@@ -882,7 +929,7 @@ public class ExpressionValidator(
         val why =
             when {
                 region == Region.TEMPLATE -> {
-                    ", because the literal also holds a \${...}, so the text holds that"
+                    template
                 }
 
                 region == Region.REGEX -> {

@@ -12,8 +12,8 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 |---|---|
 | `streamlord-*` | the ten published modules |
 | `editors/vscode`, `editors/intellij` | the two editor extensions |
-| `catalog/` | `datastar-1.0.4.json`, the source of truth for the names core, the analysis and both editors read |
-| `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.4/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
+| `catalog/` | `datastar-1.0.5.json`, the source of truth for the names core, the analysis and both editors read |
+| `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.5/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
 | `conformance/` | what the client and the servers actually do, as fixtures the tests hold Streamlord to; see below |
 | `docs/` | this project's documentation site (Astro, LO-TEK, Datastar) |
 | `demo/` | `streamlord-live`, the service behind the site's live examples and search |
@@ -74,7 +74,7 @@ the client itself does, recorded in `conformance/`:
 
 | Path | What it holds | Made by |
 |---|---|---|
-| `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store, and what each attribute plugin declares | `conformance/generate/client.mjs`, from `datastar-reference/` |
+| `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store, what each attribute plugin declares, and the options each backend action reads | `conformance/generate/client.mjs`, from `datastar-reference/` |
 | `conformance/dom/` | the client run in a browser-like DOM: what each SSE frame did to a page and its store, what the HTML parser does with a script body and where it ends a comment | `conformance/generate/dom.mjs`, from `datastar-reference/` |
 | `conformance/dsl/` | what the client did with the HTML each DSL call writes: the listeners, timers, store, requests and DOM afterwards, held to what the call means | the HTML by `./gradlew :streamlord-html-pro:updateClientReadings`, the reading by `conformance/generate/dsl.mjs`, from `datastar-reference/` |
 | `conformance/wire/` | the exact HTTP answer each adapter gives, per server, for a fixed set of requests, and in `kotlin/` the request set and the comparison both adapters' tests compile | the adapter tests, with `./gradlew :streamlord-ktor:updateTranscripts :streamlord-spring:updateTranscripts` |

@@ -801,7 +801,7 @@ class InspectorPanel(
         ToolWindowManager.getInstance(project).invokeLater(block)
     }
 
-    /** The store as the client would hold it after this frame, see [mergePatchAsClient]; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
+    /** The store as the client would hold it after this frame, see [mergePatchAsClient]; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.5). */
     private fun applyFrame(frame: DatastarFrame) {
         if (frame.event != "datastar-patch-signals") return
         val text = frame.args["signals"] ?: return
@@ -817,7 +817,7 @@ class InspectorPanel(
             storeView.text = pretty(signals)
         } catch (e: SignalPatchException) {
             // The client keeps the keys it set before the one it failed on, and so does the store
-            // shown. A throw also leaves its update batch open (signals.ts:695-708), so the bindings
+            // shown. A throw also leaves its update batch open (signals.ts:747-762), so the bindings
             // on the page stop redrawing.
             signals = e.store
             storeView.text = pretty(signals)

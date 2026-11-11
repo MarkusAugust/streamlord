@@ -52,13 +52,13 @@ public data class Token(
 
 private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
 
-// The options of a backend action, and the keys of two of them that hold objects: filterSignals'
-// include and exclude, and responseOverrides' (fetch.ts:268-271 in 1.0.4).
+// The options of a backend action, and the keys of the one that holds an object: filterSignals'
+// include and exclude.
 private val OPTION_KEYS =
     Catalog.default.fetchOptions
         .map { it.name }
         .toSet() +
-        setOf("include", "exclude", "mode", "namespace", "useViewTransition", "onlyIfMissing")
+        setOf("include", "exclude")
 private val JS_KEYWORDS =
     setOf(
         "if",
@@ -226,7 +226,7 @@ public fun tokenizeExpression(text: String): List<Token> {
 }
 
 /**
- * The signal the client's pattern `\$(\w+(?:[.-]\w+)*)` (engine.ts:449 in 1.0.4) reads at [nameStart]:
+ * The signal the client's pattern `\$(\w+(?:[.-]\w+)*)` (engine.ts:546 in 1.0.5) reads at [nameStart]:
  * the name up to its first dot as a SIGNAL token from [start], the rest as its path. Returns the
  * offset after the match, which a trailing dot or hyphen is outside of.
  */

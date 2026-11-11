@@ -128,9 +128,9 @@ export function referenceAsSubtraction(name: string): string | null {
   return out;
 }
 
-// The offsets in text of the hyphens that go wrong. The client skips a quoted string, and a
-// template literal without `${`, so their text is in runs; the text of one with `${` it reads as
-// code, which JavaScript does not, so the scan steps over that text itself.
+// The offsets in text of the hyphens that go wrong. The client skips a quoted string, and
+// the text of a template literal it takes whole, so those are in runs; the text of one whose `${`
+// holds a brace it reads as code, which JavaScript does not, so the scan steps over that text itself.
 function wrongHyphens(text: string): Set<number> {
   const read = clientRewrite(text);
   const references = read.rewrites.filter((r) => r.kind === "signal");

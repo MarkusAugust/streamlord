@@ -1,7 +1,5 @@
 package io.github.markusaugust.streamlord.html
 
-import io.github.markusaugust.streamlord.core.domain.ElementNamespace
-import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import kotlin.time.Duration
 
 /**
@@ -30,10 +28,10 @@ public class FetchOptions {
     public var openWhenHidden: Boolean? = null
 
     /**
-     * Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. Datastar 1.0.4's client
-     * retries a request that fails on the network, before or during the response, whatever this
-     * says, so `'never'` acts as `'auto'` does: neither retries an answer, both retry a failed
-     * request, up to [retryMaxCount] times in a row.
+     * Retry policy: `'auto'` (default), `'error'`, `'always'`, `'never'`. `'auto'` retries a
+     * request that fails on the network, before or during the response, and no answer; `'never'`
+     * retries nothing, and the action fails with the first error. A retry is made at most
+     * [retryMaxCount] times over the whole action.
      */
     public var retry: Retry? = null
 
@@ -53,21 +51,6 @@ public class FetchOptions {
 
     /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`. Overrides [payload]. */
     public var payloadExpr: String? = null
-
-    /**
-     * Options the client applies to a non-SSE response regardless of its `datastar-*` headers.
-     *
-     * Datastar 1.0.4 documents this option and its client does not act on it: `fetch.ts` never
-     * reads `responseOverrides` from the action's arguments, so the response is patched by its
-     * headers alone. It is written out as documented and takes effect when the client reads it.
-     * Until then, set the `datastar-*` headers on the response, which `respondElements` does.
-     */
-    public var responseOverrides: ResponseOverrides? = null
-
-    /** Configure [responseOverrides] inline. */
-    public fun responseOverrides(block: ResponseOverrides.() -> Unit) {
-        responseOverrides = ResponseOverrides().apply(block)
-    }
 
     public enum class ContentType(
         public val wire: String,
@@ -93,30 +76,6 @@ public class FetchOptions {
         DISABLED("disabled"),
     }
 
-    /**
-     * Overrides for non-SSE responses: the element options for a `text/html` body, or
-     * `onlyIfMissing` for an `application/json` body.
-     */
-    public class ResponseOverrides {
-        public var selector: String? = null
-        public var mode: ElementPatchMode? = null
-        public var namespace: ElementNamespace? = null
-        public var useViewTransition: Boolean? = null
-        public var onlyIfMissing: Boolean? = null
-
-        internal fun toJs(): String? {
-            val entries =
-                buildList {
-                    selector?.let { add("selector: ${js(it)}") }
-                    mode?.let { add("mode: ${js(it.wire)}") }
-                    namespace?.let { add("namespace: ${js(it.wire)}") }
-                    useViewTransition?.let { add("useViewTransition: $it") }
-                    onlyIfMissing?.let { add("onlyIfMissing: $it") }
-                }
-            return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
-        }
-    }
-
     /** Render as a JavaScript object literal, or `null` when every option is at its default. */
     public fun toJs(): String? {
         val entries =
@@ -140,7 +99,6 @@ public class FetchOptions {
                 }
                 requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
                 (payloadExpr ?: payload?.let { JsLiteral.write(it) })?.let { add("payload: $it") }
-                responseOverrides?.toJs()?.let { add("responseOverrides: $it") }
             }
         return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
     }

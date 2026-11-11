@@ -96,7 +96,8 @@ too. Pass the value as a pair, `"search" to codec.toJsonValue(...)`, and the fie
 
 What the codec leaves out, the page does not declare. A field that is `null` declares nothing,
 because the client holds no null: it removes a signal patched to `null`, and an expression that
-reads it, or a `data-bind` on it, gets `""`. A `null` in a list is held as `""` too. So a form
+reads it afterwards, or a `data-bind` on it, gets `""`. An expression already on the page is not
+run again for the removal, and goes on showing what it showed. A `null` in a list is held as `""` too. So a form
 with `age: Int? = null` can come back from the browser as `"age": ""`, which a read into `Int?`
 refuses. Give such a field the value the page starts it with, `""` or `0`, or make the type take
 what the browser sends. The editors warn on a pair written `"selected" to null` in `dataSignals`.
@@ -289,7 +290,7 @@ folds a patch the way the client does.
 A patch the client fails on partway, such as a `length` an array cannot take, makes
 `mergePatchAsClient` throw `SignalPatchException` with the store as the client keeps it, the keys
 before the failing one applied, and both Stream Inspectors show that store and the reason. In
-the browser the damage outlasts the patch: Datastar 1.0.4 leaves its update batch open after the
+the browser the damage outlasts the patch: Datastar 1.0.5 leaves its update batch open after the
 throw, so the bindings already on the page stop redrawing until it is reloaded. Measured in
 Chrome, a `data-text` stayed where it was while clicks moved its signal on, while element
 patches still landed and a binding added after the throw showed the current value.

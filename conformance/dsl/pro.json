@@ -1,10 +1,10 @@
 {
   "$comment": "How the free Datastar engine split the attributes and action calls the Pro DSL writes: each case's name, call, prefix, probe and html come from ProDslAsTheClientReadsItTest under ./gradlew :streamlord-html-pro:updateClientReadings, its read from conformance/generate/dsl.mjs, which registers a recording plugin under each Pro name in the free bundle. Datastar Pro itself is not read, so what Pro does with a key, such as the casing the catalog gives it, is not held here.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "bundles": {
-    "datastar.js": "727844adfc825ee651fb93c544a2a739986f9a21820a94524b35f0cac470cf91"
+    "datastar.js": "7380e0344b7f937d80ad70ededa1c28578173157ee4748be1850991491d911fd"
   },
-  "generator": "749747bfb8925e643727361f6072e58339fd959cdb71506dc55f0c6c3edb9118",
+  "generator": "9a8f37a6e729f206dd1310fe858808b691b2ca1a7f7d5cf7c49411ca244e337a",
   "proAttributes": [
     "animate",
     "custom-validity",

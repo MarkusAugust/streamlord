@@ -135,7 +135,7 @@ describe("kotlin injection grammar", () => {
   });
 
   it("knows exactly the catalog's attributes, and its expression attributes, in the attributes form", () => {
-    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.4.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
     const [value, name] = grammar.repository["attributes-index"].patterns as [{ begin: string }, { match: string }];
     // The alternation of names: the group after data-(?:star-)?.
@@ -324,12 +324,19 @@ describe("html injection grammar", () => {
   });
 
   it("knows exactly the catalog's attributes", () => {
-    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.4.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/html-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\(\?:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const of = (kinds: (k: string) => boolean) => [...new Set(catalog.attributes.filter((a) => kinds(a.valueKind)).map((a) => a.name))].sort();
     assert.deepEqual(names(grammar.repository["datastar-attribute-with-value"].begin), of((k) => k === "expression"));
     assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k !== "expression"));
     assert.deepEqual(names(grammar.repository["datastar-attribute-bare"].match), of(() => true));
+  });
+
+  it("knows exactly the catalog's fetch options, and filterSignals' two keys", () => {
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { fetchOptions: { name: string }[] };
+    const grammar = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
+    const keys = /^\\b\(([A-Za-z|]+)\)/.exec(grammar.repository["option-keys"].match)?.[1]?.split("|").sort();
+    assert.deepEqual(keys, [...catalog.fetchOptions.map((o) => o.name), "include", "exclude"].sort());
   });
 });

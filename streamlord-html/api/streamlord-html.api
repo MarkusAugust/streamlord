@@ -119,8 +119,8 @@ public final class io/github/markusaugust/streamlord/html/DatastarAttributes {
 
 public final class io/github/markusaugust/streamlord/html/ElementsKt {
 	public static final fun elements (Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
-	public static final fun elementsResponse (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLkotlin/jvm/functions/Function1;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
-	public static synthetic fun elementsResponse$default (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static final fun elementsResponse (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Lkotlin/jvm/functions/Function1;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
+	public static synthetic fun elementsResponse$default (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ElementsResponse;
 	public static final fun patchElements-jxBP150 (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun patchElements-jxBP150$default (Lio/github/markusaugust/streamlord/core/port/driving/DatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static final fun patchElements-rl3MWlM (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;ZLjava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/functions/Function1;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
@@ -156,14 +156,12 @@ public final class io/github/markusaugust/streamlord/html/FetchOptions {
 	public final fun getPayload ()Ljava/lang/Object;
 	public final fun getPayloadExpr ()Ljava/lang/String;
 	public final fun getRequestCancellation ()Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
-	public final fun getResponseOverrides ()Lio/github/markusaugust/streamlord/html/FetchOptions$ResponseOverrides;
 	public final fun getRetry ()Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
 	public final fun getRetryInterval-FghU774 ()Lkotlin/time/Duration;
 	public final fun getRetryMaxCount ()Ljava/lang/Integer;
 	public final fun getRetryMaxWait-FghU774 ()Lkotlin/time/Duration;
 	public final fun getRetryScaler ()Ljava/lang/Double;
 	public final fun getSelector ()Ljava/lang/String;
-	public final fun responseOverrides (Lkotlin/jvm/functions/Function1;)V
 	public final fun setContentType (Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;)V
 	public final fun setFilterSignals (Lio/github/markusaugust/streamlord/html/SignalFilter;)V
 	public final fun setHeaders (Ljava/util/Map;)V
@@ -171,7 +169,6 @@ public final class io/github/markusaugust/streamlord/html/FetchOptions {
 	public final fun setPayload (Ljava/lang/Object;)V
 	public final fun setPayloadExpr (Ljava/lang/String;)V
 	public final fun setRequestCancellation (Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;)V
-	public final fun setResponseOverrides (Lio/github/markusaugust/streamlord/html/FetchOptions$ResponseOverrides;)V
 	public final fun setRetry (Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;)V
 	public final fun setRetryInterval-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setRetryMaxCount (Ljava/lang/Integer;)V
@@ -198,20 +195,6 @@ public final class io/github/markusaugust/streamlord/html/FetchOptions$RequestCa
 	public final fun getWire ()Ljava/lang/String;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
 	public static fun values ()[Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
-}
-
-public final class io/github/markusaugust/streamlord/html/FetchOptions$ResponseOverrides {
-	public fun <init> ()V
-	public final fun getMode ()Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;
-	public final fun getNamespace ()Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;
-	public final fun getOnlyIfMissing ()Ljava/lang/Boolean;
-	public final fun getSelector ()Ljava/lang/String;
-	public final fun getUseViewTransition ()Ljava/lang/Boolean;
-	public final fun setMode (Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;)V
-	public final fun setNamespace (Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;)V
-	public final fun setOnlyIfMissing (Ljava/lang/Boolean;)V
-	public final fun setSelector (Ljava/lang/String;)V
-	public final fun setUseViewTransition (Ljava/lang/Boolean;)V
 }
 
 public final class io/github/markusaugust/streamlord/html/FetchOptions$Retry : java/lang/Enum {

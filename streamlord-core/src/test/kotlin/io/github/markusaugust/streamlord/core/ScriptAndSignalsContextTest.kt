@@ -32,7 +32,7 @@ class ScriptAndSignalsContextTest {
         )
     }
 
-    // Measured against the 1.0.4 store: __proto__ throws midway through a batch it never closes,
+    // Measured against the 1.0.5 store: __proto__ throws midway through a batch it never closes,
     // constructor with an object under it reaches Object.prototype, and a dotted key is one key
     // that $a.b does not reach and a request drops.
     @Test

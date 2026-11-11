@@ -162,24 +162,11 @@ class HtmlDslTest {
     }
 
     @Test
-    fun `payload and response overrides`() {
+    fun `payload`() {
+        assertEquals("""@post('/x', {payload: {id: 7}})""", post("/x") { payload = mapOf("id" to 7) })
         assertEquals(
-            """@post('/x', {payload: {id: 7}, responseOverrides: {selector: '#out', mode: 'inner', useViewTransition: true}})""",
-            post("/x") {
-                payload = mapOf("id" to 7)
-                responseOverrides {
-                    selector = "#out"
-                    mode = ElementPatchMode.INNER
-                    useViewTransition = true
-                }
-            },
-        )
-        assertEquals(
-            """@get('/x', {payload: {id: ${'$'}selected}, responseOverrides: {onlyIfMissing: true}})""",
-            get("/x") {
-                payloadExpr = "{id: ${'$'}selected}"
-                responseOverrides { onlyIfMissing = true }
-            },
+            """@get('/x', {payload: {id: ${'$'}selected}})""",
+            get("/x") { payloadExpr = "{id: ${'$'}selected}" },
         )
     }
 

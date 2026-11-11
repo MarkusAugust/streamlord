@@ -1,6 +1,6 @@
 {
-  "$comment": "Single source of truth for the Datastar 1.0.4 surface Streamlord knows: attributes, modifiers, actions, fetch options. streamlord-core compiles its names in (CatalogNames), streamlord-analysis compiles it in as text, the VS Code extension bundles it, and streamlord-html-pro/CatalogTest binds it to the DSL. Pro entries name only publicly documented attribute names; no Datastar Pro code is included anywhere.",
-  "version": "1.0.4",
+  "$comment": "Single source of truth for the Datastar 1.0.5 surface Streamlord knows: attributes, modifiers, actions, fetch options. streamlord-core compiles its names in (CatalogNames), streamlord-analysis compiles it in as text, the VS Code extension bundles it, and streamlord-html-pro/CatalogTest binds it to the DSL. Pro entries name only publicly documented attribute names; no Datastar Pro code is included anywhere.",
+  "version": "1.0.5",
   "prefix": "data-",
   "aliasedPrefix": "data-star-",
   "modifierTypes": {
@@ -469,12 +469,11 @@
     { "name": "openWhenHidden", "type": "boolean", "default": "false for @get, true otherwise", "doc": "Whether the request stays open while the tab is hidden. When false, Datastar closes it as the tab is hidden and sends it again as the tab is shown." },
     { "name": "payload", "type": "any", "default": "the filtered signal store", "doc": "What a 'json' request sends in place of the signals; filterSignals is then not read." },
     { "name": "requestCancellation", "type": "'auto' | 'cleanup' | 'disabled' | AbortController", "default": "'auto'", "doc": "'auto' cancels a request with the same method and URL that is still running; 'cleanup' does so too, and also cancels the request when its element or attribute goes; 'disabled' lets requests run side by side. An AbortController cancels the request from your own code." },
-    { "name": "responseOverrides", "type": "{selector?, mode?, namespace?, useViewTransition?} | {onlyIfMissing?}", "default": "none", "doc": "Documented, but Datastar 1.0.4's client never reads it: set the datastar-* headers on the response instead." },
-    { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'", "doc": "When Datastar sends the request again. A request that fails on the network, before or during the response, is retried whatever this says, so 'auto' and 'never' act alike; 'error' also retries a 4xx or 5xx answer; 'always' also retries any status but 200, 204 or a redirect, and an event stream when it ends. A 200 answer of HTML, JSON or JavaScript is never retried." },
-    { "name": "retryInterval", "type": "number (ms)", "default": "1000", "doc": "Milliseconds before the first retry, multiplied by retryScaler for each one after and set back by a 200 answer. A retry: line in the stream sets it too." },
+    { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'", "doc": "When Datastar sends the request again. 'auto' retries a request that fails on the network, before or during the response; 'error' also retries a 4xx or 5xx answer; 'always' also retries any status but 200, 204 or a redirect, and an event stream when it ends; 'never' retries nothing, and the action fails with the first error. A 200 answer of HTML, JSON or JavaScript is never retried." },
+    { "name": "retryInterval", "type": "number (ms)", "default": "1000", "doc": "Milliseconds before the first retry, multiplied by retryScaler for each one after, and set back when an event stream has ended. A retry: line in the stream sets it too." },
     { "name": "retryScaler", "type": "number", "default": "2", "doc": "What the wait is multiplied by after each retry, up to retryMaxWait." },
     { "name": "retryMaxWait", "type": "number (ms)", "default": "30000", "doc": "The longest the wait grows to as retryScaler multiplies it, in milliseconds. The first wait, retryInterval, and one a retry: line in the stream sets, are not held to it." },
-    { "name": "retryMaxCount", "type": "number", "default": "10", "doc": "How many retries in a row Datastar makes before it gives up and dispatches retries-failed; a 200 answer starts the count again." }
+    { "name": "retryMaxCount", "type": "number", "default": "10", "doc": "How many retries Datastar makes over the whole action before it gives up and dispatches retries-failed. An answer that arrives in between does not give it more." }
   ],
   "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
   "datastarEvents": [

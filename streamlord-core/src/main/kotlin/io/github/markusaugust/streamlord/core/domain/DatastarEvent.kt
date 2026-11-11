@@ -6,7 +6,7 @@ import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
 
 /**
- * An event bound for the browser over the Datastar SSE protocol (v1.0.4).
+ * An event bound for the browser over the Datastar SSE protocol (v1.0.5).
  *
  * The protocol itself knows only two rites, `datastar-patch-elements` and
  * `datastar-patch-signals`. Streamlord models a third, [ExecuteScript], because the SDK
@@ -28,8 +28,8 @@ public sealed interface DatastarEvent {
      * later frame sets another. `null` leaves the client's current interval in place, which is
      * the action's `retryInterval` (1000 ms unless set) until a frame has changed it. 1000 ms is
      * never written, as the SDK specification has it, so a stream that has changed the interval
-     * goes back with 999 or 1001 ms. `retryMaxCount` only counts reconnects that never reach a
-     * 200, and `retryMaxWait` caps the backoff after the first wait, not this value.
+     * goes back with 999 or 1001 ms. `retryMaxCount` counts every reconnect of the action, one that
+     * reached a 200 too, and `retryMaxWait` caps the backoff after the first wait, not this value.
      */
     public val retry: Duration?
 }

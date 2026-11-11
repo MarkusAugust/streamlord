@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { twinCases } from "./twins.ts";
 import { analyzeHtml } from "../src/analyze.ts";
 import { catalog, parseAttributeName } from "../src/catalog.ts";
@@ -12,7 +12,7 @@ import { clientKeyName, toCamel } from "../src/signals.ts";
 
 /**
  * Holds the editor's mirror to the fixtures under `conformance/client/`, each the output of a
- * function of the Datastar 1.0.4 client run by `conformance/generate/client.mjs`: `casing.json`
+ * function of the Datastar client run by `conformance/generate/client.mjs`: `casing.json`
  * (`modifyCasing` in utils/text.ts), `attribute-keys.json` (`parseAttributeKey` in
  * engine/engine.ts), `expressions.json` (the body `genRx` compiles) and `tags.json`
  * (`modifyTiming` in utils/timing.ts).
@@ -110,9 +110,141 @@ describe("the client's rules", () => {
 
   it("writes the function body genRx compiles", () => {
     const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
-    assert.equal(cases.length, 322);
+    assert.equal(cases.length, 364);
     for (const { expression, returnsValue, js } of cases) {
       assert.equal(clientRewrite(clientScript(expression, returnsValue).js).js, js, `${JSON.stringify(expression)} with returnsValue ${returnsValue}`);
+    }
+  });
+
+  // The issues the markup check gives an expression where its value is used, data-text, or where it is only run, data-on:click.
+  const judged = (expression: string, returnsValue: boolean) => {
+    const html = `<div ${returnsValue ? "data-text" : "data-on:click"}="${expression.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}"></div>`;
+    return { html, issues: analyzeHtml(html, opts) };
+  };
+
+  // What the check reports under another code than expression-syntax, each with the one it uses.
+  const brokenUnderAnotherCode = new Map([["@get ('/x')", "action-space"]]);
+
+  // expressions.json: compiles says whether JavaScript took the body genRx wrote. The check calls an
+  // expression broken exactly there, so an action after a template literal, which the client
+  // rewrites from 1.0.5 on, is not an error.
+  it("calls an expression broken where the body genRx writes does not compile, and nowhere else", () => {
+    const wrong: string[] = [];
+    for (const { expression, returnsValue, js, compiles } of read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites) {
+      const codes = judged(expression, returnsValue).issues.map((i) => i.code);
+      const other = brokenUnderAnotherCode.get(expression);
+      if (other !== undefined) {
+        assert.equal(compiles, false, expression);
+        assert.ok(codes.includes(other), expression);
+        continue;
+      }
+      if (codes.includes("expression-syntax") === compiles) {
+        wrong.push(`${expression} with returnsValue ${returnsValue}: the client's body ${compiles ? "compiles" : "does not compile"}: ${js}`);
+      }
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  // expressions.json: a reference the check says the client does not read stands in the body as it was written.
+  it("says a signal is not read only where genRx leaves it as written", () => {
+    const wrong: string[] = [];
+    let said = 0;
+    for (const { expression, returnsValue, js } of read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites) {
+      const { html, issues } = judged(expression, returnsValue);
+      for (const issue of issues.filter((i) => i.code === "signal-not-read")) {
+        said++;
+        const reference = html.slice(issue.start, issue.end);
+        if (!js.includes(reference)) wrong.push(`${expression}: the client rewrote ${reference}: ${js}`);
+      }
+    }
+    assert.deepEqual(wrong, []);
+    assert.ok(said >= 6, `only ${said} references said not to be read`);
+  });
+
+  // expressions.json: where the client compiles the same body whether the value is used or not, it
+  // split nothing, as for an expression that starts with return from 1.0.5 on, and the check has no
+  // split to warn of.
+  it("warns of a value lost at a semicolon only where genRx splits there", () => {
+    const cases = read<{ rewrites: ExpressionCase[] }>("expressions.json").rewrites;
+    const run = new Map(cases.filter((c) => !c.returnsValue).map((c) => [c.expression, c.js]));
+    const wrong: string[] = [];
+    let warned = 0;
+    for (const { expression, js } of cases.filter((c) => c.returnsValue)) {
+      if (!judged(expression, true).issues.some((i) => i.code === "statement-split")) continue;
+      warned++;
+      if (js === run.get(expression)) wrong.push(`${expression}: the client compiles it whole: ${js}`);
+    }
+    assert.deepEqual(wrong, []);
+    assert.ok(warned >= 2, `only ${warned} expressions warned of`);
+  });
+
+  type Reading = { requests: unknown[]; timers: [string, number | null][] };
+  const dslCases = JSON.parse(readFileSync(new URL("../../../conformance/dsl/free.json", import.meta.url), "utf8")) as {
+    version: string;
+    cases: { name: string; read: Reading }[];
+  };
+
+  // The reading of the case in conformance/dsl/free.json whose name starts with the one given.
+  const reading = (name: string): Reading => {
+    const found = dslCases.cases.filter((c) => c.name.startsWith(name));
+    assert.equal(found.length, 1, `no one case in free.json starts with: ${name}`);
+    return (found[0] as { read: Reading }).read;
+  };
+
+  // fetch-options.json: the catalog lists the options a backend action reads from its arguments,
+  // and no other. A name the client only has in its type is an option that does nothing.
+  it("lists the fetch options the client reads and no other", () => {
+    const listed = catalog.fetchOptions.map((o) => o.name);
+    assert.deepEqual([...new Set(listed)], listed);
+    const wrong: string[] = [];
+    for (const { action, options } of read<{ action: string; options: string[] }[]>("fetch-options.json")) {
+      wrong.push(...listed.filter((o) => !options.includes(o)).map((o) => `${o} is in the catalog, and @${action} never reads it`));
+      wrong.push(...options.filter((o) => !listed.includes(o)).map((o) => `@${action} reads ${o}, and the catalog does not list it`));
+    }
+    assert.deepEqual(wrong, []);
+  });
+
+  // conformance/dsl/free.json: what the client did with retry, retryInterval and retryMaxCount,
+  // against what the catalog tells a reader of a hover about them. Each claim here was true of 1.0.4
+  // and the reading named beside it shows 1.0.5 doing otherwise.
+  it("describes the retry options as the client acts on them", () => {
+    const doc = new Map(catalog.fetchOptions.map((o) => [o.name, o.doc ?? ""]));
+    const says = (option: string, claim: string) => (doc.get(option) as string).includes(claim);
+
+    // retry: 'never' sends one request when it fails on the network, and one when its stream breaks.
+    assert.equal(reading("get never retried gives up on a request that fails").requests.length, 1);
+    assert.equal(reading("get never retried gives up on a stream that breaks").requests.length, 1);
+    for (const claim of ["is retried whatever this says", "'auto' and 'never' act alike"]) {
+      assert.ok(!says("retry", claim), `retry: the catalog still says "${claim}"`);
+    }
+
+    // retryMaxCount 2 allows two retries over the whole action, though every answer was a 200.
+    for (const name of ["get retried always stops at retryMaxCount", "get whose stream breaks counts every retry"]) {
+      assert.equal(reading(name).requests.length, 3, name);
+    }
+    for (const claim of ["in a row", "a 200 answer starts the count again"]) {
+      assert.ok(!says("retryMaxCount", claim), `retryMaxCount: the catalog still says "${claim}"`);
+    }
+
+    // The wait grows from 100 to 200 across a 200 answer whose stream breaks, and is 100 again only after a stream that ended.
+    assert.deepEqual(reading("get whose stream breaks counts every retry").timers, [["setTimeout", 100], ["setTimeout", 200]]);
+    assert.deepEqual(reading("get retried always stops at retryMaxCount").timers, [["setTimeout", 100], ["setTimeout", 100]]);
+    assert.ok(!says("retryInterval", "set back by a 200 answer"), "retryInterval: the catalog still says a 200 answer sets it back");
+  });
+
+  // The catalog is the one for the client the fixtures were read from, none of its text names another
+  // version, and the extension's source and build load that file and no other.
+  it("carries the catalog of the client the fixtures were read from", () => {
+    const version = (JSON.parse(readFileSync(new URL("expressions.json", dir), "utf8")) as { version: string }).version;
+    assert.equal(dslCases.version, version);
+    assert.equal(catalog.version, version);
+    const root = new URL("../../../", import.meta.url);
+    assert.deepEqual(readdirSync(new URL("catalog/", root)).filter((f) => f.startsWith("datastar-")), [`datastar-${version}.json`]);
+    const text = readFileSync(new URL(`catalog/datastar-${version}.json`, root), "utf8");
+    assert.deepEqual([...new Set(text.match(/\b\d+\.\d+\.\d+\b/g))], [version], "the Datastar versions the catalog's text names");
+    for (const file of ["editors/vscode/src/catalog.ts", "editors/vscode/scripts/generate.mjs"]) {
+      const loaded = [...readFileSync(new URL(file, root), "utf8").matchAll(/catalog\/(datastar-[\d.]+\.json)/g)].map((m) => m[1]);
+      assert.deepEqual([...new Set(loaded)], [`datastar-${version}.json`], file);
     }
   });
 

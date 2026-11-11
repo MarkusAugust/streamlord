@@ -204,6 +204,18 @@ const expressions = [
   "$items[$i-1]", "$items[$i - 1]", "$a[$b['c-d']]", "$a[$b-c['d']]", "$a[`${$b-c}`]", "$a[`${'x-y'}`]",
   "$a[1-2]", "$a-b[0]", "$a[0].b-c", "$a.b-c['d-e']", "$a[$b][$c-d]", "$a['['].b-c", "$a[']'].b",
   "$a[`x]-${$b}`]", "$a[`${']'}-x`]", "$items.length-1", "$a-$b",
+  // What follows a template literal that holds an interpolation: 1.0.4 took the literal's closing
+  // backtick for the opening of another and left everything up to the next backtick as written.
+  "`${$a}` + $b", "`${$a}` + @peek(() => $b) + `${$c}`", "$x = `${$a}`; @get('/x'); $y = `${$c}`",
+  "`${$a}`; $b; `${$c}`", "`${ {a: $x}.a }` + $y + `z`", "`${`${$x}`}` + $y",
+  // A leading return and white space is a function body written out: 1.0.4 split it at each ; and
+  // wrote return before its last statement as well.
+  "return $a; $b", "return\n$a; $b", "  return $a; $b", "return($a); $b", "return;$a", "return", "return ",
+  "return (() => { $a = 1; return $b })()", "return $a; return $b",
+  "((n) => { const d = n * 2; return d })($a)", "return ((n) => { const d = n * 2; return d })($a)",
+  "[1, 2].map((n) => { $a = n; return n })", "return [1, 2].map((n) => { $a = n; return n })",
+  // Nothing but semicolons: 1.0.4 compiled an empty body where a value is returned.
+  ";;", "; ;",
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */
@@ -440,21 +452,22 @@ const isStringTrue = [
 // plugins/attributes, bundled with an `@engine` whose `attribute` records its argument instead of
 // queueing it. Everything else the plugins import is the reference's own.
 const pluginDir = path.join(reference, "plugins", "attributes");
-const recordingEngine = {
-  name: "recording-engine",
+/** An `@engine` for the files of [dir] whose export [name] records its argument in `globalThis[into]`. */
+const recordingEngine = (dir, name, into) => ({
+  name: `recording-${name}`,
   setup(build) {
     build.onResolve({ filter: /^@engine$/ }, (args) =>
-      path.dirname(args.importer) === pluginDir ? { path: "recording-engine", namespace: "recording" } : undefined,
+      path.dirname(args.importer) === dir ? { path: `recording-${name}`, namespace: "recording" } : undefined,
     );
     build.onLoad({ filter: /.*/, namespace: "recording" }, () => ({
       contents:
         `export * from ${JSON.stringify(path.join(reference, aliases["@engine"]))};\n` +
-        "export const attribute = (plugin) => globalThis.registeredPlugins.push(plugin);\n",
+        `export const ${name} = (plugin) => globalThis.${into}.push(plugin);\n`,
       loader: "ts",
       resolveDir: reference,
     }));
   },
-};
+});
 globalThis.registeredPlugins = [];
 for (const name of ["HTMLSelectElement", "HTMLTextAreaElement", "HTMLElement", "HTMLFormElement", "HTMLButtonElement"]) {
   globalThis[name] ??= class {};
@@ -468,7 +481,7 @@ const pluginBundle = await build({
   platform: "neutral",
   target: "es2022",
   define: { ALIAS: "null" },
-  plugins: [recordingEngine, referenceOnly],
+  plugins: [recordingEngine(pluginDir, "attribute", "registeredPlugins"), referenceOnly],
   logLevel: "silent",
 });
 await import(`data:text/javascript;base64,${Buffer.from(pluginBundle.outputFiles[0].text).toString("base64")}`);
@@ -481,6 +494,49 @@ const plugins = globalThis.registeredPlugins
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
 if (plugins.length !== pluginFiles.length) throw new Error(`${pluginFiles.length} plugin files registered ${plugins.length} plugins`);
+
+// --------------------------------------------------------------- fetch-options.json
+
+// The options a backend action reads from its second argument: plugins/actions/fetch.ts, bundled
+// with an `@engine` whose `action` records what it is given, and each action then run with a Proxy
+// that records every property the client asks it for. The URL is empty, so the action throws
+// FetchNoUrlProvided once it has taken its arguments apart, before it sends anything.
+const actionDir = path.join(reference, "plugins", "actions");
+globalThis.registeredActions = [];
+const fetchBundle = await build({
+  stdin: { contents: 'import "./plugins/actions/fetch.ts";', resolveDir: reference, loader: "ts" },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "neutral",
+  target: "es2022",
+  define: { ALIAS: "null" },
+  plugins: [recordingEngine(actionDir, "action", "registeredActions"), referenceOnly],
+  logLevel: "silent",
+});
+await import(`data:text/javascript;base64,${Buffer.from(fetchBundle.outputFiles[0].text).toString("base64")}`);
+const fetchOptions = [];
+for (const { name, apply } of globalThis.registeredActions) {
+  const reads = [];
+  const recording = new Proxy({}, {
+    get(_, key) {
+      if (typeof key === "string" && !reads.includes(key)) reads.push(key);
+      return undefined;
+    },
+    // A client that spread or listed its options would read them unseen.
+    has: () => { throw new Error(`@${name} asks which options it was given`); },
+    ownKeys: () => { throw new Error(`@${name} lists the options it was given`); },
+  });
+  const noUrl = new Error("FetchNoUrlProvided");
+  const ctx = { el: {}, evt: undefined, error: () => noUrl, cleanups: new Map() };
+  const thrown = await apply(ctx, "", recording).then(() => null, (e) => e);
+  if (thrown !== noUrl) throw new Error(`@${name} did not stop at its empty URL: ${thrown}`);
+  fetchOptions.push({ action: name, options: reads.sort() });
+}
+fetchOptions.sort((a, b) => a.action.localeCompare(b.action));
+if (fetchOptions.length === 0 || fetchOptions.some((a) => a.options.length === 0)) {
+  throw new Error(`fetch.ts registered ${fetchOptions.length} actions, or one that read no option`);
+}
 
 // ------------------------------------------------------------------- writing
 
@@ -531,11 +587,22 @@ const files = {
       "returnsValue and argNames as the plugin declares them, null, false and [] where it declares none.",
     cases: plugins,
   },
+  "fetch-options.json": {
+    $comment:
+      "The properties each backend action of plugins/actions/fetch.ts of the Datastar " + version + " client reads from its options, " +
+      "the argument after the URL: the file was bundled with an @engine whose action() records it, and each apply was run with " +
+      "an empty URL and a Proxy for the options that records every property asked for and answers undefined, so a property " +
+      "inside an option, such as filterSignals.include, is not listed. A name in the client's FetchArgs type that is not here " +
+      "is one the action never reads.",
+    cases: fetchOptions,
+  },
 };
 
 mkdirSync(out, { recursive: true });
 for (const [name, content] of Object.entries(files)) {
-  writeFileSync(path.join(out, name), ascii(`${JSON.stringify(content, null, 2)}\n`));
+  // The version on its own, so a test can hold what Streamlord says it speaks to what was read.
+  const { $comment, ...rest } = content;
+  writeFileSync(path.join(out, name), ascii(`${JSON.stringify({ $comment, version, ...rest }, null, 2)}\n`));
   const count = Array.isArray(content.cases) ? content.cases.length : Object.values(content.cases).map((c) => c.length).join("+");
   console.log(`${name}: ${count} cases`);
 }

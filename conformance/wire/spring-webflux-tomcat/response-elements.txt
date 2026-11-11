@@ -13,6 +13,7 @@ datastar-selector: #sky
 datastar-mode: append
 datastar-namespace: svg
 datastar-use-view-transition: true
+datastar-view-transition-selector: #sky
 Content-Type: text/html;charset=utf-8
 Content-Length: 25
 Date: {date}

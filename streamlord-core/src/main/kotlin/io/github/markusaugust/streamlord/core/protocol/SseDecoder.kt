@@ -127,8 +127,8 @@ public object SseDecoder {
         val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
-                // An empty selector is none to the client, which then patches by id (patchElements.ts:43);
-                // an empty view transition selector has it run the transition on the document (:71).
+                // An empty selector is none to the client, which then patches by id (patchElements.ts:46);
+                // an empty view transition selector has it run the transition on the document (:74).
                 val selector = args[DataLines.SELECTOR]?.takeIf { it.isNotEmpty() }
                 val mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT
                 val elements = args[DataLines.ELEMENTS]

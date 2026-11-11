@@ -281,7 +281,7 @@ identical bytes on the wire. On WebFlux the frames are written by Spring's own e
 fields and the same data, in Spring's spelling.
 
 **The Tongue** is `streamlord-html`: every `data-*` attribute, action and modifier of Datastar
-1.0.4 as typed extension functions.
+1.0.5 as typed extension functions.
 
 `streamlord-html-pro` is a separate, opt-in artifact for [Datastar Pro](/datastar-pro/). It
 contains no Pro code and is inert without the bundle you licensed.
@@ -300,7 +300,7 @@ yourself, for example over your own sources in CI. See [The analysis](/analysis/
 
 The Datastar client bundle. Streamlord is the server half; it does not ship, fetch or vendor the
 JavaScript, and it has no opinion about whether you take it from a CDN or serve it from your own
-static files. **1.0.4** is what this release speaks.
+static files. **1.0.5** is what this release speaks.
 
 ## Versions
 

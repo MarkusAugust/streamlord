@@ -11,7 +11,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
-/** The assertions against what the Datastar 1.0.4 client ends up holding for the same stream. */
+/** The assertions against what the Datastar 1.0.5 client ends up holding for the same stream. */
 class AsTheBrowserHoldsItTest {
     private fun stream(vararg events: DatastarEvent) = datastarEvents(events.joinToString("") { SseEncoder.encode(it) })
 

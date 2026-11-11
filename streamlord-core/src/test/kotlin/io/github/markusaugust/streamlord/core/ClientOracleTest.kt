@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import java.io.File
 import kotlin.test.Test
@@ -19,7 +20,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.4
+ * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.5
  * client's `mergePatch` and `filtered` (engine/signals.ts), `pathToObj` (utils/paths.ts) and
  * `isStringTrue` (utils/text.ts) run by `conformance/generate/client.mjs`, and to
  * `conformance/client/expressions.json`, the body `genRx` (engine/engine.ts) compiles.
@@ -133,6 +134,21 @@ class ClientOracleTest {
         assertEquals(21, onTheWire)
     }
 
+    /**
+     * Every fixture under `conformance/client` says which client it was read from, and
+     * [DatastarProtocol.VERSION] is the version of the one catalog the build finds, so the two
+     * differ until `catalog/datastar-<version>.json` is the file for the client the fixtures hold.
+     */
+    @Test
+    fun `speaks the version of the client the fixtures were read from`() {
+        val fixtures = File("../conformance/client").listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
+        assertTrue(fixtures.isNotEmpty())
+        val read = fixtures.map { JsonParser.parseObject(it.readText()).string("version") }.distinct().single()
+        assertEquals(read, DatastarProtocol.VERSION)
+        val catalogs = File("../catalog").list { _, name -> name.startsWith("datastar-") }!!.sorted()
+        assertEquals(listOf("datastar-$read.json"), catalogs)
+    }
+
     private val rewrites: List<JsonObject> =
         JsonParser
             .parseObject(File("../conformance/client/expressions.json").readText())
@@ -151,7 +167,7 @@ class ClientOracleTest {
     @Test
     fun `finds the references genRx rewrites`() {
         val cases = rewrites.filter { it.boolean("returnsValue") == false }
-        assertEquals(161, cases.size)
+        assertEquals(182, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             assertEquals(case.string("js"), clientRewrite(jsTrim(expression)).js, expression)

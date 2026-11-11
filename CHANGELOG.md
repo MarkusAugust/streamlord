@@ -6,6 +6,49 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
+  `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
+  `DatastarProtocol.VERSION` is `1.0.5`. A page that still loads the 1.0.4 bundle works as before,
+  but the editors now judge an expression as 1.0.5 compiles it. The documentation site and the
+  demo load the 1.0.5 bundle.
+- `ElementsResponse` has a sixth value, `viewTransitionSelector`, and `respondElements` in
+  streamlord-ktor, `datastarElements` in streamlord-spring and `elementsResponse` in streamlord-html
+  take it after `useViewTransition`. Kotlin source that names its arguments compiles as before; a
+  call that passes what comes after `useViewTransition` by position, and code compiled against the
+  old signatures, needs a change or a rebuild.
+- `FetchOptions.responseOverrides` and the class `ResponseOverrides` in streamlord-html are gone,
+  and the editors no longer offer `responseOverrides` among a backend action's options. Datastar's
+  client never read the option, so it changed nothing on the page. Say it on the response instead:
+  `respondElements` and `datastarElements` take the selector, the mode, the namespace and the view
+  transition, and `respondSignals` and `datastarSignals` take `onlyIfMissing`.
+- `ClientRewrite.runs` in streamlord-core (internal API) is a list of `Run`, each with where its
+  string or template literal opens, where it was a list of ranges.
+
+### Added
+
+- An answer of elements that is not a stream can name the element its view transition runs on:
+  `viewTransitionSelector`, sent as the header `datastar-view-transition-selector`, which
+  Datastar 1.0.5 reads. It is sent only with `useViewTransition`, as in a stream.
+  `DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR` names it.
+
+### Fixed
+
+- In both editors, the text of a template literal is no longer said to be rewritten by Datastar:
+  1.0.5 matches a template literal whole and rewrites only inside its `${...}`, so
+  `` `total: $total ${$a}` `` shows `$total` as written. The warning stays for a literal whose
+  `${...}` holds a brace, which the client still reads as code, and says so.
+- In both editors, an expression that opens with `return` is no longer split at its `;`, as 1.0.5
+  compiles it whole, so `return ((n) => { const y = n * 2; return y })($a)` is no longer an error
+  or said to lose its value. An action after a template literal, as in
+  `` `${$a}` + @peek(() => $b) ``, is no longer a syntax error.
+- The documentation of `retry`, `retryInterval` and `retryMaxCount`, in the editors' hovers, in
+  the DSL and on the operations page, says what 1.0.5 does: `'never'` retries nothing, where
+  1.0.4 retried a request that failed on the network; `retryMaxCount` counts the retries of the
+  whole action, where a 200 answer started the count again; and the wait goes back to
+  `retryInterval` only after a stream that ended.
+
 ## [0.21.0] - 2026-11-11
 
 ### Added

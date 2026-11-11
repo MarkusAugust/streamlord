@@ -9,7 +9,7 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
  * shape while its state (focus, scroll position, input values) survives. The rest are blunt
  * instruments that insert, replace or remove without mercy.
  *
- * [wire] is the exact token Datastar 1.0.4 expects on the `mode` data line.
+ * [wire] is the exact token Datastar 1.0.5 expects on the `mode` data line.
  */
 public enum class ElementPatchMode(
     public val wire: String,

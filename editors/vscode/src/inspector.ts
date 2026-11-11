@@ -238,7 +238,7 @@ export class Inspector {
     );
   }
 
-  /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
+  /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.5). */
   private applyFrame(frame: DatastarFrame): void {
     if (frame.event !== "datastar-patch-signals" || !frame.args.signals) return;
     let patch: unknown;
@@ -253,7 +253,7 @@ export class Inspector {
       this.post({ type: "signals", signals: this.signals });
     } catch (e) {
       // The client keeps the keys it set before the one it failed on, and so does the store shown. A
-      // throw also leaves its update batch open (signals.ts:695-708), so the bindings on the page stop
+      // throw also leaves its update batch open (signals.ts:747-762), so the bindings on the page stop
       // redrawing.
       if (!(e instanceof SignalPatchError)) {
         this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });

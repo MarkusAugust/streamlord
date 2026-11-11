@@ -1199,7 +1199,7 @@ class DslAsTheClientReadsItTest {
                 listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.NEVER }) } },
             dslCase(
-                "get never retried still retries a request that fails",
+                "get never retried gives up on a request that fails, which 1.0.4 retried",
                 "get",
                 probe =
                     mapOf(
@@ -1209,10 +1209,7 @@ class DslAsTheClientReadsItTest {
                 expect = {
                     listens("button", "click")
                     listensPlain("document", "visibilitychange")
-                    // fetch.ts in 1.0.4 retries a request that never reached the server whatever retry says,
-                    // so never acts as auto does: neither retries an answer, both retry a failure.
-                    timer("setTimeout", 1000)
-                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false)
+                    // One request and no wait: 1.0.4 retried a request that never reached the server whatever retry said.
                     request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                     errors += "FetchFailed"
                     heard("button", "click", 0)
@@ -1243,45 +1240,6 @@ class DslAsTheClientReadsItTest {
                         get("/x") {
                             retry = FetchOptions.Retry.ALWAYS
                             retryMaxCount = 1
-                        },
-                    )
-                }
-            },
-            dslCase(
-                "post with response overrides the client does not read",
-                "post",
-                probe =
-                    mapOf(
-                        "rounds" to 1,
-                        "respond" to
-                            mapOf("status" to 200, "headers" to mapOf("Content-Type" to "text/html"), "body" to "<div id=\"t\">new</div>"),
-                    ),
-                expect = {
-                    listens("button", "click")
-                    request("POST", "http://localhost/x", "{}", JSON_BODY)
-                    heard("button", "click", 0)
-                    // Datastar 1.0.4's fetch never takes responseOverrides from the options, so the
-                    // element is morphed by its id, as the headers alone say.
-                    text("t", "new")
-                    listensPlain("AbortSignal", "abort")
-                },
-            ) {
-                div {
-                    id = "t"
-                    +"old"
-                }
-                div {
-                    id = "other"
-                    +"other"
-                }
-                button {
-                    dataOnClick(
-                        post("/x") {
-                            responseOverrides {
-                                selector = "#other"
-                                mode =
-                                    io.github.markusaugust.streamlord.core.domain.ElementPatchMode.INNER
-                            }
                         },
                     )
                 }
@@ -1546,9 +1504,266 @@ class DslAsTheClientReadsItTest {
             ) { svg { dataClass("isOn", "true") } },
         )
 
+    /** What Datastar 1.0.5 does and 1.0.4 did not, each as a page or a server sees it; a case's name says what 1.0.4 did. */
+    private val since105 =
+        listOf(
+            dslCase(
+                "on debounce does not run once the element is removed, where 1.0.4 ran it",
+                "dataOnClick",
+                probe = mapOf("rounds" to 1, "between" to "document.querySelector('button').remove()"),
+                expect = {
+                    listens("button", "click")
+                    timer("setTimeout", 500)
+                    heard("button", "click", 0)
+                    probes = emptyList()
+                },
+            ) { button { dataOnClick("probe(evt)") { debounce = 500.milliseconds } } },
+            dslCase(
+                "on signal patch debounce is not restarted by a patch the filter drops, which in 1.0.4 left it never run",
+                "dataOnSignalPatch",
+                probe = mapOf("eval" to "Datastar.mergePatch({a: 2}); Datastar.mergePatch({b: 3})"),
+                expect = {
+                    listensPlain("document", "datastar-signal-patch")
+                    timer("setTimeout", 500)
+                    store = """{"a":1,"b":1}"""
+                    storeAfter = """{"a":2,"b":3}"""
+                    probes = listOf(listOf(mapOf("a" to 2)))
+                },
+            ) {
+                div {
+                    dataSignals("a" to 1, "b" to 1)
+                    dataOnSignalPatch("probe(patch)", SignalFilter(include = Regex("^a$"))) { debounce = 500.milliseconds }
+                }
+            },
+            dslCase(
+                "a computed replaced by another wakes what read it, which in 1.0.4 kept the old one",
+                "dataComputed",
+                key = "x",
+                probe = mapOf("rounds" to 1),
+                patch = {
+                    div {
+                        id = "slot"
+                        span { dataComputed("x", "${'$'}b") }
+                    }
+                },
+                expect = {
+                    listens("button", "click")
+                    store = """{"a":1,"b":1,"x":1}"""
+                    storeAfter = """{"a":1,"b":5,"x":5}"""
+                    heard("button", "click", 0)
+                    text("shown", "5")
+                },
+            ) {
+                div {
+                    dataSignals("a" to 1, "b" to 1)
+                    dataComputed("x", "${'$'}a")
+                }
+                p {
+                    id = "shown"
+                    dataText("${'$'}x")
+                }
+                div { id = "slot" }
+                button { dataOnClick("${'$'}b = 5") }
+            },
+            dslCase(
+                "an attribute the client refuses does not stop the ones after it, as it did in 1.0.4",
+                "dataText",
+                expect = {
+                    errors += "KeyOrValueRequired"
+                    text("span", "shown")
+                },
+            ) {
+                // Written by hand: the DSL has no call that writes data-bind with neither a key nor a value.
+                div { attributes["data-bind"] = "" }
+                span { dataText("'shown'") }
+            },
+            dslCase(
+                "init runs once more for an element a patch moves, where 1.0.4 ran it twice more",
+                "dataInit",
+                patch = {
+                    div {
+                        id = "wrap"
+                        p {
+                            span {
+                                id = "moved"
+                                dataInit("probe('i')")
+                            }
+                        }
+                    }
+                },
+                expect = { probes = listOf(listOf("i"), listOf("i")) },
+            ) {
+                div {
+                    id = "wrap"
+                    span {
+                        id = "moved"
+                        dataInit("probe('i')")
+                    }
+                }
+            },
+            dslCase(
+                "bind keeps the signal while the input holds what it cannot read, where 1.0.4 stored 0",
+                "dataBind",
+                key = "n",
+                probe =
+                    mapOf(
+                        // happy-dom never reports bad input, so the case says it does, as a browser would for a half-typed number.
+                        "eval" to "Object.defineProperty(document.querySelector('input'), 'validity', {value: {badInput: true}})",
+                        "set" to listOf(listOf("input", "value", "")),
+                        "dispatch" to listOf(listOf("input", "input")),
+                        "rounds" to 1,
+                    ),
+                expect = {
+                    listensPlain("input", "input")
+                    listensPlain("input", "datastar-prop-change")
+                    store = """{"n":5}"""
+                    heard("input", "input", 0)
+                },
+            ) {
+                input(type = InputType.number) {
+                    dataSignals("n", "5")
+                    dataBind("n")
+                }
+            },
+            dslCase(
+                "get retried always stops at retryMaxCount over the whole action, where 1.0.4 counted from each answer",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "respond" to
+                            mapOf("status" to 200, "headers" to mapOf("Content-Type" to "text/event-stream"), "body" to ": open\n\n"),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    // A stream that ends restores the first wait, so both waits are the same.
+                    timer("setTimeout", 100)
+                    timer("setTimeout", 100)
+                    repeat(2) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false) }
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    errors += "FetchFailed"
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
+                button {
+                    dataOnClick(
+                        get("/x") {
+                            retry = FetchOptions.Retry.ALWAYS
+                            retryInterval = 100.milliseconds
+                            retryMaxCount = 2
+                        },
+                    )
+                }
+            },
+            dslCase(
+                "get whose stream breaks counts every retry and waits longer each time, where 1.0.4 began again at each 200",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "respond" to mapOf("status" to 200, "headers" to mapOf("Content-Type" to "text/event-stream"), "breaks" to true),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    timer("setTimeout", 100)
+                    timer("setTimeout", 200)
+                    repeat(2) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false) }
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    errors += "FetchFailed"
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
+                button {
+                    dataOnClick(
+                        get("/x") {
+                            retryInterval = 100.milliseconds
+                            retryMaxCount = 2
+                        },
+                    )
+                }
+            },
+            dslCase(
+                "get never retried gives up on a stream that breaks, which 1.0.4 retried without end",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "respond" to mapOf("status" to 200, "headers" to mapOf("Content-Type" to "text/event-stream"), "breaks" to true),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    errors += "FetchFailed"
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.NEVER }) } },
+            dslCase(
+                "get waiting to retry sends nothing once the page is hidden, where 1.0.4 sent the retry",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "respond" to mapOf("status" to 500),
+                        "between" to
+                            "Object.defineProperty(document, 'hidden', {value: true, configurable: true}); " +
+                            "document.dispatchEvent(new Event('visibilitychange'))",
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    timer("setTimeout", 1000)
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.ERROR }) } },
+            dslCase(
+                "get answered with html reads the header datastar-view-transition-selector, which 1.0.4 ignored",
+                "get",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                        "respond" to
+                            mapOf(
+                                "status" to 200,
+                                "headers" to
+                                    mapOf(
+                                        "Content-Type" to "text/html",
+                                        "datastar-use-view-transition" to "true",
+                                        "datastar-view-transition-selector" to "#t",
+                                    ),
+                                "body" to "<div id=\"t\">new</div>",
+                            ),
+                    ),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    heard("button", "click", 0)
+                    text("t", "new")
+                    // The transition is the element's own, which happy-dom has none of, so the document starts none:
+                    // 1.0.4 never read the header and started the document's.
+                    viewTransitions = 0
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
+                div {
+                    id = "t"
+                    +"old"
+                }
+                button { dataOnClick(get("/x")) }
+            },
+        )
+
     @Test
     fun `the client reads what the DSL means`() =
-        fixture.check(events + timing + observers + signals + bind + markup + actions + values + aliased)
+        fixture.check(events + timing + observers + signals + bind + markup + actions + values + aliased + since105)
 
     @Test
     fun `the cases reach every entry of the catalog`() =

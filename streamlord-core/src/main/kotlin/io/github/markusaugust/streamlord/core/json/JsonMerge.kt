@@ -38,7 +38,7 @@ public class SignalPatchException(
 ) : IllegalArgumentException(message)
 
 /**
- * The store as the Datastar 1.0.4 client reads it after a signal patch: `mergePatch` and
+ * The store as the Datastar 1.0.5 client reads it after a signal patch: `mergePatch` and
  * `mergeInner` in the client's `signals.ts`, which differ from [mergePatch] in four ways.
  *
  * `onlyIfMissing` is honoured leaf by leaf, so a nested object is still walked and only the

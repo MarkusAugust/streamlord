@@ -1080,7 +1080,7 @@ public object Requests {
     private fun escape(s: String): String = s.toByteArray(Charsets.UTF_8).joinToString("") { "%%%02X".format(it.toInt() and 0xff) }
 
     /**
-     * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
+     * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.5), then the user's,
      * which replace one of the same name. The client's `Object.assign` replaces only the same
      * spelling and `fetch` then joins the two values; the inspector sends the user's alone.
      */

@@ -21,7 +21,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** What Datastar 1.0.4's client takes from a stream or a response, and what it fails on. */
+/** What Datastar 1.0.5's client takes from a stream or a response, and what it fails on. */
 class ProtocolAsTheClientTakesItTest {
     @Test
     fun `a frame built by hand can send the empty id that drops last-event-id`() {

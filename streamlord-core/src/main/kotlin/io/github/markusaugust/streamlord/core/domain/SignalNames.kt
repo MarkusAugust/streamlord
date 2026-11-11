@@ -5,7 +5,7 @@ import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 
 /**
- * The signal names Datastar's client cannot hold, measured against its 1.0.4 store.
+ * The signal names Datastar's client cannot hold, measured against its 1.0.5 store.
  *
  * - `__proto__` is never stored. With some objects under it, `{"x": 1}` among them, the merge
  *   throws halfway through a batch it never closes, and the bindings already on the page stop
@@ -170,9 +170,10 @@ public object SignalNames {
         return out.toString()
     }
 
-    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and a
-    // template literal without `${`, so their text is in strings; the text of one with `${` it reads
-    // as code, which JavaScript does not, so the scan steps over that text itself.
+    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and
+    // the text of a template literal it takes whole, so those are in runs; the text of one whose
+    // `${` holds a brace it reads as code, which JavaScript does not, so the scan steps over that
+    // text itself.
     private fun wrongHyphens(text: String): Set<Int> {
         val read = clientRewrite(text)
         val references = read.rewrites.filter { it.signal }
@@ -205,7 +206,7 @@ public object SignalNames {
                 continue
             }
             val skip =
-                read.runs.firstOrNull { i in it }
+                read.runs.firstOrNull { i in it.range }?.range
                     ?: references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
             if (skip != null) {
                 i = skip.last + 1

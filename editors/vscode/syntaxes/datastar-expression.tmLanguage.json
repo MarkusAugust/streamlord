@@ -123,7 +123,7 @@
     },
     "option-keys": {
       "comment": "Keys of the fetch-action options object and signal filters, when used as object keys.",
-      "match": "\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|responseOverrides|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude|mode|namespace|useViewTransition|onlyIfMissing)\\b(?=\\s*:)",
+      "match": "\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude)\\b(?=\\s*:)",
       "name": "support.type.property-name.option.datastar"
     },
     "object-key": {

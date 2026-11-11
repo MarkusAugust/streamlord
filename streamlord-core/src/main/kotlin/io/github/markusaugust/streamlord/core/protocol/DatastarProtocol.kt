@@ -5,7 +5,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * The runes of the Datastar 1.0.4 protocol, transcribed from `datastar-sdk-config-v1.json`
+ * The runes of the Datastar 1.0.5 protocol, transcribed from `datastar-sdk-config-v1.json`
  * and the client source. Nothing here is invented; every constant is a word the browser knows.
  */
 public object DatastarProtocol {
@@ -57,6 +57,9 @@ public object DatastarProtocol {
         public const val MODE: String = "datastar-mode"
         public const val NAMESPACE: String = "datastar-namespace"
         public const val USE_VIEW_TRANSITION: String = "datastar-use-view-transition"
+
+        /** Read from Datastar 1.0.5 on; an older client starts the view transition on the whole document. */
+        public const val VIEW_TRANSITION_SELECTOR: String = "datastar-view-transition-selector"
 
         /** Response header read for non-SSE `application/json` replies. */
         public const val ONLY_IF_MISSING: String = "datastar-only-if-missing"

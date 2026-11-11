@@ -1,5 +1,6 @@
 {
-  "$comment": "kebab, camel, snake, pascal and modifyCasing(key, mods, defaultCase) from utils/text.ts of the Datastar 1.0.4 client, run on each key. modifyCasing is run with no __case for the camel and kebab defaults, and with each __case value; an {error} is what the client threw.",
+  "$comment": "kebab, camel, snake, pascal and modifyCasing(key, mods, defaultCase) from utils/text.ts of the Datastar 1.0.5 client, run on each key. modifyCasing is run with no __case for the camel and kebab defaults, and with each __case value; an {error} is what the client threw.",
+  "version": "1.0.5",
   "cases": [
     {
       "key": "foo-bar",

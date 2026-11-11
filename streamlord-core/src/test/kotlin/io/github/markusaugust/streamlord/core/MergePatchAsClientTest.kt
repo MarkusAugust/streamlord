@@ -17,7 +17,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Each case in `conformance/dom/store-cases.json` is run through the real Datastar 1.0.4
+ * Each case in `conformance/dom/store-cases.json` is run through the real Datastar 1.0.5
  * `mergePatch` (engine/signals.ts, the free bundle in happy-dom, by `conformance/generate/dom.mjs`),
  * and `client` is `JSON.stringify` of its root afterwards. The fold here has to arrive at the same
  * text.
@@ -37,7 +37,7 @@ class MergePatchAsClientTest {
     }
 
     /**
-     * Each scenario in `conformance/dom/merge-differential.json` is run through the 1.0.4 client's
+     * Each scenario in `conformance/dom/merge-differential.json` is run through the 1.0.5 client's
      * `mergePatch` (engine/signals.ts) in happy-dom by `conformance/generate/dom.mjs`, a fresh store
      * per scenario, and `client` is `JSON.stringify` of the root after each step, or `THROWS` and
      * the root once the step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
@@ -75,7 +75,7 @@ class MergePatchAsClientTest {
         }
     }
 
-    // Measured against the 1.0.4 source: the client gives the object a foreign prototype, then
+    // Measured against the 1.0.5 source: the client gives the object a foreign prototype, then
     // throws on some later keys, replaces the object on a later patch, or pollutes String.prototype.
     @Test
     fun `refuses a key __proto__ anywhere in the patch, whatever it holds`() {

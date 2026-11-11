@@ -1,5 +1,6 @@
 {
-  "$comment": "parseAttributeKey(rawKey) from engine/engine.ts of the Datastar 1.0.4 client, with the key the browser hands over after data-; signalCamel and signalKebab are modifyCasing(key, mods, defaultCase) from utils/text.ts on the parsed key.",
+  "$comment": "parseAttributeKey(rawKey) from engine/engine.ts of the Datastar 1.0.5 client, with the key the browser hands over after data-; signalCamel and signalKebab are modifyCasing(key, mods, defaultCase) from utils/text.ts on the parsed key.",
+  "version": "1.0.5",
   "cases": [
     {
       "raw": "signals",

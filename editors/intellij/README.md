@@ -6,7 +6,7 @@
 > Sarn the Faceless
 
 <!-- description -->
-Datastar 1.0.4 as a language in IntelliJ IDEA (Community and Ultimate), 2026.1 and newer. Half of
+Datastar 1.0.5 as a language in IntelliJ IDEA (Community and Ultimate), 2026.1 and newer. Half of
 the [Streamlord](https://github.com/MarkusAugust/streamlord) toolchain, and the half that needs no
 part of the other: it reads your HTML and template files whatever answers them, and your Kotlin
 strings alongside the Streamlord SDK.
@@ -45,8 +45,8 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   or `signal("form.first-name")`, is an error, since the SDK refuses it at runtime, with the
   camelCase fix.
 - What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
-  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
-  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  `@name(` in the text of a template literal whose `${...}` holds a brace, or inside a regular
+  expression, is rewritten there too; a `'` in a comment or a regular expression
   pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
   signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
 - Signal names Datastar's client cannot hold or no `$name` reaches: `__proto__` anywhere in the
@@ -234,7 +234,7 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
   you to fill in; the icon names the optional ones, such as `required = false`, which it leaves out.
 - **Copy as curl** puts an equivalent `curl -N ...` command on the clipboard.
 
-Everything the plugin knows comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests
+Everything the plugin knows comes from `catalog/datastar-1.0.5.json`, which the SDK's own tests
 bind to the DSL, through `streamlord-analysis`, the same checks the VS Code extension makes.
 <!-- /description -->
 

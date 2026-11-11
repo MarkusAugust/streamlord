@@ -23,7 +23,7 @@ function inspector(): { apply: (signals: string, onlyIfMissing?: string) => void
 }
 
 describe("inspector signal store", () => {
-  // The client keeps the keys a patch set before the one it fails on (signals.ts in 1.0.4).
+  // The client keeps the keys a patch set before the one it fails on (signals.ts in 1.0.5).
   it("shows the keys set before a patch failed, and the reason", () => {
     const { apply, posted } = inspector();
     apply('{"a":[1,2]}');

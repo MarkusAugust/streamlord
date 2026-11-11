@@ -32,7 +32,7 @@ fun Application.module() {
                   <meta charset="utf-8">
                   <title>Interpolation tests</title>
                   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@lo-tek/interfaces@0.37.0/dist/lotek.css">
-                  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"></script>
+                  <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.5/bundles/datastar.js"></script>
                 </head>
                 <body data-signals="{open: false}">
                   ${everything(query)}
