@@ -189,6 +189,19 @@ class JsParserTest {
     }
 
     @Test
+    fun `an expression that stops short is said to end`() {
+        // Where the text is over there is no token to be unexpected.
+        bad("a +", pos = 3, message = "Unexpected end of input")
+        bad("const x", pos = 7, message = "Unexpected end of input")
+        bad("f('/x'", pos = 6, message = "Unexpected end of input")
+        bad("a + )", pos = 4, message = "Unexpected token")
+        val inMarkup = Analyzer().analyzeHtml("<button data-on:click=\"\$draft +\"></button>")
+        assertEquals(listOf("Datastar expression: Unexpected end of input"), inMarkup.map { it.message })
+        val inKotlin = Analyzer().analyzeKotlin("fun f() = \"<div data-on:click=\\\"@post('/x'\\\"></div>\"")
+        assertEquals(listOf("Datastar expression: Unexpected end of input"), inKotlin.map { it.message })
+    }
+
+    @Test
     fun `declarations need their initializer`() {
         ok("for (const x of y) {}", "for (const x in y) {}", "let a", "var [a] = b", "for (const [a, b] of c) {}")
         bad("const x", pos = 7)
