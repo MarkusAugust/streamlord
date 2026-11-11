@@ -261,6 +261,35 @@ then `npm run test:live` here.
 
 Press F5 in the `streamlord.code-workspace` to launch an Extension Development Host.
 
+### What the real editor shows
+
+`npm run real` builds the extension, starts the VS Code installed on this Mac with it, opens every
+file of `test/fixtures/real` and writes down what the editor answers: diagnostics with their
+links, each quick fix and the file after it, and at every offset of every file the hover, the
+signature help, the definitions, the references and the rename with its edits; completions at the
+places `test/real/marks.json` names, code lenses, document links, colors and the registered
+commands. The answers are the snapshot in `test/real/snapshot`, one record a line.
+
+```
+npm run real              # record the snapshot again
+npm run real -- --check   # run and compare: fails with the lines that differ
+```
+
+It is a local tool and no CI job: it needs VS Code in `/Applications` (or `STREAMLORD_REAL_CODE`
+set to its `Contents/MacOS/Code`), and a window opens while it runs and closes by itself. The
+profile is a fresh one under `/tmp/streamlord-real` (`STREAMLORD_REAL_TMP`, a short path), so your
+own settings and extensions take no part. Run the check before and after a change to the
+extension's internals; record again only when a difference is one you meant.
+
+The workspace holds the three ways of writing markup: HTML and template files, HTML in Kotlin
+strings, and the kotlinx.html DSL. The files under `drawn` are cases of `test/fixtures/corpus`,
+each as a file of its own (`drawn/origin.json` says which), and those under `aliased` are read with
+the prefix `data-star-`. `test/real/languages` declares Kotlin and the template languages, which
+other extensions bring: without one that declares `kotlin` the extension does nothing in a `.kt`
+file. VS Code hands no extension the TextMate scopes it colours by, so the scopes in the snapshot
+are read with the same engine (`vscode-textmate`), VS Code's own HTML grammar and the extension's
+grammars; Kotlin, which VS Code ships no grammar for, is read with `test/fixtures/host-kotlin.json`.
+
 ### Publishing
 
 The extension is published to the VS Code Marketplace from CI only, never from a developer
