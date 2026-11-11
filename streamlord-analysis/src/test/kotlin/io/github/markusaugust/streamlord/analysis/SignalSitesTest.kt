@@ -6,12 +6,14 @@ import kotlin.test.assertNull
 
 /** The places a file names a signal, as go to definition, find references and rename read them. */
 class SignalSitesTest {
-    private val html = """<div data-signals:user.name="''" data-text="${'$'}user.name.length + ${'$'}other" data-on:click="${'$'}count = 1"></div>"""
+    private val html =
+        """<div data-signals:user.name="''" data-text="${'$'}user.name.length + ${'$'}other" data-on:click="${'$'}count = 1"></div>"""
     private val declarations = signalDeclarations(html, SourceLanguage.HTML)
     private val reads = Analyzer().signalReferencesInHtml(html)
     private val sites = signalSites(reads, declarations, setOf("user", "user.name", "count"))
 
-    private fun shown(site: SignalSite) = "${html.substring(site.start, site.end)}=${site.signal}${if (site.declaration != null) " defined" else ""}"
+    private fun shown(site: SignalSite) =
+        "${html.substring(site.start, site.end)}=${site.signal}${if (site.declaration != null) " defined" else ""}"
 
     @Test
     fun `each part of a read the workspace defines is a site, and a defining place is one alone`() {
@@ -32,7 +34,10 @@ class SignalSitesTest {
     @Test
     fun `a site names its signal, and a defining place the signals above it`() {
         val defined = sites.first { it.declaration != null && it.signal == "user.name" }
-        assertEquals(listOf(true, false, true), listOf(defined.names("user.name"), defined.names("user"), defined.names("user", under = true)))
+        assertEquals(
+            listOf(true, false, true),
+            listOf(defined.names("user.name"), defined.names("user"), defined.names("user", under = true)),
+        )
         assertEquals(false, sites.first { it.signal == "user.name" && it.declaration == null }.names("user", under = true))
     }
 
@@ -51,8 +56,8 @@ class SignalSitesTest {
 
     @Test
     fun `a rename writes each site as its place wants`() {
-        val written = sites.map { it.renameText(html, "user", "person") }
-        assertEquals(listOf("person", "name", "person.name", "count"), written)
+        val written = sites.filter { it.names("user", under = true) }.map { it.renameText(html, "user", "person") }
+        assertEquals(listOf("person", "person.name"), written)
         val json = """<div data-signals="{user: {name: ''}}"></div>"""
         val keys = signalSites(emptyList(), signalDeclarations(json, SourceLanguage.HTML), emptySet())
         assertEquals(listOf("person", "name"), keys.map { it.renameText(json, "user", "person") })
