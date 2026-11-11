@@ -7,6 +7,11 @@ and compiled to JavaScript, runs on
 
 Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
 
+Two parts of it that the bundle holds are derived from other work, under the same licence:
+
+- the collections, derived from GWT, (C) 2007-08 Google Inc.
+- the 64-bit integer, derived from the Google Closure Library, Copyright 2009 The Closure Library Authors.
+
 Apache License
 
 Version 2.0, January 2004
