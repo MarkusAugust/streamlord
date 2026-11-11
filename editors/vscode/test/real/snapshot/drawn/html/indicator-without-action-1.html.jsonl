@@ -1,0 +1,10 @@
+{"what":"file","language":"html"}
+{"what":"diagnostic","code":"indicator-without-action","link":"https://data-star.dev/reference/attributes#data-indicator","message":"data-indicator tracks the requests this element sends, and nothing on it sends one. Put it on the element whose attribute calls @get, @post, @put, @patch, @delete, @query.","range":"1:7-1:26","severity":"Warning","source":"streamlord"}
+{"what":"hover","at":"1:2-1:6","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"1:2-1:6"}]}
+{"what":"hover","at":"1:7-1:26","answers":[{"contents":[{"value":"f14056469ba7"}],"range":"1:7-1:26"}]}
+{"what":"hover","at":"1:29-1:33","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"1:29-1:33"}]}
+{"what":"rename","at":"1:1-1:21","error":"No signal here to rename."}
+{"what":"rename","at":"1:22-1:26","placeholder":"busy","range":"1:22-1:26"}
+{"what":"rename","at":"1:27-2:1","error":"No signal here to rename."}
+{"what":"renamed","at":"1:22-1:26","edits":[],"to":"renamedSignal"}
+{"what":"scopes","line":1,"tokens":[["<","meta.tag.inline.span.start.html punctuation.definition.tag.begin.html"],["span","meta.tag.inline.span.start.html entity.name.tag.html"],[" ","meta.tag.inline.span.start.html"],["data-","meta.tag.inline.span.start.html entity.other.attribute-name.datastar.prefix"],["indicator","meta.tag.inline.span.start.html entity.other.attribute-name.datastar.plugin"],[":","meta.tag.inline.span.start.html punctuation.separator.key.datastar"],["busy","meta.tag.inline.span.start.html entity.other.attribute-name.datastar.key"],[">","meta.tag.inline.span.start.html punctuation.definition.tag.end.html"],["</","meta.tag.inline.span.end.html punctuation.definition.tag.begin.html"],["span","meta.tag.inline.span.end.html entity.name.tag.html"],[">","meta.tag.inline.span.end.html punctuation.definition.tag.end.html"]]}

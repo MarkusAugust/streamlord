@@ -1,0 +1,11 @@
+{"what":"file","language":"html"}
+{"what":"diagnostic","code":"signal-name","link":"https://data-star.dev/reference/attributes#data-bind","message":"data-bind declares the signal $user, as written, which holds the $ itself, so $user does not reach it: that reads the signal user.","range":"1:19-1:24","severity":"Warning","source":"streamlord"}
+{"what":"action","at":"1:1-2:1","n":0,"after":"<input data-bind=\"user\">\n","edits":[{"file":"drawn/html/signal-name-1.html","range":"1:19-1:20","text":""}],"kind":"quickfix","preferred":true,"title":"Change to user"}
+{"what":"action","at":"1:19-1:24","n":0,"after":"<input data-bind=\"user\">\n","edits":[{"file":"drawn/html/signal-name-1.html","range":"1:19-1:20","text":""}],"kind":"quickfix","preferred":true,"title":"Change to user"}
+{"what":"hover","at":"1:2-1:7","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:2-1:7"}]}
+{"what":"hover","at":"1:8-1:17","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:8-1:17"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:8-1:17"}]}
+{"what":"rename","at":"1:1-1:18","error":"No signal here to rename."}
+{"what":"rename","at":"1:19-1:24","placeholder":"$user","range":"1:19-1:24"}
+{"what":"rename","at":"1:25-2:1","error":"No signal here to rename."}
+{"what":"renamed","at":"1:19-1:24","edits":[],"to":"renamedSignal"}
+{"what":"scopes","line":1,"tokens":[["<","meta.tag.structure.input.void.html punctuation.definition.tag.begin.html"],["input","meta.tag.structure.input.void.html entity.name.tag.html"],[" ","meta.tag.structure.input.void.html"],["data-","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.prefix"],["bind","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.plugin"],["=","meta.tag.structure.input.void.html punctuation.separator.key-value.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.begin.html"],["$user","meta.tag.structure.input.void.html string.quoted.double.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.end.html"],[">","meta.tag.structure.input.void.html punctuation.definition.tag.end.html"]]}

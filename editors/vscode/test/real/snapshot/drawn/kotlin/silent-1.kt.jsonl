@@ -1,0 +1,41 @@
+{"what":"file","language":"kotlin"}
+{"what":"definition","at":"2:16-2:22","answers":[{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"}]}
+{"what":"definition","at":"9:13-9:19","answers":[{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"}]}
+{"what":"references","at":"2:16-2:22","answers":[{"file":"drawn/html/expressions.html","range":"84:25-84:31"},{"file":"drawn/html/key-case-2.html","range":"1:42-1:48"},{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"}]}
+{"what":"references","at":"9:13-9:19","answers":[{"file":"drawn/html/expressions.html","range":"84:25-84:31"},{"file":"drawn/html/key-case-2.html","range":"1:42-1:48"},{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"}]}
+{"what":"rename","at":"1:1-2:15","error":"No signal here to rename."}
+{"what":"rename","at":"2:16-2:22","placeholder":"fooBar","range":"2:16-2:22"}
+{"what":"rename","at":"2:23-6:15","error":"No signal here to rename."}
+{"what":"rename","at":"6:16-6:24","placeholder":"MySignal","range":"6:16-6:24"}
+{"what":"rename","at":"6:25-9:12","error":"No signal here to rename."}
+{"what":"rename","at":"9:13-9:19","placeholder":"fooBar","range":"9:13-9:19"}
+{"what":"rename","at":"9:20-12:11","error":"No signal here to rename."}
+{"what":"rename","at":"12:12-12:17","placeholder":"myRef","range":"12:12-12:17"}
+{"what":"rename","at":"12:18-13:17","error":"No signal here to rename."}
+{"what":"rename","at":"13:18-13:27","placeholder":"isLoading","range":"13:18-13:27"}
+{"what":"rename","at":"13:28-16:18","error":"No signal here to rename."}
+{"what":"rename","at":"16:19-16:27","placeholder":"isMobile","range":"16:19-16:27"}
+{"what":"rename","at":"16:28-18:1","error":"No signal here to rename."}
+{"what":"renamed","at":"2:16-2:22","edits":[{"file":"drawn/html/expressions.html","range":"84:25-84:31","text":"renamedSignal"},{"file":"drawn/html/key-case-2.html","range":"1:42-1:48","text":"renamedSignal"},{"file":"drawn/html/silent-8.html","range":"1:19-1:26","text":"renamed-signal"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88","text":"renamedSignal"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111","text":"renamedSignal"}],"to":"renamedSignal"}
+{"what":"renamed","at":"6:16-6:24","edits":[],"to":"renamedSignal"}
+{"what":"renamed","at":"9:13-9:19","edits":[{"file":"drawn/html/expressions.html","range":"84:25-84:31","text":"renamedSignal"},{"file":"drawn/html/key-case-2.html","range":"1:42-1:48","text":"renamedSignal"},{"file":"drawn/html/silent-8.html","range":"1:19-1:26","text":"renamed-signal"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88","text":"renamedSignal"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111","text":"renamedSignal"}],"to":"renamedSignal"}
+{"what":"renamed","at":"12:12-12:17","edits":[],"to":"renamedSignal"}
+{"what":"renamed","at":"13:18-13:27","edits":[],"to":"renamedSignal"}
+{"what":"renamed","at":"16:19-16:27","edits":[],"to":"renamedSignal"}
+{"what":"scopes","line":1,"tokens":[["div","identifier.kotlin"],[" {",""]]}
+{"what":"scopes","line":2,"tokens":[["  ",""],["dataSignals","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["fooBar","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["\"","string.quoted.double.kotlin"],["1","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":3,"tokens":[["  ",""],["dataOn","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["widgetLoaded","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["\"","string.quoted.double.kotlin"],["x()","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[") { ",""],["once","identifier.kotlin"],[" = ",""],["true","identifier.kotlin"],[" }",""]]}
+{"what":"scopes","line":4,"tokens":[["  ",""],["dataClass","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["isOpen","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["\"","string.quoted.double.kotlin"],["$","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[" + ",""],["\"","string.quoted.double.kotlin"],["open","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":5,"tokens":[["  ",""],["dataStyle","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["backgroundColor","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["\"","string.quoted.double.kotlin"],["'red'","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":6,"tokens":[["  ",""],["dataSignals","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["MySignal","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["\"","string.quoted.double.kotlin"],["1","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":7,"tokens":[["  ",""],["dataOn","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["customEvent","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["\"","string.quoted.double.kotlin"],["x()","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[") { ",""],["case","identifier.kotlin"],[" = ",""],["Case","identifier.kotlin"],[".",""],["KEBAB","identifier.kotlin"],[" }",""]]}
+{"what":"scopes","line":8,"tokens":[["  ",""],["dataSignals","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["{fooBar: 1}","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":9,"tokens":[["  ",""],["dataBind","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["fooBar","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":10,"tokens":[["  ",""],["dataOnClick","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["@post('/Add')","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", { ",""],["once","identifier.kotlin"],[" = ",""],["true","identifier.kotlin"],[" })",""]]}
+{"what":"scopes","line":11,"tokens":[["  ",""],["dataOnFetch","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["evt.detail.type === 'Started'","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[") { ",""],["window","identifier.kotlin"],[" = ",""],["true","identifier.kotlin"],[" }",""]]}
+{"what":"scopes","line":12,"tokens":[["  ",""],["dataRef","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["myRef","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":13,"tokens":[["  ",""],["dataIndicator","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["isLoading","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":14,"tokens":[["  ",""],["dataSignals","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["{fooBar: 1}","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["true","identifier.kotlin"],[")",""]]}
+{"what":"scopes","line":15,"tokens":[["  ",""],["dataPersist","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["myKey","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":16,"tokens":[["  ",""],["dataMatchMedia","identifier.kotlin"],["(",""],["\"","string.quoted.double.kotlin"],["isMobile","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[", ",""],["mediaQuery","identifier.kotlin"],[" = ",""],["\"","string.quoted.double.kotlin"],["(max-width: 600px)","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}
+{"what":"scopes","line":17,"tokens":[["}",""]]}

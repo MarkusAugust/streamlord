@@ -1,0 +1,6 @@
+{"what":"file","language":"kotlin"}
+{"what":"diagnostic","code":"unknown-attribute","link":"https://data-star.dev/reference/attributes#data-on","message":"Unknown Datastar attribute data-onn. Did you mean data-on?","range":"1:13-1:27","severity":"Warning","source":"streamlord"}
+{"what":"action","at":"1:1-2:1","n":0,"after":"attributes[\"data-on:click\"] = \"x()\"\n","edits":[{"file":"drawn/kotlin/unknown-attribute-3.kt","range":"1:13-1:21","text":"data-on"}],"kind":"quickfix","preferred":true,"title":"Change to data-on"}
+{"what":"action","at":"1:13-1:27","n":0,"after":"attributes[\"data-on:click\"] = \"x()\"\n","edits":[{"file":"drawn/kotlin/unknown-attribute-3.kt","range":"1:13-1:21","text":"data-on"}],"kind":"quickfix","preferred":true,"title":"Change to data-on"}
+{"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}
+{"what":"scopes","line":1,"tokens":[["attributes","identifier.kotlin"],["[",""],["\"","string.quoted.double.kotlin"],["data-onn:click","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],["] = ",""],["\"","string.quoted.double.kotlin"],["x()","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"]]}
