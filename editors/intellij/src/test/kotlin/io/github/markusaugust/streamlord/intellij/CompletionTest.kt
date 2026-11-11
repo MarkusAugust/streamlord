@@ -327,6 +327,26 @@ class CompletionTest : StreamlordTestCase() {
         assertEmpty((missing + notInKotlin + offered).joinToString("\n"), missing + notInKotlin + offered)
     }
 
+    fun `test a new attribute name starts right after a quoted value`() {
+        val shapes = listOf("<div a=\"x\"data-on:click__", "<div a='x'data-on:click__", "<div a=\"x y\"data-on:click__")
+        // The platform adds the words of the file here; the modifiers must all come, in order.
+        val wrong =
+            shapes.flatMapIndexed { n, markup ->
+                val html = itemsIn("quoted$n.html", "$markup<caret>")
+                myFixture.configureByText("Quoted$n.kt", "fun side() = \"\"\"$markup<caret>\"\"\"")
+                val injected = caretInInjectedHtml()
+                val kotlin = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                listOfNotNull(
+                    "$markup in html -> $html".takeUnless { html.filter { it in onModifiers } == onModifiers },
+                    "$markup in kotlin -> injected $injected, $kotlin".takeUnless {
+                        injected &&
+                            kotlin.filter { it in onModifiers } == onModifiers
+                    },
+                )
+            }
+        assertEmpty(wrong.joinToString("\n"), wrong)
+    }
+
     fun `test an escape first in a later literal is an escape`() {
         assertModifiersInjected(listOf("// language=HTML\nval s = \"<div\" + \"\\ndata-on:click__<caret>\""))
     }

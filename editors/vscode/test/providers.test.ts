@@ -347,6 +347,14 @@ describe("an attribute on its own line", () => {
     }
   });
 
+  it("starts a new attribute name right after a quoted value", () => {
+    const modifiers = labels(`<div data-on:click__`);
+    for (const markup of [`<div a="x"data-on:click__`, `<div a='x'data-on:click__`, `<div a="x y"data-on:click__`]) {
+      assert.deepEqual(labels(markup), modifiers, `${markup} in html`);
+      assert.deepEqual(inKotlin(markup), modifiers, `${markup} in a Kotlin string`);
+    }
+  });
+
   it("reads Kotlin's escaped quotes in an ordinary string as quotes", () => {
     const src = `val x = "<div data-show=\\"\\$a > 1\\" data-on:click__"`;
     assert.ok(labels(src, "kotlin", src.length - 1).includes("debounce"), src);

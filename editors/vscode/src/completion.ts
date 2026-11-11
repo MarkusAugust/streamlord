@@ -21,27 +21,41 @@ const ALL_SITES: ReadonlySet<string> = new Set([
 const SELECTOR_ARG_NAMES = new Set(["selector", "viewTransitionSelector"]);
 
 /**
- * The attribute name `token`, a run without white space in a tag, ends with, or null when it ends in
- * an unquoted value: a `/` outside a value starts a new attribute, and one inside an unquoted value,
- * as in `href=/api/x`, is the value's. nameAtEnd in StreamlordCompletionContributor.kt.
+ * The attribute name `attributes`, the markup of a tag after its name, ends with, or null when it
+ * ends in a value. Read by the browser's attribute states: white space, a `/` outside a value, and
+ * the end of a quoted value each start a new name; a `/` in an unquoted value is the value's; an
+ * `=` first in a name is part of it. White space after `=` ends the attribute, though the browser
+ * waits there for the value. nameAtEnd in StreamlordCompletionContributor.kt.
  */
-function nameAtEnd(token: string): string | null {
+function nameAtEnd(attributes: string): string | null {
   let start = 0;
-  let value = false;
+  let state: "name" | "await" | "unquoted" | "quoted" = "name";
   let quote = "";
-  for (let i = 0; i < token.length; i++) {
-    const c = token[i];
-    if (quote !== "") {
+  for (let i = 0; i < attributes.length; i++) {
+    const c = attributes[i] ?? "";
+    const space = /\s/.test(c);
+    if (state === "quoted") {
       if (c === quote) {
-        quote = "";
-        value = false;
+        state = "name";
+        start = i + 1;
       }
-    } else if (value) {
-      if (token[i - 1] === "=" && (c === '"' || c === "'")) quote = c;
-    } else if (c === "=") value = true;
-    else if (c === "/") start = i + 1;
+    } else if (state === "await") {
+      if (c === '"' || c === "'") {
+        state = "quoted";
+        quote = c;
+      } else if (space) {
+        state = "name";
+        start = i + 1;
+      } else state = "unquoted";
+    } else if (state === "unquoted") {
+      if (space) {
+        state = "name";
+        start = i + 1;
+      }
+    } else if (space || c === "/") start = i + 1;
+    else if (c === "=" && i > start) state = "await";
   }
-  return value || quote !== "" ? null : token.slice(start);
+  return state === "name" ? attributes.slice(start) : null;
 }
 
 /** Completions for Datastar expressions in Kotlin strings, and for data-* attributes in HTML. */
@@ -126,12 +140,10 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     const before = string ? tagBeforeCaretInString(string, offset, prefix) : tagBeforeCaret(src, offset, prefix);
     if (before === null) return [];
     // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret
-    // is in the tag and in no quoted value; the name is what follows the last white space, or a slash
-    // outside a value, after the tag's own name: nameAtEnd in StreamlordCompletionContributor.kt.
+    // is in the tag and in no quoted value; the name at it is read by the browser's attribute states.
     const head = /^<([A-Za-z][^\s/>]*)/.exec(before);
-    const token = /\S*$/.exec(before)?.[0] ?? "";
-    const partial = nameAtEnd(token);
-    if (!head || partial === null || before.length - partial.length <= head[0].length || /[="'<>]/.test(partial)) return [];
+    const partial = head ? nameAtEnd(before.slice(head[0].length)) : null;
+    if (!head || partial === null || before.length - partial.length <= head[0].length || /["'<>]/.test(partial)) return [];
     const tagName = (head[1] ?? "").toLowerCase();
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
     // The event of data-on, which VS Code's HTML service knows nothing of, in any file.

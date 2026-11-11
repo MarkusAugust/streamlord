@@ -247,11 +247,10 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     else -> tagBeforeCaret(src, offset, prefix)
                 } ?: return false
             // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret is in
-            // the tag and in no quoted value; the name is what follows the last white space, or a slash outside a value,
-            // after the tag's own name, as completion.ts reads it.
+            // the tag and in no quoted value; the name at it is read by the browser's attribute states, as completion.ts reads it.
             val head = Regex("""^<([A-Za-z][^\s/>]*)""").find(before) ?: return false
-            val partial = nameAtEnd(Regex("""\S*$""").find(before)?.value.orEmpty()) ?: return false
-            if (before.length - partial.length <= head.value.length || partial.any { it in "=\"'<>" }) return false
+            val partial = nameAtEnd(before.substring(head.value.length)) ?: return false
+            if (before.length - partial.length <= head.value.length || partial.any { it in "\"'<>" }) return false
             val tagName = head.groupValues[1].lowercase()
             if ("__" in partial) {
                 modifierItems(partial)
@@ -564,28 +563,56 @@ internal fun withoutKotlinEscapes(
     }
 
 /**
- * The attribute name [token], a run without white space in a tag, ends with, or null when it ends in
- * an unquoted value: a `/` outside a value starts a new attribute, and one inside an unquoted value,
- * as in `href=/api/x`, is the value's. nameAtEnd in completion.ts.
+ * The attribute name [attributes], the markup of a tag after its name, ends with, or null when it
+ * ends in a value. Read by the browser's attribute states: white space, a `/` outside a value, and
+ * the end of a quoted value each start a new name; a `/` in an unquoted value is the value's; an
+ * `=` first in a name is part of it. White space after `=` ends the attribute, though the browser
+ * waits there for the value. nameAtEnd in completion.ts.
  */
-internal fun nameAtEnd(token: String): String? {
+internal fun nameAtEnd(attributes: String): String? {
     var start = 0
-    var value = false
+    var state = NameState.NAME
     var quote = 0.toChar()
-    for (i in token.indices) {
-        val c = token[i]
-        if (quote != 0.toChar()) {
-            if (c == quote) {
-                quote = 0.toChar()
-                value = false
+    for (i in attributes.indices) {
+        val c = attributes[i]
+        val space = c.isWhitespace()
+        when (state) {
+            NameState.QUOTED -> {
+                if (c == quote) {
+                    state = NameState.NAME
+                    start = i + 1
+                }
             }
-        } else if (value) {
-            if (token.getOrNull(i - 1) == '=' && (c == '"' || c == '\'')) quote = c
-        } else if (c == '=') {
-            value = true
-        } else if (c == '/') {
-            start = i + 1
+
+            NameState.AWAIT -> {
+                if (c == '"' || c == '\'') {
+                    state = NameState.QUOTED
+                    quote = c
+                } else if (space) {
+                    state = NameState.NAME
+                    start = i + 1
+                } else {
+                    state = NameState.UNQUOTED
+                }
+            }
+
+            NameState.UNQUOTED -> {
+                if (space) {
+                    state = NameState.NAME
+                    start = i + 1
+                }
+            }
+
+            NameState.NAME -> {
+                if (space || c == '/') {
+                    start = i + 1
+                } else if (c == '=' && i > start) {
+                    state = NameState.AWAIT
+                }
+            }
         }
     }
-    return if (value || quote != 0.toChar()) null else token.substring(start)
+    return if (state == NameState.NAME) attributes.substring(start) else null
 }
+
+private enum class NameState { NAME, AWAIT, UNQUOTED, QUOTED }
