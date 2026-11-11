@@ -8,6 +8,7 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.
 - Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
   `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
   `DatastarProtocol.VERSION` is `1.0.5`. A page that still loads the 1.0.4 bundle works as before,

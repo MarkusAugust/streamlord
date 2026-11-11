@@ -273,9 +273,8 @@ you license and load yourself.
 ```
 
 The plugin build includes the SDK build (`includeBuild("../..")`) for `streamlord-analysis`, the
-editor-independent analysis that the VS Code extension mirrors in TypeScript; both are tested
-against the same cases. The analysis module's tests live with the SDK: `../../gradlew
-:streamlord-analysis:test`.
+editor-independent analysis, which the VS Code extension runs too, compiled to JavaScript. The
+analysis module's tests live with the SDK: `../../gradlew :streamlord-analysis:test`.
 
 ### Publishing
 

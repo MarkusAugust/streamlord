@@ -231,13 +231,13 @@ the DSL, so the catalog cannot drift from the library without a test failing.
 The checks live once, in `streamlord-analysis`: a Kotlin module with no dependency beyond
 `streamlord-core`, holding the Kotlin string reader, the JavaScript syntax check, the markup and
 attribute rules, the signal and selector collectors, the route finder and the inspector's file
-format. The IntelliJ plugin calls it. The VS Code extension mirrors it in TypeScript, and both
-test suites run one shared corpus of expressions, markup, HTML and Kotlin, each case with the
-issue codes, the ranges and the text every quick fix must leave behind. It lives in
-`editors/vscode/test/fixtures/corpus`. What is no issue, such as the signals a file declares, the
-routes it serves or the curl line of a saved request, is a case in `fixtures/twins` beside it, which
-both suites read the same way. The JavaScript check is two parsers, acorn in the extension and a
-port of it in Kotlin, and the corpus is what holds them to the same verdict.
+format. Both editors run it: the IntelliJ plugin calls it on the JVM, and the VS Code extension
+runs the same Kotlin compiled to JavaScript. Its tests run on both, over one corpus of expressions,
+markup, HTML and Kotlin, each case with the issue codes, the ranges and the text every quick fix
+must leave behind. It lives in `editors/vscode/test/fixtures/corpus`. What is no issue, such as the
+signals a file declares, the routes it serves or the curl line of a saved request, is a case in
+`fixtures/cases` beside it. The JavaScript check is a port of acorn to Kotlin, so an expression
+parses the same in both editors.
 
 **You can call it too**, which is worth doing in the tests of your own markup functions:
 
