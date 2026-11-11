@@ -24,7 +24,7 @@ createHttpMethod('post', 'POST')        // every other method defaults to true
 
 A long-lived stream is almost always a `@get`, so this is almost always your case. The client
 aborts the request on `visibilitychange` and builds a fresh one when the page comes back
-(`fetch.ts:506`). **Observed.**
+(`fetch.ts:507-513`). **Observed.**
 
 Turn it off where you open the stream:
 
@@ -82,9 +82,9 @@ Two SSE fields the
 and Datastar's own reference never mentions.
 
 **`retry:`** sets the client's base retry interval, overriding
-`retryInterval` (`fetch.ts:669`). **Observed.** It holds for the rest of the action, across
+`retryInterval` (`fetch.ts:668`). **Observed.** It holds for the rest of the action, across
 reconnects, until a later frame sets another. The first reconnect waits the full value;
-`retryMaxWait` only caps the backoff steps after it (`fetch.ts:539-542`). Streamlord omits
+`retryMaxWait` only caps the backoff steps after it (`fetch.ts:541-544`). Streamlord omits
 the line when it writes as the protocol default of 1000 ms, as the specification says to, so a
 stream that has changed the interval goes back to it with 999 or 1001 ms:
 
@@ -102,9 +102,9 @@ times, and then the client gives up for good, since the count runs over the whol
 200 does not start it again. A stream meant to live for hours needs a `retryMaxCount` to match.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
-`last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
+`last-event-id` request header (`fetch.ts:661`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
-empty one (`fetch.ts:665`). **Observed.** An event cannot carry an empty id; it is refused when
+empty one (`fetch.ts:664`). **Observed.** An event cannot carry an empty id; it is refused when
 the event is built. An `SseFrame` built by hand can, to drop the header on purpose. Streamlord
 also keeps an id to printable ASCII with no space at either end, which comes back as it was
 written: `fetch` cannot send a character above U+00FF, Node's `fetch` refuses a control
@@ -175,7 +175,7 @@ On Spring it is a parameter of the bean you already declare,
 Four things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
-  `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
+  `fetch` runs without a timer, and a frame that arrives does not touch its count of retries. The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
   the reader has gone: the comment is a write, and a write to a closed connection fails. It
   takes a few: the first still land in the operating system's buffer. Over a local socket, the
@@ -424,9 +424,12 @@ response that intends to stay open for an hour is not something it waits for.
 So a deploy cuts your streams, and that is the behaviour to design around rather than configure
 away. The good news is in the table [further up](#when-datastar-reconnects-and-when-it-does-not):
 a severed connection is a transport failure, and a transport failure is the one case the default
-`retry: 'auto'` does reconnect from. Your readers come back on the new instance after the one
-second base interval, all of them, together. If that herd is a problem, raise `retryInterval`
-where you open the stream.
+`retry: 'auto'` does reconnect from. The first time a stream is cut, its reader comes back on
+the new instance after the one second base interval, and so do all the others, together. If that
+herd is a problem, raise `retryInterval` where you open the stream. Each later cut of the same
+stream waits twice as long as the one before, up to thirty seconds, and the tenth is the last,
+since the count runs over the stream's whole life: raise `retryMaxCount` for a stream that is to
+outlive more deploys than that.
 
 To end streams cleanly instead, the handler has to know the server is going down. Watch Ktor's
 `ApplicationStopPreparing` event and finish your flows from there; nothing in Streamlord can do it

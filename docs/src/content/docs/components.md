@@ -129,9 +129,11 @@ server's, and focus and typed text go with it. At the top level the client looks
 its id, so a changed id finds nothing: it warns `PatchElementsNoTargetsFound` and leaves the page
 as it was.
 
-Unique means on the whole page, not only in the list. The client looks an id up in the whole
-document, so when the rows change order, a `#case-41` in a sidebar can be moved into the list in
-place of the row. A duplicate inside the patched element or in the patch is dropped from the
+Unique means within the element you patch. The client matches the rows by the ids inside that
+element and nowhere else, so a `#case-41` in a sidebar is left where it is when the rows change
+order. Datastar 1.0.4 looked an id up in the whole document there, and moved the sidebar's element
+into the list in place of the row. Only the element you patch itself is found by its id in the
+whole document. A duplicate inside the patched element or in the patch is dropped from the
 matching by id.
 
 Leave the id off and the element is matched by its tag and its place among its siblings, unless

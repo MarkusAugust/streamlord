@@ -96,7 +96,8 @@ too. Pass the value as a pair, `"search" to codec.toJsonValue(...)`, and the fie
 
 What the codec leaves out, the page does not declare. A field that is `null` declares nothing,
 because the client holds no null: it removes a signal patched to `null`, and an expression that
-reads it, or a `data-bind` on it, gets `""`. A `null` in a list is held as `""` too. So a form
+reads it afterwards, or a `data-bind` on it, gets `""`. An expression already on the page is not
+run again for the removal, and goes on showing what it showed. A `null` in a list is held as `""` too. So a form
 with `age: Int? = null` can come back from the browser as `"age": ""`, which a read into `Int?`
 refuses. Give such a field the value the page starts it with, `""` or `0`, or make the type take
 what the browser sends. The editors warn on a pair written `"selected" to null` in `dataSignals`.

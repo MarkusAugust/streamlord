@@ -19,6 +19,10 @@ const client = freeBundle('datastar.js').code
 // view transitions; the client only asks instanceof of the one and counts on the other to call back.
 const harness = `
   globalThis.MathMLElement ??= class MathMLElement {}
+  // happy-dom has no reportError, which the client hands an attribute's error from 1.0.5 on; a
+  // browser sends what it is given to the window as an error event.
+  globalThis.reportError ??= (error) =>
+    window.dispatchEvent(new window.ErrorEvent('error', { error, message: String(error?.message ?? error) }))
   let viewTransitions = 0
   document.startViewTransition = (update) => {
     viewTransitions++
