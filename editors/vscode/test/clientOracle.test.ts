@@ -191,6 +191,19 @@ describe("the client's rules", () => {
     return (found[0] as { read: Reading }).read;
   };
 
+  // fetch-options.json: the catalog lists the options a backend action reads from its arguments,
+  // and no other. A name the client only has in its type is an option that does nothing.
+  it("lists the fetch options the client reads and no other", () => {
+    const listed = catalog.fetchOptions.map((o) => o.name);
+    assert.deepEqual([...new Set(listed)], listed);
+    const wrong: string[] = [];
+    for (const { action, options } of read<{ action: string; options: string[] }[]>("fetch-options.json")) {
+      wrong.push(...listed.filter((o) => !options.includes(o)).map((o) => `${o} is in the catalog, and @${action} never reads it`));
+      wrong.push(...options.filter((o) => !listed.includes(o)).map((o) => `@${action} reads ${o}, and the catalog does not list it`));
+    }
+    assert.deepEqual(wrong, []);
+  });
+
   // conformance/dsl/free.json: what the client did with retry, retryInterval and retryMaxCount,
   // against what the catalog tells a reader of a hover about them. Each claim here was true of 1.0.4
   // and the reading named beside it shows 1.0.5 doing otherwise.

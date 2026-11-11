@@ -213,6 +213,24 @@ class ClientOracleTest {
             .objects()
             .associateBy { it.string("name")!! }
 
+    /**
+     * `fetch-options.json`: the catalog lists the options a backend action reads from its
+     * arguments, and no other. A name the client only has in its type is an option that does nothing.
+     */
+    @Test
+    fun `lists the fetch options the client reads and no other`() {
+        val listed = Catalog.default.fetchOptions.map { it.name }
+        assertEquals(listed.distinct(), listed)
+        val wrong = ArrayList<String>()
+        for (case in cases("fetch-options.json")) {
+            val action = case.string("action")!!
+            val read = case.array("options")!!.strings()
+            wrong += (listed - read.toSet()).map { "$it is in the catalog, and @$action never reads it" }
+            wrong += (read - listed.toSet()).map { "@$action reads $it, and the catalog does not list it" }
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
     /** The reading of the case in `conformance/dsl/free.json` whose name starts with [name]. */
     private fun reading(name: String): JsonObject =
         dslCases.entries

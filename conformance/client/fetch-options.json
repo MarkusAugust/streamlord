@@ -1,0 +1,108 @@
+{
+  "$comment": "The properties each backend action of plugins/actions/fetch.ts of the Datastar 1.0.5 client reads from its options, the argument after the URL: the file was bundled with an @engine whose action() records it, and each apply was run with an empty URL and a Proxy for the options that records every property asked for and answers undefined, so a property inside an option, such as filterSignals.include, is not listed. A name in the client's FetchArgs type that is not here is one the action never reads.",
+  "version": "1.0.5",
+  "cases": [
+    {
+      "action": "delete",
+      "options": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ]
+    },
+    {
+      "action": "get",
+      "options": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ]
+    },
+    {
+      "action": "patch",
+      "options": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ]
+    },
+    {
+      "action": "post",
+      "options": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ]
+    },
+    {
+      "action": "put",
+      "options": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ]
+    },
+    {
+      "action": "query",
+      "options": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ]
+    }
+  ]
+}

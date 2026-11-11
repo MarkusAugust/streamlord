@@ -452,21 +452,22 @@ const isStringTrue = [
 // plugins/attributes, bundled with an `@engine` whose `attribute` records its argument instead of
 // queueing it. Everything else the plugins import is the reference's own.
 const pluginDir = path.join(reference, "plugins", "attributes");
-const recordingEngine = {
-  name: "recording-engine",
+/** An `@engine` for the files of [dir] whose export [name] records its argument in `globalThis[into]`. */
+const recordingEngine = (dir, name, into) => ({
+  name: `recording-${name}`,
   setup(build) {
     build.onResolve({ filter: /^@engine$/ }, (args) =>
-      path.dirname(args.importer) === pluginDir ? { path: "recording-engine", namespace: "recording" } : undefined,
+      path.dirname(args.importer) === dir ? { path: `recording-${name}`, namespace: "recording" } : undefined,
     );
     build.onLoad({ filter: /.*/, namespace: "recording" }, () => ({
       contents:
         `export * from ${JSON.stringify(path.join(reference, aliases["@engine"]))};\n` +
-        "export const attribute = (plugin) => globalThis.registeredPlugins.push(plugin);\n",
+        `export const ${name} = (plugin) => globalThis.${into}.push(plugin);\n`,
       loader: "ts",
       resolveDir: reference,
     }));
   },
-};
+});
 globalThis.registeredPlugins = [];
 for (const name of ["HTMLSelectElement", "HTMLTextAreaElement", "HTMLElement", "HTMLFormElement", "HTMLButtonElement"]) {
   globalThis[name] ??= class {};
@@ -480,7 +481,7 @@ const pluginBundle = await build({
   platform: "neutral",
   target: "es2022",
   define: { ALIAS: "null" },
-  plugins: [recordingEngine, referenceOnly],
+  plugins: [recordingEngine(pluginDir, "attribute", "registeredPlugins"), referenceOnly],
   logLevel: "silent",
 });
 await import(`data:text/javascript;base64,${Buffer.from(pluginBundle.outputFiles[0].text).toString("base64")}`);
@@ -493,6 +494,46 @@ const plugins = globalThis.registeredPlugins
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
 if (plugins.length !== pluginFiles.length) throw new Error(`${pluginFiles.length} plugin files registered ${plugins.length} plugins`);
+
+// --------------------------------------------------------------- fetch-options.json
+
+// The options a backend action reads from its second argument: plugins/actions/fetch.ts, bundled
+// with an `@engine` whose `action` records what it is given, and each action then run with a Proxy
+// that records every property the client asks it for. The URL is empty, so the action throws
+// FetchNoUrlProvided once it has taken its arguments apart, before it sends anything.
+const actionDir = path.join(reference, "plugins", "actions");
+globalThis.registeredActions = [];
+const fetchBundle = await build({
+  stdin: { contents: 'import "./plugins/actions/fetch.ts";', resolveDir: reference, loader: "ts" },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "neutral",
+  target: "es2022",
+  define: { ALIAS: "null" },
+  plugins: [recordingEngine(actionDir, "action", "registeredActions"), referenceOnly],
+  logLevel: "silent",
+});
+await import(`data:text/javascript;base64,${Buffer.from(fetchBundle.outputFiles[0].text).toString("base64")}`);
+const fetchOptions = [];
+for (const { name, apply } of globalThis.registeredActions) {
+  const reads = [];
+  const recording = new Proxy({}, {
+    get(_, key) {
+      if (typeof key === "string" && !reads.includes(key)) reads.push(key);
+      return undefined;
+    },
+  });
+  const noUrl = new Error("FetchNoUrlProvided");
+  const ctx = { el: {}, evt: undefined, error: () => noUrl, cleanups: new Map() };
+  const thrown = await apply(ctx, "", recording).then(() => null, (e) => e);
+  if (thrown !== noUrl) throw new Error(`@${name} did not stop at its empty URL: ${thrown}`);
+  fetchOptions.push({ action: name, options: reads.sort() });
+}
+fetchOptions.sort((a, b) => a.action.localeCompare(b.action));
+if (fetchOptions.length === 0 || fetchOptions.some((a) => a.options.length === 0)) {
+  throw new Error(`fetch.ts registered ${fetchOptions.length} actions, or one that read no option`);
+}
 
 // ------------------------------------------------------------------- writing
 
@@ -542,6 +583,15 @@ const files = {
       "from engine/engine.ts, recorded by bundling the plugins with an @engine whose attribute() records it: requirement, " +
       "returnsValue and argNames as the plugin declares them, null, false and [] where it declares none.",
     cases: plugins,
+  },
+  "fetch-options.json": {
+    $comment:
+      "The properties each backend action of plugins/actions/fetch.ts of the Datastar " + version + " client reads from its options, " +
+      "the argument after the URL: the file was bundled with an @engine whose action() records it, and each apply was run with " +
+      "an empty URL and a Proxy for the options that records every property asked for and answers undefined, so a property " +
+      "inside an option, such as filterSignals.include, is not listed. A name in the client's FetchArgs type that is not here " +
+      "is one the action never reads.",
+    cases: fetchOptions,
   },
 };
 
