@@ -183,7 +183,20 @@ class RequestsTest {
             assertEquals(c["expected"]!!.toKotlin(), call(c), name)
         }
 
-    // Where a JSON reader stops is its own, so requests.test.ts says less here.
+    @Test
+    fun `a path that leaves the folder is named by what the editor calls that folder`() {
+        assertEquals(
+            "The requests file ../r.json leaves the workspace: use a path without .. in it.",
+            Requests.requestsPathProblem("../r.json", "workspace"),
+        )
+        assertEquals(
+            "The requests file /r.json is not inside the workspace: use a workspace-relative path.",
+            Requests.requestsPathProblem("/r.json", "workspace"),
+        )
+        assertEquals(Requests.requestsPathProblem("../r.json"), Requests.requestsPathProblem("../r.json", "project"))
+        assertEquals(null, Requests.requestsPathProblem("a/r.json", "workspace"))
+    }
+
     @Test
     fun `text that is not JSON is named with where it stops`() {
         assertEquals(
