@@ -201,6 +201,7 @@ export const workspace = {
   onDidDeleteFiles: noop,
   onDidRenameFiles: noop,
   onDidCloseTextDocument: noop,
+  onDidOpenTextDocument: noop,
   onDidChangeConfiguration: noop,
   createFileSystemWatcher: () => ({ onDidChange: noop, onDidCreate: noop, onDidDelete: noop, dispose: () => {} }),
   findFiles: async (): Promise<MockUri[]> => [],
