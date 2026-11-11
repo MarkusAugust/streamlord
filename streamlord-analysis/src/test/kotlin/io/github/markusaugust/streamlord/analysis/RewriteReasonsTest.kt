@@ -6,13 +6,13 @@ import kotlin.test.assertTrue
 
 /**
  * A warning about what the client did with a reference gives the reason that holds for that
- * reference. `rewriteReasons.test.ts` reads the same cases.
+ * reference.
  */
 class RewriteReasonsTest {
     @Test
     fun `the reason a rewrite warning gives`() {
         val failures = ArrayList<String>()
-        for (case in twinCases("rewrite-reasons.json")) {
+        for (case in sharedCases("rewrite-reasons.json")) {
             val name = case.string("name")
             val source = case.string("source")!!
             val code = case.string("code")

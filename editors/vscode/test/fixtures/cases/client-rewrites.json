@@ -1,5 +1,5 @@
 {
-  "$comment": "What the client's rewrite of an expression gives in both twins: js (the text as the client writes it), runs (the start, end and opening quote of each stretch it stepped over and left as written) and rewrites (the kind, start, end and name of each reference it rewrote, in the order written); offsets count UTF-16 code units. The expected values are what the TypeScript clientRewrite gave. Read by ClientRewriteTwinTest.kt and clientRewriteTwin.test.ts.",
+  "$comment": "What the client's rewrite of an expression gives: js (the text as the client writes it), runs (the start, end and opening quote of each stretch it stepped over and left as written) and rewrites (the kind, start, end and name of each reference it rewrote, in the order written); offsets count UTF-16 code units. Read by ClientRewriteCasesTest.kt.",
   "cases": [
     {"name":"signals in code","source":"$a + $b.c","js":"$['a'] + $['b']['c']","runs":[],"rewrites":[["signal",0,2,"a"],["signal",5,9,"b.c"]]},
     {"name":"a numeric part and a bracketed one","source":"$foo.0.name + $['x']","js":"$['foo']['0']['name'] + $['x']","runs":[[16,19,16]],"rewrites":[["signal",0,11,"foo.0.name"]]},

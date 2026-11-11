@@ -5,8 +5,7 @@ import io.github.markusaugust.streamlord.core.regex
 /*
  * What a Kotlin type or string literal, as the source writes it, tells of a value joined into
  * HTML. The analysis reads declarations with these, and the IntelliJ plugin reads with them the
- * types and literals it finds, so each rule is written once. The twin of valueTypes.ts; the cases both
- * hold are in twins/value-types.json.
+ * types and literals it finds, so each rule is written once. The cases are in cases/value-types.json.
  */
 
 /** Streamlord's own markup types, bare as an import gives them or written out in full. */
@@ -34,8 +33,8 @@ private val MARKUP_COLLECTION =
 
 /**
  * A tag, a comment or a doctype first, with what may stand for the tag name when a space, `>` or
- * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so the twins cannot fold or
- * space them apart.
+ * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so
+ * that it means the same on the JVM and in JavaScript.
  */
 private fun tagStart(template: String): Regex =
     regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")

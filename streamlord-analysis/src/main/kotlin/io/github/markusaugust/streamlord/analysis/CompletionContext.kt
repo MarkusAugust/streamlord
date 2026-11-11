@@ -7,7 +7,7 @@ import io.github.markusaugust.streamlord.core.domain.landingAsParsed
 import io.github.markusaugust.streamlord.core.regex
 
 /*
- * Where a caret stands, for completion, hover and parameter info; shared with completionContext.ts.
+ * Where a caret stands, for completion, hover and parameter info.
  */
 
 /** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
@@ -46,7 +46,7 @@ public fun valueAtCaret(
 /**
  * The markup of the tag [offset] stands in, from its `<` up to [offset], read as [valueAtCaret]
  * reads it, or null in text, a comment, raw text or a quoted value. The tag may begin lines above,
- * with its attributes on lines of their own. tagBeforeCaret in completionContext.ts.
+ * with its attributes on lines of their own.
  */
 public fun tagBeforeCaret(
     markup: String,

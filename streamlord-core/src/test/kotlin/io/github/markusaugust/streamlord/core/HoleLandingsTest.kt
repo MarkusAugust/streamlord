@@ -20,12 +20,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
 /**
- * [holeLandings] and [urlSchemeFixedBy] against `editors/vscode/test/fixtures/twins/hole-landings.json`,
+ * [holeLandings] and [urlSchemeFixedBy] against `editors/vscode/test/fixtures/cases/hole-landings.json`,
  * which the VS Code analysis reads too, and each case against [interpolate] itself, so the editors
  * cannot be held to a position that run time does not act on.
  */
 class HoleLandingsTest {
-    private val fixture = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/twins/hole-landings.json"))
+    private val fixture = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/cases/hole-landings.json"))
 
     private fun holesOf(markup: String): List<IntRange> = Regex("%s").findAll(markup).map { it.range }.toList()
 

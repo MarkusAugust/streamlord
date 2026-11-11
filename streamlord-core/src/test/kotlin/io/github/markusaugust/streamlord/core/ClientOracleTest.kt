@@ -179,13 +179,12 @@ class ClientOracleTest {
      * What [SignalNames.withoutReferenceHyphens] and [SignalNames.referenceAsSubtraction] say of a
      * name, each against the body the client compiles for `$` and that name: the part of it that
      * shows the hyphen is read as a key, as a signal of its own, or as a minus, or is template text.
-     * The table is shared with the editor's clientOracle.test.ts.
      */
     @Test
     fun `reads a reference's hyphens as genRx does`() {
         val names =
             JsonParser
-                .parseObject(fixtureText("editors/vscode/test/fixtures/twins/reference-hyphens.json"))
+                .parseObject(fixtureText("editors/vscode/test/fixtures/cases/reference-hyphens.json"))
                 .array("cases")!!
                 .objects()
         assertEquals(20, names.size)

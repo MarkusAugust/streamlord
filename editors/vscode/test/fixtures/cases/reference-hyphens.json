@@ -1,5 +1,5 @@
 {
-  "$comment": "Names an expression helper writes after $, and what SignalNames.withoutReferenceHyphens and referenceAsSubtraction say of each, in streamlord-core and in the editor: fixed is the name to write (null: nothing wrong), subtraction the expression to write instead where the hyphen looks like one, and shows the part of the body the client compiles for $ and the name in conformance/client/expressions.json that bears it out. Every name is a case of that fixture. Read by ClientOracleTest in streamlord-core and clientOracle.test.ts.",
+  "$comment": "Names an expression helper writes after $, and what SignalNames.withoutReferenceHyphens and referenceAsSubtraction say of each, in streamlord-core: fixed is the name to write (null: nothing wrong), subtraction the expression to write instead where the hyphen looks like one, and shows the part of the body the client compiles for $ and the name in conformance/client/expressions.json that bears it out. Every name is a case of that fixture. Read by ClientOracleTest in streamlord-core.",
   "cases": [
     {
       "name": "form['first-name']",

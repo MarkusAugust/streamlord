@@ -326,7 +326,7 @@ private class Refusal(
 
 private const val PROTO = "__proto__"
 
-/** Why a patch with a key `__proto__` is refused; the VS Code fold in sse.ts gives the same text. */
+/** Why a patch with a key `__proto__` is refused. */
 internal const val PROTO_REFUSED =
     "A key named __proto__ whose value is an object with keys mostly makes Datastar's client throw at that key, " +
         "and the bindings on the page then stop redrawing. Otherwise the client gives the object holding the key " +

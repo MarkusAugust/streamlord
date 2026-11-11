@@ -8,7 +8,7 @@ import io.github.markusaugust.streamlord.core.regex
  * A hyphen in a signal name written in a DSL call. The client reads one as a capital in an
  * attribute key and as a hyphen in an expression or a patch, so the SDK refuses such a name at
  * render or send time (`SignalNames.hyphenProblem` in streamlord-core); this says so in the editor,
- * with the name to write instead. `signalNameHyphens.ts` is the same check for VS Code.
+ * with the name to write instead.
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */

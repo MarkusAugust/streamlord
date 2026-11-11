@@ -1,5 +1,5 @@
 {
-  "$comment": "The reason a warning gives for what the client did with a reference: code and written name the issue (written is the source text it is on), holds are words its message has to hold and lacks words it must not. Read by RewriteReasonsTest.kt and rewriteReasons.test.ts.",
+  "$comment": "The reason a warning gives for what the client did with a reference: code and written name the issue (written is the source text it is on), holds are words its message has to hold and lacks words it must not. Read by RewriteReasonsTest.kt.",
   "cases": [
     {"name":"a signal in the text of a template literal whose ${ holds a brace","source":"`total: $total ${ {a: 1}.a }`","code":"literal-rewritten","written":"$total","holds":["holds a brace"],"lacks":[]},
     {"name":"a signal in a template literal inside a ${...} of a literal the client matched whole","source":"`${ `$x` }`","code":"literal-rewritten","written":"$x","holds":["inside a ${...}","inner template literal"],"lacks":["holds a brace"]},

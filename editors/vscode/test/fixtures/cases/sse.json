@@ -1,5 +1,5 @@
 {
-  "$comment": "What the inspector's SSE parser hands back after each chunk, and how a message decodes as a Datastar event, its arguments in order. Read by sse.test.ts and SseTest.kt in streamlord-analysis; the stream corpus is fixtures/sse.",
+  "$comment": "What the inspector's SSE parser hands back after each chunk, and how a message decodes as a Datastar event, its arguments in order. Read by SseTest.kt in streamlord-analysis; the stream corpus is fixtures/sse.",
   "cases": [
     {"name":"a CRLF split across two chunks is one line ending","call":"feed","chunks":["data: x\r","\ndata: y\r\n\r\n"],"expected":[[],[{"event":"message","id":null,"retry":null,"data":["x","y"],"comments":[]}]]},
     {"name":"an empty chunk between the CR and the LF changes nothing","call":"feed","chunks":["data: x\r","","\n","\r\n"],"expected":[[],[],[],[{"event":"message","id":null,"retry":null,"data":["x"],"comments":[]}]]},

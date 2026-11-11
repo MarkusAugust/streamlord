@@ -7,7 +7,7 @@ import kotlin.time.TimeSource
 
 /**
  * What the corpus cannot hold: the editor's own facts about a hole, and the time a large file
- * takes. `holeJudgement.test.ts` holds the VS Code twin to the same.
+ * takes.
  */
 class HoleJudgementTest {
     private val analyzer = Analyzer()

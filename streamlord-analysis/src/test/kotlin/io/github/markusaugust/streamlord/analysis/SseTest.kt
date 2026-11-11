@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.TimeSource
 
-/** The cases of `twins/sse.json`, which the VS Code extension's `sse.test.ts` reads too. */
+/** The cases of `cases/sse.json`. */
 class SseTest {
     private fun shown(m: SseMessage) =
         mapOf(
@@ -16,7 +16,7 @@ class SseTest {
             "comments" to m.comments,
         )
 
-    // The projections of sse.test.ts: what each chunk hands back, or every message decoded.
+    // The projections of a case: what each chunk hands back, or every message decoded.
     private val calls: Map<String, (List<String>) -> Any?> =
         mapOf(
             "feed" to { chunks ->
@@ -33,7 +33,7 @@ class SseTest {
 
     @Test
     fun `sse parser`() =
-        eachCase(twinCases("sse.json"), { it.string("name")!! }) { c ->
+        eachCase(sharedCases("sse.json"), { it.string("name")!! }) { c ->
             val name = c.string("name")!!
             val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
             assertEquals(c["expected"]!!.toKotlin(), call(c.array("chunks")!!.strings()), name)

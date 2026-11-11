@@ -12,8 +12,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The scanner, the string reader and the collectors against `twins/analyze.json`, which
- * `analyze.test.ts` reads as well; what they report as issues is in the shared corpus.
+ * The scanner, the string reader and the collectors against `cases/analyze.json`; what they
+ * report as issues is in the shared corpus.
  */
 class AnalyzerTest {
     private val analyzer = Analyzer()
@@ -44,7 +44,7 @@ class AnalyzerTest {
             )
         }
 
-    /** What each kind of case expects, in the fields `twins/analyze.json` describes; `analyze.test.ts` projects the same. */
+    /** What each kind of case expects, in the fields `cases/analyze.json` describes. */
     private fun project(case: JsonObject): Map<String, Any?> {
         val source = case.string("source") ?: ""
         return when (val kind = case.string("kind")) {
@@ -97,8 +97,8 @@ class AnalyzerTest {
     }
 
     @Test
-    fun `holds every twin case of the analysis`() {
-        val cases = twinCases("analyze.json")
+    fun `holds every shared case of the analysis`() {
+        val cases = sharedCases("analyze.json")
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val actual = project(case)

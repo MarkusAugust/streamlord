@@ -7,13 +7,13 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * The cases of a rule both twins hold, from `editors/vscode/test/fixtures/twins/<file>`: this
- * module's tests and the VS Code extension's read the same file, through `twins.ts` there, so a
- * case is written once and the two analyses cannot hold different ones.
+ * The cases of a rule, written once in `editors/vscode/test/fixtures/cases/<file>`. The analysis's
+ * tests read them on the JVM and on Node, and a test of the extension reads one (through `cases.ts`)
+ * where it holds something of its own to it.
  */
-internal fun twinCases(file: String): List<JsonObject> =
+internal fun sharedCases(file: String): List<JsonObject> =
     JsonParser
-        .parseObject(fixtureText("editors/vscode/test/fixtures/twins/$file"))
+        .parseObject(fixtureText("editors/vscode/test/fixtures/cases/$file"))
         .array("cases")!!
         .objects()
 

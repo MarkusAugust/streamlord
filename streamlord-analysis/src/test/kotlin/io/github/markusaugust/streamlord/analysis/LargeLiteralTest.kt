@@ -8,7 +8,7 @@ import kotlin.time.TimeSource
 /**
  * One literal with thousands of holes is judged in time that grows with the literal, not with its
  * square: a fix that rewrites the whole literal is made only when it is applied, and once for all
- * the holes that offer it. largeLiteral.test.ts holds the VS Code analysis to the same.
+ * the holes that offer it.
  */
 class LargeLiteralTest {
     @Test

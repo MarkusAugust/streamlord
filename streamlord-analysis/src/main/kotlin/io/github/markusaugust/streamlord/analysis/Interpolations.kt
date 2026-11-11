@@ -8,8 +8,7 @@ import kotlin.concurrent.Volatile
  * The pieces of the interpolation judgement that are about Kotlin rather than about Datastar:
  * which values are joined into an HTML string, which of them the analysis can see are safe or
  * are markup themselves, what the text looks like once `trimMargin` has run, and the rewrite to
- * `interpolate`. The twin of interpolation.ts in the VS Code extension; where a hole lands is
- * core's `holeLandings`.
+ * `interpolate`. Where a placeholder lands is core's `holeLandings`.
  */
 
 private val TRIM_MARGIN_AFTER = regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
@@ -386,8 +385,7 @@ public fun otherDeclaredNames(src: String): Set<String> = visibleNames(src).othe
 /**
  * The constants of a project whose Kotlin files are [sources], to pass as [AnalyzeOptions.constants]:
  * each file's [constantNames], less every name some file declares as anything else another file
- * could mean by it. The twin of `projectConstants` in the VS Code extension, whose workspace index
- * gives its analysis the same set.
+ * could mean by it.
  */
 public fun projectConstants(sources: Iterable<String>): Set<String> {
     val out = HashSet<String>()
@@ -2376,7 +2374,7 @@ private fun fileHeaderEnd(
     }
 }
 
-/** The spaces and line breaks the head of a file is read past: ASCII only, as `isWhitespace` in interpolation.ts. */
+/** The spaces and line breaks the head of a file is read past: ASCII only. */
 private fun isSpace(c: Char): Boolean = c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C'
 
 /** Just past the annotation whose name starts at [from], after `@file:`: a name and its arguments, or a bracketed list. */

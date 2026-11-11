@@ -29,7 +29,7 @@ import org.jetbrains.kotlin.psi.KtStringTemplateExpression
  * A place in a file that names a signal: one part of a read's path, `name` in `$user.name` for
  * `user.name`, or the name a defining place writes, with [declaration] saying how a new one is
  * written there. [host] is where the innermost Kotlin string around it starts, which holds its
- * reference, or -1. The rules are those of `signalSites.ts` in the VS Code extension.
+ * reference, or -1.
  */
 class SignalSite(
     val start: Int,

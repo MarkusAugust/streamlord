@@ -10,12 +10,12 @@ import kotlin.test.assertTrue
  * The checks and the caret read markup the one way: every quoted attribute value [tokenize] finds,
  * [valueAtCaret] finds at each offset in it, and every value the caret finds is one [tokenize]
  * found. Over the markup of the shared fixtures, read as a template file and as a Kotlin string,
- * so the two cannot drift apart where the fixtures already reach. oneReading.test.ts holds the same.
+ * so the two cannot drift apart where the fixtures already reach.
  */
 class OneReadingTest {
     private val markups: List<Pair<String, String>> =
-        twinCases("hole-landings.json").map { it.string("name")!! to it.string("markup")!! } +
-            twinCases("completion-contexts.json").map { it.string("name")!! to it.string("before")!! + it.string("after")!! } +
+        sharedCases("hole-landings.json").map { it.string("name")!! to it.string("markup")!! } +
+            sharedCases("completion-contexts.json").map { it.string("name")!! to it.string("before")!! + it.string("after")!! } +
             listOf("markup.json", "html.json").flatMap { file ->
                 JsonParser
                     .parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))

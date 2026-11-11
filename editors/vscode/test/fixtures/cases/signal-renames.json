@@ -1,5 +1,5 @@
 {
-  "$comment": "What a rename writes at a place that defines a signal (signalRenameText) or reads it (signalReadRenameText). For a definition, at is the text written at the first declaration that has it, and text is what goes there for rename, or null when nothing written there can define it. For a read, read is the signal a part of an expression's path stands for, and text what goes over that part. Read by SignalRenamesTest.kt and signalRenames.test.ts.",
+  "$comment": "What a rename writes at a place that defines a signal (signalRenameText) or reads it (signalReadRenameText). For a definition, at is the text written at the first declaration that has it, and text is what goes there for rename, or null when nothing written there can define it. For a read, read is the signal a part of an expression's path stands for, and text what goes over that part. Read by SignalRenamesTest.kt.",
   "cases": [
     {"name":"a pair is written as it stands","language":"kotlin","src":"fun h() = patchSignals(mapOf(\"count\" to 1))","at":"count","rename":"total","text":"total"},
     {"name":"an assignment is written as it stands","language":"html","src":"<b data-on:click=\"$count = 1\"></b>","at":"count","rename":"total","text":"total"},

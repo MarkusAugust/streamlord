@@ -1,5 +1,5 @@
 {
-  "$comment": "Reading Kotlin source: the string literal at an offset (text, interpolations as [kind, text]), the call sites of the named calls (sites: the text of each argument that is one string literal, else null) and the issues of the file (codes, starts). Read by KotlinStringsTest.kt and kotlinStrings.test.ts.",
+  "$comment": "Reading Kotlin source: the string literal at an offset (text, interpolations as [kind, text]), the call sites of the named calls (sites: the text of each argument that is one string literal, else null) and the issues of the file (codes, starts). Read by KotlinStringsTest.kt.",
   "cases": [
     {"name":"points an end-of-input error in a raw string at its closing quotes","src":"dataOnClick(\"\"\"@get('/x') +\"\"\")","codes":["expression-syntax"],"starts":[27]},
     {"name":"points an end-of-input error in a raw string at its closing quotes, after a quote","src":"dataOnClick(\"\"\"\"x\" +\"\"\")","starts":[20],"codes":["expression-syntax"]},

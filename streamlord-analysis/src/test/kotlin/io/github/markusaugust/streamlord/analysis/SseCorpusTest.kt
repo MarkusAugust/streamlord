@@ -9,8 +9,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * The SSE corpus in the VS Code extension's `test/fixtures/sse` is read by this suite and by
- * `sseCorpus.test.ts`, so both inspectors read a stream alike. Each case runs twice: in its own
+ * The SSE corpus in the VS Code extension's `test/fixtures/sse` is read by this suite, on the JVM and
+ * on Node, so both inspectors read a stream alike. Each case runs twice: in its own
  * chunks, and one character at a time, since a chunk may end anywhere.
  */
 class SseCorpusTest {

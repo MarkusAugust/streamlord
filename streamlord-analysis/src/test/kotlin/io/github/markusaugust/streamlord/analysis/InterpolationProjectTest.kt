@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /**
  * The files of the interpolation test project, and what the analysis must say about each
- * hole in them; `interpolationProject.test.ts` reads the same expected.json.
+ * hole in them.
  */
 class InterpolationProjectTest {
     private val analyzer = Analyzer()

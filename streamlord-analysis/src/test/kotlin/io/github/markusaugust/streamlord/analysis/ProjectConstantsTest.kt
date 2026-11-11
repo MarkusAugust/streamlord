@@ -5,8 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Which `const val` names count as the author's own across a project; the VS Code twin holds the
- * same in `interpolationProject.test.ts`.
+ * Which `const val` names count as the author's own across a project.
  */
 class ProjectConstantsTest {
     private val analyzer = Analyzer()

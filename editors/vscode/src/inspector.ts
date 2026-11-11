@@ -409,7 +409,7 @@ function html(cspSource: string): string {
   const clearEmpty = () => { const e = frames.querySelector('.empty'); if (e) e.remove(); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const time = (t) => new Date(t).toLocaleTimeString(undefined, { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
-  // The URL as it is sent, by the rule of previewUrl in requests.ts: baseUrl as it is, a param encoded, and what cannot be filled in left as written.
+  // The URL as it is sent, by the rule of the page's own previewUrl, held to cases/requests.json: baseUrl as it is, a param encoded, and what cannot be filled in left as written.
   const OWN = ['baseUrl', 'signals', 'headers'];
   const encode = (s) => encodeURIComponent(s.replace(/[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]/g, '\\uFFFD'));
   const preview = (s) => s.replace(/\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*\\}\\}/g, (w, n) => {

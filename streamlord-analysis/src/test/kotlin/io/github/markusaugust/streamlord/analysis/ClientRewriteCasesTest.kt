@@ -4,11 +4,11 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** The client's rewrite gives the same text, runs and rewrites here as in TypeScript: `clientRewriteTwin.test.ts` reads the same cases. */
-class ClientRewriteTwinTest {
+/** The text, runs and rewrites the client's rewrite gives, against `cases/client-rewrites.json`. */
+class ClientRewriteCasesTest {
     @Test
-    fun `the client's rewrite, as both twins give it`() {
-        val cases = twinCases("client-rewrites.json")
+    fun `the client's rewrite, case by case`() {
+        val cases = sharedCases("client-rewrites.json")
         assertEquals(24, cases.size)
         for (case in cases) {
             val name = case.string("name")

@@ -8,12 +8,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The cases of `twins/requests.json`, which the VS Code extension's `requests.test.ts` reads too. */
+/** The cases of `cases/requests.json`, which the extension's `inspectorPage.test.ts` reads for the inspector page's own `previewUrl`. */
 class RequestsTest {
-    // twins/request-urls.json, which requests.test.ts and core's ClientRequestTest read too.
+    // cases/request-urls.json, which the extension's `requestUrls.test.ts` and core's ClientRequestTest read too.
     @Test
     fun `opens the url the client opens`() {
-        val cases = twinCases("request-urls.json")
+        val cases = sharedCases("request-urls.json")
         for (c in cases) {
             assertEquals(
                 c.string("expected"),
@@ -51,7 +51,7 @@ class RequestsTest {
 
     private fun pairs(list: List<Pair<String, String>>?) = list?.map { listOf(it.first, it.second) }
 
-    // The projections of requests.test.ts, so that a case means the same in both twins.
+    // The projection of each call to the fields a case holds, so that a case means the same on the JVM and on Node.
     private val calls: Map<String, (JsonObject) -> Any?> =
         mapOf(
             "parseRequestsFile" to { c ->
@@ -177,7 +177,7 @@ class RequestsTest {
 
     @Test
     fun `inspector requests`() =
-        eachCase(twinCases("requests.json"), { it.string("name")!! }) { c ->
+        eachCase(sharedCases("requests.json"), { it.string("name")!! }) { c ->
             val name = c.string("name")!!
             val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
             assertEquals(c["expected"]!!.toKotlin(), call(c), name)

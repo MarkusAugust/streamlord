@@ -9,7 +9,7 @@ import io.github.markusaugust.streamlord.core.regex
  * The request Datastar 1.0.5's `@get` and its kin send with the default JSON content type
  * (fetch.ts): the client's headers, and the page's signals, in the body or, for a method without
  * one, in the `datastar` query parameter. The test client and the editors' request inspector send
- * it the same way; `editors/vscode/test/fixtures/twins/request-urls.json` holds the URL to it.
+ * it the same way; `editors/vscode/test/fixtures/cases/request-urls.json` holds the URL to it.
  */
 @InternalStreamlordApi
 public object ClientRequest {

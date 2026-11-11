@@ -9,9 +9,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The corpus in the VS Code extension's `test/fixtures/corpus` is read by this suite and by
- * `corpus.test.ts`, so the two editors are held to the same cases. The format is described in
- * each file.
+ * The corpus in the VS Code extension's `test/fixtures/corpus` is read by this suite and by the
+ * extension's `port.test.ts`, so the two editors are held to the same cases. The format is
+ * described in each file.
  */
 class CorpusTest {
     private val analyzer = Analyzer()

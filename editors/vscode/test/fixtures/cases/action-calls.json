@@ -1,5 +1,5 @@
 {
-  "$comment": "Which action call a caret stands in, in a Datastar expression (actionCallAt): the caret is at the end of before, and only the text before it is read. action is the innermost @name( still open around the caret, or null; argument counts from 0. option is set when the caret is where a key of a backend action's options object goes: typed is what is written of the key so far, written the keys already in the object. Read by CompletionContextsTest.kt and completionContext.test.ts.",
+  "$comment": "Which action call a caret stands in, in a Datastar expression (actionCallAt): the caret is at the end of before, and only the text before it is read. action is the innermost @name( still open around the caret, or null; argument counts from 0. option is set when the caret is where a key of a backend action's options object goes: typed is what is written of the key so far, written the keys already in the object. Read by CompletionContextsTest.kt.",
   "cases": [
     { "name": "the first argument", "before": "@get(", "action": "get", "argument": 0, "option": null },
     { "name": "the second argument, before its object", "before": "@get('/x', ", "action": "get", "argument": 1, "option": null },

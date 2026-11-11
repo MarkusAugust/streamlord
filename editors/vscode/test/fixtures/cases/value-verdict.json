@@ -1,5 +1,5 @@
 {
-  "$comment": "What a value's fact alone says of it where a Kotlin template writes it into markup, before the text around it is read: SAFE, nothing to say; ESCAPE, characters that need escaping (in a URL, the text before it decides the rest); UNSAFE, escaping does not help; DIGITS, an unsigned number, whose digits are safe but which interpolate refuses there. A fact of null is a value of unknown type. Read by ValueVerdictTest.kt and valueVerdict.test.ts.",
+  "$comment": "What a value's fact alone says of it where a Kotlin template writes it into markup, before the text around it is read: SAFE, nothing to say; ESCAPE, characters that need escaping (in a URL, the text before it decides the rest); UNSAFE, escaping does not help; DIGITS, an unsigned number, whose digits are safe but which interpolate refuses there. A fact of null is a value of unknown type. Read by ValueVerdictTest.kt.",
   "cases": [
     {"name":"a constant the author wrote","fact":"constant","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"SAFE","STRUCTURE":"SAFE"}},
     {"name":"a number","fact":"number","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},

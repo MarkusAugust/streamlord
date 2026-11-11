@@ -8,8 +8,7 @@ import io.github.markusaugust.streamlord.core.regex
  * What a key of a Datastar attribute may be, for the DSL that writes one and the analysis that
  * reads a call before it runs: how a name with capitals is written in kebab-case, which keys the
  * client would cut in the wrong place, and how an HTML attribute with capitals is spelled. The DSL
- * throws with these reasons and the analysis reports them, so the two say the same thing; the VS
- * Code extension's twin is held to them by the shared corpus.
+ * throws with these reasons and the analysis reports them, so the two say the same thing.
  */
 @InternalStreamlordApi
 public object AttributeKeys {

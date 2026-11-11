@@ -1,5 +1,5 @@
 {
-  "$comment": "The issues of a Kotlin file at its call sites: codes, spans (the text of each), and fix (the first fix whose title starts with title, on the first issue or the one whose text is on, applied to the file); html: whether htmlStringAt finds an HTML string at an offset. Read by CallSitesTest.kt and callSites.test.ts.",
+  "$comment": "The issues of a Kotlin file at its call sites: codes, spans (the text of each), and fix (the first fix whose title starts with title, on the first issue or the one whose text is on, applied to the file); html: whether htmlStringAt finds an HTML string at an offset. Read by CallSitesTest.kt.",
   "cases": [
     {"name":"sees a selector and a mode given by position","src":"patchElements(\"<tr></tr>\", \"#rows\", ElementPatchMode.APPEND)","codes":[]},
     {"name":"sees a selector left out by position","src":"patchElements(\"<li>x</li>\", null, ElementPatchMode.APPEND)","codes":["mode-needs-selector"]},

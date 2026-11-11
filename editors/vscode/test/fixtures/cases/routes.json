@@ -1,5 +1,5 @@
 {
-  "$comment": "Routes found in Kotlin source, each as framework, method, path and the query parameters (?) and headers (H) its handler reads, a trailing ? when optional. Read by routes.test.ts and RoutesTest.kt in streamlord-analysis.",
+  "$comment": "Routes found in Kotlin source, each as framework, method, path and the query parameters (?) and headers (H) its handler reads, a trailing ? when optional. Read by RoutesTest.kt in streamlord-analysis.",
   "cases": [
     {"name":"a verb called on a receiver is not a route","source":["fun Application.module() {","    routing {","        get(\"/top\") { }","        val v = map.get(\"key\")","        val h = call.request.headers.get(\"X-Foo\")","        client.post(\"https://example.com/hook\")","        cache.delete(\"user\")","        client","            .put(\"/chained\") { }","        val bare = get(\"key\")","    }","}"],"expected":["ktor GET /top"]},
     {"name":"ktor routes keep their shapes","source":["fun Route.api() {","    get(\"/x\") { }","    get(\"relative\") { }","    get(\"/no-lambda\")","    authenticate(\"jwt\") { post(\"/secure\") { } }","    route(\"/api\") { delete { } }","}"],"expected":["ktor GET /x","ktor GET /relative","ktor GET /no-lambda","ktor POST /secure","ktor DELETE /api"]},

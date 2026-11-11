@@ -153,8 +153,7 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
  * string, a template, a regular expression, an array with such an item), a unary operation, or
  * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
  * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
- * judged. Shared with the VS Code extension (`certainlyNoFunction` in markup.ts), which this
- * follows step by step.
+ * judged.
  */
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
@@ -310,7 +309,6 @@ private fun arrayItems(
  * value or stands where the value of a group, a conditional or a `||`, `&&`, `??` or `,` comes
  * from, as in `({x: 1})`, `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put
  * in an array or returned by a function does not count, and a value with `=>` in it is a function.
- * Shared with the VS Code extension (`mayGiveObject` in markup.ts).
  */
 internal fun mayGiveObject(value: String): Boolean {
     val regions = jsRegions(value)

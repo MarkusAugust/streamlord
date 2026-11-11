@@ -11,7 +11,7 @@ class RequestsJvmTest {
     // verdicts to the JDK, which is the client that has to accept what we let through.
     @Test
     fun `refuses exactly the hosts and ports the HTTP client refuses`() {
-        val cases = twinCases("requests.json").filter { it.string("call") == "sends" }
+        val cases = sharedCases("requests.json").filter { it.string("call") == "sends" }
         assertTrue(cases.isNotEmpty())
         for (c in cases) {
             val url = c.string("url")!!

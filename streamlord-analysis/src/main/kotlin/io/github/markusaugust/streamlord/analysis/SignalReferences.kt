@@ -23,7 +23,7 @@ public data class SignalReference(
 
 /**
  * The signals an expression reads, with offsets relative to [text]: what the client rewrites as a
- * signal where JavaScript runs it (see [clientSignalReads]), shared with `signalReferences.ts`. A
+ * signal where JavaScript runs it (see [clientSignalReads]). A
  * `$foo-bar` is left to the `signal-kebab` check. A name opening with a digit, which the client
  * reads and `data-signals:123` declares, is left out too: no check of this module is written
  * for one.
@@ -49,7 +49,7 @@ private val PLAIN_HELPER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
  * `not("error")`, is somebody else's. A line starts after `\n` alone and is indented with spaces
- * and tabs, as `USES_HTML_DSL` in signalNameHyphens.ts reads it.
+ * and tabs.
  */
 internal val USES_HTML_DSL =
     regex(

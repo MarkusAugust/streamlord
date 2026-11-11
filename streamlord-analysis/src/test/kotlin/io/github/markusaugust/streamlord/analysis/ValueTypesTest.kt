@@ -4,9 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The cases of `twins/value-types.json`, which `valueTypes.test.ts` reads too. */
+/** The cases of `cases/value-types.json`. */
 class ValueTypesTest {
-    private val cases = twinCases("value-types.json")
+    private val cases = sharedCases("value-types.json")
 
     @Test
     fun `every case asks one of the three`() {

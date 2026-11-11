@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 class CompletionContextsTest {
     @Test
     fun `which attribute value a caret stands in`() {
-        for (case in twinCases("completion-contexts.json")) {
+        for (case in sharedCases("completion-contexts.json")) {
             val name = case.string("name")
             val before = case.string("before")!!
             val markup = before + case.string("after")!!
@@ -20,7 +20,7 @@ class CompletionContextsTest {
 
     @Test
     fun `which tag a caret stands in`() {
-        val cases = twinCases("completion-contexts.json").filter { it.containsKey("tag") }
+        val cases = sharedCases("completion-contexts.json").filter { it.containsKey("tag") }
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val before = case.string("before")!!
@@ -57,7 +57,7 @@ class CompletionContextsTest {
     @Test
     fun `which Datastar expression a caret stands in`() {
         val analyzer = Analyzer()
-        for (case in twinCases("expressions-at-caret.json")) {
+        for (case in sharedCases("expressions-at-caret.json")) {
             val name = case.string("name")
             val before = case.string("before")!!
             val at =
@@ -77,7 +77,7 @@ class CompletionContextsTest {
 
     @Test
     fun `which action call a caret stands in`() {
-        for (case in twinCases("action-calls.json")) {
+        for (case in sharedCases("action-calls.json")) {
             val name = case.string("name")
             val before = case.string("before")!!
             val call = actionCallAt(before, before.length)

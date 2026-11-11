@@ -1,5 +1,5 @@
 {
-  "$comment": "Where a server's log line says it started (Spring Boot's Tomcat, Jetty and Netty lines of Boot 3.5 and 4.0, Ktor's \"Responding at\"), and which lines are a warning or an error. Read by serverLog.test.ts and ServerLogTest.kt in streamlord-analysis.",
+  "$comment": "Where a server's log line says it started (Spring Boot's Tomcat, Jetty and Netty lines of Boot 3.5 and 4.0, Ktor's \"Responding at\"), and which lines are a warning or an error. Read by ServerLogTest.kt in streamlord-analysis.",
   "cases": [
     {"name":"reads where a server says it started: 2026-10-06 11:39:50,123 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 9102 (http) with context path '/'","call":"startedAt","line":"2026-10-06 11:39:50,123 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 9102 (http) with context path '/'","expected":"http://localhost:9102"},
     {"name":"reads where a server says it started: Tomcat started on port 8080 (http) with context path '/app/'","call":"startedAt","line":"Tomcat started on port 8080 (http) with context path '/app/'","expected":"http://localhost:8080/app"},

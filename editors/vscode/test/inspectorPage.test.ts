@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { environment, type DatastarFrame, type SavedRequest } from "../src/analysis.ts";
-import { twinCases } from "./twins.ts";
+import { sharedCases } from "./cases.ts";
 import { createServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -176,10 +176,11 @@ describe("inspector page", () => {
   });
 
   // The page fills the preview itself as the URL is typed, with the variables it was sent; the
-  // cases are those of previewUrl, which the extension and the IntelliJ plugin hold.
+  // page's own previewUrl is held to the cases of `cases/requests.json`, which the analysis's
+  // RequestsTest also reads.
   describe("shows under the URL what previewUrl gives", () => {
     type Preview = { name: string; call: string; url: string; env: string; defaultUrl: string; running?: { url: string; name: string }; expected: string };
-    const cases = twinCases<Preview>("requests.json").filter((c) => c.call === "previewUrl");
+    const cases = sharedCases<Preview>("requests.json").filter((c) => c.call === "previewUrl");
     it("has cases to show", () => assert.ok(cases.length > 0));
     for (const c of cases) {
       it(c.name, () => {

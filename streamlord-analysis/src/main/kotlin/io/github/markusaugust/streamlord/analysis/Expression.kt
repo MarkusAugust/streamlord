@@ -117,7 +117,7 @@ private fun regexEnds(text: String): IntArray {
 }
 
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
-// on either side, any character beyond ASCII counted as one, as the editor's twin counts it.
+// on either side, any character beyond ASCII counted as one.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
 
 private val BINDS_NAMES = regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
@@ -186,8 +186,7 @@ private fun scopeNameIssues(
 /**
  * What each character of an expression is to JavaScript: code, a string, the text of a template
  * literal, a regular expression or a comment. The code of a `${ }` is code. Whether a `/` divides
- * or opens a regular expression is told by what precedes it, as a tokenizer tells it. Shared with
- * the VS Code extension (`jsRegions` in expression.ts), which this follows step by step.
+ * or opens a regular expression is told by what precedes it, as a tokenizer tells it.
  */
 internal fun jsRegions(text: String): ByteArray {
     val kind = ByteArray(text.length)
@@ -582,8 +581,7 @@ private fun keyOpens(
  * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
  * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
  * template literal counts when it holds no `${`. A scan rather than one regular expression, which
- * backtracks without end on a run of escapes. Shared with the VS Code extension (`stringPatterns`
- * in expression.ts).
+ * backtracks without end on a run of escapes.
  */
 internal fun stringPatterns(
     text: String,
@@ -637,8 +635,7 @@ private val UNFIXABLE_IN_PATTERN = regex("""[\\'"`&]""")
 
 /**
  * The `filter-pattern` warnings for the string patterns of the object between [from] and [to] in
- * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action. Shared
- * with the VS Code extension (`filterPatternIssues` in expression.ts).
+ * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action.
  */
 internal fun filterPatternIssues(
     text: String,

@@ -40,8 +40,7 @@ globals it touches at module load, and calls the exported functions. The fixture
 | `plugins.json` | `plugins/attributes/*.ts`: the argument each passes to `attribute()` | each plugin's `requirement`, `returnsValue` and `argNames`, recorded by bundling the plugins with an `@engine` whose `attribute()` records it; `CatalogTest` holds the catalog to them |
 | `fetch-options.json` | `plugins/actions/fetch.ts`: what each backend action reads from its options | the option names each of `@get`, `@post`, `@put`, `@patch`, `@delete` and `@query` reads, recorded by running it with a Proxy for its options; `ClientOracleTest` holds the catalog's fetch options to them |
 
-The tests are the `ClientOracleTest` of each Kotlin module and `clientOracle.test.ts` in the
-editor. Where Streamlord deliberately reads a thing differently, the test says so next to the
+The tests are the `ClientOracleTest` of each Kotlin module. Where Streamlord deliberately reads a thing differently, the test says so next to the
 case.
 
 ## dom
@@ -67,7 +66,7 @@ The inputs are read from the fixtures themselves (the `sse` texts, the `steps`, 
 list at the end of `dom.mjs` for the script and comment bodies; the generator writes everything else, and a
 run leaves the files byte for byte as they are until the client changes. The tests are
 `SseDecoderAsTheClientReadsTest`, which reads `comment-ends.json` too, `ResponseAsTheClientReadsTest`, `MergePatchAsClientTest` and
-`ScriptEscapesAsTheParserReadsTest` in `streamlord-core`, and `mergePatchAsClient.test.ts` in the editor.
+`ScriptEscapesAsTheParserReadsTest` in `streamlord-core`.
 
 ```sh
 cd conformance/generate && npm install && npm run dom
@@ -127,7 +126,7 @@ also holds the cases to the catalog: every attribute in each of its forms, every
 tag of a duration modifier, every value of an enum one, every action, every fetch option and every
 Kotlin function must be reached by a case, counted from the attributes the client parsed, with an
 exemption list that says why for the few the DSL never writes. `ClientOracleTest` in
-`streamlord-analysis` and `clientOracle.test.ts` hold the editors' hint of what a call writes on
+`streamlord-analysis` holds the editors' hint of what a call writes on
 the wire to the same cases.
 
 The tests were checked by breaking the DSL on purpose, writing the cases again and letting the

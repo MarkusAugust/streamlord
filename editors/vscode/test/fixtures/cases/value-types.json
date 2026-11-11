@@ -1,5 +1,5 @@
 {
-  "$comment": "What a Kotlin type or string literal, as the source writes it, tells of a value joined into HTML: the fact of a declared type (null when nothing is known), whether a type is a collection of Streamlord's markup, and whether a literal's content opens with a tag. The IntelliJ plugin reads types and literals with the same functions. Read by ValueTypesTest.kt and valueTypes.test.ts.",
+  "$comment": "What a Kotlin type or string literal, as the source writes it, tells of a value joined into HTML: the fact of a declared type (null when nothing is known), whether a type is a collection of Streamlord's markup, and whether a literal's content opens with a tag. The IntelliJ plugin reads types and literals with the same functions. Read by ValueTypesTest.kt.",
   "cases": [
     {"name":"a number","type":"Int","fact":"number"},
     {"name":"a number written in full that may be null","type":"kotlin.Long?","fact":"nullable"},

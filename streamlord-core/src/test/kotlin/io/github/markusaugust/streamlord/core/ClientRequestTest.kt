@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * [ClientRequest] against `editors/vscode/test/fixtures/twins/request-urls.json`, whose cases the
+ * [ClientRequest] against `editors/vscode/test/fixtures/cases/request-urls.json`, whose cases the
  * editors' tests read too and the VS Code suite holds to the browser's URLSearchParams.
  */
 class ClientRequestTest {
@@ -17,7 +17,7 @@ class ClientRequestTest {
         val cases =
             JsonParser
                 .parseObject(
-                    fixtureText("editors/vscode/test/fixtures/twins/request-urls.json"),
+                    fixtureText("editors/vscode/test/fixtures/cases/request-urls.json"),
                 ).array("cases")!!
                 .objects()
         assertTrue(cases.isNotEmpty())
