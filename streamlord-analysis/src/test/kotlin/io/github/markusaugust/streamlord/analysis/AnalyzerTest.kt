@@ -2,7 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -86,7 +86,7 @@ class AnalyzerTest {
             }
 
             "fixture" -> {
-                val text = File("../editors/vscode/test/fixtures/${case.string("file")}").readText()
+                val text = fixtureText("editors/vscode/test/fixtures/${case.string("file")}")
                 mapOf("codes" to analyzer.analyzeHtml(text, opts).map { it.code })
             }
 

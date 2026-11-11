@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -18,7 +18,7 @@ class OneReadingTest {
             twinCases("completion-contexts.json").map { it.string("name")!! to it.string("before")!! + it.string("after")!! } +
             listOf("markup.json", "html.json").flatMap { file ->
                 JsonParser
-                    .parseObject(File("../editors/vscode/test/fixtures/corpus/$file").readText())
+                    .parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
                     .array("cases")!!
                     .objects()
                     .map { it.string("name")!! to it.string("source")!! }

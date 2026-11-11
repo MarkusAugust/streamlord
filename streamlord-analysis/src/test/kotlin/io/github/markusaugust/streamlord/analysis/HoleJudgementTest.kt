@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.TimeSource
 
 /**
  * What the corpus cannot hold: the editor's own facts about a hole, and the time a large file
@@ -77,9 +78,9 @@ class HoleJudgementTest {
         // Warm the JIT, then time one pass of a fresh copy, which nothing of the first is cached for.
         analyzer.analyzeKotlin(src)
         val copy = src.replace("package p", "package q")
-        val started = System.nanoTime()
+        val started = TimeSource.Monotonic.markNow()
         val issues = analyzer.analyzeKotlin(copy)
-        val ms = (System.nanoTime() - started) / 1_000_000
+        val ms = started.elapsedNow().inWholeMilliseconds
         assertEquals(4000, issues.count { it.code == "unescaped-interpolation" || it.code == "unsafe-interpolation" })
         println("two thousand functions: $ms ms")
         assertTrue(ms < 3000, "took $ms ms")

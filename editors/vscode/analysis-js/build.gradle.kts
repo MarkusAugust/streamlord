@@ -1,0 +1,111 @@
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin
+
+/*
+ * The analysis and the part of core it reads, compiled to JavaScript for the VS Code extension:
+ * the same source directories the JVM modules compile, and their tests run on Node. Nothing here
+ * is published; `npm run build` in editors/vscode bundles the library this project writes.
+ */
+plugins {
+    id("org.jetbrains.kotlin.multiplatform")
+}
+
+// The generated catalog sources are tasks of the JVM modules.
+evaluationDependsOn(":streamlord-core")
+evaluationDependsOn(":streamlord-analysis")
+
+val core = project(":streamlord-core")
+val analysis = project(":streamlord-analysis")
+val floor = KotlinVersion.fromVersion(libs.versions.kotlinFloor.get().substringBeforeLast('.'))
+
+// The Node and npm on the PATH, which the extension's own build needs anyway, and no second one
+// downloaded: for this project's tasks and for the npm install the plugin runs from the root.
+plugins.withType<NodeJsPlugin> {
+    extensions.getByType<NodeJsEnvSpec>().download.set(false)
+}
+rootProject.plugins.withType<NodeJsRootPlugin> {
+    rootProject.extensions.getByType<NodeJsEnvSpec>().download.set(false)
+}
+
+kotlin {
+    js {
+        nodejs {
+            testTask {
+                // Read by path, so a change to a case alone runs the tests again.
+                val root = rootProject.layout.projectDirectory
+                inputs.dir(root.dir("editors/vscode/test/fixtures")).withPropertyName("editorFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+                inputs.dir(root.dir("conformance")).withPropertyName("conformance").withPathSensitivity(PathSensitivity.RELATIVE)
+                inputs.dir(root.dir("catalog")).withPropertyName("catalog").withPathSensitivity(PathSensitivity.RELATIVE)
+                useMocha { timeout = "120s" }
+            }
+        }
+        binaries.library()
+        useEsModules()
+        generateTypeScriptDefinitions()
+    }
+    sourceSets {
+        // Common, so the annotations the JVM alone reads (@JvmInline, @JvmStatic) are allowed and ignored.
+        getByName("commonMain") {
+            kotlin.srcDir(core.layout.projectDirectory.dir("src/main/kotlin"))
+            kotlin.srcDir(analysis.layout.projectDirectory.dir("src/main/kotlin"))
+            kotlin.srcDir(core.tasks.named("generateCatalogNames"))
+            kotlin.srcDir(analysis.tasks.named("generateCatalogText"))
+            // What the analysis never reads, the server side of core, and what each module asks of the JVM.
+            kotlin.exclude(
+                "**/core/application/**",
+                "**/core/port/**",
+                "**/core/protocol/SseEncoder.kt",
+                "**/*Jvm.kt",
+            )
+            dependencies {
+                // @Language on the parameters, as in core; annotations alone, nothing runs.
+                implementation(libs.jetbrains.annotations)
+            }
+        }
+        // The two modules' own tests, as they are. A test whose subject or oracle is the JVM is named
+        // *JvmTest and stays there, and so do the two that need files or the Kotlin compiler and
+        // the tests of core's server side.
+        getByName("jsTest") {
+            kotlin.srcDir(analysis.layout.projectDirectory.dir("src/test/kotlin"))
+            kotlin.srcDir(core.layout.projectDirectory.dir("src/test/kotlin"))
+            kotlin.exclude(
+                "**/*JvmTest.kt",
+                "**/analysis/AnalyzeProjectTest.kt",
+                "**/analysis/DataSignalsSecondArgumentTest.kt",
+                "**/core/DatastarStreamTest.kt",
+                "**/core/ElementsGuardTest.kt",
+                "**/core/ElementsResponseViewTransitionSelectorTest.kt",
+                "**/core/EncodeFlowTest.kt",
+                "**/core/GoldenConformanceTest.kt",
+                "**/core/HeartbeatTest.kt",
+                "**/core/JsonLimitsTest.kt",
+                "**/core/JsonRobustnessTest.kt",
+                "**/core/JsonTest.kt",
+                "**/core/MarkupAsTheBrowserReadsTest.kt",
+                "**/core/ProtocolAsTheClientTakesItTest.kt",
+                "**/core/ReadSignalsGuardTest.kt",
+                "**/core/ReadSignalsTest.kt",
+                "**/core/ResponseAsTheClientReadsTest.kt",
+                "**/core/ScriptAndSignalsContextTest.kt",
+                "**/core/SendLatestTest.kt",
+                "**/core/SseDecoderTest.kt",
+                "**/core/SseEncoderTest.kt",
+                "**/core/StreamAuthorisationTest.kt",
+                "**/core/ToJsonValueTest.kt",
+                "**/core/UrlHelpersTest.kt",
+                "**/core/WireLimitsTest.kt",
+            )
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
+    }
+    compilerOptions {
+        languageVersion.set(floor)
+        apiVersion.set(floor)
+        optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+}

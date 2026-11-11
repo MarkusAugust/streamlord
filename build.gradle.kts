@@ -25,6 +25,9 @@ val kotlinFloor: String = libs.versions.kotlinFloor.get()
  * mode so that nothing leaves the walls of a module by accident.
  */
 subprojects {
+    // Kotlin/JS, configured in its own build file; nothing below applies to it.
+    if (name == "analysis-js") return@subprojects
+
     /*
      * Modules that exist for the build itself and never leave it. They are not
      * published, they are not held to explicit API mode, and an unused value in

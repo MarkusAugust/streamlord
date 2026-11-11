@@ -1,10 +1,9 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import org.junit.jupiter.api.DynamicTest
-import org.junit.jupiter.api.TestFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.TimeSource
 
 /** The cases of `twins/sse.json`, which the VS Code extension's `sse.test.ts` reads too. */
 class SseTest {
@@ -32,25 +31,23 @@ class SseTest {
             },
         )
 
-    @TestFactory
-    fun `sse parser`(): List<DynamicTest> =
-        twinCases("sse.json").map { c: JsonObject ->
+    @Test
+    fun `sse parser`() =
+        eachCase(twinCases("sse.json"), { it.string("name")!! }) { c ->
             val name = c.string("name")!!
-            DynamicTest.dynamicTest(name) {
-                val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
-                assertEquals(c["expected"]!!.toKotlin(), call(c.array("chunks")!!.strings()), name)
-            }
+            val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
+            assertEquals(c["expected"]!!.toKotlin(), call(c.array("chunks")!!.strings()), name)
         }
 
     // One long line in small pieces used to be scanned again from its start on every piece.
     @Test
     fun `a long line in small pieces is read in linear time`() {
         val parser = SseParser()
-        val started = System.nanoTime()
+        val started = TimeSource.Monotonic.markNow()
         parser.feed("data: ")
         repeat(80_000) { parser.feed("0123456789") }
         val messages = parser.feed("\n\n")
-        val millis = (System.nanoTime() - started) / 1_000_000
+        val millis = started.elapsedNow().inWholeMilliseconds
 
         assertEquals(
             800_000,

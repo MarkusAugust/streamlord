@@ -28,4 +28,8 @@ include(
     "streamlord-test",
 )
 
+// The analysis compiled to JavaScript for the VS Code extension. Never published.
+include("analysis-js")
+project(":analysis-js").projectDir = file("editors/vscode/analysis-js")
+
 apply(from = "gradle/build-tool-floors.settings.gradle.kts")

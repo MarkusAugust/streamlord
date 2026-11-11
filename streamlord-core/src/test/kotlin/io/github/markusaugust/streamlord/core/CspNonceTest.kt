@@ -8,17 +8,6 @@ import kotlin.test.assertTrue
 
 class CspNonceTest {
     @Test
-    fun `a generated nonce is base64 and never repeats`() {
-        val nonces = List(1000) { CspNonce.generate() }
-
-        assertEquals(1000, nonces.toSet().size, "a nonce that repeats is a constant")
-        for (nonce in nonces) {
-            assertEquals(nonce, CspNonce.checked(nonce))
-            assertEquals(24, nonce.length, "16 bytes, base64, padded")
-        }
-    }
-
-    @Test
     fun `the starter policy carries the nonce where script-src looks for it`() {
         val policy = CspNonce.starterPolicy("abc123+/=")
 

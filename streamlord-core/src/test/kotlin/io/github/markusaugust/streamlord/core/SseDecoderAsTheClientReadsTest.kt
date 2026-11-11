@@ -8,7 +8,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -177,7 +177,7 @@ class SseDecoderAsTheClientReadsTest {
      */
     @Test
     fun `a comment ends where the HTML parser ends it`() {
-        val cases = JsonParser.parse(File("../conformance/dom/comment-ends.json").readText()) as JsonArray
+        val cases = JsonParser.parse(fixtureText("conformance/dom/comment-ends.json")) as JsonArray
         assertEquals(16, cases.size)
         for (case in cases.objects()) {
             val input = case.string("input")!!
@@ -200,7 +200,7 @@ class SseDecoderAsTheClientReadsTest {
      */
     @Test
     fun `decodes each frame to what the client did with it`() {
-        val cases = JsonParser.parse(File("../conformance/dom/decoder-cases.json").readText()) as JsonArray
+        val cases = JsonParser.parse(fixtureText("conformance/dom/decoder-cases.json")) as JsonArray
         assertEquals(85, cases.size)
 
         // White space as HTML counts it, which the page shows as nothing between elements.

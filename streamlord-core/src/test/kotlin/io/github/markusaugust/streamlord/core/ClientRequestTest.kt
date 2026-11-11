@@ -2,7 +2,7 @@ package io.github.markusaugust.streamlord.core
 
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,7 +17,7 @@ class ClientRequestTest {
         val cases =
             JsonParser
                 .parseObject(
-                    File("../editors/vscode/test/fixtures/twins/request-urls.json").readText(),
+                    fixtureText("editors/vscode/test/fixtures/twins/request-urls.json"),
                 ).array("cases")!!
                 .objects()
         assertTrue(cases.isNotEmpty())
