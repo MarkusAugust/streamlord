@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.lang.html.HTMLLanguage
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.psi.statistics.StatisticsManager
 import com.intellij.psi.statistics.impl.StatisticsManagerImpl
 
@@ -233,8 +235,34 @@ class CompletionTest : StreamlordTestCase() {
         val control = itemsIn("Control.kt", "// language=HTML\nval s = \"<p>\" + \"<div data-on:click__<caret>\"")
         assertEquals("the same shape without a template comment completes", onModifiers, control)
         // Without templates the quote in `{{!-- <i a="b --}}` is left open, so the caret is in a value.
-        val items = itemsIn("View.kt", "// language=HTML\nval s = \"<p>\" + \"{{!-- <i a=\\\"b --}}<div data-on:click__<caret>\"")
+        myFixture.configureByText("View.kt", "// language=HTML\nval s = \"<p>\" + \"{{!-- <i a=\\\"b --}}<div data-on:click__<caret>\"")
+        assertTrue("the caret stands in an injected HTML fragment", caretInInjectedHtml())
+        val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
         assertFalse(items.toString(), "debounce" in items)
+    }
+
+    /** Whether the caret stands in an HTML fragment injected into Kotlin: the fixture then opens that fragment. */
+    private fun caretInInjectedHtml(): Boolean {
+        val file = myFixture.file
+        return InjectedLanguageManager.getInstance(project).isInjectedFragment(file) && file.language.isKindOf(HTMLLanguage.INSTANCE)
+    }
+
+    fun `test markup joined over several kotlin literals keeps its tag`() {
+        val sources =
+            listOf(
+                "import io.github.markusaugust.streamlord.core.port.driving.DatastarStream\n" +
+                    "suspend fun f(s: DatastarStream) = s.patchElements(\"<div class=\\\"a\\\"\" + \" data-on:click__<caret>\")",
+                "// language=HTML\nval s = \"<div\" + \" data-on:click__<caret>\"",
+                "// language=HTML\nval s = \"<div\\n\" + \"  data-on:click__<caret>\"",
+            )
+        val wrong =
+            sources.mapIndexedNotNull { n, source ->
+                myFixture.configureByText("Joined$n.kt", source)
+                val injected = caretInInjectedHtml()
+                val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                if (injected && items == onModifiers) null else "$source -> injected $injected, $items"
+            }
+        assertEmpty(wrong.joinToString("\n"), wrong)
     }
 
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {

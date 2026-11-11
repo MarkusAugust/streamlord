@@ -75,19 +75,6 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     hostFile == null && file.virtualFile != null && !manager.isInjectedFragment(file) &&
                         StreamlordSettings.getInstance(project).state.yieldAttributeNamesToDatastarPlugin &&
                         PluginManagerCore.isPluginInstalled(PluginId.getId(Streamlord.DATASTAR_PLUGIN_ID))
-                // A fragment injected into a Kotlin string holds the string's escapes; its tag is read from the string, decoded.
-                val inKotlin =
-                    (hostFile as? KtFile)?.let { kt ->
-                        val at = manager.injectedToHost(file, parameters.offset)
-                        // The literal the caret is in, also one that is no HTML string of its own, such as a later part of a sum.
-                        val literal =
-                            analysis.analyzer.htmlStringAt(kt.text, at)
-                                ?: analysis.analyzer
-                                    .lex(kt.text)
-                                    .strings
-                                    .firstOrNull { at > it.contentStart && at <= it.contentEnd }
-                        literal?.let { it to at }
-                    }
                 Html(
                     file.text,
                     parameters.offset,
@@ -97,8 +84,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     result,
                     offerAttributeNames = !yieldNames,
                     valueFile = file,
-                    string = inKotlin?.first,
-                    stringOffset = inKotlin?.second ?: parameters.offset,
+                    // A fragment injected into Kotlin holds the strings' escapes, joined over every literal of the markup.
+                    kotlinEscapes = hostFile is KtFile,
                 ).complete()
             }
         }
@@ -154,7 +141,6 @@ class StreamlordCompletionContributor : CompletionContributor() {
                     offerAttributeNames = true,
                     valueFile = null,
                     string = html,
-                    stringOffset = offset,
                 ).complete()
             }
         }
@@ -228,9 +214,10 @@ class StreamlordCompletionContributor : CompletionContributor() {
         val result: CompletionResultSet,
         val offerAttributeNames: Boolean,
         val valueFile: PsiFile?,
-        /** The HTML string in Kotlin the caret is in, read decoded, and the caret's offset in its file; without it [src] is markup. */
+        /** The HTML string in Kotlin the caret is in, read decoded; without it [src] is markup. */
         val string: KotlinString? = null,
-        val stringOffset: Int = offset,
+        /** Whether [src] is markup injected into Kotlin, holding the strings' escapes as written. */
+        val kotlinEscapes: Boolean = false,
     ) {
         val catalog: Catalog = analysis.catalog
         val prefix: String = analysis.prefix
@@ -246,16 +233,11 @@ class StreamlordCompletionContributor : CompletionContributor() {
             }
             // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
             val before =
-                (
-                    if (string !=
-                        null
-                    ) {
-                        tagBeforeCaret(string, stringOffset, prefix)
-                    } else {
-                        tagBeforeCaret(src, offset, prefix, templates = indexFile !is KtFile)
-                    }
-                )
-                    ?: return false
+                when {
+                    string != null -> tagBeforeCaret(string, offset, prefix)
+                    kotlinEscapes -> tagBeforeCaret(withoutKotlinEscapes(src), offset, prefix, templates = false)
+                    else -> tagBeforeCaret(src, offset, prefix)
+                } ?: return false
             // On an attribute name inside a tag: <div data-on:cl|. What comes before is whitespace-separated runs of
             // plain characters and quoted strings, as completion.ts reads it, so a quote left open is a value, not a name.
             val inName =
@@ -555,3 +537,17 @@ private class Fixed(
 
 /** Add an element that the machine-learned ranking must not move. */
 private fun CompletionResultSet.addFixed(element: LookupElement) = addElement(Fixed(element))
+
+/**
+ * [markup] with each Kotlin escape in it read as what it stands for, at the same length, so offsets
+ * into it still hold: in `\"`, `\'`, `\$` and `\\` the backslash is a space before the character,
+ * and `\n`, `\t`, `\r` and `\b` are white space.
+ */
+internal fun withoutKotlinEscapes(markup: String): String =
+    Regex("""\\(.)""").replace(markup) { m ->
+        when (val escaped = m.groupValues[1]) {
+            "\"", "'", "$", "\\" -> " $escaped"
+            "n", "t", "r", "b" -> "  "
+            else -> m.value
+        }
+    }
