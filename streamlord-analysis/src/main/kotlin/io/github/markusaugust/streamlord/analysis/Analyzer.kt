@@ -910,7 +910,7 @@ public class Analyzer(
     /** The value converted to a Long, which is a `kotlin.Number`: `u.toLong()`, `(a + b).toLong()`. */
     private fun toLongFix(arg: Arg): Fix {
         val t = arg.text.trim()
-        val receiver = if (SIMPLE_RECEIVER.matches(t)) t else "($t)"
+        val receiver = if (SIMPLE_RECEIVER.matchEntire(t) != null) t else "($t)"
         return Fix("Convert ${shortened(t)} with toLong()", arg.start, arg.end, "$receiver.toLong()")
     }
 
@@ -931,7 +931,7 @@ public class Analyzer(
         at: Int,
     ): Boolean {
         val lt = if (at > 0) view.lastIndexOf('<', at - 1) else -1
-        return lt >= 0 && END_TAG_ATTRIBUTES.matches(view.substring(lt, at))
+        return lt >= 0 && END_TAG_ATTRIBUTES.matchEntire(view.substring(lt, at)) != null
     }
 
     /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
@@ -1861,7 +1861,7 @@ public class Analyzer(
         // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
         if (signalKey && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
-        val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
+        val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matchEntire(it.text) != null) }?.text
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         val capital = HAS_CAPITAL.containsMatchIn(name)

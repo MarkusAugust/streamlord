@@ -33,6 +33,12 @@ class PatternsInMainTest {
         assertEquals(emptyList(), files.filter { direct.containsMatchIn(fixtureText(it)) })
     }
 
+    /** Kotlin/JS answers `matches` from the first match at the start, and never tries for one that reaches the end. */
+    @Test
+    fun `a whole input is asked for with matchEntire`() {
+        assertEquals(emptyList(), files.filter { ".matches(" in fixtureText(it) })
+    }
+
     @Test
     fun `every pattern written in the sources has a JavaScript spelling`() {
         val refused = ArrayList<String>()

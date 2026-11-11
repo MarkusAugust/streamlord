@@ -66,8 +66,10 @@ compiler writes. A rule is written and tested once, in Kotlin.
 - **Patterns.** Every regular expression is built with `regex(...)`, never `Regex(...)`. On the
   JVM the two are the same. For JavaScript, `regex` respells the pattern so that it means what
   java.util.regex means by it, since the engines read `\s`, `$`, `.` and `(?i)` differently, and
-  refuses a construct it has no spelling for. `PatternsTest` holds what each construct means, on
-  both engines, and `PatternsInMainTest` that every pattern in the shared sources goes that way.
+  refuses a construct it has no spelling for. A whole input is asked for with `matchEntire`, never
+  `matches`, which Kotlin/JS answers from the first match alone. `PatternsTest` holds what each
+  construct means, on both engines, and `PatternsInMainTest` that every pattern in the shared
+  sources goes that way.
 - **The extension.** `npm run build`, `npm test` and `npm run typecheck` in `editors/vscode` start
   with `npm run analysis`, which asks Gradle for the library and is quick when no Kotlin changed.
 

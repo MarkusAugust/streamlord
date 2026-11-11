@@ -604,7 +604,7 @@ internal fun stringPatterns(
         // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
         val slash = content.lastIndexOf('/')
         val flags = content.substring(slash + 1)
-        if (slash <= 0 || !REGEX_FLAGS.matches(flags)) continue
+        if (slash <= 0 || REGEX_FLAGS.matchEntire(flags) == null) continue
         out += StringPattern(match.groupValues[2], start, j + 1, content.substring(1, slash), flags)
     }
     return out
@@ -825,7 +825,7 @@ public class ExpressionValidator(
             if (js[p] != '$' || regions[p] != Region.CODE || p in rewrittenAt || js.getOrNull(p - 1).isJsNamePart()) continue
             val next = js.getOrNull(p + 1) ?: continue
             if (next == '$') continue
-            if (WORD_CHAR.matches(next.toString())) {
+            if (WORD_CHAR.matchEntire(next.toString()) != null) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
                 val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =

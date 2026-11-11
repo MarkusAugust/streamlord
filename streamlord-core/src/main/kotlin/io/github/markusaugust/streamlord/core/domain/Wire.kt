@@ -175,7 +175,7 @@ public object Wire {
 
     /** Reject anything that is not a syntactically sane HTML attribute name. */
     public fun attributeName(name: String): String {
-        if (!ATTRIBUTE_NAME.matches(name)) {
+        if (ATTRIBUTE_NAME.matchEntire(name) == null) {
             throw DatastarEventValidationException("'$name' is not a valid HTML attribute name")
         }
         return name

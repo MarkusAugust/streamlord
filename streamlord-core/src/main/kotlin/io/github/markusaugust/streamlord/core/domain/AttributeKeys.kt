@@ -59,7 +59,7 @@ public object AttributeKeys {
         if ('-' in name) listOf(name.lowercase()) else listOf(ClientCasing.kebab(name), name.lowercase()).distinct()
 
     /** The object form with [name] as its key, `{viewBox: ...}`, quoted when it is no JavaScript name. */
-    public fun objectForm(name: String): String = if (JS_NAME.matches(name)) "{$name: ...}" else "{'$name': ...}"
+    public fun objectForm(name: String): String = if (JS_NAME.matchEntire(name) != null) "{$name: ...}" else "{'$name': ...}"
 
     /** Why the attribute [name] cannot be a key, or null: the browser lowercases a capital, and [helper]'s object form keeps it. */
     public fun capitalIn(

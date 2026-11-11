@@ -79,9 +79,9 @@ public object CspNonce {
         when {
             nonce.isEmpty() -> "The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start."
 
-            !BASE64.matches(
+            BASE64.matchEntire(
                 nonce,
-            ) -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
+            ) == null -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
 
             else -> null
         }

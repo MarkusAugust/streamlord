@@ -97,7 +97,7 @@ public object DatastarProtocol {
                     .drop(1)
                     .map { it.split('=', limit = 2).map(String::trim) }
                     .firstOrNull { it.size == 2 && it[0].equals("q", ignoreCase = true) }
-                    ?.let { if (QVALUE.matches(it[1])) it[1].toDouble() else 0.0 } ?: 1.0
+                    ?.let { if (QVALUE.matchEntire(it[1]) != null) it[1].toDouble() else 0.0 } ?: 1.0
             when (name) {
                 "gzip", "x-gzip" -> named = (named == true) || weight > 0.0
                 "*" -> star = weight > 0.0

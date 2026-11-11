@@ -27,7 +27,7 @@ internal object JsText {
             "Infinity", "+Infinity" -> return Double.POSITIVE_INFINITY
             "-Infinity" -> return Double.NEGATIVE_INFINITY
         }
-        if (DECIMAL.matches(t)) return t.toDouble()
+        if (DECIMAL.matchEntire(t) != null) return t.toDouble()
         val radix = RADIX.matchEntire(t) ?: return Double.NaN
         val base =
             when (radix.groupValues[1].lowercase()) {

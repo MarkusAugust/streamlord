@@ -50,7 +50,7 @@ private const val JS_SPACE =
 private fun jsNumber(tag: String): Double? {
     val t = tag.trim { it in JS_SPACE }.asciiLowercase()
     if (t.isEmpty()) return 0.0
-    if (JS_DECIMAL.matches(t)) return t.toDouble()
+    if (JS_DECIMAL.matchEntire(t) != null) return t.toDouble()
     val m = JS_RADIX.matchEntire(t) ?: return null
     val radix =
         when (m.groupValues[1]) {
@@ -158,7 +158,7 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
     if (v.isEmpty()) return false
-    if (NUMBER.matches(v) || v in NO_FUNCTION_WORDS) return true
+    if (NUMBER.matchEntire(v) != null || v in NO_FUNCTION_WORDS) return true
     val regions = jsRegions(v)
     var depth = 0
     var binary = false
@@ -1033,7 +1033,7 @@ public class MarkupValidator(
                 issues += validateComputedObject(attr, prefix)
             }
             if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
-                named.none { it.start >= attr.valueStart } && !SIGNAL_NAME.matches(value.trim())
+                named.none { it.start >= attr.valueStart } && SIGNAL_NAME.matchEntire(value.trim()) == null
             ) {
                 issues +=
                     Issue(
@@ -1078,7 +1078,7 @@ public class MarkupValidator(
         // Template syntax in a value, or attributes spread into the tag by name, leave what it
         // sends unknown until rendered.
         if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
-            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || !PLAIN_ATTRIBUTE_NAME.matches(it.name) }
+            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || PLAIN_ATTRIBUTE_NAME.matchEntire(it.name) == null }
         ) {
             return emptyList()
         }
@@ -1183,7 +1183,7 @@ public class MarkupValidator(
             from: Int,
             to: Int,
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
-        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matches(decoded.text)) {
+        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matchEntire(decoded.text) != null) {
             val held = decoded.text
             val path = signalPathProblem(held)
             val reach = if (path == null) signalNameProblem(held) else null
@@ -1350,7 +1350,7 @@ public class MarkupValidator(
                 val at = m.range.first
                 val before = text.getOrNull(at - 1)
                 if (regions[at] != Region.CODE ||
-                    (before != null && (before == '$' || WORD_CHAR_CLASS.matches(before.toString())))
+                    (before != null && (before == '$' || WORD_CHAR_CLASS.matchEntire(before.toString()) != null))
                 ) {
                     continue
                 }
@@ -1501,7 +1501,7 @@ public class MarkupValidator(
         spec: AttributeSpec,
     ): String? {
         val underscore = name.indexOf('_')
-        if (underscore <= 0 || underscore == name.length - 1 || !MODIFIER_WORD.matches(name)) return null
+        if (underscore <= 0 || underscore == name.length - 1 || MODIFIER_WORD.matchEntire(name) == null) return null
         val head = name.substring(0, underscore)
         val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
         if (modifier.type == ModifierType.FLAG) return null
@@ -1586,9 +1586,9 @@ public class MarkupValidator(
             ModifierType.DURATION -> {
                 val d = args.firstOrNull()
                 val flags = args.drop(1)
-                val later = flags.indexOfFirst { DURATION.matches(it) }
+                val later = flags.indexOfFirst { DURATION.matchEntire(it) != null }
                 val at = start + spec.name.length
-                if (d != null && !DURATION.matches(d) && d in spec.flags && later >= 0) {
+                if (d != null && DURATION.matchEntire(d) == null && d in spec.flags && later >= 0) {
                     // __debounce.leading.500ms: the client reads the first argument as the duration.
                     val ordered = listOf(flags[later], d) + flags.filterIndexed { k, _ -> k != later }
                     val fixed = "__${spec.name}.${ordered.joinToString(".")}"
@@ -1602,12 +1602,12 @@ public class MarkupValidator(
                         if (unknown.isEmpty()) listOf(Fix("Change to $fixed", at, end, "." + ordered.joinToString("."))) else emptyList(),
                     )
                     for (f in unknown) {
-                        if (!DURATION.matches(f)) unknownFlag(f)
+                        if (DURATION.matchEntire(f) == null) unknownFlag(f)
                     }
                     return issues
                 }
                 val next = flags.firstOrNull()
-                if (d != null && WHOLE_NUMBER.matches(d) && next != null && DURATION.matches(next)) {
+                if (d != null && WHOLE_NUMBER.matchEntire(d) != null && next != null && DURATION.matchEntire(next) != null) {
                     // __debounce.1.5s: the dot ends the duration, which the client reads as 1 ms.
                     val seconds = next.endsWith("s") && !next.endsWith("ms")
                     val ms = "$d.${next.removeSuffix("ms").removeSuffix("s")}".toDouble() * if (seconds) 1000 else 1
@@ -1630,7 +1630,7 @@ public class MarkupValidator(
                     }
                     return issues
                 }
-                val read = d?.takeIf { it.isNotEmpty() && !DURATION.matches(it) }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
+                val read = d?.takeIf { it.isNotEmpty() && DURATION.matchEntire(it) == null }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
                 if (d != null && read != null) {
                     // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
                     val at = start + spec.name.length
@@ -1639,7 +1639,7 @@ public class MarkupValidator(
                         "Datastar reads __${spec.name}.$d as ${jsFormat(read)} ms." + (fix?.let { " Write __${spec.name}.$it." } ?: ""),
                         fix?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 1 + d.length, ".$it")) } ?: emptyList(),
                     )
-                } else if (d.isNullOrEmpty() || !DURATION.matches(d)) {
+                } else if (d.isNullOrEmpty() || DURATION.matchEntire(d) == null) {
                     val at = start + spec.name.length
                     // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
                     fail(
@@ -1700,12 +1700,12 @@ public class MarkupValidator(
 
             ModifierType.IDENT -> {
                 val v = args.firstOrNull()
-                if (v == null || !IDENT.matches(v)) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
+                if (v == null || IDENT.matchEntire(v) == null) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
                 if (args.size > 1) fail("__${spec.name} takes a single name.")
             }
 
             ModifierType.IDENTS -> {
-                if (args.isEmpty() || args.any { !IDENT.matches(it) }) {
+                if (args.isEmpty() || args.any { IDENT.matchEntire(it) == null }) {
                     fail("__${spec.name} needs one or more names, e.g. __${spec.name}.input.blur.")
                 }
             }

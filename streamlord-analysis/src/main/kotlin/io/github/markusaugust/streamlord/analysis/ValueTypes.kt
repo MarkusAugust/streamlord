@@ -73,19 +73,19 @@ public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     val bare = type.removeSuffix("?")
     val nullable = bare != type
     return when {
-        NUMBER_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.NUMBER
+        NUMBER_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.NUMBER
 
-        UNSIGNED_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.UNSIGNED
+        UNSIGNED_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.UNSIGNED
 
-        BOOLEAN_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.BOOLEAN
+        BOOLEAN_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.BOOLEAN
 
-        STRING_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE_STRING else ValueFact.STRING
+        STRING_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE_STRING else ValueFact.STRING
 
         // What interpolate returns: markup whose values have been through it.
-        HTML_TYPE.matches(bare) -> ValueFact.MARKUP
+        HTML_TYPE.matchEntire(bare) != null -> ValueFact.MARKUP
 
         // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
-        !nullable && TRUSTED_TYPE.matches(bare) -> ValueFact.MARKUP
+        !nullable && TRUSTED_TYPE.matchEntire(bare) != null -> ValueFact.MARKUP
 
         else -> null
     }
@@ -114,7 +114,7 @@ internal fun declaredFact(
 
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 public fun isMarkupCollection(type: String): Boolean =
-    MARKUP_COLLECTION.matches(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() })
+    MARKUP_COLLECTION.matchEntire(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() }) != null
 
 // `out` as a keyword, so a type named `outHtml` is not read as `out Html`.
 private val OUT_PROJECTION = regex("""<\s*out\s+""")
@@ -132,4 +132,4 @@ public fun opensWithTag(
 internal fun textOpensWithTag(text: String): Boolean = TEXT_TAG_START.containsMatchIn(text)
 
 /** Whether [type] is Streamlord's `Trusted`, which cannot be null. */
-internal fun isTrustedType(type: String): Boolean = TRUSTED_TYPE.matches(type.filterNot { it.isWhitespace() })
+internal fun isTrustedType(type: String): Boolean = TRUSTED_TYPE.matchEntire(type.filterNot { it.isWhitespace() }) != null

@@ -68,10 +68,12 @@ internal class JavaScriptPattern(
 
     fun regex(): Regex = if (everyCase) Regex(translated(), RegexOption.IGNORE_CASE) else Regex(translated())
 
+    /** In a group of its own: Kotlin's `matchEntire` anchors a pattern by writing `^` and `$` around it. */
     fun translated(): String {
         leadingFlags()
+        out.append("(?:")
         while (at < source.length) atom()
-        return out.toString()
+        return out.append(')').toString()
     }
 
     private fun refuse(what: String): Nothing =
@@ -133,11 +135,8 @@ internal class JavaScriptPattern(
     private fun group() {
         if (source.getOrNull(at + 1) != '?') return emit("(")
         val known = listOf("(?:", "(?=", "(?!", "(?<=", "(?<!").firstOrNull { source.startsWith(it, at) }
-        when {
-            known != null -> emit(known, known.length)
-            source.startsWith("(?<", at) && source.getOrNull(at + 3)?.isAsciiLetter() == true -> emit("(?<", 3)
-            else -> refuse("The group")
-        }
+        if (known == null) refuse("The group")
+        emit(known, known.length)
     }
 
     private fun escape(inClass: Boolean) {
@@ -148,10 +147,6 @@ internal class JavaScriptPattern(
             c == 'S' && !inClass -> emit("""[^\t-\r ]""", 2)
 
             c == 'z' && !inClass -> emit("""(?![\s\S])""", 2)
-
-            c == 'Z' && !inClass -> emit(INPUT_END, 2)
-
-            c == 'A' && !inClass -> emit("^", 2)
 
             c == 'x' && source.getOrNull(at + 2) == '{' -> emit("\\u", 2)
 

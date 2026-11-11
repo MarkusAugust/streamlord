@@ -505,7 +505,7 @@ public object Requests {
                                     errors += "$INVALID: \"$name\" cannot be a param; {{$name}} is a variable of its own."
                                 }
 
-                                !PARAM_NAME.matches(name) -> {
+                                PARAM_NAME.matchEntire(name) == null -> {
                                     errors +=
                                         "$INVALID: \"$name\" cannot be a param name; {{$name}} would not be read."
                                 }
@@ -1088,12 +1088,12 @@ public object Requests {
         val hostEnd = if (bracketed) hostPort.indexOf(']') + 1 else hostPort.indexOf(':').let { if (it < 0) hostPort.length else it }
         val host = hostPort.substring(0, hostEnd)
         val port = hostPort.substring(hostEnd)
-        if (port.isNotEmpty() && !PORT.matches(port)) {
+        if (port.isNotEmpty() && PORT.matchEntire(port) == null) {
             return "The port in $hostPort is not a number. Is a / missing between the port and the path?"
         }
-        if (bracketed || IPV4.matches(host)) return null
+        if (bracketed || IPV4.matchEntire(host) != null) return null
         val labels = host.removeSuffix(".").split('.')
-        if (labels.all { LABEL.matches(it) } && (labels.size == 1 || labels.last()[0].isLetter())) return null
+        if (labels.all { LABEL.matchEntire(it) != null } && (labels.size == 1 || labels.last()[0].isLetter())) return null
         return "The host $host cannot be sent: " +
             "a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter."
     }
@@ -1350,14 +1350,14 @@ public object Requests {
         val path = PATH_VARIABLE.replace(OPTIONAL_SEGMENT.replace(route.path, "")) { "{{${it.groupValues[1]}}}" }
         val query =
             route.query
-                .filter { it.required && PARAM_NAME.matches(it.name) }
+                .filter { it.required && PARAM_NAME.matchEntire(it.name) != null }
                 .joinToString("&") { "${encodeSegment(it.name)}={{${it.name}}}" }
         return "{{baseUrl}}$path" + if (query.isEmpty()) "" else "?$query"
     }
 
     /** The headers field for [route]: one `Name: {{Name}}` line per header it requires. */
     public fun routeHeaders(route: Route): String =
-        route.headers.filter { it.required && PARAM_NAME.matches(it.name) }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
+        route.headers.filter { it.required && PARAM_NAME.matchEntire(it.name) != null }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
 
     /** What [routeUrl] and [routeHeaders] leave out because the route can do without it, by name. */
     public fun routeOptional(route: Route): List<String> =

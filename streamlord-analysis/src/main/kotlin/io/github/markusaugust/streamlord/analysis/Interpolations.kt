@@ -100,7 +100,7 @@ internal fun withNested(strings: List<KotlinString>): List<KotlinString> {
  * else "errors"}`, a number, `true`. Its value is markup the source spells out.
  */
 internal fun literalOnly(expr: String): Boolean =
-    (branches(expr) ?: listOf(expr)).all { LITERAL.matches(it.trim()) || plainString(it.trim()) }
+    (branches(expr) ?: listOf(expr)).all { LITERAL.matchEntire(it.trim()) != null || plainString(it.trim()) }
 
 private val QUOTE_OPENING = regex("""^\$*"""")
 
@@ -111,7 +111,7 @@ private fun stringLiteral(t: String): KotlinString? {
 }
 
 /** Whether [t] is one string literal without a template: `"x"`, and `"$"` too, whose dollar opens none. */
-private fun plainString(t: String): Boolean = STRING_LITERAL.matches(t) || stringLiteral(t)?.interpolations?.isEmpty() == true
+private fun plainString(t: String): Boolean = STRING_LITERAL.matchEntire(t) != null || stringLiteral(t)?.interpolations?.isEmpty() == true
 
 private fun wordAt(
     e: String,
@@ -119,8 +119,8 @@ private fun wordAt(
     w: String,
 ): Boolean =
     e.startsWith(w, at) &&
-        !WORD_CHAR.matches(e.getOrNull(at - 1)?.toString() ?: "") &&
-        !WORD_CHAR.matches(e.getOrNull(at + w.length)?.toString() ?: "")
+        WORD_CHAR.matchEntire(e.getOrNull(at - 1)?.toString() ?: "") == null &&
+        WORD_CHAR.matchEntire(e.getOrNull(at + w.length)?.toString() ?: "") == null
 
 /** Just past the string or character literal that opens at [at], templates and all. */
 private fun literalEnd(
@@ -501,7 +501,7 @@ private fun lineEnds(
 ): Boolean {
     var k = at - 1
     while (k >= 0 && (!code[k] || src[k].isWhitespace())) k--
-    if (k >= 0 && LINE_GOES_ON_BEFORE.matches(src[k].toString())) return false
+    if (k >= 0 && LINE_GOES_ON_BEFORE.matchEntire(src[k].toString()) != null) return false
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
@@ -833,7 +833,7 @@ private fun declarations(
                                     )
                                 }
                             for ((name, type) in list) {
-                                g.ends += add(name, Declaration(i + 1, i, type?.takeIf { WHOLE_TYPE.matches(it) }))
+                                g.ends += add(name, Declaration(i + 1, i, type?.takeIf { WHOLE_TYPE.matchEntire(it) != null }))
                             }
                         }
                     }
@@ -1037,7 +1037,7 @@ internal fun trustedLiteral(
     at: Int,
 ): String? {
     val t = value.trim()
-    if (IDENT.matches(t)) return declarationOf(src, t, at)?.takeIf { setToCore(src, it) }?.trustedText
+    if (IDENT.matchEntire(t) != null) return declarationOf(src, t, at)?.takeIf { setToCore(src, it) }?.trustedText
     return literalTrusted(asCoreCall(src, t, "Trusted") ?: return null, 0, whole = true)
 }
 
@@ -1067,7 +1067,7 @@ internal fun mayBeNull(
         val t = v.trim()
         when {
             t == "null" -> true
-            IDENT.matches(t) -> declarationOf(src, t, at)?.type?.let { it.endsWith("?") || nullableTypeParameter(src, it) } == true
+            IDENT.matchEntire(t) != null -> declarationOf(src, t, at)?.type?.let { it.endsWith("?") || nullableTypeParameter(src, it) } == true
             else -> "?." in t && "?:" !in t
         }
     }
@@ -1228,7 +1228,7 @@ private fun qualifiedConstant(
             .filter { it.isNotEmpty() }
     if (!holders.last()[0].isUpperCase() || declarationOf(src, holders.first(), at) != null) return false
     val name = m.groupValues[2]
-    if (SCREAMING.matches(name)) return true
+    if (SCREAMING.matchEntire(name) != null) return true
     return name in constants || fileFacts(src).names[name].orEmpty().any { it.constant }
 }
 
@@ -1247,7 +1247,7 @@ internal fun valueKind(
     sdk: Sdk = Sdk.DEFAULT,
 ): ValueFact? {
     val t = value.trim()
-    if (LITERAL.matches(t) || STRING_LITERAL.matches(t) || CHAR_LITERAL.matches(t)) return ValueFact.CONSTANT
+    if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null || CHAR_LITERAL.matchEntire(t) != null) return ValueFact.CONSTANT
     stringLiteral(t)?.let { literal ->
         return weakest(
             literal.interpolations.flatMap { ip ->
@@ -1269,7 +1269,7 @@ internal fun valueKind(
     }
     callKind(src, t, at, constants, sdk)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return ValueFact.CONSTANT
-    if (!IDENT.matches(t)) return null
+    if (IDENT.matchEntire(t) == null) return null
     if (constantAt(src, t, at, constants)) return ValueFact.CONSTANT
     return declaredKind(src, t, at, nonNull, sdk.core)
 }
@@ -1339,7 +1339,7 @@ private fun callKind(
 /** Whether [e] is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
 private fun wholeOperand(e: String): Boolean {
     val d = depths(e)
-    return e.indices.all { d[it] != 0 || OPERAND_CHAR.matches(e[it].toString()) }
+    return e.indices.all { d[it] != 0 || OPERAND_CHAR.matchEntire(e[it].toString()) != null }
 }
 
 /** Whether [name] means, at [at], a parameter or value marked `@Language("HTML")`. */
@@ -1378,7 +1378,7 @@ private fun htmlLiteral(t: String): Boolean {
     val at = quote.value.length - 1
     val end = literalEnd(t, at)
     val rest = t.substring(end)
-    if (rest.isNotBlank() && !TRIM_CALL.matches(rest)) return false
+    if (rest.isNotBlank() && TRIM_CALL.matchEntire(rest) == null) return false
     val content = t.substring(minOf(end, at + (if (t.startsWith("\"\"\"", at)) 3 else 1)), end)
     return opensWithTag(content, trimMargin = "trimMargin" in rest)
 }
@@ -1477,7 +1477,7 @@ internal fun markupValue(
         return markup.any { it } &&
             values.indices.all { k ->
                 val v = values[k].text
-                markup[k] || LITERAL.matches(v) || plainString(v) || CHAR_LITERAL.matches(v)
+                markup[k] || LITERAL.matchEntire(v) != null || plainString(v) || CHAR_LITERAL.matchEntire(v) != null
             }
     }
     val t = values[0].text
@@ -1490,12 +1490,12 @@ internal fun markupValue(
         textOf != null &&
         (
             coreCall(src, textOf, "interpolate") ||
-                (IDENT.matches(textOf) && declaredKind(src, textOf, at).isMarkup())
+                (IDENT.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
         )
     ) {
         return true
     }
-    if (IDENT.matches(t)) {
+    if (IDENT.matchEntire(t) != null) {
         if (declaredKind(src, t, at, core = sdk.core).isMarkup() || htmlNamed(src, t, at)) return true
         // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
         val d = declarationOf(src, t, at) ?: return false
@@ -1529,7 +1529,7 @@ private fun markupElements(
     sdk: Sdk,
 ): Boolean {
     val t = receiver.trim()
-    if (IDENT.matches(t)) {
+    if (IDENT.matchEntire(t) != null) {
         val d = declarationOf(src, t, at) ?: return false
         val type = d.type
         if (type != null) {
@@ -1657,15 +1657,15 @@ internal fun mayHoldMarkup(
     holeValues(value).any { v ->
         val t = v.text
         when {
-            LITERAL.matches(t) || CHAR_LITERAL.matches(t) -> {
+            LITERAL.matchEntire(t) != null || CHAR_LITERAL.matchEntire(t) != null -> {
                 false
             }
 
-            IDENT.matches(t) && markupText(src, t, at) -> {
+            IDENT.matchEntire(t) != null && markupText(src, t, at) -> {
                 true
             }
 
-            IDENT.matches(t) -> {
+            IDENT.matchEntire(t) != null -> {
                 if (!constantAt(src, t, at, constants)) {
                     false
                 } else {
@@ -1678,7 +1678,7 @@ internal fun mayHoldMarkup(
                 true
             }
 
-            t.startsWith("\"") || PROPERTY_CHAIN.matches(t) -> {
+            t.startsWith("\"") || PROPERTY_CHAIN.matchEntire(t) != null -> {
                 false
             }
 
@@ -1718,7 +1718,7 @@ private fun heldAsMarkup(
 ): Boolean =
     (branches(value) ?: listOf(value)).all { v ->
         val t = v.trim()
-        if (IDENT.matches(t)) {
+        if (IDENT.matchEntire(t) != null) {
             declaredKind(src, t, at).isMarkup()
         } else {
             val call = MARKUP_CALL_START.find(t)
@@ -1738,8 +1738,8 @@ internal fun markupHeldAsString(
 ): Boolean {
     // A literal is text the author chose to have escaped, `"<the oath>"`, whatever it looks like.
     if (holeValues(value).all {
-            htmlLiteral(it.text) || stringLiteral(it.text) != null || LITERAL.matches(it.text) ||
-                CHAR_LITERAL.matches(it.text)
+            htmlLiteral(it.text) || stringLiteral(it.text) != null || LITERAL.matchEntire(it.text) != null ||
+                CHAR_LITERAL.matchEntire(it.text) != null
         }
     ) {
         return false
@@ -1755,7 +1755,7 @@ private fun markupText(
 ): Boolean {
     val of = declarationOf(src, name, at)?.textOf ?: return false
     return wholeCall(of, "interpolate") ||
-        (IDENT.matches(of) && declaredKind(src, of, declarationOf(src, name, at)!!.at).isMarkup())
+        (IDENT.matchEntire(of) != null && declaredKind(src, of, declarationOf(src, name, at)!!.at).isMarkup())
 }
 
 /** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
@@ -1763,7 +1763,7 @@ internal fun markupTextValue(
     src: String,
     value: String,
     at: Int,
-): Boolean = holeValues(value).all { IDENT.matches(it.text) && markupText(src, it.text, at) }
+): Boolean = holeValues(value).all { IDENT.matchEntire(it.text) != null && markupText(src, it.text, at) }
 
 /**
  * The fix for a value written into an attribute value without quotes: quotes around the whole
@@ -1796,8 +1796,8 @@ private fun operandEndWordAt(
 ): Boolean =
     OPERAND_END_WORDS.any { w ->
         src.startsWith(w, at) &&
-            !WORD_CHAR.matches(src.getOrNull(at - 1)?.toString() ?: "") &&
-            !WORD_CHAR.matches(src.getOrNull(at + w.length)?.toString() ?: "")
+            WORD_CHAR.matchEntire(src.getOrNull(at - 1)?.toString() ?: "") == null &&
+            WORD_CHAR.matchEntire(src.getOrNull(at + w.length)?.toString() ?: "") == null
     }
 
 /** One part of a `+` chain: a literal, or the value between two of them. */
@@ -2238,7 +2238,7 @@ internal fun visiblyList(
     at: Int,
 ): Boolean {
     val t = value.trim()
-    if (IDENT.matches(t)) return LIST_TYPE.matches(declarationOf(src, t, at)?.type ?: "")
+    if (IDENT.matchEntire(t) != null) return LIST_TYPE.matchEntire(declarationOf(src, t, at)?.type ?: "") != null
     val call = lastCall(t) ?: return false
     return if (call.receiver == null) call.name in LIST_MAKERS else call.name in LIST_RESULTS
 }
@@ -2515,18 +2515,18 @@ internal fun valueKind(
 ): ArgKind? {
     val t = text.trim()
     if (literal) return ArgKind.STRING
-    if (NUMBER_LITERAL.matches(t)) return if (UNSIGNED_SUFFIX.containsMatchIn(t)) ArgKind.UNSIGNED else ArgKind.NUMBER
+    if (NUMBER_LITERAL.matchEntire(t) != null) return if (UNSIGNED_SUFFIX.containsMatchIn(t)) ArgKind.UNSIGNED else ArgKind.NUMBER
     if (t == "true" || t == "false") return ArgKind.BOOLEAN
     if (t == "null") return ArgKind.NULL
-    if (CHAR_LITERAL.matches(t)) return ArgKind.CHAR
+    if (CHAR_LITERAL.matchEntire(t) != null) return ArgKind.CHAR
     if (IF_START.containsMatchIn(t) && literalOnly(t)) return if ('"' in t) ArgKind.STRING else null
-    if (coreCall(src, t, "Trusted") || (IDENT.matches(t) && trustedName(src, t, at))) return ArgKind.TRUSTED
+    if (coreCall(src, t, "Trusted") || (IDENT.matchEntire(t) != null && trustedName(src, t, at))) return ArgKind.TRUSTED
     if (coreCall(src, t, "interpolate")) return ArgKind.MARKUP
     // The String of the Html: interpolate(...).text.
     val html = TEXT_OF.find(t)?.groupValues?.get(1)
     if (html != null && coreCall(src, html, "interpolate")) return ArgKind.STRING
     callKind(src, t, at, emptySet())?.argKind()?.let { return it }
-    if (!IDENT.matches(t)) return null
+    if (IDENT.matchEntire(t) == null) return null
     // `val name = "Gorvek"`: a String, though no type is written.
     val declared = declaredKind(src, t, at) ?: return if (declarationOf(src, t, at)?.string == true) ArgKind.STRING else null
     return declared.argKind()

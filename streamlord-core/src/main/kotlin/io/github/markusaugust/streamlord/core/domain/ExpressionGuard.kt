@@ -287,8 +287,8 @@ public object ExpressionGuard {
         }
         val t = blankLiterals(expression.trim())
         if (t.isEmpty()) throw InterpolatedExpressionException(expression, "is empty", attribute)
-        if (ONLY_BRACKETS.matches(t)) return expression
-        if (ONLY_OPERATORS.matches(t) || ONLY_KEYWORDS.matches(t)) {
+        if (ONLY_BRACKETS.matchEntire(t) != null) return expression
+        if (ONLY_OPERATORS.matchEntire(t) != null || ONLY_KEYWORDS.matchEntire(t) != null) {
             throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)
         }
         if (LEADING_BINARY.containsMatchIn(t)) {

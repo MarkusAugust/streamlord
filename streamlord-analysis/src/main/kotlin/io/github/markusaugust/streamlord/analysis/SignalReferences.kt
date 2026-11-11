@@ -95,7 +95,7 @@ internal fun unshadowed(
 
 /** The signal the literal first argument of a helper in [HELPER_READ_CALLS] reads, with offsets relative to its text. */
 internal fun helperSignalReference(text: String): SignalReference? =
-    if (PLAIN_HELPER_NAME.matches(text) && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
+    if (PLAIN_HELPER_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
 internal fun markupSignalReferences(
@@ -169,7 +169,7 @@ public fun unknownSignalIssue(
     val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
     // A helper writes its name as it stands, and only a plain name goes back into one.
-    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matches(it) }
+    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matchEntire(it) != null }
     val nameStart = ref.end - ref.name.length
     return Issue(
         start = ref.start,

@@ -139,7 +139,7 @@ internal fun encodedSignalTypes(
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
         val a =
-            positional.firstOrNull()?.takeIf { positional.size == 1 || (positional.size == 2 && BOOLEAN_ARG.matches(positional[1].text)) }
+            positional.firstOrNull()?.takeIf { positional.size == 1 || (positional.size == 2 && BOOLEAN_ARG.matchEntire(positional[1].text) != null) }
                 ?: site.named("signals")
                 ?: continue
         if (a.string != null || PAIR.containsMatchIn(a.text) || ANY_PAIR.containsMatchIn(a.text)) continue
@@ -391,7 +391,7 @@ public fun signalRenameText(
     d: SignalDeclaration,
     newName: String,
 ): String? {
-    if (!RENAMABLE.matches(newName)) return null
+    if (RENAMABLE.matchEntire(newName) == null) return null
     return when (d.kind) {
         SignalDeclaration.Kind.NAME -> {
             newName
@@ -436,7 +436,7 @@ public fun signalReadRenameText(
     signal: String,
     newName: String,
 ): String? {
-    if (!RENAMABLE.matches(newName) || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
+    if (RENAMABLE.matchEntire(newName) == null || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
     return newName.substringAfterLast('.')
 }
 
@@ -608,7 +608,7 @@ internal fun signalNameProblem(
     parts: List<String> = name.split('.'),
 ): String? {
     // What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-`.
-    if (CLIENT_SIGNAL.matches("$" + name)) return null
+    if (CLIENT_SIGNAL.matchEntire("$" + name) != null) return null
     if (name.startsWith("$")) return "holds the \$ itself, so \$${name.drop(1)} does not reach it: that reads the signal ${name.drop(1)}"
     val bracket = "only the bracket form ${bracketRead(parts)} reads it"
     return if (name.any { it > '\u007F' }) {

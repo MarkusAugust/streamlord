@@ -38,10 +38,8 @@ class PatternsTest {
         assertEquals(emptyList(), found("a$", "a\nb"))
         assertEquals(listOf("1-1", "2-2"), found("$", "a\n"))
         assertEquals(listOf("1-1", "3-3"), found("$", "a\r\n"))
-        assertEquals(listOf("0-1"), found("""a\Z""", "a\n"))
         assertEquals(emptyList(), found("""a\z""", "a\n"))
         assertEquals(listOf("2-3"), found("""a\z""", "a\na"))
-        assertEquals(listOf("0-1"), found("""\Aa""", "a\na"))
         assertEquals(listOf("0-2"), found("""[$]a""", "\$a"))
     }
 
@@ -110,10 +108,8 @@ class PatternsTest {
     @Test
     fun `a pattern of alternatives matches a whole input as one of them, never as a part`() {
         assertEquals(null, regex("a|b").matchEntire("ab"))
-        assertEquals(false, regex("a|b").matches("ab"))
         assertEquals(null, regex("^a|b$").matchEntire("ab"))
-        assertEquals(false, regex("^a|b$").matches("ab"))
-        assertEquals(true, regex("a|ab").matches("ab"))
+        assertEquals("ab", regex("a|ab").matchEntire("ab")?.value)
         assertEquals(listOf("b", "", "b"), regex("(a)|(b)").matchEntire("b")?.groupValues)
         assertEquals(listOf("0-1", "1-2"), found("(a)|(b)", "ab"))
     }

@@ -86,7 +86,7 @@ public object SignalNames {
         AttributeKeys.nameProblem(name)
             ?: hyphenProblem(name)
             ?: pathProblem(name)
-            ?: if (SIGNAL_NAME.matches(name)) {
+            ?: if (SIGNAL_NAME.matchEntire(name) != null) {
                 null
             } else {
                 "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by dots"
