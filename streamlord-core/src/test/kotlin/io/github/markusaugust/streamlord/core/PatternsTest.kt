@@ -108,6 +108,17 @@ class PatternsTest {
     }
 
     @Test
+    fun `a pattern of alternatives matches a whole input as one of them, never as a part`() {
+        assertEquals(null, regex("a|b").matchEntire("ab"))
+        assertEquals(false, regex("a|b").matches("ab"))
+        assertEquals(null, regex("^a|b$").matchEntire("ab"))
+        assertEquals(false, regex("^a|b$").matches("ab"))
+        assertEquals(true, regex("a|ab").matches("ab"))
+        assertEquals(listOf("b", "", "b"), regex("(a)|(b)").matchEntire("b")?.groupValues)
+        assertEquals(listOf("0-1", "1-2"), found("(a)|(b)", "ab"))
+    }
+
+    @Test
     fun `where a group stands is known`() {
         val pattern = regex("""(a)?(b+)""")
         val match = pattern.find("xxbb")!!
