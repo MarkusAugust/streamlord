@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.lang.html.HTMLLanguage
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.psi.statistics.StatisticsManager
 import com.intellij.psi.statistics.impl.StatisticsManagerImpl
 
@@ -114,6 +116,239 @@ class CompletionTest : StreamlordTestCase() {
         myFixture.configureByText("View.kt", "fun side() = \"\"\"\n<div data-<caret>\n\"\"\"")
         val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
         assertTrue(items.toString(), "data-on" in items)
+    }
+
+    fun `test modifiers for an attribute on its own line in html`() {
+        myFixture.configureByText("page.html", "<input data-bind:query\n       data-on:input__<caret>")
+        assertEquals(onModifiers, myFixture.completeBasic()!!.map { it.lookupString })
+    }
+
+    fun `test attribute names and modifiers for an attribute on its own line in a kotlin string`() {
+        myFixture.configureByText("View.kt", "fun side() = \"\"\"\n<div class=\"card\"\n     data-<caret>\n\"\"\"")
+        val attrs = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertTrue(attrs.toString(), "data-on" in attrs && "data-signals" in attrs)
+        myFixture.configureByText("View2.kt", "fun side() = \"\"\"\n<div class=\"card\"\n     data-on:click__<caret>\n\"\"\"")
+        val mods = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertEquals(onModifiers, mods)
+    }
+
+    /** The items at the caret in `source`, as a file named `name`. */
+    private fun itemsIn(
+        name: String,
+        source: String,
+    ): List<String> {
+        myFixture.configureByText(name, source)
+        return myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+    }
+
+    /** Each html source whose items are not the modifiers of data-on, with what it got, so one run shows them all. */
+    private fun withoutModifiers(sources: List<String>): List<String> =
+        sources.mapIndexedNotNull { n, source ->
+            val items = itemsIn("page$n.html", source)
+            if (items == onModifiers) null else "$source -> $items"
+        }
+
+    fun `test modifiers after a stray quote elsewhere in the markup`() {
+        val missing =
+            withoutModifiers(
+                listOf(
+                    "<img alt=it's> <div data-on:click__<caret>",
+                    "<p a\"b>x</p>\n<div\n  data-on:click__<caret>",
+                ),
+            )
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test the text of script, textarea and title is read as text`() {
+        val missing =
+            withoutModifiers(
+                listOf(
+                    "<script>if (i<n) {/* don't */}</script> <div data-on:click__<caret>",
+                    "<textarea>x<y isn't</textarea>\n<div data-on:click__<caret>",
+                    "<title>a<b don't</title>\n<div data-on:click__<caret>",
+                ),
+            )
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test no modifiers inside a script or a style`() {
+        for ((n, source) in listOf(
+            "<script>\n if (a<b &&\n  data-on:click__<caret>",
+            "<style>\n a<b\n  data-on:click__<caret>",
+        ).withIndex()) {
+            val items = itemsIn("raw$n.html", source)
+            assertFalse("$source -> $items", "debounce" in items)
+        }
+    }
+
+    fun `test a comment ends at the short closings the browser takes`() {
+        val missing = withoutModifiers(listOf("<!--> <div\n data-on:click__<caret>", "<!---> <div\n data-on:click__<caret>"))
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test escaped quotes in an ordinary kotlin string read as quotes`() {
+        val items = itemsIn("View.kt", "val x = \"<div data-show=\\\"\\\$a > 1\\\" data-on:click__<caret>\"")
+        assertEquals(onModifiers, items)
+    }
+
+    fun `test no tag is read out of the kotlin code before the string`() {
+        // The quotes in the code pair up so that `<b` reads as a tag reaching into the string.
+        for ((n, source) in listOf(
+            "val ok = a <b || e == \"\\\"\"; s.patchElements(\"\"\"  data-on:click__<caret>\"\"\")",
+            "val ok = a <b || e == \"\\\"\"\ns.patchElements(\"\"\"\n  data-on:click__<caret>\"\"\")",
+        ).withIndex()) {
+            val items = itemsIn("Code$n.kt", source)
+            assertFalse("$source -> $items", "debounce" in items)
+        }
+    }
+
+    fun `test quoted values on earlier lines are read as the browser reads them`() {
+        val missing =
+            withoutModifiers(
+                listOf(
+                    "<div data-show=\"\$a > 1 && \$b < 2\"\n     data-text='\"x\"'\n     data-on:click__<caret>",
+                    "<div data-show=\"\$a\n > 1\"\n     data-on:click__<caret>",
+                ),
+            )
+        assertEmpty(missing.joinToString("\n"), missing)
+    }
+
+    fun `test no modifiers in element content or in a comment`() {
+        val sources =
+            listOf(
+                "<div data-show=\"\$a\">\n  data-on:click__<caret>",
+                "<!-- <div -->\n  data-on:click__<caret>",
+                "<!-- <div\n  data-on:click__<caret>",
+            )
+        val offered =
+            sources.mapIndexedNotNull {
+                n,
+                source,
+                ->
+                itemsIn("outside$n.html", source).takeIf { "debounce" in it }?.let { "$source -> $it" }
+            }
+        assertEmpty(offered.joinToString("\n"), offered)
+    }
+
+    fun `test a fragment injected into a kotlin file is read with templates off`() {
+        // The later literal of a concatenation: the injection spans both, but no HTML string is found at the caret.
+        val control = itemsIn("Control.kt", "// language=HTML\nval s = \"<p>\" + \"<div data-on:click__<caret>\"")
+        assertEquals("the same shape without a template comment completes", onModifiers, control)
+        // Without templates the quote in `{{!-- <i a="b --}}` is left open, so the caret is in a value.
+        myFixture.configureByText("View.kt", "// language=HTML\nval s = \"<p>\" + \"{{!-- <i a=\\\"b --}}<div data-on:click__<caret>\"")
+        assertTrue("the caret stands in an injected HTML fragment", caretInInjectedHtml())
+        val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+        assertFalse(items.toString(), "debounce" in items)
+    }
+
+    /** Whether the caret stands in an HTML fragment injected into Kotlin: the fixture then opens that fragment. */
+    private fun caretInInjectedHtml(): Boolean {
+        val file = myFixture.file
+        return InjectedLanguageManager.getInstance(project).isInjectedFragment(file) && file.language.isKindOf(HTMLLanguage.INSTANCE)
+    }
+
+    fun `test markup joined over several kotlin literals keeps its tag`() {
+        val sources =
+            listOf(
+                "import io.github.markusaugust.streamlord.core.port.driving.DatastarStream\n" +
+                    "suspend fun f(s: DatastarStream) = s.patchElements(\"<div class=\\\"a\\\"\" + \" data-on:click__<caret>\")",
+                "// language=HTML\nval s = \"<div\" + \" data-on:click__<caret>\"",
+                "// language=HTML\nval s = \"<div\\n\" + \"  data-on:click__<caret>\"",
+            )
+        assertModifiersInjected(sources)
+    }
+
+    /** That each Kotlin source puts its caret in injected HTML and gets the modifiers of data-on, listing every one that does not. */
+    private fun assertModifiersInjected(sources: List<String>) {
+        val wrong =
+            sources.mapIndexedNotNull { n, source ->
+                myFixture.configureByText("Injected$n.kt", source)
+                val injected = caretInInjectedHtml()
+                val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                if (injected && items == onModifiers) null else "$source -> injected $injected, $items"
+            }
+        assertEmpty(wrong.joinToString("\n"), wrong)
+    }
+
+    fun `test a backslash in a raw string is text`() {
+        assertModifiersInjected(
+            listOf(
+                "// language=HTML\nval s = \"\"\"<div a=\\\" data-on:click__<caret>\"\"\"",
+                "// language=HTML\nval s = \"\"\"<div a=\\n data-on:click__<caret>\"\"\"",
+            ),
+        )
+    }
+
+    fun `test an escaped backslash in an ordinary string stays one`() {
+        assertModifiersInjected(listOf("// language=HTML\nval s = \"<div a=\\\\ data-on:click__<caret>\""))
+    }
+
+    fun `test a sum of a raw and an ordinary literal reads each by its own rule`() {
+        assertModifiersInjected(
+            listOf("// language=HTML\nval s = \"\"\"<div a=\\\" \"\"\" + \" data-show=\\\"x\\\" data-on:click__<caret>\""),
+        )
+    }
+
+    fun `test a slash in an unquoted value is the value's, and one outside a value starts a new attribute`() {
+        val inValue = listOf("<a href=/api/data-", "<a href=x/data-on:click__")
+        val offered =
+            inValue.flatMapIndexed { n, markup ->
+                listOf(
+                    "html" to itemsIn("value$n.html", "$markup<caret>"),
+                    "kotlin" to
+                        run {
+                            myFixture.configureByText("Value$n.kt", "fun side() = \"\"\"$markup<caret>\"\"\"")
+                            assertTrue("$markup in a Kotlin string is injected HTML", caretInInjectedHtml())
+                            myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                        },
+                ).filter { (_, items) -> "data-on" in items || "debounce" in items }.map { (where, items) -> "$markup in $where -> $items" }
+            }
+        val outside = listOf("<div/data-on:click__", "<div a/data-on:click__", "<div a=\"x\"/data-on:click__")
+        // The platform adds the words of the file here (div, data, on); the modifiers must all come, in order.
+        val missing =
+            outside.mapIndexedNotNull { n, markup ->
+                val items = itemsIn("outside$n.html", "$markup<caret>")
+                if (items.filter { it in onModifiers } == onModifiers) null else "$markup in html -> $items"
+            }
+        val notInKotlin =
+            outside.mapIndexedNotNull { n, markup ->
+                myFixture.configureByText("Outside$n.kt", "fun side() = \"\"\"$markup<caret>\"\"\"")
+                val injected = caretInInjectedHtml()
+                val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                if (injected &&
+                    items.filter { it in onModifiers } == onModifiers
+                ) {
+                    null
+                } else {
+                    "$markup in kotlin -> injected $injected, $items"
+                }
+            }
+        // After the outside cases, so one run shows every shape that is read wrong.
+        assertEmpty((missing + notInKotlin + offered).joinToString("\n"), missing + notInKotlin + offered)
+    }
+
+    fun `test a new attribute name starts right after a quoted value`() {
+        val shapes = listOf("<div a=\"x\"data-on:click__", "<div a='x'data-on:click__", "<div a=\"x y\"data-on:click__")
+        // The platform adds the words of the file here; the modifiers must all come, in order.
+        val wrong =
+            shapes.flatMapIndexed { n, markup ->
+                val html = itemsIn("quoted$n.html", "$markup<caret>")
+                myFixture.configureByText("Quoted$n.kt", "fun side() = \"\"\"$markup<caret>\"\"\"")
+                val injected = caretInInjectedHtml()
+                val kotlin = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
+                listOfNotNull(
+                    "$markup in html -> $html".takeUnless { html.filter { it in onModifiers } == onModifiers },
+                    "$markup in kotlin -> injected $injected, $kotlin".takeUnless {
+                        injected &&
+                            kotlin.filter { it in onModifiers } == onModifiers
+                    },
+                )
+            }
+        assertEmpty(wrong.joinToString("\n"), wrong)
+    }
+
+    fun `test an escape first in a later literal is an escape`() {
+        assertModifiersInjected(listOf("// language=HTML\nval s = \"<div\" + \"\\ndata-on:click__<caret>\""))
     }
 
     fun `test patch is offered only in data-on-signal-patch, where the client defines it`() {

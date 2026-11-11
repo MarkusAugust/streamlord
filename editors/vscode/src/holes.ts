@@ -19,6 +19,8 @@ export interface HoleLanding {
   valueStart: number;
   /** Whether that attribute is a URL its tag loads and runs, judged by urlHostFixedBy: CODE_URL_ATTRIBUTES. */
   loadsCode: boolean;
+  /** Where the tag it landed in starts in the markup, at its `<`, or -1: HoleLanding.tagStart in Interpolation.kt. */
+  tagStart: number;
 }
 
 /** A span the caller will fill: start inclusive, end exclusive. */
@@ -139,7 +141,9 @@ class Landscape implements Visitor {
   landing(at: number): HoleLanding {
     const a = this.attributeAt(at);
     const loadsCode = a !== undefined && (CODE_URL_ATTRIBUTES.get(a.tag)?.has(asciiLowercase(a.name)) ?? false);
-    return { position: this.positionOf(at), attribute: a?.name ?? null, valueStart: a?.start ?? -1, loadsCode };
+    const tag = this.tags[lastAtOrBefore(this.tags, at)];
+    const tagStart = tag !== undefined && at < tag[1] ? tag[0] : -1;
+    return { position: this.positionOf(at), attribute: a?.name ?? null, valueStart: a?.start ?? -1, loadsCode, tagStart };
   }
 
   private datastar(lower: string): boolean {
@@ -222,12 +226,11 @@ export function holeLandings(markup: string, holes: readonly Hole[], prefixes: s
   // From inside an svg or a math, once more with no HTML element opened from it left open.
   for (const context of [NS_SVG, NS_MATH]) for (const scripting of scriptings) read((l) => scanMarkupTracked(shadowed, l, context, scripting, false));
   return holes.map((_, index) => {
-    if (known.has(index)) return { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false };
+    if (known.has(index)) return { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false, tagStart: -1 };
     const at = w.starts[index] as number;
     let strictest = landscapes[0] as Landscape;
     for (const l of landscapes) if (STRICTNESS.indexOf(l.positionOf(at)) > STRICTNESS.indexOf(strictest.positionOf(at))) strictest = l;
-    const landing = strictest.landing(at);
-    return landing.valueStart < 0 ? landing : { ...landing, valueStart: w.sourceOf(landing.valueStart) };
+    return inSource(strictest.landing(at), w);
   });
 }
 
@@ -245,8 +248,16 @@ export function landingAsParsed(markup: string, hole: Hole, prefixes: string[] =
   const shadowed = shadow(w.text, w.open);
   const parsed = new Landscape([...prefixes].sort((a, b) => b.length - a.length), shadowed, new Map(w.open.map((h) => [h.start, h.end])));
   scanMarkupTracked(shadowed, parsed, NS_HTML, false, true, templates);
-  const landing = parsed.landing(w.starts[0] as number);
-  return landing.valueStart < 0 ? landing : { ...landing, valueStart: w.sourceOf(landing.valueStart) };
+  return inSource(parsed.landing(w.starts[0] as number), w);
+}
+
+/** The landing with its offsets into the markup as written: inSource in Interpolation.kt. */
+function inSource(landing: HoleLanding, w: { sourceOf(at: number): number }): HoleLanding {
+  return {
+    ...landing,
+    valueStart: landing.valueStart < 0 ? landing.valueStart : w.sourceOf(landing.valueStart),
+    tagStart: landing.tagStart < 0 ? landing.tagStart : w.sourceOf(landing.tagStart),
+  };
 }
 
 /** Whether the literal start of a URL attribute's value already settles the scheme: urlSchemeFixedBy in Interpolation.kt. */

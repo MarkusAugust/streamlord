@@ -441,6 +441,9 @@ private fun StringBuilder.escaped(value: Any?) {
  *   own document, on its tag: `src` of a `<script>`, `<iframe>` or `<embed>`, `href` of a `<base>`,
  *   a `<link>` or an SVG `<script>`, `data` of an `<object>`. A hole there is judged by
  *   [urlHostFixedBy] rather than [urlSchemeFixedBy].
+ * @property tagStart Where the tag it landed in starts in the markup, at its `<`, when it landed
+ *   in a tag, on an attribute's name or in its value; or -1. A tag over several lines starts on the
+ *   first, and raw text, a comment or a quoted value holds no tag.
  */
 @InternalStreamlordApi
 public class HoleLanding(
@@ -448,6 +451,7 @@ public class HoleLanding(
     public val attribute: String?,
     public val valueStart: Int,
     public val loadsCode: Boolean,
+    public val tagStart: Int = -1,
 )
 
 /**
@@ -474,12 +478,7 @@ public fun holeLandings(
         if (index in known) {
             HoleLanding(Position.TEXT, null, -1, false)
         } else {
-            val landing = landingOf(landscapes, written.starts[index])
-            if (landing.valueStart < 0) {
-                landing
-            } else {
-                HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
-            }
+            landingOf(landscapes, written.starts[index]).inSource(written)
         }
     }
 }
@@ -503,10 +502,18 @@ public fun landingAsParsed(
     val written = Written(markup, listOf(hole), emptyMap(), percents = false)
     val reading = Reading(tracked = true, context = NS_HTML, templates = templates)
     val parsed = landscape(shadow(written.text, written.open), written.open, prefixes, reading)
-    val landing = landingOf(listOf(parsed), written.starts[0])
-    if (landing.valueStart < 0) return landing
-    return HoleLanding(landing.position, landing.attribute, written.sourceOf(landing.valueStart), landing.loadsCode)
+    return landingOf(listOf(parsed), written.starts[0]).inSource(written)
 }
+
+/** The landing with its offsets into the markup as written. */
+private fun HoleLanding.inSource(written: Written): HoleLanding =
+    HoleLanding(
+        position,
+        attribute,
+        if (valueStart < 0) valueStart else written.sourceOf(valueStart),
+        loadsCode,
+        if (tagStart < 0) tagStart else written.sourceOf(tagStart),
+    )
 
 /**
  * Whether the start of a URL attribute's value, the literal text before its first hole, already
@@ -679,7 +686,13 @@ private fun landingOf(
     hole: Int,
 ): HoleLanding {
     val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
-    return HoleLanding(strictest.positionOf(hole), strictest.attributeAt(hole), strictest.valueStartAt(hole), strictest.loadsCodeAt(hole))
+    return HoleLanding(
+        strictest.positionOf(hole),
+        strictest.attributeAt(hole),
+        strictest.valueStartAt(hole),
+        strictest.loadsCodeAt(hole),
+        strictest.tagStartAt(hole),
+    )
 }
 
 /**
@@ -1029,6 +1042,8 @@ private class Landscape(
     fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
     fun loadsCodeAt(hole: Int): Boolean = indexOfSpan(hole, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
+
+    fun tagStartAt(hole: Int): Int = indexOfSpan(hole, tagStarts, tagEnds).let { if (it >= 0) tagStarts[it] else -1 }
 
     // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
     private val signalPaths = CatalogNames.signalAttributes

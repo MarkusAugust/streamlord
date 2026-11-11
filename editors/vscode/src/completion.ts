@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
 import { lexCached } from "./analyze.ts";
-import { expressionAtCaret, type ExpressionAtCaret } from "./caret.ts";
+import { expressionAtCaret, tagBeforeCaretInString, type ExpressionAtCaret } from "./caret.ts";
 import { catalog, parseAttributeName, type AttributeSpec } from "./catalog.ts";
-import { actionCallAt } from "./completionContext.ts";
+import { actionCallAt, tagBeforeCaret } from "./completionContext.ts";
 import { actionPrefixAt, signalPrefixAt } from "./expression.ts";
 import { keyKind } from "./markup.ts";
 import { kotlinExpressionAtCaret, kotlinHtmlStringAt, kotlinModules, streamlordSites } from "./modules.ts";
+import type { KotlinString } from "./kotlinStrings.ts";
 import { findCallSites } from "./scanner.ts";
 import type { SignalIndex } from "./signalIndex.ts";
 
@@ -18,6 +19,44 @@ const ALL_SITES: ReadonlySet<string> = new Set([
   ...Object.keys(catalog.callSites.selector),
 ]);
 const SELECTOR_ARG_NAMES = new Set(["selector", "viewTransitionSelector"]);
+
+/**
+ * The attribute name `attributes`, the markup of a tag after its name, ends with, or null when it
+ * ends in a value. Read by the browser's attribute states: white space, a `/` outside a value, and
+ * the end of a quoted value each start a new name; a `/` in an unquoted value is the value's; an
+ * `=` first in a name is part of it. White space after `=` ends the attribute, though the browser
+ * waits there for the value. nameAtEnd in StreamlordCompletionContributor.kt.
+ */
+function nameAtEnd(attributes: string): string | null {
+  let start = 0;
+  let state: "name" | "await" | "unquoted" | "quoted" = "name";
+  let quote = "";
+  for (let i = 0; i < attributes.length; i++) {
+    const c = attributes[i] ?? "";
+    const space = /\s/.test(c);
+    if (state === "quoted") {
+      if (c === quote) {
+        state = "name";
+        start = i + 1;
+      }
+    } else if (state === "await") {
+      if (c === '"' || c === "'") {
+        state = "quoted";
+        quote = c;
+      } else if (space) {
+        state = "name";
+        start = i + 1;
+      } else state = "unquoted";
+    } else if (state === "unquoted") {
+      if (space) {
+        state = "name";
+        start = i + 1;
+      }
+    } else if (space || c === "/") start = i + 1;
+    else if (c === "=" && i > start) state = "await";
+  }
+  return state === "name" ? attributes.slice(start) : null;
+}
 
 /** Completions for Datastar expressions in Kotlin strings, and for data-* attributes in HTML. */
 export class StreamlordCompletionProvider implements vscode.CompletionItemProvider {
@@ -38,7 +77,7 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     if (expression) return this.expressionItems(expression, src, offset, document, position);
     // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
     const html = kotlinHtmlStringAt(src, offset, modules);
-    if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position);
+    if (html && offset > html.contentStart && offset <= html.contentEnd) return this.html(src, offset, document, position, html);
     return [];
   }
 
@@ -89,23 +128,23 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
   }
 
   /** Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup languages. */
-  private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
+  /** `string` is the HTML string in Kotlin the caret is in, read decoded; without it `src` is markup. */
+  private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position, string?: KotlinString): vscode.CompletionItem[] {
     const prefix = this.prefix();
     // Inside an attribute value, read as the browser reads the markup: over several lines and in either quote.
     if (document.languageId !== "kotlin") {
       const expression = expressionAtCaret(src, offset, false, prefix);
       if (expression) return this.expressionItems(expression, src, offset, document, position);
     }
-    const lineStart = src.lastIndexOf("\n", offset - 1) + 1;
-    const before = src.slice(Math.max(lineStart, offset - 400), offset);
-    // On an attribute name inside a tag: <div data-on:cl|
-    // What comes before is whitespace-separated runs of plain characters and quoted strings, each
-    // character read one way only. Telling names from values instead made `<a != != …` backtrack
-    // exponentially, and anything stricter than this loses template code and Kotlin's \" quotes.
-    const inName = /<([A-Za-z][A-Za-z0-9:-]*)(?:\s+(?:[^\s<>"']|"[^"]*"|'[^']*')+)*\s+([^\s<>="']*)$/.exec(before);
-    if (!inName) return [];
-    const partial = inName[2] ?? "";
-    const tagName = (inName[1] ?? "").toLowerCase();
+    // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
+    const before = string ? tagBeforeCaretInString(string, offset, prefix) : tagBeforeCaret(src, offset, prefix);
+    if (before === null) return [];
+    // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret
+    // is in the tag and in no quoted value; the name at it is read by the browser's attribute states.
+    const head = /^<([A-Za-z][^\s/>]*)/.exec(before);
+    const partial = head ? nameAtEnd(before.slice(head[0].length)) : null;
+    if (!head || partial === null || before.length - partial.length <= head[0].length || /["'<>]/.test(partial)) return [];
+    const tagName = (head[1] ?? "").toLowerCase();
     if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
     // The event of data-on, which VS Code's HTML service knows nothing of, in any file.
     if (partial.toLowerCase().startsWith(`${prefix}on:`)) return this.eventItems(partial.slice(prefix.length + 3), src, offset, position);
