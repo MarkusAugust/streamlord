@@ -147,6 +147,25 @@ class InterpolationTest {
     }
 
     @Test
+    fun `the message for a Datastar expression advises only what interpolate takes`() {
+        val message = assertFailsWith<UnsafeInterpolationException> { render("""<li data-text="%s"></li>""", "x") }.message!!
+
+        assertTrue("data-" in message && "el.dataset" in message, message)
+        // A string written into data-signals is refused by the same rule, so that way is none.
+        assertFailsWith<UnsafeInterpolationException> { render("""<li data-signals="{label: '%s'}"></li>""", "x") }
+        // Each way the message may name, by the words that name it, built as it says.
+        val ways =
+            mapOf<String, () -> String>(
+                "el.dataset" to { render("""<li data-label="%s" data-text="el.dataset.label"></li>""", "x") },
+                "in a signal" to { render("""<li data-signals="{label: '%s'}" data-text="${'$'}label"></li>""", "x") },
+                "signal name" to { render("""<li data-label="%s" data-text="${'$'}label"></li>""", "x") },
+                "Number" to { render("""<li data-text="%s"></li>""", 3) },
+                "Boolean" to { render("""<li data-text="%s"></li>""", true) },
+            )
+        for ((words, way) in ways) if (words in message) way()
+    }
+
+    @Test
     fun `the index names which value was refused`() {
         val failure =
             assertFailsWith<UnsafeInterpolationException> {

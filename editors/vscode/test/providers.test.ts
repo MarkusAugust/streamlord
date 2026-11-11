@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { MockDocument, Position } from "./vscode-mock.ts";
+import { MockDocument, Position, Range, type CodeAction } from "./vscode-mock.ts";
+import { IssueStore, StreamlordCodeActionProvider } from "../src/codeActions.ts";
 import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
 import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
@@ -417,6 +418,60 @@ describe("hover provider", () => {
     assert.match(String((attr?.contents as unknown as { value: string }).value), /\*\*data-on-intersect\*\*/);
     const plain = new MockDocument(`val x = "data-on-intersect"`, "kotlin");
     assert.equal(hover.provideHover(plain as never, new Position(0, 15) as never), null);
+  });
+});
+
+describe("code action provider", () => {
+  /** The actions at `offset` of a Kotlin document linted as the extension lints it, and what applying one leaves. */
+  function actionsAt(text: string, offset: number) {
+    const doc = new MockDocument(text, "kotlin");
+    const issues = new IssueStore();
+    issues.set(doc.uri as never, diagnose(text, true, "data-", [], null));
+    const at = doc.positionAt(offset);
+    const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, new Range(at, at) as never, { diagnostics: [] } as never) as unknown as CodeAction[];
+    const applied = (action: CodeAction) =>
+      [...(action.edit?.replacements ?? [])]
+        .sort((a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start))
+        .reduce((out, r) => out.slice(0, doc.offsetAt(r.range.start)) + r.text + out.slice(doc.offsetAt(r.range.end)), text);
+    return { actions, applied };
+  }
+
+  const DOMAIN = "io.github.markusaugust.streamlord.core.domain";
+  const head = `import ${DOMAIN}.Trusted\nimport ${DOMAIN}.interpolate\n\nfun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: String): String =\n    `;
+  /** The literal of the case that found the defects, with each value written as given. */
+  const widget = (root: string, css: string, content: string, body: string, events: string) =>
+    `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
+  const ESCAPES = "Build it with interpolate(...), which escapes the values";
+
+  it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
+    const css = "${customCss.orEmpty()}";
+    const values = ["${k.rootId}", css, "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
+    const text = `${head}${widget(...values)}\n`;
+    const rewritten = `${head}interpolate(${widget("%s", "%s", "%s", "%s", "%s")}, k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n`;
+    for (const value of values) {
+      const title = value === css ? `Build it with interpolate(...), with ${css} as Trusted(...)` : ESCAPES;
+      const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
+      const action = actions.find((a) => a.title === title);
+      assert.ok(action, `${value}: ${title} is not among ${JSON.stringify(actions.map((a) => a.title))}`);
+      assert.equal(applied(action), rewritten, value);
+    }
+  });
+
+  it("offers the rewrite as a context action away from the warning", () => {
+    const text = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
+    const { actions, applied } = actionsAt(text, text.indexOf("class"));
+    const action = actions.find((a) => a.title.startsWith("Build it with interpolate(...)"));
+    assert.ok(action, JSON.stringify(actions.map((a) => a.title)));
+    assert.notEqual(action.kind?.value, "quickfix");
+    assert.equal(applied(action), `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`);
+  });
+
+  it("offers the rewrite as a context action where no value has a warning", () => {
+    const text = 'fun total(count: Int): String = "<p>total $count</p>"';
+    const { actions, applied } = actionsAt(text, text.indexOf("total $"));
+    const action = actions.find((a) => a.title.startsWith("Build it with interpolate(...)"));
+    assert.ok(action, JSON.stringify(actions.map((a) => a.title)));
+    assert.equal(applied(action), `import ${DOMAIN}.interpolate\n\nfun total(count: Int): String = interpolate("<p>total %s</p>", count).text`);
   });
 });
 

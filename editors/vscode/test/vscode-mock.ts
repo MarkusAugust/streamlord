@@ -195,6 +195,26 @@ export class WorkspaceEdit {
   }
 }
 
+/** The kinds a code action provider names: a quick fix on a diagnostic, and the refactorings a caret is offered without one. */
+export const CodeActionKind = {
+  Empty: { value: "" },
+  QuickFix: { value: "quickfix" },
+  Refactor: { value: "refactor" },
+  RefactorRewrite: { value: "refactor.rewrite" },
+} as const;
+
+export class CodeAction {
+  title: string;
+  kind?: { value: string };
+  edit?: WorkspaceEdit;
+  diagnostics?: unknown[];
+  isPreferred?: boolean;
+  constructor(title: string, kind?: { value: string }) {
+    this.title = title;
+    this.kind = kind;
+  }
+}
+
 export const workspace = {
   onDidSaveTextDocument: noop,
   onDidChangeTextDocument: noop,

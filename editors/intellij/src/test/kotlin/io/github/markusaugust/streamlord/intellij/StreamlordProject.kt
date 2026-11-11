@@ -16,6 +16,9 @@ import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import kotlinx.html.TagConsumer
 import java.io.File
+import java.util.jar.JarEntry
+import java.util.jar.JarFile
+import java.util.jar.JarOutputStream
 
 /**
  * A module with the Kotlin standard library, Streamlord's core and DSL, and kotlinx.html: the
@@ -40,6 +43,12 @@ object CoreKtorProject : LibrariesProject(
     "kotlin-stdlib" to jarOf(KotlinVersion::class.java),
     "streamlord-core" to jarOf(Trusted::class.java),
     "streamlord-ktor" to { markerJar(StreamlordLibrary.KTOR)!! },
+)
+
+/** A core from before 0.16.0, which had no `Html`: today's core with that class left out. */
+object CoreBeforeHtmlProject : LibrariesProject(
+    "kotlin-stdlib" to jarOf(KotlinVersion::class.java),
+    "streamlord-core" to { coreWithoutHtml(jarOf(Trusted::class.java)()) },
 )
 
 /** Every module of Streamlord the plugin knows, with kotlinx.html. */
@@ -71,6 +80,35 @@ abstract class LibrariesProject(
 }
 
 private fun jarOf(type: Class<*>): () -> File = { File(PathUtil.getJarPathForClass(type)) }
+
+/** A copy of [core], a jar or a folder of classes, as a jar without core's `Html`. */
+private fun coreWithoutHtml(core: File): File {
+    val html = Regex("""io/github/markusaugust/streamlord/core/domain/Html(\$.*)?\.class""")
+    val jar = File.createTempFile("streamlord-core-before-html", ".jar").also { it.deleteOnExit() }
+    JarOutputStream(jar.outputStream()).use { out ->
+        fun entry(
+            name: String,
+            bytes: () -> ByteArray,
+        ) {
+            if (html.matches(name)) return
+            out.putNextEntry(JarEntry(name))
+            out.write(bytes())
+            out.closeEntry()
+        }
+        if (core.isDirectory) {
+            core.walkTopDown().filter { it.isFile }.forEach { entry(it.relativeTo(core).invariantSeparatorsPath) { it.readBytes() } }
+        } else {
+            JarFile(core).use { source ->
+                source.entries().asSequence().filter { !it.isDirectory }.forEach {
+                    entry(
+                        it.name,
+                    ) { source.getInputStream(it).readBytes() }
+                }
+            }
+        }
+    }
+    return jar
+}
 
 /** The jar or folder that holds [library]'s marker class on the test's class path, found by its class file. */
 fun markerJar(library: StreamlordLibrary): File? =
