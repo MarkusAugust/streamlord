@@ -255,6 +255,9 @@ exports.run = async () => {
     if (!extension) throw new Error("The Streamlord extension is not loaded.");
     await extension.activate();
     out.extension = extension.packageJSON.version;
+    // Without its folder the editor reads no file it was not shown, and every answer across files would be missing.
+    const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+    if (folders.length !== 1 || fs.realpathSync(folders[0]) !== fs.realpathSync(job.workspace)) throw new Error(`VS Code opened ${JSON.stringify(folders)}, not the workspace ${job.workspace}.`);
     out.commands = (await vscode.commands.getCommands(true)).filter((c) => c.startsWith("streamlord.")).sort();
 
     for (const pass of job.passes) {
