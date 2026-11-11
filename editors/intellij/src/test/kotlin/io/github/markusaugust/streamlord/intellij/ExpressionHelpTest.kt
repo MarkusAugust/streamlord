@@ -2,13 +2,16 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
 import io.github.markusaugust.streamlord.analysis.ActionSpec
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
 import io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler
-import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationTarget
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordLookupDocumentationTargetProvider
 
 /** Help inside a Datastar expression: completion where the value is, its options and events, parameter info and option docs. */
 class ExpressionHelpTest : StreamlordTestCase() {
@@ -107,12 +110,17 @@ class ExpressionHelpTest : StreamlordTestCase() {
 
     // The documentation of the lookup's items (F1 or Ctrl+Q while the list is open).
     fun `test options and events are documented in the list`() {
-        val provider = StreamlordDocumentationProvider()
+        val provider = StreamlordLookupDocumentationTargetProvider()
 
         fun docOf(name: String): String {
             val item = myFixture.lookupElements!!.first { it.lookupString == name }
-            val element = provider.getDocumentationElementForLookupItem(psiManager, item.`object`, myFixture.file)
-            return provider.generateDoc(element, null).orEmpty()
+            return (
+                provider.documentationTarget(
+                    myFixture.file,
+                    item,
+                    myFixture.caretOffset,
+                ) as? StreamlordDocumentationTarget
+            )?.html.orEmpty()
         }
         myFixture.configureByText("j.html", "<div data-on:click=\"@get('/x', {<caret>})\"></div>")
         myFixture.completeBasic()
@@ -132,8 +140,8 @@ class ExpressionHelpTest : StreamlordTestCase() {
         assertTrue(docOf("data-on:click"), docOf("data-on:click").contains("developer.mozilla.org"))
     }
 
-    // The typed handler runs before the document is committed, so it reads the editor's text: what was just typed is there.
-    fun `test the typed handler reads the text as typed`() {
+    // The help for what was typed is worked out once it is in the file, which the typed handler runs ahead of.
+    fun `test what was typed is read once it is in the file`() {
         for ((name, text) in listOf(
             "l.html" to "<div data-on:click=\"<caret>\"></div>",
             "L.kt" to "fun f() { dataOnClick(\"<caret>\") }",
@@ -142,13 +150,14 @@ class ExpressionHelpTest : StreamlordTestCase() {
             val at = myFixture.caretOffset
             WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(at, "@get") }
             assertNull(name, DatastarCaret.expressionAt(myFixture.file, at + 4))
-            assertEquals(name, "@get", DatastarCaret.expressionAt(myFixture.file, at + 4, fromDocument = true)?.before)
+            PsiDocumentManager.getInstance(project).commitAllDocuments()
+            assertEquals(name, "@get", DatastarCaret.expressionAt(myFixture.file, at + 4)?.before)
         }
     }
 
     fun `test an option of a backend action is documented`() {
         myFixture.configureByText("g.html", "<div data-on:click=\"@get('/x', {retryScaler: 3})\"></div>")
-        val doc = StreamlordDocumentationProvider().documentationAt(myFixture.file, myFixture.file.text.indexOf("retryScaler") + 3)
+        val doc = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("retryScaler") + 3)
         assertTrue(doc?.first.orEmpty(), doc?.first.orEmpty().contains("<b>retryScaler</b>"))
     }
 }

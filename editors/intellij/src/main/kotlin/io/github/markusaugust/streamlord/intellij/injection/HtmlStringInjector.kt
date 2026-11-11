@@ -88,8 +88,6 @@ class HtmlStringInjector : MultiHostInjector {
         }
         return e is org.jetbrains.kotlin.psi.KtValueArgument
     }
-
-    private companion object {
-        val MARKER = Regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-    }
 }
+
+private val MARKER = Regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)

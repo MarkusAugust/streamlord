@@ -16,6 +16,7 @@ import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordResolve
+import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.references.mainReference
@@ -168,6 +169,7 @@ object SignalSites {
             val name = callee.getReferencedName()
             if (name in ATTRIBUTE_HELPERS) return true
             if (name !in SHORT_HELPERS && name !in CORE_CALLS) continue
+            UiThreadWork.note()
             val target = callee.mainReference.resolve() ?: return true
             return StreamlordResolve.isStreamlord(target) || (name in CORE_CALLS && StreamlordResolve.isOfficialSdk(target))
         }

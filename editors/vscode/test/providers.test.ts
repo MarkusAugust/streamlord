@@ -148,12 +148,13 @@ describe("completion provider", () => {
     }
     const escaped = `val html = "<div class=\\"card\\" data-`;
     assert.ok(complete(new MockDocument(escaped, "kotlin"), 0, escaped.length, index).some((i) => i.label === "data-on"), escaped);
-    // CodeQL's input, as long as the 400 characters the provider reads, ending in a quote no value
-    // regex takes; it never finished before.
-    const hostile = "<A " + "!= ".repeat(132) + "'";
+    // CodeQL's input, as long as the 400 characters the provider reads, which never finished
+    // before. It ends on a name the caret completes, so the whole reading is timed.
+    const hostile = "<A " + "!= ".repeat(132) + "data-on:click__";
     const started = performance.now();
-    complete(pdoc(hostile), 0, hostile.length, index);
+    const items = complete(pdoc(hostile), 0, hostile.length, index);
     assert.ok(performance.now() - started < 1000, `${Math.round(performance.now() - started)} ms`);
+    assert.ok(items.some((i) => i.label === "debounce"), "modifiers at the end of the hostile input");
   });
 
   it("offers signals inside html attribute values", () => {
@@ -231,6 +232,132 @@ describe("help inside an expression", () => {
     const click = items.find((i) => i.label === "click");
     assert.ok(click && items.some((i) => i.label === "datastar-fetch"));
     assert.equal(doc.offsetAt(startOf(click)), doc.text.length - 2);
+  });
+});
+
+describe("an attribute on its own line", () => {
+  const index = new FakeIndex().add("file:///other.html", other, "html");
+  /** The labels offered at `at` in `src`, by default its end, in a document of `language`. */
+  const labels = (src: string, language = "html", at = src.length) => {
+    const doc = new MockDocument(src, language);
+    const provider = new StreamlordCompletionProvider(index as never, () => "data-");
+    return provider.provideCompletionItems(doc as never, doc.positionAt(at) as never).map((i) => String(i.label));
+  };
+  /** The labels offered at the end of a Kotlin raw string whose content is `html`. */
+  const inKotlin = (html: string) => labels(`fun side() = """${html}"""`, "kotlin", `fun side() = """${html}`.length);
+
+  it("offers the modifiers of data-on in a tag opened on the line above", () => {
+    const oneLine = labels(`<input data-bind:query data-on:input__`);
+    assert.ok(oneLine.includes("debounce"), oneLine.join());
+    assert.deepEqual(labels(`<input data-bind:query\n       data-on:input__`), oneLine);
+  });
+
+  it("offers the duration values of a modifier in a tag opened on the line above", () => {
+    const oneLine = labels(`<input data-bind:query data-on:input__debounce.`);
+    assert.ok(oneLine.includes("500ms"), oneLine.join());
+    assert.deepEqual(labels(`<input data-bind:query\n       data-on:input__debounce.`), oneLine);
+  });
+
+  it("offers the events after data-on: in a tag opened on the line above", () => {
+    const oneLine = labels(`<input data-bind:query data-on:`);
+    assert.ok(oneLine.includes("click") && oneLine.includes("datastar-fetch"), oneLine.join());
+    assert.deepEqual(labels(`<input data-bind:query\n       data-on:`), oneLine);
+  });
+
+  it("offers the modifiers in a tag opened several lines above, with attributes on each line between", () => {
+    const oneLine = labels(`<input type="search" data-bind:query class=wide data-on:input__`);
+    assert.deepEqual(labels(`<input\n  type="search"\n  data-bind:query\n  class=wide\n  data-on:input__`), oneLine);
+  });
+
+  it("offers attribute names and modifiers in a Kotlin string, in a tag opened on the line above", () => {
+    const oneLine = inKotlin(`\n<div class="card" data-`);
+    assert.ok(oneLine.includes("data-on") && oneLine.includes("data-signals"), oneLine.join());
+    assert.deepEqual(inKotlin(`\n<div class="card"\n     data-`), oneLine);
+    const modifiers = inKotlin(`\n<div class="card" data-on:click__`);
+    assert.ok(modifiers.includes("debounce"), modifiers.join());
+    assert.deepEqual(inKotlin(`\n<div class="card"\n     data-on:click__`), modifiers);
+  });
+
+  it("reads no tag out of the Kotlin code before the string", () => {
+    // The quotes in the code pair up so that `<b` reads as a tag reaching into the string.
+    const sameLine = `val ok = a <b || e == "\\""; s.patchElements("""  data-on:click__""")`;
+    assert.deepEqual(labels(sameLine, "kotlin", sameLine.indexOf(`""")`)), []);
+    const lineAbove = `val ok = a <b || e == "\\""\ns.patchElements("""\n  data-on:click__""")`;
+    assert.deepEqual(labels(lineAbove, "kotlin", lineAbove.indexOf(`""")`)), []);
+  });
+
+  it("reads quoted values on earlier lines as the browser does", () => {
+    const oneLine = labels(`<div data-on:click__`);
+    assert.ok(oneLine.includes("debounce"), oneLine.join());
+    assert.deepEqual(labels(`<div data-show="$a > 1 && $b < 2"\n     data-text='"x"'\n     data-on:click__`), oneLine, "quotes holding >, < and the other quote");
+    assert.deepEqual(labels(`<div data-show="$a\n > 1"\n     data-on:click__`), oneLine, "a value over two lines");
+  });
+
+  it("offers nothing in element content or in a comment", () => {
+    assert.deepEqual(labels(`<div data-show="$a">\n  data-on:click__`), [], "after the tag is closed");
+    assert.deepEqual(labels(`<!-- <div -->\n  data-on:click__`), [], "after a comment that held a tag");
+    assert.deepEqual(labels(`<!-- <div\n  data-on:click__`), [], "inside a comment");
+  });
+
+  it("answers in time on a long document of tags never closed", () => {
+    let hostile = "";
+    while (hostile.length < 50_000) hostile += "<a " + "!= ".repeat(40) + "\n";
+    hostile += "<a " + "!= ".repeat(40) + "data-on:click__";
+    const started = performance.now();
+    const items = labels(hostile, "pebble");
+    const took = performance.now() - started;
+    assert.ok(took < 1000, `${Math.round(took)} ms`);
+    assert.ok(items.includes("debounce"), "modifiers at the end of the long document");
+  });
+
+  it("completes after a stray quote elsewhere in the markup", () => {
+    const oneLine = labels(`<div data-on:click__`);
+    assert.ok(oneLine.includes("debounce"), oneLine.join());
+    assert.deepEqual(labels(`<img alt=it's> <div data-on:click__`), oneLine, "an unquoted value holding a quote");
+    assert.deepEqual(labels(`<p a"b>x</p>\n<div\n  data-on:click__`), oneLine, "a quote inside an attribute name");
+  });
+
+  it("reads the text of script, textarea and title as text", () => {
+    const oneLine = labels(`<div data-on:click__`);
+    assert.deepEqual(labels(`<script>if (i<n) {/* don't */}</script> <div data-on:click__`), oneLine, "script");
+    assert.deepEqual(labels(`<textarea>x<y isn't</textarea>\n<div data-on:click__`), oneLine, "textarea");
+    assert.deepEqual(labels(`<title>a<b don't</title>\n<div data-on:click__`), oneLine, "title");
+  });
+
+  it("offers nothing inside a script or a style", () => {
+    assert.deepEqual(labels(`<script>\n if (a<b &&\n  data-on:click__`), [], "script");
+    assert.deepEqual(labels(`<style>\n a<b\n  data-on:click__`), [], "style");
+  });
+
+  it("ends a comment at the short closings the browser takes", () => {
+    const oneLine = labels(`<div data-on:click__`);
+    assert.deepEqual(labels(`<!--> <div\n data-on:click__`), oneLine, "<!-->");
+    assert.deepEqual(labels(`<!---> <div\n data-on:click__`), oneLine, "<!--->");
+  });
+
+  it("reads a / in an unquoted value as the value's, and one outside a value as a new attribute", () => {
+    const modifiers = labels(`<div data-on:click__`);
+    for (const inValue of ["<a href=/api/data-", "<a href=x/data-on:click__"]) {
+      assert.deepEqual(labels(inValue, "pebble"), [], `${inValue} in a template`);
+      assert.deepEqual(inKotlin(inValue), [], `${inValue} in a Kotlin string`);
+    }
+    for (const outside of ["<div/data-on:click__", "<div a/data-on:click__", `<div a="x"/data-on:click__`]) {
+      assert.deepEqual(labels(outside), modifiers, `${outside} in html`);
+      assert.deepEqual(inKotlin(outside), modifiers, `${outside} in a Kotlin string`);
+    }
+  });
+
+  it("starts a new attribute name right after a quoted value", () => {
+    const modifiers = labels(`<div data-on:click__`);
+    for (const markup of [`<div a="x"data-on:click__`, `<div a='x'data-on:click__`, `<div a="x y"data-on:click__`]) {
+      assert.deepEqual(labels(markup), modifiers, `${markup} in html`);
+      assert.deepEqual(inKotlin(markup), modifiers, `${markup} in a Kotlin string`);
+    }
+  });
+
+  it("reads Kotlin's escaped quotes in an ordinary string as quotes", () => {
+    const src = `val x = "<div data-show=\\"\\$a > 1\\" data-on:click__"`;
+    assert.ok(labels(src, "kotlin", src.length - 1).includes("debounce"), src);
   });
 });
 

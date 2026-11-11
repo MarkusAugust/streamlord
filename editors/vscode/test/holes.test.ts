@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { holeLandings, urlHostFixedBy, urlSchemeFixedBy } from "../src/holes.ts";
+import { holeLandings, landingAsParsed, urlHostFixedBy, urlSchemeFixedBy } from "../src/holes.ts";
 
 /** The cases core's HoleLandingsTest holds to interpolate; this port is held to the same file. */
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/twins/hole-landings.json", import.meta.url), "utf8")) as {
@@ -24,10 +24,27 @@ describe("hole landings", () => {
   it("gives the start of a value in the markup it was handed, known text or not", () => {
     const markup = '<a %s="x%s">';
     const [name, url] = holeLandings(markup, [{ start: 3, end: 5 }, { start: 8, end: 10 }], undefined, new Map([[0, "href"]]));
-    assert.deepEqual(name, { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false });
+    assert.deepEqual(name, { position: "TEXT", attribute: null, valueStart: -1, loadsCode: false, tagStart: -1 });
     assert.equal(url?.position, "URL");
     assert.equal(url?.valueStart, 7);
     assert.equal(holeLandings('<a href="%s">', [{ start: 9, end: 11 }], undefined, new Map([[0, '/x" title="']]))[0]?.position, "TEXT");
+  });
+
+  it("gives the start of the tag a hole lands in, at its <, or -1 outside a tag", () => {
+    /** The tagStart of the one hole in `markup`, written %s. */
+    const tagStart = (markup: string) => holeLandings(markup, [{ start: markup.indexOf("%s"), end: markup.indexOf("%s") + 2 }])[0]?.tagStart;
+    const overLines = `<p>x</p>\n<div\n  id="a"\n  %s>`;
+    assert.equal(tagStart(overLines), overLines.indexOf("<div"), "an attribute name in a tag that starts lines above");
+    const quoted = `<p>x</p><a title="%s">`;
+    assert.equal(tagStart(quoted), quoted.indexOf("<a"), "a quoted value");
+    for (const outside of [`<p>%s</p>`, `<!-- <div %s -->`, `<script>if (a<b) %s</script>`]) assert.equal(tagStart(outside), -1, outside);
+    // The strictest reading takes a textarea's text as markup too; the browser's reads it as text.
+    const textarea = `<textarea><i %s</textarea>`;
+    assert.equal(landingAsParsed(textarea, { start: textarea.indexOf("%s"), end: textarea.indexOf("%s") + 2 }).tagStart, -1, textarea);
+    const markup = `<p>%s</p><a title="%s">`;
+    const holes = [...markup.matchAll(/%s/g)].map((m) => ({ start: m.index, end: m.index + 2 }));
+    const [, title] = holeLandings(markup, holes, undefined, new Map([[0, "a text longer than its hole"]]));
+    assert.equal(title?.tagStart, markup.indexOf("<a"), "an offset into the markup as written, after known text");
   });
 
   // Each hole is looked up among spans found in order: HoleLandingsTest holds core to the same.

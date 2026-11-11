@@ -3,8 +3,10 @@ package io.github.markusaugust.streamlord.intellij.navigation
 import com.intellij.codeInsight.TargetElementUtil
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
+import com.intellij.platform.ide.progress.runWithModalProgressBlocking
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -31,7 +33,7 @@ import org.jetbrains.kotlin.psi.KtFile
  * and patched by a handler has, so this one takes the first: the rename renames them all.
  */
 class SignalRenameHandler : RenameHandler {
-    // Asked on every update of the action, so it resolves nothing: a signal reference at the caret is enough.
+    // Asked on every update of the action, in the background: a signal reference at the caret is enough.
     override fun isAvailableOnDataContext(dataContext: DataContext): Boolean = referenceAt(dataContext) != null
 
     override fun invoke(
@@ -40,7 +42,7 @@ class SignalRenameHandler : RenameHandler {
         file: PsiFile?,
         dataContext: DataContext,
     ) {
-        val target = targetAt(dataContext) ?: return
+        val target = targetAt(project, dataContext) ?: return
         val editorAt = editor?.let(InjectedLanguageEditorUtil::getTopLevelEditor)
         PsiElementRenameHandler.rename(target, project, target, editorAt, PsiElementRenameHandler.DEFAULT_NAME.getData(dataContext))
     }
@@ -50,16 +52,28 @@ class SignalRenameHandler : RenameHandler {
         elements: Array<out PsiElement>,
         dataContext: DataContext,
     ) {
-        val target = elements.singleOrNull() as? SignalTarget ?: targetAt(dataContext) ?: return
+        val target = elements.singleOrNull() as? SignalTarget ?: targetAt(project, dataContext) ?: return
         val editor = CommonDataKeys.EDITOR.getData(dataContext)
         PsiElementRenameHandler.rename(target, project, target, editor, PsiElementRenameHandler.DEFAULT_NAME.getData(dataContext))
     }
 
-    private fun targetAt(dataContext: DataContext): SignalTarget? =
-        referenceAt(dataContext)?.let { SignalTarget.of(it.element.containingFile, it.signal).firstOrNull() }
-
-    private fun referenceAt(dataContext: DataContext): SignalPsiReference? {
+    /**
+     * The signal at the caret. The rename starts on the UI thread, and finding the signal reads the
+     * project and resolves calls, so it is found in the background while the UI thread waits.
+     */
+    private fun targetAt(
+        project: Project,
+        dataContext: DataContext,
+    ): SignalTarget? {
         val editor = CommonDataKeys.EDITOR.getData(dataContext) ?: return null
+        return runWithModalProgressBlocking(project, "Finding the signal") {
+            readAction { referenceIn(editor)?.let { SignalTarget.of(it.element.containingFile, it.signal).firstOrNull() } }
+        }
+    }
+
+    private fun referenceAt(dataContext: DataContext): SignalPsiReference? = CommonDataKeys.EDITOR.getData(dataContext)?.let(::referenceIn)
+
+    private fun referenceIn(editor: Editor): SignalPsiReference? {
         // In HTML injected into a Kotlin string the reference is the string's.
         for (e in listOf(editor, InjectedLanguageEditorUtil.getTopLevelEditor(editor)).distinct()) {
             val file = e.project?.let { PsiDocumentManager.getInstance(it).getPsiFile(e.document) }
@@ -96,7 +110,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
         val out = ArrayList<PsiReference>()
         // The rename asks in the target's own scope, which is empty so that no word search runs: a signal's is the project.
         val scope = searchScope as? LocalSearchScope ?: GlobalSearchScope.projectScope(element.project)
-        SignalReferencesSearcher.references(element.project, (element as SignalTarget).name, scope, under = true) {
+        signalReferences(element.project, (element as SignalTarget).name, scope, under = true) {
             out += it
             true
         }
@@ -114,7 +128,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
             conflicts.putValue(element, "The project already defines the signal '$newName'.")
         }
         val project = element.project
-        SignalReferencesSearcher.references(project, old, GlobalSearchScope.projectScope(project), under = true) { ref ->
+        signalReferences(project, old, GlobalSearchScope.projectScope(project), under = true) { ref ->
             if (ref.renameText(old, newName) == null) {
                 val written =
                     ref.element.containingFile.text
@@ -146,7 +160,7 @@ class SignalRenameProcessor : RenamePsiElementProcessor() {
         for (place in index.declarationsOf(old, inside = true) + index.readsOf(old)) {
             val file = SignalSites.psiOf(manager, place.file) ?: continue
             val sites = SignalSites.of(file).filter { it.start >= place.start && it.end <= place.end }
-            if (sites.any { SignalReferencesSearcher.referenceAt(file, it.start) != null }) continue
+            if (sites.any { signalReferenceAt(file, it.start) != null }) continue
             val written = file.text.substring(place.start, place.end)
             if (file !is KtFile) {
                 conflicts.putValue(file, "'$written' in ${file.name} is not renamed: the plugin finds no reference there to rewrite.")

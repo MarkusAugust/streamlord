@@ -150,6 +150,80 @@ requests in `.streamlord/inspector.json` that the two editors share.
 The JVM template languages are covered: JTE, kte, FreeMarker, Velocity, Mustache and Pebble.
 Thymeleaf is plain HTML and needs nothing special.
 
+## The Stream Inspector's two files
+
+The inspector keeps what you save in two files under `.streamlord/` in the project. One is for
+the team and one is for you.
+
+**Share the requests, keep the variables to yourself.** Commit `.streamlord/inspector.json` and
+ignore `.streamlord/env.json`:
+
+```
+# .gitignore
+.streamlord/env.json
+```
+
+**`inspector.json` holds the requests.** Save one with **Save** in the inspector, or write the
+file by hand:
+
+```json
+{
+  "version": 1,
+  "requests": [
+    {
+      "name": "feed",
+      "url": "{{baseUrl}}/api/feed/{{partsnummer}}",
+      "method": "POST",
+      "signals": { "search": "ash" },
+      "headers": { "X-Id": "7" }
+    }
+  ]
+}
+```
+
+`name` and `url` are needed, and a name is held once, whatever its case. `method` is `GET` when
+left out. `signals` is an object or JSON text, and `headers` an object or `Name: value` lines.
+
+**`env.json` holds the values that differ from one machine to the next**: the host, a token,
+the parameters of your routes. **Edit variables** in the inspector creates it:
+
+```json
+{
+  "baseUrl": "http://127.0.0.1:8081",
+  "signals": { "search": "ash" },
+  "headers": { "Authorization": "Bearer dev-token" },
+  "params": { "partsnummer": "3000507723" }
+}
+```
+
+Write `{{baseUrl}}` in the URL, `{{signals}}` in the signals field, `{{headers}}` in the headers
+field, and the name of a param, `{{partsnummer}}`, in the URL or the headers. Type `{{` in a
+field to pick from the ones that are set. Without `baseUrl` in the file, it is where the server
+you started from the editor said it listens, and with nothing running the default base URL of
+the settings.
+
+**What a save keeps.** **Save** and **Delete** change the one entry and leave the rest of
+`inspector.json` as it was written: the other entries, their layout, and what else the file
+holds. The entry that is saved is written in the layout above, with its members of your own such
+as a `"note"` after `headers`, and with `signals` and `headers` still objects where the new
+values allow it. So the diff a colleague reviews is the request that changed. With the file
+open in an editor, the Request list follows it as you type, saved or not, and **Save** and
+**Delete** change the editor's text as one edit you can undo, keeping what you typed there.
+
+**What stops you, and where it says so.** Both files are JSON and take no comments, and both
+have a schema, so the editor marks a mistake as you type it.
+
+- An entry of `inspector.json` without a `name` or a `url`, or a second entry of a name, is not
+  read. The inspector names it in red under the Request list, and leaves it in the file.
+- An `inspector.json` that is not JSON, not an object with a `requests` list, or of another
+  `version` than 1, is not read and not written over until it is fixed.
+- Any key of `env.json` but `baseUrl`, `signals`, `headers` and `params`, or a value of the
+  wrong kind, stops every request until it is fixed, also one that uses no variable: a request
+  is not sent half filled. The Variables box names the key.
+- The setting for another requests file takes a path inside the project, written with `/`, and
+  not `.streamlord/env.json`. A path it refuses is said in the inspector, which shows the
+  default file meanwhile.
+
 ## One implementation, two editors
 
 Everything they know comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to

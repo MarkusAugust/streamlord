@@ -1,19 +1,24 @@
 package io.github.markusaugust.streamlord.intellij.inspector
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.platform.util.coroutines.childScope
 import com.intellij.ui.content.ContentFactory
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.Route
 import io.github.markusaugust.streamlord.analysis.SavedRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 
 /** The "Streamlord" tool window holding the Stream Inspector. */
 class InspectorToolWindowFactory :
@@ -23,9 +28,13 @@ class InspectorToolWindowFactory :
         project: Project,
         toolWindow: ToolWindow,
     ) {
-        val panel = InspectorPanel(project, toolWindow.disposable)
+        // What the tab holds, listeners and an open stream, goes with the tab.
+        val disposable = Disposer.newDisposable(toolWindow.disposable, "Stream Inspector")
+        val panel = InspectorPanel(project, disposable)
         InspectorService.getInstance(project).panel = panel
         val content = ContentFactory.getInstance().createContent(panel, "Stream Inspector", false)
+        content.setDisposer(disposable)
+        Disposer.register(disposable) { InspectorService.getInstance(project).panel = null }
         toolWindow.contentManager.addContent(content)
     }
 }
@@ -34,8 +43,16 @@ class InspectorToolWindowFactory :
 @Service(Service.Level.PROJECT)
 class InspectorService(
     private val project: Project,
+    private val scope: CoroutineScope,
 ) {
     var panel: InspectorPanel? = null
+
+    /** A scope for what a panel does in the background, which ends with [parent]. */
+    fun scopeFor(parent: Disposable): CoroutineScope {
+        val child = scope.childScope("Stream Inspector")
+        Disposer.register(parent) { child.cancel() }
+        return child
+    }
 
     /** Show the inspector, prefilled when a request is given. */
     fun open(prefill: SavedRequest? = null) {
@@ -63,7 +80,7 @@ class InspectorService(
 }
 
 /** Tools | Streamlord | Open Stream Inspector. */
-class OpenInspectorAction : AnAction() {
+class OpenInspectorAction : DumbAwareAction() {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(e: AnActionEvent) {

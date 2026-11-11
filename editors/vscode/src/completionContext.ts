@@ -37,6 +37,20 @@ export function valueAtCaret(markup: string, offset: number, prefix: string, tem
   return { attribute: landing.attribute, valueStart: landing.valueStart, before: decodeEntities(markup.slice(landing.valueStart, offset)).text };
 }
 
+/**
+ * The markup of the tag `offset` stands in, from its `<` up to `offset`, read as `valueAtCaret`
+ * reads it, or null in text, a comment, raw text or a quoted value. The tag may begin lines above,
+ * with its attributes on lines of their own. tagBeforeCaret in CompletionContext.kt.
+ */
+export function tagBeforeCaret(markup: string, offset: number, prefix: string, templates = true): string | null {
+  if (offset < 0 || offset > markup.length) return null;
+  const walked = withTemplateTagNames(markup);
+  const probe = walked.slice(0, offset) + CARET + walked.slice(offset);
+  const landing = landingAsParsed(probe, { start: offset, end: offset + 1 }, [prefix], templates);
+  if (landing.position !== "STRUCTURE" || landing.attribute !== null || landing.tagStart < 0 || landing.tagStart > offset) return null;
+  return markup.slice(landing.tagStart, offset);
+}
+
 /** The action call a caret stands in: the action's name, which argument, and the key of the options object when the caret is on one. */
 export interface ActionCall {
   action: string;

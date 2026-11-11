@@ -10,7 +10,7 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.ThreeState
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence
-import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentationProvider
+import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 import org.jetbrains.kotlin.psi.KtFile
@@ -67,7 +67,7 @@ abstract class AttributesFormTestCase : BasePlatformTestCase() {
 
     fun `test hover documents the attribute in the key`() {
         myFixture.configureByText("View.kt", "fun FlowContent.f() { button { attributes[\"data-on:click\"] = \"@post('/x')\" } }")
-        val doc = StreamlordDocumentationProvider().documentationAt(myFixture.file, myFixture.file.text.indexOf("data-on") + 6)
+        val doc = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("data-on") + 6)
         assertTrue(doc?.first, doc?.first?.contains("<b>data-on</b>") == true)
     }
 
@@ -145,7 +145,7 @@ class ForeignDslCallTest : StreamlordTestCase() {
 
     fun `test hover leaves the action out`() {
         val file = myFixture.configureByText("Other.kt", onReceiver)
-        assertNull(inBackground { StreamlordDocumentationProvider().documentationAt(file, file.text.indexOf("@post") + 2) })
+        assertNull(inBackground { StreamlordDocumentation.at(file, file.text.indexOf("@post") + 2) })
     }
 
     // A typed handler asks on the UI thread, where the Kotlin plugin forbids analysis: the names decide there.

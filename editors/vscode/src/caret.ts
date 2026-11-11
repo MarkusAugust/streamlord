@@ -7,7 +7,7 @@
  */
 import { ATTRIBUTES_INDEX, htmlStringAt, lexCached } from "./analyze.ts";
 import { catalog, parseAttributeName } from "./catalog.ts";
-import { valueAtCaret } from "./completionContext.ts";
+import { tagBeforeCaret, valueAtCaret } from "./completionContext.ts";
 import type { KotlinString } from "./kotlinStrings.ts";
 import { asciiLowercase } from "./markup.ts";
 import { findCallSites, selectStringArg, stringAt } from "./scanner.ts";
@@ -21,6 +21,11 @@ export interface ExpressionAtCaret {
   allowActions: boolean;
   /** Whether `patch` is in scope: data-on-signal-patch only. */
   patchInScope: boolean;
+}
+
+/** `tagBeforeCaret` in an HTML string in Kotlin, read decoded, as its values are: tagBeforeCaret in CompletionContext.kt. */
+export function tagBeforeCaretInString(html: KotlinString, offset: number, prefix: string): string | null {
+  return tagBeforeCaret(html.text, decodedIndex(html, offset), prefix, false);
 }
 
 /** The decoded index of a source offset in a Kotlin string: the last character that starts at or before it. */

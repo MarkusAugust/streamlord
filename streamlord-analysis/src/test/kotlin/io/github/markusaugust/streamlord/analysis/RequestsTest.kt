@@ -51,6 +51,8 @@ class RequestsTest {
     private fun variables(c: JsonObject) =
         Requests.mergeVariables(c.string("defaultUrl")!!, Requests.parseEnv(c.string("env")!!), running(c))
 
+    private fun edit(e: RequestsEdit) = mapOf("text" to e.text, "error" to e.error)
+
     private fun pairs(list: List<Pair<String, String>>?) = list?.map { listOf(it.first, it.second) }
 
     // The projections of requests.test.ts, so that a case means the same in both twins.
@@ -61,16 +63,39 @@ class RequestsTest {
                     c.string("path")?.let { Requests.parseRequestsFile(c.string("text")!!, it) }
                         ?: Requests.parseRequestsFile(c.string("text")!!)
                 val again = Requests.parseRequestsFile(Requests.serializeRequestsFile(file)).requests
-                mapOf("requests" to file.requests.map(::shown), "invalid" to (file.error != null), "roundTrips" to (again == file.requests))
+                val expected = c.obj("expected")!!
+                buildMap {
+                    put("requests", file.requests.map(::shown))
+                    put("invalid", file.error != null)
+                    put("roundTrips", again == file.requests)
+                    // The text of an error that names a position is each reader's own, so a case states these two only when it pins them.
+                    if ("error" in expected) put("error", file.error)
+                    if ("skipped" in expected) put("skipped", file.skipped)
+                }
+            },
+            "saveRequest" to { c ->
+                val request = request(c.obj("request"))
+                edit(
+                    c.string("path")?.let { Requests.saveRequest(c.string("text"), request, it) }
+                        ?: Requests.saveRequest(c.string("text"), request),
+                )
+            },
+            "removeRequest" to { c ->
+                val name = c.string("remove")!!
+                edit(
+                    c.string("path")?.let { Requests.removeRequest(c.string("text"), name, it) }
+                        ?: Requests.removeRequest(c.string("text"), name),
+                )
             },
             "serializeRequestsFile" to { c ->
                 Requests.serializeRequestsFile(RequestsFile(c.array("requests")!!.objects().map(::request)))
             },
             "upsert" to { c ->
-                var file = RequestsFile.EMPTY
-                for (r in c.array("upsert")!!.objects()) file = Requests.upsert(file, request(r))
-                c.string("remove")?.let { file = Requests.remove(file, it) }
-                file.requests.map { listOf(it.name, it.url) }
+                // Through the edits of the file's text, as a store saves and deletes.
+                var text: String? = null
+                for (r in c.array("upsert")!!.objects()) text = Requests.saveRequest(text, request(r)).text
+                c.string("remove")?.let { text = Requests.removeRequest(text, it).text }
+                Requests.parseRequestsFile(text!!).requests.map { listOf(it.name, it.url) }
             },
             "pushRecent" to { c ->
                 c
@@ -96,6 +121,9 @@ class RequestsTest {
                 Requests.requestHeaders(c.string("method")!!, headers).map { listOf(it.key, it.value) }
             },
             "requestsPathProblem" to { c -> Requests.requestsPathProblem(c.string("path")!!) != null },
+            "requestsPathMessage" to { c -> Requests.requestsPathProblem(c.string("path")!!) },
+            // The two older messages say "project" here and "workspace" in the extension, so a case names the part they share.
+            "requestsPathProblemSays" to { c -> Requests.requestsPathProblem(c.string("path")!!)?.contains(c.string("says")!!) ?: false },
             "newRequestLabel" to { c -> Requests.newRequestLabel(c.int("saved")!!, c.int("recent")!!) },
             "lineAndColumn" to { c -> Requests.lineAndColumn(c.string("text")!!, c.int("position")!!) },
             "parseEnv" to { c ->
@@ -133,6 +161,7 @@ class RequestsTest {
                     "unset" to r.unset,
                 )
             },
+            "previewUrl" to { c -> Requests.previewUrl(c.string("url")!!, variables(c)) },
             "unreachableHint" to { c -> Requests.unreachableHint(c.string("url")!!, variables(c), running(c)) },
             "baseUrlSuggestion" to { c -> Requests.baseUrlSuggestion(variables(c), running(c)) },
             "variableCompletions" to { c ->
@@ -183,5 +212,64 @@ class RequestsTest {
         assertEquals(listOf(".streamlord/env.json is not valid JSON at line 1, column 1."), Requests.parseEnv("not json").errors)
         val broken = Requests.parseRequestsFile("{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"},]}", "req.json")
         assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
+    }
+
+    @Test
+    fun `a file that is not JSON is not changed, and the edit says where it stops`() {
+        val refused = RequestsEdit(null, ".streamlord/inspector.json is not valid JSON at line 1, column 1.")
+        assertEquals(refused, Requests.saveRequest("not json", SavedRequest("a", "/a")))
+        assertEquals(refused, Requests.removeRequest("not json", "a"))
+        val broken = Requests.saveRequest("{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"},]}", SavedRequest("b", "/b"), "req.json")
+        assertEquals(null, broken.text)
+        assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
+    }
+
+    // A text field hands back the signals it was given, line endings and all.
+    @Test
+    fun `a file with CRLF line endings keeps every line break a single CRLF through save after save`() {
+        val lines =
+            listOf(
+                "{",
+                "  \"version\": 1,",
+                "  \"requests\": [",
+                "    {",
+                "      \"name\": \"a\",",
+                "      \"url\": \"/a\",",
+                "      \"method\": \"GET\",",
+                "      \"signals\": {",
+                "        \"q\": 1",
+                "      },",
+                "      \"headers\": \"\",",
+                "      \"note\": {",
+                "        \"k\": 1",
+                "      }",
+                "    }",
+                "  ]",
+                "}",
+                "",
+            )
+        var text = lines.joinToString("\r\n")
+        for (url in listOf("/one", "/two")) {
+            val read = Requests.parseRequestsFile(text).requests.single()
+            assertTrue("\r\n" in read.signals, read.signals)
+            val saved = Requests.saveRequest(text, read.copy(url = url))
+            assertEquals(null, saved.error)
+            text = saved.text!!
+            assertTrue("\r\r" !in text, text)
+            assertEquals(text.split("\n").size, text.split("\r\n").size, text)
+            assertEquals(lines.joinToString("\r\n").replace("\"/a\"", "\"$url\""), text)
+        }
+        val read = Requests.parseRequestsFile(text).requests.single()
+        assertEquals(text, Requests.saveRequest(text, read).text)
+    }
+
+    @Test
+    fun `the entries that are not read are part of the file, none by default`() {
+        val file = Requests.parseRequestsFile("{\"requests\":[7]}")
+        assertEquals(
+            RequestsFile(emptyList(), null, listOf("Request 1 in .streamlord/inspector.json is not read: it is not an object.")),
+            file,
+        )
+        assertEquals(emptyList<String>(), RequestsFile(emptyList()).skipped)
     }
 }

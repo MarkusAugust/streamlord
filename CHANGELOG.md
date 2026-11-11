@@ -6,6 +6,113 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-11
+
+### Added
+
+- streamlord-analysis has `tagBeforeCaret`: the markup of the tag a caret stands in, from its `<`,
+  read as the browser reads it, for markup and for an HTML string in Kotlin.
+- streamlord-analysis has `Requests.previewUrl`: a URL with its variables filled in as a request
+  sends it, a param encoded and one that cannot be filled left as written.
+
+### Changed
+
+- `HoleLanding` in streamlord-core has a fifth value, `tagStart`: where the tag a hole landed in
+  starts, or -1. It has a default, but code compiled against the four-value constructor needs a
+  rebuild.
+- `Requests.upsert` and `Requests.remove` in streamlord-analysis are gone, since they changed a
+  requests file by writing it anew, which lost what the file held besides its requests.
+  `Requests.saveRequest` and `Requests.removeRequest` take the text of the file and return it with
+  the one entry changed, as a `RequestsEdit`: other members, entries that are not read and the
+  layout stay as written, and an entry that is saved keeps its own other members and the object
+  form of its `signals` and `headers`. Each touches the first entry of the name and no other.
+- `RequestsFile` has a third value, `skipped`, with one message for each entry of the file that
+  is not read, so code compiled against its two-value constructor or `copy` needs a rebuild.
+- `Requests.parseRequestsFile` reports a file whose root is no object, whose `requests` is no
+  list, or whose `version` is not 1, in `error`, where it read each as a file of requests; a
+  save then wrote over them. A second entry of a name is not read, and is named in `skipped`.
+  An empty file is a file without requests, and no longer invalid JSON, and `Requests.parseEnv`,
+  `withEnvVariables` and `withBaseUrl` read an empty env file as a missing one.
+- `Requests.requestsPathProblem` refuses a path that names `.streamlord/env.json`, however it
+  is spelled, one with a backslash and one that ends in `/`.
+
+### Fixed
+
+- In both editors, an attribute on a line of its own, in a tag opened on a line above, gets its
+  completions: the events after `data-on:`, the modifiers after `__` and their values, and in a
+  Kotlin string the attribute names as well. Completion read only the caret's line, so it found
+  no tag there and offered nothing. The tag is now read as the browser reads the markup, so the
+  text of a `<script>`, `<style>`, `<textarea>` or `<title>`, a comment and a quoted value hold
+  no tag, and in VS Code a `<` in the Kotlin code before an HTML string no longer makes the
+  string read as inside a tag.
+- In both editors, the inspector reads `.streamlord/inspector.json` as an open editor has it,
+  saved or not, as it reads `env.json`, and the Request list follows it as you type. **Save** and
+  **Delete** change the open editor's text as one edit that can be undone, where they wrote the
+  file underneath it: IntelliJ asked which version to keep, and what was typed and not saved was
+  lost. A requests file at a path the settings name outside `.streamlord/` is followed as well,
+  however the path is written. In VS Code, an editor that does not take the change says so, where
+  the save was reported done.
+- In VS Code, a `method` in `inspector.json` that is not text is GET, as in IntelliJ, where
+  `["post"]` was POST. A header value that is a number is read as written, `1.0` and `1e2`, where
+  it was `1` and `100` and a number past 2^53 was rounded.
+- In both editors, a header value in `inspector.json` that is an object or a list is read as it
+  is written, less its white space, so the two editors send the same header. They spelt escapes
+  their own ways, IntelliJ kept one of two keys of a name, and VS Code put a header named like a
+  number, such as `10`, first.
+- In both editors, the inspector's status says "error" only for an error that keeps the request
+  from being sent or ends it, and its tooltip names that request's URL. A Save, Delete, Edit
+  variables, Use baseUrl, Copy as curl or signal patch that failed while a stream was open set
+  the status to "error", and in IntelliJ disabled **Stop**, though the stream went on; and a
+  failed connection showed "closed", or "idle" in VS Code. A request that was stopped, or
+  followed by another, no longer sets the status, or shows an error, when its close or its error
+  comes late. In VS Code, a Stop or a second Connect while a request is still being prepared
+  keeps it from being sent, where it was sent anyway.
+- In both editors, the URL shown under the inspector's URL field is the one that is sent. It
+  showed a param as written, `/feed/4 2/x`, where the request sends `/feed/4%202%2Fx`.
+- In both editors, **Save** and **Delete** in the inspector stay where they are when "modified"
+  appears beside them. They moved to the left, so a click where Save stood hit Delete.
+- In IntelliJ, a long error in the inspector's list of events is read whole, on as many lines as
+  it takes, where it was cut at the edge of the list, and so is the URL under the URL field.
+  The fields of the form give way in a narrow tool window and the action buttons go on to a
+  second line, where Save and Delete were laid out past the edge.
+- In IntelliJ, the tooltip of the inspector's status shows the URL as written. The IDE renders a
+  tooltip as HTML, so a URL with `&copy=1` in it showed a copyright sign, and markup in a URL
+  from a shared requests file was rendered. The tooltip also has the status whole and is set
+  anew with each status, where it kept the URL of an earlier request; a long status is cut in
+  the panel when the action buttons need the room, so they keep it in a narrow tool window.
+- In IntelliJ, the inspector's **Stop** button is disabled until a request is connecting or open.
+  It was enabled in a panel that had not connected to anything.
+- In both editors, **Save** and **Delete** in the Stream Inspector wrote
+  `.streamlord/inspector.json` anew, which dropped what a person had written in it: an entry
+  without a `url`, members of their own such as a `"note"`, and the object form of `signals` and
+  `headers`. They now change the one entry and leave the rest of the file byte for byte, in the
+  line endings the file has, and write nothing when a request is saved as it was read.
+- In both editors, a requests file whose root is a list, or whose `requests` is no list, read as
+  a file without requests, and the next save wrote over it. It is now said to be no requests
+  file and left alone, and so is a file of another `version` than 1. An empty file is a file
+  without requests, where it was invalid JSON and stopped a save.
+- In both editors, the inspector says under the Request list what it does not read: an entry
+  without a `name` or a `url`, and a second entry of a name, which a save of that name used to
+  delete. It says there as well when the setting for the requests file names a path it refuses.
+- In both editors, the setting for the requests file took `.streamlord/env.json`, and a save
+  then wrote the requests over the variables. That path is refused, as are one with a backslash
+  and one that ends in `/`; the IntelliJ settings page says so in the field and does not store
+  the path.
+- In IntelliJ, the inspector reads the requests file and the default base URL again when the
+  settings are applied, where it showed the old ones until something else made it read.
+- In VS Code, a requests file that could not be read was taken for a missing one, and a save
+  wrote a new file over it; and two saves at once could each write over what the other had read.
+- In IntelliJ, the plugin no longer asks the indexes or reads files on the UI thread where it
+  did: the Stream Inspector reads `inspector.json` and `env.json` and sends its requests in the
+  background, typing `(` or `,` asks in the background whether there is parameter info to show,
+  and a signal rename finds its signal under a progress bar. Open Stream Inspector works while the
+  IDE indexes, the signal index stops for a write that waits on it, and Re-index Signals can be
+  cancelled from the status bar. Connect and Copy as curl read the variables and the default base
+  URL again first, so a change in the settings counts at once.
+- In IntelliJ, the documentation for Datastar attributes and actions goes through the platform's
+  Documentation Target API. Where another plugin documents the same `data-*` attribute, both
+  answers are shown, where that answer hid Streamlord's.
+
 ## [0.20.0] - 2026-11-09
 
 ### Security

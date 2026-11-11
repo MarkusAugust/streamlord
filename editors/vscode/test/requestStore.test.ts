@@ -1,18 +1,41 @@
 import { beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as vscode from "vscode";
-import { files, Position, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
+import { files, Position, settings, unreadable, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
 import { RequestStore } from "../src/requestStore.ts";
+import { removeRequest, saveRequest } from "../src/requests.ts";
 import { RunningServers } from "../src/serverLog.ts";
 
 const ENV = "/ws/.streamlord/env.json";
+const REQUESTS = "/ws/.streamlord/inspector.json";
 const bytes = (s: string) => new TextEncoder().encode(s);
-const disk = () => new TextDecoder().decode(files.get(ENV));
+const disk = (path = ENV) => new TextDecoder().decode(files.get(path));
 
-/** An open editor on the env file, holding `text` that is not saved. */
-function open(text: string): OpenDocument {
+/** A requests file as a person writes one: members and an entry the inspector does not know, and a layout of its own. */
+const HAND_WRITTEN = `{
+  "version": 1,
+  "team": "blue",
+  "requests": [
+    {
+      "name": "feed",
+      "url": "{{baseUrl}}/feed",
+      "method": "POST",
+      "signals": { "search": "ash", "n": 1.0 },
+      "headers": { "X-Id": "7" },
+      "note": "written by hand"
+    },
+    { "name": "no url here" },
+    { "name": "plain", "url": "http://h/feed" }
+  ]
+}
+`;
+const entry = (name: string, url: string) => `{\n      "name": "${name}",\n      "url": "${url}",\n      "method": "GET",\n      "signals": "",\n      "headers": ""\n    }`;
+const NOT_A_REQUESTS_FILE = '.streamlord/inspector.json is not a requests file: it must be an object with a "requests" list.';
+
+/** An open editor on the file at `path`, the env file unless said, holding `text` that is not saved. */
+function open(text: string, path = ENV): OpenDocument {
   const doc: OpenDocument = {
-    uri: Uri.file(ENV),
+    uri: Uri.file(path),
     text,
     getText: () => doc.text,
     offsetAt: (p: Position) => {
@@ -35,6 +58,8 @@ const baseUrl = async (s: RequestStore) => (await s.environment()).vars.find((v)
 describe("request store", () => {
   beforeEach(() => {
     files.clear();
+    unreadable.clear();
+    settings.clear();
     workspace.textDocuments.length = 0;
     workspace.workspaceFolders = [{ uri: Uri.file("/ws") }];
     files.set(ENV, bytes('{"baseUrl": "http://disk:1"}'));
@@ -71,5 +96,258 @@ describe("request store", () => {
     files.set(ENV, bytes('{"params": {}}'));
     const found = (await s.environment()).vars[0];
     assert.deepEqual(found, { name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Motregning back (dev)" });
+  });
+
+  it("keeps what else a hand-written requests file holds through a save and a delete", async () => {
+    files.set(REQUESTS, bytes(HAND_WRITTEN));
+    const s = store();
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["feed", "plain"]);
+
+    await s.save({ name: "alpha", url: "/a", method: "GET", signals: "", headers: "" });
+    const withAlpha = HAND_WRITTEN.replace('    {\n      "name": "feed"', `    ${entry("alpha", "/a")},\n    {\n      "name": "feed"`);
+    assert.equal(disk(REQUESTS), withAlpha);
+
+    const feed = (await s.saved()).find((r) => r.name === "feed");
+    assert.deepEqual(feed, { name: "feed", url: "{{baseUrl}}/feed", method: "POST", signals: '{ "search": "ash", "n": 1.0 }', headers: "X-Id: 7" });
+    await s.save({ ...feed!, url: "{{baseUrl}}/feed2" });
+    const withFeed2 = withAlpha.replace('"url": "{{baseUrl}}/feed"', '"url": "{{baseUrl}}/feed2"');
+    assert.equal(disk(REQUESTS), withFeed2);
+
+    await s.delete("PLAIN");
+    assert.equal(disk(REQUESTS), withFeed2.replace(',\n    { "name": "plain", "url": "http://h/feed" }', ""));
+    await s.delete("alpha");
+    await s.delete("feed");
+    assert.equal(disk(REQUESTS), '{\n  "version": 1,\n  "team": "blue",\n  "requests": [\n    { "name": "no url here" }\n  ]\n}\n');
+  });
+
+  it("writes the fresh file when there is none", async () => {
+    await store().save({ name: "a", url: "/a", method: "GET", signals: "", headers: "" });
+    assert.equal(disk(REQUESTS), `{\n  "version": 1,\n  "requests": [\n    ${entry("a", "/a")}\n  ]\n}\n`);
+  });
+
+  it("writes nothing when a request is saved as it was read", async () => {
+    const written = bytes(HAND_WRITTEN);
+    files.set(REQUESTS, written);
+    const s = store();
+    for (const request of await s.saved()) await s.save(request);
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("writes nothing when the name to delete is not saved, and creates no file", async () => {
+    const s = store();
+    await s.delete("nowhere");
+    assert.equal(files.has(REQUESTS), false);
+    const written = bytes(HAND_WRITTEN);
+    files.set(REQUESTS, written);
+    await s.delete("nowhere");
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("does not write over a requests file that is a list", async () => {
+    const written = bytes('[{"name": "a", "url": "/a"}]\n');
+    files.set(REQUESTS, written);
+    const s = store();
+    assert.equal((await s.readFile()).error, NOT_A_REQUESTS_FILE);
+    const refused = { message: `${NOT_A_REQUESTS_FILE} Fix the file before saving, so the requests in it are not lost.` };
+    await assert.rejects(s.save({ name: "b", url: "/b", method: "GET", signals: "", headers: "" }), refused);
+    await assert.rejects(s.delete("a"), refused);
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("reads the entries it leaves out by number, and none from a clean or a missing file", async () => {
+    const s = store();
+    assert.deepEqual((await s.readFile()).skipped, []);
+    files.set(REQUESTS, bytes(HAND_WRITTEN));
+    assert.deepEqual((await s.readFile()).skipped, ['Request 2 in .streamlord/inspector.json is not read: it has no "url".']);
+    files.set(REQUESTS, bytes('{"requests": [{"name": "a", "url": "/a"}]}'));
+    const clean = await s.readFile();
+    assert.deepEqual([clean.requests.map((r) => r.name), clean.skipped], [["a"], []]);
+  });
+
+  const request = (name: string) => ({ name, url: `/${name}`, method: "GET", signals: "", headers: "" });
+
+  // Reading it as a missing file would write a fresh file over requests that are there.
+  it("does not take a file it cannot read for a missing one", async () => {
+    const written = bytes(HAND_WRITTEN);
+    files.set(REQUESTS, written);
+    unreadable.set(REQUESTS, Object.assign(new Error("EACCES: permission denied"), { code: "NoPermissions" }));
+    const s = store();
+    const file = await s.readFile();
+    const error = ".streamlord/inspector.json cannot be read: EACCES: permission denied";
+    assert.deepEqual([file.requests, file.error], [[], error]);
+    const refused = { message: `${error} Fix the file before saving, so the requests in it are not lost.` };
+    await assert.rejects(s.save(request("a")), refused);
+    await assert.rejects(s.delete("feed"), refused);
+    assert.equal(files.get(REQUESTS), written);
+  });
+
+  it("creates no file where one cannot be read", async () => {
+    unreadable.set(REQUESTS, new Error("the disk is gone"));
+    const s = store();
+    assert.equal((await s.readFile()).error, ".streamlord/inspector.json cannot be read: the disk is gone");
+    await assert.rejects(s.save(request("a")), { message: ".streamlord/inspector.json cannot be read: the disk is gone Fix the file before saving, so the requests in it are not lost." });
+    assert.equal(files.has(REQUESTS), false);
+  });
+
+  it("reads a file that is not found as no file", async () => {
+    const file = await store().readFile();
+    assert.deepEqual([file.requests, file.error, file.skipped], [[], undefined, []]);
+  });
+
+  // Two saves that both read the file before either writes would lose one of them.
+  it("makes changes one at a time, so two saves at once are both kept", async () => {
+    files.set(REQUESTS, bytes('{\n  "version": 1,\n  "requests": []\n}\n'));
+    const s = store();
+    await Promise.all([s.save(request("a")), s.save(request("b"))]);
+    assert.equal(disk(REQUESTS), `{\n  "version": 1,\n  "requests": [\n    ${entry("a", "/a")},\n    ${entry("b", "/b")}\n  ]\n}\n`);
+    await Promise.all([s.delete("a"), s.save(request("c")), s.delete("b")]);
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["c"]);
+  });
+
+  it("goes on with the next change after one that was refused", async () => {
+    files.set(REQUESTS, bytes("[]"));
+    const s = store();
+    const refused = s.save(request("a"));
+    files.set(REQUESTS, bytes('{"requests": []}'));
+    const next = s.save(request("b"));
+    await assert.rejects(refused);
+    await next;
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["b"]);
+  });
+
+  it("reads and writes the file the setting names", async () => {
+    settings.set("streamlord.inspector.requestsFile", "tools/requests.json");
+    const s = store();
+    assert.equal(s.requestsPathProblem(), null);
+    await s.save(request("a"));
+    assert.deepEqual([...files.keys()], [ENV, "/ws/tools/requests.json"]);
+  });
+
+  it("reads the requests file as an open editor holds it, saved or not", async () => {
+    files.set(REQUESTS, bytes('{"requests": [{"name": "feed", "url": "/feed"}]}'));
+    const s = store();
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["feed"]);
+    const doc = open('{"requests": [{"name": "feed", "url": "/feed"}, {"name": "typed", "url": "/typed"}]}', REQUESTS);
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["feed", "typed"]);
+    doc.text = '{"requests": [{"name": "typed", "url": "/typed"}]}';
+    assert.deepEqual((await s.saved()).map((r) => r.name), ["typed"]);
+  });
+
+  it("reads the requests file the setting names as an open editor holds it", async () => {
+    settings.set("streamlord.inspector.requestsFile", "requests/inspector.json");
+    files.set("/ws/requests/inspector.json", bytes('{"requests": []}'));
+    open('{"requests": [{"name": "typed", "url": "/typed"}]}', "/ws/requests/inspector.json");
+    assert.deepEqual((await store().saved()).map((r) => r.name), ["typed"]);
+  });
+
+  /** An open editor on the requests file, with an entry typed and not saved, and a count of the edits made in it. */
+  function typedInEditor() {
+    const onDisk = '{\n  "version": 1,\n  "requests": [\n    ' + entry("feed", "/feed") + "\n  ]\n}\n";
+    files.set(REQUESTS, bytes(onDisk));
+    const typed = onDisk.replace(entry("feed", "/feed"), `${entry("feed", "/feed")},\n    ${entry("typed", "/typed")}`);
+    const doc = open(typed, REQUESTS);
+    const edits = { count: 0 };
+    const applyEdit = workspace.applyEdit;
+    workspace.applyEdit = (edit) => {
+      edits.count++;
+      return applyEdit(edit);
+    };
+    return { onDisk, typed, doc, edits, restore: () => (workspace.applyEdit = applyEdit) };
+  }
+
+  it("saves into the open editor of the requests file as one edit, keeping what is typed there and leaving the disk alone", async () => {
+    const { onDisk, typed, doc, edits, restore } = typedInEditor();
+    try {
+      await store().save(request("a"));
+      assert.equal(doc.text, saveRequest(typed, request("a")).text);
+      assert.equal(edits.count, 1);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      restore();
+    }
+  });
+
+  it("deletes from the open editor of the requests file as one edit, keeping what is typed there and leaving the disk alone", async () => {
+    const { onDisk, typed, doc, edits, restore } = typedInEditor();
+    try {
+      await store().delete("feed");
+      assert.equal(doc.text, removeRequest(typed, "feed").text);
+      assert.ok(doc.text.includes('"name": "typed"'), doc.text);
+      assert.equal(edits.count, 1);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      restore();
+    }
+  });
+
+  it("deletes an entry that is typed in the open editor and not saved", async () => {
+    const { onDisk, typed, doc, restore } = typedInEditor();
+    try {
+      await store().delete("typed");
+      assert.equal(doc.text, removeRequest(typed, "typed").text);
+      assert.ok(!doc.text.includes('"name": "typed"'), doc.text);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      restore();
+    }
+  });
+
+  /** Make the open editors refuse every edit, as `workspace.applyEdit` does when it resolves to false; the returned function undoes it. */
+  function editorsRefuse(): () => void {
+    const applyEdit = workspace.applyEdit;
+    workspace.applyEdit = async () => false;
+    return () => (workspace.applyEdit = applyEdit);
+  }
+
+  it("refuses a save and a delete the open editor of the requests file does not take, naming the file, and tells of no change", async () => {
+    const { onDisk, typed, doc, restore } = typedInEditor();
+    const undo = editorsRefuse();
+    try {
+      const s = store();
+      let changes = 0;
+      s.onDidChange(() => changes++);
+      const names = { message: /\.streamlord\/inspector\.json/ };
+      await assert.rejects(s.save(request("a")), names);
+      await assert.rejects(s.delete("feed"), names);
+      assert.equal(changes, 0);
+      assert.equal(doc.text, typed);
+      assert.equal(disk(REQUESTS), onDisk);
+    } finally {
+      undo();
+      restore();
+    }
+  });
+
+  it("refuses Edit variables and Use baseUrl the open editor of the env file does not take, naming the file", async () => {
+    const doc = open('{"baseUrl": "http://unsaved:2"}');
+    const undo = editorsRefuse();
+    try {
+      const s = store();
+      const names = { message: /\.streamlord\/env\.json/ };
+      await assert.rejects(s.defineVariables(["signals"]), names);
+      await assert.rejects(s.useBaseUrl("http://localhost:9102"), names);
+      assert.equal(doc.text, '{"baseUrl": "http://unsaved:2"}');
+      assert.equal(disk(), '{"baseUrl": "http://disk:1"}');
+    } finally {
+      undo();
+    }
+  });
+
+  it("refuses a save and a delete when the setting names a path with a problem, and writes nothing", async () => {
+    const env = files.get(ENV);
+    const problems = {
+      "../elsewhere/requests.json": "The requests file ../elsewhere/requests.json leaves the workspace: use a path without .. in it.",
+      "tools\\requests.json": "The requests file tools\\requests.json holds a backslash: write the path with /.",
+      ".streamlord/./env.json": "The requests file cannot be .streamlord/env.json: that file holds the variables.",
+    };
+    for (const [path, problem] of Object.entries(problems)) {
+      settings.set("streamlord.inspector.requestsFile", path);
+      const s = store();
+      assert.equal(s.requestsPathProblem(), problem);
+      await assert.rejects(s.save(request("a")), { message: `${problem} Nothing was saved.` });
+      await assert.rejects(s.delete("a"), { message: `${problem} Nothing was saved.` });
+      assert.deepEqual([...files.keys()], [ENV]);
+      assert.equal(files.get(ENV), env);
+    }
   });
 });

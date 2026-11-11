@@ -1,8 +1,10 @@
 package io.github.markusaugust.streamlord.intellij.settings
 
 import com.intellij.openapi.options.BoundConfigurable
+import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
@@ -11,14 +13,27 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.toNullableProperty
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.intellij.inspector.InspectorService
 
 /** Settings | Tools | Streamlord. */
 class StreamlordConfigurable(
     private val project: Project,
 ) : BoundConfigurable("Streamlord") {
+    /** The field of the requests file, to judge what is in it before it is stored. */
+    private var requestsFile: JBTextField? = null
+
     override fun apply() {
+        // The field marks a path it refuses as it is typed; here it is not stored either.
+        requestsFile?.text?.let(Requests::requestsPathProblem)?.let { throw ConfigurationException(it) }
         super.apply()
         StreamlordSettings.getInstance(project).changed()
+        // An open inspector shows the file and the base URL of the settings, so it reads them again.
+        InspectorService.getInstance(project).panel?.pushRequests(null)
+    }
+
+    override fun disposeUIResources() {
+        requestsFile = null
+        super.disposeUIResources()
     }
 
     override fun createPanel(): DialogPanel {
@@ -74,6 +89,9 @@ class StreamlordConfigurable(
                     textField()
                         .bindText(state::requestsFile)
                         .align(AlignX.FILL)
+                        // Said here, where the path is written, and not first when a request is saved.
+                        .validationOnInput { field -> Requests.requestsPathProblem(field.text)?.let { error(it) } }
+                        .applyToComponent { requestsFile = this }
                         .comment("Project-relative; ${Requests.REQUESTS_FILE} by default. Commit it to share requests with the team.")
                 }
                 row {

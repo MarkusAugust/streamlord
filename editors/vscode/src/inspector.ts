@@ -65,11 +65,15 @@ export class Inspector {
   }
 
   private async pushRequests(current?: Partial<SavedRequest>): Promise<void> {
-    const [saved, env] = await Promise.all([this.store.saved(), this.store.environment()]);
+    const [file, env] = await Promise.all([this.store.readFile(), this.store.environment()]);
+    const saved = file.requests;
+    const pathProblem = this.store.requestsPathProblem();
     const recent = this.store.recent();
     this.post({
       type: "requests",
       saved,
+      // Why the file is not read, or which of its entries are not: they stay in the file, and the user is told.
+      requestProblems: [...(pathProblem === null ? [] : [`${pathProblem} The default file is shown.`]), ...(file.error !== undefined ? [file.error] : file.skipped)],
       recent,
       newLabel: newRequestLabel(saved.length, recent.length),
       variables: variableValues(env.vars),
@@ -81,17 +85,21 @@ export class Inspector {
 
   /**
    * The request with its variables filled in, or null after the reason is posted: an invalid
-   * env file, or a variable that is unknown, misplaced or not set.
+   * env file, or a variable that is unknown, misplaced or not set. With `sending`, the reason is
+   * the status of the request, whose URL is as written since it could not be filled in; `current`
+   * says whether it is still the request of the panel once the env file is read.
    */
-  private async resolve(raw: SavedRequest): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+  private async resolve(raw: SavedRequest, sending = false, current = () => true): Promise<{ request: SavedRequest; vars: Variable[] } | null> {
+    const requestUrl = sending ? raw.url : undefined;
     const env = await this.store.environment();
+    if (!current()) return null;
     if (env.errors.length) {
-      this.post({ type: "error", message: env.errors.join(" "), define: [] });
+      this.post({ type: "error", message: env.errors.join(" "), define: [], requestUrl });
       return null;
     }
     const { request, errors, unset } = resolveRequest(raw, env.vars);
     if (errors.length) {
-      this.post({ type: "error", message: errors.join(" "), define: unset });
+      this.post({ type: "error", message: errors.join(" "), define: unset, requestUrl });
       return null;
     }
     return { request, vars: env.vars };
@@ -180,23 +188,28 @@ export class Inspector {
 
   private async connect(raw: SavedRequest): Promise<void> {
     this.stop();
-    const resolved = await this.resolve(raw);
-    if (!resolved) return;
+    // Made before the request is prepared, so a Stop or the next Connect meanwhile keeps it from being sent.
+    const abort = new AbortController();
+    this.abort = abort;
+    // A request stopped, or followed by another, no longer speaks for the status: its close can come late.
+    const current = () => !abort.signal.aborted;
+    const resolved = await this.resolve(raw, true, current);
+    if (!resolved || !current()) return;
     const { request, vars } = resolved;
     try {
       JSON.parse(compactSignals(request.signals));
     } catch (e) {
-      this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}` });
+      this.post({ type: "error", message: `Signals are not valid JSON: ${(e as Error).message}`, requestUrl: request.url });
       return;
     }
     await this.store.addRecent(raw);
     void this.pushRequests();
+    if (!current()) return;
     const since = Date.now();
-    this.abort = new AbortController();
     await openStream(
       { url: request.url, method: request.method, signals: request.signals, headers: parseHeaderLines(request.headers) },
       {
-        onStatus: (status, detail) => this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
+        onStatus: (status, detail) => current() && this.post({ type: "status", status, resolvedUrl: request.url, ...(detail ?? {}) }),
         onComment: (text) => this.post({ type: "comment", text, at: Date.now() }),
         onNonSse: (r) => {
           const status = Number.parseInt(r.http, 10);
@@ -212,16 +225,16 @@ export class Inspector {
           this.post({ type: "frame", frame });
         },
         onError: (message) => {
+          if (!current()) return;
           const unreachable = /^(Connection refused|Host not found)/.test(message);
           const server = this.running.current();
           const hint = unreachable ? unreachableHint(raw.url, vars, server) : null;
           const elsewhere = unreachable ? baseUrlSuggestion(vars, server) : null;
-          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere });
-          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined });
-          this.post({ type: "status", status: "idle" });
+          if (elsewhere !== null) this.post({ type: "error", message: `${message} ${hint}`, useBaseUrl: elsewhere, requestUrl: request.url });
+          else this.post({ type: "error", message: hint ? `${message} ${hint}` : message, define: hint ? [] : undefined, requestUrl: request.url });
         },
       },
-      this.abort.signal,
+      abort.signal,
     );
   }
 
@@ -298,11 +311,14 @@ function html(cspSource: string): string {
   .row { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .saved-row { display: flex; gap: 6px; align-items: center; }
   .saved-row select { flex: 1; width: auto; }
+  #requestProblems { grid-column: 2; }
+  #requestProblems:empty { display: none; }
+  #requestProblems p { margin: 0; }
   .dirty { color: var(--vscode-editorWarning-foreground); font-size: .9em; white-space: nowrap; }
   .status { margin-left: auto; opacity: .8; }
   .status.open { color: var(--vscode-testing-iconPassed); }
   .status.error { color: var(--vscode-errorForeground); }
-  .resolved { grid-column: 2; opacity: .6; font-family: var(--vscode-editor-font-family); font-size: .9em; min-height: 0; }
+  .resolved { grid-column: 2; opacity: .6; font-family: var(--vscode-editor-font-family); font-size: .9em; min-height: 0; overflow-wrap: anywhere; }
   .resolved:empty { display: none; }
   main { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
   @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
@@ -339,8 +355,9 @@ function html(cspSource: string): string {
     <select id="saved"><option value="">New request…</option></select>
     <button type="button" class="secondary" id="save" title="Save the current request to .streamlord/inspector.json">Save</button>
     <button type="button" class="secondary" id="delete" title="Delete the selected saved request">Delete</button>
-    <span class="dirty" id="dirty" hidden>● modified</span>
+    <span class="dirty" id="dirty" style="visibility: hidden">● modified</span>
   </div>
+  <div id="requestProblems"></div>
   <label for="url">URL</label><input id="url" placeholder="{{baseUrl}}/api/feed">
   <span class="resolved" id="resolved"></span>
   <label for="method">Method</label>
@@ -380,12 +397,21 @@ function html(cspSource: string): string {
   const clearEmpty = () => { const e = frames.querySelector('.empty'); if (e) e.remove(); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const time = (t) => new Date(t).toLocaleTimeString(undefined, { hour12: false }) + '.' + String(t % 1000).padStart(3, '0');
-  const substitute = (s) => s.replace(/\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*\\}\\}/g, (w, n) => (n in variables ? variables[n] : w));
+  // The URL as it is sent, by the rule of previewUrl in requests.ts: baseUrl as it is, a param encoded, and what cannot be filled in left as written.
+  const OWN = ['baseUrl', 'signals', 'headers'];
+  const encode = (s) => encodeURIComponent(s.replace(/[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]/g, '\\uFFFD'));
+  const preview = (s) => s.replace(/\\{\\{\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*\\}\\}/g, (w, n) => {
+    const value = Object.hasOwn(variables, n) ? variables[n] : '';
+    if (n === 'baseUrl') return Object.hasOwn(variables, n) ? value : w;
+    if (OWN.some((k) => k.toLowerCase() === n.toLowerCase()) || value === '') return w;
+    return encode(value);
+  });
   const refresh = () => {
-    $('resolved').textContent = $('url').value.includes('{{') ? substitute($('url').value) : '';
+    $('resolved').textContent = $('url').value.includes('{{') ? preview($('url').value) : '';
     const f = fields();
     const dirty = !!loaded && ['url','method','signals','headers'].some((k) => f[k] !== loaded[k]);
-    $('dirty').hidden = !dirty;
+    // Hidden in its place, so Save and Delete do not move under the pointer when it comes and goes.
+    $('dirty').style.visibility = dirty ? 'visible' : 'hidden';
     $('delete').disabled = !loadedName();
   };
   const fill = (r) => { $('url').value = r.url ?? ''; $('method').value = r.method ?? 'GET'; $('signals').value = r.signals ?? ''; $('headers').value = r.headers ?? ''; };
@@ -420,6 +446,8 @@ function html(cspSource: string): string {
     if (m.type === 'requests') {
       saved = m.saved; recent = m.recent; variables = m.variables; newLabel = m.newLabel;
       $('vars').textContent = m.variablesText;
+      $('requestProblems').replaceChildren();
+      for (const e of m.requestProblems) { const p = document.createElement('p'); p.className = 'error'; p.textContent = e; $('requestProblems').append(p); }
       $('varErrors').innerHTML = '';
       for (const e of m.variableErrors) { const p = document.createElement('p'); p.className = 'error'; p.textContent = e; $('varErrors').append(p); }
       if (m.current) {
@@ -439,7 +467,9 @@ function html(cspSource: string): string {
       // A missing variable is added to the env file in one click; an unreachable server opens it to change baseUrl.
       if (m.define) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = m.define.length ? 'Add to .streamlord/env.json' : 'Edit variables'; b.addEventListener('click', () => vscode.postMessage({ type: 'defineVariables', names: m.define })); p.append(b); }
       if (m.useBaseUrl) { const b = document.createElement('button'); b.type = 'button'; b.className = 'link'; b.textContent = 'Use ' + m.useBaseUrl + ' in .streamlord/env.json'; b.addEventListener('click', () => vscode.postMessage({ type: 'useBaseUrl', url: m.useBaseUrl })); p.append(b); }
-      frames.prepend(p); $('status').className = 'status error'; $('status').textContent = 'error';
+      frames.prepend(p);
+      // An error of the request sent is its status; any other leaves the status of the stream as it is.
+      if (m.requestUrl !== undefined) { const s = $('status'); s.className = 'status error'; s.textContent = 'error'; s.title = m.requestUrl; }
     }
     if (m.type === 'completions') showCompletions(m);
     if (m.type === 'signals') { $('store').textContent = JSON.stringify(m.signals, null, 2); }

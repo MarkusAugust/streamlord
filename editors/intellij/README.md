@@ -151,9 +151,42 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 `text/event-stream` response with any status but 200 is not read, as the client reads none.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the project, the same file the VS
-  Code extension uses (commit it to share with the team, or ignore it). Save one with **Save**,
-  and pick it again from the Request list, which also holds the recent ones and says how many
-  of each it has. **Delete** removes the selected one.
+  Code extension
+  uses (commit it to share with the team, or ignore it). Save one with **Save**, and pick it
+  again from the Request list, which also holds the recent ones and says how many of each it
+  has. **Delete** removes the selected one. You can write the file by hand as well:
+
+  ```json
+  {
+    "version": 1,
+    "requests": [
+      {
+        "name": "feed",
+        "url": "{{baseUrl}}/api/feed/{{partsnummer}}",
+        "method": "POST",
+        "signals": { "search": "ash" },
+        "headers": { "X-Id": "7" }
+      }
+    ]
+  }
+  ```
+
+  `name` and `url` are needed, and a name is held once, whatever its case. `method` is `GET`
+  when left out. `signals` is an object or JSON text, and `headers` an object or `Name: value`
+  lines; text is the form to use for `{{signals}}` and `{{headers}}`. A header value that is
+  a number, such as `1.0`, is sent as it is written. The file is JSON, so it takes no comments.
+  With the file open in an editor, the Request list follows it as you type, saved or not.
+
+  **Save** and **Delete** change the one entry and leave the rest of the file as you wrote it:
+  the other entries, their layout, and what else the file holds. The entry that is saved is
+  written in the layout above and keeps its members of your own, such as a `"note"`; `signals`
+  stays an object where the new value is one, and `headers` an object on one line with text
+  values where each line is a header of its own name. A request saved as it was read
+  writes nothing. With the file open in an editor, the change goes into the editor's text as
+  one edit you can undo, and what you typed there and did not save is kept. What the inspector cannot read is said in red under the Request list, and
+  stays in the file: an entry without a `name` or a `url`, or a second entry of a name. A file
+  that is not JSON, not an object with a `requests` list, or of another `version` than 1 is not
+  read and not written over until it is fixed. An empty file is a file without requests.
 - **Recent** requests are remembered automatically, and the last one is prefilled on open.
 - **Variables** live in `.streamlord/env.json` in the project: three with a field of their own,
   and the `params` of your routes:
@@ -183,8 +216,8 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 
   The Variables box in the panel lists each value, and says when `baseUrl` is the default or
   which run configuration it came from.
-  **Edit variables** opens the file, creating it with `baseUrl` filled in, and the panel picks
-  up the file as you save it. Any other key, or a value of the wrong kind, is reported by name
+  **Edit variables** opens the file, creating it with `baseUrl` filled in, and the panel follows
+  the file as you type in it, saved or not. Any other key, or a value of the wrong kind, is reported by name
   and stops the request until it is fixed; the file also has a JSON schema, so the editor marks
   it as you type. The file is the place for local hosts, tokens and test values, so keep it out
   of version control. A server that cannot be reached is reported together with the `{{baseUrl}}` it was
@@ -215,7 +248,7 @@ Settings | Tools | Streamlord:
 | Inject HTML into Kotlin strings | on | Strings that open with a tag, without `@Language("HTML")`. |
 | Leave attribute names to the Datastar plugin | on | No double listing of attribute names and DOM events in HTML files when the official plugin is installed. |
 | Default base URL | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
-| Saved requests file | `.streamlord/inspector.json` | Project-relative. |
+| Saved requests file | `.streamlord/inspector.json` | Project-relative, written with `/`, and not `.streamlord/env.json`. A path that is refused says why in the field and in the panel, which then shows the default file. A file elsewhere gets no JSON schema. |
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family

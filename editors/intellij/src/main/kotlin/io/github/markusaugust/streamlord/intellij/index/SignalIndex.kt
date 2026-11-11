@@ -5,6 +5,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.impl.LoadTextUtil
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
@@ -27,9 +28,12 @@ import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
+import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
+import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 /**
@@ -109,6 +113,9 @@ class SignalIndex(
     @Volatile
     private var refreshedAt: List<Long> = emptyList()
 
+    /** How many times [forget] has run. */
+    private val forgotten = AtomicInteger()
+
     /** The files to read, with the counts they were listed at: an edit changes a file, not which files there are. */
     @Volatile
     private var listed: Pair<List<Long>, List<VirtualFile>> = emptyList<Long>() to emptyList()
@@ -164,7 +171,7 @@ class SignalIndex(
         val vf = e.file ?: return null
         val document = FileDocumentManager.getInstance().getCachedDocument(vf)
         val stamp = document?.modificationStamp ?: vf.modificationStamp
-        val current = text ?: document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: return null
+        val current = text ?: document?.text ?: loadText(vf) ?: return null
         return current to (current.length == e.length && (text != null || stamp == e.stamp))
     }
 
@@ -287,12 +294,28 @@ class SignalIndex(
 
     /** Forget everything and read the project again; returns the number of signal names found. */
     fun rebuild(): Int {
+        forget()
+        return all().size
+    }
+
+    /** Forget everything, so the next question reads the project again. Apart from the reading, which a write may stop and start over. */
+    fun forget() {
+        forgotten.incrementAndGet()
         entries.clear()
         dropUnion()
         refreshedAt = emptyList()
         listed = emptyList<Long>() to emptyList()
-        return all().size
     }
+
+    /** The text of a file that is not open, or null when it cannot be read. A cancellation is not such a failure. */
+    private fun loadText(vf: VirtualFile): String? =
+        try {
+            LoadTextUtil.loadText(vf).toString()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
 
     private fun entryFor(file: PsiFile): Entry? {
         val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile) ?: return null
@@ -353,8 +376,12 @@ class SignalIndex(
                 DumbService.getInstance(project).modificationTracker.modificationCount,
             )
         if (counts == refreshedAt) return
+        UiThreadWork.note()
+        val forgottenAt = forgotten.get()
         val seen = HashSet<String>()
         for (vf in projectFiles(counts.drop(1))) {
+            // Reading a file is no PSI work, so nothing else asks: a write that waits must be able to stop this read.
+            ProgressManager.checkCanceled()
             if (!vf.isValid) continue
             val language = languageOf(vf) ?: continue
             seen += vf.path
@@ -362,12 +389,13 @@ class SignalIndex(
             val stamp = document?.modificationStamp ?: vf.modificationStamp
             val cached = entries[vf.path]
             if (cached != null && cached.stamp == stamp && cached.prefix == prefix()) continue
-            val text = document?.text ?: runCatching { LoadTextUtil.loadText(vf).toString() }.getOrNull() ?: continue
+            val text = document?.text ?: loadText(vf) ?: continue
             index(vf.path, vf, stamp, text, language)
         }
         // A file deleted, renamed or moved out of the project defines nothing any more.
         if (entries.keys.retainAll(seen)) dropUnion()
-        refreshedAt = counts
+        // A read that [forget] emptied half way has not read everything, so it leaves the next one to.
+        if (forgotten.get() == forgottenAt) refreshedAt = counts
     }
 
     private fun projectFiles(counts: List<Long>): List<VirtualFile> {

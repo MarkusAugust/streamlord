@@ -2,11 +2,26 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessOutputTypes
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ui.TestDialog
+import com.intellij.openapi.ui.TestDialogManager
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.replaceService
+import com.intellij.toolWindow.ToolWindowHeadlessManagerImpl
+import com.intellij.ui.components.ActionLink
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.components.JBTextField
+import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.sun.net.httpserver.HttpServer
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
@@ -20,17 +35,253 @@ import io.github.markusaugust.streamlord.intellij.inspector.RequestStore
 import io.github.markusaugust.streamlord.intellij.inspector.RunningServers
 import io.github.markusaugust.streamlord.intellij.inspector.StreamClient
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Container
+import java.awt.KeyboardFocusManager
+import java.awt.Rectangle
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import javax.swing.JButton
 import javax.swing.JComboBox
+import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
+import javax.swing.JScrollPane
+import javax.swing.JTextArea
 import javax.swing.ListCellRenderer
+import javax.swing.Scrollable
+import javax.swing.SwingUtilities
+import javax.swing.text.JTextComponent
 import kotlin.test.assertFailsWith
 
 class InspectorTest : BasePlatformTestCase() {
+    /** Where the requests of a test run; ended with the test. */
+    private val background = CoroutineScope(SupervisorJob())
+
+    override fun tearDown() {
+        try {
+            background.cancel()
+        } finally {
+            super.tearDown()
+        }
+    }
+
+    private fun RequestStore.save(request: SavedRequest) = apply(saving(request))
+
+    private fun RequestStore.delete(name: String) = apply(deleting(name))
+
+    private fun RequestStore.defineVariables(keys: List<String>) = apply(definingVariables(keys)).let { it.first!! to it.second }
+
+    private fun RequestStore.useBaseUrl(url: String) = apply(usingBaseUrl(url)).let { it.first!! to it.second }
+
+    /** Write [text] to [path] in the project, as a person or another tool would have. */
+    private fun write(
+        path: String,
+        text: String,
+    ): VirtualFile =
+        WriteCommandAction.writeCommandAction(project).compute<VirtualFile, Throwable> {
+            val base = RequestStore.getInstance(project).baseDir()!!
+            val dir = VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/'))!!
+            val name = path.substringAfterLast('/')
+            (dir.findChild(name) ?: dir.createChildData(this, name)).also { VfsUtil.saveText(it, text) }
+        }
+
+    // The project is shared with the other tests, which read these files.
+    private fun remove(path: String) =
+        WriteCommandAction.runWriteCommandAction(project) {
+            RequestStore
+                .getInstance(project)
+                .baseDir()
+                ?.findFileByRelativePath(path)
+                ?.delete(this)
+        }
+
+    private fun entry(
+        name: String,
+        url: String,
+    ) =
+        "{\n      \"name\": \"$name\",\n      \"url\": \"$url\",\n      \"method\": \"GET\",\n      \"signals\": \"\",\n      \"headers\": \"\"\n    }"
+
+    /** What the panel tells the user in text that cannot be edited. */
+    private fun notes(panel: InspectorPanel) =
+        UIUtil.findComponentsOfType(panel, JBTextArea::class.java).filter { !it.isEditable }.map { it.text }
+
+    private fun areas(panel: InspectorPanel) = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).filter { !it.isEditable }
+
+    /** The one area that tells the user exactly [text]. */
+    private fun telling(
+        panel: InspectorPanel,
+        text: String,
+    ): JBTextArea {
+        val found = areas(panel).filter { it.text == text }
+        assertEquals(notes(panel).toString(), 1, found.size)
+        return found.single()
+    }
+
+    // An area that holds nothing is not shown, so it takes no room in the form.
+    private fun assertNoEmptyAreaShows(panel: InspectorPanel) =
+        assertEquals(emptyList<String>(), areas(panel).filter { it.text.isEmpty() && it.isVisible }.map { it.toString() })
+
+    private fun aboutTheRequestsFile(text: String) =
+        "is not read" in text || "is not a requests file" in text || "is not valid JSON" in text
+
+    /** What the panel says in text components that cannot be edited: an error line is one. */
+    private fun texts(panel: InspectorPanel) =
+        UIUtil.findComponentsOfType(panel, JTextComponent::class.java).filter { !it.isEditable }.map { it.text }
+
+    /** Give [panel] a size and lay out everything in it, as a window would have. */
+    private fun layOut(
+        panel: InspectorPanel,
+        width: Int,
+    ) {
+        fun all(c: Container) {
+            // A window marks what it lays out valid, and a size that changes then invalidates the layouts above it; here each pass asks anew.
+            c.invalidate()
+            c.doLayout()
+            for (child in c.components) if (child is Container) all(child)
+        }
+        panel.setSize(width, 700)
+        // Wrapped text knows its height only once it has its width, so one pass is not enough.
+        repeat(4) { all(panel) }
+    }
+
+    private fun boundsIn(
+        panel: InspectorPanel,
+        c: java.awt.Component,
+    ): Rectangle = SwingUtilities.convertRectangle(c.parent, c.bounds, panel)
+
+    /** Whether the panel shows the marker of an edited request: the label and everything it stands in is visible. */
+    private fun modifiedShows(panel: InspectorPanel) =
+        UIUtil.findComponentsOfType(panel, JBLabel::class.java).any { label ->
+            label.text == "● modified" &&
+                generateSequence<java.awt.Component>(label) { it.parent }.takeWhile { it !== panel }.all { it.isVisible }
+        }
+
+    /**
+     * What is out of place in the form of [panel] as it is laid out: a button, a field or the request list that does
+     * not lie wholly inside the panel's width, an action button outside the form, and a field under an action button.
+     */
+    private fun outside(panel: InspectorPanel): List<String> {
+        val buttons = UIUtil.findComponentsOfType(panel, JButton::class.java).filter { it.text in FORM_BUTTONS }
+        assertEquals(FORM_BUTTONS, buttons.map { it.text }.sorted())
+        val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+        val list = UIUtil.findComponentsOfType(panel, JComboBox::class.java).single { it.getItemAt(0) !is String }
+        val areas = UIUtil.findComponentsOfType(form(panel), JBTextArea::class.java).filter { it.isEditable }
+        assertEquals(2, areas.size)
+        val fields =
+            listOf("the URL field" to url, "the signals field" to areas[0], "the headers field" to areas[1])
+                .map { (name, c) -> name to (SwingUtilities.getAncestorOfClass(JScrollPane::class.java, c) ?: c) }
+        val form = form(panel).bounds
+        val actions = buttons.filter { it.text in ACTION_BUTTONS }
+        return (buttons.map { it.text to it } + fields + ("the request list" to list)).mapNotNull { (name, c) ->
+            val b = boundsIn(panel, c)
+            if (b.width > 0 && b.x >= 0 && b.x + b.width <= panel.width) null else "$name at x ${b.x} to ${b.x + b.width}"
+        } +
+            actions.mapNotNull { c ->
+                val b = boundsIn(panel, c)
+                if (b.height > 0 && form.contains(b)) null else "${c.text} at $b outside the form at $form"
+            } +
+            fields.flatMap { (name, c) ->
+                actions.filter { boundsIn(panel, it).intersects(boundsIn(panel, c)) }.map { "$name under ${it.text}" }
+            }
+    }
+
+    /** The scroll pane of the event list; asked for before the first event, while the list holds its note. */
+    private fun events(panel: InspectorPanel): JScrollPane =
+        UIUtil.findComponentsOfType(panel, JScrollPane::class.java).single { pane ->
+            UIUtil.findComponentsOfType(pane, JLabel::class.java).any { it.text.startsWith("No events yet") }
+        }
+
+    private fun showError(
+        panel: InspectorPanel,
+        message: String,
+        define: List<String>? = null,
+        useBaseUrl: String? = null,
+    ) {
+        panel.javaClass
+            .getDeclaredMethod("error", String::class.java, List::class.java, String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, message, define, useBaseUrl)
+    }
+
+    /** The line of the error [message] in the event list. */
+    private fun errorLine(
+        events: JScrollPane,
+        message: String,
+    ): JTextArea {
+        val found = UIUtil.findComponentsOfType(events, JTextArea::class.java).filter { !it.isEditable && it.text == message }
+        assertEquals("no error line that is text: $message", 1, found.size)
+        return found.single()
+    }
+
+    private fun links(events: JScrollPane) = UIUtil.findComponentsOfType(events, ActionLink::class.java).map { it.text }
+
+    private fun pump(
+        body: java.io.InputStream,
+        handlers: StreamClient.Handlers,
+        aborted: java.util.concurrent.atomic.AtomicBoolean,
+    ) = runBlocking { StreamClient.pump(body, handlers, aborted) }
+
+    /** Wait for what the panel reads off the UI thread, letting the UI thread take the result. */
+    private fun await(job: Job) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (!job.isCompleted && System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+        assertTrue("the panel did not finish reading", job.isCompleted && !job.isCancelled)
+    }
+
+    /** What an answer does: the status, and the URL it came from. The tool window's queue does not run in a test. */
+    private fun setStatus(
+        panel: InspectorPanel,
+        text: String,
+        status: StreamClient.Status?,
+        url: String?,
+    ) {
+        panel.javaClass
+            .getDeclaredMethod("setStatus", String::class.java, StreamClient.Status::class.java, String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, text, status, url)
+    }
+
+    /** The form above the event list: the fields and the row of action buttons. */
+    private fun form(panel: InspectorPanel) = (panel.layout as BorderLayout).getLayoutComponent(BorderLayout.NORTH) as JComponent
+
+    private fun button(
+        panel: InspectorPanel,
+        text: String,
+    ) = UIUtil.findComponentsOfType(panel, JButton::class.java).single { it.text == text }
+
+    /** The line under the URL field that shows the URL as it is sent, [text] being what it shows. */
+    private fun preview(
+        panel: InspectorPanel,
+        text: String,
+    ): JTextArea {
+        val found =
+            UIUtil
+                .findComponentsOfType(
+                    form(panel),
+                    JTextArea::class.java,
+                ).filter { !it.isEditable && it.text == text }
+        assertEquals("no preview that is text: $text in ${texts(panel)}", 1, found.size)
+        return found.single()
+    }
+
+    private fun tabLeaves(text: JTextComponent) {
+        for (keys in listOf(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS)) {
+            assertEquals(text.parent.getFocusTraversalKeys(keys), text.getFocusTraversalKeys(keys))
+        }
+    }
+
     fun `test the client reads a datastar stream as the browser would`() {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val seen = CopyOnWriteArrayList<String>()
@@ -63,7 +314,7 @@ class InspectorTest : BasePlatformTestCase() {
             val comments = CopyOnWriteArrayList<String>()
             val statuses = CopyOnWriteArrayList<StreamClient.Status>()
             val done = CountDownLatch(1)
-            val client = StreamClient()
+            val client = StreamClient(background)
             client.open(
                 "$base/api/feed",
                 "GET",
@@ -162,7 +413,7 @@ class InspectorTest : BasePlatformTestCase() {
                 val before = seen.size
                 val done = CountDownLatch(1)
                 var error: String? = null
-                StreamClient().open(
+                StreamClient(background).open(
                     r.url,
                     r.method,
                     r.signals,
@@ -402,7 +653,7 @@ class InspectorTest : BasePlatformTestCase() {
             val frames = CopyOnWriteArrayList<DatastarFrame>()
             val errors = CopyOnWriteArrayList<String>()
             val done = CountDownLatch(1)
-            StreamClient().open(
+            StreamClient(background).open(
                 "http://localhost:${server.address.port}/v6",
                 "GET",
                 "{}",
@@ -496,7 +747,7 @@ class InspectorTest : BasePlatformTestCase() {
                     java.util.concurrent.atomic
                         .AtomicReference<StreamClient.NonSseResponse>()
                 val done = CountDownLatch(1)
-                StreamClient().open(
+                StreamClient(background).open(
                     "$base$path",
                     "GET",
                     "{}",
@@ -538,7 +789,7 @@ class InspectorTest : BasePlatformTestCase() {
     /** Comments after the last message come back when the stream ends, through the parser's finish. */
     fun `test the comments that end a stream after its last message are shown`() {
         val comments = CopyOnWriteArrayList<String>()
-        StreamClient.pump(
+        pump(
             "data: x\n\n: bye\n".byteInputStream(),
             object : StreamClient.Handlers {
                 override fun onComment(text: String) {
@@ -572,7 +823,7 @@ class InspectorTest : BasePlatformTestCase() {
                 }
             }
         val frames = CopyOnWriteArrayList<DatastarFrame>()
-        StreamClient.pump(
+        pump(
             trickle,
             object : StreamClient.Handlers {
                 override fun onFrame(frame: DatastarFrame) {
@@ -618,12 +869,224 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test a save and a delete keep what else a hand-written requests file holds`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, HAND_WRITTEN)
+        try {
+            assertEquals(listOf("feed", "plain"), store.saved().map { it.name })
+            assertEquals(listOf("Request 2 in .streamlord/inspector.json is not read: it has no \"url\"."), store.read().skipped)
+
+            store.save(SavedRequest("alpha", "/a", "GET", "", ""))
+            val withAlpha =
+                HAND_WRITTEN.replace(
+                    "    {\n      \"name\": \"feed\"",
+                    "    ${entry("alpha", "/a")},\n    {\n      \"name\": \"feed\"",
+                )
+            assertEquals(withAlpha, String(file.contentsToByteArray()))
+
+            val feed = store.saved().single { it.name == "feed" }
+            assertEquals(SavedRequest("feed", "{{baseUrl}}/feed", "POST", "{ \"search\": \"ash\", \"n\": 1.0 }", "X-Id: 7"), feed)
+            store.save(feed.copy(url = "{{baseUrl}}/feed2"))
+            val withFeed2 = withAlpha.replace("\"url\": \"{{baseUrl}}/feed\"", "\"url\": \"{{baseUrl}}/feed2\"")
+            assertEquals(withFeed2, String(file.contentsToByteArray()))
+
+            store.delete("PLAIN")
+            assertEquals(
+                withFeed2.replace(",\n    { \"name\": \"plain\", \"url\": \"http://h/feed\" }", ""),
+                String(file.contentsToByteArray()),
+            )
+            store.delete("alpha")
+            store.delete("feed")
+            val left =
+                "{\n  \"version\": 1,\n  \"team\": \"blue\",\n  \"requests\": [\n    { \"name\": \"no url here\" }\n  ]\n}\n"
+            assertEquals(left, String(file.contentsToByteArray()))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save of an unchanged request leaves the file as it is, bytes and stamp`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, HAND_WRITTEN)
+        try {
+            val stamp = file.modificationStamp
+            for (request in store.saved()) store.save(request)
+            assertEquals(HAND_WRITTEN, String(file.contentsToByteArray()))
+            assertEquals(stamp, file.modificationStamp)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a delete of a name that is not saved leaves the file as it is, and creates none`() {
+        val store = RequestStore.getInstance(project)
+        remove(Requests.REQUESTS_FILE)
+        store.delete("nowhere")
+        assertNull(store.requestsFile())
+
+        val file = write(Requests.REQUESTS_FILE, HAND_WRITTEN)
+        try {
+            val stamp = file.modificationStamp
+            store.delete("nowhere")
+            assertEquals(HAND_WRITTEN, String(file.contentsToByteArray()))
+            assertEquals(stamp, file.modificationStamp)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a requests file that is a list is not written over`() {
+        val store = RequestStore.getInstance(project)
+        val list = "[{\"name\": \"a\", \"url\": \"/a\"}]\n"
+        val file = write(Requests.REQUESTS_FILE, list)
+        val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
+        try {
+            assertEquals(reason, store.read().error)
+            assertEquals(emptyList<SavedRequest>(), store.saved())
+            val saved = assertFailsWith<IllegalStateException> { store.save(SavedRequest("b", "/b", "GET", "", "")) }
+            assertEquals("$reason Fix the file before saving, so the requests in it are not lost.", saved.message)
+            val deleted = assertFailsWith<IllegalStateException> { store.delete("a") }
+            assertEquals("$reason Fix the file before saving, so the requests in it are not lost.", deleted.message)
+            assertEquals(list, String(file.contentsToByteArray()))
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the variables file cannot be made the requests file`() {
+        val store = RequestStore.getInstance(project)
+        val settings = StreamlordSettings.getInstance(project)
+        val variables = "{\n  \"baseUrl\": \"http://localhost:9102\"\n}\n"
+        val env = write(Requests.ENV_FILE, variables)
+        remove(Requests.REQUESTS_FILE)
+        val refused = "The requests file cannot be .streamlord/env.json: that file holds the variables. Nothing was saved."
+        try {
+            for (path in listOf(
+                ".streamlord/env.json",
+                "./.streamlord/env.json",
+                ".Streamlord/ENV.json",
+                ".streamlord/./env.json",
+                ".streamlord//env.json",
+            )) {
+                settings.state.requestsFile = path
+                assertEquals(Requests.REQUESTS_FILE, store.requestsPath())
+                val saved = assertFailsWith<IllegalStateException> { store.save(SavedRequest("a", "/a", "GET", "", "")) }
+                assertEquals(refused, saved.message)
+                val deleted = assertFailsWith<IllegalStateException> { store.delete("a") }
+                assertEquals(refused, deleted.message)
+                assertEquals(variables, String(env.contentsToByteArray()))
+                assertNull(store.requestsFile())
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.ENV_FILE)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the panel names the entries of the requests file that are not read`() {
+        write(Requests.REQUESTS_FILE, "{\"requests\": [7, {\"name\": \"feed\", \"url\": \"/feed\"}, {\"name\": \"no url\"}]}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val skipped =
+                "Request 1 in .streamlord/inspector.json is not read: it is not an object.\n" +
+                    "Request 3 in .streamlord/inspector.json is not read: it has no \"url\"."
+            assertTrue(telling(panel, skipped).isVisible)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the panel says why a requests file is not read`() {
+        write(Requests.REQUESTS_FILE, "[]")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
+            assertTrue(telling(panel, reason).isVisible)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the panel says nothing about a requests file that reads cleanly`() {
+        write(Requests.REQUESTS_FILE, "{\"requests\": [{\"name\": \"feed\", \"url\": \"/feed\"}, {\"name\": \"no url\"}]}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val area = telling(panel, "Request 2 in .streamlord/inspector.json is not read: it has no \"url\".")
+            assertTrue(area.isVisible)
+
+            // Once the file is put right, what was said about it goes, and the area with it.
+            write(Requests.REQUESTS_FILE, "{\"requests\": [{\"name\": \"feed\", \"url\": \"/feed\"}]}")
+            await(panel.pushRequests(null))
+            assertFalse(notes(panel).toString(), notes(panel).any(::aboutTheRequestsFile))
+            assertEquals("", area.text)
+            assertFalse(area.isVisible)
+            assertNoEmptyAreaShows(panel)
+
+            remove(Requests.REQUESTS_FILE)
+            val fresh = InspectorPanel(project, testRootDisposable)
+            await(fresh.pushRequests(null))
+            assertFalse(notes(fresh).toString(), notes(fresh).any(::aboutTheRequestsFile))
+            assertNoEmptyAreaShows(fresh)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    // The default file is what the list then shows, and nothing else said so before a Save was refused.
+    fun `test the panel says first when the setting names a path with a problem`() {
+        val store = RequestStore.getInstance(project)
+        val settings = StreamlordSettings.getInstance(project)
+        val problem = "The requests file ../elsewhere/inspector.json leaves the project: use a path without .. in it."
+        val skipped = "Request 1 in .streamlord/inspector.json is not read: it is not an object."
+        write(Requests.REQUESTS_FILE, "{\"requests\": [7, {\"name\": \"feed\", \"url\": \"/feed\"}]}")
+        try {
+            assertNull(store.requestsPathProblem())
+            settings.state.requestsFile = "../elsewhere/inspector.json"
+            assertEquals(problem, store.requestsPathProblem())
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(null))
+            val area = telling(panel, "$problem The default file is shown.\n$skipped")
+            assertTrue(area.isVisible)
+
+            write(Requests.REQUESTS_FILE, "[]")
+            await(panel.pushRequests(null))
+            val reason = ".streamlord/inspector.json is not a requests file: it must be an object with a \"requests\" list."
+            assertEquals("$problem The default file is shown.\n$reason", area.text)
+
+            remove(Requests.REQUESTS_FILE)
+            await(panel.pushRequests(null))
+            assertEquals("$problem The default file is shown.", area.text)
+            assertTrue(area.isVisible)
+
+            settings.state.requestsFile = ".streamlord/./env.json"
+            assertEquals("The requests file cannot be .streamlord/env.json: that file holds the variables.", store.requestsPathProblem())
+            await(panel.pushRequests(null))
+            assertEquals(
+                "The requests file cannot be .streamlord/env.json: that file holds the variables. The default file is shown.",
+                area.text,
+            )
+
+            settings.state.requestsFile = ""
+            assertNull(store.requestsPathProblem())
+            await(panel.pushRequests(null))
+            assertEquals("", area.text)
+            assertFalse(area.isVisible)
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
     // Swing renders a label whose text starts with <html> as HTML and fetches its images; an event name or a saved name must not.
     fun `test the panel shows server text and shared names as text, never as Swing HTML`() {
         val store = RequestStore.getInstance(project)
         store.save(SavedRequest("<html><b>x</b><img src='http://127.0.0.1:1/beacon'>", "/a", "GET", "", ""))
         val panel = InspectorPanel(project, testRootDisposable)
-        panel.pushRequests(null)
+        await(panel.pushRequests(null))
         val frame = DatastarFrame("<html><b>forged</b><img src='http://127.0.0.1:1/b'>", "1", null, mapOf("elements" to "<p>x</p>"), "", 0L)
         panel.javaClass
             .getDeclaredMethod("addFrame", DatastarFrame::class.java)
@@ -683,7 +1146,7 @@ class InspectorTest : BasePlatformTestCase() {
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
         assertEquals("""{"a":[7,2],"b":1}""", JsonParser.parse(store.text).toJson())
-        val labels = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        val labels = texts(panel)
         // The client leaves its batch open after a throw, so the bindings on the page stop
         // redrawing (measured in Chrome).
         val expected =
@@ -703,7 +1166,7 @@ class InspectorTest : BasePlatformTestCase() {
         fun patch(signals: String) =
             apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
 
-        fun labels() = UIUtil.findComponentsOfType(panel, JLabel::class.java).map { it.text }
+        fun labels() = texts(panel)
         patch("""{"a":[1]}""")
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         patch("""{"b":1,"o":{"__proto__":{"x":1}},"c":2}""")
@@ -749,5 +1212,1222 @@ class InspectorTest : BasePlatformTestCase() {
         patch("""{"b":3,"c":3}""", "\u001Ctrue")
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).single { it.text.startsWith("{\n") }
         assertEquals("""{"a":1,"b":3,"c":3}""", JsonParser.parse(store.text).toJson())
+    }
+
+    // The request sends a param encoded, and the line under the URL is there to show what is sent.
+    fun `test the line under the URL shows a param as the request sends it`() {
+        write(Requests.ENV_FILE, "{\"baseUrl\":\"http://h:1\",\"params\":{\"id\":\"4 2/x\"}}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(SavedRequest("", "{{baseUrl}}/feed/{{id}}", "GET", "", "")))
+            await(panel.pushRequests(null))
+
+            val line = preview(panel, "http://h:1/feed/4%202%2Fx")
+            assertTrue(line.lineWrap)
+            assertTrue(line.isVisible)
+            tabLeaves(line)
+
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single { it.text == "{{baseUrl}}/feed/{{id}}" }
+            url.text = "{{baseUrl}}/feed/{{nowhere}}/{{signals}}?id={{ id }}"
+            assertEquals("http://h:1/feed/{{nowhere}}/{{signals}}?id=4%202%2Fx", line.text)
+            assertTrue(line.isVisible)
+
+            // The IDE renders a tooltip as HTML whatever it starts with, and the URL is typed or comes from a shared file.
+            url.text = "{{baseUrl}}/feed/<b>bold</b>"
+            assertEquals("http://h:1/feed/<b>bold</b>", line.text)
+            assertNull(line.toolTipText)
+            val tooltips = UIUtil.findComponentsOfType(panel, JComponent::class.java).mapNotNull { it.toolTipText }
+            assertEquals(emptyList<String>(), tooltips.filter { "bold" in it || "http://h:1" in it })
+
+            url.text = "http://h:1/feed"
+            assertEquals("", line.text)
+            assertFalse(line.isVisible)
+            assertFalse(texts(panel).toString(), texts(panel).any { it.startsWith("http://h:1/feed") })
+        } finally {
+            remove(Requests.ENV_FILE)
+        }
+    }
+
+    fun `test a long preview goes on to more lines inside the panel`() {
+        write(Requests.ENV_FILE, "{\"baseUrl\":\"http://h:1\"}")
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            val long = "http://h:1" + "/part".repeat(38)
+            assertEquals(200, long.length)
+            await(panel.pushRequests(SavedRequest("", "{{baseUrl}}" + "/part".repeat(38), "GET", "", "")))
+            layOut(panel, 360)
+            val line = preview(panel, long)
+            val bounds = boundsIn(panel, line)
+            assertTrue("$bounds in 360", bounds.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= panel.width)
+            val oneLine = line.getFontMetrics(line.font).height
+            assertTrue("${line.height} high, a line is $oneLine", line.height >= 2 * oneLine)
+            assertEquals(emptyList<String>(), outside(panel))
+        } finally {
+            remove(Requests.ENV_FILE)
+        }
+    }
+
+    // A URL is typed or comes from a shared file, and the IDE renders every tooltip as HTML.
+    fun `test the tooltip of the status shows the URL that was sent as text`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x?a=1&lt=2<b>")
+        assertEquals("open · 200 OK", status.text)
+        assertEquals("open · 200 OK<br>http://h/x?a=1&amp;lt=2&lt;b&gt;", status.toolTipText)
+
+        // The tooltip is of the status that shows: the URL of an earlier request does not stay on it.
+        setStatus(panel, "error", null, null)
+        assertEquals("error", status.toolTipText)
+
+        // A content type is the server's text, as much as the URL is the file's.
+        setStatus(panel, "open · 200 OK · text/<i>\"x\"</i>&", StreamClient.Status.OPEN, "http://h/\"q\"&amp;")
+        assertEquals("open · 200 OK · text/&lt;i&gt;&quot;x&quot;&lt;/i&gt;&amp;<br>http://h/&quot;q&quot;&amp;amp;", status.toolTipText)
+        setStatus(panel, "idle", null, null)
+        assertEquals("idle", status.toolTipText)
+    }
+
+    // A status with a content type is longer than the row has room for in a narrow panel, and the buttons are what is clicked.
+    fun `test a long status gives way to the action buttons`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        val statuses =
+            listOf(
+                "open · 200 OK · text/event-stream; charset=utf-8" to StreamClient.Status.OPEN,
+                "error · 500 Internal Server Error · application/problem+json; charset=utf-8" to null,
+            )
+        val found = ArrayList<String>()
+        for ((text, kind) in statuses) {
+            setStatus(panel, text, kind, "http://h/x")
+            // Longer than the label may be in a narrow panel, so the label is in fact cut there and the cap is not met by a short text.
+            val whole = status.getFontMetrics(status.font).stringWidth(text)
+            val cap = JBUI.scale(160)
+            assertTrue(text, whole > cap)
+            for (width in listOf(360, 460, 900, 1200, 360)) {
+                layOut(panel, width)
+                val at = "at $width with ${text.substringBefore(' ')}"
+                val form = form(panel).bounds
+                val label = boundsIn(panel, status)
+                found += outside(panel).map { "$it $at" }
+                if (label.width <= 0 || label.x < 0 || !form.contains(label)) found += "the status at $label outside the form at $form $at"
+                // Cut only where the row has no room for more: whole beside the buttons in a wide panel, never under the cap in between.
+                if (width <= 460 && label.width > cap) found += "the status is ${label.width} wide $at"
+                if (width == 900 && label.width < cap) found += "the status is ${label.width} wide, under $cap $at"
+                if (width == 1200) {
+                    if (label.width < whole) found += "the status is ${label.width} wide and its text $whole $at"
+                    val row = ACTION_BUTTONS.map { boundsIn(panel, button(panel, it)) }
+                    if (row.map { it.y }.distinct().size != 1) found += "the action buttons stand on lines ${row.map { it.y }} $at"
+                    if (row.any { label.x < it.x + it.width }) found += "the status at $label is not right of the buttons $row $at"
+                }
+                for (name in ACTION_BUTTONS) {
+                    val button = button(panel, name)
+                    val b = boundsIn(panel, button)
+                    val own = button.bounds
+                    val room = button.parent.size
+                    if (own.x < 0 || own.y < 0 || own.x + own.width > room.width || own.y + own.height > room.height) {
+                        found += "$name at $own is cut by its row of ${room.width} by ${room.height} $at"
+                    }
+                    if (label.x < b.x + b.width &&
+                        label.y < b.y + b.height
+                    ) {
+                        found += "the status at $label is not right of or below $name at $b $at"
+                    }
+                }
+            }
+        }
+        assertEquals("", found.joinToString("\n"))
+
+        setStatus(panel, "idle", null, null)
+        layOut(panel, 900)
+        val idle = boundsIn(panel, status)
+        val right = form(panel).x + form(panel).width
+        assertTrue("$idle, the form ends at $right", right - (idle.x + idle.width) in 0..16)
+        val connect = boundsIn(panel, button(panel, "Connect"))
+        assertTrue("$idle beside $connect", idle.y + idle.height / 2 in connect.y..connect.y + connect.height)
+    }
+
+    fun `test Stop is enabled only while a request is connecting or open`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val stop = button(panel, "Stop")
+        assertFalse(stop.isEnabled)
+        await(panel.pushRequests(null))
+        assertFalse(stop.isEnabled)
+
+        setStatus(panel, "connecting", StreamClient.Status.CONNECTING, "http://h/x")
+        assertTrue(stop.isEnabled)
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
+        assertTrue(stop.isEnabled)
+        setStatus(panel, "closed", StreamClient.Status.CLOSED, "http://h/x")
+        assertFalse(stop.isEnabled)
+        setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
+        setStatus(panel, "error", null, null)
+        assertFalse(stop.isEnabled)
+    }
+
+    fun `test the modified marker asks for the width of its text in the font it has`() {
+        val feed = SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", "")
+        RequestStore.getInstance(project).save(feed)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(feed))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single { it.text == feed.url }
+            url.text = "${feed.url}/2"
+            val marker = UIUtil.findComponentsOfType(panel, JBLabel::class.java).single { it.text == "● modified" }
+            val shown = marker.preferredSize
+            assertTrue("$shown", shown.width >= marker.getFontMetrics(marker.font).stringWidth("● modified"))
+
+            url.text = feed.url
+            assertFalse(modifiedShows(panel))
+            assertEquals(shown, marker.preferredSize)
+
+            marker.font = marker.font.deriveFont(marker.font.size2D * 2)
+            val larger = marker.preferredSize
+            assertTrue("$larger after $shown", larger.width > shown.width)
+            assertTrue("$larger", larger.width >= marker.getFontMetrics(marker.font).stringWidth("● modified"))
+            url.text = "${feed.url}/2"
+            assertEquals(larger, marker.preferredSize)
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the status stands at the right end of the action row`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+
+        layOut(panel, 900)
+        val wide = boundsIn(panel, status)
+        val right = form(panel).x + form(panel).width
+        assertTrue("$wide, the form ends at $right", right - (wide.x + wide.width) in 0..16)
+        val connect = boundsIn(panel, button(panel, "Connect"))
+        assertTrue("$wide beside $connect", wide.y + wide.height / 2 in connect.y..connect.y + connect.height)
+
+        layOut(panel, 360)
+        val narrow = boundsIn(panel, status)
+        assertTrue("$narrow in 360", narrow.width > 0 && narrow.x >= 0 && narrow.x + narrow.width <= panel.width)
+    }
+
+    fun `test the form holds its buttons and fields apart whichever width came first`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val found =
+            listOf(360, 460, 900, 360, 900, 460, 360).mapIndexedNotNull { step, width ->
+                layOut(panel, width)
+                outside(panel).takeIf { it.isNotEmpty() }?.let { "step ${step + 1}, $width wide: $it" }
+            }
+        assertEquals(emptyList<String>(), found)
+    }
+
+    // The note stands in an empty list only: the first event takes its place, and no event takes the place of another.
+    fun `test the first event takes the place of the note, and no later one takes a line away`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+        val list = UIUtil.findComponentsOfType(events, JLabel::class.java).single { it.text.startsWith("No events yet") }.parent
+
+        fun labels() = UIUtil.findComponentsOfType(events, JLabel::class.java).map { it.text }
+
+        fun comment(text: String) {
+            panel.javaClass
+                .getDeclaredMethod("addComment", String::class.java)
+                .apply { isAccessible = true }
+                .invoke(panel, text)
+        }
+
+        fun frame(event: String) {
+            panel.javaClass
+                .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+                .apply { isAccessible = true }
+                .invoke(panel, DatastarFrame(event, null, null, mapOf("elements" to "<p>x</p>"), "", 0L))
+        }
+
+        comment("first comment")
+        assertEquals(1, list.componentCount)
+        assertFalse(labels().toString(), labels().any { it.startsWith("No events yet") })
+        frame("first-frame")
+        assertEquals(2, list.componentCount)
+        assertTrue(labels().toString(), labels().any { it.endsWith(": first comment") } && "first-frame" in labels())
+
+        button(panel, "Clear").doClick()
+        assertEquals(listOf("Cleared."), labels())
+        showError(panel, "an error")
+        assertEquals(1, list.componentCount)
+        assertFalse(labels().toString(), "Cleared." in labels())
+        comment("after the error")
+        assertEquals(2, list.componentCount)
+        errorLine(events, "an error")
+        assertTrue(labels().toString(), labels().any { it.endsWith(": after the error") })
+
+        button(panel, "Clear").doClick()
+        comment("after Clear")
+        assertEquals(1, list.componentCount)
+        assertEquals(listOf(true), labels().map { it.endsWith(": after Clear") })
+
+        // Each line added is one line more, whatever stood alone before it.
+        val adds = listOf<() -> Unit>({ comment("a") }, { comment("b") }, { frame("c") }, { showError(panel, "d") }, { comment("e") })
+        for (start in adds) {
+            button(panel, "Clear").doClick()
+            start()
+            for ((n, add) in adds.withIndex()) {
+                add()
+                assertEquals(n + 2, list.componentCount)
+            }
+        }
+    }
+
+    fun `test every line of the event list starts at its left edge`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+        val note = UIUtil.findComponentsOfType(events, JLabel::class.java).single { it.text.startsWith("No events yet") }
+        val list = note.parent
+        layOut(panel, 460)
+        assertEquals(0, SwingUtilities.convertRectangle(list, note.bounds, events.viewport).x)
+
+        // The note gives way to the first event, so it is measured alone and the other four together.
+        panel.javaClass
+            .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, DatastarFrame("datastar-patch-elements", "1", null, mapOf("elements" to "<p>x</p>"), "", 0L))
+        panel.javaClass
+            .getDeclaredMethod("addComment", String::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, "a comment")
+        showError(panel, "an error without a link")
+        showError(panel, "an error with a link", listOf("id"))
+        layOut(panel, 460)
+        assertEquals(4, list.componentCount)
+        assertEquals(listOf(0, 0, 0, 0), list.components.map { SwingUtilities.convertRectangle(list, it.bounds, events.viewport).x })
+        val texts = listOf("an error without a link", "an error with a link").map { errorLine(events, it) }
+        assertEquals(1, texts.map { SwingUtilities.convertRectangle(it.parent, it.bounds, events.viewport).x }.distinct().size)
+    }
+
+    // A tool window is often narrower than the row of action buttons, and the form is no wider than the panel.
+    fun `test the form fits a narrow panel, and its action buttons share a line in a wide one`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val found =
+            listOf(900, 460, 360).flatMap { width ->
+                layOut(panel, width)
+                outside(panel).map { "$it of $width" }
+            }
+        assertEquals(emptyList<String>(), found)
+        layOut(panel, 900)
+        val lines = ACTION_BUTTONS.map { boundsIn(panel, button(panel, it)).y }
+        assertEquals(lines.toString(), 1, lines.distinct().size)
+    }
+
+    // The marker holds its place whether it shows or not, so a click meant for Save does not land on Delete.
+    fun `test Save and Delete stay where they are when the modified marker comes and goes`() {
+        val feed = SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", "")
+        RequestStore.getInstance(project).save(feed)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(feed))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single { it.text == feed.url }
+
+            fun buttons() =
+                listOf("Save", "Delete").map { text ->
+                    boundsIn(panel, UIUtil.findComponentsOfType(panel, JButton::class.java).single { it.text == text })
+                }
+            for (width in listOf(900, 460, 360)) {
+                layOut(panel, width)
+                assertFalse(modifiedShows(panel))
+                val before = buttons()
+                assertEquals("at $width", emptyList<String>(), outside(panel))
+
+                url.text = "${feed.url}/2"
+                layOut(panel, width)
+                assertTrue(modifiedShows(panel))
+                assertEquals("edited, at $width", before, buttons())
+
+                url.text = feed.url
+                layOut(panel, width)
+                assertFalse(modifiedShows(panel))
+                assertEquals("put back, at $width", before, buttons())
+            }
+        } finally {
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test an error in the event list is text that wraps, with its link beside it`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+
+        // A message is someone else's text as much as an event name is: never Swing HTML.
+        val markup = "<html><b>bold</b><img src='http://127.0.0.1:1/beacon'> could not be reached"
+        showError(panel, markup)
+        val line = errorLine(events, markup)
+        assertTrue(line.lineWrap)
+        assertTrue(line.wrapStyleWord)
+        tabLeaves(line)
+        assertEquals(emptyList<String>(), links(events))
+
+        showError(panel, "{{id}} is not set. Add it to params in .streamlord/env.json.", listOf("id"))
+        tabLeaves(errorLine(events, "{{id}} is not set. Add it to params in .streamlord/env.json."))
+        assertEquals(listOf("Add to .streamlord/env.json"), links(events))
+
+        showError(panel, "Could not reach http://localhost:8080/feed.", emptyList())
+        errorLine(events, "Could not reach http://localhost:8080/feed.")
+        assertTrue(links(events).toString(), "Edit variables" in links(events))
+
+        showError(panel, "Could not reach http://localhost:8080/x.", null, "http://localhost:9102")
+        errorLine(events, "Could not reach http://localhost:8080/x.")
+        assertTrue(links(events).toString(), "Use http://localhost:9102 in .streamlord/env.json" in links(events))
+        assertEquals(3, links(events).size)
+    }
+
+    // An error is read whole in the list: it goes on to more lines, and the list never scrolls sideways.
+    fun `test a long error is laid out no wider than the event list, on more lines than one`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events = events(panel)
+        assertTrue((events.viewport.view as? Scrollable)?.scrollableTracksViewportWidth == true)
+
+        val long = "long ".repeat(59) + "words"
+        assertEquals(300, long.length)
+        showError(panel, long)
+        showError(panel, "$long.", listOf("id"))
+        for (width in listOf(460, 360, 900, 360)) {
+            layOut(panel, width)
+            val viewport = events.viewport
+            assertTrue("${viewport.width}", viewport.width in 1..width)
+            assertTrue("${viewport.view.width} in ${viewport.width}", viewport.view.width <= viewport.width)
+            for (line in listOf(errorLine(events, long), errorLine(events, "$long."))) {
+                val bounds = SwingUtilities.convertRectangle(line.parent, line.bounds, viewport)
+                assertTrue("$bounds in ${viewport.width}", line.width > 0 && bounds.x >= 0 && bounds.x + bounds.width <= viewport.width)
+                val oneLine = line.getFontMetrics(line.font).height
+                assertTrue("${line.height} high at $width, a line is $oneLine", line.height >= 2 * oneLine)
+            }
+        }
+    }
+
+    // Reading a file is not work for the UI thread: the form is there at once, and the list follows.
+    fun `test the panel fills the form at once and reads the saved requests off the UI thread`() {
+        RequestStore.getInstance(project).save(SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", ""))
+        val panel = InspectorPanel(project, testRootDisposable)
+
+        fun names() =
+            UIUtil
+                .findComponentsOfType(panel, JComboBox::class.java)
+                .flatMap { combo -> (0 until combo.itemCount).map { combo.getItemAt(it).toString() } }
+        val job = panel.pushRequests(SavedRequest("feed", "{{baseUrl}}/feed", "GET", "", ""))
+        assertTrue(UIUtil.findComponentsOfType(panel, JBTextField::class.java).any { it.text == "{{baseUrl}}/feed" })
+        assertFalse(names().toString(), "feed" in names())
+
+        await(job)
+        assertTrue(names().toString(), "feed" in names())
+    }
+
+    // A save is planned in the background and written on the UI thread: what changed in between is not written over.
+    fun `test a file changed after a save was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        store.save(SavedRequest("feed", "/feed", "GET", "", ""))
+        val planned = store.saving(SavedRequest("count", "/count", "GET", "", ""))
+        store.save(SavedRequest("pulled", "/pulled", "GET", "", ""))
+
+        try {
+            store.apply(planned)
+            fail("the save wrote over a file that had changed")
+        } catch (e: IllegalStateException) {
+            assertEquals("${Requests.REQUESTS_FILE} changed in the meantime. Try again.", e.message)
+        }
+        assertEquals(listOf("feed", "pulled"), store.saved().map { it.name })
+    }
+
+    fun `test the variables file edited after a change was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        val (file, _) = store.defineVariables(emptyList())
+        try {
+            val planned = store.usingBaseUrl("http://localhost:9103")
+            val document = FileDocumentManager.getInstance().getDocument(file)!!
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("""{"baseUrl": "http://typed"}""") }
+
+            try {
+                store.apply(planned)
+                fail("the change wrote over text typed since")
+            } catch (e: IllegalStateException) {
+                assertEquals("${Requests.ENV_FILE} changed in the meantime. Try again.", e.message)
+            }
+            assertEquals("""{"baseUrl": "http://typed"}""", document.text)
+        } finally {
+            WriteCommandAction.runWriteCommandAction(project) { file.delete(this) }
+        }
+    }
+
+    // The stream is open and silent when its scope ends: the read under way is interrupted, which is no failure.
+    fun `test an open stream ends quietly when its scope does`() {
+        val server = java.net.ServerSocket(0)
+        val serving =
+            Thread {
+                runCatching {
+                    server.accept().use { socket ->
+                        val input = socket.getInputStream().bufferedReader()
+                        var line = input.readLine()
+                        while (!line.isNullOrEmpty()) line = input.readLine()
+                        socket.getOutputStream().apply {
+                            write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n".toByteArray())
+                            flush()
+                        }
+                        Thread.sleep(30_000)
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+        try {
+            val open = CountDownLatch(1)
+            val closed = CountDownLatch(1)
+            val errors = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val scope = CoroutineScope(SupervisorJob())
+            StreamClient(scope).open(
+                "http://127.0.0.1:${server.localPort}/silent",
+                "GET",
+                "{}",
+                emptyMap(),
+                object : StreamClient.Handlers {
+                    override fun onStatus(
+                        status: StreamClient.Status,
+                        http: String?,
+                        contentType: String?,
+                    ) {
+                        if (status == StreamClient.Status.OPEN) open.countDown()
+                        if (status == StreamClient.Status.CLOSED) closed.countDown()
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
+                    }
+                },
+            )
+            assertTrue(open.await(10, TimeUnit.SECONDS))
+            Thread.sleep(200)
+            scope.cancel()
+            assertTrue(closed.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
+        } finally {
+            serving.interrupt()
+            server.close()
+        }
+    }
+
+    // The server takes the connection and never answers, so the request is waiting when its scope ends.
+    fun `test a request waiting for the server ends quietly when its scope does`() {
+        val server = java.net.ServerSocket(0)
+        try {
+            val connecting = CountDownLatch(1)
+            val closed = CountDownLatch(1)
+            val errors = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val scope = CoroutineScope(SupervisorJob())
+            StreamClient(scope).open(
+                "http://127.0.0.1:${server.localPort}/never",
+                "GET",
+                "{}",
+                emptyMap(),
+                object : StreamClient.Handlers {
+                    override fun onStatus(
+                        status: StreamClient.Status,
+                        http: String?,
+                        contentType: String?,
+                    ) {
+                        if (status == StreamClient.Status.CONNECTING) connecting.countDown()
+                        if (status == StreamClient.Status.CLOSED) closed.countDown()
+                    }
+
+                    override fun onError(message: String) {
+                        errors += message
+                    }
+                },
+            )
+            assertTrue(connecting.await(10, TimeUnit.SECONDS))
+            Thread.sleep(300)
+            scope.cancel()
+            assertTrue(closed.await(10, TimeUnit.SECONDS))
+            assertEquals(emptyList<String>(), errors)
+        } finally {
+            server.close()
+        }
+    }
+
+    /** The tool window's queue as a test holds it: what it is given runs on the UI thread, or waits in [held] while [holding]. */
+    private class Queue {
+        @Volatile var holding = false
+        val held = CopyOnWriteArrayList<Runnable>()
+
+        /** Run what waits, in the order it came, and let what comes after run as it comes. */
+        fun release() {
+            holding = false
+            val waiting = held.toList()
+            held.clear()
+            waiting.forEach { it.run() }
+        }
+    }
+
+    /** Let the tool window's queue run, as it does in the IDE; in a test it drops what it is given. */
+    private fun toolWindowRuns(): Queue {
+        val queue = Queue()
+        val manager =
+            object : ToolWindowHeadlessManagerImpl(project) {
+                override fun invokeLater(runnable: Runnable) {
+                    if (queue.holding) queue.held += runnable else ApplicationManager.getApplication().invokeLater(runnable)
+                }
+            }
+        project.replaceService(ToolWindowManager::class.java, manager, testRootDisposable)
+        return queue
+    }
+
+    /** Run the UI thread until [done] or [seconds] have passed, and say whether it is done. */
+    private fun within(
+        seconds: Long,
+        done: () -> Boolean,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (!done() && System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+        return done()
+    }
+
+    /** Run the UI thread until [done], or fail with [what]. */
+    private fun until(
+        what: () -> String,
+        seconds: Long = 10,
+        done: () -> Boolean,
+    ) = assertTrue(what(), within(seconds, done))
+
+    /** Run the UI thread for [millis], so what is on its way arrives. */
+    private fun settle(millis: Long = 300) {
+        val deadline = System.currentTimeMillis() + millis
+        while (System.currentTimeMillis() < deadline) {
+            PlatformTestUtil.dispatchAllEventsInIdeEventQueue()
+            Thread.sleep(5)
+        }
+    }
+
+    /** The names of the saved requests in the request list, in its order. */
+    private fun savedNames(panel: InspectorPanel): List<String> {
+        val list = UIUtil.findComponentsOfType(panel, JComboBox::class.java).single { it.getItemAt(0) !is String }
+        return (1 until list.itemCount).map { list.getItemAt(it).toString() }.filter { !it.startsWith("recent: ") }
+    }
+
+    /** The lines of text in the event list, newest first. */
+    private fun lines(events: JScrollPane) = UIUtil.findComponentsOfType(events, JTextArea::class.java).filter { !it.isEditable }
+
+    /** The requests file as the store writes it, holding feed; [typed] is it with an entry typed and not saved. */
+    private val written = "{\n  \"version\": 1,\n  \"requests\": [\n    ${entry("feed", "/feed")}\n  ]\n}\n"
+
+    private val typed = written.replace(entry("feed", "/feed"), "${entry("feed", "/feed")},\n    ${entry("typed", "/typed")}")
+
+    /** Drop what is typed in the editor of [file] and not saved, so the next test reads the file. */
+    private fun forget(file: VirtualFile) {
+        val documents = FileDocumentManager.getInstance()
+        documents.getCachedDocument(file)?.let { documents.reloadFromDisk(it) }
+    }
+
+    fun `test the saved requests follow what an open editor holds of the requests file, saved or not`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        try {
+            assertEquals(listOf("feed"), store.saved().map { it.name })
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            assertEquals(listOf("feed", "typed"), store.saved().map { it.name })
+            WriteCommandAction.runWriteCommandAction(project) { document.setText("""{"requests": [{"name": "typed", "url": "/typed"}]}""") }
+            assertEquals(listOf("typed"), store.saved().map { it.name })
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save and a delete change the open editor of the requests file, keeping what is typed there and leaving the disk alone`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val documents = FileDocumentManager.getInstance()
+        val document = documents.getDocument(file)!!
+        try {
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            val a = SavedRequest("a", "/a", "GET", "", "")
+            store.save(a)
+            val withA = Requests.saveRequest(typed, a, Requests.REQUESTS_FILE).text!!
+            assertEquals(withA, document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+            assertTrue(documents.isDocumentUnsaved(document))
+
+            store.delete("feed")
+            val withoutFeed = Requests.removeRequest(withA, "feed", Requests.REQUESTS_FILE).text!!
+            assertEquals(withoutFeed, document.text)
+            store.delete("typed")
+            assertEquals(Requests.removeRequest(withoutFeed, "typed", Requests.REQUESTS_FILE).text, document.text)
+            assertFalse(document.text, "\"typed\"" in document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test a save into the open editor of the requests file is one edit that can be undone`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        try {
+            myFixture.openFileInEditor(file)
+            val document = myFixture.editor.document
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            store.save(SavedRequest("a", "/a", "GET", "", ""))
+            assertTrue(document.text, "\"a\"" in document.text)
+            val editor = FileEditorManager.getInstance(project).getSelectedEditor(file)!!
+            UndoManager.getInstance(project).undo(editor)
+            assertEquals(typed, document.text)
+        } finally {
+            forget(file)
+            FileEditorManager.getInstance(project).closeFile(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    fun `test the requests file typed in after a save was planned is left as it is`() {
+        val store = RequestStore.getInstance(project)
+        val file = write(Requests.REQUESTS_FILE, written)
+        val document = FileDocumentManager.getInstance().getDocument(file)!!
+        try {
+            val planned = store.saving(SavedRequest("a", "/a", "GET", "", ""))
+            WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+            val e = assertFailsWith<IllegalStateException> { store.apply(planned) }
+            assertEquals("${Requests.REQUESTS_FILE} changed in the meantime. Try again.", e.message)
+            assertEquals(typed, document.text)
+            assertEquals(written, String(file.contentsToByteArray()))
+        } finally {
+            forget(file)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    /** The setting, and the file it names: written as the default, as a path of its own, and as that path spelt otherwise. */
+    private val requestsPaths =
+        listOf(
+            Requests.REQUESTS_FILE to Requests.REQUESTS_FILE,
+            "requests/inspector.json" to "requests/inspector.json",
+            "./requests/inspector.json" to "requests/inspector.json",
+            "requests//inspector.json" to "requests/inspector.json",
+        )
+
+    fun `test the request list follows the requests file as it is typed, however the settings write its path`() {
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        val found = ArrayList<String>()
+        try {
+            for ((setting, path) in requestsPaths) {
+                settings.state.requestsFile = setting
+                val file = write(path, written)
+                try {
+                    val panel = InspectorPanel(project, testRootDisposable)
+                    await(panel.pushRequests(null))
+                    if (savedNames(panel) != listOf("feed")) found += "$setting reads ${savedNames(panel)}"
+                    val document = FileDocumentManager.getInstance().getDocument(file)!!
+                    WriteCommandAction.runWriteCommandAction(project) { document.setText(typed) }
+                    if (!within(3) { savedNames(panel) == listOf("feed", "typed") }) found += "$setting as typed lists ${savedNames(panel)}"
+                } finally {
+                    forget(file)
+                    remove(path)
+                }
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove("requests")
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    fun `test the request list follows a change on disk, however the settings write its path`() {
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        val found = ArrayList<String>()
+        try {
+            for ((setting, path) in requestsPaths) {
+                settings.state.requestsFile = setting
+                write(path, written)
+                try {
+                    val panel = InspectorPanel(project, testRootDisposable)
+                    await(panel.pushRequests(null))
+                    if (savedNames(panel) != listOf("feed")) found += "$setting reads ${savedNames(panel)}"
+                    write(path, typed)
+                    if (!within(3) { savedNames(panel) == listOf("feed", "typed") }) {
+                        found +=
+                            "$setting after a change on disk lists ${savedNames(panel)}"
+                    }
+                } finally {
+                    remove(path)
+                }
+            }
+        } finally {
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove("requests")
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    /** A server that opens a stream on each request and holds it until the client closes it. */
+    private class Streaming : AutoCloseable {
+        private val server = java.net.ServerSocket(0)
+        private val sockets = CopyOnWriteArrayList<java.net.Socket>()
+        private val byPath = java.util.concurrent.ConcurrentHashMap<String, java.net.Socket>()
+        val port = server.localPort
+
+        /** The path of each request without its query, in the order they came. */
+        val paths = CopyOnWriteArrayList<String>()
+
+        /** Break the connection of the request to [path], as a network that fails does: the client reads an error, not an end. */
+        fun drop(path: String) {
+            byPath[path]?.apply {
+                setSoLinger(true, 0)
+                close()
+            }
+        }
+
+        init {
+            Thread {
+                runCatching {
+                    while (true) {
+                        val socket = server.accept()
+                        sockets += socket
+                        Thread {
+                            runCatching {
+                                val input = socket.getInputStream().bufferedReader()
+                                var line = input.readLine()
+                                val path =
+                                    line
+                                        .orEmpty()
+                                        .split(' ')
+                                        .getOrElse(1) { "" }
+                                        .substringBefore('?')
+                                byPath[path] = socket
+                                paths += path
+                                while (!line.isNullOrEmpty()) line = input.readLine()
+                                socket.getOutputStream().apply {
+                                    write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n: open\n\n".toByteArray())
+                                    flush()
+                                }
+                                // Held open until the client closes it, which ends the read.
+                                input.readText()
+                            }
+                        }.apply {
+                            isDaemon = true
+                            start()
+                        }
+                    }
+                }
+            }.apply {
+                isDaemon = true
+                start()
+            }
+        }
+
+        override fun close() {
+            sockets.forEach { runCatching { it.close() } }
+            server.close()
+        }
+    }
+
+    // The earlier stream's close is held until what came after it is done, as a slow close of a stream may come.
+    fun `test an earlier request does not speak for the one after it`() {
+        val queue = toolWindowRuns()
+        Streaming().use { server ->
+            write(Requests.ENV_FILE, """{"baseUrl": "http://127.0.0.1:${server.port}"}""")
+            try {
+                val panel = InspectorPanel(project, testRootDisposable)
+                await(panel.pushRequests(null))
+                val events = events(panel)
+                val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+                val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+                val stop = button(panel, "Stop")
+                val found = ArrayList<String>()
+
+                fun open() {
+                    url.text = "{{baseUrl}}/feed"
+                    button(panel, "Connect").doClick()
+                    until({ "the stream does not open: ${status.text}" }) { status.text.startsWith("open") }
+                    settle(100)
+                    queue.holding = true
+                }
+
+                fun heldClose(what: String) {
+                    if (!within(5) { queue.held.isNotEmpty() }) found += "$what: the earlier stream told nothing as it closed"
+                    settle(200)
+                    queue.release()
+                    settle(100)
+                }
+
+                open()
+                val before = lines(events).toSet()
+                url.text = "{{nope}}/x"
+                button(panel, "Connect").doClick()
+                until({ "the new request shows no error line" }) { lines(events).any { it !in before } }
+                heldClose("Connect")
+                if (status.text != "error" || status.toolTipText != "error<br>{{nope}}/x") {
+                    found += "after Connect the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (stop.isEnabled) found += "after Connect Stop is enabled"
+
+                open()
+                stop.doClick()
+                heldClose("Stop")
+                if (status.text != "idle" ||
+                    status.toolTipText != "idle"
+                ) {
+                    found += "after Stop the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (stop.isEnabled) found += "after Stop Stop is enabled"
+                assertEquals("", found.joinToString("\n"))
+            } finally {
+                queue.release()
+                remove(Requests.ENV_FILE)
+                InspectorState.getInstance(project).loadState(InspectorState.State())
+            }
+        }
+    }
+
+    /** A panel over a server that streams, with what the tests of more than one request look at. */
+    private inner class Streams(
+        val server: Streaming,
+    ) {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val events: JScrollPane
+        val status: JLabel
+        val url: JBTextField
+        val stop: JButton
+
+        init {
+            await(panel.pushRequests(null))
+            events = events(panel)
+            status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+            url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+            stop = button(panel, "Stop")
+        }
+
+        fun connect(path: String) {
+            url.text = "{{baseUrl}}$path"
+            button(panel, "Connect").doClick()
+        }
+
+        /** Connect to [path] and wait until its stream is open. */
+        fun open(path: String) {
+            connect(path)
+            until({ "$path does not open: ${status.text} ${status.toolTipText}" }) { isOpen(path) }
+            settle(100)
+        }
+
+        fun isOpen(path: String) = status.text.startsWith("open") && status.toolTipText.endsWith("<br>http://127.0.0.1:${server.port}$path")
+    }
+
+    /** Run [test] over a server that streams, with the env file pointing at it. */
+    private fun streams(test: (Streams, Queue) -> Unit) {
+        val queue = toolWindowRuns()
+        Streaming().use { server ->
+            write(Requests.ENV_FILE, """{"baseUrl": "http://127.0.0.1:${server.port}"}""")
+            try {
+                test(Streams(server), queue)
+            } finally {
+                queue.release()
+                remove(Requests.ENV_FILE)
+                InspectorState.getInstance(project).loadState(InspectorState.State())
+            }
+        }
+    }
+
+    /** Wait, without running the UI thread, until the queue holds something or [seconds] have passed. */
+    private fun heldWithin(
+        queue: Queue,
+        seconds: Long,
+    ): Boolean {
+        val deadline = System.currentTimeMillis() + seconds * 1000
+        while (queue.held.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(5)
+        // What else the same close tells comes right after.
+        Thread.sleep(200)
+        return queue.held.isNotEmpty()
+    }
+
+    fun `test Stop and Connect stop a request still being prepared`() =
+        streams { s, _ ->
+            s.open("/feed")
+            // Stop is enabled by the stream that is open, and clicked before the request after it is prepared.
+            s.connect("/stopped")
+            s.stop.doClick()
+            settle(500)
+            val found = ArrayList<String>()
+            if (s.status.text != "idle" ||
+                s.status.toolTipText != "idle"
+            ) {
+                found += "after Stop the status is ${s.status.text} ${s.status.toolTipText}"
+            }
+
+            s.open("/feed")
+            s.connect("/first")
+            s.connect("/second")
+            if (!within(5) { s.isOpen("/second") }) found += "the second Connect does not open: ${s.status.text} ${s.status.toolTipText}"
+            settle(300)
+            if (s.server.paths != listOf("/feed", "/feed", "/second")) found += "the server was sent ${s.server.paths}"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    // Stop and the next Connect are clicked before the UI thread runs again, so the variables of the first are not read back yet.
+    fun `test a request stopped or replaced while its variables are read shows no error`() =
+        streams { s, _ ->
+            val found = ArrayList<String>()
+            s.open("/feed")
+            var before = lines(s.events).toSet()
+            s.url.text = "{{nope}}/x"
+            button(s.panel, "Connect").doClick()
+            s.stop.doClick()
+            settle(500)
+            if (s.status.text != "idle" ||
+                s.status.toolTipText != "idle"
+            ) {
+                found += "after Stop the status is ${s.status.text} ${s.status.toolTipText}"
+            }
+            lines(s.events).filter { it !in before }.map { it.text }.let {
+                if (it.isNotEmpty()) {
+                    found +=
+                        "after Stop the event list shows $it"
+                }
+            }
+
+            s.open("/feed")
+            before = lines(s.events).toSet()
+            s.url.text = "{{nope}}/x"
+            button(s.panel, "Connect").doClick()
+            s.connect("/b")
+            if (!within(5) { s.isOpen("/b") }) found += "the second Connect does not open: ${s.status.text} ${s.status.toolTipText}"
+            settle(300)
+            if (!s.isOpen("/b")) found += "after the second Connect the status is ${s.status.text} ${s.status.toolTipText}"
+            lines(s.events).filter { it !in before }.map { it.text }.let {
+                if (it.isNotEmpty()) {
+                    found +=
+                        "after the second Connect the event list shows $it"
+                }
+            }
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    // The earlier stream's close is held until the request after it is open, as a slow close of a stream may come.
+    fun `test a later request that is open keeps its status when the earlier stream's close comes after it`() =
+        streams { s, queue ->
+            s.open("/feed")
+            val before = lines(s.events).toSet()
+            queue.holding = true
+            s.connect("/b")
+            // The UI thread does not run meanwhile, so only the earlier stream's close can come.
+            val closed = heldWithin(queue, 5)
+            val earlier = queue.held.toList()
+            queue.held.clear()
+            queue.holding = false
+            until({ "/b does not open: ${s.status.text} ${s.status.toolTipText}" }) { s.isOpen("/b") }
+            earlier.forEach { it.run() }
+            settle(200)
+            val found = ArrayList<String>()
+            if (!closed) found += "the earlier stream told nothing as it closed"
+            if (!s.isOpen("/b")) found += "the status is ${s.status.text} with the tooltip ${s.status.toolTipText}"
+            if (!s.stop.isEnabled) found += "Stop is disabled"
+            val shown = lines(s.events).filter { it !in before }.map { it.text }
+            if (shown.isNotEmpty()) found += "the event list shows $shown"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    fun `test a later request that is open keeps its status when the earlier stream's error comes after it`() =
+        streams { s, queue ->
+            s.open("/feed")
+            val before = lines(s.events).toSet()
+            queue.holding = true
+            s.server.drop("/feed")
+            val failed = heldWithin(queue, 5)
+            val earlier = queue.held.toList()
+            queue.held.clear()
+            queue.holding = false
+            s.open("/b")
+            earlier.forEach { it.run() }
+            settle(200)
+            val found = ArrayList<String>()
+            if (!failed) found += "the earlier stream told nothing as it broke"
+            if (!s.isOpen("/b")) found += "the status is ${s.status.text} with the tooltip ${s.status.toolTipText}"
+            if (!s.stop.isEnabled) found += "Stop is disabled"
+            val shown = lines(s.events).filter { it !in before }.map { it.text }
+            if (shown.isNotEmpty()) found += "the event list shows $shown"
+            assertEquals("", found.joinToString("\n"))
+        }
+
+    fun `test an error that keeps a request from being sent or ends it says error, with the URL of that request`() {
+        toolWindowRuns()
+        val port = java.net.ServerSocket(0).use { it.localPort }
+
+        // [sent] is the URL as filled in, or as written when filling it in is what failed.
+        class Case(
+            val what: String,
+            val env: String,
+            val url: String,
+            val sent: String,
+            val says: String,
+            val signals: String = "",
+            val headers: String = "",
+        )
+        val h = """{"baseUrl": "http://h:1"}"""
+        val closed = """{"baseUrl": "http://127.0.0.1:$port"}"""
+        val cases =
+            listOf(
+                Case("an env file that is not valid", "[]", "{{baseUrl}}/x?a=1&b=2", "{{baseUrl}}/x?a=1&b=2", "env.json is not valid"),
+                Case("a variable that is unknown", h, "{{nope}}/x", "{{nope}}/x", "{{nope}} is not set"),
+                Case(
+                    "a variable that is misplaced",
+                    h,
+                    "{{baseUrl}}/x",
+                    "{{baseUrl}}/x",
+                    "belongs in the URL field",
+                    signals = "{{baseUrl}}",
+                ),
+                Case(
+                    "a variable that is not set",
+                    """{"baseUrl": "http://h:1", "params": {"id": ""}}""",
+                    "{{baseUrl}}/x/{{id}}",
+                    "{{baseUrl}}/x/{{id}}",
+                    "{{id}} is empty",
+                ),
+                Case("signals that are not valid JSON", h, "{{baseUrl}}/x", "http://h:1/x", "Signals are not valid JSON", signals = "{"),
+                Case("a URL that cannot be sent", h, "{{baseUrl}}/x?filter[name]=1", "http://h:1/x?filter[name]=1", "The URL holds ["),
+                Case(
+                    "a header the HTTP client will not set",
+                    closed,
+                    "{{baseUrl}}/x",
+                    "http://127.0.0.1:$port/x",
+                    "Cannot send the request",
+                    headers = "Expect: 100-continue",
+                ),
+                Case("a failed connection", closed, "{{baseUrl}}/x", "http://127.0.0.1:$port/x", "Connection refused"),
+            )
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        val events = events(panel)
+        val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "idle" }
+        val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+        val (signals, headers) = UIUtil.findComponentsOfType(form(panel), JBTextArea::class.java).filter { it.isEditable }
+        val stop = button(panel, "Stop")
+        val found = ArrayList<String>()
+        try {
+            for (c in cases) {
+                write(Requests.ENV_FILE, c.env)
+                url.text = c.url
+                signals.text = c.signals
+                headers.text = c.headers
+                setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/old")
+                val before = lines(events).toSet()
+                button(panel, "Connect").doClick()
+                until({ "${c.what} shows no error line" }) { lines(events).any { it !in before } }
+                // A connection that failed is closed after its error is told.
+                settle()
+                val line = lines(events).filter { it !in before }.joinToString(" | ") { it.text }
+                if (c.says !in line) found += "${c.what}: the error line says $line"
+                val tooltip = "error<br>${StringUtil.escapeXmlEntities(c.sent)}"
+                if (status.text != "error" || status.toolTipText != tooltip) {
+                    found += "${c.what}: the status is ${status.text} with the tooltip ${status.toolTipText}, not $tooltip"
+                }
+                if (stop.isEnabled) found += "${c.what}: Stop is enabled"
+            }
+        } finally {
+            remove(Requests.ENV_FILE)
+            InspectorState.getInstance(project).loadState(InspectorState.State())
+        }
+        assertEquals("", found.joinToString("\n"))
+    }
+
+    fun `test an error that is not about the request leaves the status of an open stream as it was`() {
+        // What the panel does later on the UI thread runs, so a status it sets there is seen.
+        toolWindowRuns()
+        val settings = StreamlordSettings.getInstance(project)
+        write(Requests.REQUESTS_FILE, written)
+        // Not a JSON object, so neither Edit variables nor Use baseUrl can change it.
+        write(Requests.ENV_FILE, "[]")
+        val input = TestDialogManager.setTestInputDialog { "a" }
+        val dialog = TestDialogManager.setTestDialog(TestDialog.YES)
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(SavedRequest("feed", "/feed", "GET", "", "")))
+            val events = events(panel)
+            val editVariables = UIUtil.findComponentsOfType(panel, ActionLink::class.java).single { it.text == "Edit variables" }
+            showError(panel, "The server is elsewhere.", useBaseUrl = "http://localhost:9")
+            val useBaseUrl =
+                UIUtil.findComponentsOfType(events, ActionLink::class.java).single {
+                    it.text ==
+                        "Use http://localhost:9 in ${Requests.ENV_FILE}"
+                }
+            // A path that leaves the project: Save and Delete are refused, and the default file is still read.
+            settings.state.requestsFile = "../elsewhere/inspector.json"
+            val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+
+            fun patch(signals: String) =
+                apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to signals), "", 0L))
+            val url = UIUtil.findComponentsOfType(panel, JBTextField::class.java).single()
+            val failures =
+                listOf<Pair<String, () -> Unit>>(
+                    "a Save that fails" to { button(panel, "Save").doClick() },
+                    "a Delete that fails" to { button(panel, "Delete").doClick() },
+                    "Copy as curl with a variable not set" to {
+                        url.text = "{{nope}}/x"
+                        button(panel, "Copy as curl").doClick()
+                    },
+                    "Edit variables that fails" to { editVariables.doClick() },
+                    "Use baseUrl that fails" to { useBaseUrl.doClick() },
+                    "a signal patch the signal store cannot take" to {
+                        patch("""{"a":[1,2]}""")
+                        patch("""{"b":1,"a":{"0":7,"length":-1},"c":2}""")
+                    },
+                )
+            val status = UIUtil.findComponentsOfType(form(panel), JLabel::class.java).single { it.text == "error" || it.text == "idle" }
+            val stop = button(panel, "Stop")
+            val found = ArrayList<String>()
+            for ((what, fail) in failures) {
+                setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/feed")
+                val before = lines(events).toSet()
+                fail()
+                until({ "$what shows no error line" }) { lines(events).any { it !in before } }
+                settle(100)
+                if (status.text != "open · 200 OK" || status.toolTipText != "open · 200 OK<br>http://h/feed") {
+                    found += "$what: the status is ${status.text} with the tooltip ${status.toolTipText}"
+                }
+                if (!stop.isEnabled) found += "$what: Stop is disabled"
+            }
+            assertEquals("", found.joinToString("\n"))
+        } finally {
+            TestDialogManager.setTestInputDialog(input)
+            TestDialogManager.setTestDialog(dialog)
+            settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.ENV_FILE)
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    private companion object {
+        val FORM_BUTTONS = listOf("Clear", "Connect", "Copy as curl", "Delete", "Reset signals", "Save", "Stop")
+        val ACTION_BUTTONS = listOf("Connect", "Stop", "Clear", "Reset signals", "Copy as curl")
+
+        /** A requests file as a person writes one: members and an entry the inspector does not know, and a layout of its own. */
+        val HAND_WRITTEN =
+            """
+            {
+              "version": 1,
+              "team": "blue",
+              "requests": [
+                {
+                  "name": "feed",
+                  "url": "{{baseUrl}}/feed",
+                  "method": "POST",
+                  "signals": { "search": "ash", "n": 1.0 },
+                  "headers": { "X-Id": "7" },
+                  "note": "written by hand"
+                },
+                { "name": "no url here" },
+                { "name": "plain", "url": "http://h/feed" }
+              ]
+            }
+            """.trimIndent() + "\n"
     }
 }

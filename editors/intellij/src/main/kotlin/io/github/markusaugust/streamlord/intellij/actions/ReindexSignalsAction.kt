@@ -1,16 +1,16 @@
 package io.github.markusaugust.streamlord.intellij.actions
 
-import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.ReadAction
-import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.progress.Task
+import com.intellij.openapi.application.smartReadAction
+import com.intellij.openapi.progress.currentThreadCoroutineScope
+import com.intellij.platform.ide.progress.withBackgroundProgress
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
+import kotlinx.coroutines.launch
 
 /** Tools | Streamlord | Re-index Signals: read every Kotlin and HTML file again. */
 class ReindexSignalsAction : AnAction() {
@@ -22,17 +22,16 @@ class ReindexSignalsAction : AnAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        ProgressManager.getInstance().run(
-            object : Task.Backgroundable(project, "Streamlord: indexing signals", false) {
-                override fun run(indicator: ProgressIndicator) {
-                    val count = ReadAction.nonBlocking<Int> { SignalIndex.getInstance(project).rebuild() }.executeSynchronously()
-                    NotificationGroupManager
-                        .getInstance()
-                        .getNotificationGroup(Streamlord.NOTIFICATION_GROUP)
-                        .createNotification("Streamlord: indexed $count signal names.", NotificationType.INFORMATION)
-                        .notify(project)
+        currentThreadCoroutineScope().launch {
+            val index = SignalIndex.getInstance(project)
+            val count =
+                withBackgroundProgress(project, "Streamlord: indexing signals") {
+                    // Forgotten once: the read gives way to a write and starts over after it, and keeps what it had read.
+                    index.forget()
+                    smartReadAction(project) { index.all().size }
                 }
-            },
-        )
+            Notification(Streamlord.NOTIFICATION_GROUP, "Streamlord: indexed $count signal names.", NotificationType.INFORMATION)
+                .notify(project)
+        }
     }
 }

@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
@@ -28,13 +29,21 @@ public data class SavedRequest(
 
 public data class RequestsFile(
     val requests: List<SavedRequest>,
-    /** Why the file could not be read, when it exists and is not JSON; saving over it would lose what it holds. */
+    /** Why the file could not be read, when it is not JSON or not a requests file; saving over it would lose what it holds. */
     val error: String? = null,
+    /** One message for each entry that is not read, for the user to be told: it stays in the file, and out of the list. */
+    val skipped: List<String> = emptyList(),
 ) {
     public companion object {
         public val EMPTY: RequestsFile = RequestsFile(emptyList())
     }
 }
+
+/** The text of the requests file after a change, or the reason the file cannot be changed: exactly one is set. */
+public data class RequestsEdit(
+    val text: String?,
+    val error: String?,
+)
 
 public object Requests {
     /** How much of a response without a stream the inspector reads and shows. */
@@ -87,35 +96,78 @@ public object Requests {
     private const val NOT_SENDABLE = "\"<>\\^`|"
 
     /**
-     * Parse the requests file leniently: bad entries are dropped. Text that is not JSON at all is
-     * reported in [RequestsFile.error], so a save does not write an empty list over it.
+     * Parse the requests file leniently: an entry that cannot be read is left out and named in
+     * [RequestsFile.skipped]. Text that is not JSON, or not shaped as a requests file, is reported in
+     * [RequestsFile.error], so a save does not write over it. An empty file holds no requests.
      */
     public fun parseRequestsFile(
         text: String,
         path: String = REQUESTS_FILE,
-    ): RequestsFile {
-        val json = text.removePrefix("\uFEFF")
+    ): RequestsFile = readRequests(text.removePrefix("\uFEFF"), path).file
+
+    /** Whether a file's text holds nothing: no character but the whitespace JSON allows between values. */
+    private fun empty(text: String): Boolean = text.all { it in " \t\n\r" }
+
+    /** The file as read, and each entry of its list in file order: the request it is, or null when it is not read. */
+    private class ReadRequests(
+        val file: RequestsFile,
+        val entries: List<SavedRequest?> = emptyList(),
+        val root: JsonObject? = null,
+    )
+
+    private fun readRequests(
+        json: String,
+        path: String,
+    ): ReadRequests {
+        if (empty(json)) return ReadRequests(RequestsFile.EMPTY)
         val raw =
             try {
                 JsonParser.parse(json)
             } catch (e: JsonParseException) {
-                return RequestsFile(emptyList(), "$path is not valid JSON ${lineAndColumn(json, e.position)}.")
+                return ReadRequests(RequestsFile(emptyList(), "$path is not valid JSON ${lineAndColumn(json, e.position)}."))
             } catch (_: Exception) {
-                return RequestsFile(emptyList(), "$path is not valid JSON.")
+                return ReadRequests(RequestsFile(emptyList(), "$path is not valid JSON."))
             }
-        val list = (raw as? JsonObject)?.array("requests") ?: return RequestsFile.EMPTY
-        val requests = ArrayList<SavedRequest>()
-        list.forEachIndexed { index, item ->
-            if (item !is JsonObject) return@forEachIndexed
-            val name = item.string("name") ?: return@forEachIndexed
-            val url = item.string("url") ?: return@forEachIndexed
-            val method = (item.string("method") ?: "GET").uppercase()
-            val signals = item["signals"]
-            val headers = item["headers"]
-            requests +=
+        if (raw !is JsonObject) {
+            return ReadRequests(RequestsFile(emptyList(), "$path is not a requests file: it must be an object with a \"requests\" list."))
+        }
+        raw["version"]?.let { version ->
+            if ((version as? JsonNumber)?.toJson()?.toDoubleOrNull() != 1.0) {
+                val written = topLevelValues(json)["version"] ?: version.toJson()
+                return ReadRequests(
+                    RequestsFile(emptyList(), "$path is version $written of the requests file, and this Streamlord reads version 1."),
+                )
+            }
+        }
+        val list =
+            when (val member = raw["requests"]) {
+                null -> return ReadRequests(RequestsFile.EMPTY, root = raw)
+                is JsonArray -> member
+                else -> return ReadRequests(RequestsFile(emptyList(), "$path is not a requests file: \"requests\" must be a list."))
+            }
+        val skipped = ArrayList<String>()
+        // Where the first entry of each name stands: a file holds a name once, and a later entry of it is not read.
+        val named = HashMap<String, Int>()
+        val entries =
+            list.mapIndexed { index, item ->
+                val missing =
+                    when {
+                        item !is JsonObject -> "it is not an object"
+                        item.string("name") == null -> "it has no \"name\""
+                        item.string("url") == null -> "it has no \"url\""
+                        else -> named.putIfAbsent(nameKey(item.string("name")!!), index + 1)?.let { "request $it has its name" }
+                    }
+                if (missing != null) {
+                    skipped += "Request ${index + 1} in $path is not read: $missing."
+                    return@mapIndexed null
+                }
+                item as JsonObject
+                val method = (item.string("method") ?: "GET").uppercase()
+                val signals = item["signals"]
+                val headers = item["headers"]
                 SavedRequest(
-                    name = name,
-                    url = url,
+                    name = item.string("name")!!,
+                    url = item.string("url")!!,
                     method = if (method in METHODS) method else "GET",
                     signals =
                         when (signals) {
@@ -133,9 +185,10 @@ public object Requests {
                             }
 
                             is JsonObject -> {
-                                headers.entries.joinToString(
-                                    "\n",
-                                ) { (k, v) -> "$k: ${(v as? JsonString)?.value ?: v.toJson()}" }
+                                val raw = rawHeaders(json, index)
+                                headers.entries.joinToString("\n") { (k, v) ->
+                                    "$k: ${(v as? JsonString)?.value ?: compactJson(raw[k] ?: v.toJson())}"
+                                }
                             }
 
                             else -> {
@@ -143,21 +196,15 @@ public object Requests {
                             }
                         },
                 )
-        }
-        return RequestsFile(requests)
+            }
+        return ReadRequests(RequestsFile(entries.filterNotNull(), skipped = skipped), entries, raw)
     }
 
     public fun serializeRequestsFile(file: RequestsFile): String {
         val sb = StringBuilder("{\n  \"version\": 1,\n  \"requests\": [")
         file.requests.forEachIndexed { i, r ->
             sb.append(if (i == 0) "\n" else ",\n")
-            sb.append("    {\n")
-            sb.append("      \"name\": ").append(JsonString(r.name).toJson()).append(",\n")
-            sb.append("      \"url\": ").append(JsonString(r.url).toJson()).append(",\n")
-            sb.append("      \"method\": ").append(JsonString(r.method).toJson()).append(",\n")
-            sb.append("      \"signals\": ").append(JsonString(r.signals).toJson()).append(",\n")
-            sb.append("      \"headers\": ").append(JsonString(r.headers).toJson()).append("\n")
-            sb.append("    }")
+            sb.append("    ").append(entryText(r))
         }
         if (file.requests.isNotEmpty()) sb.append("\n  ")
         sb.append("]\n}\n")
@@ -165,26 +212,171 @@ public object Requests {
     }
 
     /**
-     * Insert or replace by name (case-insensitive), keeping the list sorted by name.
-     *
-     * Names are matched and ordered by [nameKey]. The VS Code extension applies the same rule, so
-     * the shared file keeps one order whichever editor saves it.
+     * One entry as the file holds it, from its `{` to its `}`, to stand four spaces in. [signals] and
+     * [headers] are the values as JSON; [more] are members to keep after them, each as written.
      */
-    public fun upsert(
-        file: RequestsFile,
-        request: SavedRequest,
-    ): RequestsFile {
-        val key = nameKey(request.name)
-        val others = file.requests.filter { nameKey(it.name) != key }
-        return RequestsFile((others + request).sortedBy { nameKey(it.name) })
+    private fun entryText(
+        r: SavedRequest,
+        signals: String = JsonString(r.signals).toJson(),
+        headers: String = JsonString(r.headers).toJson(),
+        more: List<String> = emptyList(),
+    ): String {
+        val sb = StringBuilder("{\n")
+        sb.append("      \"name\": ").append(JsonString(r.name).toJson()).append(",\n")
+        sb.append("      \"url\": ").append(JsonString(r.url).toJson()).append(",\n")
+        sb.append("      \"method\": ").append(JsonString(r.method).toJson()).append(",\n")
+        sb.append("      \"signals\": ").append(signals).append(",\n")
+        sb.append("      \"headers\": ").append(headers)
+        for (member in more) sb.append(",\n      ").append(member)
+        return sb.append("\n    }").toString()
     }
 
-    public fun remove(
-        file: RequestsFile,
+    /** Where the list of a requests file stands in its text, and each of its entries. */
+    private class Listed(
+        /** The offsets of `[` and of `]`. */
+        val open: Int,
+        val close: Int,
+        /** Each entry from its first character to just past its last. */
+        val spans: List<IntRange>,
+    )
+
+    /** The list of [json], which has parsed as a requests file; null when its root has no `requests`. */
+    private fun listed(json: String): Listed? {
+        val scan = JsonScan(json)
+        var found: Listed? = null
+        scan.members(scan.skipSpace(0)) { key, start, _ ->
+            if (key != "requests" || json[start] != '[') return@members
+            val spans = ArrayList<IntRange>()
+            val end =
+                scan.elements(start) { elementStart, elementEnd ->
+                    spans += elementStart until elementEnd
+                    elementEnd
+                }
+            found = Listed(start, end - 1, spans)
+        }
+        return found
+    }
+
+    /**
+     * The text of the requests file with [request] saved in it: in place of the entry of its name, or
+     * else where the names keep their order. The file is changed where the entry stands and nowhere
+     * else, so what a person or a newer Streamlord wrote in it stays: other members, entries that
+     * are not read, the layout. A missing or empty file is written anew.
+     */
+    public fun saveRequest(
+        text: String?,
+        request: SavedRequest,
+        path: String = REQUESTS_FILE,
+    ): RequestsEdit {
+        if (text == null ||
+            empty(text.removePrefix("\uFEFF"))
+        ) {
+            return RequestsEdit(serializeRequestsFile(RequestsFile(listOf(request))), null)
+        }
+        val bom = if (text.startsWith("\uFEFF")) "\uFEFF" else ""
+        val json = text.removePrefix("\uFEFF")
+        val read = readRequests(json, path)
+        read.file.error?.let { return RequestsEdit(null, it) }
+        // What is written follows the line endings of the file it is written into.
+        val crlf = "\r\n" in json
+
+        // Text copied from the file has them already, so each line break is counted once.
+        fun written(lines: String) = if (crlf) lines.replace("\r\n", "\n").replace("\n", "\r\n") else lines
+        val list = listed(json)
+        if (list == null) {
+            if (read.root.isNullOrEmpty()) return RequestsEdit(serializeRequestsFile(RequestsFile(listOf(request))), null)
+            val scan = JsonScan(json)
+            var last = 0
+            scan.members(scan.skipSpace(0)) { _, _, end -> last = end }
+            val added = written(",\n  \"requests\": [\n    ${entryText(request)}\n  ]")
+            return RequestsEdit(bom + json.substring(0, last) + added + json.substring(last), null)
+        }
+        val key = nameKey(request.name)
+        val first = read.entries.indices.firstOrNull { i -> read.entries[i]?.let { nameKey(it.name) == key } == true }
+        if (first == null) {
+            val before = read.entries.indices.firstOrNull { i -> read.entries[i]?.let { nameKey(it.name) > key } == true }
+            val entry = entryText(request)
+            val (at, added, rest) =
+                when {
+                    before != null -> Triple(list.spans[before].first, "$entry,\n    ", list.spans[before].first)
+                    list.spans.isNotEmpty() -> Triple(list.spans.last().last + 1, ",\n    $entry", list.spans.last().last + 1)
+                    else -> Triple(list.open + 1, "\n    $entry\n  ", list.close)
+                }
+            return RequestsEdit(bom + json.substring(0, at) + written(added) + json.substring(rest), null)
+        }
+        if (read.entries[first] == request) return RequestsEdit(text, null)
+        val span = list.spans[first]
+        val old = JsonParser.parse(json.substring(span.first, span.last + 1)) as JsonObject
+        val more = ArrayList<String>()
+        JsonScan(json).membersAsWritten(span.first) { keyStart, keyEnd, member, start, end ->
+            if (member !in ENTRY_KEYS) more += json.substring(keyStart, keyEnd) + ": " + json.substring(start, end)
+        }
+        val entry = entryText(request, signalsAs(old["signals"], request.signals), headersAs(old["headers"], request.headers), more)
+        return RequestsEdit(bom + json.substring(0, span.first) + written(entry) + json.substring(span.last + 1), null)
+    }
+
+    /**
+     * The text of the requests file without the entries named [name], and everything else as it was.
+     * A file that holds none, or is missing, is returned as it is.
+     */
+    public fun removeRequest(
+        text: String?,
         name: String,
-    ): RequestsFile {
+        path: String = REQUESTS_FILE,
+    ): RequestsEdit {
+        if (text == null || empty(text.removePrefix("\uFEFF"))) return RequestsEdit(text ?: "", null)
+        val bom = if (text.startsWith("\uFEFF")) "\uFEFF" else ""
+        val json = text.removePrefix("\uFEFF")
+        val read = readRequests(json, path)
+        read.file.error?.let { return RequestsEdit(null, it) }
         val key = nameKey(name)
-        return RequestsFile(file.requests.filter { nameKey(it.name) != key })
+        val first = read.entries.indices.firstOrNull { i -> read.entries[i]?.let { nameKey(it.name) == key } == true }
+        return if (first == null) RequestsEdit(text, null) else RequestsEdit(bom + without(json, first), null)
+    }
+
+    /** [json] without the entry at [index] of its list, and without the comma that set it apart. */
+    private fun without(
+        json: String,
+        index: Int,
+    ): String {
+        val list = listed(json)!!
+        val spans = list.spans
+        return when {
+            spans.size == 1 -> json.substring(0, list.open + 1) + json.substring(list.close)
+            index < spans.lastIndex -> json.substring(0, spans[index].first) + json.substring(spans[index + 1].first)
+            else -> json.substring(0, spans[index - 1].last + 1) + json.substring(spans[index].last + 1)
+        }
+    }
+
+    private val ENTRY_KEYS = setOf("name", "url", "method", "signals", "headers")
+
+    /** The signals of a saved entry as JSON: an object as written when the entry held one before and still can, or else text. */
+    private fun signalsAs(
+        old: JsonValue?,
+        signals: String,
+    ): String {
+        val trimmed = signals.trim(' ', '\t', '\r', '\n')
+        val stillObject =
+            (old is JsonObject || old is JsonArray) && runCatching { JsonParser.parse(trimmed) is JsonObject }.getOrDefault(false)
+        return if (stillObject) trimmed else JsonString(signals).toJson()
+    }
+
+    /** The headers of a saved entry as JSON: an object when the entry held one before and each line is one header of its own name, or else text. */
+    private fun headersAs(
+        old: JsonValue?,
+        headers: String,
+    ): String {
+        val text = JsonString(headers).toJson()
+        if (old !is JsonObject) return text
+        val members = ArrayList<Pair<String, String>>()
+        for (line in headers.split('\n').filter { l -> l.any { it !in " \t\r" } }) {
+            val colon = line.indexOf(':')
+            val name = if (colon > 0) line.substring(0, colon).trim(' ', '\t') else ""
+            if (name.isEmpty() || members.any { nameKey(it.first) == nameKey(name) }) return text
+            members += name to line.substring(colon + 1).trim(' ', '\t', '\r')
+        }
+        if (members.isEmpty()) return text
+        return members.joinToString(", ", "{ ", " }") { (k, v) -> "${JsonString(k).toJson()}: ${JsonString(v).toJson()}" }
     }
 
     /**
@@ -233,6 +425,7 @@ public object Requests {
     public fun parseEnv(rawText: String): Env {
         val errors = ArrayList<String>()
         val text = rawText.removePrefix("\uFEFF")
+        if (empty(text)) return Env(null, null, null, null, emptyList())
         val raw =
             try {
                 JsonParser.parse(text)
@@ -550,6 +743,16 @@ public object Requests {
     }
 
     /**
+     * The URL as a request would send it, to show under the field while it is written: each variable
+     * filled in as [resolveRequest] fills it, a param encoded, and one that cannot be filled left as
+     * written. Empty for a URL without a variable, which shows itself.
+     */
+    public fun previewUrl(
+        url: String,
+        vars: List<Variable>,
+    ): String = if ("{{" in url) resolveRequest(SavedRequest("", url), vars).request.url else ""
+
+    /**
      * The text of `.streamlord/env.json` with [keys] added after what is there: `baseUrl` with its
      * current value, `signals` and `headers` as empty objects to fill in, and any other name as an
      * empty entry in `params`. A missing file is written with `baseUrl` first. The text is extended
@@ -557,10 +760,12 @@ public object Requests {
      * is not a JSON object and cannot be extended safely.
      */
     public fun withEnvVariables(
-        text: String?,
+        written: String?,
         keys: List<String>,
         baseUrl: String,
     ): String? {
+        // An empty file is one to write, as a missing one is.
+        val text = written?.takeUnless(::empty)
         val (own, params) = keys.distinct().partition { it in ENV_KEYS }
         val newParams = params.joinToString(",\n", "{\n", "\n  }") { "    ${JsonString(it).toJson()}: \"\"" }
 
@@ -662,9 +867,10 @@ public object Requests {
      * is not a JSON object and cannot be changed safely.
      */
     public fun withBaseUrl(
-        text: String?,
+        written: String?,
         url: String,
     ): String? {
+        val text = written?.takeUnless(::empty)
         val range = text?.let { t -> runCatching { JsonParser.parse(t) as? JsonObject }.getOrNull()?.let { topLevelRanges(t)["baseUrl"] } }
         if (text == null || range == null) return withEnvVariables(text, listOf("baseUrl"), url)
         return text.substring(0, range.first) + JsonString(url).toJson() + text.substring(range.last + 1)
@@ -910,7 +1116,7 @@ public object Requests {
      */
     public fun requestsPathProblem(path: String): String? =
         when {
-            path.isBlank() -> null
+            empty(path) -> null
 
             path.startsWith(
                 "/",
@@ -920,6 +1126,17 @@ public object Requests {
                 ) || DRIVE.containsMatchIn(path) -> "The requests file $path is not inside the project: use a project-relative path."
 
             path.split('/', '\\').any { it == ".." } -> "The requests file $path leaves the project: use a path without .. in it."
+
+            '\\' in path -> "The requests file $path holds a backslash: write the path with /."
+
+            path.endsWith("/") -> "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+
+            path
+                .trim(' ', '\t', '\r', '\n')
+                .split('/')
+                .filter { it.isNotEmpty() && it != "." }
+                .joinToString("/")
+                .lowercase() == ENV_FILE -> "The requests file cannot be $ENV_FILE: that file holds the variables."
 
             else -> null
         }
@@ -947,6 +1164,54 @@ public object Requests {
             }
         }
         return found
+    }
+
+    /**
+     * The source text of each member of `requests[index].headers`; the last of a key counts, as with
+     * the parser. A value that is not text is read as written: a writer of its own would spell `1.0`,
+     * escapes and a second key of a name its own way.
+     */
+    private fun rawHeaders(
+        text: String,
+        index: Int,
+    ): Map<String, String> {
+        val scan = JsonScan(text)
+        val found = HashMap<String, String>()
+        scan.members(scan.skipSpace(0)) { key, start, _ ->
+            if (key != "requests" || text[start] != '[') return@members
+            var i = index
+            scan.elements(start) { elementStart, elementEnd ->
+                if (i-- == 0 && text[elementStart] == '{') {
+                    scan.members(elementStart) { k, s, _ ->
+                        if (k == "headers" && text[s] == '{') {
+                            found.clear()
+                            scan.members(s) { name, vs, ve -> found[name] = text.substring(vs, ve) }
+                        }
+                    }
+                }
+                elementEnd
+            }
+        }
+        return found
+    }
+
+    /** JSON as written, less the white space between its parts. */
+    private fun compactJson(text: String): String {
+        val out = StringBuilder()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '"') {
+                var end = i + 1
+                while (end < text.length && text[end] != '"') end += if (text[end] == '\\') 2 else 1
+                out.append(text, i, minOf(end + 1, text.length))
+                i = end + 1
+            } else {
+                if (c !in " \t\n\r") out.append(c)
+                i++
+            }
+        }
+        return out.toString()
     }
 
     /** Just enough of a JSON scanner to find the span of a member of valid JSON; [text] must have parsed already. */
@@ -998,17 +1263,24 @@ public object Requests {
         fun members(
             from: Int,
             each: (key: String, start: Int, end: Int) -> Unit,
+        ) = membersAsWritten(from) { _, _, key, start, end -> each(key, start, end) }
+
+        /** Each member of the object at [from]: the span of its key as written, the key, and the span of its value. */
+        fun membersAsWritten(
+            from: Int,
+            each: (keyStart: Int, keyEnd: Int, key: String, start: Int, end: Int) -> Unit,
         ) {
             var i = skipSpace(from + 1)
             while (i < text.length && text[i] != '}') {
                 if (text[i] != '"') return
+                val keyStart = i
                 val keyEnd = skipString(i)
                 val key = JsonParser.parse(text.substring(i, keyEnd)).let { (it as JsonString).value }
                 i = skipSpace(keyEnd)
                 if (i >= text.length || text[i] != ':') return
                 val start = skipSpace(i + 1)
                 val end = skipValue(start)
-                each(key, start, end)
+                each(keyStart, keyEnd, key, start, end)
                 i = skipSpace(end)
                 if (i < text.length && text[i] == ',') i = skipSpace(i + 1)
             }
