@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.landingAsParsed
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * Where a caret stands, for completion, hover and parameter info; shared with completionContext.ts.
@@ -150,9 +151,9 @@ public data class OptionKeyAt(
     val written: List<String>,
 )
 
-private val ACTION_OPEN = Regex("""@([A-Za-z_$][\w$]*)\s*\(""")
-private val WRITTEN_KEY = Regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
-private val TYPED_KEY = Regex("""\s*([A-Za-z_$][\w$]*)?""")
+private val ACTION_OPEN = regex("""@([A-Za-z_$][\w$]*)\s*\(""")
+private val WRITTEN_KEY = regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
+private val TYPED_KEY = regex("""\s*([A-Za-z_$][\w$]*)?""")
 private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
 
 /** A bracket open at the caret, with the action whose argument list it is and the key text of an options object. */

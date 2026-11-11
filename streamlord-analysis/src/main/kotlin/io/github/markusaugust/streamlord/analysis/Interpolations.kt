@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.groupRange
+import io.github.markusaugust.streamlord.core.regex
 import kotlin.concurrent.Volatile
 
 /*
@@ -10,19 +12,19 @@ import kotlin.concurrent.Volatile
  * core's `holeLandings`.
  */
 
-private val TRIM_MARGIN_AFTER = Regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
-private val TRIM_CALL_AFTER = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(""")
-private val IDENT = Regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
-private val LITERAL = Regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
-private val STRING_LITERAL = Regex(""""(?:[^"\\$]|\\.)*"""")
+private val TRIM_MARGIN_AFTER = regex("""^\s*\.\s*trimMargin\s*\(\s*(?:"([^"\\\n]*)")?\s*\)""")
+private val TRIM_CALL_AFTER = regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(""")
+private val IDENT = regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
+private val LITERAL = regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
+private val STRING_LITERAL = regex(""""(?:[^"\\$]|\\.)*"""")
 
-private val UNSIGNED_SUFFIX = Regex("""[uU][lL]?$""")
-private val MARKUP_CALL_START = Regex("""^(?:interpolate|Trusted)\s*\(""")
-private val UNQUOTED_VALUE = Regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
-private val WORD_CHAR = Regex("""[\p{L}\p{Nd}_]""")
+private val UNSIGNED_SUFFIX = regex("""[uU][lL]?$""")
+private val MARKUP_CALL_START = regex("""^(?:interpolate|Trusted)\s*\(""")
+private val UNQUOTED_VALUE = regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
+private val WORD_CHAR = regex("""[\p{L}\p{Nd}_]""")
 
 /** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
-private val OPERAND_END = Regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
+private val OPERAND_END = regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
 
 /** The words that end an operand, as words of their own: `photo` is a name, not `pho` and `to`. */
 private val OPERAND_END_WORDS = listOf("to", "else")
@@ -33,7 +35,7 @@ internal fun shortened(text: String): String {
     return if (e.length <= 30) e else e.substring(0, 29) + "…"
 }
 
-private val SPACES = Regex("""\s+""")
+private val SPACES = regex("""\s+""")
 
 /** How a hole is named in a message: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
 internal fun holeDisplay(
@@ -101,7 +103,7 @@ internal fun withNested(strings: List<KotlinString>): List<KotlinString> {
 internal fun literalOnly(expr: String): Boolean =
     (branches(expr) ?: listOf(expr)).all { LITERAL.matches(it.trim()) || plainString(it.trim()) }
 
-private val QUOTE_OPENING = Regex("""^\$*"""")
+private val QUOTE_OPENING = regex("""^\$*"""")
 
 /** [t] read as one whole string literal, its templates and all, or null when it is anything more or less. */
 private fun stringLiteral(t: String): KotlinString? {
@@ -424,34 +426,34 @@ private const val NAME = """[\p{L}_][\p{L}\p{Nd}_]*"""
 // A name in backticks too, as `` `Page` ``, which means the same name without them.
 private const val TYPE = """(?:[\p{L}_][\p{L}\p{Nd}_.]*|`[^`\n]+`)(?:\.(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`))*\??"""
 private val VAL_AFTER =
-    Regex(
+    regex(
         """\s*(?:<[^<>]*>\s*)?((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
             """(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?""",
     )
-private val DESTRUCTURED = Regex("""\s*\(([^()]*)\)""")
+private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
 private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
 private val PARAMETER =
-    Regex("""^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""")
-private val TYPE_ARGUMENTS_AFTER = Regex(TYPE_ARGUMENTS)
-private val VALUE_AFTER = Regex("""\s*=(?!=)\s*""")
+    regex("""^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""")
+private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
+private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
-    Regex(
+    regex(
         """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*->""",
     )
-private val FOR_VARIABLE = Regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
-private val NAMES = Regex("""($NAME)(?:\s*:\s*($TYPE))?""")
-private val WHOLE_TYPE = Regex(TYPE)
-private val CONST_BEFORE = Regex("""\bconst[ \t]+(?:\p{L}+[ \t]+)*$""")
-private val PRIVATE_BEFORE = Regex("""\bprivate[ \t]+(?:\p{L}+[ \t]+)*$""")
-private val PROPERTY_MODIFIERS = Regex("""\b(?:val|var)\b""")
-private val PRIVATE_MODIFIER = Regex("""\bprivate\b""")
-private val HTML_BEFORE = Regex("""@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
-private val HTML_ANNOTATION = Regex("""@Language\(\s*"html"\s*\)""", RegexOption.IGNORE_CASE)
-private val VARARG = Regex("""\bvararg\b""")
-private val LAMBDA_NAME = Regex("""^\S+?(?=\s*(?::|$))""")
-private val LAMBDA_TYPE = Regex(""":\s*(.+)$""")
-private val LINE_GOES_ON_BEFORE = Regex("""[-=+*/%&|?:.,(<>!]""")
-private val LINE_GOES_ON_AFTER = Regex("""^(?:[-.?+*/%&|:]|else\b)""")
+private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
+private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
+private val WHOLE_TYPE = regex(TYPE)
+private val CONST_BEFORE = regex("""\bconst[ \t]+(?:\p{L}+[ \t]+)*$""")
+private val PRIVATE_BEFORE = regex("""\bprivate[ \t]+(?:\p{L}+[ \t]+)*$""")
+private val PROPERTY_MODIFIERS = regex("""\b(?:val|var)\b""")
+private val PRIVATE_MODIFIER = regex("""\bprivate\b""")
+private val HTML_BEFORE = regex("""@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
+private val HTML_ANNOTATION = regex("""@Language\(\s*"html"\s*\)""", RegexOption.IGNORE_CASE)
+private val VARARG = regex("""\bvararg\b""")
+private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
+private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
+private val LINE_GOES_ON_BEFORE = regex("""[-=+*/%&|?:.,(<>!]""")
+private val LINE_GOES_ON_AFTER = regex("""^(?:[-.?+*/%&|:]|else\b)""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
@@ -507,8 +509,8 @@ private fun lineEnds(
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
 }
 
-private val MARKUP_INITIALISER = Regex("""\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
-private val STATEMENT_END = Regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
+private val MARKUP_INITIALISER = regex("""\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
+private val STATEMENT_END = regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
 
 /**
  * Which of `interpolate` and `Trusted` what follows a declared name at [at] calls as the whole
@@ -531,9 +533,9 @@ private fun markupInitialiser(
     return Triple(name, callee.range.first - m.groupValues[1].length, name != callee.value)
 }
 
-private val TEXT_OF_NAME = Regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
-private val TEXT_OF_CALL = Regex("""\s*=\s*interpolate\s*\(""")
-private val TEXT_AFTER = Regex("""^\s*\.\s*text""")
+private val TEXT_OF_NAME = regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
+private val TEXT_OF_CALL = regex("""\s*=\s*interpolate\s*\(""")
+private val TEXT_AFTER = regex("""^\s*\.\s*text""")
 
 /** What a declared name at [at] is set to the `.text` of, when that is its whole value: `name` of `= name.text`, or `interpolate(...)`. */
 private fun textInitialiser(
@@ -973,10 +975,10 @@ internal fun declaredKind(
 
 // The callee is Trusted or an alias of it, which the caller has read.
 private val TRUSTED_LITERAL =
-    Regex(
+    regex(
         "(`?)[\\p{L}_][\\p{L}\\p{Nd}_]*\\1\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)",
     )
-private val KOTLIN_ESCAPE = Regex("""\\(u[0-9A-Fa-f]{4}|.)""")
+private val KOTLIN_ESCAPE = regex("""\\(u[0-9A-Fa-f]{4}|.)""")
 
 /**
  * The text of `Trusted("...")` at [at], or of `Trusted("""...""")` or `Trusted(html = ...)`, with
@@ -1072,9 +1074,9 @@ internal fun mayBeNull(
         }
     }
 
-private val TYPE_PARAMETERS = Regex("""(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<((?:[^<>]|<[^<>]*>)*)>""")
+private val TYPE_PARAMETERS = regex("""(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<((?:[^<>]|<[^<>]*>)*)>""")
 private val TYPE_PARAMETER =
-    Regex("""^\s*(?:(?:in|out|reified)\s+)*([\p{L}_][\p{L}\p{Nd}_]*)\s*(?::\s*(.+?))?\s*$""", RegexOption.DOT_MATCHES_ALL)
+    regex("""(?s)^\s*(?:(?:in|out|reified)\s+)*([\p{L}_][\p{L}\p{Nd}_]*)\s*(?::\s*(.+?))?\s*$""")
 
 /**
  * Whether [type] is a type parameter a value of which may be null: `T` of `fun <T> f(q: T)`,
@@ -1124,7 +1126,7 @@ private fun unparen(expr: String): String {
     return t
 }
 
-private val OPERATOR_BEFORE = Regex("""[-+*/%=<>!&|?:(,]$""")
+private val OPERATOR_BEFORE = regex("""[-+*/%=<>!&|?:(,]$""")
 
 /** [e] cut at each [op] outside brackets and literals; a `+` that is part of `++` or `+=`, or a sign, does not cut. */
 private fun splitTop(
@@ -1157,7 +1159,7 @@ private fun splitTop(
     return out
 }
 
-private val CALL_START = Regex("""^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
+private val CALL_START = regex("""^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
 
 /** The calls of Streamlord's DSL that a hole may hold: `signal("count")`, `post("/x")`, each returning an expression the author wrote. */
 private val HOLE_HELPERS: Set<String> =
@@ -1186,7 +1188,7 @@ private fun helperArguments(
 }
 
 /** A name given to an argument, `value = `, which says nothing of the value. */
-private val ARGUMENT_NAME = Regex("""^\s*[\p{L}_][\p{L}\p{Nd}_]*\s*=(?!=)""")
+private val ARGUMENT_NAME = regex("""^\s*[\p{L}_][\p{L}\p{Nd}_]*\s*=(?!=)""")
 
 /**
  * Whether a helper's argument is the author's own: a literal, a constant, a number or a boolean
@@ -1206,8 +1208,8 @@ private fun ownArgument(
     return kind.writesItself()
 }
 
-private val QUALIFIED = Regex("""^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$""")
-private val SCREAMING = Regex("""[A-Z][A-Z0-9_]*""")
+private val QUALIFIED = regex("""^((?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)+)([\p{L}_][\p{L}\p{Nd}_]*)$""")
+private val SCREAMING = regex("""[A-Z][A-Z0-9_]*""")
 
 /**
  * A constant reached through what holds it: `Routes.SAVE`, a `const val` of the workspace or of
@@ -1297,8 +1299,8 @@ private val STRING_CHANGES =
         "padEnd",
         "repeat",
     )
-private val NON_NULL_ASSERTION = Regex("""\s*!!$""")
-private val OPERAND_CHAR = Regex("""[\p{L}\p{Nd}_.?!()\[\]{}"']""")
+private val NON_NULL_ASSERTION = regex("""\s*!!$""")
+private val OPERAND_CHAR = regex("""[\p{L}\p{Nd}_.?!()\[\]{}"']""")
 
 /**
  * What a call shows its result to be, by its name and what it is called on: `u.toLong()` or
@@ -1349,28 +1351,28 @@ internal fun htmlNamed(
     at: Int,
 ): Boolean = declarationOf(src, name, at)?.html ?: false
 
-private val TRIM_CALL = Regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
+private val TRIM_CALL = regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
 
 // Lines as `USES_HTML_DSL` reads them: they start after `\n` alone and are indented with spaces and tabs.
 private val USES_ELEMENTS =
-    Regex(
+    regex(
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)[ \t\r]*(?=\n|(?![\s\S]))|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
-private val QUOTE_START = Regex("""^\$*"""")
-private val TEXT_OF_VALUE = Regex("""^([\s\S]*?)\s*\.\s*text$""")
-private val CREATE_HTML = Regex("""^createHTML\s*\(""")
-private val APPEND_HTML = Regex("""\bappendHTML\s*\(""")
-private val NAME_AT_END = Regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
-private val SAFE_CALL_DOT = Regex("""\??\.$""")
+private val QUOTE_START = regex("""^\$*"""")
+private val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*text$""")
+private val CREATE_HTML = regex("""^createHTML\s*\(""")
+private val APPEND_HTML = regex("""\bappendHTML\s*\(""")
+private val NAME_AT_END = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
+private val SAFE_CALL_DOT = regex("""\??\.$""")
 private val LAMBDA_HEAD =
-    Regex(
+    regex(
         """^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*\s*->""",
     )
-private val ENDS_IN_OPERATOR = Regex("""[-+*/%=<>&|?:.,(]$""")
-private val STARTS_WITH_OPERATOR = Regex("""^(?:[-+*/%&|?:.]|else\b)""")
-private val PROPERTY_CHAIN = Regex("""^[\p{L}_][\p{L}\p{Nd}_]*(?:\s*\??\.\s*[\p{L}_][\p{L}\p{Nd}_]*)*(?:!!)?$""")
-private val MARKUP_CHARS = Regex("""[<&]""")
+private val ENDS_IN_OPERATOR = regex("""[-+*/%=<>&|?:.,(]$""")
+private val STARTS_WITH_OPERATOR = regex("""^(?:[-+*/%&|?:.]|else\b)""")
+private val PROPERTY_CHAIN = regex("""^[\p{L}_][\p{L}\p{Nd}_]*(?:\s*\??\.\s*[\p{L}_][\p{L}\p{Nd}_]*)*(?:!!)?$""")
+private val MARKUP_CHARS = regex("""[<&]""")
 
 /** Whether [t] is one string literal of HTML, or one with a trim call after it. */
 private fun htmlLiteral(t: String): Boolean {
@@ -1450,7 +1452,7 @@ private fun namedLambda(
     args: String,
     name: String,
 ): String? {
-    val re = Regex("""^\s*$name\s*=\s*\{([\s\S]*)\}\s*$""")
+    val re = regex("""^\s*$name\s*=\s*\{([\s\S]*)\}\s*$""")
     for (a in splitTop(args, ",")) re.find(a)?.let { return it.groupValues[1] }
     return null
 }
@@ -2022,7 +2024,7 @@ private fun aliasesIn(
         }
     }
 
-private val CORE_ALIAS = Regex("""${Regex.escape(DOMAIN)}\.([\p{L}_][\p{L}\p{Nd}_]*)\s+as\s+([\p{L}_][\p{L}\p{Nd}_]*)""")
+private val CORE_ALIAS = regex("""${Regex.escape(DOMAIN)}\.([\p{L}_][\p{L}\p{Nd}_]*)\s+as\s+([\p{L}_][\p{L}\p{Nd}_]*)""")
 
 /** [written], a type as a declaration writes it, with a bare alias of core's `Html` or `Trusted` written as the name it stands for: `Page?` as `Html?`. */
 internal fun coreType(
@@ -2036,7 +2038,7 @@ internal fun coreType(
 }
 
 // `List<out Html>` reads its elements as `List<Html>` does.
-private val OUT_VARIANCE = Regex("""^\s*out\s+""")
+private val OUT_VARIANCE = regex("""^\s*out\s+""")
 
 /** [written] with its backticks dropped: `` `Page`? `` as `Page?`, the same name to Kotlin. */
 internal fun unticked(written: String): String = written.replace("`", "")
@@ -2060,7 +2062,7 @@ internal fun asCoreCall(
     }
 }
 
-private val CALLEE = Regex("""^(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
+private val CALLEE = regex("""^(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
 
 /** Whether [text] is one call to core's [name], under that name or an alias: `Trusted(x)`, `T(x)`. */
 internal fun coreCall(
@@ -2077,10 +2079,10 @@ internal fun callsTrusted(
     TRUSTED_CALL.containsMatchIn(text) ||
         coreAliases(src).any { (alias, name) ->
             name == "Trusted" &&
-                Regex("""(?:^|[^\p{L}\p{Nd}_.`])(`?)${Regex.escape(alias)}\1\s*\(""").containsMatchIn(text)
+                regex("""(?:^|[^\p{L}\p{Nd}_.`])(`?)${Regex.escape(alias)}\1\s*\(""").containsMatchIn(text)
         }
 
-private val TRUSTED_CALL = Regex("""(?:^|[^\p{L}\p{Nd}_.`])(`?)Trusted\1\s*\(""")
+private val TRUSTED_CALL = regex("""(?:^|[^\p{L}\p{Nd}_.`])(`?)Trusted\1\s*\(""")
 
 /** Whether [d] is set to a call to core's `interpolate` or `Trusted`: by an alias, or by a name nothing else in [src] takes. */
 private fun setToCore(
@@ -2135,7 +2137,7 @@ private fun shadowedInFile(
             return true
         }
     }
-    val declaration = Regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?(`?)${Regex.escape(name)}\1(?![\p{L}\p{Nd}_])""")
+    val declaration = regex("""\b(?:fun|class|object|interface|typealias)\s+(?:<[^>]*>\s*)?(`?)${Regex.escape(name)}\1(?![\p{L}\p{Nd}_])""")
     for (m in declaration.findAll(src)) {
         if (!code[m.range.first]) continue
         var depth = 0
@@ -2226,7 +2228,7 @@ private val LIST_RESULTS =
     )
 
 /** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
-private val LIST_TYPE = Regex("""(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??""")
+private val LIST_TYPE = regex("""(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??""")
 
 /** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
 internal fun callResult(value: String): Boolean = holeValues(value).all { lastCall(it.text) != null }
@@ -2477,17 +2479,17 @@ internal fun countBelow(
 /** What a value handed to `interpolate` is, as far as the text shows: what core's `admits` decides by. */
 internal enum class ArgKind { STRING, NUMBER, UNSIGNED, BOOLEAN, NULL, CHAR, TRUSTED, MARKUP }
 
-private val NUMBER_LITERAL = Regex("""-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*""")
-private val CHAR_LITERAL = Regex("""'(?:[^'\\]|\\.[^']*)'""")
-private val IF_START = Regex("""^if\s*\(""")
-private val TEXT_OF = Regex("""^([\s\S]*?)\s*\.\s*text$""")
+private val NUMBER_LITERAL = regex("""-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*""")
+private val CHAR_LITERAL = regex("""'(?:[^'\\]|\\.[^']*)'""")
+private val IF_START = regex("""^if\s*\(""")
+private val TEXT_OF = regex("""^([\s\S]*?)\s*\.\s*text$""")
 
 /** Whether [text] is one call to [name] whose argument list closes at its end: `Trusted(x)`, not `Trusted(x).html`. */
 private fun wholeCall(
     text: String,
     name: String,
 ): Boolean {
-    if (!Regex("""^$name\s*\(""").containsMatchIn(text) || !text.endsWith(")")) return false
+    if (!regex("""^$name\s*\(""").containsMatchIn(text) || !text.endsWith(")")) return false
     val mask = lexKotlin(text).mask
     var depth = 0
     for (i in text.indexOf('(') until text.length) {

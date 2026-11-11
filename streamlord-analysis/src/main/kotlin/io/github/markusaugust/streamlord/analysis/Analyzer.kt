@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
+import io.github.markusaugust.streamlord.core.regex
 import kotlin.concurrent.Volatile
 
 /*
@@ -81,28 +82,28 @@ public enum class ValueFact {
     public companion object
 }
 
-private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
-private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")
-private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
-private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
-private val OBJECT_FORM = Regex("""^\s*[{\[]""")
-private val HAS_CAPITAL = Regex("""[A-Z]""")
+private val MODE_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
+private val CASE_ARG = regex("""^\s*Case\.[A-Z]+\s*$""")
+private val CASE_VALUE = regex("""Case\.([A-Z]+)""")
+private val CASE_IN_LAMBDA = regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
+private val OBJECT_FORM = regex("""^\s*[{\[]""")
+private val HAS_CAPITAL = regex("""[A-Z]""")
 
 // A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
 // `val once = 1` a variable of the lambda's own.
-private val LAMBDA_ASSIGNMENT = Regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
-private val KOTLIN_STRING = Regex(""""(?:[^"\\]|\\.)*"""")
+private val LAMBDA_ASSIGNMENT = regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
+private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
 
 // The parameter a DSL helper takes its key by, when it is passed by name.
 private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
-private val DOLLAR_RUNS = Regex("""\$+""")
-private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
-private val BRACED_TEMPLATE = Regex("""\$\{""")
-private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
+private val DOLLAR_RUNS = regex("""\$+""")
+private val ASSIGN_BEFORE = regex("""\s*=\s*$""")
+private val BRACED_TEMPLATE = regex("""\$\{""")
+private val TRIM_AFTER = regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 // A name, a property chain or a number literal, which takes a call after it without brackets.
-private val SIMPLE_RECEIVER = Regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
-private val END_TAG_ATTRIBUTES = Regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
+private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
+private val END_TAG_ATTRIBUTES = regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
 
 /** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
 private const val UNQUOTED_STOP = " \t\n\u000C\r\u000B\"'=<>`"
@@ -128,22 +129,22 @@ private class HoleReading(
 
 private val INTERPOLATE = setOf("interpolate")
 
-private val FORMAT_SPECIFIER = Regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
+private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
-private val ATTRIBUTES_INDEX = Regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
+private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
 /** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
-private val STATEMENT_END = Regex("""[ \t]*(?:[;}\n\r]|$)""")
+private val STATEMENT_END = regex("""[ \t]*(?:[;}\n\r]|$)""")
 
 /** The DSL helper that says the same as a whole-string expression, when there is one, by its name. */
 private val HELPERS: List<Pair<Regex, String>> =
     listOf(
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "signal",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$""") to "increment",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)--$""") to "decrement",
-        Regex("""^!\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "not",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$""") to "toggle",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "signal",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$""") to "increment",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)--$""") to "decrement",
+        regex("""^!\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "not",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$""") to "toggle",
     )
 
 /**

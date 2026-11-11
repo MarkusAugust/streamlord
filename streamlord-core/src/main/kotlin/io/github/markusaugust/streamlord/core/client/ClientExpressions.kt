@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * How Datastar's client rewrites the `$` and `@` references in an expression before compiling it.
@@ -52,10 +53,10 @@ public class ClientRewrite(
 
 /** The client's signal pattern (engine.ts, `genRx`, in 1.0.5): `\w` and `.`/`-` joined parts. */
 @InternalStreamlordApi
-public val CLIENT_SIGNAL: Regex = Regex("""\$(\w+(?:[.-]\w+)*)""")
+public val CLIENT_SIGNAL: Regex = regex("""\$(\w+(?:[.-]\w+)*)""")
 
 /** The client's action pattern: a name and the parenthesis right after it. */
-private val CLIENT_ACTION = Regex("""@([A-Za-z_$][\w$]*)\(""")
+private val CLIENT_ACTION = regex("""@([A-Za-z_$][\w$]*)\(""")
 
 private fun signalPath(name: String): String = "$" + name.split('.').joinToString("") { "['$it']" }
 

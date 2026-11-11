@@ -14,6 +14,7 @@ import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.radixDouble
+import io.github.markusaugust.streamlord.core.regex
 import kotlin.math.abs
 import kotlin.math.floor
 
@@ -23,16 +24,16 @@ import kotlin.math.floor
  */
 
 /** An attribute name as a browser parses it, without template syntax or a spread in it. */
-private val PLAIN_ATTRIBUTE_NAME = Regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
+private val PLAIN_ATTRIBUTE_NAME = regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
 
 /** A modifier name with arguments run into it by underscores, and nothing else. */
-private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
+private val MODIFIER_WORD = regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-private val JS_DECIMAL = Regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+private val JS_DECIMAL = regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
 
-private val JS_RADIX = Regex("0([xob])([0-9a-f]+)")
+private val JS_RADIX = regex("0([xob])([0-9a-f]+)")
 
 /** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
 private val FIRST_TAG_READ = setOf(ModifierType.DURATION, ModifierType.INT, ModifierType.IDENT)
@@ -61,7 +62,7 @@ private fun jsNumber(tag: String): Double? {
 }
 
 /** What JavaScript's `parseFloat` reads from the start of a tag: digits, and an exponent if one follows. */
-private val JS_FLOAT_PREFIX = Regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+private val JS_FLOAT_PREFIX = regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
 
 /**
  * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
@@ -110,28 +111,28 @@ private val OPTIONAL_END: Map<String, Set<String>> =
  * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
  */
 public val TEMPLATE_SYNTAX: Regex =
-    Regex(
+    regex(
         """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
             """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
     )
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
-private val DURATION = Regex("""^\d+(ms|s)?$""")
-private val WHOLE_NUMBER = Regex("""^\d+$""")
+private val DURATION = regex("""^\d+(ms|s)?$""")
+private val WHOLE_NUMBER = regex("""^\d+$""")
 
 /** A value that looks like a name, so that its problems as a name are told rather than called an expression. */
-private val NAME_LIKE = Regex("""[\p{L}\p{Nd}_$.-]+""")
+private val NAME_LIKE = regex("""[\p{L}\p{Nd}_$.-]+""")
 
 /** A `$name` in a filter, which the client evaluates without rewriting signals. */
-private val FILTER_SIGNAL = Regex("""\$[A-Za-z_][\w$]*""")
-private val WORD_CHAR_CLASS = Regex("""\w""")
-private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
-private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
-private val HAS_CAPITAL = Regex("""[A-Z]""")
-private val HAS_LOWERCASE = Regex("""[a-z]""")
+private val FILTER_SIGNAL = regex("""\$[A-Za-z_][\w$]*""")
+private val WORD_CHAR_CLASS = regex("""\w""")
+private val IDENT = regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
+private val SIGNAL_NAME = regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
+private val HAS_CAPITAL = regex("""[A-Z]""")
+private val HAS_LOWERCASE = regex("""[a-z]""")
 
 /** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */
-private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
+private val KEY_ESCAPE = regex("""(?s)\\(.)""")
 
 /**
  * The path of a key of the object form, part by part as the keys are written and read as the
@@ -141,7 +142,7 @@ private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
 private fun keyParts(k: ObjectKey): List<String> = k.parts.map { p -> KEY_ESCAPE.replace(p) { it.groupValues[1] } }
 
 /** A number literal, whole. */
-private val NUMBER = Regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
+private val NUMBER = regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 private val NO_FUNCTION_WORDS = setOf("true", "false", "null", "undefined", "NaN", "Infinity")
 private val UNARY_WORDS = setOf("typeof", "void", "delete")
 private val BINARY_WORDS = setOf("in", "instanceof")
@@ -385,7 +386,7 @@ private fun cutByTemplate(
 ): Boolean = tagSource.getOrNull(at) == '{' || (at < tagSource.length && templateConstructEnd(tagSource, at) > at)
 
 /** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
-private val KOTLIN_TEMPLATE = Regex("""\$[A-Za-z_{]""")
+private val KOTLIN_TEMPLATE = regex("""\$[A-Za-z_{]""")
 
 public data class Attribute(
     val name: String,
@@ -498,7 +499,7 @@ public fun tokenize(
 }
 
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
-private val KOTLIN_TAG_NAME = Regex("""(</?)__kt__""")
+private val KOTLIN_TAG_NAME = regex("""(</?)__kt__""")
 
 /**
  * [html] with the placeholder of a Kotlin template as a tag's name, `<$tag>`, turned into a name of
@@ -641,7 +642,7 @@ public class MarkupValidator(
     private val backendActions = catalog.actions.filter { it.kind == "backend" }.map { it.name }
 
     /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
-    private val backendAction = Regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
+    private val backendAction = regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
 
     public fun validateMarkup(
         html: String,

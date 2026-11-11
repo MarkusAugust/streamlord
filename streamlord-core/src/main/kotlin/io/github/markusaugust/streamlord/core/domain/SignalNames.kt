@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.core.domain
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.clientRewrite
+import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The signal names Datastar's client cannot hold, measured against its 1.0.5 store.
@@ -72,7 +73,7 @@ public object SignalNames {
 
     // What Datastar's client finds behind a `$`, less the hyphen a signal name may not hold: ASCII
     // word characters, in parts joined by `.`.
-    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
+    private val SIGNAL_NAME = regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
 
     /**
      * Why [name] cannot declare a signal in code, or `null` when it can: what
@@ -109,7 +110,7 @@ public object SignalNames {
     /** [name] with each hyphen dropped and the letter after it raised: `first-name` is `firstName`. */
     public fun withoutHyphens(name: String): String = HYPHEN.replace(name) { it.value.trimStart('-').uppercase() }
 
-    private val HYPHEN = Regex("-+.?")
+    private val HYPHEN = regex("-+.?")
 
     /**
      * [name], a reference an expression writes after `$`, with its hyphens taken out, or `null`

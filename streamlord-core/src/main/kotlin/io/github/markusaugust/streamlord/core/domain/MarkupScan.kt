@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.client.commentClose
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.regex
 
 /**
  * What a walk over HTML reports. Offsets are into the string that was walked, so a caller can
@@ -1149,7 +1150,7 @@ private fun templateTagAt(
         else -> null
     }
 
-private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
+private val TEMPLATE_CALL = regex("""^[@#][A-Za-z]+\s*\(""")
 
 /**
  * Where a template construct that starts at [at] inside a tag ends, or [at] when none starts

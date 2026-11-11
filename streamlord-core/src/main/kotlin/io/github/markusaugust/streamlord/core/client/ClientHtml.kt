@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * What the browser's HTML tokenizer decides before Datastar sees anything: which elements hold
@@ -163,7 +164,7 @@ internal fun commentClose(
  * one, which the browser reads with or without its semicolon.
  */
 private val ENTITY =
-    Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)""")
+    regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)""")
 
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 private val NAMED_ENTITIES =

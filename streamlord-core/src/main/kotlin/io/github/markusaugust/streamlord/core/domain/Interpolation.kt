@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.regex
 import org.intellij.lang.annotations.Language
 import kotlin.jvm.JvmInline
 
@@ -400,7 +401,7 @@ private fun Position.admits(value: Any?): Boolean =
         Position.STRUCTURE, Position.CODE -> false
     }
 
-private val SCHEME = Regex("^([A-Za-z][A-Za-z0-9+.-]*):")
+private val SCHEME = regex("^([A-Za-z][A-Za-z0-9+.-]*):")
 private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
 
 /**
@@ -785,7 +786,7 @@ private fun refreshUrls(content: String): List<String> {
     return listOf(rest, url).flatMap { listOf(it, it.trimStart('"', '\'')) }
 }
 
-private val REFRESH_URL_KEY = Regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
+private val REFRESH_URL_KEY = regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
 
 /** The span of [text] from [from] to [to] as it will be written, with the values of the holes [inside] it escaped. */
 private fun written(

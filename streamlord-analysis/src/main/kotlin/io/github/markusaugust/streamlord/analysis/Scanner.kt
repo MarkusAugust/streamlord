@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.regex
+
 /*
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
  * Kotlin parser. The DSL names are distinctive enough that a call is `name(` not preceded by
@@ -67,12 +69,12 @@ public class KotlinLex(
     }
 }
 
-private val FUN_BEFORE = Regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
-private val NAMED_ARG = Regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
-private val TRAILING_LAMBDA = Regex("""^\s*\{""")
+private val FUN_BEFORE = regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
+private val NAMED_ARG = regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
+private val TRAILING_LAMBDA = regex("""^\s*\{""")
 
 /** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
-private val TRIM_CALL = Regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
+private val TRIM_CALL = regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 /** The offset of the first character from [from] that is neither whitespace nor part of a comment. */
 private fun skipTrivia(
@@ -315,8 +317,8 @@ public fun lexKotlin(src: String): KotlinLex {
 /** Every string literal in the source that is not inside a comment, in order. */
 public fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
 
-private val HTML_MARKER = Regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-private val PARAMETER_AFTER_MARKER = Regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
+private val HTML_MARKER = regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
 /**
  * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,

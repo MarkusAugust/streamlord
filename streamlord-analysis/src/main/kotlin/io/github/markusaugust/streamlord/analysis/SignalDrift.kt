@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.regex
+
 /*
  * Signals a handler reads, against signals the pages declare.
  *
@@ -48,20 +50,20 @@ public data class SignalFacts(
     val encodedTypes: Set<String> = emptySet(),
 )
 
-private val SIGNAL_TYPE_PARAMETER = Regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
-private val SIGNAL_TYPE_DEFAULT = Regex("""\breadSignalsOr\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
+private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
+private val SIGNAL_TYPE_DEFAULT = regex("""\breadSignalsOr\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
 
 // Any modifier may stand between the annotation and `class`: an explicit-API module writes
 // `@Serializable public data class`.
 private val SERIALIZABLE_DECLARATION =
-    Regex(
+    regex(
         """@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
     )
 
 // `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
 // between it and the property.
 private val PROPERTY_NAME =
-    Regex(
+    regex(
         """(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""",
     )
 
@@ -72,12 +74,12 @@ private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decim
 // not enough. A lookup counts when it is made on an untyped `readSignals()` call, on a name the
 // file binds to one or declares as `Signals`, or on a name that is plainly `signals`.
 private val SIGNALS_BINDING =
-    Regex(
+    regex(
         """\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*Signals\??\s*)?=[^\n;=]*\breadSignals\s*\([^()\n]*\)\s*$""",
         RegexOption.MULTILINE,
     )
-private val SIGNALS_TYPED = Regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
-private val READ_SIGNALS_BEFORE = Regex("""\breadSignals\s*$""")
+private val SIGNALS_TYPED = regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
+private val READ_SIGNALS_BEFORE = regex("""\breadSignals\s*$""")
 
 /**
  * Reads [src] for everything the drift check needs.

@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The `$` trap, hunted in HTML written as a string.
@@ -217,7 +218,7 @@ private fun foreignRoot(
     }
 
 /** A CDATA section, to its `]]>` or the end. */
-private val CDATA = Regex("""<!\[CDATA\[[\s\S]*?(?:]]>|$)""")
+private val CDATA = regex("""<!\[CDATA\[[\s\S]*?(?:]]>|$)""")
 
 /**
  * Each svg or math the HTML reading found, from its start tag to its own end tag, nested ones
@@ -235,7 +236,7 @@ private fun foreignSpans(
     for (start in roots) {
         if (start < covered) continue
         val name = foreignRoot(html, start) ?: continue
-        val token = Regex("<(/?)$name(?=[\\s/>]|$)", RegexOption.IGNORE_CASE)
+        val token = regex("<(/?)$name(?=[\\s/>]|$)", RegexOption.IGNORE_CASE)
         var depth = 0
         var end = html.length
         for (m in token.findAll(html, start)) {

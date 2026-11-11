@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -106,5 +107,5 @@ public object DatastarProtocol {
     }
 
     // RFC 9110's weight: 0 to 1, with at most three decimals. Anything else, Infinity included, is no.
-    private val QVALUE = Regex("""0(\.\d{0,3})?|1(\.0{0,3})?""")
+    private val QVALUE = regex("""0(\.\d{0,3})?|1(\.0{0,3})?""")
 }

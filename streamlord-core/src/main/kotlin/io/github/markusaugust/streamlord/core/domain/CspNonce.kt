@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.randomBase64
+import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The nonce that turns Datastar's CSP mode on, and the header it has to agree with.
@@ -34,7 +35,7 @@ public object CspNonce {
     private const val BYTES = 16
 
     // Section 2.3.1 of CSP Level 3: a nonce-value is a base64-value, padding included.
-    private val BASE64 = Regex("[A-Za-z0-9+/\\-_]+={0,2}")
+    private val BASE64 = regex("[A-Za-z0-9+/\\-_]+={0,2}")
 
     /**
      * A fresh nonce: 16 random bytes from [SecureRandom], base64 encoded.

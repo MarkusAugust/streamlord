@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.core.client
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.formEncoded
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The request Datastar 1.0.5's `@get` and its kin send with the default JSON content type
@@ -12,7 +13,7 @@ import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
  */
 @InternalStreamlordApi
 public object ClientRequest {
-    private val PERCENT_BYTE = Regex("%([0-9A-Fa-f]{2})")
+    private val PERCENT_BYTE = regex("%([0-9A-Fa-f]{2})")
 
     /**
      * Whether [method] sends the signals in the query rather than in a body: `GET` and `DELETE`

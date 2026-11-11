@@ -19,11 +19,11 @@ class PatternsTest {
     @Test
     fun `white space is the six ASCII characters`() {
         assertEquals(listOf("0-1", "2-3", "4-5", "6-7", "8-9", "10-11"), found("""\s""", " a\tb\nc\u000Bd\u000Ce\r"))
-        assertEquals(emptyList(), found("""\s""", "   ﻿　\u0085"))
-        assertEquals(listOf("0-3"), found("""\S+""", "  x y"))
-        assertEquals(listOf("1-3"), found("""[\s,]+""", "  , "))
-        assertEquals(listOf("0-1", "2-3"), found("""[^\s]""", "   "))
-        assertEquals(listOf("0-4"), found("""[\s\S]+""", "  \nx"))
+        assertEquals(emptyList(), found("""\s""", "\u00A0\u2028\u2029\uFEFF\u3000\u0085"))
+        assertEquals(listOf("0-3", "4-5"), found("""\S+""", "\u00A0\u2028x y"))
+        assertEquals(listOf("1-3"), found("""[\s,]+""", "\u00A0 ,\u2028"))
+        assertEquals(listOf("0-1", "2-3"), found("""[^\s]""", "\u00A0 \u2028"))
+        assertEquals(listOf("0-4"), found("""[\s\S]+""", "\u00A0 \nx"))
     }
 
     @Test
@@ -32,7 +32,7 @@ class PatternsTest {
         assertEquals(listOf("0-1"), found("a$", "a\n"))
         assertEquals(listOf("0-1"), found("a$", "a\r\n"))
         assertEquals(listOf("0-1"), found("a$", "a\r"))
-        assertEquals(listOf("0-1"), found("a$", "a "))
+        assertEquals(listOf("0-1"), found("a$", "a\u2028"))
         assertEquals(listOf("0-1"), found("a$", "a\u0085"))
         assertEquals(emptyList(), found("a$", "a\n\n"))
         assertEquals(emptyList(), found("a$", "a\nb"))
@@ -56,24 +56,32 @@ class PatternsTest {
 
     @Test
     fun `the dot stops at each line break and takes them all when told to`() {
-        assertEquals(listOf("0-1", "6-7"), found(".+", "a\n\r\u0085  b"))
+        assertEquals(listOf("0-1", "6-7"), found(".+", "a\n\r\u0085\u2028\u2029b"))
         assertEquals(listOf("0-3"), found(".+", "a\u000Bb"))
-        assertEquals(listOf("0-7"), found(".+", "a\n\r\u0085  b", RegexOption.DOT_MATCHES_ALL))
+        assertEquals(listOf("0-7"), found("(?s).+", "a\n\r\u0085\u2028\u2029b"))
         assertEquals(listOf("0-3"), found("(?s)a.b", "a\nb"))
         assertEquals(listOf("0-1"), found("[.]", ".a"))
-        assertEquals(listOf("0-2"), found(".", "😀"))
+        assertEquals(listOf("0-2"), found(".", "\uD83D\uDE00"))
     }
 
     @Test
-    fun `letter case is ignored for ASCII letters alone`() {
+    fun `letter case written into the pattern is ignored for ASCII letters alone`() {
         assertEquals(listOf("0-6"), found("(?i)data-x", "DATA-X"))
-        assertEquals(listOf("0-1", "1-2"), found("k", "kKK", RegexOption.IGNORE_CASE))
-        assertEquals(listOf("0-2"), found("[a-z]+", "sSſK", RegexOption.IGNORE_CASE))
-        assertEquals(listOf("0-2"), found("[^a-f]+", "xYeE", RegexOption.IGNORE_CASE))
-        assertEquals(listOf("2-3", "3-4"), found("[^X]", "xXa\u212A", RegexOption.IGNORE_CASE))
-        assertEquals(emptyList(), found("\u00E9", "\u00C9", RegexOption.IGNORE_CASE))
+        assertEquals(listOf("0-1", "1-2"), found("(?i)k", "kK\u212A"))
+        assertEquals(listOf("0-2"), found("(?i)[a-z]+", "sS\u017F\u212A"))
+        assertEquals(listOf("0-2"), found("(?i)[^a-f]+", "xYeE"))
+        assertEquals(listOf("2-3", "3-4"), found("(?i)[^X]", "xXa\u212A"))
+        assertEquals(listOf("0-3"), found("(?i)[\\p{L}_.-]+", "aB_ "))
+        assertEquals(listOf("0-4"), found("""(?i)a\x41\u0061\d""", "AaA1"))
+    }
+
+    @Test
+    fun `letter case asked for as an option is ignored for every letter`() {
+        assertEquals(listOf("0-1", "1-2", "2-3"), found("k", "kK\u212A", RegexOption.IGNORE_CASE))
+        assertEquals(listOf("0-4"), found("[a-z]+", "sS\u017F\u212A", RegexOption.IGNORE_CASE))
+        assertEquals(listOf("0-1"), found("\u00E9", "\u00C9", RegexOption.IGNORE_CASE))
         assertEquals(listOf("0-5"), found("""</?svg""", "</SVG>", RegexOption.IGNORE_CASE))
-        assertEquals(listOf("0-4"), found("""(a)\1x\x41""", "aAxa", RegexOption.IGNORE_CASE))
+        assertEquals(listOf("0-6"), found("""(?s)<svg.*?>""", "<SVG\n>", RegexOption.IGNORE_CASE))
     }
 
     @Test
@@ -82,18 +90,17 @@ class PatternsTest {
         assertEquals(listOf("0-3"), found("""\$\{\s*}""", "\${}"))
         assertEquals(listOf("0-3", "3-3"), found("""(?:]]>|$)""", "]]>"))
         assertEquals(listOf("0-1", "1-2"), found("""[]a]""", "]a"))
-        assertEquals(listOf("0-2"), found("""x{""", "x{"))
         assertEquals(listOf("0-3"), found("""x{2}y""", "xxy"))
     }
 
     @Test
     fun `an escape names the same character`() {
-        assertEquals(listOf("0-1", "1-3"), found("""[A-Za-z0-9_$\x{80}-\x{10FFFF}]""", "é😀 "))
+        assertEquals(listOf("0-1", "1-3"), found("""[A-Za-z0-9_$\x{80}-\x{10FFFF}]""", "\u00E9\uD83D\uDE00 "))
         assertEquals(listOf("0-7"), found("""\"\'\<\>\=\:\-""", "\"'<>=:-"))
         assertEquals(listOf("0-3"), found("""[\-\"\`]+""", "-\"`"))
-        assertEquals(listOf("0-1"), found("""\d""", "1٣"))
-        assertEquals(listOf("0-2"), found("""\w+""", "a_é"))
-        assertEquals(listOf("0-2"), found("""[\p{L}\p{Nd}]+""", "é٣ "))
+        assertEquals(listOf("0-1"), found("""\d""", "1\u0663"))
+        assertEquals(listOf("0-2"), found("""\w+""", "a_\u00E9"))
+        assertEquals(listOf("0-2"), found("""[\p{L}\p{Nd}]+""", "\u00E9\u0663 "))
         assertEquals(listOf("0-1"), found("""\p{Lu}""", "Aa"))
         assertEquals(listOf("0-5"), found("""a\x62\t\n\r""", "ab\t\n\r"))
         assertEquals(listOf("0-3"), found(Regex.escape("a.b"), "a.b a-b"))

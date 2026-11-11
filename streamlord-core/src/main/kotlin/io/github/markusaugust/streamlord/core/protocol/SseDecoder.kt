@@ -10,6 +10,7 @@ import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsText
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
+import io.github.markusaugust.streamlord.core.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -197,10 +198,10 @@ public object SseDecoder {
     // `<!-->`, `<!--->` and `--!>`. A `</body>`, `</head>` or `</html>`
     // anywhere outside an `<svg>` has the client read the text as a whole document and patch that
     // element of the page (patchElements.ts).
-    private val START_TAG = Regex("<[A-Za-z]")
-    private val COMMENT = Regex("<!--(?:-?>|.*?(?:--!?>|$))", RegexOption.DOT_MATCHES_ALL)
-    private val SVG = Regex("<svg(?:\\s[^>]*>|>).*?</svg>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-    private val DOCUMENT_END = Regex("</(?:body|head|html)>")
+    private val START_TAG = regex("<[A-Za-z]")
+    private val COMMENT = regex("(?s)<!--(?:-?>|.*?(?:--!?>|$))")
+    private val SVG = regex("(?s)<svg(?:\\s[^>]*>|>).*?</svg>", RegexOption.IGNORE_CASE)
+    private val DOCUMENT_END = regex("</(?:body|head|html)>")
 
     private fun holdsElement(elements: String): Boolean =
         DOCUMENT_END.containsMatchIn(elements.replace(SVG, "")) || START_TAG.containsMatchIn(elements.replace(COMMENT, ""))

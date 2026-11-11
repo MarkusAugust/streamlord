@@ -3,6 +3,8 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import io.github.markusaugust.streamlord.core.groupRange
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -16,21 +18,21 @@ public enum class SourceLanguage { KOTLIN, HTML }
 // assign the signal, which creates it.
 private val KOTLIN_PATTERNS =
     listOf(
-        Regex(
+        regex(
             """\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
         ),
-        Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
+        regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
 private val KOTLIN_READS =
     listOf(
-        Regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
-        Regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
+        regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
+        regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
     )
 
 /** A helper that reads a signal by name: `signal("count")` is `$count`, which completion offers and a definition is not. */
-private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""")
+private val HELPER_READS = regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""")
 
 /*
  * Declarations in markup, read as the client stores them. These also run over Kotlin, where they
@@ -44,13 +46,13 @@ private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})
  * `data-signals:{{ name }}`, `data-signals:th:text`) declares nothing.
  */
 private val KEYED_ATTRIBUTE =
-    Regex(
+    regex(
         """(?i)data-(?:star-)?(?:${Catalog.default.signalKeyAttributes.joinToString("|")}):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""",
     )
 
 /** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
 private val VALUE_ATTRIBUTE =
-    Regex(
+    regex(
         """(?i)data-(?:star-)?(?:${Catalog.default.attributes.filter { it.valueKind == ValueKind.SIGNAL }.joinToString(
             "|",
         ) { it.name }})""" +
@@ -60,13 +62,13 @@ private val VALUE_ATTRIBUTE =
 // The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
 // by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
 // data-computed="{total: () => ...}" declares its keys the same way.
-private val OBJECT_ATTRIBUTE = Regex("""(?i)data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
+private val OBJECT_ATTRIBUTE = regex("""(?i)data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
 
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
-private val ASSIGNED_SIGNAL = Regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
+private val ASSIGNED_SIGNAL = regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
-private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
+private val BARE_SIGNAL = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
 private val PAIR_CALLS = Catalog.default.signalCalls.keys
 
@@ -96,7 +98,7 @@ private val JSON_CALLS =
     Catalog.default.signalCalls
         .filterValues { "json" in it }
         .keys
-private val JSON_OBJECT = Regex("""^\s*\{""")
+private val JSON_OBJECT = regex("""^\s*\{""")
 
 /**
  * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
@@ -104,14 +106,14 @@ private val JSON_OBJECT = Regex("""^\s*\{""")
  * or by a variable whose type the file writes down, `toJsonValue(form)` with `form: Form`.
  */
 private val TO_JSON =
-    Regex(
+    regex(
         """\btoJsonValue\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(|([a-z_][A-Za-z0-9_]*)\s*\))?""",
     )
 
 /** A pair whose key is not a literal, `key to value`: the fields under it are no top-level signals. */
-private val ANY_PAIR = Regex("""^[^(]*?\bto\s""")
-private val IDENTIFIER_ARG = Regex("""^\s*([a-z_][A-Za-z0-9_]*)\s*$""")
-private val BOOLEAN_ARG = Regex("""^\s*(?:true|false)\s*$""")
+private val ANY_PAIR = regex("""^[^(]*?\bto\s""")
+private val IDENTIFIER_ARG = regex("""^\s*([a-z_][A-Za-z0-9_]*)\s*$""")
+private val BOOLEAN_ARG = regex("""^\s*(?:true|false)\s*$""")
 
 /** Types that say nothing about the names in them. */
 private val UNNAMED_TYPES = setOf("JsonValue", "JsonObject", "Any", "Map", "MutableMap", "HashMap", "LinkedHashMap")
@@ -165,7 +167,7 @@ private fun encodedType(
     if (depth > 0) return null
     val name = Regex.escape(id)
     val init =
-        Regex("""\b(?:val|var)\s+$name\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
+        regex("""\b(?:val|var)\s+$name\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
             .findAll(before)
             .lastOrNull()
             ?.groupValues
@@ -180,8 +182,8 @@ private fun variableType(
     before: String,
 ): String? {
     val name = Regex.escape(id)
-    val typed = Regex("""\b$name\s*:\s*([A-Z][A-Za-z0-9_]*)""").findAll(before).lastOrNull()
-    val built = Regex("""\b(?:val|var)\s+$name\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""").findAll(before).lastOrNull()
+    val typed = regex("""\b$name\s*:\s*([A-Z][A-Za-z0-9_]*)""").findAll(before).lastOrNull()
+    val built = regex("""\b(?:val|var)\s+$name\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""").findAll(before).lastOrNull()
     return listOfNotNull(typed, built).maxByOrNull { it.range.first }?.groupValues?.get(1)
 }
 
@@ -196,12 +198,12 @@ internal const val ENCODED_CLASS: String = "toJsonValue:"
 internal const val READABLE_CLASS: String = "class:"
 
 /** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
-private val PAIR = Regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
-private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
+private val PAIR = regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
+private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 
 /** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
 private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
-private val MAP_CALL = Regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
+private val MAP_CALL = regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
 /** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
 private fun argumentKeys(text: String): List<SignalDeclaration> {
@@ -368,10 +370,10 @@ public fun signalDeclarations(
  * digit. What a `$name` reads and what a Kotlin string holds without a template or a name the DSL
  * refuses: a `$` would be a template in Kotlin and `-` throws in a DSL call.
  */
-private val RENAMABLE = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+private val RENAMABLE = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /** The characters of a key and its modifiers, as [KEYED_ATTRIBUTE] reads them. */
-private val KEY_TAIL = Regex("""[\p{L}\p{N}_.-]*""")
+private val KEY_TAIL = regex("""[\p{L}\p{N}_.-]*""")
 
 /**
  * What to write at [d] in [src] so that the place defines [newName], or null when nothing written
@@ -744,11 +746,11 @@ internal fun objectKeys(
     return out
 }
 
-private val BARE_KEY = Regex("""[A-Za-z0-9_$]+""")
+private val BARE_KEY = regex("""[A-Za-z0-9_$]+""")
 
-private val PAIR_KEY = Regex("""^[\s(]*"""")
-private val PAIR_AFTER = Regex("""\s+to\b""")
-private val TO_NULL = Regex("""\s+to\s+null\b""")
+private val PAIR_KEY = regex("""^[\s(]*"""")
+private val PAIR_AFTER = regex("""\s+to\b""")
+private val TO_NULL = regex("""\s+to\s+null\b""")
 
 /** The keys of the pairs among the positional arguments of [site], `"name" to value`, as string literals. */
 internal fun pairKeys(

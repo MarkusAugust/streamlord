@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.regex
 
 /**
  * What a key of a Datastar attribute may be, for the DSL that writes one and the analysis that
@@ -12,12 +13,12 @@ import io.github.markusaugust.streamlord.core.client.ClientCasing
  */
 @InternalStreamlordApi
 public object AttributeKeys {
-    private val UPPER = Regex("[A-Z]")
-    private val JS_NAME = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
+    private val UPPER = regex("[A-Z]")
+    private val JS_NAME = regex("[A-Za-z_$][A-Za-z0-9_$]*")
 
     // Java's \s, the spaces JavaScript's \s adds (class.ts splits a class list on it), NUL, which
     // the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
-    private val FORBIDDEN = Regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
+    private val FORBIDDEN = regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
 
     /**
      * Why [name] cannot be a key or a signal name, or null: it is blank, or holds whitespace (as

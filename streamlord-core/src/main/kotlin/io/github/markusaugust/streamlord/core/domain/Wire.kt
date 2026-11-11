@@ -4,6 +4,7 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.json.JsonShape
+import io.github.markusaugust.streamlord.core.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -15,17 +16,17 @@ import kotlin.time.Duration.Companion.milliseconds
  * elements nobody asked for. Everything that becomes a single wire line passes through here.
  */
 public object Wire {
-    private val LINE_BREAKS = Regex("\r\n|\r|\n")
-    private val ATTRIBUTE_NAME = Regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
+    private val LINE_BREAKS = regex("\r\n|\r|\n")
+    private val ATTRIBUTE_NAME = regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
 
     // The end tag that closes the element early, in any case, and the three Datastar's client takes
     // for a whole document, which drops the script or appends a second html element: those it
     // tests in lower case only (patchElements.ts), so `</BODY>` is left as written.
-    private val END_TAGS = Regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
+    private val END_TAGS = regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
 
     // After <!--, a <script that a name boundary follows sends the tokenizer into a state where
     // </script> no longer ends the element.
-    private val OPEN_SCRIPT = Regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
+    private val OPEN_SCRIPT = regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
 
     /**
      * [json] with each surrogate that lacks its other half written as a `\uXXXX` escape, which is

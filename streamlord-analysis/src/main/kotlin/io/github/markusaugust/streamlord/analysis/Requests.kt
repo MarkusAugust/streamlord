@@ -14,6 +14,7 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * Saved requests for the Stream Inspector: the file format, variable substitution, the recent
@@ -92,11 +93,11 @@ public object Requests {
     /** The methods of the backend actions, in the catalog's order. */
     public val METHODS: List<String> = Catalog.default.backendActions.map { it.uppercase() }
 
-    private val VARIABLE = Regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
-    private val PATH_VARIABLE = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
-    private val OPTIONAL_SEGMENT = Regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
-    private val ABSOLUTE = Regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
-    private val PATH_PARAM_TEXT = Regex("""\{[^{}]*\}""")
+    private val VARIABLE = regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
+    private val PATH_VARIABLE = regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
+    private val OPTIONAL_SEGMENT = regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
+    private val ABSOLUTE = regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
+    private val PATH_PARAM_TEXT = regex("""\{[^{}]*\}""")
     private const val NOT_SENDABLE = "\"<>\\^`|"
 
     /**
@@ -526,7 +527,7 @@ public object Requests {
         return Env(baseUrl, signals, headers, params, errors)
     }
 
-    private val PARAM_NAME = Regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
+    private val PARAM_NAME = regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
 
     /** Where [position] falls in [text], as an editor counts it: "at line 3, column 1". */
     public fun lineAndColumn(
@@ -537,7 +538,7 @@ public object Requests {
         return "at line $line, column $column"
     }
 
-    private val HTTP = Regex("""^https?://""", RegexOption.IGNORE_CASE)
+    private val HTTP = regex("""^https?://""", RegexOption.IGNORE_CASE)
 
     /** The text of each value of the top-level object, by key as written; [text] is known to parse. */
     private fun topLevelValues(text: String): Map<String, String> =
@@ -840,7 +841,7 @@ public object Requests {
         return before + added + text.substring(close)
     }
 
-    private val BASE_URL_VARIABLE = Regex("""\{\{\s*baseUrl\s*\}\}""")
+    private val BASE_URL_VARIABLE = regex("""\{\{\s*baseUrl\s*\}\}""")
 
     /**
      * Where the `{{baseUrl}}` of a URL came from, for a server that could not be reached: a value
@@ -906,7 +907,7 @@ public object Requests {
         val items: List<Variable>,
     )
 
-    private val OPEN_VARIABLE = Regex("""\{\{\s*([A-Za-z]*)$""")
+    private val OPEN_VARIABLE = regex("""\{\{\s*([A-Za-z]*)$""")
 
     /** The variables to offer after `{{` at [caret]: those the field takes and the file sets. */
     public fun variableCompletions(
@@ -1070,9 +1071,9 @@ public object Requests {
             "The server sent no body with this $status, so the reason is in its log."
         }
 
-    private val PORT = Regex("""^:[0-9]*$""")
-    private val IPV4 = Regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
-    private val LABEL = Regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
+    private val PORT = regex("""^:[0-9]*$""")
+    private val IPV4 = regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
+    private val LABEL = regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
 
     /**
      * Why java.net.URI would read no host in [authority], or null when it reads one.
@@ -1164,7 +1165,7 @@ public object Requests {
             else -> null
         }
 
-    private val DRIVE = Regex("""^[A-Za-z]:""")
+    private val DRIVE = regex("""^[A-Za-z]:""")
 
     /**
      * The source text of `requests[index].signals`, or null when the file is not shaped that way.

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * The documentation the editors show on hover and in completion, as Markdown. One wording for
@@ -76,13 +77,13 @@ public fun markdownToHtml(md: String): String {
     // Code spans are set aside first, so the underscores and asterisks inside them stay literal.
     val codes = ArrayList<String>()
     val withoutCode =
-        Regex("""`([^`]+)`""").replace(escaped) {
+        regex("""`([^`]+)`""").replace(escaped) {
             codes += it.groupValues[1]
             "\u0000${codes.size - 1}\u0000"
         }
-    val bold = Regex("""\*\*(.+?)\*\*""").replace(withoutCode) { "<b>${it.groupValues[1]}</b>" }
-    val italic = Regex("""(?<![A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])""").replace(bold) { "<i>${it.groupValues[1]}</i>" }
-    val restored = Regex("""\u0000(\d+)\u0000""").replace(italic) { "<code>${codes[it.groupValues[1].toInt()]}</code>" }
+    val bold = regex("""\*\*(.+?)\*\*""").replace(withoutCode) { "<b>${it.groupValues[1]}</b>" }
+    val italic = regex("""(?<![A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])""").replace(bold) { "<i>${it.groupValues[1]}</i>" }
+    val restored = regex("""\u0000(\d+)\u0000""").replace(italic) { "<code>${codes[it.groupValues[1].toInt()]}</code>" }
     return restored
         .split("\n\n")
         .map { "<p>" + it.replace("  \n", "<br/>").replace("\n", " ") + "</p>" }

@@ -57,14 +57,6 @@ internal abstract class Traceless : RuntimeException(null, null, false, false)
 
 internal fun currentTimeMillis(): Long = System.currentTimeMillis()
 
-/** Where group [group] of [match], a match of this regex in [input], stands; null when the group took no part. */
-@Suppress("UnusedReceiverParameter", "UNUSED_PARAMETER")
-internal fun Regex.groupRange(
-    input: CharSequence,
-    match: MatchResult,
-    group: Int,
-): IntRange? = match.groups[group]?.range
-
 /** Past ASCII: whether [codePoint] may start a JavaScript name, `ID_Start`. */
 internal fun startsName(codePoint: Int): Boolean = Character.isUnicodeIdentifierStart(codePoint)
 

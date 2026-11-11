@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.regex
+
 /*
  * What a Kotlin type or string literal, as the source writes it, tells of a value joined into
  * HTML. The analysis reads declarations with these, and the IntelliJ plugin reads with them the
@@ -10,21 +12,21 @@ package io.github.markusaugust.streamlord.analysis
 /** Streamlord's own markup types, bare as an import gives them or written out in full. */
 private const val CORE_DOMAIN = """(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?"""
 
-private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
+private val NUMBER_TYPE = regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
 
 /** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
-private val UNSIGNED_TYPE = Regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
-private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
-private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
-private val HTML_TYPE = Regex("${CORE_DOMAIN}Html")
-private val TRUSTED_TYPE = Regex("${CORE_DOMAIN}Trusted")
+private val UNSIGNED_TYPE = regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
+private val BOOLEAN_TYPE = regex("""(?:kotlin\.)?Boolean""")
+private val STRING_TYPE = regex("""(?:kotlin\.)?(?:String|CharSequence)""")
+private val HTML_TYPE = regex("${CORE_DOMAIN}Html")
+private val TRUSTED_TYPE = regex("${CORE_DOMAIN}Trusted")
 
 /**
  * A collection of markup: what `joinToString` over Html or Trusted is called on. An Html that may be
  * null is markup as it is on its own, and `out` changes nothing a read sees.
  */
 private val MARKUP_COLLECTION =
-    Regex(
+    regex(
         """(?:kotlin\.collections\.|kotlin\.sequences\.)?""" +
             """(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)""" +
             """<$CORE_DOMAIN(?:Html\??|Trusted)>\??""",
@@ -36,14 +38,14 @@ private val MARKUP_COLLECTION =
  * space them apart.
  */
 private fun tagStart(template: String): Regex =
-    Regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")
+    regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")
 
 /** In the source: `<$tag ` and `<${t} `, and `__kt__`, a `%s` of interpolate's format read as one. */
 private val TAG_START = tagStart("""__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*)""")
 
 /** In the text at runtime, where each template is `__kt__` and a `$` left is one the author wrote. */
 private val TEXT_TAG_START = tagStart("__kt__")
-private val MARGIN_START = Regex("""^\s*\|""")
+private val MARGIN_START = regex("""^\s*\|""")
 
 /**
  * The fact of a class the editor resolved, by its qualified name, where the text alone would read
@@ -116,7 +118,7 @@ public fun isMarkupCollection(type: String): Boolean =
     MARKUP_COLLECTION.matches(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() })
 
 // `out` as a keyword, so a type named `outHtml` is not read as `out Html`.
-private val OUT_PROJECTION = Regex("""<\s*out\s+""")
+private val OUT_PROJECTION = regex("""<\s*out\s+""")
 
 /**
  * Whether the content of a string literal, past its opening quotes, starts with a tag, a comment

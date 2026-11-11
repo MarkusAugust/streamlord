@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.regex
 
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the
@@ -43,7 +44,7 @@ internal val HELPER_READ_CALLS: Set<String> =
  * refuses (see [signalNameHyphenIssues]), or brackets, whose key a plain name would not replace
  * as written.
  */
-private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+private val PLAIN_HELPER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
@@ -51,14 +52,14 @@ private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-
  * and tabs, as `USES_HTML_DSL` in signalNameHyphens.ts reads it.
  */
 internal val USES_HTML_DSL =
-    Regex(
+    regex(
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
 
 /** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. Lines as in [USES_HTML_DSL]. */
 private val FOREIGN_IMPORT =
-    Regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
+    regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
 
 /**
  * The helpers of [names] that [src] reads as the DSL's: those no import from elsewhere puts in their
