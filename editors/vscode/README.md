@@ -281,6 +281,10 @@ profile is a fresh one under `/tmp/streamlord-real` (`STREAMLORD_REAL_TMP`, a sh
 own settings and extensions take no part. Run the check before and after a change to the
 extension's internals; record again only when a difference is one you meant.
 
+A file under `test/real/outside` lies in no folder of the workspace: the editor is shown it and
+never finds it by itself, as any file in a window without a folder. A code lens is recorded with
+the request it fills the inspector with.
+
 The workspace holds the three ways of writing markup: HTML and template files, HTML in Kotlin
 strings, and the kotlinx.html DSL. The files under `drawn` are cases of `test/fixtures/corpus`,
 each as a file of its own (`drawn/origin.json` says which), and those under `aliased` are read with

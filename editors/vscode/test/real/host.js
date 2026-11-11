@@ -5,6 +5,7 @@ const path = require("node:path");
 
 const job = JSON.parse(fs.readFileSync(process.env.STREAMLORD_REAL_JOB, "utf8"));
 const root = vscode.Uri.file(job.workspace).toString() + "/";
+const outside = vscode.Uri.file(job.outside.folder).toString() + "/";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const run = (command, ...args) => vscode.commands.executeCommand(command, ...args);
@@ -23,7 +24,8 @@ async function until(what, probe, timeout = 30_000) {
 // What the providers hand back, as plain values: 1-based line:column, paths from the workspace root.
 const at = (p) => `${p.line + 1}:${p.character + 1}`;
 const span = (r) => (r ? `${at(r.start)}-${at(r.end)}` : undefined);
-const file = (uri) => (uri.toString().startsWith(root) ? decodeURIComponent(uri.toString().slice(root.length)) : uri.toString());
+const under = (uri, folder) => (uri.toString().startsWith(folder) ? decodeURIComponent(uri.toString().slice(folder.length)) : null);
+const file = (uri) => under(uri, root) ?? (under(uri, outside) === null ? uri.toString() : job.outside.name + under(uri, outside));
 const text = (d) => (d === undefined || d === null ? undefined : typeof d === "string" ? d : d.value);
 const place = (l) => ({ file: file(l.targetUri ?? l.uri), range: span(l.targetSelectionRange ?? l.targetRange ?? l.range) });
 const byPlace = (a, b) => a.file.localeCompare(b.file) || rank(a.range) - rank(b.range);
@@ -183,8 +185,8 @@ async function settled(uri, name) {
   return vscode.languages.getDiagnostics(uri);
 }
 
-async function record(name, marks) {
-  const uri = vscode.Uri.file(path.join(job.workspace, name));
+async function record(name, marks, folder = job.workspace) {
+  const uri = vscode.Uri.file(path.join(folder, name));
   const document = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(document);
   const found = await settled(uri, name);
@@ -224,7 +226,8 @@ async function record(name, marks) {
   }
 
   out.lenses = ((await run("vscode.executeCodeLensProvider", uri, 10_000)) ?? [])
-    .map((l) => ({ range: span(l.range), title: l.command?.title, tooltip: l.command?.tooltip, command: l.command?.command, arguments: l.command?.arguments }))
+    // The request the lens fills the inspector with is what a user meets; the rest of what the command is handed is the extension's own.
+    .map((l) => ({ range: span(l.range), title: l.command?.title, tooltip: l.command?.tooltip, command: l.command?.command, prefill: l.command?.arguments?.[0]?.request }))
     .sort((a, b) => rank(a.range) - rank(b.range) || order(a.title, b.title));
   out.links = ((await run("vscode.executeLinkProvider", uri, 10_000)) ?? [])
     .map((l) => ({ range: span(l.range), target: l.target ? file(l.target) : undefined, tooltip: l.tooltip }))
@@ -273,6 +276,8 @@ exports.run = async () => {
         await until("the HTML language server", async () => (await run("vscode.executeCompletionItemProvider", uri, tag)).items.some((i) => i.label === "div"));
       }
       for (const name of pass.files) out.files[name] = await record(name, job.marks.filter((m) => m.file === name));
+      // Written for the catalog's own prefix, which the first pass reads with.
+      if (pass === job.passes[0]) for (const name of job.outside.files) out.files[job.outside.name + name] = await record(name, [], job.outside.folder);
     }
   } catch (e) {
     out.error = e.stack ?? String(e);

@@ -10,6 +10,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const extension = join(here, "../..");
 const workspace = join(extension, "test/fixtures/real");
 const snapshot = join(here, "snapshot");
+/** Files no folder of the workspace holds: the editor is shown them and never finds them, as a file opened in a window without a folder. */
+const outside = join(here, "outside");
+/** The name such a file is recorded under, which no folder of the workspace has. */
+const OUTSIDE = "(outside)/";
 const check = process.argv.includes("--check");
 const code = process.env.STREAMLORD_REAL_CODE ?? "/Applications/Visual Studio Code.app/Contents/MacOS/Code";
 // VS Code puts a socket under the user data directory, and a socket's path is short.
@@ -58,6 +62,7 @@ async function runEditor() {
   for (const m of marks) if (!files.includes(m.file)) fail(`marks.json names ${m.file}, which is not in the workspace.`);
   const job = {
     workspace,
+    outside: { folder: outside, name: OUTSIDE, files: walk(outside).map((f) => relative(outside, f)) },
     out: join(scratch, "out.json"),
     caret: CARET,
     marks,
@@ -258,7 +263,7 @@ function differences(rendered) {
 
 const started = Date.now();
 const out = await runEditor();
-const rendered = render(out, await scopes(Object.keys(out.files)));
+const rendered = render(out, await scopes(Object.keys(out.files).filter((f) => !f.startsWith(OUTSIDE))));
 const seconds = Math.round((Date.now() - started) / 1000);
 const about = `VS Code ${out.vscode}, Streamlord ${out.extension}, ${Object.keys(out.files).length} files, ${seconds} s`;
 if (check) {
