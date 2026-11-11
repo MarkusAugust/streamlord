@@ -6,6 +6,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-11
+
 ### Added
 
 - streamlord-analysis has `tagBeforeCaret`: the markup of the tag a caret stands in, from its `<`,
@@ -100,6 +102,16 @@ All notable changes to Streamlord are recorded here. The format follows
   settings are applied, where it showed the old ones until something else made it read.
 - In VS Code, a requests file that could not be read was taken for a missing one, and a save
   wrote a new file over it; and two saves at once could each write over what the other had read.
+- In IntelliJ, the plugin no longer asks the indexes or reads files on the UI thread where it
+  did: the Stream Inspector reads `inspector.json` and `env.json` and sends its requests in the
+  background, typing `(` or `,` asks in the background whether there is parameter info to show,
+  and a signal rename finds its signal under a progress bar. Open Stream Inspector works while the
+  IDE indexes, the signal index stops for a write that waits on it, and Re-index Signals can be
+  cancelled from the status bar. Connect and Copy as curl read the variables and the default base
+  URL again first, so a change in the settings counts at once.
+- In IntelliJ, the documentation for Datastar attributes and actions goes through the platform's
+  Documentation Target API. Where another plugin documents the same `data-*` attribute, both
+  answers are shown, where that answer hid Streamlord's.
 
 ## [0.20.0] - 2026-11-09
 

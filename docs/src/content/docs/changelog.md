@@ -7,6 +7,17 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.21.0
+
+**Code that calls the requests file functions of streamlord-analysis needs a few changes.**
+`Requests.upsert` and `Requests.remove` are gone: call `Requests.saveRequest` and
+`Requests.removeRequest` with the text of the file, and write the `RequestsEdit` they return.
+`RequestsFile` has a third value, `skipped`, and `HoleLanding` in streamlord-core a fifth,
+`tagStart`; Kotlin source that names the values compiles as before, and code compiled against
+the old constructors needs a rebuild. `Requests.parseRequestsFile` reports a root that is no
+object, a `requests` that is no list and a `version` other than 1 in `error`, so check it before
+you save over such a file.
+
 ## 0.20.0
 
 **`interpolate` escapes some `Html` values it wrote as markup.** An `Html` value that reshapes the
