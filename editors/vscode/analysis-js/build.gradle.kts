@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
+import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrLink
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsEnvSpec
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsPlugin
 import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin
@@ -11,6 +12,9 @@ import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
 }
+
+// Never published: a version of its own keeps the release's out of kotlin-js-store/package-lock.json.
+version = "0.0.0"
 
 // The generated catalog sources are tasks of the JVM modules.
 evaluationDependsOn(":streamlord-core")
@@ -120,6 +124,10 @@ tasks.matching { it.name.startsWith("compile") && it.name.endsWith("KotlinJs") }
 // repository compiles this project once, for its tests.
 tasks.named("assemble") { setDependsOn(emptyList<Any>()) }
 
+// The plugin follows the library's compile with a reading of its types by a TypeScript it installs
+// from npm. The extension's own typecheck reads them, so its build asks the registry for nothing.
+tasks.named("compileProductionLibraryKotlinJs") { setFinalizedBy(emptyList<Any>()) }
+
 /*
  * The library as the extension imports it: the two modules and the TypeScript types the compiler
  * wrote for the port. Kotlin marks each interface it exports with a property no TypeScript object
@@ -131,7 +139,7 @@ val port =
     tasks.register("port") {
         description = "Writes the library and its TypeScript types where the VS Code extension imports them."
         group = "build"
-        val library = tasks.named("jsNodeProductionLibraryDistribution").map { it.outputs.files.singleFile }
+        val library = tasks.named<KotlinJsIrLink>("compileProductionLibraryKotlinJs").flatMap { it.destinationDirectory }.map { it.asFile }
         val into = layout.buildDirectory.dir("port")
         inputs.dir(library).withPathSensitivity(PathSensitivity.RELATIVE)
         outputs.dir(into)
