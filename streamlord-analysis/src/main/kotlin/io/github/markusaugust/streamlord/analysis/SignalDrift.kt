@@ -67,6 +67,8 @@ private val PROPERTY_NAME =
         """(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""",
     )
 
+private val BLANK_LINE = regex("""\n[ \t\r]*\n""")
+
 /** The `Signals` accessors that take a signal name. `path` takes several; its first is the signal. */
 private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decimal", "obj", "array", "has", "path")
 
@@ -153,8 +155,8 @@ internal fun serializableProperties(src: String): Map<String, List<SignalPropert
         val name = declaration.groupValues[1]
         val open = src.indexOf('(', declaration.range.last)
         if (open < 0) continue
-        val close = matchingParen(src, open)
-        if (close < 0) continue
+        // Still being typed, the list is what stands before the first blank line: the signals stay known meanwhile.
+        val close = matchingParen(src, open).takeIf { it >= 0 } ?: BLANK_LINE.find(src, open)?.range?.first ?: src.length
 
         val properties = ArrayList<SignalProperty>()
         val list = src.substring(open, close)
