@@ -152,6 +152,7 @@ object HoleFacts {
                 when {
                     fact != null && fact.isMarkup() -> fact
                     isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
+                    trustedCall(expr) -> ValueFact.TRUSTED
                     markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
                     literalOnly(expr) -> ValueFact.CONSTANT
                     else -> fact ?: continue
@@ -409,6 +410,12 @@ object HoleFacts {
         if (callee.getReferencedName() == "elements") return false
         val target = callee.mainReference.resolve() ?: return callee.getReferencedName() in HELPERS
         return target is KtNamedFunction && packageOf(target) == HTML_PACKAGE
+    }
+
+    /** A call of core's `Trusted(...)`, which K2 reads from its type and K1 gives no type for. */
+    private fun trustedCall(expr: KtExpression): Boolean {
+        val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false
+        return callTo(call.calleeExpression, setOf("Trusted")) { it.startsWith(StreamlordResolve.PACKAGE) }
     }
 
     /** Whether a call by this name resolves into [pkg], or to nothing, as in a file that does not compile yet. */
