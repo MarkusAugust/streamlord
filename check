@@ -4,8 +4,10 @@
 #
 #   ./check                  every part
 #   ./check sdk vscode       only those parts, in the order below
-#   ./check --changed [BASE] the parts a change since BASE touches (default origin/master), as CI decides
+#   ./check --changed [BASE] the parts a change since BASE touches, as CI decides; BASE defaults to
+#                            the newest origin/release/* branch
 #   ./check --parts BASE     print which parts a change since BASE touches, as name=true|false lines
+#   ./check --fetch-ktlint   fetch and verify the pinned ktlint, and print where it is
 #
 # The parts: sdk, ktlint, vscode, intellij, docs. The image is built by CI alone. Before a pull
 # request that changes an editor, also run the real VS Code check: cd editors/vscode && npm run real -- --check
@@ -21,6 +23,28 @@ KTLINT_SHA256=a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75
 gradle_flags=()
 [ "${CI:-}" = "true" ] && gradle_flags=(--no-daemon)
 
+passed=()
+current=""
+
+summary() {
+    echo
+    echo "Passed:"
+    [ ${#passed[@]} -eq 0 ] && echo "  nothing" && return
+    for p in "${passed[@]}"; do echo "  $p"; done
+}
+
+# Stops everything with $1 as the last line, and as an error annotation in CI. To stderr, so that a
+# failure inside a command substitution is still seen.
+die() {
+    {
+        summary
+        echo
+        echo "FAILED: $1"
+        [ "${CI:-}" = "true" ] && echo "::error title=./check failed::$1"
+    } >&2
+    exit 1
+}
+
 # Which parts the files changed since $1 touch. A change to the workflow, or one that cannot be
 # compared, touches everything.
 parts_for() {
@@ -31,7 +55,7 @@ parts_for() {
         echo "Nothing to compare against: checking everything." >&2
         kotlin=true vscode=true intellij=true docs=true image=true ktlint=true
     else
-        files=$(git -C "$root" diff --name-only "$base" "${2:-HEAD}")
+        files=$(git -C "$root" diff --name-only "$base" "${2:-HEAD}") || die "git diff $base ${2:-HEAD}"
         while IFS= read -r file; do
             [ -z "$file" ] && continue
             # Any Kotlin file, wherever it lives, and the rules it is held to, at the root or
@@ -40,8 +64,8 @@ parts_for() {
                 *.kt | .editorconfig | */.editorconfig) ktlint=true ;;
             esac
             case "$file" in
-                # The workflow and this script decide what runs, so a change to either runs everything.
-                .github/workflows/* | check)
+                # The workflow and this script decide what runs, so a change to them runs everything.
+                .github/workflows/* | check | check.test.sh)
                     kotlin=true vscode=true intellij=true docs=true image=true ktlint=true ;;
                 # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
                 # and the front page counts it, so it is site content as well.
@@ -98,40 +122,56 @@ parts_for() {
     printf '%s\n' "kotlin=$kotlin" "vscode=$vscode" "intellij=$intellij" "docs=$docs" "image=$image" "ktlint=$ktlint"
 }
 
-# The ktlint on the PATH when it is the pinned release, else the pinned jar, fetched once and checked.
-ktlint_bin() {
-    if command -v ktlint >/dev/null && [ "$(ktlint --version 2>/dev/null)" = "ktlint version $KTLINT_VERSION" ]; then
-        command -v ktlint
+# Sets KTLINT to the ktlint on the PATH when it is the pinned release, else to the pinned release
+# fetched once into a cache and kept only when its sha256 is the pinned one. KTLINT_URL fetches it
+# from elsewhere, as check.test.sh does, and skips the PATH. Never called inside $( ), where a
+# failing command would not stop the script.
+fetch_ktlint() {
+    if [ -z "${KTLINT_URL:-}" ] && command -v ktlint >/dev/null &&
+        [ "$(ktlint --version 2>/dev/null || true)" = "ktlint version $KTLINT_VERSION" ]; then
+        KTLINT=$(command -v ktlint)
         return
     fi
     local dir=${KTLINT_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/streamlord/ktlint-$KTLINT_VERSION}
-    if [ ! -x "$dir/ktlint" ]; then
-        mkdir -p "$dir"
-        curl -sSfL -o "$dir/ktlint.download" "https://github.com/pinterest/ktlint/releases/download/$KTLINT_VERSION/ktlint"
-        if command -v sha256sum >/dev/null; then
-            echo "$KTLINT_SHA256  $dir/ktlint.download" | sha256sum -c - >&2
-        else
-            echo "$KTLINT_SHA256  $dir/ktlint.download" | shasum -a 256 -c - >&2
-        fi
-        chmod +x "$dir/ktlint.download"
-        mv "$dir/ktlint.download" "$dir/ktlint"
+    local url=${KTLINT_URL:-https://github.com/pinterest/ktlint/releases/download/$KTLINT_VERSION/ktlint}
+    KTLINT=$dir/ktlint
+    [ -x "$KTLINT" ] && return
+    mkdir -p "$dir" || die "ktlint: cannot make $dir"
+    local download=$dir/ktlint.download
+    rm -f "$download"
+    curl -sSfL -o "$download" "$url" || { rm -f "$download"; die "ktlint: cannot fetch $url"; }
+    local sum
+    if command -v sha256sum >/dev/null; then
+        sum=$(sha256sum "$download") || { rm -f "$download"; die "ktlint: cannot read the sha256 of $download"; }
+    else
+        sum=$(shasum -a 256 "$download") || { rm -f "$download"; die "ktlint: cannot read the sha256 of $download"; }
     fi
-    echo "$dir/ktlint"
+    if [ "${sum%% *}" != "$KTLINT_SHA256" ]; then
+        rm -f "$download"
+        die "ktlint: $url has the sha256 ${sum%% *}, not the pinned $KTLINT_SHA256; nothing was kept"
+    fi
+    chmod +x "$download" || die "ktlint: cannot make $download executable"
+    mv "$download" "$KTLINT" || die "ktlint: cannot move $download to $KTLINT"
 }
 
 # Each part's commands, as its job in .github/workflows/ci.yml runs them.
+go() { cd "$root/$1" || die "$current: no folder $1"; }
+
 part_sdk() {
-    cd "$root" && step "./gradlew build" ./gradlew build ${gradle_flags[@]+"${gradle_flags[@]}"}
+    go .
+    step "./gradlew build" ./gradlew build ${gradle_flags[@]+"${gradle_flags[@]}"}
 }
 part_ktlint() {
-    local bin
-    bin=$(ktlint_bin)
+    go .
+    # This script's own test first, of how it fetches ktlint.
+    step "check.test.sh" ./check.test.sh
+    fetch_ktlint
     # Relative globs: ktlint walks from here. The .kts build scripts are left out, as they
     # are everywhere ktlint is run in this repository.
-    cd "$root" && step "ktlint $KTLINT_VERSION" "$bin" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**" "!editors/vscode/test/fixtures/**"
+    step "ktlint $KTLINT_VERSION" "$KTLINT" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**" "!editors/vscode/test/fixtures/**"
 }
 part_vscode() {
-    cd "$root/editors/vscode"
+    go editors/vscode
     step "npm ci" npm ci
     step "npm run typecheck" npm run typecheck
     step "npm test" npm test
@@ -139,10 +179,11 @@ part_vscode() {
     step "vsce package" npx vsce package --no-dependencies
 }
 part_intellij() {
-    cd "$root/editors/intellij" && step "./gradlew buildPlugin test verifyPlugin" ./gradlew buildPlugin test verifyPlugin ${gradle_flags[@]+"${gradle_flags[@]}"}
+    go editors/intellij
+    step "./gradlew buildPlugin test verifyPlugin" ./gradlew buildPlugin test verifyPlugin ${gradle_flags[@]+"${gradle_flags[@]}"}
 }
 part_docs() {
-    cd "$root/docs"
+    go docs
     step "bun install" bun install --frozen-lockfile
     step "bun run build" bun run build
     step "bun run check:links" bun run check:links
@@ -150,26 +191,13 @@ part_docs() {
     step "bun run typecheck" bun run typecheck
 }
 
-passed=()
-current=""
 step() {
     local name=$1
     shift
     echo "==> $current: $name"
     local started=$SECONDS
-    if ! "$@"; then
-        echo
-        echo "FAILED: $current, at $name"
-        summary
-        exit 1
-    fi
+    "$@" || die "$current, at $name"
     passed+=("$current: $name ($((SECONDS - started)) s)")
-}
-summary() {
-    echo
-    echo "Passed:"
-    [ ${#passed[@]} -eq 0 ] && echo "  nothing" && return
-    for p in "${passed[@]}"; do echo "  $p"; done
 }
 
 wanted=()
@@ -178,8 +206,19 @@ case "${1:-}" in
         parts_for "${2:?a base commit}" "${3:-HEAD}"
         exit 0
         ;;
+    --fetch-ktlint)
+        fetch_ktlint
+        echo "$KTLINT"
+        exit 0
+        ;;
     --changed)
-        touched=$(parts_for "$(git -C "$root" merge-base "${2:-origin/master}" HEAD)" HEAD)
+        # Pull requests go to the release branch of the next version.
+        against=${2:-$(git -C "$root" for-each-ref --sort=-version:refname --count=1 --format='%(refname:short)' 'refs/remotes/origin/release/*')} ||
+            die "cannot list the release branches"
+        [ -n "$against" ] || die "no origin/release/* branch to compare with: name one, ./check --changed BASE"
+        base=$(git -C "$root" merge-base "$against" HEAD) || die "no merge base of $against and HEAD"
+        echo "Comparing with $against, at ${base:0:12}."
+        touched=$(parts_for "$base" HEAD) || exit 1
         # The sdk part is the kotlin answer; the image is CI's alone.
         for part in "${order[@]}"; do
             key=$part
@@ -188,7 +227,7 @@ case "${1:-}" in
         done
         ;;
     -h | --help)
-        sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
         exit 0
         ;;
     "") wanted=("${order[@]}") ;;

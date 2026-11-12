@@ -24,9 +24,12 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 ## Before calling work done
 
 Run `./check` from the root and have it green before you call a change done or open a pull
-request. It runs what CI runs on a pull request, in the same order, and CI's jobs call it, so a
-green `./check` is a green CI. `./check --changed origin/release/<version>` runs only the parts
-the change touches, as CI decides them, and `./check sdk ktlint` names the parts to run.
+request. It runs the checks of the jobs CI runs on a pull request, the Kotlin SDK build, ktlint, the VS Code
+extension, the IntelliJ plugin and the documentation site, with the same commands in the same
+order, and those jobs call it. It leaves out the streamlord-live image, which CI builds when the
+demo or what it bundles changes, and the jobs that deploy and publish. `./check --changed` runs
+only the parts the change since the newest `origin/release/*` touches, as CI decides them, and
+`./check sdk ktlint` names the parts to run.
 
 Never make it pass by weakening a rule, raising a limit, adding to an exclusion or deleting a
 test. Fix what it found. When an editor changes, also run the check in real VS Code,
