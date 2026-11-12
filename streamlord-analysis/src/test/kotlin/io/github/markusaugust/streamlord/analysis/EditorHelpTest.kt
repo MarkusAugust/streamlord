@@ -75,6 +75,7 @@ class EditorHelpTest {
                     listOf(
                         item.kind.name.lowercase(),
                         item.replaceFrom - caret,
+                        item.replaceTo - caret,
                         item.insert,
                         snippet,
                         item.detail,
@@ -86,6 +87,7 @@ class EditorHelpTest {
                     listOf(
                         expected.string("kind"),
                         expected.int("from"),
+                        expected.int("to") ?: 0,
                         expected.string("insert"),
                         wantedSnippet,
                         expected.string("detail"),
@@ -93,7 +95,7 @@ class EditorHelpTest {
                         expected.string("doc"),
                         expected.string("filter"),
                     )
-                assertEquals(wanted, actual, "$label: kind, from, insert, snippet, detail, tail, doc, filter")
+                assertEquals(wanted, actual, "$label: kind, from, to, insert, snippet, detail, tail, doc, filter")
             }
             assertEquals(case.boolean("alone") ?: false, found.alone, "alone")
         }

@@ -279,8 +279,7 @@ class ClientOracleTest {
 
     /**
      * `actions.json`: each free action of the catalog takes as many arguments as its apply declares,
-     * of the kinds its types say, and those with a default are optional in its signature. A filter
-     * is optional too: `filtered` in engine/signals.ts gives it a default of its own.
+     * of the kinds its types say, and those the client takes left out are optional in its signature.
      */
     @Test
     fun `gives each free action the parameters its source declares`() {
@@ -296,7 +295,7 @@ class ClientOracleTest {
                     .parameters
             val wanted = parameters.map { kindOf(it.string("type")!!).first }
             if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the client declares $wanted"
-            val optional = parameters.map { it.boolean("optional") == true || kindOf(it.string("type")!!).first == "filter" }
+            val optional = parameters.map { it.boolean("optional") == true }
             if (signature.map { it.endsWith("?") } !=
                 optional
             ) {
