@@ -175,8 +175,9 @@ public class UnsafeInterpolationException(
             val fix =
                 when (position) {
                     Position.DATASTAR -> {
-                        "Put the value in a signal and reference it from the expression, write a signal name in the " +
-                            "markup yourself, or pass a Number or Boolean, which can carry neither an expression nor a path."
+                        // A string written into data-signals is refused by this same rule, so no signal is advised.
+                        "Put the value in an attribute of its own, such as data-label, and read it in the expression with " +
+                            "el.dataset.label, or pass a Number or Boolean, which can carry neither an expression nor a path."
                     }
 
                     Position.URL -> {
