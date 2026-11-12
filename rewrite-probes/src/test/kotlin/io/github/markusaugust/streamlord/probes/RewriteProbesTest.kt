@@ -8,6 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val REWRITE = "Build this string with interpolate(...)"
+private const val ADVICE = "build the string with interpolate(...)"
+private val UNOFFERED = listOf("interpolate(...) is not offered here", "interpolate(...) cannot take this string")
 private const val HOSTILE = "<i a=\"b\">'&"
 private const val LINES = "a\n      b"
 
@@ -197,6 +199,14 @@ class RewriteProbesTest {
             val marked = probe.issues.map { it.text }
             if (probe.marks != null && probe.marks != marked) {
                 failures += "${probe.name}: the issues mark $marked, expected ${probe.marks}\n    ${probe.source.trim()}"
+            }
+            // A message that sends the author to interpolate offers the rewrite, or says why it does not.
+            if (rewrites.isEmpty()) {
+                for (said in probe.issues) {
+                    if (ADVICE in said.message && UNOFFERED.none { it in said.message }) {
+                        failures += "${probe.name}: ${said.text} is sent to interpolate, which is not offered, and not told why: ${said.message}"
+                    }
+                }
             }
         }
         assertEquals(emptyList(), failures, "${failures.size} cases fail:\n" + failures.joinToString("\n"))

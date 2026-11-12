@@ -108,6 +108,24 @@ class CorpusTest {
         (message?.let { "\n  message: $it" } ?: "") + fixes.joinToString("") { "\n  fix: $it" }
 
     @Test
+    fun `a message that sends the author to interpolate offers the rewrite or says why it does not`() {
+        val failures = ArrayList<String>()
+        for (file in files) {
+            val corpus = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
+            if (corpus.string("kind") != "kotlin") continue
+            for (case in corpus.array("cases")!!.objects()) {
+                for (issue in run("kotlin", case)) {
+                    val advises = "build the string with interpolate(...)" in issue.message
+                    val offered = issue.fixes.any { it.title.startsWith(REWRITE_TITLE) }
+                    val why = "interpolate(...) is not offered here" in issue.message || "interpolate(...) cannot take this string" in issue.message
+                    if (advises && !offered && !why) failures += "$file: ${case.string("name")}: ${issue.message}"
+                }
+            }
+        }
+        assertEquals(emptyList(), failures, failures.joinToString("\n"))
+    }
+
+    @Test
     fun `judges every case of the shared corpus as written`() {
         assertTrue(files.isNotEmpty())
         for (file in files) {
