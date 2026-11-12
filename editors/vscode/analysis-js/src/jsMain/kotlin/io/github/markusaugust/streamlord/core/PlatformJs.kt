@@ -16,15 +16,15 @@ internal actual fun exactLongOrNull(text: String): Long? {
     val unsigned = if (negative) text.substring(1) else text
     val e = unsigned.indexOfFirst { it == 'e' || it == 'E' }
     val mantissa = if (e < 0) unsigned else unsigned.substring(0, e)
-    // An exponent past an Int moves the point further than any Long has digits.
-    val beyond = if (unsigned.getOrNull(e + 1) == '-') Int.MIN_VALUE / 2 else Int.MAX_VALUE / 2
-    val exponent = if (e < 0) 0 else unsigned.substring(e + 1).toIntOrNull() ?: beyond
+    // BigDecimal, which the JVM asks, takes no exponent and no scale past an Int, whatever the digits.
+    val exponent = if (e < 0) 0 else unsigned.substring(e + 1).toIntOrNull() ?: return null
     val whole = mantissa.substringBefore('.')
     val fraction = mantissa.substringAfter('.', "")
     val digits = (whole + fraction).trimStart('0')
-    if (digits.isEmpty()) return 0
     // The digits are the number times ten to the power of [scale].
     val scale = fraction.length.toLong() - exponent
+    if (scale < Int.MIN_VALUE || scale > Int.MAX_VALUE) return null
+    if (digits.isEmpty()) return 0
     val wholeDigits =
         when {
             scale <= 0 -> if (digits.length - scale > 19) return null else digits + "0".repeat((-scale).toInt())
