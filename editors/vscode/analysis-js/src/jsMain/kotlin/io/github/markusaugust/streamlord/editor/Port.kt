@@ -182,17 +182,18 @@ private fun sites(
 }
 
 /**
- * The rewrite of the HTML string at [offset] of the Kotlin file [src] to a call of `interpolate`,
- * to offer as a context action: null where the string cannot take it, and where an issue under
- * [offset] offers it already.
+ * The rewrite of an HTML string of the Kotlin file [src] to a call of `interpolate`, to offer as a
+ * context action for the caret or selection from [start] to [end]: null where that lies in no one
+ * string that can take it, and where an issue it touches offers the rewrite already.
  */
 @JsExport
 fun rewriteAt(
     src: String,
-    offset: Int,
+    start: Int,
+    end: Int,
     prefix: String,
     constants: Array<String>,
-): Fix? = analysedRewriteAt(sites(src, options(src, true, prefix).copy(constants = constants.toHashSet())), offset)?.let(::plain)
+): Fix? = analysedRewriteAt(sites(src, options(src, true, prefix).copy(constants = constants.toHashSet())), start, end)?.let(::plain)
 
 // ---- The workspace's signals -------------------------------------------------------------------
 

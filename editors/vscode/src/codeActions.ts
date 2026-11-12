@@ -46,10 +46,9 @@ export class StreamlordCodeActionProvider implements vscode.CodeActionProvider {
         a.isPreferred = i === 0 && fix.preferred !== false;
       });
     }
-    // At a caret: over a selection the editor asks for what applies to all of it.
-    if (document.languageId === "kotlin" && from === to) {
+    if (document.languageId === "kotlin") {
       const { prefix, constants } = this.read();
-      const rewrite = rewriteAt(document.getText(), from, prefix, constants);
+      const rewrite = rewriteAt(document.getText(), from, to, prefix, constants);
       if (rewrite) action(rewrite, vscode.CodeActionKind.RefactorRewrite);
     }
     return actions;
