@@ -21,7 +21,7 @@ ktorOldest = "3.0.0"
 # has known vulnerabilities; this is the 4.1 release install.md tells a user on Ktor 3.0 to raise
 # it to, so the promise is tested on what users are told to run. It stays on 4.1, the line
 # Ktor 3.0 was built against.
-nettyOldestKtor = "4.1.139.Final"
+nettyOldestKtor = "4.1.140.Final"
 # The same for Ktor 3.0's Tomcat and Jetty engines, which bring Tomcat 10.1.30 and Jetty 11.0.24.
 # 11.0.26 is the last Jetty 11 on Maven Central, and it still has advisories install.md names.
 tomcatOldestKtor = "10.1.61"
@@ -31,13 +31,13 @@ servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
 tomcat = "11.0.27"
 reactor = "3.8.8"
-jackson = "3.2.4"
-jackson2 = "2.22.4"
+jackson = "3.3.0"
+jackson2 = "2.23.0"
 # Floors for libraries the build's own tools carry (Dokka, the IntelliJ Platform plugin), raised
 # past the advisories those tools' pins have; gradle/build-tool-floors.settings.gradle.kts
 # applies them. Nothing published depends on them.
-buildToolsJackson = "2.22.4"
-buildToolsJsoup = "1.23.2"
+buildToolsJackson = "2.23.0"
+buildToolsJsoup = "1.24.1"
 buildToolsFreemarker = "2.3.35"
 
 [libraries]
@@ -103,6 +103,6 @@ maven-publish = { id = "com.vanniktech.maven.publish", version = "0.37.0" }
 graalvm-native = { id = "org.graalvm.buildtools.native", version = "0.11.5" }
 # The API reference, generated from the KDoc that is already in the source. Used for the
 # javadoc jar every published module carries, which was empty until now.
-dokka = { id = "org.jetbrains.dokka", version = "2.2.0" }
+dokka = { id = "org.jetbrains.dokka", version = "2.3.0" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
