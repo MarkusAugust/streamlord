@@ -189,8 +189,11 @@ interface VariableCompletion {
 private fun plain(v: Requests.Variable): Variable =
     plain("name" to v.name, "value" to v.value, "source" to v.source.name.lowercase(), "origin" to v.origin)
 
+private fun source(v: Variable): Requests.VariableSource? = Requests.VariableSource.entries.firstOrNull { it.name.lowercase() == v.source }
+
+/** A source that is none of the three is no default and no running server, which leaves the file. */
 private fun analysed(vars: Array<Variable>): List<Requests.Variable> =
-    vars.map { Requests.Variable(it.name, it.value, Requests.VariableSource.valueOf(it.source.uppercase()), it.origin) }
+    vars.map { Requests.Variable(it.name, it.value, source(it) ?: Requests.VariableSource.ENV, it.origin) }
 
 private fun running(
     url: String?,
@@ -255,10 +258,14 @@ fun variableCompletions(
     caret: Int,
     field: String,
     vars: Array<Variable>,
-): VariableCompletion? =
-    Requests.variableCompletions(text, caret, Requests.Field.valueOf(field.uppercase()), analysed(vars))?.let {
+): VariableCompletion? {
+    val known = Requests.Field.entries.firstOrNull { it.name.lowercase() == field }
+    // A field that is none of the three takes what the URL takes but `baseUrl`: the params.
+    val offered = analysed(vars).filter { known != null || it.name != "baseUrl" }
+    return Requests.variableCompletions(text, caret, known ?: Requests.Field.URL, offered)?.let {
         plain("from" to it.from, "to" to it.to, "items" to it.items.map(::plain).toTypedArray())
     }
+}
 
 @JsExport
 fun unreachableHint(
@@ -273,7 +280,9 @@ fun baseUrlSuggestion(
     vars: Array<Variable>,
     runningUrl: String?,
     runningName: String?,
-): String? = Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
+): String? =
+    // Offered only over a `baseUrl` the file is known to set.
+    if (vars.any { it.name == "baseUrl" && source(it) == null }) null else Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
 
 // ---- The request as the client sends it --------------------------------------------------------
 

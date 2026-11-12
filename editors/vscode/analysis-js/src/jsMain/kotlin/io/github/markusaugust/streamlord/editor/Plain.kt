@@ -9,9 +9,9 @@ internal fun <T> plain(vararg fields: Pair<String, Any?>): T {
     return o.unsafeCast<T>()
 }
 
-/** An object with a property for each entry, in the map's order. */
+/** An object with a property for each entry, in the map's order; of no prototype, so that `__proto__` is a name like any other. */
 internal fun record(entries: Map<String, String>): dynamic {
-    val o: dynamic = js("({})")
+    val o: dynamic = js("Object.create(null)")
     for ((name, value) in entries) o[name] = value
     return o
 }
