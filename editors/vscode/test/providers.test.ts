@@ -172,6 +172,9 @@ describe("completion provider", () => {
   });
 });
 
+/** An item's name, whether its label is a string or carries a detail. */
+const name = (i: { label: unknown }) => (typeof i.label === "string" ? i.label : (i.label as { label: string }).label);
+
 describe("help inside an expression", () => {
   const index = new FakeIndex().add("file:///other.html", other, "html");
   /** Where an item's range starts; the provider sets a plain range. */
@@ -200,25 +203,27 @@ describe("help inside an expression", () => {
 
   it("offers the options of a backend action not yet written, with what each does", () => {
     const { items } = at(`<div data-on:click="@get('/x', {retry: 'never', re`);
-    const labels = items.map((i) => i.label);
+    const labels = items.map(name);
     assert.ok(labels.includes("retryInterval") && !labels.includes("retry"), labels.join());
-    assert.match(String((items.find((i) => i.label === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
+    // Its default shows after its name, as IntelliJ shows it.
+    assert.deepEqual(items.find((i) => name(i) === "retryInterval")?.label, { label: "retryInterval", detail: " = 1000" });
+    assert.match(String((items.find((i) => name(i) === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
   });
 
   it("offers the options in a template and in a Kotlin DSL string", () => {
-    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => i.label === "retryInterval"), "pebble");
+    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => name(i) === "retryInterval"), "pebble");
     const kotlin = new MockDocument(`${DSL}fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(kotlin as never, kotlin.positionAt(kotlin.text.indexOf("})")) as never);
-    assert.ok(items.some((i) => i.label === "retryInterval"), "kotlin");
+    assert.ok(items.some((i) => name(i) === "retryInterval"), "kotlin");
   });
 
   it("writes the colon after an option only where none follows", () => {
     const doc = new MockDocument(`<div data-on:click="@get('/x', {retr: 'never'})"></div>`, "html");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(doc as never, doc.positionAt(doc.text.indexOf(":", 35)) as never);
-    assert.equal(items.find((i) => i.label === "retry")?.insertText, "retry");
-    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => i.label === "retry")?.insertText, "retry: ");
+    assert.equal(items.find((i) => name(i) === "retry")?.insertText, "retry");
+    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => name(i) === "retry")?.insertText, "retry: ");
   });
 
   it("offers DOM events and Datastar's own after data-on:", () => {

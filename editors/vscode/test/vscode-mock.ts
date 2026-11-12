@@ -31,7 +31,7 @@ export const CompletionItemKind = {
 } as const;
 
 export class CompletionItem {
-  label: string;
+  label: string | { label: string; detail?: string; description?: string };
   kind?: number;
   detail?: string;
   documentation?: unknown;
@@ -39,7 +39,7 @@ export class CompletionItem {
   insertText?: unknown;
   sortText?: string;
   filterText?: string;
-  constructor(label: string, kind?: number) {
+  constructor(label: string | { label: string; detail?: string; description?: string }, kind?: number) {
     this.label = label;
     this.kind = kind;
   }

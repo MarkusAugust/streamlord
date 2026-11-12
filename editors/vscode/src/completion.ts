@@ -30,7 +30,8 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
 }
 
 function item(i: CompletionItem, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem {
-  const out = new vscode.CompletionItem(i.label, KINDS[i.kind]);
+  // A tail, an option's default, shows right after the name.
+  const out = new vscode.CompletionItem(i.tail != null ? { label: i.label, detail: i.tail } : i.label, KINDS[i.kind]);
   out.range = new vscode.Range(document.positionAt(i.replaceFrom), position);
   if (i.snippet != null) out.insertText = new vscode.SnippetString(i.snippet);
   else if (i.insert != null) out.insertText = i.insert;
