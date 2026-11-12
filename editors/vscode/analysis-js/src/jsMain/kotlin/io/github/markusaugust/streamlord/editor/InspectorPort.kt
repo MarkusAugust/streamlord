@@ -10,6 +10,7 @@ import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.analysis.RequestsEdit as AnalysedEdit
@@ -439,11 +440,14 @@ fun applySignalPatch(
     onlyIfMissing: Boolean,
 ): PatchedStore =
     try {
-        val store = mergePatchAsClient(JsonParser.parseObject(storeJson), JsonParser.parse(patchJson), onlyIfMissing)
-        plain("store" to store.toJson(), "refused" to false)
+        val store = mergePatchAsClient(JsonParser.parseObject(storeJson, NO_LIMIT), JsonParser.parse(patchJson, NO_LIMIT), onlyIfMissing)
+        plain("store" to JsonWriter.write(store, NO_LIMIT), "refused" to false)
     } catch (e: SignalPatchException) {
-        plain("store" to e.store.toJson(), "error" to e.message, "refused" to e.refused)
+        plain("store" to JsonWriter.write(e.store, NO_LIMIT), "error" to e.message, "refused" to e.refused)
     }
+
+// The client nests as deep as a stream says. The limit the SDK reads a request under is its own.
+private const val NO_LIMIT = Int.MAX_VALUE
 
 // ---- A server's log ----------------------------------------------------------------------------
 
