@@ -28,11 +28,10 @@ class TemplateTextTest : BasePlatformTestCase() {
     }
 
     fun `test jte freemarker velocity and mustache fixtures as plain text`() {
-        // The value is wrapped in `return (...)` as Datastar compiles it, so the text ends at a `)` rather than at the end of the input.
         assertEquals(
             listOf(
                 "Unknown modifier __debunce on data-on, which Datastar ignores, so it listens for the event click. Did you mean __debounce?",
-                "Datastar expression: Unexpected token",
+                "Datastar expression: Unexpected end of input",
             ),
             descriptions("template.jte").sorted().reversed(),
         )
@@ -45,7 +44,7 @@ class TemplateTextTest : BasePlatformTestCase() {
         )
         assertEquals(listOf("__threshold needs an integer between 0 and 100, e.g. __threshold.50."), descriptions("template.vm"))
         assertEquals(
-            listOf("data-persist is a Datastar Pro attribute; it needs the Pro bundle.", "Datastar expression: Unexpected token"),
+            listOf("data-persist is a Datastar Pro attribute; it needs the Pro bundle.", "Datastar expression: Unexpected end of input"),
             descriptions("template.mustache"),
         )
     }
