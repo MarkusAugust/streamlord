@@ -150,7 +150,7 @@ object HoleFacts {
             val fact = typed(expr)
             facts[range] =
                 when {
-                    fact.isMarkup() -> ValueFact.MARKUP
+                    fact != null && fact.isMarkup() -> fact
                     isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
                     markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
                     literalOnly(expr) -> ValueFact.CONSTANT
@@ -282,7 +282,7 @@ object HoleFacts {
 
             // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
             definite && lower.isClass(TRUSTED_CLASS) -> {
-                ValueFact.MARKUP
+                ValueFact.TRUSTED
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.

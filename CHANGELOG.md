@@ -39,6 +39,13 @@ All notable changes to Streamlord are recorded here. The format follows
   may be null, and not as the preferred fix: a template writes `null` for it and `interpolate`
   nothing. It is no longer offered where the value in an attribute or at the start of a URL is
   declared a `Trusted`, which `interpolate` neither escapes nor judges there.
+- `ValueFact` in streamlord-analysis has one more value, `TRUSTED`: core's `Trusted`, which
+  `ofTypeName` now gives for that type where it gave `MARKUP`. It is judged as `MARKUP` is, and
+  `isMarkup()` holds for both; the rewrite to `interpolate(...)` is not offered for one in an
+  attribute or at the start of a URL, where `interpolate` writes it as it is. The IntelliJ plugin
+  gives it from the resolved type, so also for a value the file does not declare, `user.badge`. In
+  a call to `interpolate`, a value the plugin resolves to a `Trusted` is let in wherever it lands,
+  as core lets it.
 - A warning about a Kotlin value in element text, an attribute, a URL, `style`, a script or the
   markup's structure links to [the page on HTML strings](https://streamlord-docs.netlify.app/strings/),
   `Docs.STRINGS`, where it linked to Datastar's guide to expressions. One about a `data-*`

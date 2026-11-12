@@ -69,7 +69,9 @@ internal class Sdk private constructor(
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
- * refuses it where only a number is let in. [OTHER] is a class the editor resolved whose name the
+ * refuses it where only a number is let in. [TRUSTED] is core's `Trusted`, judged as [MARKUP] is,
+ * which `interpolate` writes as it stands wherever it lands, so a rewrite escapes nothing of it.
+ * [OTHER] is a class the editor resolved whose name the
  * text alone would take for Streamlord's markup, an `Html` or a `Trusted` of another package
  * ([ofResolvedClass]): nothing about it is known, and no reading of the text makes it markup. Only
  * IntelliJ gives it; VS Code has no resolver.
@@ -82,6 +84,7 @@ public enum class ValueFact {
     NULLABLE,
     CONSTANT,
     MARKUP,
+    TRUSTED,
     UNSIGNED,
     OTHER,
     ;
@@ -1600,7 +1603,7 @@ public class Analyzer(
         if (position !in ESCAPED_POSITIONS) return false
         // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
         if (visiblyList(src, ip.text, s.start)) return false
-        if (!told.isOther() && trustedValue(src, ip.text, s.start)) return position == Position.TEXT
+        if (told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))) return position == Position.TEXT
         if (fact.isMarkup()) return position != Position.TEXT || markupValued(src, s, ip)
         if (position == Position.TEXT && !fact.digitsOrBoolean() &&
             mayHoldMarkup(src, ip.text, s.start, opts.constants)

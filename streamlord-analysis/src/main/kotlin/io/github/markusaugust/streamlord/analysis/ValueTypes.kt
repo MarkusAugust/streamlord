@@ -65,7 +65,7 @@ public fun ValueFact.Companion.ofResolvedClass(qualified: String): ValueFact? {
 /**
  * The fact a type gives, as a declaration writes it, the whitespace in it ignored: `Int`
  * [ValueFact.NUMBER] and `Int?` [ValueFact.NULLABLE], `String?` [ValueFact.NULLABLE_STRING], and
- * Streamlord's `Html` or `Trusted` [ValueFact.MARKUP], bare or in full. Null for any other type,
+ * Streamlord's `Html` [ValueFact.MARKUP] and `Trusted` [ValueFact.TRUSTED], bare or in full. Null for any other type,
  * `com.acme.Html` among them.
  */
 public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
@@ -85,7 +85,7 @@ public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
         HTML_TYPE.matchEntire(bare) != null -> ValueFact.MARKUP
 
         // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
-        !nullable && TRUSTED_TYPE.matchEntire(bare) != null -> ValueFact.MARKUP
+        !nullable && TRUSTED_TYPE.matchEntire(bare) != null -> ValueFact.TRUSTED
 
         else -> null
     }
@@ -107,7 +107,7 @@ internal fun declaredFact(
         // A template writes `null` for it, which the analysis judges as the string it may also be.
         ValueFact.NULLABLE_STRING -> ValueFact.STRING
 
-        ValueFact.MARKUP -> if (core) fact else null
+        ValueFact.MARKUP, ValueFact.TRUSTED -> if (core) fact else null
 
         else -> fact
     }
