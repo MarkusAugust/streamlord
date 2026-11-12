@@ -789,7 +789,12 @@ public class ExpressionValidator(
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
-            val message = "Datastar expression: ${err.message}"
+            // The `);` the client closes a value with stands at one place of the text and is no token of
+            // it: met there, the parser is asked what it says of the value without it.
+            val closed = js.endsWith(");") && fromScript(js.length - 1) == fromScript(js.length - 2)
+            val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
+            val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
+            val message = "Datastar expression: $said"
             if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
 

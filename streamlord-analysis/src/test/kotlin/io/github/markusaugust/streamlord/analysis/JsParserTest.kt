@@ -207,9 +207,9 @@ class JsParserTest {
         // The client compiles a value as `return (...);`, and its `)` is no token of the text.
         assertEquals(listOf("Datastar expression: Unexpected end of input" to 20), said("1 +"))
         assertEquals(listOf("Datastar expression: Unexpected end of input" to 19), said("(1"))
-        assertEquals(listOf("Datastar expression: Unexpected end of input" to 23), said("f(); 1 +"))
+        assertEquals(listOf("Datastar expression: Unexpected end of input" to 25), said("f(); 1 +"))
         assertEquals(listOf("Datastar expression: Unexpected token" to 21), said("1 + )"))
-        assertEquals(listOf("Datastar expression: Unexpected token" to 18), said("1)"))
+        assertEquals(listOf("Datastar expression: Unexpected token" to 19), said("1)"))
     }
 
     @Test
