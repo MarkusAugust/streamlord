@@ -32,7 +32,8 @@
     {"name":"a raw string","open":"\"\"\"","close":"\"\"\"","hole":"${v}","shown":"${v}"},
     {"name":"a raw string with trimIndent","open":"\"\"\"\n    ","close":"\n    \"\"\".trimIndent()","hole":"${v}","shown":"${v}"},
     {"name":"a multi-dollar raw string","open":"$$\"\"\"","close":"\"\"\"","hole":"$${v}","shown":"$${v}"},
-    {"name":"strings joined with +","open":"\"","close":"\"","hole":"\" + v + \"","shown":"the value `v`","escaped":true}
+    {"name":"strings joined with +","open":"\"","close":"\"","hole":"\" + v + \"","shown":"the value `v`","escaped":true},
+    {"name":"a multi-dollar string joined to another with +","open":"$$\"","close":"\" + \"\"","hole":"$${v}","shown":"$${v}","escaped":true}
   ],
   "cells": {
     "element text": {

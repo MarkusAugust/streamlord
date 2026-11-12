@@ -222,6 +222,6 @@ class HoleMatrixTest {
 
         /** The value as each form writes it, and as a rewrite passes it. */
         val WRITTEN = setOf("\${v}", "\$\${v}", "v")
-        val ARGUMENT = Regex("""^(?:\.trimIndent\(\))?,\s*(.+)\)\.text\s*$""")
+        val ARGUMENT = Regex("""^(?:\.trimIndent\(\)| \+ "")?,\s*(.+)\)\.text\s*$""")
     }
 }
