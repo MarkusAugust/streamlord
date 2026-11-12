@@ -204,6 +204,17 @@ All notable changes to Streamlord are recorded here. The format follows
   read for its signals when it is opened. Go to definition and find references answered nothing
   from a place such a file defines a signal, and a rename there was offered and wrote nothing,
   unless the file also read a signal and the unknown-signal check was on.
+- VS Code works in a `.kt` file with Streamlord alone: the extension declares the Kotlin language
+  itself, where it did nothing until some other extension declared it.
+- VS Code warns on a signal the server reads, through a `Signals` lookup or a `@Serializable`
+  class, that no page in the workspace declares, the `signal-never-declared` check that
+  `signalDrift` runs in a build.
+- The Open in Stream Inspector lens and IntelliJ's route marker no longer stand on a DSL action
+  handed to an attribute, `dataInit(get("/quests"))`, and a Ktor `sse("/feed") { }` route gets one.
+- An attribute value of nothing but spaces, `data-on:click="  "`, is reported as an empty
+  expression in HTML and in a Kotlin HTML string, as it is in the DSL.
+- IntelliJ no longer offers to import `CatalogNames.attributes` or the other attribute sets of
+  streamlord-core's catalog for a name it cannot resolve: they are internal now.
 
 ## [0.21.0] - 2026-11-11
 
