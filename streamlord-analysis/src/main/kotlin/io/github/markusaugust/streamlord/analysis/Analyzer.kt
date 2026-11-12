@@ -969,7 +969,7 @@ public class Analyzer(
         when (landing.position) {
             Position.DATASTAR -> {
                 "${landing.attribute ?: "a Datastar attribute"}, which Datastar runs as an expression or follows as a signal path" to
-                    "Put the value in a signal and reference it from the expression, or write the signal's name in the markup yourself."
+                    "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
             }
 
             Position.STYLE -> {
@@ -979,7 +979,7 @@ public class Analyzer(
 
             Position.CODE -> {
                 "${landing.attribute ?: "a script or style element"}, which the browser runs" to
-                    "Put the value in a data-* attribute or a signal and read it from there; wrap markup you built yourself in Trusted(...)."
+                    "Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
             }
 
             else -> {
@@ -1777,7 +1777,8 @@ public class Analyzer(
     ): String =
         "Kotlin writes $shown into $attribute, which Datastar runs as an expression or follows as a signal path. " +
             "Text from outside becomes code there, even inside quotes. " +
-            "Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
+            "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; " +
+            "only a number or a boolean is safe to write in."
 
     /**
      * `$name` where a signal could stand: the Kotlin value or the signal of that name, which only the

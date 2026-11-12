@@ -51,8 +51,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - A warning about a Kotlin value in element text, an attribute, a URL, `style`, a script or the
   markup's structure links to [the page on HTML strings](https://streamlord-docs.netlify.app/strings/),
   `Docs.STRINGS`, where it linked to Datastar's guide to expressions. One about a `data-*`
-  expression links there as before. The message for a value in a script or an event handler no
-  longer advises a signal.
+  expression links there as before. No message for a value in a Datastar expression, a script or
+  an event handler advises a signal any longer: each says to put the value in an attribute of its
+  own and read it with `el.dataset`.
 - `interpolate(format, values: List<Any?>, prefixes)` in streamlord-core is gone. The values of
   `interpolate(format, vararg values)` are always the values: a `List`, a `Set` or an array handed
   over as one of them is one value, written as a Kotlin template writes it, `[a, b]`, and escaped.
