@@ -100,6 +100,12 @@ All notable changes to Streamlord are recorded here. The format follows
 - In both editors, a value joined before the first literal, `name + "<p>"` or `greet(name) + "<p>"`, one after a comment,
   one joined to a literal with a call after it, and a name in backticks, `` $`my name` ``, are
   judged; none was. The URL of a `<meta>` refresh is judged as a URL.
+- In both editors, a helper of the DSL whose attribute name is given by name and is no plain
+  literal, `dataAttr(name = "tab-index".uppercase(), expression = "0")`, no longer stops the
+  analysis of the whole file, as it did in the released editors too.
+- In both editors, a trim call after one literal of a `+` chain trims that literal alone, as Kotlin
+  binds it: a value after `"""…""".trimMargin() + name` is judged where the page has it, a URL in
+  `href` as a URL, and a `|` in a literal before the trimmed one stays the character it is.
 - In both editors, a `+` chain with a call or an index after one of its literals,
   `"<p>" + name + "</p>".uppercase()`, gets no rewrite, since the call is that literal's alone and
   the rewrite moved it to the whole string. Nor does a string in an annotation's argument or a
