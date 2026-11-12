@@ -195,4 +195,11 @@ describe("what crosses the port", () => {
     assert.equal(baseUrlSuggestion(vars, "http://localhost:2", "demo"), "http://localhost:2");
     assert.equal(baseUrlSuggestion(odd, "http://localhost:2", "demo"), null);
   });
+  it("folds a patch nested deeper than the SDK reads from a request, as the client does", () => {
+    const deep = '{"a":'.repeat(200) + "1" + "}".repeat(200);
+    const patched = applySignalPatch(`{"b":2}`, deep, false);
+    assert.deepEqual([patched.store, patched.error, patched.refused], [`{"b":2,"a":${deep.slice(5, -1)}}`, undefined, false]);
+    // And once more into the store that now holds it.
+    assert.equal(applySignalPatch(patched.store, deep, false).store, patched.store);
+  });
 });
