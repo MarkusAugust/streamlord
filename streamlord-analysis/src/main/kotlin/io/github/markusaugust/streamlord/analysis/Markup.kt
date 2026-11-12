@@ -1058,7 +1058,7 @@ public class MarkupValidator(
                 issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present, listensFor).map { it.copy(link = link) }
             }
             val value = attr.value
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasTemplateSyntax(value)) {
                 val decoded = decodeEntities(value)
 
                 fun source(

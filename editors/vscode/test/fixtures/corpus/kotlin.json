@@ -166,6 +166,7 @@
     {"name":"dataNonce of an empty literal by name throws","source":"fun page() = html { dataNonce(nonce = \"\") }","issues":[{"code":"missing-nonce","start":38,"end":40,"severity":"error","message":"The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start. dataNonce refuses it as the page renders."}]},
     {"name":"an empty data-nonce in an HTML string","source":"fun page() = \"\"\"<html data-nonce=\"\"><body></body></html>\"\"\"","issues":[{"code":"missing-nonce","start":22,"end":32,"severity":"error"}]},
     {"name":"a chain that opens with a doctype is markup","source":"val page = \"\\n\" + \"<!doctype html><div data-on:click=\\\"@post('/x'\\\"></div>\"","issues":[{"code":"expression-syntax","start":65,"end":67,"severity":"error"}]},
-    {"name":"a chain that opens with a dollar written before a tag name is not markup","source":"fun f(user: String) = \"<\\$tag>\" + \"<b class=$user>$user</b>\"","issues":[]}
+    {"name":"a chain that opens with a dollar written before a tag name is not markup","source":"fun f(user: String) = \"<\\$tag>\" + \"<b class=$user>$user</b>\"","issues":[]},
+    {"name":"a value of nothing but spaces in an HTML string is an empty expression","source":"fun f() = \"<button data-on:click=\\\"  \\\">go</button>\"","issues":[{"code":"empty-expression","start":35,"end":37}]}
   ]
 }
