@@ -1311,11 +1311,10 @@ public class Analyzer(
             }
         // A trim call stays on the format, inside the call; one whose argument is no literal is not read.
         val trim = TRIM_AFTER.matchAt(src, s.end)?.value
-        val joined = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
         // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
         val fixable =
             canInterpolate &&
-                (if (joined) !trimmed(src, s) && oneForm(src, s) else trim != null || !trimmed(src, s)) &&
+                (trim != null || !trimmed(src, s)) &&
                 holes.all { keeps[it] || it in vouched }
         // The rewrite is made once for the literal, and only when a fix is applied.
         val rewrite = interpolateText(src, s, trim.orEmpty(), vouched)

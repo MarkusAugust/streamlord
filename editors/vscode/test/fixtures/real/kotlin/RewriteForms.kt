@@ -43,3 +43,6 @@ fun constant() = "<p title=\"$REWRITE_KIND\">$REWRITE_KIND</p>"
 fun joinedDollars(a: String, b: String) = $$"<p title=\"$${a}\">" + b + $$"</p>"
 
 fun mixedDollars(b: String) = "<div>" + $$"<p>$${b}</p></div>"
+
+// A value joined to a plain literal and a raw one: each keeps its form in the rewrite.
+fun mixedForms(a: String, b: String) = "<p title=\"" + a + """">""" + b + "</p>"

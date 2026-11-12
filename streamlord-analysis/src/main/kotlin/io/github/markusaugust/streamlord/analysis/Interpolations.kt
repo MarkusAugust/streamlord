@@ -1953,7 +1953,7 @@ internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that
 internal fun trustedRewriteTitle(shown: String): String = "$REWRITE_TITLE, with $shown as Trusted(...)"
 
 /** Whether one literal can hold what the `+` chain [s] writes: its literals are written alike, raw or not, with as many dollars. */
-internal fun oneForm(
+private fun oneForm(
     src: String,
     s: KotlinString,
 ): Boolean {
@@ -1994,7 +1994,8 @@ private inline fun chainParts(
  * argument, and each `%` the literal writes, as itself or as an escape, is written twice, so
  * `interpolate` prints it once. A multi-dollar literal keeps its prefix, so a `$name` that was
  * text stays text; [trim], the trim call after the literal, stays on the format; literals joined
- * to values with `+` become one; and each value of [trusted], by its place among the values, is
+ * to values with `+` become one where they are written alike, and otherwise each keeps its form
+ * with the value a `%s` at the end of the one before it; and each value of [trusted], by its place among the values, is
  * passed as `Trusted(...)`. Made the first time it is read, and once for all the holes of the
  * literal that offer it.
  */
@@ -2012,10 +2013,25 @@ private fun rewriteToInterpolate(
     trusted: Set<Int>,
 ): String {
     val format = StringBuilder()
-    val joined = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
+    // Literals written alike become one where a value is joined to them; a trim call binds to the last of them alone.
+    val one = s.interpolations.any { it.kind == InterpolationKind.OPERAND } && trim.isEmpty() && oneForm(src, s)
     var last: KotlinString? = null
-    chainParts(src, s, { if (!joined) format.append(it) }, { format.append("%s") }) { literal ->
-        if (!joined || last == null) format.append(src, literal.start, literal.contentStart)
+    // Where the literal last written closes, and what stands between it and the next: a value joined there goes in as its last `%s`.
+    var close = 0
+    val between = StringBuilder()
+    chainParts(
+        src,
+        s,
+        { between.append(it) },
+        {
+            format.insert(close, "%s")
+            close += 2
+            between.clear()
+        },
+    ) { literal ->
+        if (!one) format.append(between)
+        between.clear()
+        if (!one || last == null) format.append(src, literal.start, literal.contentStart)
         // Where the literal writes a per cent sign, and how many characters of source spell it.
         val percents = HashMap<Int, Int>()
         for (i in literal.text.indices) if (literal.text[i] == '%') percents[literal.map[i]] = literal.map[i + 1] - literal.map[i]
@@ -2034,10 +2050,11 @@ private fun rewriteToInterpolate(
                 format.append(src[k++])
             }
         }
-        if (!joined) format.append(src, literal.contentEnd, literal.end)
+        close = format.length
+        if (!one) format.append(src, literal.contentEnd, literal.end)
         last = literal
     }
-    if (joined) last?.let { format.append(src, it.contentEnd, it.end) }
+    if (one) last?.let { format.append(src, it.contentEnd, it.end) }
     val args =
         s.interpolations.mapIndexed { k, it ->
             val value = if (it.kind == InterpolationKind.SIMPLE) it.text else it.text.trim()

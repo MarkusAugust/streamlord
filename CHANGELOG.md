@@ -74,7 +74,15 @@ All notable changes to Streamlord are recorded here. The format follows
 - In both editors, the rewrite of an HTML string to `interpolate(...)` is offered for a literal
   with `.trimIndent()` or `.trimMargin()` after it, which stays on the format inside the call; for
   a `$$"..."` literal, which keeps its prefix; and for literals joined to values with `+`, which
-  become one format. None of them was offered it.
+  become one format, or each keep their own form where they are written differently. None of
+  them was offered it.
+- In both editors, a Kotlin template before an equals sign in a string, `"<p $name=\"x\">"` or
+  `println("$key=$value")`, no longer defines a signal of that name. It was read as an assignment
+  to a signal, so the name was offered after `$` everywhere and a misspelt signal of that name got
+  no warning. An escaped dollar, `\$count = 1`, assigns as before.
+- In both editors, a value in a `$$"..."` literal that is joined to other literals with `+` is
+  shown as written, `$${name}`, and "Mark … as markup" writes it with both dollars, where it wrote
+  one and left text. A value in a raw literal of such a chain is quoted without a backslash.
 - In both editors, one value `interpolate` refuses no longer takes the rewrite from the others
   without a word: the message of each other value names the value in the way and where it stands.
   CSS in the body of a `<style>` can be passed as `Trusted(...)`: the fix is on that value, and
