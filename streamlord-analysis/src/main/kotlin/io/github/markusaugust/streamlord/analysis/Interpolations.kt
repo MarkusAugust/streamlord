@@ -11,9 +11,8 @@ import kotlin.concurrent.Volatile
  * `interpolate`. Where a placeholder lands is core's `holeLandings`.
  */
 
-// A trim call with no argument or a margin written as a literal, by position or by name; and any trim call.
-private val TRIM_READ = regex("""\s*\.\s*trim(Indent|Margin)\s*\(\s*(?:(?:marginPrefix\s*=\s*)?"([^"\\\n]*)"\s*)?\)""")
-private val TRIM_START = regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(""")
+// A trim call, read to its end where it has no argument or a margin written as a literal, by position or by name.
+private val TRIM = regex("""\s*\.\s*trim(Indent|Margin)\s*\((\s*(?:(?:marginPrefix\s*=\s*)?"([^"\\\n]*)"\s*)?\))?""")
 private val IDENT = regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 private val LITERAL = regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null)""")
 private val STRING_LITERAL = regex(""""(?:[^"\\$]|\\.)*"""")
@@ -103,9 +102,9 @@ internal fun trimAfter(
     src: String,
     s: KotlinString,
 ): Trim? {
-    val read = TRIM_READ.matchAt(src, s.end)
-    if (read != null) return Trim(read.value, if (read.groupValues[1] == "Margin") read.groups[2]?.value ?: "|" else null)
-    return if (TRIM_START.matchesAt(src, s.end)) Trim(null, null) else null
+    val call = TRIM.matchAt(src, s.end) ?: return null
+    if (call.groups[2] == null) return Trim(null, null)
+    return Trim(call.value, if (call.groupValues[1] == "Margin") call.groups[3]?.value ?: "|" else null)
 }
 
 /** Every literal the lexer found, and those inside their templates. */
