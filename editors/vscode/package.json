@@ -190,6 +190,18 @@
     ],
     "languages": [
       {
+        "id": "kotlin",
+        "aliases": [
+          "Kotlin",
+          "kotlin"
+        ],
+        "extensions": [
+          ".kt",
+          ".kts"
+        ],
+        "configuration": "./kotlin-language-configuration.json"
+      },
+      {
         "id": "datastar-expression",
         "aliases": [
           "Datastar expression"

@@ -292,9 +292,9 @@ the request it fills the inspector with.
 The workspace holds the three ways of writing markup: HTML and template files, HTML in Kotlin
 strings, and the kotlinx.html DSL. The files under `drawn` are cases of `test/fixtures/corpus`,
 each as a file of its own (`drawn/origin.json` says which), and those under `aliased` are read with
-the prefix `data-star-`. `test/real/languages` declares Kotlin and the template languages, which
-other extensions bring: without one that declares `kotlin` the extension does nothing in a `.kt`
-file. VS Code hands no extension the TextMate scopes it colours by, so the scopes in the snapshot
+the prefix `data-star-`. `test/real/languages` declares the template languages, which other
+extensions bring. It leaves Kotlin out: the extension declares `kotlin` itself, since VS Code
+has no Kotlin of its own, and the run shows that a `.kt` file works with Streamlord alone. VS Code hands no extension the TextMate scopes it colours by, so the scopes in the snapshot
 are read with the same engine (`vscode-textmate`), VS Code's own HTML grammar and the extension's
 grammars; Kotlin, which VS Code ships no grammar for, is read with `test/fixtures/host-kotlin.json`.
 
