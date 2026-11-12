@@ -50,6 +50,9 @@ private val KEYED_ATTRIBUTE =
         """(?i)data-(?:star-)?(?:${Catalog.default.signalKeyAttributes.joinToString("|")}):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""",
     )
 
+/** The object value of a keyed attribute, after its key: `="{...}"`, `='{...}'`, its quotes escaped in a Kotlin string. */
+private val KEYED_OBJECT = regex("""\s*=\s*(?:\\?"\{([^"]*)\}\\?"|'\{([^']*)\}')""")
+
 /** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
 private val VALUE_ATTRIBUTE =
     regex(
@@ -542,7 +545,18 @@ private fun declared(
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (site.name == "removeSignals") out += declarationAt(name, a.start)
-                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += declarationAt(name, a.start)
+                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
+                    out += declarationAt(name, a.start)
+                    // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.
+                    val value = positional[1].string!!
+                    if (JSON_OBJECT.containsMatchIn(value.text)) {
+                        val open = value.text.indexOf('{') + 1
+                        for (k in objectKeys(value.text.substring(open, maxOf(open, value.text.lastIndexOf('}'))))) {
+                            val at = value.toSource(open + k.nameStart, open + k.nameStart + k.key.length)
+                            out += SignalDeclaration(at.first, at.last + 1, "${name.value}.${k.path}", SignalDeclaration.Kind.OBJECT_KEY)
+                        }
+                    }
+                }
             }
         }
         for (re in KOTLIN_PATTERNS) {
@@ -561,13 +575,16 @@ private fun declared(
     for (m in KEYED_ATTRIBUTE.findAll(src)) {
         val written = KEYED_ATTRIBUTE.groupAt(src, m, 1)!!
         val key = written.value.substringBefore("__")
-        out +=
-            SignalDeclaration(
-                written.range.first,
-                written.range.first + key.length,
-                ClientCasing.readKey(written.value),
-                SignalDeclaration.Kind.KEY,
-            )
+        val name = ClientCasing.readKey(written.value)
+        out += SignalDeclaration(written.range.first, written.range.first + key.length, name, SignalDeclaration.Kind.KEY)
+        // An object as the value is merged in under the key, its own keys as written: data-signals:hero="{strength: 1}".
+        val body = KEYED_OBJECT.matchAt(src, m.range.last + 1)?.let { KEYED_OBJECT.groupAt(src, it, 1) ?: KEYED_OBJECT.groupAt(src, it, 2) }
+        if (body != null && m.value.substringAfter('-').let { it.startsWith("signals", true) || it.startsWith("star-signals", true) }) {
+            for (k in objectKeys(body.value)) {
+                val start = body.range.first + k.nameStart
+                out += SignalDeclaration(start, start + k.key.length, "$name.${k.path}", SignalDeclaration.Kind.OBJECT_KEY)
+            }
+        }
     }
     for (m in VALUE_ATTRIBUTE.findAll(src)) {
         out +=
