@@ -145,6 +145,27 @@ public fun readKotlinStringAt(
     val interpolations = ArrayList<Interpolation>()
     val nested = ArrayList<KotlinString>()
 
+    // The literal read up to [contentEnd], where its closing quotes start, or where an unterminated one stops.
+    fun read(
+        contentEnd: Int,
+        end: Int,
+    ): KotlinString {
+        d.map.add(contentEnd)
+        return KotlinString(
+            start = at,
+            end = end,
+            raw = raw,
+            dollars = dollars,
+            contentStart = contentStart,
+            contentEnd = contentEnd,
+            text = d.out.toString(),
+            map = d.map.toIntArray(),
+            interpolations = interpolations,
+            unterminated = end == contentEnd,
+            nested = nested,
+        )
+    }
+
     while (i < src.length) {
         val c = src[i]
         if (raw) {
@@ -154,39 +175,10 @@ public fun readKotlinStringAt(
                 while (j < src.length && src[j] == '"') j++
                 val extra = j - i - 3
                 for (k in 0 until extra) d.push('"', i + k)
-                // The end of the text is where the closing quotes start, as in an ordinary literal.
-                d.map.add(j - 3)
-                return KotlinString(
-                    start = at,
-                    end = j,
-                    raw = true,
-                    dollars = dollars,
-                    contentStart = contentStart,
-                    contentEnd = j - 3,
-                    text = d.out.toString(),
-                    map = d.map.toIntArray(),
-                    interpolations = interpolations,
-                    unterminated = false,
-                    nested = nested,
-                )
+                return read(j - 3, j)
             }
         } else {
-            if (c == '"') {
-                d.map.add(i)
-                return KotlinString(
-                    start = at,
-                    end = i + 1,
-                    raw = false,
-                    dollars = dollars,
-                    contentStart = contentStart,
-                    contentEnd = i,
-                    text = d.out.toString(),
-                    map = d.map.toIntArray(),
-                    interpolations = interpolations,
-                    unterminated = false,
-                    nested = nested,
-                )
-            }
+            if (c == '"') return read(i, i + 1)
             if (c == '\n') break
             if (c == '\\') {
                 val n = src.getOrNull(i + 1)
@@ -286,20 +278,7 @@ public fun readKotlinStringAt(
         d.push(c, i)
         i++
     }
-    d.map.add(i)
-    return KotlinString(
-        start = at,
-        end = i,
-        raw = raw,
-        dollars = dollars,
-        contentStart = contentStart,
-        contentEnd = i,
-        text = d.out.toString(),
-        map = d.map.toIntArray(),
-        interpolations = interpolations,
-        unterminated = true,
-        nested = nested,
-    )
+    return read(i, i)
 }
 
 private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
