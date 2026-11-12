@@ -1238,7 +1238,7 @@ public class Analyzer(
         opts: AnalyzeOptions,
         view: String,
     ): Judged {
-        if (s.interpolations.isEmpty()) return Judged(emptyList(), null)
+        if (s.interpolations.isEmpty()) return Judged()
         val trapOf = traps(s, src)
         // Without core there is no interpolate to build the string with, and Trusted is not Streamlord's.
         val sdk = Sdk.of(opts)
@@ -1484,7 +1484,7 @@ public class Analyzer(
                                 issue(
                                     "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
                                     if (fact.scalar()) Severity.HINT else Severity.WARNING,
-                                    fixes = listOfNotNull(quoteFix(s, view, ip, s.rawAt(ip))),
+                                    fixes = listOfNotNull(quoteFix(s, view, ip)),
                                 )
                             }
 
@@ -1838,8 +1838,8 @@ public class Analyzer(
         hyphenated: Set<String>,
     ): Judged {
         val s = markupString(site, spec, src)
-        if (s == null && !site.trailingLambda) return Judged(emptyList(), null)
-        if (s != null && s.unterminated) return Judged(emptyList(), null)
+        if (s == null && !site.trailingLambda) return Judged()
+        if (s != null && s.unterminated) return Judged()
         // In every signature the selector and the mode follow the elements, so they may be given by
         // position. A trailing lambda holds the elements, so the selector comes first.
         val elements =
@@ -2188,8 +2188,8 @@ public fun rewriteAt(
 
 /** The issues of the values of an HTML string, and its rewrite to `interpolate` where that can be offered. */
 internal class Judged(
-    val issues: List<Issue>,
-    val rewrite: Fix?,
+    val issues: List<Issue> = emptyList(),
+    val rewrite: Fix? = null,
 )
 
 internal fun String.lastNonSpaceBefore(index: Int): Char? {

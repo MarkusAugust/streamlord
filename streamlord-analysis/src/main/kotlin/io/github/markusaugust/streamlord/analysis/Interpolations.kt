@@ -1803,7 +1803,6 @@ internal fun quoteFix(
     s: KotlinString,
     view: String,
     ip: Interpolation,
-    raw: Boolean,
 ): Fix? {
     if (s.interpolations.any { it.kind == InterpolationKind.OPERAND }) return null
     val m = UNQUOTED_VALUE.find(view.substring(0, ip.decodedStart)) ?: return null
@@ -1813,7 +1812,7 @@ internal fun quoteFix(
         if (view[to] in "\"'=<`") return null
         to++
     }
-    val quote = if (raw) "\"" else "\\\""
+    val quote = if (s.rawAt(ip)) "\"" else "\\\""
     val start = s.map[from]
     val end = s.map[to]
     return Fix("Quote the value", start, start, quote, listOf(Edit(end, end, quote)))
