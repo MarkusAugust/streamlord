@@ -31,6 +31,8 @@
 {"what":"diagnostic","code":"modifier-args","link":"https://data-star.dev/reference/attributes#data-init","message":"__delay needs a duration such as __delay.500ms or __delay.1s.","range":"33:19-33:24","severity":"Error","source":"streamlord"}
 {"what":"diagnostic","code":"pro-attribute","link":"https://data-star.dev/reference/attributes#data-persist","message":"data-persist is a Datastar Pro attribute; it needs the Pro bundle.","range":"34:8-34:20","severity":"Hint","source":"streamlord"}
 {"what":"diagnostic","code":"pro-action","link":"https://data-star.dev/reference/actions","message":"@clipboard is a Datastar Pro action; it needs the Pro bundle.","range":"35:26-35:36","severity":"Hint","source":"streamlord"}
+{"what":"diagnostic","code":"unknown-option","link":"https://data-star.dev/reference/actions#options","message":"@post has no option contentTyp, so Datastar ignores it. Did you mean contentType?","range":"37:42-37:52","severity":"Warning","source":"streamlord"}
+{"what":"diagnostic","code":"option-value","link":"https://data-star.dev/reference/actions#options","message":"retry takes 'auto' | 'error' | 'always' | 'never', and with 'sometimes' Datastar retries as with 'auto'.","range":"37:69-37:80","severity":"Warning","source":"streamlord"}
 {"what":"diagnostic","code":"expression-syntax","link":"https://data-star.dev/guide/datastar_expressions","message":"Datastar expression: Unexpected end of input","range":"38:25-38:26","severity":"Error","source":"streamlord"}
 {"what":"action","at":"1:1-41:1","n":0,"after":{"value":"80a2a40f6657"},"edits":[{"file":"html/mistakes.html","range":"4:26-4:30","text":"@get"}],"kind":"quickfix","preferred":true,"title":"Change to @get"}
 {"what":"action","at":"1:1-41:1","n":1,"after":{"value":"494291a5d6df"},"edits":[{"file":"html/mistakes.html","range":"5:30-5:31","text":""}],"kind":"quickfix","preferred":true,"title":"Remove the space"}
@@ -43,8 +45,9 @@
 {"what":"action","at":"1:1-41:1","n":8,"after":{"value":"280647354a38"},"edits":[{"file":"html/mistakes.html","range":"24:21-24:22","text":""}],"kind":"quickfix","preferred":true,"title":"Change to draft"}
 {"what":"action","at":"1:1-41:1","n":9,"after":{"value":"6c3d1a5aca07"},"edits":[{"file":"html/mistakes.html","range":"30:37-30:42","text":"/(?:)/i"}],"kind":"quickfix","preferred":true,"title":"Change to /(?:)/i"}
 {"what":"action","at":"1:1-41:1","n":10,"after":{"value":"9792c618dbc9"},"edits":[{"file":"html/mistakes.html","range":"33:24-33:24","text":".500ms"}],"kind":"quickfix","preferred":true,"title":"Add .500ms"}
-{"what":"action","at":"1:1-41:1","n":11,"after":{"value":"051e57042640"},"edits":[{"file":"html/mistakes.html","range":"19:18-19:24","text":"draft"}],"kind":"quickfix","preferred":true,"title":"Change to $draft"}
-{"what":"action","at":"1:1-41:1","n":12,"after":{"value":"87f40053503d"},"edits":[{"file":"html/mistakes.html","range":"18:17-18:26","text":"$my - draft"}],"kind":"quickfix","preferred":false,"title":"Write $my - draft"}
+{"what":"action","at":"1:1-41:1","n":11,"after":{"value":"a7f9380db6fb"},"edits":[{"file":"html/mistakes.html","range":"37:42-37:52","text":"contentType"}],"kind":"quickfix","preferred":true,"title":"Change to contentType"}
+{"what":"action","at":"1:1-41:1","n":12,"after":{"value":"051e57042640"},"edits":[{"file":"html/mistakes.html","range":"19:18-19:24","text":"draft"}],"kind":"quickfix","preferred":true,"title":"Change to $draft"}
+{"what":"action","at":"1:1-41:1","n":13,"after":{"value":"87f40053503d"},"edits":[{"file":"html/mistakes.html","range":"18:17-18:26","text":"$my - draft"}],"kind":"quickfix","preferred":false,"title":"Write $my - draft"}
 {"what":"action","at":"4:26-4:30","n":0,"after":{"value":"80a2a40f6657"},"edits":[{"file":"html/mistakes.html","range":"4:26-4:30","text":"@get"}],"kind":"quickfix","preferred":true,"title":"Change to @get"}
 {"what":"action","at":"5:26-5:31","n":0,"after":{"value":"494291a5d6df"},"edits":[{"file":"html/mistakes.html","range":"5:30-5:31","text":""}],"kind":"quickfix","preferred":true,"title":"Remove the space"}
 {"what":"action","at":"11:11-11:25","n":0,"after":{"value":"47746301dd4c"},"edits":[{"file":"html/mistakes.html","range":"11:11-11:19","text":"data-on"}],"kind":"quickfix","preferred":true,"title":"Change to data-on"}
@@ -58,6 +61,7 @@
 {"what":"action","at":"24:21-24:27","n":0,"after":{"value":"280647354a38"},"edits":[{"file":"html/mistakes.html","range":"24:21-24:22","text":""}],"kind":"quickfix","preferred":true,"title":"Change to draft"}
 {"what":"action","at":"30:37-30:42","n":0,"after":{"value":"6c3d1a5aca07"},"edits":[{"file":"html/mistakes.html","range":"30:37-30:42","text":"/(?:)/i"}],"kind":"quickfix","preferred":true,"title":"Change to /(?:)/i"}
 {"what":"action","at":"33:19-33:24","n":0,"after":{"value":"9792c618dbc9"},"edits":[{"file":"html/mistakes.html","range":"33:24-33:24","text":".500ms"}],"kind":"quickfix","preferred":true,"title":"Add .500ms"}
+{"what":"action","at":"37:42-37:52","n":0,"after":{"value":"a7f9380db6fb"},"edits":[{"file":"html/mistakes.html","range":"37:42-37:52","text":"contentType"}],"kind":"quickfix","preferred":true,"title":"Change to contentType"}
 {"what":"hover","at":"2:2-2:6","answers":[{"contents":[{"value":"139b643a8093"}],"range":"2:2-2:6"}]}
 {"what":"hover","at":"3:2-3:6","answers":[{"contents":[{"value":"bc844e599acf"}],"range":"3:2-3:6"}]}
 {"what":"hover","at":"3:7-3:25","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"3:7-3:25"}]}
