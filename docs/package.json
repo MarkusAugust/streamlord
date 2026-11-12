@@ -12,12 +12,12 @@
     "check:links": "bun scripts/check-links.ts"
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "7.3.5",
-    "@lo-tek/interfaces": "0.39.0",
-    "astro": "7.4.4"
+    "@astrojs/markdown-remark": "7.3.6",
+    "@lo-tek/interfaces": "0.43.0",
+    "astro": "7.4.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.6",
     "@types/bun": "^1.4.4",
     "typescript": "^5.9.3"
   }
