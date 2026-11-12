@@ -59,23 +59,32 @@ internal fun holeDisplay(ip: Interpolation): String {
 internal fun KotlinString.rawAt(ip: Interpolation): Boolean = literals.firstOrNull { ip.start >= it.start && ip.end <= it.end }?.raw ?: raw
 
 /**
- * The literal's text as `trimMargin` leaves it for the markup checks: each margin marker at the
- * start of a line becomes a space, so nothing moves and the map still holds.
+ * The string's text as `trimMargin` leaves it for the markup checks: each margin marker at the
+ * start of a line becomes a space, so nothing moves and the map still holds. In a `+` chain each
+ * literal is trimmed by the call after it alone, as Kotlin binds it.
  */
 internal fun markupView(
     src: String,
     s: KotlinString,
 ): String {
-    val marker = trimAfter(src, s)?.margin
-    if (marker.isNullOrEmpty()) return s.text
+    val literals = s.literals.ifEmpty { listOf(s) }
+    val margins = literals.map { trimAfter(src, it)?.margin.orEmpty() }
+    if (margins.all { it.isEmpty() }) return s.text
     val out = StringBuilder()
+    // The literal the text at [i] is written in, by the source it maps to: each starts a first line of its own.
+    var part = -1
     var lineStart = true
     var i = 0
     while (i < s.text.length) {
+        while (part + 1 < literals.size && s.map[i] >= literals[part + 1].contentStart) {
+            part++
+            lineStart = true
+        }
+        val marker = if (part >= 0 && s.map[i] < literals[part].contentEnd) margins[part] else ""
         val c = s.text[i]
         if (lineStart && c != ' ' && c != '\t') {
             lineStart = false
-            if (s.text.startsWith(marker, i)) {
+            if (marker.isNotEmpty() && s.text.startsWith(marker, i)) {
                 out.append(" ".repeat(marker.length))
                 i += marker.length
                 continue
@@ -97,11 +106,12 @@ internal class Trim(
     val margin: String?,
 )
 
-/** The trim call that follows the literal, or null where none does. */
+/** The trim call that follows the literal, or null where none does: one after a `+` chain is its last literal's, and none of the chain's. */
 internal fun trimAfter(
     src: String,
     s: KotlinString,
 ): Trim? {
+    if (s.literals.isNotEmpty()) return null
     val call = TRIM.matchAt(src, s.end) ?: return null
     if (call.groups[2] == null) return Trim(null, null)
     return Trim(call.value, if (call.groupValues[1] == "Margin") call.groups[3]?.value ?: "|" else null)
