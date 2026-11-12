@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.radixDouble
 import io.github.markusaugust.streamlord.core.client.regex
@@ -744,6 +745,43 @@ public class MarkupValidator(
     ): List<Issue> = validateAttributes(tag, prefix, null)
 
     /**
+     * The one Datastar attribute the name of [attr] is one edit from, where something says the author
+     * meant Datastar: a key or a modifier, a signal or an action in the value as the client reads
+     * them, or no value where that attribute is written without one. `data-test`, `data-kind` and
+     * `data-unit` are honest names one edit from Datastar's, so the name alone says nothing.
+     */
+    private fun meantAttribute(
+        parsed: ParsedAttribute,
+        attr: Attribute,
+    ): AttributeSpec? {
+        val near = catalog.attributes.filter { oneEdit(parsed.base, it.name) }.singleOrNull() ?: return null
+        val value = attr.value.orEmpty()
+        val meant =
+            when {
+                parsed.key != null || parsed.modifiers.isNotEmpty() -> true
+                value.isEmpty() -> near.valueKind == ValueKind.NONE || near.valueKind == ValueKind.FILTER
+                else -> clientRewrite(decodeEntities(value).text).rewrites.isNotEmpty()
+            }
+        return near.takeIf { meant }
+    }
+
+    /** Whether [a] becomes [b] by one character added, removed or changed, or two neighbours swapped. */
+    private fun oneEdit(
+        a: String,
+        b: String,
+    ): Boolean {
+        if (a == b || a.length - b.length !in -1..1) return false
+        var start = 0
+        while (start < a.length && start < b.length && a[start] == b[start]) start++
+        var end = 0
+        while (end < a.length - start && end < b.length - start && a[a.length - 1 - end] == b[b.length - 1 - end]) end++
+        val left = a.length - start - end
+        val right = b.length - start - end
+        return left + right == 1 || (left == 1 && right == 1) ||
+            (left == 2 && right == 2 && a[start] == b[start + 1] && a[start + 1] == b[start])
+    }
+
+    /**
      * Validate the Datastar attributes on one tag, whose text is [tagSource]: with it, a template
      * construct the tokenizer stepped over inside the tag is seen too. [kotlin] says the names are
      * written in Kotlin source, where `$name` and `${...}` are templates.
@@ -829,6 +867,19 @@ public class MarkupValidator(
                             code = "unknown-attribute",
                             link = Docs.attribute(if (init) "init" else keyedSpec.name),
                             fixes = listOf(Fix("Change to $fixed", attr.nameStart, baseEnd, fixed)),
+                        )
+                    continue
+                }
+                meantAttribute(parsed, attr)?.let { meant ->
+                    issues +=
+                        Issue(
+                            start = attr.nameStart,
+                            end = nameEnd,
+                            message = "$prefix${parsed.base} is not a Datastar attribute. Did you mean $prefix${meant.name}?",
+                            severity = Severity.HINT,
+                            code = "unknown-attribute",
+                            link = Docs.attribute(meant.name),
+                            fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
                         )
                 }
                 continue
