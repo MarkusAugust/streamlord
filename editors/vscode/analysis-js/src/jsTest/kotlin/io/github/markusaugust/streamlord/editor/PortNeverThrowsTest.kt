@@ -11,7 +11,8 @@ class PortNeverThrowsTest {
         val thrown =
             CallShapes.sources(2000, 2).mapNotNull { src ->
                 runCatching {
-                    for (issue in diagnose(src, true, "data-", arrayOf("A"), arrayOf("count"), emptyArray())) issue.fixes?.forEach { it.text }
+                    val issues = diagnose(src, true, "data-", arrayOf("A"), arrayOf("count"), emptyArray())
+                    for (issue in issues) issue.fixes?.forEach { it.text }
                     rewriteAt(src, src.length / 2, src.length / 2, "data-", emptyArray())?.text
                 }.exceptionOrNull()?.let { "$it in:\n$src" }
             }
