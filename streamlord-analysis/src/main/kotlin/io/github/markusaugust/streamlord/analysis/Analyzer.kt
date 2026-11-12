@@ -743,6 +743,18 @@ public class Analyzer(
             }
         val issues = ArrayList<Issue>()
         // The values are always the values: a List among them is one, written as a template writes it.
+        val collections = if (plain) values.mapIndexedNotNull { k, v -> collectionElements(v.text)?.takeIf { it.isNotEmpty() }?.let { k to it } } else emptyList()
+
+        fun writtenOut(of: List<Pair<Int, List<String>>>) =
+            Fix(
+                "Pass the elements as the values",
+                values[of[0].first].start,
+                values[of[0].first].end,
+                of[0].second.joinToString(", "),
+                of.drop(1).map { (k, elements) -> Edit(values[k].start, values[k].end, elements.joinToString(", ")) },
+            )
+        // Where the elements would fill the placeholders, the count is the list's doing: the error says so.
+        val spread = collections.isNotEmpty() && holes.size == values.size + collections.sumOf { it.second.size - 1 }
         if (plain && holes.size != values.size) {
             val h = holes.size
             val v = values.size
@@ -760,10 +772,32 @@ public class Analyzer(
                     site.nameStart + site.name.length,
                     "interpolate throws IllegalArgumentException here: the markup has " +
                         "$h %s ${if (h == 1) "placeholder" else "placeholders"} and " +
-                        "$v ${if (v == 1) "value is" else "values are"} given. $advice",
+                        "$v ${if (v == 1) "value is" else "values are"} given. " +
+                        if (spread) {
+                            val named = collections.joinToString(" and ") { shortened(values[it.first].text) }
+                            "$named ${if (collections.size == 1) "is one value" else "are one value each"}: " +
+                                "write ${if (collections.size == 1) "its" else "their"} elements out to pass them as the values."
+                        } else {
+                            advice
+                        },
                     Severity.ERROR,
                     "interpolate-placeholders",
+                    fixes = if (spread) listOf(writtenOut(collections)) else emptyList(),
                 )
+        } else {
+            for (c in collections) {
+                val v = values[c.first]
+                issues +=
+                    Issue(
+                        v.start,
+                        v.end,
+                        "interpolate takes ${shortened(v.text)} as one value and writes it whole, in brackets, escaped like any text. " +
+                            "Write the elements out to pass them as the values.",
+                        Severity.HINT,
+                        "interpolate-placeholders",
+                        fixes = listOf(writtenOut(listOf(c))),
+                    )
+            }
         }
         val mapped = plain && holes.size == values.size
         val view = markupView(src, format)

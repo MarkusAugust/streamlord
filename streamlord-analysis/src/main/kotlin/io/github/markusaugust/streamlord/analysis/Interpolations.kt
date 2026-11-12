@@ -218,6 +218,21 @@ private fun closing(
     return -1
 }
 
+/** A call that makes a list, a set or an array of the values it is given. */
+private val COLLECTION_CALL =
+    regex(
+        """^(?:listOf|mutableListOf|arrayListOf|setOf|mutableSetOf|arrayOf|(?:int|long|short|byte|double|float|boolean|char)ArrayOf)""" +
+            """\s*(?:<[^()]*>)?\s*\(""",
+    )
+
+/** The elements of [text] when it is one call that makes a list, a set or an array of them, `listOf(a, b)`; null otherwise. */
+internal fun collectionElements(text: String): List<String>? {
+    val t = text.trim()
+    val open = (COLLECTION_CALL.find(t) ?: return null).value.length - 1
+    if (closing(t, depths(t), open) != t.length) return null
+    return splitTop(t.substring(open + 1, t.length - 1), ",").map { it.trim() }.filter { it.isNotEmpty() }
+}
+
 /** A branch as the value it gives: a block of one expression is that expression. */
 private fun unblock(v: String): String {
     val t = v.trim()
