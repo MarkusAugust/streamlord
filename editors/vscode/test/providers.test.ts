@@ -473,6 +473,28 @@ describe("code action provider", () => {
     assert.deepEqual(actionsAt(card, card.indexOf("String ="), card.indexOf("class")).actions, []);
   });
 
+  it("offers every fix of every diagnostic over the whole file, each tied to its own diagnostic", () => {
+    const text = readFileSync(new URL("./fixtures/real/kotlin/ViewMistakes.kt", import.meta.url), "utf8");
+    const doc = new MockDocument(text, "kotlin");
+    const found = diagnose(text, true, "data-", [], null);
+    const issues = new IssueStore();
+    issues.set(doc.uri as never, found);
+    // What VS Code hands the provider: every diagnostic the range touches, as the extension made them.
+    const diagnostics = found.map((i) => ({ source: "streamlord", code: i.code, range: new Range(doc.positionAt(i.start), doc.positionAt(i.end)) }));
+    const whole = new Range(doc.positionAt(0), doc.positionAt(text.length));
+    const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, whole as never, { diagnostics } as never) as unknown as CodeAction[];
+    const got = actions
+      .filter((a) => a.kind?.value === "quickfix")
+      .map((a) => {
+        const [d] = (a.diagnostics ?? []) as typeof diagnostics;
+        return `${d?.code} ${d ? `${doc.offsetAt(d.range.start)}-${doc.offsetAt(d.range.end)}` : "none"} ${a.title}`;
+      });
+    assert.deepEqual(got, found.flatMap((i) => (i.fixes ?? []).map((f) => `${i.code} ${i.start}-${i.end} ${f.title}`)));
+    // Line 8, `dataText("$count")`, has four.
+    const line8 = text.indexOf('dataText("$count")');
+    assert.equal(got.filter((g) => g.startsWith(`kotlin-interpolation ${line8 + 10}-`)).length, 4);
+  });
+
   it("offers nothing where no value of the string is escaped", () => {
     const text = 'fun total(count: Int): String = "<p>total $count</p>"';
     assert.deepEqual(actionsAt(text, text.indexOf("total $")).actions, []);
