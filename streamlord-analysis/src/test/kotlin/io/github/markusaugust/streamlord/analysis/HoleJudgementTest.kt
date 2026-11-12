@@ -27,6 +27,15 @@ class HoleJudgementTest {
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
     }
 
+    @Test
+    fun `a message that advises interpolate without offering the rewrite says why`() {
+        val src = "fun card(title: String) = \"<h2>\${title.escaped()}</h2>\""
+        val issue = analyzer.analyzeKotlin(src).single()
+        assertTrue("build the string with interpolate(...)" in issue.message, issue.message)
+        assertEquals(emptyList(), issue.fixes.filter { it.title.startsWith("Build this string") })
+        assertTrue("is not offered here" in issue.message, issue.message)
+    }
+
     /** The issues on [src] where the editor says the last [value] in it is [fact], as code and the text they cover. */
     private fun told(
         src: String,
