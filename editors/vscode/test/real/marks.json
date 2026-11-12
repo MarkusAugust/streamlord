@@ -107,5 +107,12 @@
   {"file": "kotlin/RewriteLimits.kt", "at": "@Suppress(\"<p¦>$REWRITE_GREETING", "actions": true},
   {"file": "kotlin/RewriteLimits.kt", "at": "\"<p>to¦tal $count</p>\"", "actions": true},
   {"file": "kotlin/RewriteLimits.kt", "at": "</sty¦le><p title=\\\"$name\\\">x</p>\"", "actions": true},
-  {"file": "kotlin/RewriteLimits.kt", "at": "|</d¦iv>", "actions": true}
+  {"file": "kotlin/RewriteLimits.kt", "at": "|</d¦iv>", "actions": true},
+  {"file": "kotlin/RewriteOperands.kt", "at": "+\"<p>$na¦me</p>\"", "actions": true},
+  {"file": "kotlin/RewriteOperands.kt", "at": "a + n * 2 + \"<p>${n.d¦ec()}</p>\"", "actions": true},
+  {"file": "kotlin/RewriteOperands.kt", "at": "object { override fun toString() = a } + \"</¦p>\"", "actions": true},
+  {"file": "kotlin/RewriteOperands.kt", "at": "${title.esc¦aped()}", "actions": true},
+  {"file": "kotlin/InterpolateValues.kt", "at": "listOf(¦a))", "actions": true},
+  {"file": "kotlin/InterpolateValues.kt", "at": "listOf(a, ¦b))", "actions": true},
+  {"file": "kotlin/InterpolateValues.kt", "at": "intArrayOf(¦n, 2)", "actions": true}
 ]
