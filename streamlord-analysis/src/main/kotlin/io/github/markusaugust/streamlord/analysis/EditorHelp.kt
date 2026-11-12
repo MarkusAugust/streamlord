@@ -315,7 +315,7 @@ private class Asked(
             // The colon is written only where none follows yet, after the rest of the name, which the item replaces.
             val colon = if (text.substring(wordEnd(CompletionKind.OPTION)).trimStart().startsWith(":")) "" else ": "
             val items =
-                option.fields.filter { it.name !in option.written }.map {
+                option.fields.map { it.option }.filter { it.name !in option.written }.map {
                     Completion(
                         it.name,
                         CompletionKind.OPTION,

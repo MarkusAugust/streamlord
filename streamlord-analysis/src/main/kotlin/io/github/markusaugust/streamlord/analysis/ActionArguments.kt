@@ -18,7 +18,8 @@ private enum class Written(
     STRING("a string"),
     NUMBER("a number"),
     BOOLEAN("a boolean"),
-    NULLISH(""),
+    NULL("none"),
+    UNDEFINED(""),
     OBJECT("an object"),
     ARRAY("an array"),
     REGEX("a regular expression"),
@@ -39,7 +40,10 @@ private const val SHORT = 40
 
 private val NUMBER_LITERAL =
     regex("""[+-]?(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
-private val NUMERIC_STRING = regex("""\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?\s*""")
+
+// What JavaScript's Number reads as a number: white space alone is 0, and a sign is no part of a hexadecimal, octal or binary one.
+private val NUMERIC_STRING =
+    regex("""\s*(?:[+-]?(?:Infinity|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)?\s*""")
 private val IDENTIFIER = regex("""[A-Za-z_$][\w$]*""")
 
 private fun ArgumentKind.phrase(): String =
@@ -66,8 +70,12 @@ private val TAKEN =
         Written.FUNCTION to setOf(ArgumentKind.FUNCTION),
     )
 
-/** Whether a value written so is one of [kind]; an expression always is, and a string of digits is a number, as the client counts with it. */
+/**
+ * Whether a value written so is one of [kind]; an expression always is, and a string Number reads
+ * as a number is one, as the client counts with it. Null is judged apart, where the client throws on it.
+ */
 private fun ArgumentKind.takes(value: Value): Boolean {
+    if (value.written == Written.NULL) return true
     val taken = TAKEN[value.written] ?: return value.written != Written.ARRAY || this == ArgumentKind.ANY
     return this == ArgumentKind.ANY || this in taken ||
         (
@@ -88,7 +96,25 @@ private class Brackets(
     private val commas = HashMap<Int, MutableList<Int>>()
     private val colons = HashMap<Int, MutableList<Int>>()
 
+    /** How many of the places a Kotlin template was read at start before each offset. */
+    private val templates = IntArray(js.length + 1)
+
+    /** Whether a Kotlin template was read somewhere from [from] until [to]: the value is the code's, not written. */
+    fun computed(
+        from: Int,
+        to: Int,
+    ): Boolean = to - from >= PLACEHOLDER.length && templates[to - PLACEHOLDER.length + 1] > templates[from]
+
     init {
+        var at = js.indexOf(PLACEHOLDER)
+        var seen = 0
+        for (i in js.indices) {
+            if (i == at) {
+                seen++
+                at = js.indexOf(PLACEHOLDER, i + 1)
+            }
+            templates[i + 1] = seen
+        }
         val open = ArrayList<Int>()
         for (i in js.indices) {
             if (regions[i] != Region.CODE) continue
@@ -129,7 +155,7 @@ private class Brackets(
     fun value(piece: IntRange): Value {
         val s = piece.first
         val e = piece.last + 1
-        if (s >= e) return Value(s, e, Written.EXPRESSION, null)
+        if (s >= e || computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
         val first = js[s]
 
         fun all(region: Byte) = (s until e).all { regions[it] == region }
@@ -147,7 +173,9 @@ private class Brackets(
 
                 short == "true" || short == "false" -> Written.BOOLEAN
 
-                short == "null" || short == "undefined" -> Written.NULLISH
+                short == "null" -> Written.NULL
+
+                short == "undefined" -> Written.UNDEFINED
 
                 first == '{' && close[s] == e - 1 -> Written.OBJECT
 
@@ -199,16 +227,12 @@ internal fun actionArgumentIssues(
     rewrites: List<Rewrite>,
     span: (Int, Int) -> Pair<Int, Int>,
 ): List<Issue> {
-    val calls =
-        rewrites.filter {
-            !it.signal && regions[it.start] == Region.CODE &&
-                catalog.actionsByName[it.name]?.kinds?.isNotEmpty() == true
-        }
+    val calls = rewrites.filter { !it.signal && regions[it.start] == Region.CODE && catalog.actionKinds[it.name]?.isNotEmpty() == true }
     if (calls.isEmpty()) return emptyList()
     val brackets = Brackets(js, regions)
     val out = ArrayList<Issue>()
     val filterKey = { key: String ->
-        "A signal filter has only ${catalog.signalFilter.joinToString(" and ") { it.name }}, so Datastar ignores $key."
+        "A signal filter has only ${catalog.filterFields.joinToString(" and ") { it.name }}, so Datastar ignores $key."
     }
 
     fun issue(
@@ -228,31 +252,77 @@ internal fun actionArgumentIssues(
         out += Issue(start, end, message, Severity.WARNING, code, link, mapped)
     }
 
-    fun shown(v: Value): String = js.substring(v.start, v.end).takeIf { it.length <= 40 && '\n' !in it } ?: "this value"
+    fun shown(v: Value): String = js.substring(v.start, v.end).takeIf { it.length <= SHORT && '\n' !in it } ?: "this value"
 
-    /** What a value of the wrong kind is, and what the client then does, for a value of [kind] written as [v]. */
+    /**
+     * What a value of [kind] written as [v] is, where it is not one, and what the client then does:
+     * [otherwise] for a number that is NaN, [url] for the address of a backend action.
+     */
     fun wrong(
         kind: ArgumentKind,
         v: Value,
-        pro: Boolean,
+        otherwise: String,
         filterChanges: Boolean,
-    ): String {
+        url: Boolean,
+    ): String? {
+        val nan = kind == ArgumentKind.NUMBER && v.written in setOf(Written.STRING, Written.OBJECT, Written.REGEX, Written.FUNCTION)
         val what =
             when {
-                kind == ArgumentKind.NUMBER && v.written == Written.STRING -> "a string that is no number"
+                v.written == Written.NULL -> "none"
+                url && v.text == "" -> "empty"
+                nan -> v.written.phrase + " Datastar reads as NaN"
                 else -> v.written.phrase
             }
+        val reads = if (kind == ArgumentKind.OPTIONS) "them" else "it"
         val then =
-            if (pro) {
-                ""
-            } else {
-                when (kind) {
-                    ArgumentKind.BOOLEAN -> ", which Datastar reads as ${v.text != ""}"
-                    ArgumentKind.OPTIONS -> ", so Datastar reads every option at its default"
-                    ArgumentKind.FILTER -> ", so Datastar reads no filter from it" + if (filterChanges) " and changes every signal" else ""
-                    ArgumentKind.FUNCTION -> ", so Datastar throws a TypeError as it calls it"
-                    ArgumentKind.PATTERN -> ", so Datastar throws a TypeError as it matches a signal"
-                    else -> ""
+            when {
+                url && (
+                    v.text == "" || v.written in
+                        setOf(
+                            Written.NULL,
+                            Written.NUMBER,
+                            Written.BOOLEAN,
+                            Written.OBJECT,
+                            Written.REGEX,
+                        )
+                ) -> {
+                    ", so Datastar throws FetchNoUrlProvided and sends nothing"
+                }
+
+                v.written == Written.NULL && kind in setOf(ArgumentKind.OPTIONS, ArgumentKind.FILTER) -> {
+                    ", so Datastar throws a TypeError as it reads $reads"
+                }
+
+                v.written == Written.NULL && kind !in setOf(ArgumentKind.PATTERN, ArgumentKind.FUNCTION) -> {
+                    return null
+                }
+
+                nan && otherwise.isNotEmpty() -> {
+                    ", so $otherwise"
+                }
+
+                kind == ArgumentKind.BOOLEAN -> {
+                    ", which Datastar reads as ${v.text != ""}"
+                }
+
+                kind == ArgumentKind.OPTIONS -> {
+                    ", so Datastar reads every option at its default"
+                }
+
+                kind == ArgumentKind.FILTER -> {
+                    ", so Datastar reads no filter from it" + if (filterChanges) " and changes every signal" else ""
+                }
+
+                kind == ArgumentKind.FUNCTION -> {
+                    ", so Datastar throws a TypeError as it calls it"
+                }
+
+                kind == ArgumentKind.PATTERN -> {
+                    ", so Datastar throws a TypeError as it matches a signal"
+                }
+
+                else -> {
+                    ""
                 }
             }
         return "${shown(v)} is $what$then."
@@ -261,7 +331,7 @@ internal fun actionArgumentIssues(
     /** The keys of the object literal opening at [open], held to [fields]; [unknown] says what Datastar does with a key that is none. */
     fun judgeObject(
         open: Int,
-        fields: List<FetchOption>,
+        fields: List<ValueField>,
         unknown: (String) -> String,
         link: String,
     ) {
@@ -278,8 +348,9 @@ internal fun actionArgumentIssues(
             val keyText = js.substring(keyRange.first, keyRange.last + 1)
             val quoted = keyText.length >= 2 && (keyText[0] == '\'' || keyText[0] == '"') && keyText.last() == keyText[0]
             val key = if (quoted) keyText.substring(1, keyText.length - 1) else keyText
-            // A computed key, a method or a shorthand that is no name is not judged.
-            if (IDENTIFIER.matchEntire(key) == null || (colon < 0 && quoted)) continue
+            // A computed key, a method, a shorthand that is no name and a key the code writes are not judged.
+            val written = if (quoted) '\\' !in key && key.none { it == keyText[0] } else IDENTIFIER.matchEntire(key) != null
+            if (!written || (colon < 0 && quoted) || PLACEHOLDER in key) continue
             val field = byName[key]
             if (field == null) {
                 val near =
@@ -300,18 +371,9 @@ internal fun actionArgumentIssues(
             }
             if (colon < 0) continue
             val v = brackets.value(brackets.trim(colon + 1, piece.last + 1))
+            val enum = field.values.isNotEmpty()
             when {
-                !field.kind.takes(v) -> {
-                    issue(
-                        v.start,
-                        v.end,
-                        "${field.name} takes ${field.kind.phrase()}, and " + wrong(field.kind, v, false, false),
-                        "option-value",
-                        link,
-                    )
-                }
-
-                field.values.isNotEmpty() && v.written == Written.STRING && v.text != null && v.text !in field.values -> {
+                enum && (v.written == Written.NULL || (v.written == Written.STRING && v.text != null && v.text !in field.values)) -> {
                     issue(
                         v.start,
                         v.end,
@@ -321,8 +383,14 @@ internal fun actionArgumentIssues(
                     )
                 }
 
+                !field.kind.takes(v) || v.written == Written.NULL -> {
+                    wrong(field.kind, v, field.otherwise, filterChanges = false, url = false)?.let {
+                        issue(v.start, v.end, "${field.name} takes ${field.kind.phrase()}, and $it", "option-value", link)
+                    }
+                }
+
                 field.kind == ArgumentKind.FILTER && v.written == Written.OBJECT -> {
-                    judgeObject(v.start, catalog.signalFilter, filterKey, link)
+                    judgeObject(v.start, catalog.filterFields, filterKey, link)
                 }
             }
         }
@@ -330,6 +398,7 @@ internal fun actionArgumentIssues(
 
     for (r in calls) {
         val spec = catalog.actionsByName.getValue(r.name)
+        val kinds = catalog.actionKinds.getValue(r.name)
         val open = r.end - 1
         if (js.getOrNull(open) != '(' || brackets.close[open] < 0) continue
         val link = "${Docs.ACTIONS}#${spec.name.lowercase()}"
@@ -355,36 +424,31 @@ internal fun actionArgumentIssues(
             )
         }
         for ((n, piece) in pieces.withIndex()) {
-            val kind = spec.kinds.getOrNull(n) ?: break
+            val kind = kinds.getOrNull(n) ?: break
+            if (kind == ArgumentKind.ANY) continue
             val v = brackets.value(piece)
             val parameter = parameters[n].removeSuffix("?")
-            val takes = "@${spec.name} takes ${kind.phrase()} as $parameter, and "
+            // A parameter the signature names is named; one it writes out, as @peek(() => expr), is shown in it.
+            val takes =
+                "@${spec.name} takes ${kind.phrase()}" +
+                    (if (IDENTIFIER.matchEntire(parameter) != null) " as $parameter" else ", as in ${spec.signature}") + ", and "
+            val url = spec.kind == "backend" && n == 0
             when {
-                !kind.takes(v) -> {
-                    issue(v.start, v.end, takes + wrong(kind, v, spec.pro, filterChanges = true), "action-argument", link)
-                }
-
-                spec.kind == "backend" && n == 0 && v.text == "" -> {
-                    issue(
-                        v.start,
-                        v.end,
-                        "$takes${shown(v)} is empty, so Datastar throws FetchNoUrlProvided and sends nothing.",
-                        "action-argument",
-                        link,
-                    )
+                !kind.takes(v) || v.written == Written.NULL || (url && v.text == "") -> {
+                    wrong(kind, v, "", filterChanges = true, url = url)?.let { issue(v.start, v.end, takes + it, "action-argument", link) }
                 }
 
                 kind == ArgumentKind.OPTIONS && v.written == Written.OBJECT -> {
                     judgeObject(
                         v.start,
-                        catalog.fetchOptions,
+                        catalog.optionFields,
                         { "@${spec.name} has no option $it, so Datastar ignores it." },
                         "${Docs.ACTIONS}#options",
                     )
                 }
 
                 kind == ArgumentKind.FILTER && v.written == Written.OBJECT -> {
-                    judgeObject(v.start, catalog.signalFilter, filterKey, link)
+                    judgeObject(v.start, catalog.filterFields, filterKey, link)
                 }
             }
         }

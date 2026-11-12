@@ -1054,6 +1054,8 @@ public class ExpressionValidator(
         name: String,
         start: Int,
     ): List<Issue> {
+        // A name with a Kotlin template in it is one the code writes.
+        if (PLACEHOLDER in name) return emptyList()
         val spec = catalog.actionsByName[name]
         val end = start + 1 + name.length
         if (spec == null) {

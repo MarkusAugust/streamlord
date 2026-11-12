@@ -173,12 +173,12 @@ internal data class ActionCall(
 internal data class OptionKeyAt(
     val typed: String,
     val written: List<String>,
-    val fields: List<FetchOption> = emptyList(),
+    val fields: List<ValueField> = emptyList(),
 )
 
 /** The value of a key of such an object at the caret: the key, what is typed, and whether in a string already opened. */
 internal data class OptionValueAt(
-    val field: FetchOption,
+    val field: ValueField,
     val typed: String,
     val quoted: Boolean,
 )
@@ -195,7 +195,7 @@ private const val OTHER = '#'
 private class OpenBracket(
     val close: Char,
     val action: String?,
-    val fields: List<FetchOption>?,
+    val fields: List<ValueField>?,
 ) {
     var argument = 0
 
@@ -203,24 +203,24 @@ private class OpenBracket(
     val keys = StringBuilder()
 
     /** The key whose value the text after the last comma begins, or null. */
-    fun valueKey(): FetchOption? {
+    fun valueKey(): ValueField? {
         val m = VALUE_KEY.matchEntire(keys.substring(keys.lastIndexOf(",") + 1)) ?: return null
         return fields?.firstOrNull { it.name == m.groupValues[1] }
     }
 }
 
 /** The keys an object opened in [top] takes: the options or a filter as an argument, or a filter as the value of an option. */
-private fun fieldsOf(top: OpenBracket?): List<FetchOption>? {
+private fun fieldsOf(top: OpenBracket?): List<ValueField>? {
     val catalog = Catalog.default
     val kind =
         when {
             top == null -> null
-            top.action != null -> catalog.actionsByName[top.action]?.kinds?.getOrNull(top.argument)
+            top.action != null -> catalog.actionKinds[top.action]?.getOrNull(top.argument)
             else -> top.valueKey()?.kind
         }
     return when (kind) {
-        ArgumentKind.OPTIONS -> catalog.fetchOptions
-        ArgumentKind.FILTER -> catalog.signalFilter
+        ArgumentKind.OPTIONS -> catalog.optionFields
+        ArgumentKind.FILTER -> catalog.filterFields
         else -> null
     }
 }
