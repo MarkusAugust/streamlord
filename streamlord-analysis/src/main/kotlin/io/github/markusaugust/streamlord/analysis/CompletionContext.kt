@@ -86,6 +86,10 @@ internal data class ExpressionAtCaret(
     val allowActions: Boolean,
     /** Whether `patch` is in scope: data-on-signal-patch only. */
     val patchInScope: Boolean,
+    /** The quote a string written there takes: the one the attribute around it does not use. */
+    val quote: Char = '\'',
+    /** Whether that quote is written escaped, `\"`, as a Kotlin string that is not raw needs it. */
+    val escaped: Boolean = false,
 )
 
 /**
@@ -112,7 +116,7 @@ internal fun Analyzer.expressionAtCaret(
     }
     htmlStringAt(src, offset)?.let { html ->
         if (offset <= html.contentStart || offset > html.contentEnd) return null
-        return expressionInMarkup(html.text, decodedIndex(html, offset), prefix, templates = false)
+        return expressionInMarkup(html.text, decodedIndex(html, offset), prefix, templates = false, kotlinEscapes = !html.raw)
     }
     val site =
         findCallSites(src, catalog.expressionCallSites.keys, lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen }
@@ -132,11 +136,19 @@ private fun Analyzer.expressionInMarkup(
     caret: Int,
     prefix: String,
     templates: Boolean = true,
+    kotlinEscapes: Boolean = false,
 ): ExpressionAtCaret? {
     val at = valueAtCaret(markup, caret, prefix, templates) ?: return null
     val spec = catalog.parseAttributeName(at.attribute.lowercase(), prefix)?.spec ?: return null
     if (spec.valueKind != ValueKind.EXPRESSION && spec.valueKind != ValueKind.SIGNAL) return null
-    return ExpressionAtCaret(at.before, spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")
+    val quote = if (markup.getOrNull(at.valueStart - 1) == '\'') '"' else '\''
+    return ExpressionAtCaret(
+        at.before,
+        spec.valueKind == ValueKind.EXPRESSION,
+        spec.name == "on-signal-patch",
+        quote,
+        escaped = quote == '"' && kotlinEscapes,
+    )
 }
 
 /** The decoded index of a source offset in a Kotlin string: the last character that starts at or before it. */
