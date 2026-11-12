@@ -51,6 +51,10 @@ public data class KotlinString(
     val unterminated: Boolean,
     /** The literals inside this one's templates, `"<ul>${xs.joinToString { "<li>$it</li>" }}</ul>"`, outermost first. */
     val nested: List<KotlinString> = emptyList(),
+    /** The literals a `+` chain joins, in source order, each as it is written; none for a literal that stands alone. */
+    val literals: List<KotlinString> = emptyList(),
+    /** Whether a call or an index follows one of the chain's [literals], `"</p>".uppercase()`: it is that literal's alone. */
+    val called: Boolean = false,
 ) {
     /** Map a decoded range back to source offsets. */
     public fun toSource(
@@ -254,9 +258,18 @@ public fun readKotlinStringAt(
                 i = j
                 continue
             }
-            if (n != null && n.isKotlinIdentStart()) {
-                var j = i + dollars
-                while (j < src.length && src[j].isKotlinIdentPart()) j++
+            // A name in backticks is a template too: "$`my name`".
+            val ticked =
+                if (n ==
+                    '`'
+                ) {
+                    src.indexOf('`', i + dollars + 1).takeIf { it > i + dollars + 1 && '\n' !in src.substring(i, it) }
+                } else {
+                    null
+                }
+            if (ticked != null || (n != null && n.isKotlinIdentStart())) {
+                var j = if (ticked != null) ticked + 1 else i + dollars
+                while (ticked == null && j < src.length && src[j].isKotlinIdentPart()) j++
                 interpolations +=
                     Interpolation(
                         start = i,

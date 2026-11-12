@@ -110,7 +110,6 @@ private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribu
 private val DOLLAR_RUNS = regex("""\$+""")
 private val ASSIGN_BEFORE = regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = regex("""\$\{""")
-private val TRIM_AFTER = regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
@@ -139,6 +138,11 @@ private class HoleReading(
 )
 
 private val INTERPOLATE = setOf("interpolate")
+
+/** What stands before the URL in the content of a refresh: a delay, a separator and `url=`, with a quote where one is written. */
+private val REFRESH_BEFORE_URL = regex("""\s*\d+(?:\.\d*)?\s*[;,]\s*(?:[Uu][Rr][Ll]\s*=\s*)?['"]?""")
+private val CONST_VAL_BEFORE = regex("""\bconst\s+val\s+[^=\n]*=\s*\z""")
+private val ANNOTATION_BEFORE = regex("""@[\p{L}_][\p{L}\p{Nd}_.:]*\s*\z""")
 
 private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
@@ -243,17 +247,6 @@ public class Analyzer(
         root: File,
         opts: AnalyzeOptions = AnalyzeOptions(),
     ): List<ProjectIssue> = issuesUnder(root, opts, SKIPPED_FOLDERS)
-
-    /**
-     * The rewrite of an HTML string to a call of `interpolate` that an editor offers at [offset] as
-     * a context action: the string there has values and `interpolate` keeps them all, and no issue
-     * under the caret offers the rewrite already. Null anywhere else.
-     */
-    public fun rewriteAt(
-        src: String,
-        offset: Int,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): Fix? = rewriteAt(analyzeKotlinSites(src, opts), offset)
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(
@@ -704,7 +697,7 @@ public class Analyzer(
         val lex = lex(src)
         val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
         // A trim call leaves each placeholder where it stood.
-        if (!first.unterminated && TRIM_AFTER.matchAt(src, first.end)?.let { first.end + it.value.length } == arg.end) return arg to first
+        if (!first.unterminated && trimAfter(src, first)?.text?.let { first.end + it.length } == arg.end) return arg to first
         val chain = chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end } ?: return null
         return arg to chain
     }
@@ -1216,7 +1209,7 @@ public class Analyzer(
     ): (Interpolation) -> Issue? {
         val shared by lazy(LazyThreadSafetyMode.NONE) {
             // Literals joined with `+` are one string to the judgement, but a prefix makes only the first a `$$` literal.
-            val whole = readKotlinStringAt(src, s.start)?.end == s.end
+            val whole = s.literals.isEmpty()
             val content = src.substring(s.contentStart, s.contentEnd)
             // Enough dollars that no run already in the text opens a template: one more than the longest run.
             val longestRun = DOLLAR_RUNS.findAll(content).maxOfOrNull { it.value.length } ?: 0
@@ -1224,7 +1217,7 @@ public class Analyzer(
             // The literal as the author meant it, with every template read as a signal.
             if (whole && !BRACED_TEMPLATE.containsMatchIn(content)) {
                 // A helper is not a string: it replaces the literal together with the trim call after it.
-                val end = s.end + (TRIM_AFTER.matchAt(src, s.end)?.value?.length ?: 0)
+                val end = s.end + (trimAfter(src, s)?.text?.length ?: 0)
                 for ((re, helper) in HELPERS) {
                     if (available != null && helper !in available) continue
                     // The whole content: `$` alone would also match before a final line break.
@@ -1243,7 +1236,7 @@ public class Analyzer(
             val fixes = ArrayList<Fix>(shared.helpers)
             if (shared.whole) fixes += multiDollarFix(s, src, ip, shared.dollars)
             fixes += Fix("Escape as \${'$'}${ip.text}", ip.start, ip.start + 1, "\${'$'}")
-            if (!(if (shared.whole) s.raw else inRawLiteral(src, s, ip))) fixes += Fix("Escape as \\$${ip.text}", ip.start, ip.start, "\\")
+            if (!s.rawAt(ip)) fixes += Fix("Escape as \\$${ip.text}", ip.start, ip.start, "\\")
             Issue(
                 start = ip.start,
                 end = ip.end,
@@ -1299,35 +1292,61 @@ public class Analyzer(
         val told = s.interpolations.map { holeFact(s, src, opts, it) }
         val starts = s.interpolations.map { it.decodedStart }
         val holes = s.interpolations.indices
-        // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
+        // interpolate takes a Trusted wherever it lands and writes it as it is, as a template does.
+        val trusted =
+            holes.map { k ->
+                told[k] == ValueFact.TRUSTED ||
+                    (!told[k].isOther() && trustedValue(src, s.interpolations[k].text, s.start))
+            }
+        // It refuses every other value in a URL that loads code unless the literal fixes its host.
         val loose = holes.map { k -> hostUnfixed(reading, starts, k) { true } }
-        val keeps = holes.map { k -> !loose[k] && interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) }
+        val keeps =
+            holes.map { k ->
+                trusted[k] || (!loose[k] && interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts))
+            }
         // CSS in the body of a <style> is the author's to vouch for: the rewrite passes it as Trusted(...), which takes
         // a String. An editor that types the values says which are; the text alone leaves most unknown.
         val vouched =
-            holes.filterTo(HashSet()) { k ->
+            holes.filterTo(LinkedHashSet()) { k ->
                 canTrust && !keeps[k] && (told[k].isString() || (told[k] == null && opts.valueFact == null)) &&
-                    inStyleBody(view, landings[k], starts[k]) && !mayBeNull(src, s.interpolations[k].text, s.start)
+                    rawElement(view, landings[k], starts[k]) == "style" && !mayBeNull(src, s.interpolations[k].text, s.start)
             }
-        // A trim call stays on the format, inside the call; one whose argument is no literal is not read.
-        val trim = TRIM_AFTER.matchAt(src, s.end)?.value
-        // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
-        val fixable =
-            canInterpolate &&
-                (trim != null || !trimmed(src, s)) &&
-                holes.all { keeps[it] || it in vouched }
-        // The rewrite is made once for the literal, and only when a fix is applied.
-        val rewrite = interpolateText(src, s, trim.orEmpty(), vouched)
+        val trim = trimAfter(src, s)
+        // Why the string cannot be rewritten whatever its values are, in a few words, or null where it can.
+        val unfit =
+            when {
+                s.called -> "a call after one literal of the + chain applies to that literal alone"
+
+                // The trim call stays on the format, inside the call: one read here, with a margin that is no format character.
+                trim != null && (trim.text == null || trim.margin?.contains('%') == true) -> "the trim call after the string cannot be kept"
+
+                // An annotation and a const val take a constant, which no call is.
+                constantOnly(src, s.start) -> ""
+
+                else -> null
+            }
+        // interpolate(...) can take the string only when every value is one it accepts where it lands.
+        val fixable = canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched }
+        // One value alone that may be a List is passed as a list of one, or Kotlin would take it for the values.
+        val listed = holes.count() == 1 && (told[0] == null || told[0].isOther()) && !trusted[0] && 0 !in vouched
+        // The rewrite is made once for the string, and only when a fix is applied.
+        val rewrite = interpolateText(src, s, trim?.text.orEmpty(), vouched, listed)
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
-        // value, nor where one may be null, which a template writes as `null` and interpolate as nothing.
+        // value, where one may be null, which a template writes as `null` and interpolate as nothing, nor under
+        // trimIndent, where a value with a line break changed what was trimmed.
         val same =
-            vouched.isEmpty() &&
+            vouched.isEmpty() && (trim == null || trim.margin != null) &&
                 holes.none { told[it].isNullable() || told[it].isNullableString() || mayBeNull(src, s.interpolations[it].text, s.start) }
+        var offered = false
 
         fun rewriteFix(
             title: String,
             preferred: Boolean,
-        ): Fix = interpolateFix(src, s, s.end + (trim?.length ?: 0), rewrite, title, preferred && same, vouched.isNotEmpty())
+        ): Fix {
+            offered = true
+            return interpolateFix(src, s, s.end + (trim?.text?.length ?: 0), rewrite, title, preferred && same, vouched.isNotEmpty())
+        }
+        val vouchedTitle by lazy(LazyThreadSafetyMode.NONE) { trustedRewriteTitle(vouched.map { holeDisplay(s.interpolations[it]) }) }
         val issues = ArrayList<Issue>()
         for ((k, ip) in s.interpolations.withIndex()) {
             if (k in written) continue
@@ -1337,28 +1356,47 @@ public class Analyzer(
             val factSays = verdict(fact, landing.position)
             val severity = if (fact.knownCharacters()) Severity.WARNING else Severity.HINT
 
+            // The rewrite escapes nothing of a Trusted, so the issue of one does not offer it.
             fun rewritten(
                 title: String,
                 preferred: Boolean = true,
-            ): List<Fix> = if (fixable) listOf(rewriteFix(title, preferred)) else emptyList()
+            ): List<Fix> = if (fixable && !trusted[k]) listOf(rewriteFix(title, preferred)) else emptyList()
 
             val link = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
 
-            // The first other value interpolate refuses where it stands: why no rewrite is offered here, or what the
-            // rewrite does about it where it passes that value as Trusted(...).
+            // What the rewrite does with another value, or why none is offered: the first value in the way.
             val inTheWay =
-                holes
-                    .firstOrNull { it != k && !keeps[it] && (loose[it] || landings[it].position !in ESCAPED_POSITIONS) }
-                    ?.takeIf { canInterpolate }
-                    ?.let {
-                        val other = holeDisplay(s.interpolations[it])
-                        val place = refusedPlace(view, landings[it], starts[it])
-                        if (fixable) {
-                            " interpolate(...) takes this string once $other, which stands in $place, is passed as Trusted(...), as the fix does."
-                        } else {
-                            " interpolate(...) cannot take this string while $other stands in $place."
+                run {
+                    if (!canInterpolate || trusted[k]) return@run ""
+                    val other = holes.firstOrNull { it != k && !keeps[it] }
+                    val named = other?.let { holeDisplay(s.interpolations[it]) }
+                    val place = other?.let { refusedPlace(view, landings[it], starts[it]) }
+                    when {
+                        fixable && other != null -> {
+                            " The fix passes $named, in $place, as Trusted(...)."
                         }
-                    }.orEmpty()
+
+                        fixable -> {
+                            ""
+                        }
+
+                        !unfit.isNullOrEmpty() -> {
+                            " interpolate(...) is not offered here: $unfit."
+                        }
+
+                        other == null -> {
+                            ""
+                        }
+
+                        loose[other] || landings[other].position !in ESCAPED_POSITIONS -> {
+                            " interpolate(...) cannot take this string while $named stands in $place."
+                        }
+
+                        else -> {
+                            " interpolate(...) is not offered here: it would escape $named, which may be markup you built."
+                        }
+                    }
+                }
 
             fun issue(
                 severity: Severity,
@@ -1381,7 +1419,7 @@ public class Analyzer(
                                         mayHoldMarkup(src, ip.text, s.start, opts.constants)
                                 )
                         ) &&
-                        !mayBeNull(src, ip.text, s.start)
+                        !mayBeNull(src, ip.text, s.start) && !visiblyList(src, ip.text, s.start)
                 if (!core) {
                     // A call or a value of unknown type may be markup the author composed; a known String stays a warning.
                     return issue(
@@ -1390,13 +1428,31 @@ public class Analyzer(
                         plainUnescapedMessage(shown, fact, text),
                     )
                 }
-                val fixes = rewritten(ESCAPES_TITLE, !trust) + if (trust && canTrust) listOf(trustedFix(src, s, ip, shown)) else emptyList()
+                // A Trusted that opens a `+` chain would be joined to nothing, since Kotlin has no plus for it: no such fix there.
+                val fixes =
+                    rewritten(ESCAPES_TITLE, !trust) +
+                        if (trust && canTrust && ip.start != s.start) listOf(trustedFix(src, s, ip, shown)) else emptyList()
                 val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.coreHtml != false)
                 return issue(severity, "unescaped-interpolation", message + inTheWay, fixes)
             }
+
+            fun schemeIssue(attribute: String): Issue {
+                val fixes = rewritten(REFUSES_URL_TITLE)
+                return issue(
+                    Severity.WARNING,
+                    "unsafe-interpolation",
+                    "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
+                        "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
+                        (if (fixes.isNotEmpty()) ", or build the string with $REFUSES_SCHEME." else ".") + inTheWay,
+                    fixes,
+                )
+            }
             when (landing.position) {
                 Position.TEXT, Position.ATTRIBUTE -> {
-                    if (factSays == Verdict.ESCAPE) issues += unescaped()
+                    if (factSays != Verdict.ESCAPE) continue
+                    // The content of a <meta> may be a refresh, whose URL interpolate judges as any URL.
+                    issues +=
+                        if (refreshUrlStart(view, landing) { reading.prefix(k, k) }) schemeIssue("the URL of content") else unescaped()
                 }
 
                 Position.URL -> {
@@ -1410,14 +1466,7 @@ public class Analyzer(
                         } else if (urlSchemeFixedBy(attribute, before)) {
                             unescaped()
                         } else {
-                            issue(
-                                Severity.WARNING,
-                                "unsafe-interpolation",
-                                "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
-                                    "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
-                                    (if (canInterpolate) ", or build the string with $REFUSES_SCHEME." else ".") + inTheWay,
-                                rewritten(REFUSES_URL_TITLE),
-                            )
+                            schemeIssue(attribute)
                         }
                 }
 
@@ -1476,9 +1525,9 @@ public class Analyzer(
                             Severity.WARNING,
                             "unsafe-interpolation",
                             "Kotlin writes $shown into ${landing.attribute ?: "a script or style element"}, which the browser runs, " +
-                                "so escaping does not help. Put the value in a data-* attribute or a signal and read it from there." +
+                                "so escaping does not help. Put the value in a data-* attribute and read it from there." +
                                 if (vouch) " CSS you wrote yourself can be passed to interpolate(...) as Trusted(...)." else "",
-                            if (vouch) listOf(rewriteFix(trustedRewriteTitle(shown), false)) else emptyList(),
+                            if (vouch) listOf(rewriteFix(vouchedTitle, false)) else emptyList(),
                         )
                 }
 
@@ -1510,7 +1559,7 @@ public class Analyzer(
                                     if (fact.scalar()) Severity.HINT else Severity.WARNING,
                                     "unsafe-interpolation",
                                     "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
-                                    listOfNotNull(quoteFix(s, view, ip, inRawLiteral(src, s, ip))),
+                                    listOfNotNull(quoteFix(s, view, ip, s.rawAt(ip))),
                                 )
                             }
 
@@ -1527,25 +1576,74 @@ public class Analyzer(
                 }
             }
         }
-        val offered =
-            if (fixable) {
-                val first = vouched.minOrNull()?.let { trustedRewriteTitle(holeDisplay(s.interpolations[it])) }
-                rewriteFix(first ?: ESCAPES_TITLE, false)
-            } else {
-                null
-            }
-        return Judged(issues, offered)
+        // The context action is for a string some issue of which offers the rewrite: one with a value to escape.
+        val anywhere = if (offered) rewriteFix(if (vouched.isEmpty()) ESCAPES_TITLE else vouchedTitle, false) else null
+        return Judged(issues, anywhere)
     }
 
-    /** Whether the hole at [at] of the markup lands in the body of a `<style>`, which holds CSS, and not of a `<script>`. */
-    private fun inStyleBody(
+    /** The `<style>` or `<script>` whose body the value at [at] of the markup lands in, as the markup scan reads it, or null. */
+    private fun rawElement(
         view: String,
         landing: HoleLanding,
         at: Int,
+    ): String? {
+        if (landing.position != Position.CODE || landing.attribute != null) return null
+        var open: String? = null
+        for (tag in tokenize(view, false).tags) {
+            if (tag.start >= at) break
+            val name = tag.name.asciiLowercase()
+            if (tag.closing && name == open) {
+                open = null
+            } else if (!tag.closing && (name == "style" || name == "script")) {
+                open = name
+            }
+        }
+        return open
+    }
+
+    /** Whether a value after [before] in the `content` of a `<meta>` starts the URL a refresh reads: `0;url=`. */
+    private fun refreshUrlStart(
+        view: String,
+        landing: HoleLanding,
+        before: () -> String,
+    ): Boolean =
+        landing.attribute?.asciiLowercase() == "content" && landing.tagStart >= 0 && landing.valueStart >= 0 &&
+            view.startsWith("<meta", landing.tagStart, ignoreCase = true) &&
+            REFRESH_BEFORE_URL.matchEntire(decodeEntities(before()).text) != null
+
+    /** Whether the literal at [start] stands where Kotlin takes a constant alone: the argument of an annotation, or a `const val`. */
+    private fun constantOnly(
+        src: String,
+        start: Int,
     ): Boolean {
-        if (landing.position != Position.CODE || landing.attribute != null) return false
-        val before = view.substring(0, at).asciiLowercase()
-        return before.lastIndexOf("<style") > before.lastIndexOf("<script")
+        val before = src.substring(maxOf(0, start - 400), start)
+        if (CONST_VAL_BEFORE.containsMatchIn(before)) return true
+        // The bracket the literal is an argument in, and what it belongs to.
+        var depth = 0
+        for (k in before.indices.reversed()) {
+            when (before[k]) {
+                ')', ']' -> {
+                    depth++
+                }
+
+                '(', '[' -> {
+                    if (depth-- == 0) return ANNOTATION_BEFORE.containsMatchIn(before.substring(0, k))
+                }
+
+                '\n' -> {
+                    if (depth == 0 &&
+                        before
+                            .substring(0, k)
+                            .trimEnd()
+                            .lastOrNull()
+                            ?.let { it == ',' || it == '(' || it == '[' } != true
+                    ) {
+                        return false
+                    }
+                }
+            }
+        }
+        return false
     }
 
     /** Where a value interpolate refuses stands, as the issue of another value names it. */
@@ -1555,7 +1653,7 @@ public class Analyzer(
         at: Int,
     ): String =
         landing.attribute ?: when {
-            landing.position == Position.CODE -> if (inStyleBody(view, landing, at)) "a <style>" else "a <script>"
+            landing.position == Position.CODE -> "a <${rawElement(view, landing, at) ?: "script"}>"
             unquotedValueBefore(view, at) -> "an attribute value without quotes"
             else -> "the markup's structure"
         }
@@ -1599,9 +1697,8 @@ public class Analyzer(
         val fact = told.plain()
         if (position == Position.DATASTAR || position == Position.STYLE) return fact.interpolateTakesIn(position)
         if (position !in ESCAPED_POSITIONS) return false
-        // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
-        if (visiblyList(src, ip.text, s.start)) return false
-        if (told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))) return position == Position.TEXT
+        // A value that holds a Trusted among other things is escaped as a whole anywhere but in element text.
+        if (!told.isOther() && callsTrusted(src, ip.text)) return position == Position.TEXT
         if (fact.isMarkup()) return position != Position.TEXT || markupValued(src, s, ip)
         if (position == Position.TEXT && !fact.digitsOrBoolean() &&
             mayHoldMarkup(src, ip.text, s.start, opts.constants)
@@ -2167,20 +2264,27 @@ public data class SiteIssues(
     val rewrite: Fix? = null,
 )
 
-/** [Analyzer.rewriteAt] of a file whose [sites] are analysed already. */
+/**
+ * The rewrite of an HTML string to a call of `interpolate` that an editor offers as a context
+ * action for the caret or selection from [start] to [end] in a file whose [sites] are analysed:
+ * the selection lies in one string that has a value the rewrite escapes and whose values
+ * `interpolate` accepts, and no issue the selection touches offers the rewrite already. Null anywhere else.
+ */
 public fun rewriteAt(
     sites: List<SiteIssues>,
-    offset: Int,
+    start: Int,
+    end: Int = start,
 ): Fix? {
     // The innermost: a literal inside a template of another has a rewrite of its own.
     val site =
-        sites
-            .filter {
-                it.rewrite != null && offset in it.rewrite.start..it.rewrite.end
-            }.minByOrNull { it.rewrite!!.end - it.rewrite.start }
+        sites.filter { it.rewrite != null && start >= it.rewrite.start && end <= it.rewrite.end }.minByOrNull {
+            it.rewrite!!.end -
+                it.rewrite.start
+        }
             ?: return null
-    val offered = site.issues.any { i -> offset in i.start..i.end && i.fixes.any { it.title.startsWith(REWRITE_TITLE) } }
-    return site.rewrite.takeUnless { offered }
+    val rewrite = site.rewrite!!
+    val offered = site.issues.any { i -> i.start <= end && start <= i.end && i.fixes.any { it.sharesTextWith(rewrite) } }
+    return rewrite.takeUnless { offered }
 }
 
 /** The issues of the values of an HTML string, and its rewrite to `interpolate` where that can be offered. */

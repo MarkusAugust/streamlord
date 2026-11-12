@@ -59,7 +59,20 @@ public class Fix private constructor(
 
     override fun toString(): String = "Fix(title=$title, start=$start, end=$end, text=$text, edits=$edits, preferred=$preferred)"
 
+    /** Whether this fix and [other] write the same text, made once for both: the rewrite of a literal, offered from each of its values. */
+    internal fun sharesTextWith(other: Fix): Boolean = made === other.made
+
     internal companion object {
+        /** A fix whose text is [text], which other fixes share and which is made the first time one of them reads it. */
+        fun shared(
+            title: String,
+            start: Int,
+            end: Int,
+            edits: List<Edit>,
+            preferred: Boolean,
+            text: Lazy<String>,
+        ): Fix = Fix(title, start, end, text, edits, preferred)
+
         /** A fix whose text is made the first time it is read. */
         fun later(
             title: String,

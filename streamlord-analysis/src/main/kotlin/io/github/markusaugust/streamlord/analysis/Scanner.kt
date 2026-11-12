@@ -344,7 +344,7 @@ public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
-    if (textOpensWithTag(s.text)) return true
+    if (textOpensWithTag(markupView(src, s))) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
     val after = before.substring(last.range.last + 1)

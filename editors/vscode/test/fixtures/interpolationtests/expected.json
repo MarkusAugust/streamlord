@@ -212,7 +212,7 @@
     "end": 5296,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 133,
@@ -268,7 +268,7 @@
     "end": 1374,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 36,
@@ -475,7 +475,7 @@
     "end": 6187,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 160,
@@ -693,7 +693,7 @@
     "end": 4704,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 103,
@@ -743,7 +743,7 @@
     "end": 1393,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
    },
    {
     "line": 53,
@@ -1400,7 +1400,7 @@
     "end": 21958,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 558,
@@ -1409,7 +1409,7 @@
     "end": 21985,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $n into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $n into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 559,
@@ -1418,7 +1418,7 @@
     "end": 22015,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $maybe into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $maybe into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 560,
@@ -1427,7 +1427,7 @@
     "end": 22044,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $flag into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $flag into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 561,
@@ -1436,7 +1436,7 @@
     "end": 22074,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $html into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 577,
@@ -1445,7 +1445,7 @@
     "end": 22642,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 578,
@@ -1454,7 +1454,7 @@
     "end": 22673,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${n} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes ${n} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 579,
@@ -1463,7 +1463,7 @@
     "end": 22710,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${maybe} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes ${maybe} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 580,
@@ -1472,7 +1472,7 @@
     "end": 22744,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $flag into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $flag into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 581,
@@ -1481,7 +1481,7 @@
     "end": 22779,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $html into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 597,
@@ -1490,7 +1490,7 @@
     "end": 23362,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 598,
@@ -1499,7 +1499,7 @@
     "end": 23414,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $n into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $n into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 599,
@@ -1508,7 +1508,7 @@
     "end": 23469,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $maybe into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $maybe into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 600,
@@ -1517,7 +1517,7 @@
     "end": 23523,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $flag into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $flag into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 601,
@@ -1526,7 +1526,7 @@
     "end": 23578,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $html into onclick, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 617,
@@ -1535,7 +1535,7 @@
     "end": 24240,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $query into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 618,
@@ -1544,7 +1544,7 @@
     "end": 24289,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $n into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $n into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 619,
@@ -1553,7 +1553,7 @@
     "end": 24342,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $maybe into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $maybe into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 620,
@@ -1562,7 +1562,7 @@
     "end": 24394,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $flag into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $flag into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 621,
@@ -1571,7 +1571,7 @@
     "end": 24443,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes $html into srcdoc, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 637,
@@ -1850,7 +1850,7 @@
     "end": 29366,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
    },
    {
     "line": 777,
@@ -1859,7 +1859,7 @@
     "end": 29941,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
    },
    {
     "line": 797,
@@ -1868,7 +1868,7 @@
     "end": 30590,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
    },
    {
     "line": 820,
@@ -1922,7 +1922,7 @@
     "end": 32635,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $$query stands in data-text."
+    "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $$variant, which may be markup you built."
    },
    {
     "line": 852,
@@ -1976,7 +1976,7 @@
     "end": 34791,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${if (flag) \"<b>$query</b>\" els…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes ${if (flag) \"<b>$query</b>\" els…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) is not offered here: it would escape ${if (flag) \"<b>$query</b>\" els…}, which may be markup you built."
    },
    {
     "line": 899,
@@ -1994,7 +1994,7 @@
     "end": 35735,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${Trusted(query)} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${Trusted(query)} stands in data-text."
+    "message": "Kotlin writes ${Trusted(query)} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
    },
    {
     "line": 920,
@@ -2003,7 +2003,7 @@
     "end": 35798,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", quer…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${Trusted(query)} stands in data-text."
+    "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", quer…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) is not offered here: it would escape ${html.text}, which may be markup you built."
    },
    {
     "line": 921,
@@ -2012,7 +2012,7 @@
     "end": 35839,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${html.text} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${Trusted(query)} stands in data-text."
+    "message": "Kotlin writes ${html.text} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) is not offered here: it would escape ${html.text}, which may be markup you built."
    },
    {
     "line": 922,
@@ -2030,7 +2030,7 @@
     "end": 35957,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", n)} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute or a signal and read it from there."
+    "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", n)} into a script or style element, which the browser runs, so escaping does not help. Put the value in a data-* attribute and read it from there."
    },
    {
     "line": 937,

@@ -99,7 +99,9 @@ private fun render(
     val header = case.imports.joinToString("") { "import $it\n" } + "\n"
     val declares = if (case.declares.isEmpty()) "" else case.declares.trimEnd() + "\n"
     val source = header + declares + "fun f(${case.params}) = ${case.body}\n"
-    val opts = AnalyzeOptions(valueFact = { start, end -> case.fact.takeIf { source.substring(start, end).trim() in case.written } })
+    // The matrix gives the fact an editor that types the values would; any other case is read by its text alone.
+    val facts = { start: Int, end: Int -> case.fact.takeIf { source.substring(start, end).trim() in case.written } }
+    val opts = AnalyzeOptions(valueFact = facts.takeIf { case.written.isNotEmpty() })
     val sites = analyzer.analyzeKotlinSites(source, opts)
     val issues = sites.flatMap { it.issues }.sortedBy { it.start }
     val variants = ArrayList<Triple<String, Fix, Boolean>>()

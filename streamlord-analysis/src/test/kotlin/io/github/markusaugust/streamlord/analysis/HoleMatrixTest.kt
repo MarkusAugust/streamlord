@@ -12,7 +12,8 @@ import kotlin.test.assertEquals
 /**
  * Every place a Kotlin value can land, every kind of value and every way to write the literal,
  * against `cases/hole-matrix.json`. The suite reaches core, so it also holds the table to what
- * `interpolate` does with each value at run time, and runs the call each rewrite leaves.
+ * `interpolate` does with each value at run time. What each fix leaves is compiled and run by the
+ * rewrite-probes project, for every cell.
  */
 class HoleMatrixTest {
     private val analyzer = Analyzer()
@@ -45,7 +46,13 @@ class HoleMatrixTest {
             source =
                 imports.joinToString("") { "import $it\n" } + "\n" + value.string("declares").orEmpty() + "fun f($parameter) = $literal"
             val own = verdict?.obj("forms")?.obj(form.string("name")!!) ?: verdict
-            fixes = own?.array("fixes")?.objects()?.map { it.string("title")!!.replace("{shown}", shown) to it.boolean("preferred") }
+            // Under trimIndent no rewrite is preferred: a value with a line break changes what the trim removes.
+            val never = form.boolean("rewriteNeverPreferred") == true
+            fixes =
+                own?.array("fixes")?.objects()?.map {
+                    val title = it.string("title")!!.replace("{shown}", shown)
+                    title to it.boolean("preferred")?.let { preferred -> preferred && !(never && title.startsWith(REWRITE)) }
+                }
         }
 
         /** The issues of [text], the cell's source or what a fix left of it, with the editor's fact given for the value wherever it stands. */
@@ -161,7 +168,7 @@ class HoleMatrixTest {
     }
 
     @Test
-    fun `every fix offered leaves its issue gone and a call interpolate takes`() {
+    fun `every fix offered leaves its issue gone`() {
         val failures = ArrayList<String>()
         for (cell in cells()) {
             for (issue in cell.analyse(cell.source)) {
@@ -173,54 +180,10 @@ class HoleMatrixTest {
                         failures +=
                             "${cell.name}, ${fix.title}: leaves ${left.map { "${it.code} ${it.severity.name.lowercase()}" }} in $fixed"
                     }
-                    if ("= interpolate(" !in fixed) continue
-                    for (sample in samples(cell)) {
-                        val out =
-                            try {
-                                call(fixed, sample)
-                            } catch (e: UnsafeInterpolationException) {
-                                failures +=
-                                    "${cell.name}, ${fix.title}: the call throws for ${sample?.let { it::class.simpleName }}: ${e.message}"
-                                continue
-                            }
-                        val raw = if (sample is Trusted) sample.html else sample?.toString()
-                        if (fix.title == ESCAPES_TITLE && raw != null && '<' in raw && raw in out) {
-                            failures += "${cell.name}, ${fix.title}: the call writes ${sample!!::class.simpleName} as it is: $out"
-                        }
-                    }
                 }
             }
         }
         failed(failures)
-    }
-
-    /**
-     * What the `interpolate` call a rewrite left in [fixed] gives with [sample] for `v`: the format
-     * as the compiler reads the literal, trimmed where a trim call follows it, and the value as
-     * the call passes it, bare or as `Trusted(v)`.
-     */
-    private fun call(
-        fixed: String,
-        sample: Any?,
-    ): String {
-        val at = fixed.indexOf("= interpolate(")
-        val literals = lexKotlin(fixed).strings
-        var literal = literals.first { it.start > at }
-        var joined = literal.text
-        // A format of several literals joined with `+` is what they write one after the other.
-        while (fixed.startsWith(" + ", literal.end)) {
-            literal = literals.first { it.start == literal.end + 3 }
-            joined += literal.text
-        }
-        val rest = fixed.substring(literal.end)
-        val format = if (rest.startsWith(".trimIndent()")) joined.trimIndent() else joined
-        val value =
-            when (val argument = ARGUMENT.find(rest)?.groupValues?.get(1)) {
-                "v" -> sample
-                "Trusted(v)" -> Trusted(sample.toString())
-                else -> error("Unread argument $argument in $fixed")
-            }
-        return interpolate(format, value).text
     }
 
     private companion object {
@@ -229,6 +192,5 @@ class HoleMatrixTest {
 
         /** The value as each form writes it, and as a rewrite passes it. */
         val WRITTEN = setOf("\${v}", "\$\${v}", "v")
-        val ARGUMENT = Regex("""^(?:\.trimIndent\(\))?,\s*(.+)\)\.text\s*$""")
     }
 }
