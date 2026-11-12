@@ -30,6 +30,22 @@ All notable changes to Streamlord are recorded here. The format follows
   how the editor names its attribute prefix setting, which the warning about an aliased attribute
   points to. `Markup.validateAttributes` takes it last. Each has a default, the IntelliJ plugin's
   words, but code compiled against the old constructors needs a rebuild.
+- `AnalyzeOptions` in streamlord-analysis has one more value, `coreHtml`, last: `false` says the
+  project's core has no `Html` (it came in 0.16.0), and the advice for a value in an HTML string
+  then names `Trusted(...)` alone. `SiteIssues` has a fourth value, `rewrite`, and
+  `analyzeKotlinSites` now also lists an HTML string that has no issue and can be rewritten. Code
+  compiled against the old constructors needs a rebuild.
+- In both editors, the rewrite of an HTML string to `interpolate(...)` is offered for a value that
+  may be null, and not as the preferred fix: a template writes `null` for it and `interpolate`
+  nothing. It is no longer offered where the value in an attribute or at the start of a URL is
+  declared a `Trusted`, which `interpolate` neither escapes nor judges there.
+- A warning about a Kotlin value in element text, an attribute, a URL, `style`, a script or the
+  markup's structure links to [the page on HTML strings](https://streamlord-docs.netlify.app/strings/),
+  `Docs.STRINGS`, where it linked to Datastar's guide to expressions. One about a `data-*`
+  expression links there as before.
+- The message `interpolate` throws for a `String` in a `data-*` expression advises an attribute of
+  its own read with `el.dataset`, where it advised a signal, which a `String` written into
+  `data-signals` is refused for in the same way.
 
 ### Added
 
@@ -37,8 +53,27 @@ All notable changes to Streamlord are recorded here. The format follows
   `viewTransitionSelector`, sent as the header `datastar-view-transition-selector`, which
   Datastar 1.0.5 reads. It is sent only with `useViewTransition`, as in a stream.
   `DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR` names it.
+- In both editors, the rewrite of an HTML string to `interpolate(...)` is a context action
+  anywhere in a string whose values `interpolate` keeps, also where no value has a warning: among
+  the intentions in IntelliJ, as a refactoring in VS Code. streamlord-analysis has `rewriteAt` for it.
+- In both editors, a `data-*` name one edit from a Datastar attribute (a letter added, left out,
+  changed, or two swapped) gets a hint with the fix, where something says Datastar was meant: the
+  name has a key or a modifier, the value names a signal or an action, or the attribute stands
+  without a value as that Datastar attribute is written, as `data-persits` does. `data-test`,
+  `data-kind` and `data-unit` say nothing, as before.
 
 ### Fixed
+
+- In both editors, the rewrite of an HTML string to `interpolate(...)` is offered for a literal
+  with `.trimIndent()` or `.trimMargin()` after it, which stays on the format inside the call; for
+  a `$$"..."` literal, which keeps its prefix; and for literals joined to values with `+`, which
+  become one format. None of them was offered it.
+- In both editors, one value `interpolate` refuses no longer takes the rewrite from the others
+  without a word: the message of each other value names the value in the way and where it stands.
+  CSS in the body of a `<style>` can be passed as `Trusted(...)`: the fix is on that value, and
+  the rewrite then covers the whole string.
+- In both editors, a call to `interpolate` whose format has a trim call after it is checked as
+  any other. Nothing in it was.
 
 - In both editors, the text of a template literal is no longer said to be rewritten by Datastar:
   1.0.5 matches a template literal whole and rewrites only inside its `${...}`, so

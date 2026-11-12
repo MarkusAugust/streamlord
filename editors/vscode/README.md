@@ -74,8 +74,10 @@ template file; the id and completeness rules apply only where the string is hand
 **Quick fixes** on the lightbulb: `$count` becomes `increment("count")`, `signal("count")`,
 `toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`, `__debounce_150ms`
 becomes `__debounce.150ms` and `__prevent.stop` becomes `__prevent__stop`; `@Post` becomes
-`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added.
-Every diagnostic links to the matching page of the Datastar reference.
+`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added;
+an HTML string with Kotlin values in it becomes a call of `interpolate(...)`, which is also a
+refactoring anywhere in a string that can take it. Every diagnostic links to the matching page of
+the Datastar reference, or to Streamlord's page on HTML strings.
 
 **Snippets** for Ktor and Spring routes and the DSL calls in Kotlin, for a function that
 returns HTML as a `$$"""..."""` string (`htmlFunction`), and for every `data-*` attribute in

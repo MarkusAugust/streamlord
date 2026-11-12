@@ -74,6 +74,11 @@ judged on any one-letter slip, because `data-signal:name` is nobody's own attrib
 `data-signal` is left alone, because `data-animated` and `data-effects` are honest words in the
 same shape.
 
+The editors warn about the names the guard throws for, and go one step further with a hint, where
+a bare name one edit away shows that Datastar was meant: its value names a signal or an action,
+`data-shwo="$open"`, or it stands without a value as the attribute it is near is written,
+`data-persits`. `data-test="login"` says nothing there either.
+
 It is a small scan that builds no tree and copies no markup, and it skips `<script>` and `<style>`
 bodies. `ElementsGuard.check(html)` is also there to call directly, which is worth doing in the
 tests of your markup functions.
@@ -272,9 +277,17 @@ so `${if (blank) "nothing" else query}` is the `String` it may be.
 VS Code knows what the file it is in declares, each name in the scope it is declared in, and every
 `const val` in the workspace that the file does not declare as something else; IntelliJ also knows
 the types, and what it knows of a value comes before anything the text suggests. Nothing here is an error, because a value the text cannot see into may well
-be a number. The `interpolate(...)` fix is offered only when the rewrite keeps the page as it was,
-escaping aside: not when a value may be null, which a template writes as `null` and `interpolate`
-as nothing, nor when a value in element text may be markup, which `interpolate` would escape.
+be a number. The `interpolate(...)` fix is offered wherever `interpolate` keeps every value of the
+string. A `.trimIndent()` or `.trimMargin()` after the literal stays on the format, inside the
+call; a `$$"..."` literal keeps its prefix; and literals joined to values with `+` become one
+format. It is not offered when a value in element text may be markup, which `interpolate` would
+escape. For a value that may be null, which a template writes as `null` and `interpolate` as
+nothing, it is offered and not put first. When `interpolate` refuses one value where it stands, in
+a `data-*` expression, in `style`, in a script or in the markup's structure, the string cannot be
+rewritten, and the message of each other value says which value is in the way. CSS in the body of
+a `<style>` is the exception: the fix on that value passes it as `Trusted(...)`, your word that
+the CSS is yours. Anywhere in a string that can take the rewrite it is also a context action:
+among the intentions in IntelliJ, under Refactor in VS Code.
 For a `String` in element text the editors cannot tell which you hold, so they offer both the
 rewrite and "Mark … as markup", which wraps the value in `Trusted(...)`, and put neither first:
 text from outside wants the rewrite, a fragment you rendered yourself wants `Trusted`, or better,
