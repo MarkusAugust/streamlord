@@ -59,4 +59,23 @@ class UiThreadTest : StreamlordTestCase() {
         assertEquals("fun h() = patchSignals(mapOf(\"total\" to 1))", view.text)
         assertEquals(0, UiThreadWork.count.get() - before)
     }
+
+    // The action was found for the text before the edit: applying it reads the text as it is now, in the background.
+    fun `test the rewrite to interpolate applied after an edit analyses nothing on the UI thread`() {
+        myFixture.configureByText("Applied.kt", "fun card(name: String): String = \"<p cl<caret>ass=\\\"x\\\">\$name</p>\"")
+        val action = myFixture.availableIntentions.first { it.text.startsWith("Build this string with interpolate(...)") }
+        val document = myFixture.editor.document
+        WriteCommandAction.runWriteCommandAction(project) { document.insertString(document.textLength, "\n") }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+        val before = UiThreadWork.count.get()
+
+        myFixture.launchAction(action)
+
+        assertEquals(
+            "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
+                "fun card(name: String): String = interpolate(\"<p class=\\\"x\\\">%s</p>\", name).text\n",
+            document.text,
+        )
+        assertEquals(0, UiThreadWork.count.get() - before)
+    }
 }

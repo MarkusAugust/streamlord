@@ -80,16 +80,19 @@ class RewriteActionTest : StreamlordTestCase() {
         )
     }
 
-    fun `test the rewrite is a context action where no value has a warning`() {
+    fun `test no rewrite is offered where no value of the string is escaped`() {
         myFixture.configureByText("Total.kt", "fun total(count: Int): String = \"<p>to<caret>tal \$count</p>\"")
-        assertEmpty(myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" })
-        val offered = myFixture.availableIntentions
-        val action = offered.firstOrNull { it.text.startsWith("Build this string with interpolate(...)") }
-        assertNotNull(offered.map { it.text }.toString(), action)
-        myFixture.launchAction(action!!)
+        assertEmpty(myFixture.availableIntentions.filter { it.text.startsWith("Build this string with interpolate(...)") })
+    }
+
+    fun `test the rewrite is offered for a selection inside the string`() {
+        myFixture.configureByText("Card.kt", "fun card(name: String): String = \"<selection><p class</selection>=\\\"x\\\">\$name</p>\"")
+        val offered = myFixture.availableIntentions.filter { it.text.startsWith("Build this string with interpolate(...)") }
+        assertEquals(1, offered.size)
+        myFixture.launchAction(offered.single())
         myFixture.checkResult(
             "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
-                "fun total(count: Int): String = interpolate(\"<p>total %s</p>\", count).text",
+                "fun card(name: String): String = interpolate(\"<p class=\\\"x\\\">%s</p>\", name).text",
         )
     }
 }
