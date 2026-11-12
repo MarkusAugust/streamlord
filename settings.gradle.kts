@@ -16,6 +16,7 @@ rootProject.name = "streamlord"
 include(
     "demo",
     "docs-samples",
+    "rewrite-probes",
     "streamlord-core",
     "streamlord-analysis",
     "streamlord-html",

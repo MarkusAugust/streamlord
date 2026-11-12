@@ -18,6 +18,7 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 | `conformance/` | what the client and the servers actually do, as fixtures the tests hold Streamlord to; see below |
 | `docs/` | this project's documentation site (Astro, LO-TEK, Datastar) |
 | `demo/` | `streamlord-live`, the service behind the site's live examples and search |
+| `rewrite-probes/` | compiles HTML strings as written and as each fix of the editors' analysis leaves them, against core, and runs both; the cases are `editors/vscode/test/fixtures/cases/rewrite-probes.json` and every cell of `hole-matrix.json` |
 | `docs-samples/` | compiles every Kotlin example in the documentation, and generates the wire examples the pages show |
 
 ## Building and releasing
