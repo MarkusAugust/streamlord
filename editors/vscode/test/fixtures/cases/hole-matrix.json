@@ -65,7 +65,7 @@
       "a boolean": null,
       "a nullable number": null,
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
-      "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
+      "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]}

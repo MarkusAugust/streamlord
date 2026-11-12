@@ -131,7 +131,7 @@
     "end": 3519,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $error stands in data-on:click."
    },
    {
     "line": 90,
@@ -167,7 +167,7 @@
     "end": 4671,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while the value `query` stands in style."
    },
    {
     "line": 110,
@@ -185,7 +185,7 @@
     "end": 4747,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while the value `query` stands in style."
    },
    {
     "line": 120,
@@ -194,7 +194,7 @@
     "end": 5196,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in a <script>."
    },
    {
     "line": 121,
@@ -203,7 +203,7 @@
     "end": 5247,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in a <script>."
    },
    {
     "line": 122,
@@ -394,7 +394,7 @@
     "end": 4444,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $error stands in data-on:click."
    },
    {
     "line": 116,
@@ -430,7 +430,7 @@
     "end": 5627,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while the value `query` stands in style."
    },
    {
     "line": 138,
@@ -448,7 +448,7 @@
     "end": 5703,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while the value `query` stands in style."
    },
    {
     "line": 148,
@@ -457,7 +457,7 @@
     "end": 6087,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in a <script>."
    },
    {
     "line": 149,
@@ -466,7 +466,7 @@
     "end": 6138,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in a <script>."
    },
    {
     "line": 150,
@@ -621,7 +621,7 @@
     "end": 3198,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $error into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $error stands in data-on:click."
    },
    {
     "line": 69,
@@ -666,7 +666,7 @@
     "end": 4262,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes the value `applicant.name` into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while the value `query` stands in style."
    },
    {
     "line": 93,
@@ -675,7 +675,7 @@
     "end": 4600,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes ${applicant.name} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in a <script>."
    },
    {
     "line": 94,
@@ -684,7 +684,7 @@
     "end": 4653,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $count into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in a <script>."
    },
    {
     "line": 95,
@@ -723,7 +723,7 @@
     "end": 1994,
     "code": "unescaped-interpolation",
     "severity": "hint",
-    "message": "Kotlin writes ${everything(query)} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes ${everything(query)} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $query stands in data-init."
    },
    {
     "line": 41,
@@ -1877,7 +1877,7 @@
     "end": 31511,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${query} stands in data-text."
    },
    {
     "line": 821,
@@ -1886,7 +1886,7 @@
     "end": 31559,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) cannot take this string while ${query} stands in data-text."
    },
    {
     "line": 822,
@@ -1913,7 +1913,7 @@
     "end": 31872,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${query} stands in data-text."
    },
    {
     "line": 845,
@@ -1922,7 +1922,7 @@
     "end": 32635,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $$query stands in data-text."
    },
    {
     "line": 852,
@@ -1994,7 +1994,7 @@
     "end": 35735,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${Trusted(query)} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes ${Trusted(query)} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${Trusted(query)} stands in data-text."
    },
    {
     "line": 920,
@@ -2003,7 +2003,7 @@
     "end": 35798,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", quer…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes ${interpolate(\"<b>%s</b>\", quer…} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${Trusted(query)} stands in data-text."
    },
    {
     "line": 921,
@@ -2012,7 +2012,7 @@
     "end": 35839,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${html.text} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes ${html.text} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${Trusted(query)} stands in data-text."
    },
    {
     "line": 922,
@@ -2039,7 +2039,7 @@
     "end": 36729,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${if (flag) \"nothing\" else query} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes ${if (flag) \"nothing\" else query} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${if (flag) \"red\" else \"blue\"} stands in style."
    },
    {
     "line": 938,
@@ -2066,7 +2066,7 @@
     "end": 37099,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${if (flag) html else \"\"} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes ${if (flag) html else \"\"} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${if (flag) \"red\" else \"blue\"} stands in style."
    },
    {
     "line": 957,
@@ -2075,7 +2075,7 @@
     "end": 37784,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${when (n) { 0 -> \"none\"; else …} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes ${when (n) { 0 -> \"none\"; else …} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${when { flag -> \"red\"; else ->…} stands in style."
    },
    {
     "line": 958,

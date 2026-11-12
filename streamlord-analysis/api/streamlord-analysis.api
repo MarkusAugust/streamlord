@@ -37,8 +37,8 @@ public final class io/github/markusaugust/streamlord/analysis/ActionSpec {
 
 public final class io/github/markusaugust/streamlord/analysis/AnalyzeOptions {
 	public fun <init> ()V
-	public fun <init> (Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Z
 	public final fun component3 ()Ljava/util/Set;
@@ -47,12 +47,14 @@ public final class io/github/markusaugust/streamlord/analysis/AnalyzeOptions {
 	public final fun component6 ()Ljava/lang/Boolean;
 	public final fun component7 ()Ljava/util/Set;
 	public final fun component8 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;
+	public final fun component9 ()Ljava/lang/Boolean;
+	public final fun copy (Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;Ljava/lang/Boolean;)Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;Ljava/lang/String;ZLjava/util/Set;Lkotlin/jvm/functions/Function2;Ljava/lang/Boolean;Ljava/lang/Boolean;Ljava/util/Set;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCheckHtmlAttributes ()Z
 	public final fun getConstants ()Ljava/util/Set;
 	public final fun getCore ()Ljava/lang/Boolean;
+	public final fun getCoreHtml ()Ljava/lang/Boolean;
 	public final fun getForeignCalls ()Ljava/util/Set;
 	public final fun getHtmlDsl ()Ljava/lang/Boolean;
 	public final fun getPrefix ()Ljava/lang/String;
@@ -80,12 +82,18 @@ public final class io/github/markusaugust/streamlord/analysis/Analyzer {
 	public final fun getDslNames ()Ljava/util/Set;
 	public final fun htmlStringAt (Ljava/lang/String;I)Lio/github/markusaugust/streamlord/analysis/KotlinString;
 	public final fun lex (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/KotlinLex;
+	public final fun rewriteAt (Ljava/lang/String;ILio/github/markusaugust/streamlord/analysis/AnalyzeOptions;)Lio/github/markusaugust/streamlord/analysis/Fix;
+	public static synthetic fun rewriteAt$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;ILio/github/markusaugust/streamlord/analysis/AnalyzeOptions;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Fix;
 	public final fun signalReferencesInHtml (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;)Ljava/util/List;
 	public static synthetic fun signalReferencesInHtml$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;ILjava/lang/Object;)Ljava/util/List;
 	public final fun signalReferencesInKotlin (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;)Ljava/util/List;
 	public static synthetic fun signalReferencesInKotlin$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/AnalyzeOptions;ILjava/lang/Object;)Ljava/util/List;
 	public final fun validateExpression (Ljava/lang/String;)Ljava/util/List;
 	public final fun validateMarkup (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/MarkupOptions;)Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/AnalyzerKt {
+	public static final fun rewriteAt (Ljava/util/List;I)Lio/github/markusaugust/streamlord/analysis/Fix;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/Arg {
@@ -310,6 +318,7 @@ public final class io/github/markusaugust/streamlord/analysis/Docs {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/Docs;
 	public static final field SIGNALS Ljava/lang/String;
 	public static final field SSE Ljava/lang/String;
+	public static final field STRINGS Ljava/lang/String;
 	public final fun attribute (Ljava/lang/String;)Ljava/lang/String;
 }
 
@@ -1241,14 +1250,17 @@ public final class io/github/markusaugust/streamlord/analysis/SignalsKt {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/SiteIssues {
-	public fun <init> (Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;)V
+	public fun <init> (Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/Fix;)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/Fix;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lio/github/markusaugust/streamlord/analysis/CallSite;
 	public final fun component2 ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
 	public final fun component3 ()Ljava/util/List;
-	public final fun copy (Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/SiteIssues;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/SiteIssues;Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/SiteIssues;
+	public final fun component4 ()Lio/github/markusaugust/streamlord/analysis/Fix;
+	public final fun copy (Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/Fix;)Lio/github/markusaugust/streamlord/analysis/SiteIssues;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/SiteIssues;Lio/github/markusaugust/streamlord/analysis/CallSite;Lio/github/markusaugust/streamlord/analysis/KotlinString;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/Fix;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/SiteIssues;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getIssues ()Ljava/util/List;
+	public final fun getRewrite ()Lio/github/markusaugust/streamlord/analysis/Fix;
 	public final fun getSite ()Lio/github/markusaugust/streamlord/analysis/CallSite;
 	public final fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
 	public fun hashCode ()I

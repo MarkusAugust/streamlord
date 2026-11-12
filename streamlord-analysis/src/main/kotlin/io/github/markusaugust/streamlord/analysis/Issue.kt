@@ -143,8 +143,10 @@ public fun sourcePosition(
     return SourcePosition(line, at - lineStart + 1)
 }
 
-/** Where the diagnostics point in the Datastar reference. */
+/** Where the diagnostics point: in the Datastar reference, and for a Kotlin value in an HTML string in Streamlord's own documentation. */
 public object Docs {
+    /** Streamlord's page on HTML strings and `interpolate`. */
+    public const val STRINGS: String = "https://streamlord-docs.netlify.app/strings/"
     public const val ATTRIBUTES: String = "https://data-star.dev/reference/attributes"
     public const val ACTIONS: String = "https://data-star.dev/reference/actions"
     public const val SSE: String = "https://data-star.dev/reference/sse_events"

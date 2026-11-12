@@ -35,6 +35,8 @@ public data class AnalyzeOptions(
     val foreignCalls: Set<Int> = emptySet(),
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,
+    /** Whether the project's core has `Html`, which came in 0.16.0 and a message may send the author to; null counts as having it. */
+    val coreHtml: Boolean? = null,
 )
 
 /** The setting as the IntelliJ plugin's settings page shows it. */
@@ -239,6 +241,17 @@ public class Analyzer(
         opts: AnalyzeOptions = AnalyzeOptions(),
     ): List<ProjectIssue> = issuesUnder(root, opts, SKIPPED_FOLDERS)
 
+    /**
+     * The rewrite of an HTML string to a call of `interpolate` that an editor offers at [offset] as
+     * a context action: the string there has values and `interpolate` keeps them all, and no issue
+     * under the caret offers the rewrite already. Null anywhere else.
+     */
+    public fun rewriteAt(
+        src: String,
+        offset: Int,
+        opts: AnalyzeOptions = AnalyzeOptions(),
+    ): Fix? = rewriteAt(analyzeKotlinSites(src, opts), offset)
+
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(
         src: String,
@@ -258,8 +271,8 @@ public class Analyzer(
             if (foreign(site.name, site.nameStart)) continue
             val issues = ArrayList<Issue>()
             catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, hyphenated, opts, siteHelpers) }
-            val html = catalog.htmlCallSites[site.name]
-            html?.let { issues += checkHtmlSite(site, it, opts, src, hyphenated) }
+            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, hyphenated) }
+            html?.let { issues += it.issues }
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
@@ -267,7 +280,7 @@ public class Analyzer(
             for (judged in judgedStrings(site, src)) {
                 for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
             }
-            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
+            if (issues.isNotEmpty() || html?.rewrite != null) out += SiteIssues(site, null, issues, html?.rewrite)
         }
         // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
         // declares, since the text cannot tell whether the call fits it.
@@ -305,8 +318,8 @@ public class Analyzer(
             val whole = chain ?: s
             if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
-            val issues = checkFreeHtmlString(whole, opts, src, hyphenated)
-            if (issues.isNotEmpty()) out += SiteIssues(null, whole, issues)
+            val judged = checkFreeHtmlString(whole, opts, src, hyphenated)
+            if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
         return out
     }
@@ -671,11 +684,11 @@ public class Analyzer(
         opts: AnalyzeOptions,
         src: String,
         hyphenated: Set<String>,
-    ): List<Issue> {
+    ): Judged {
         val view = markupView(src, s)
-        val issues = ArrayList(judgeHoles(s, src, opts, view))
-        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false))
-        return issues
+        val judged = judgeHoles(s, src, opts, view)
+        if (!opts.checkHtmlAttributes) return judged
+        return Judged(judged.issues + mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false)), judged.rewrite)
     }
 
     /** The format handed to `interpolate`: its first argument or `format =`, a literal or a `+` chain that starts with one. */
@@ -687,6 +700,8 @@ public class Analyzer(
         arg.string?.let { return if (it.unterminated) null else arg to it }
         val lex = lex(src)
         val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
+        // A trim call leaves each placeholder where it stood.
+        if (!first.unterminated && TRIM_AFTER.matchAt(src, first.end)?.let { first.end + it.value.length } == arg.end) return arg to first
         val chain = chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end } ?: return null
         return arg to chain
     }
@@ -1254,8 +1269,8 @@ public class Analyzer(
         src: String,
         opts: AnalyzeOptions,
         view: String,
-    ): List<Issue> {
-        if (s.interpolations.isEmpty()) return emptyList()
+    ): Judged {
+        if (s.interpolations.isEmpty()) return Judged(emptyList(), null)
         val trapOf = traps(s, src)
         // Without core there is no interpolate to build the string with, and Trusted is not Streamlord's.
         val sdk = Sdk.of(opts)
@@ -1281,17 +1296,37 @@ public class Analyzer(
         val landings = reading.landings
         val told = s.interpolations.map { holeFact(s, src, opts, it) }
         val starts = s.interpolations.map { it.decodedStart }
+        val holes = s.interpolations.indices
+        // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
+        val loose = holes.map { k -> hostUnfixed(reading, starts, k) { true } }
+        val keeps = holes.map { k -> !loose[k] && interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) }
+        // CSS in the body of a <style> is the author's to vouch for: the rewrite passes it as Trusted(...), which takes
+        // a String. An editor that types the values says which are; the text alone leaves most unknown.
+        val vouched =
+            holes.filterTo(HashSet()) { k ->
+                canTrust && !keeps[k] && (told[k].isString() || (told[k] == null && opts.valueFact == null)) &&
+                    inStyleBody(view, landings[k], starts[k]) && !mayBeNull(src, s.interpolations[k].text, s.start)
+            }
+        // A trim call stays on the format, inside the call; one whose argument is no literal is not read.
+        val trim = TRIM_AFTER.matchAt(src, s.end)?.value
+        val joined = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
         // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
         val fixable =
             canInterpolate &&
-                s.dollars == 1 &&
-                !trimmed(src, s) &&
-                s.interpolations.none { it.kind == InterpolationKind.OPERAND } &&
-                s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) } &&
-                // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
-                s.interpolations.indices.none { k -> hostUnfixed(reading, starts, k) { true } }
+                (if (joined) !trimmed(src, s) && oneForm(src, s) else trim != null || !trimmed(src, s)) &&
+                holes.all { keeps[it] || it in vouched }
         // The rewrite is made once for the literal, and only when a fix is applied.
-        val rewrite = interpolateText(src, s)
+        val rewrite = interpolateText(src, s, trim.orEmpty(), vouched)
+        // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
+        // value, nor where one may be null, which a template writes as `null` and interpolate as nothing.
+        val same =
+            vouched.isEmpty() &&
+                holes.none { told[it].isNullable() || told[it].isNullableString() || mayBeNull(src, s.interpolations[it].text, s.start) }
+
+        fun rewriteFix(
+            title: String,
+            preferred: Boolean,
+        ): Fix = interpolateFix(src, s, s.end + (trim?.length ?: 0), rewrite, title, preferred && same, vouched.isNotEmpty())
         val issues = ArrayList<Issue>()
         for ((k, ip) in s.interpolations.withIndex()) {
             if (k in written) continue
@@ -1304,14 +1339,26 @@ public class Analyzer(
             fun rewritten(
                 title: String,
                 preferred: Boolean = true,
-            ): List<Fix> = if (fixable) listOf(interpolateFix(src, s, rewrite, title, preferred)) else emptyList()
+            ): List<Fix> = if (fixable) listOf(rewriteFix(title, preferred)) else emptyList()
+
+            val link = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
+
+            // Why another value keeps the rewrite from this one: the first that interpolate refuses where it stands.
+            val inTheWay =
+                holes
+                    .firstOrNull { it != k && !keeps[it] && (loose[it] || landings[it].position !in ESCAPED_POSITIONS) }
+                    ?.takeIf { canInterpolate }
+                    ?.let {
+                        " interpolate(...) cannot take this string while ${holeDisplay(s.interpolations[it], s.dollars)} stands in " +
+                            "${refusedPlace(view, landings[it], starts[it])}."
+                    }.orEmpty()
 
             fun issue(
                 severity: Severity,
                 code: String,
                 message: String,
                 fixes: List<Fix> = emptyList(),
-            ): Issue = Issue(ip.start, ip.end, message, severity, code, Docs.EXPRESSIONS, fixes)
+            ): Issue = Issue(ip.start, ip.end, message, severity, code, link, fixes)
 
             fun unescaped(): Issue {
                 // A String in element text may be markup the author built, which only the author knows: then
@@ -1337,8 +1384,8 @@ public class Analyzer(
                     )
                 }
                 val fixes = rewritten(ESCAPES_TITLE, !trust) + if (trust && canTrust) listOf(trustedFix(src, s, ip, shown)) else emptyList()
-                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust)
-                return issue(severity, "unescaped-interpolation", message, fixes)
+                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.coreHtml != false)
+                return issue(severity, "unescaped-interpolation", message + inTheWay, fixes)
             }
             when (landing.position) {
                 Position.TEXT, Position.ATTRIBUTE -> {
@@ -1361,7 +1408,7 @@ public class Analyzer(
                                 "unsafe-interpolation",
                                 "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
                                     "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
-                                    if (canInterpolate) ", or build the string with $REFUSES_SCHEME." else ".",
+                                    (if (canInterpolate) ", or build the string with $REFUSES_SCHEME." else ".") + inTheWay,
                                 rewritten(REFUSES_URL_TITLE),
                             )
                         }
@@ -1416,12 +1463,15 @@ public class Analyzer(
 
                 Position.CODE -> {
                     if (factSays == Verdict.SAFE) continue
+                    val vouch = fixable && k in vouched
                     issues +=
                         issue(
                             Severity.WARNING,
                             "unsafe-interpolation",
                             "Kotlin writes $shown into ${landing.attribute ?: "a script or style element"}, which the browser runs, " +
-                                "so escaping does not help. Put the value in a data-* attribute or a signal and read it from there.",
+                                "so escaping does not help. Put the value in a data-* attribute or a signal and read it from there." +
+                                if (vouch) " CSS you wrote yourself can be passed to interpolate(...) as Trusted(...)." else "",
+                            if (vouch) listOf(rewriteFix(trustedRewriteTitle(shown), false)) else emptyList(),
                         )
                 }
 
@@ -1470,8 +1520,38 @@ public class Analyzer(
                 }
             }
         }
-        return issues
+        val offered =
+            if (fixable) {
+                val first = vouched.minOrNull()?.let { trustedRewriteTitle(holeDisplay(s.interpolations[it], s.dollars)) }
+                rewriteFix(first ?: ESCAPES_TITLE, false)
+            } else {
+                null
+            }
+        return Judged(issues, offered)
     }
+
+    /** Whether the hole at [at] of the markup lands in the body of a `<style>`, which holds CSS, and not of a `<script>`. */
+    private fun inStyleBody(
+        view: String,
+        landing: HoleLanding,
+        at: Int,
+    ): Boolean {
+        if (landing.position != Position.CODE || landing.attribute != null) return false
+        val before = view.substring(0, at).asciiLowercase()
+        return before.lastIndexOf("<style") > before.lastIndexOf("<script")
+    }
+
+    /** Where a value interpolate refuses stands, as the issue of another value names it. */
+    private fun refusedPlace(
+        view: String,
+        landing: HoleLanding,
+        at: Int,
+    ): String =
+        landing.attribute ?: when {
+            landing.position == Position.CODE -> if (inStyleBody(view, landing, at)) "a <style>" else "a <script>"
+            unquotedValueBefore(view, at) -> "an attribute value without quotes"
+            else -> "the markup's structure"
+        }
 
     /** Whether [at] in the markup is inside an attribute value written without quotes: `x=$q`. */
     private fun unquotedValueBefore(
@@ -1496,10 +1576,10 @@ public class Analyzer(
 
     /**
      * Whether `interpolate(...)` writes the value as the template does, escaped at most, so the
-     * rewrite keeps the page: anything it admits where it lands, but not a value that may be null
-     * (a template writes `null`, interpolate nothing), a `Trusted` outside element text (it is not
-     * escaped there, so the rewrite would fix nothing), nor markup held as a String in element text,
-     * which it would escape.
+     * rewrite keeps the page: anything it admits where it lands, but not a `Trusted` outside element
+     * text (it is not escaped there, so the rewrite would fix nothing), nor markup held as a String
+     * in element text, which it would escape. A value that may be null is kept: a template writes
+     * `null` for it, which no page means, and interpolate nothing.
      */
     private fun interpolateKeeps(
         src: String,
@@ -1512,10 +1592,9 @@ public class Analyzer(
         val fact = told.plain()
         if (position == Position.DATASTAR || position == Position.STYLE) return fact.interpolateTakesIn(position)
         if (position !in ESCAPED_POSITIONS) return false
-        if (fact.isNullable() || told.isNullableString() || mayBeNull(src, ip.text, s.start)) return false
         // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
         if (visiblyList(src, ip.text, s.start)) return false
-        if (!told.isOther() && callsTrusted(src, ip.text)) return position == Position.TEXT
+        if (!told.isOther() && trustedValue(src, ip.text, s.start)) return position == Position.TEXT
         if (fact.isMarkup()) return position != Position.TEXT || markupValued(src, s, ip)
         if (position == Position.TEXT && !fact.digitsOrBoolean() &&
             mayHoldMarkup(src, ip.text, s.start, opts.constants)
@@ -1548,7 +1627,8 @@ public class Analyzer(
     /**
      * What a value written into the HTML as it is can do, and what to write instead: [interpolate]
      * and [trusted] say whether a fix may name `interpolate` and `Trusted` in this file, which
-     * plain Kotlin and kotlinx.html stand in for where it may not.
+     * plain Kotlin and kotlinx.html stand in for where it may not, and [html] whether the project's
+     * core has `Html` to declare.
      */
     private fun unescapedMessage(
         shown: String,
@@ -1556,6 +1636,7 @@ public class Analyzer(
         text: Boolean,
         interpolate: Boolean,
         trusted: Boolean,
+        html: Boolean = true,
     ): String {
         // Markup an attribute holds is only characters, whose quotes end the value: that it is markup is the problem.
         if (markup) {
@@ -1571,7 +1652,7 @@ public class Analyzer(
                         if (text) "text" else "attribute values"
                 }
         if (!text) return "$base."
-        val built = if (trusted) "declare it Html or wrap it in Trusted(...)" else "this is fine"
+        val built = if (!trusted) "this is fine" else (if (html) "declare it Html or " else "") + "wrap it in Trusted(...)"
         return "$base; if it is markup you built, $built."
     }
 
@@ -1750,10 +1831,10 @@ public class Analyzer(
         opts: AnalyzeOptions,
         src: String,
         hyphenated: Set<String>,
-    ): List<Issue> {
+    ): Judged {
         val s = markupString(site, spec, src)
-        if (s == null && !site.trailingLambda) return emptyList()
-        if (s != null && s.unterminated) return emptyList()
+        if (s == null && !site.trailingLambda) return Judged(emptyList(), null)
+        if (s != null && s.unterminated) return Judged(emptyList(), null)
         // In every signature the selector and the mode follow the elements, so they may be given by
         // position. A trailing lambda holds the elements, so the selector comes first.
         val elements =
@@ -1773,7 +1854,8 @@ public class Analyzer(
                 if (name == "default") "outer" else name?.takeIf { it in catalog.patchModes }
             }
         val view = s?.let { markupView(src, it) } ?: ""
-        val issues = ArrayList(s?.let { judgeHoles(it, src, opts, view) }.orEmpty())
+        val judged = s?.let { judgeHoles(it, src, opts, view) }
+        val issues = ArrayList(judged?.issues.orEmpty())
         if (modeArg != null && mode != null && mode != "outer" && mode != "replace" && selector == null) {
             val assign = ASSIGN_BEFORE.find(src.substring(0, modeArg.start))?.value?.length ?: 0
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
@@ -1808,7 +1890,7 @@ public class Analyzer(
                     ),
                 )
         }
-        return issues
+        return Judged(issues, judged?.rewrite)
     }
 
     /**
@@ -2067,11 +2149,37 @@ public data class AttributesIndex(
     val whole: Boolean,
 )
 
-/** The issues that belong to one DSL call, or to one free-standing HTML string. */
+/**
+ * The issues that belong to one DSL call, or to one free-standing HTML string, and the [rewrite]
+ * of its HTML string to a call of `interpolate`, where every value in it is one `interpolate` keeps.
+ */
 public data class SiteIssues(
     val site: CallSite?,
     val string: KotlinString?,
     val issues: List<Issue>,
+    val rewrite: Fix? = null,
+)
+
+/** [Analyzer.rewriteAt] of a file whose [sites] are analysed already. */
+public fun rewriteAt(
+    sites: List<SiteIssues>,
+    offset: Int,
+): Fix? {
+    // The innermost: a literal inside a template of another has a rewrite of its own.
+    val site =
+        sites
+            .filter {
+                it.rewrite != null && offset in it.rewrite.start..it.rewrite.end
+            }.minByOrNull { it.rewrite!!.end - it.rewrite.start }
+            ?: return null
+    val offered = site.issues.any { i -> offset in i.start..i.end && i.fixes.any { it.title.startsWith(REWRITE_TITLE) } }
+    return site.rewrite.takeUnless { offered }
+}
+
+/** The issues of the values of an HTML string, and its rewrite to `interpolate` where that can be offered. */
+internal class Judged(
+    val issues: List<Issue>,
+    val rewrite: Fix?,
 )
 
 internal fun String.lastNonSpaceBefore(index: Int): Char? {

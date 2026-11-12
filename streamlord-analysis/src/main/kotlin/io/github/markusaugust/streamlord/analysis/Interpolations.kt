@@ -77,7 +77,7 @@ internal fun markupView(
     return out.toString()
 }
 
-/** Whether a trim call follows the literal, which `interpolate`'s rewrite cannot move without changing the output. */
+/** Whether a trim call follows the literal. */
 internal fun trimmed(
     src: String,
     s: KotlinString,
@@ -1919,58 +1919,112 @@ internal fun chainFrom(
 
 private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 
+/** How every title of the rewrite to `interpolate` starts. */
+internal const val REWRITE_TITLE = "Build it with interpolate(...)"
+
 /** The title of the rewrite to `interpolate` where the hole is a value it escapes. */
-internal const val ESCAPES_TITLE = "Build it with interpolate(...), which escapes the values"
+internal const val ESCAPES_TITLE = "$REWRITE_TITLE, which escapes the values"
 
 /** Its title where the hole starts a URL, which escaping does not help but interpolate refuses when it would run. */
-internal const val REFUSES_URL_TITLE = "Build it with interpolate(...), which refuses a URL that runs"
+internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that runs"
+
+/** The title of the rewrite that passes the value shown as [shown] as `Trusted(...)`: CSS in the body of a `<style>`, which the author vouches for. */
+internal fun trustedRewriteTitle(shown: String): String = "$REWRITE_TITLE, with $shown as Trusted(...)"
+
+/** Whether one literal can hold what the `+` chain [s] writes: its literals are written alike, raw or not, with as many dollars. */
+internal fun oneForm(
+    src: String,
+    s: KotlinString,
+): Boolean {
+    val literals = ArrayList<KotlinString>()
+    chainParts(src, s, {}, {}) { literals += it }
+    return literals.all { it.raw == literals[0].raw && it.dollars == literals[0].dollars }
+}
+
+/** Walks the literal or `+` chain [s] in source order: each value joined with `+`, each literal, and what stands between them. */
+private inline fun chainParts(
+    src: String,
+    s: KotlinString,
+    between: (Char) -> Unit,
+    operand: (Interpolation) -> Unit,
+    literal: (KotlinString) -> Unit,
+) {
+    val operands = s.interpolations.filter { it.kind == InterpolationKind.OPERAND }.associateBy { it.start }
+    var at = s.start
+    while (at < s.end) {
+        val value = operands[at]
+        if (value != null) {
+            operand(value)
+            at = value.end
+            continue
+        }
+        val read = if (isStringStart(src, at)) readKotlinStringAt(src, at) else null
+        if (read == null) {
+            between(src[at++])
+        } else {
+            literal(read)
+            at = read.end
+        }
+    }
+}
 
 /**
  * The literal rewritten as a call to `interpolate`: each template becomes `%s` and its value an
  * argument, and each `%` the literal writes, as itself or as an escape, is written twice, so
- * `interpolate` prints it once. Made the first time it is read, and once for all the holes of the
+ * `interpolate` prints it once. A multi-dollar literal keeps its prefix, so a `$name` that was
+ * text stays text; [trim], the trim call after the literal, stays on the format; literals joined
+ * to values with `+` become one; and each value of [trusted], by its place among the values, is
+ * passed as `Trusted(...)`. Made the first time it is read, and once for all the holes of the
  * literal that offer it.
  */
 internal fun interpolateText(
     src: String,
     s: KotlinString,
-): Lazy<String> = lazy(LazyThreadSafetyMode.PUBLICATION) { rewriteToInterpolate(src, s) }
+    trim: String,
+    trusted: Set<Int>,
+): Lazy<String> = lazy(LazyThreadSafetyMode.PUBLICATION) { rewriteToInterpolate(src, s, trim, trusted) }
 
 private fun rewriteToInterpolate(
     src: String,
     s: KotlinString,
+    trim: String,
+    trusted: Set<Int>,
 ): String {
-    // Where the literal writes a per cent sign, and how many characters of source spell it.
-    val percents = HashMap<Int, Int>()
-    for (i in s.text.indices) if (s.text[i] == '%') percents[s.map[i]] = s.map[i + 1] - s.map[i]
     val format = StringBuilder()
-
-    fun copy(
-        from: Int,
-        to: Int,
-    ) {
-        var k = from
-        while (k < to) {
+    val joined = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
+    var last: KotlinString? = null
+    chainParts(src, s, { if (!joined) format.append(it) }, { format.append("%s") }) { literal ->
+        if (!joined || last == null) format.append(src, literal.start, literal.contentStart)
+        // Where the literal writes a per cent sign, and how many characters of source spell it.
+        val percents = HashMap<Int, Int>()
+        for (i in literal.text.indices) if (literal.text[i] == '%') percents[literal.map[i]] = literal.map[i + 1] - literal.map[i]
+        val holes = literal.interpolations.associateBy { it.start }
+        var k = literal.contentStart
+        while (k < literal.contentEnd) {
+            val hole = holes[k]
             val n = percents[k] ?: 0
-            if (n > 0) {
+            if (hole != null) {
+                format.append("%s")
+                k = hole.end
+            } else if (n > 0) {
                 format.append(src, k, k + n).append(src, k, k + n)
                 k += n
             } else {
                 format.append(src[k++])
             }
         }
+        if (!joined) format.append(src, literal.contentEnd, literal.end)
+        last = literal
     }
-    var at = s.start
-    for (ip in s.interpolations) {
-        copy(at, ip.start)
-        format.append("%s")
-        at = ip.end
-    }
-    copy(at, s.end)
-    val args = s.interpolations.map { if (it.kind == InterpolationKind.SIMPLE) it.text else it.text.trim() }
+    if (joined) last?.let { format.append(src, it.contentEnd, it.end) }
+    val args =
+        s.interpolations.mapIndexed { k, it ->
+            val value = if (it.kind == InterpolationKind.SIMPLE) it.text else it.text.trim()
+            if (k in trusted) "Trusted($value)" else value
+        }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
     // would break whatever took the String.
-    return "interpolate(" + (listOf(format.toString()) + args).joinToString(", ") + ").text"
+    return "interpolate(" + (listOf(format.toString() + trim) + args).joinToString(", ") + ").text"
 }
 
 /**
@@ -2082,8 +2136,15 @@ internal fun coreCall(
     name: String,
 ): Boolean = asCoreCall(src, text, name)?.let { wholeCall(it, name) } == true
 
+/** Whether the text shows [value] to be a `Trusted`: it calls core's `Trusted`, or is a name declared or set to one. */
+internal fun trustedValue(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean = callsTrusted(src, value) || (IDENT.matches(value.trim()) && trustedName(src, value.trim(), at))
+
 /** Whether [text] calls core's `Trusted` anywhere, under that name or an alias. */
-internal fun callsTrusted(
+private fun callsTrusted(
     src: String,
     text: String,
 ): Boolean =
@@ -2190,14 +2251,35 @@ private fun usedInCode(
     return false
 }
 
-/** The rewrite of the literal to `interpolate`, whose text [text] makes, with the import when the file has none. */
+/**
+ * The rewrite of the literal to `interpolate`, whose text [text] makes, over the literal and the
+ * trim call after it, to [end]; with the import when the file has none, and that of `Trusted`
+ * where the rewrite writes it ([trusted]).
+ */
 internal fun interpolateFix(
     src: String,
     s: KotlinString,
+    end: Int,
     text: Lazy<String>,
     title: String,
     preferred: Boolean,
-): Fix = Fix.later(title, s.start, s.end, importEdits(src, DOMAIN, "interpolate"), preferred) { text.value }
+    trusted: Boolean,
+): Fix =
+    Fix.later(title, s.start, end, coreImports(src, if (trusted) listOf("Trusted", "interpolate") else listOf("interpolate")), preferred) {
+        text.value
+    }
+
+/** The imports of [names] of core's domain the file lacks, as one edit, so that two new ones stand on lines next to each other. */
+private fun coreImports(
+    src: String,
+    names: List<String>,
+): List<Edit> {
+    val missing = names.map { it to importEdits(src, DOMAIN, it) }.filter { it.second.isNotEmpty() }
+    if (missing.size < 2) return missing.flatMap { it.second }
+    val (first, edits) = missing.first()
+    val lines = missing.joinToString(lineBreak(src)) { "import $DOMAIN.${it.first}" }
+    return edits.map { it.copy(text = it.text.replace("import $DOMAIN.$first", lines)) }
+}
 
 /**
  * The hole made a `Trusted` value, `${Trusted(body)}`: markup the author vouches for, which the
