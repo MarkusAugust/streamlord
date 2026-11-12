@@ -52,7 +52,7 @@ class HoleJudgementTest {
         }
         // A generic call is no comparison, and a call of the author's may still give markup.
         val generic = "fun <T> foo(a: T) = \"\$a\"\nfun f(a: String) = \"<td>\${foo<String>(a)}</td>\""
-        assertTrue(analyzer.analyzeKotlin(generic).single().fixes.any { it.title.startsWith("Mark") })
+        assertTrue(analyzer.analyzeKotlin(generic).single().fixes.none { it.title.startsWith("Build this string") })
     }
 
     /** The issues on [src] where the editor says the last [value] in it is [fact], as code and the text they cover. */

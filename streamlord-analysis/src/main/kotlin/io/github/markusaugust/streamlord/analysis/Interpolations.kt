@@ -1674,6 +1674,46 @@ private fun markupInLiteral(e: String): Boolean {
     return false
 }
 
+/** The calls whose result is a number or a boolean, whatever they are called on. */
+private val NUMBER_CALLS =
+    NUMBER_CONVERSIONS +
+        setOf(
+            "dec", "inc", "count", "sum", "compareTo", "hashCode", "indexOf", "lastIndexOf", "isEmpty", "isNotEmpty",
+            "isBlank", "isNotBlank", "contains", "startsWith", "endsWith", "equals", "any", "all", "none",
+        )
+private val NUMBER_PROPERTY = regex("""[\p{L}\p{Nd}_)\]]\s*\??\.\s*(?:size|length|lastIndex)$""")
+
+/** Outside brackets: an operator whose result is a Boolean, which binds looser than any that may give a String. */
+private val BOOLEAN_OPERATOR = regex("""&&|\|\||[=!]==?|\s(?:<=|>=|<|>|!?in|!?is)\s""")
+
+/** Outside brackets: an operator that may give anything, or a String: a cast, an elvis, a range or an infix call. */
+private val OTHER_OPERATOR = regex("""\?:|\.\.|\s[\p{L}_][\p{L}\p{Nd}_]*\??\s""")
+
+/** Outside brackets: `*`, `/`, `%` or a `-` between operands, which Kotlin defines for numbers. */
+private val ARITHMETIC = regex("""[*/%]|[\p{L}\p{Nd}_)\]]\s*-(?![-=>])""")
+
+/**
+ * Whether the shape of [value] says it is a number or a boolean, whatever its type: arithmetic, a
+ * comparison, a negation, or a call or a property such as `.dec()`, `.count()` or `.size`. A sum
+ * may be a String, and a call of the author's anything.
+ */
+internal fun numberShaped(value: String): Boolean {
+    val e = unparen(value)
+    if (e.isEmpty()) return false
+    if (NUMBER_LITERAL.matchEntire(e) != null) return true
+    val d = depths(e)
+    val top = CharArray(e.length) { if (d[it] == 0) e[it] else ' ' }.concatToString()
+    if (BOOLEAN_OPERATOR.containsMatchIn(top)) return true
+    if (OTHER_OPERATOR.containsMatchIn(top) || splitTop(e, "+").size > 1) return false
+    if (ARITHMETIC.containsMatchIn(top)) return true
+    // One operand from here on, spaces before a lambda aside.
+    if (top.trimStart('!', '-').any { !it.isWhitespace() && OPERAND_CHAR.matchEntire(it.toString()) == null }) return false
+    if ((e.startsWith("!") && !e.startsWith("!!")) || (e.startsWith("-") && !e.startsWith("--"))) return true
+    if (NUMBER_PROPERTY.containsMatchIn(e)) return true
+    val call = lastCall(e) ?: return false
+    return call.receiver != null && call.name in NUMBER_CALLS
+}
+
 /**
  * Whether a value in element text may hold markup that `interpolate` would escape: a constant
  * whose value this file does not show or shows with a tag, a literal with one, or the result of a
@@ -1689,7 +1729,7 @@ internal fun mayHoldMarkup(
     holeValues(value).any { v ->
         val t = v.text
         when {
-            LITERAL.matchEntire(t) != null || CHAR_LITERAL.matchEntire(t) != null -> {
+            LITERAL.matchEntire(t) != null || CHAR_LITERAL.matchEntire(t) != null || numberShaped(t) -> {
                 false
             }
 
