@@ -460,7 +460,18 @@ private fun definedAt(
             }
         }
     }
-    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
+    // In Kotlin a dollar that opens a template writes a Kotlin value, which is assigned nothing.
+    val templates by lazy(LazyThreadSafetyMode.NONE) {
+        if (language != SourceLanguage.KOTLIN) {
+            emptyList()
+        } else {
+            withNested((lex ?: lexKotlin(src)).strings).flatMap { s -> s.interpolations.filter { it.kind == InterpolationKind.SIMPLE } }
+        }
+    }
+    for (m in ASSIGNED_SIGNAL.findAll(src)) {
+        val at = m.range.first
+        if (templates.none { at >= it.start && at < it.end }) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
+    }
     return out.filter { PLACEHOLDER !in it.name }.distinct()
 }
 
