@@ -166,14 +166,18 @@ class InterpolationTest {
     }
 
     @Test
-    fun `a value that is a list or an array is one value, written as a Kotlin template writes it`() {
+    fun `a value that is a list or an array is one value, written in brackets with each element escaped`() {
         val two = listOf("a", "<b>")
         assertEquals("<p>[a, &lt;b&gt;]</p>", interpolate("<p>%s</p>", two).text)
         assertEquals("<p>[x]</p>", interpolate("<p>%s</p>", listOf("x")).text)
         assertEquals("<p>[]</p>", interpolate("<p>%s</p>", emptyList<String>()).text)
         assertEquals("<p>[1, 2]</p>", interpolate("<p>%s</p>", setOf(1, 2)).text)
         val array = arrayOf("a", "b")
-        assertEquals("<p>$array</p>", interpolate("<p>%s</p>", array as Any?).text)
+        // A template writes an array as its class and hash; interpolate writes it as it writes a list.
+        assertEquals("<p>[a, b]</p>", interpolate("<p>%s</p>", array as Any?).text)
+        assertEquals("<p>[&lt;b&gt;]</p>", interpolate("<p>%s</p>", arrayOf("<b>") as Any?).text)
+        assertEquals("<p title=\"[1, 2]\">[true]</p>", interpolate("<p title=\"%s\">%s</p>", intArrayOf(1, 2), booleanArrayOf(true)).text)
+        assertEquals("<p>[[a], [1]] [a]</p>", interpolate("<p>%s %s</p>", arrayOf<Any>(arrayOf("a"), intArrayOf(1)), charArrayOf('a')).text)
         // Spread, its elements are the values.
         assertEquals("<p>a b</p>", interpolate("<p>%s %s</p>", *array).text)
         assertEquals("<p>a &lt;b&gt;</p>", interpolate("<p>%s %s</p>", *two.toTypedArray()).text)
