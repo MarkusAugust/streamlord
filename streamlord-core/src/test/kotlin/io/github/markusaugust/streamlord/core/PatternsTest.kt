@@ -44,6 +44,15 @@ class PatternsTest {
     }
 
     @Test
+    fun `the input and a line end after an astral character, never inside it`() {
+        assertEquals(listOf("3-3"), found("$", "\uD83D\uDE00x"))
+        assertEquals(listOf("2-2"), found("""\z""", "\uD83D\uDE00"))
+        assertEquals(listOf("2-2"), found("""[ \t]*(?:;|$)""", "\uD83D\uDE00"))
+        assertEquals(listOf("2-2", "5-5"), found("$", "\uD83D\uDE00\n\uD83D\uDE00", RegexOption.MULTILINE))
+        assertEquals(listOf("0-0", "3-3"), found("^", "\uD83D\uDE00\n\uD83D\uDE00", RegexOption.MULTILINE))
+    }
+
+    @Test
     fun `a line starts and ends at every kind of line break when the pattern asks for lines`() {
         assertEquals(listOf("0-1", "3-4", "5-6"), found("^.", "a\r\nb\nc", RegexOption.MULTILINE))
         assertEquals(listOf("0-1", "3-4", "5-6"), found(".$", "a\r\nb\nc", RegexOption.MULTILINE))
