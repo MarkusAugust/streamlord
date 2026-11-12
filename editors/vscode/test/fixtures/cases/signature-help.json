@@ -1,0 +1,12 @@
+{
+  "$comment": "What signature help shows at a caret (signatureHelp): text, language, prefix, core and htmlDsl as in completions.json. signature is null where none is shown, or the action's signature, how its documentation starts, its parameters and the one active. Read by EditorHelpTest.kt.",
+  "cases": [
+    {"name":"the parameter at the caret","language":"html","text":"<div data-on:click=\"@get('/x', ¦","signature":{"label":"@get(uri, options?)","doc":"GET with signals in the query string.","parameters":["uri","options?"],"active":1}},
+    {"name":"the first parameter in a DSL string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataOnClick(\"@post(¦\") }","signature":{"label":"@post(uri, options?)","doc":"POST with signals in the body.","parameters":["uri","options?"],"active":0}},
+    {"name":"the last parameter stays active past the end","language":"html","text":"<div data-on:click=\"@get('/x', {}, 3, ¦","signature":{"label":"@get(uri, options?)","doc":"GET with signals in the query string.","parameters":["uri","options?"],"active":1}},
+    {"name":"nothing outside an action call","language":"html","text":"<div data-text=\"$count¦\"></div>","signature":null},
+    {"name":"nothing in a DSL-named call of a file without the DSL","language":"kotlin","text":"fun f() { dataOnClick(\"@post(¦\") }","signature":null},
+    {"name":"an action in a template file","language":"html","text":"<div data-on:click=\"@get('/x', ¦)\"></div>","signature":{"label":"@get(uri, options?)","doc":"GET with signals in the query string.","parameters":["uri","options?"],"active":1}},
+    {"name":"an action nested in another call's argument","language":"html","text":"<div data-on:click=\"@post('/x', {headers: {a: @peek(() => ¦)}})\"></div>","signature":{"label":"@peek(() => expr)","doc":"Reads signals without subscribing.","parameters":["() => expr"],"active":0}}
+  ]
+}

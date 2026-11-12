@@ -1,0 +1,25 @@
+{
+  "$comment": "What hover shows at a caret (hover): text, language, prefix, core, htmlDsl and foreign as in completions.json. hover is null where nothing is shown, or the word the hover covers, which holds the caret, how its documentation starts, and what it leaves out. Read by EditorHelpTest.kt.",
+  "cases": [
+    {"name":"an attribute in markup, modifiers and all","language":"html","text":"<div data-on-inter¦sect__once=\"x()\"></div>","hover":{"word":"data-on-intersect__once","doc":"**data-on-intersect**"}},
+    {"name":"an action in a markup value","language":"html","text":"<div data-on:click=\"@po¦st('/x')\"></div>","hover":{"word":"@post","doc":"**@post(uri, options?)**"}},
+    {"name":"an option key in markup","language":"html","text":"<div data-on:click=\"@get('/x', {retrySc¦aler: 3})\"></div>","hover":{"word":"retryScaler","doc":"**retryScaler**: `number`, default `2`"}},
+    {"name":"a word that is no Datastar","language":"html","text":"<div title=\"pl¦ain\"></div>","hover":null},
+    {"name":"an attribute in markup without the DSL names no helper","language":"html","text":"<div data-te¦xt=\"$a\"></div>","htmlDsl":false,"hover":{"word":"data-text","doc":"**data-text**","without":"**Kotlin:**"}},
+    {"name":"an attribute for an aliased prefix","language":"html","text":"<div data-star-te¦xt=\"$a\"></div>","prefix":"data-star-","hover":{"word":"data-star-text","doc":"**data-star-text**"}},
+    {"name":"a DSL helper","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataOn¦Click(\"@post('/x')\") }","hover":{"word":"dataOnClick","doc":"**data-on**"}},
+    {"name":"an action in a DSL string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataOnClick(\"@po¦st('/x')\") }","hover":{"word":"@post","doc":"**@post(uri, options?)**"}},
+    {"name":"dataOnSignalPatch is the attribute its expression fills","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataOnSig¦nalPatch(\"console.log(patch)\", SignalFilter.exclude(\"^_\")) }","hover":{"word":"dataOnSignalPatch","doc":"**data-on-signal-patch**"}},
+    {"name":"a DSL action helper where it is called","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataOnClick(po¦st(\"/x\")) }","hover":{"word":"post","doc":"**@post(uri, options?)**"}},
+    {"name":"a DSL action helper that is not called","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\nval p = po¦st","hover":null},
+    {"name":"an option key in a DSL string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\nfun f() { dataOnClick(\"@get('/x', {retrySc¦aler: 3})\") }","hover":{"word":"retryScaler","doc":"**retryScaler**: `number`, default `2`"}},
+    {"name":"an attribute in an HTML string","language":"kotlin","text":"val x = \"\"\"<div data-on-inter¦sect__once=\"x()\">\"\"\"","hover":{"word":"data-on-intersect__once","doc":"**data-on-intersect**"}},
+    {"name":"a plain string naming an attribute","language":"kotlin","text":"val x = \"data-on-inter¦sect\"","hover":null},
+    {"name":"the attribute in the key of the attributes form","language":"kotlin","text":"fun DIV.f() { attributes[\"data-o¦n:click\"] = \"@post('/x')\" }","hover":{"word":"data-on:click","doc":"**data-on**"}},
+    {"name":"an action in the attributes form without the DSL","language":"kotlin","text":"fun DIV.f() { attributes[\"data-on:click\"] = \"@po¦st('/x')\" }","hover":{"word":"@post","doc":"**@post(uri, options?)**"}},
+    {"name":"a DSL helper in a file without the DSL","language":"kotlin","text":"fun f() { dataOn¦Click(\"x\") }","hover":null},
+    {"name":"an action in a DSL-named call of a file without the DSL","language":"kotlin","text":"fun f() { dataOnClick(\"@po¦st('/x')\") }","hover":null},
+    {"name":"a DSL helper's name inside a string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\nval s = \"data¦Text(x)\"","hover":null},
+    {"name":"an action in a call the editor resolves elsewhere","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\nfun f() { dataOnClick(\"@po¦st('/x')\") }","foreign":["dataOnClick"],"hover":null}
+  ]
+}
