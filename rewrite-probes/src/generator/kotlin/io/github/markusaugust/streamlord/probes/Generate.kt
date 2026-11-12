@@ -26,7 +26,8 @@ private class Case(
     val written: Set<String>,
     val expects: String?,
     val says: List<String>,
-    val marks: List<String>,
+    /** What the issues mark, each as written and in order; null for a cell of the matrix, whose table says it. */
+    val marks: List<String>?,
 )
 
 private fun literal(text: String): String =
@@ -56,9 +57,10 @@ private fun probes(file: File): List<Case> =
             c.string("body")!!,
             null,
             emptySet(),
-            c.string("rewrite"),
+            // A case says all it expects, so that one the analysis says nothing of fails and does not pass unseen.
+            c.string("rewrite") ?: error("${c.string("name")}: no rewrite"),
             c.array("says")?.strings().orEmpty(),
-            c.array("marks")?.strings().orEmpty(),
+            c.array("marks")?.strings() ?: error("${c.string("name")}: no marks"),
         )
     }
 
@@ -81,7 +83,7 @@ private fun matrix(file: File): List<Case> {
                         setOf("\${v}", "\$\${v}", "v"),
                         null,
                         emptyList(),
-                        emptyList(),
+                        null,
                     )
             }
         }
@@ -134,7 +136,7 @@ private fun render(
     out.append("    val probe = Probe(\n        ${literal(case.name)},\n        ${literal(source.substring(header.length))},\n")
     out.append("        listOf(${types.joinToString(", ") { literal(it) }}),\n")
     out.append("        ${case.expects?.let(::literal)},\n        listOf(${case.says.joinToString(", ") { literal(it) }}),\n")
-    out.append("        listOf(${case.marks.joinToString(", ") { literal(it) }}),\n")
+    out.append("        ${case.marks?.let { marks -> "listOf(${marks.joinToString(", ") { literal(it) }})" }},\n")
     out.append(
         "        listOf(${issues.joinToString(
             ", ",

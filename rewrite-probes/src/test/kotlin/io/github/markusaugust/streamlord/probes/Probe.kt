@@ -12,8 +12,8 @@ class Probe(
     val rewrite: String?,
     /** What some message of the case must hold. */
     val says: List<String>,
-    /** The values an issue must mark. */
-    val marks: List<String>,
+    /** What the issues mark, each as written and in order: no more and no less. Null where the case does not say. */
+    val marks: List<String>?,
     val issues: List<Said>,
     val before: (List<Any?>) -> Any?,
     val variants: List<Variant>,

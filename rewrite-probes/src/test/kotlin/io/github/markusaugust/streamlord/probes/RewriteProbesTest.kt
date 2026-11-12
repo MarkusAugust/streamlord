@@ -175,7 +175,7 @@ class RewriteProbesTest {
     }
 
     @Test
-    fun `each case offers the rewrite, marks the values and says what it is written to`() {
+    fun `each case offers the rewrite it says, marks the values it says and no other, and says what it is written to`() {
         val failures = ArrayList<String>()
         for (probe in PROBES) {
             val rewrites = probe.variants.filter { it.title.startsWith(REWRITE) }
@@ -194,11 +194,9 @@ class RewriteProbesTest {
                         "${probe.name}: no message says \"$words\": ${probe.issues.map { it.message }}"
                 }
             }
-            for (value in probe.marks) {
-                if (probe.issues.none { it.text == value }) {
-                    failures +=
-                        "${probe.name}: no issue marks $value, only ${probe.issues.map { it.text }}"
-                }
+            val marked = probe.issues.map { it.text }
+            if (probe.marks != null && probe.marks != marked) {
+                failures += "${probe.name}: the issues mark $marked, expected ${probe.marks}\n    ${probe.source.trim()}"
             }
         }
         assertEquals(emptyList(), failures, "${failures.size} cases fail:\n" + failures.joinToString("\n"))
