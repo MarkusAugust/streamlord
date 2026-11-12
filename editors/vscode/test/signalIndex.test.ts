@@ -81,6 +81,27 @@ describe("signal index", () => {
     assert.equal(fired, 1);
   });
 
+  it("re-lints the other files when a class or a package changes which class a read names", () => {
+    const index = new SignalIndex(new Set());
+    let fired = 0;
+    index.onDidChangeDefinitions(() => fired++);
+    const edit = (d: vscode.TextDocument) => {
+      index.update(d);
+      index.readDrift(d);
+    };
+    edit(doc("/t/Form.kt", "kotlin", `package app\n@Serializable\ndata class Form(val query: String = "")`, 1));
+    edit(doc("/t/Read.kt", "kotlin", `package app\nfun r() = call.readSignals<Form>()`, 1));
+    edit(doc("/t/Twin.kt", "kotlin", `package app\nfun t() = 1`, 1));
+    fired = 0;
+    // A second class of the name leaves the read naming two, and the first class's warning goes.
+    edit(doc("/t/Twin.kt", "kotlin", `package app\n@Serializable\ndata class Form(val mail: String = "")`, 2));
+    assert.ok(fired > 0);
+    fired = 0;
+    // The reader moved to another package names neither.
+    edit(doc("/t/Read.kt", "kotlin", `package other\nfun r() = call.readSignals<Form>()`, 2));
+    assert.ok(fired > 0);
+  });
+
   it("reads what a document tells the others about server reads when it is linted, not on each change", () => {
     const index = new SignalIndex(new Set());
     const handler = doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("query") }\n}`, 1);

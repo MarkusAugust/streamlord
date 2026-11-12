@@ -178,13 +178,26 @@ private fun drift(
     src: String,
     others: Array<DriftFacts>,
 ): List<AnalysedIssue> {
+    // A file with no signals class and no lookup can report nothing, whatever the others say.
+    val own = collectSignalFacts(src, SourceLanguage.KOTLIN)
+    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
     // Only this file's issues are asked for, so another file's reads and offsets play no part.
     val facts = HashMap<String, SignalFacts>()
     others.forEachIndexed { i, o ->
         val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
-        facts["$i"] = SignalFacts(o.declared.toSet(), o.readInto.toSet(), classes, emptyList(), o.encoded.toSet())
+        facts["$i"] =
+            SignalFacts(
+                o.declared.toSet(),
+                o.readInto.toSet(),
+                classes,
+                emptyList(),
+                o.encoded.toSet(),
+                o.patched.toSet(),
+                o.packageName,
+                o.imports.toSet(),
+            )
     }
-    facts[THIS_FILE] = collectSignalFacts(src, SourceLanguage.KOTLIN)
+    facts[THIS_FILE] = own
     return signalDrift(facts).issues[THIS_FILE].orEmpty()
 }
 
@@ -238,17 +251,21 @@ interface SignalClass {
 
 /**
  * What one file tells another about the signals the server reads: the signals it declares, the
- * classes it reads signals into ([readInto]) and declares a page from ([encoded]), and its own
- * `@Serializable` classes. [reads] are the names it may read, its lookups and every property of
- * its classes: a name declared elsewhere or no more changes its verdict only when it is one.
+ * classes it reads signals into ([readInto]), declares a page from ([encoded]) and patches
+ * ([patched]), and its own `@Serializable` classes. [reads] are the names it may read, its lookups and every property of
+ * its classes: a name declared elsewhere or no more changes its verdict only when it is one. Its
+ * [packageName] and [imports] say which class a name in [readInto] or [encoded] is.
  */
 @JsExport
 interface DriftFacts {
     val declared: Array<String>
     val readInto: Array<String>
     val encoded: Array<String>
+    val patched: Array<String>
     val classes: Array<SignalClass>
     val reads: Array<String>
+    val packageName: String
+    val imports: Array<String>
 }
 
 /** What [src] tells the other files about the signals the server reads. */
@@ -270,10 +287,13 @@ private fun plain(facts: SignalFacts): DriftFacts =
         "declared" to facts.declared.plain(),
         "readInto" to facts.signalTypes.plain(),
         "encoded" to facts.encodedTypes.plain(),
+        "patched" to facts.patchedTypes.plain(),
         "classes" to
             facts.classes
                 .map { (name, properties) -> plain<SignalClass>("name" to name, "properties" to properties.map { it.name }.plain()) }
                 .toTypedArray(),
+        "packageName" to facts.packageName,
+        "imports" to facts.imports.plain(),
     )
 
 /** The calls of [src] that are somebody else's and define no signal, by the modules its imports show. */

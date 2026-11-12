@@ -256,4 +256,67 @@ class SignalDriftTest {
 
         assertEquals(listOf("a", "b", "c", "d", "e"), kotlin(mixed).lookups.map { it.name })
     }
+
+    // A handler that patches a signals class sets every property of it, so the page need not declare them.
+    @Test
+    fun `a class instance handed to a signals patch declares its properties`() {
+        val form = "@Serializable\ndata class Form(val query: String = \"\", val page: Int = 0)\nfun read() = call.readSignals<Form>()\n"
+        assertEquals(listOf("query", "page"), drift("Form.kt" to kotlin(form))["Form.kt"]!!.map { form.substring(it.start, it.end) })
+        for (patch in listOf(
+            "suspend fun f() = call.respondSignals(Form(\"\", 1))",
+            "suspend fun f() = sse.patchSignals(Form(query = \"\"), onlyIfMissing = true)",
+            "fun f() = datastarSignals(Form())",
+            "fun f(form: Form) = datastarSignals(form, streamlord)",
+            "suspend fun f() { val form = Form(); stream.patchSignals(form) }",
+            "suspend fun f() = sse.patchSignals(codec.toJsonValue(Form()))",
+            "suspend fun f() = sse.patchSignals(mapOf(\"query\" to \"\", \"page\" to 1))",
+        )) {
+            assertEquals(emptyMap(), drift("Form.kt" to kotlin(form), "Patch.kt" to kotlin(patch)), patch)
+        }
+        // A string, a value of no class the file names, or a patch of other names declares nothing of Form.
+        for (patch in listOf(
+            "suspend fun f(json: String) = sse.patchSignals(json)",
+            "suspend fun f() = sse.patchSignals(\"count\" to 1)",
+            "suspend fun f() = call.respondSignals(Other(1))\n@Serializable data class Other(val count: Int)",
+            // A Jackson class: its names are the codec's, and a patch of it says nothing for the rest of the project.
+            "fun f() = datastarSignals(JacksonForm())",
+        )) {
+            assertEquals(2, drift("Form.kt" to kotlin(form), "Patch.kt" to kotlin(patch))["Form.kt"]?.size, patch)
+        }
+    }
+
+    @Test
+    fun `a read written in a comment or a string is no read`() {
+        val quiet =
+            """
+            @Serializable
+            data class Form(val email: String = "")
+
+            // A page declares the names the handler's readSignals<Form>() reads.
+            /* readSignalsOr(Form()) */
+            val text = "call.readSignals<Form>()"
+            """.trimIndent()
+
+        assertEquals(emptySet(), kotlin(quiet).signalTypes)
+        assertEquals(emptyMap(), drift("Form.kt" to kotlin(quiet)))
+    }
+
+    // Kotlin finds a simple name by an explicit import, then the file's own package, then a star import.
+    @Test
+    fun `a class read is the one the reading file's package and imports name`() {
+        val form = "package app.forms\n@Serializable\ndata class Form(val email: String = \"\")\n"
+        val reader = { header: String -> "${header}fun read() = call.readSignals<Form>()\n" }
+        val judged = { header: String -> drift("Form.kt" to kotlin(form), "Read.kt" to kotlin(reader(header)))["Form.kt"].orEmpty().size }
+
+        assertEquals(1, judged("package app.forms\n"), "the same package")
+        assertEquals(1, judged("package app.routes\nimport app.forms.Form\n"), "an explicit import")
+        assertEquals(1, judged("package app.routes\nimport app.forms.*\n"), "a star import")
+        assertEquals(0, judged("package app.routes\n"), "another package, not imported")
+        assertEquals(0, judged("package app.routes\nimport other.Form\n"), "another class of the name, imported")
+
+        // Two classes of the name the read may mean: the check cannot tell which, and says nothing.
+        val twin = "package app.forms\n@Serializable\ndata class Form(val mail: String = \"\")\n"
+        val both = drift("Form.kt" to kotlin(form), "Twin.kt" to kotlin(twin), "Read.kt" to kotlin(reader("package app.forms\n")))
+        assertEquals(emptyMap(), both)
+    }
 }

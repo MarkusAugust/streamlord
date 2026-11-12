@@ -169,17 +169,20 @@ export class SignalIndex implements vscode.Disposable {
 
   /** Whether a file's facts changing from `a` to `b` can change what the server reads is judged in another file. */
   private driftMatters(key: string, a: DriftFacts, b: DriftFacts): boolean {
-    if (!sameNames(a.readInto, b.readInto) || !sameNames(a.encoded, b.encoded)) return true;
+    if (!sameNames(a.readInto, b.readInto) || !sameNames(a.encoded, b.encoded) || !sameNames(a.patched, b.patched)) return true;
+    // The package and the imports decide which class a name of the file is.
+    if (a.packageName !== b.packageName || !sameNames(a.imports, b.imports)) return true;
     const declared = changed(a.declared, b.declared);
     const classes = changed(
       a.classes.map((c) => JSON.stringify(c)),
       b.classes.map((c) => JSON.stringify(c)),
     ).map((c) => (JSON.parse(c) as { name: string }).name);
     if (declared.length === 0 && classes.length === 0) return false;
-    // A declared name counts where another file reads it, and a class where another declares a page from it.
+    // A declared name counts where another file reads it, and a class where another reads into it or
+    // declares a page from it: one more class of a name may leave a read naming two.
     for (const [k, e] of this.byFile) {
       if (k === key) continue;
-      if (declared.some((n) => e.drift.reads.includes(n)) || classes.some((c) => e.drift.encoded.includes(c))) return true;
+      if (declared.some((n) => e.drift.reads.includes(n)) || classes.some((c) => e.drift.encoded.includes(c) || e.drift.patched.includes(c) || e.drift.readInto.includes(c))) return true;
     }
     return false;
   }
@@ -332,7 +335,7 @@ function entry(text: string, language: "kotlin" | "html", version: number | null
 }
 
 
-const NO_DRIFT: DriftFacts = { declared: [], readInto: [], encoded: [], classes: [], reads: [] };
+const NO_DRIFT: DriftFacts = { declared: [], readInto: [], encoded: [], patched: [], classes: [], reads: [], packageName: "", imports: [] };
 
 /** The names in one list and not the other. */
 function changed(a: readonly string[], b: readonly string[]): string[] {
