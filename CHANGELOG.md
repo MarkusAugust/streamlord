@@ -110,6 +110,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - The project `rewrite-probes` compiles HTML strings as they are written and as each fix of the
   analysis leaves them, against core, and runs both: every cell of the editors' matrix of values,
   and the cases in `rewrite-probes.json`.
+- VS Code warns on a signal the server reads, through a `Signals` lookup or a `@Serializable`
+  class, that no page in the workspace declares: the `signal-never-declared` warning, which
+  `signalDrift` gives in your own tests.
 
 ### Fixed
 
@@ -206,13 +209,14 @@ All notable changes to Streamlord are recorded here. The format follows
   unless the file also read a signal and the unknown-signal check was on.
 - VS Code works in a `.kt` file with Streamlord alone: the extension declares the Kotlin language
   itself, where it did nothing until some other extension declared it.
-- VS Code warns on a signal the server reads, through a `Signals` lookup or a `@Serializable`
-  class, that no page in the workspace declares, the `signal-never-declared` check that
-  `signalDrift` runs in a build.
 - The Open in Stream Inspector lens and IntelliJ's route marker no longer stand on a DSL action
   handed to an attribute, `dataInit(get("/quests"))`, and a Ktor `sse("/feed") { }` route gets one.
 - An attribute value of nothing but spaces, `data-on:click="  "`, is reported as an empty
-  expression in HTML and in a Kotlin HTML string, as it is in the DSL.
+  expression in HTML and in a Kotlin HTML string, as it is in the DSL, and an empty value gets the
+  same verdict as a blank one: `data-signals=""` is an empty expression, and `data-bind="  "`
+  names a signal no expression can read.
+- A Ktor route whose arguments hold a lambda or a call, `sse("/t", serialize = { ... }) { }`,
+  gets its lens and gutter marker.
 - IntelliJ no longer offers to import `CatalogNames.attributes` or the other attribute sets of
   streamlord-core's catalog for a name it cannot resolve: they are internal now.
 
