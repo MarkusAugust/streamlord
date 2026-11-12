@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.DecodedValue
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
@@ -108,8 +109,66 @@ private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
 // The parameter a DSL helper takes its key by, when it is passed by name.
 private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
 private val DOLLAR_RUNS = regex("""\$+""")
-private val ASSIGN_BEFORE = regex("""\s*=\s*$""")
 private val BRACED_TEMPLATE = regex("""\$\{""")
+
+/** The length of the `=` and the white space around it that end [src] before [end], or 0: read back from [end], not from the start. */
+private fun assignBefore(
+    src: String,
+    end: Int,
+): Int {
+    var k = end
+    while (k > 0 && src[k - 1] in JAVA_SPACE) k--
+    if (k == 0 || src[k - 1] != '=') return 0
+    k--
+    while (k > 0 && src[k - 1] in JAVA_SPACE) k--
+    return end - k
+}
+
+/**
+ * The attribute values of a markup [view], each read and decoded once, however many values are
+ * written into it: whether a value written at an offset lands inside a JavaScript string.
+ */
+private class ExpressionValues(
+    private val view: String,
+) {
+    private class Read(
+        val value: String,
+        val decoded: DecodedValue,
+        val quotes: QuoteScan,
+    )
+
+    private val read = HashMap<Int, Read>()
+
+    private fun at(valueStart: Int): Read =
+        read.getOrPut(valueStart) {
+            val quote = view.getOrNull(valueStart - 1) ?: '"'
+            val valueEnd = view.indexOf(quote, valueStart)
+            val value = view.substring(valueStart, if (valueEnd < 0) view.length else valueEnd)
+            val decoded = decodeEntities(value)
+            Read(value, decoded, QuoteScan(decoded.text))
+        }
+
+    fun value(valueStart: Int): String = at(valueStart).value
+
+    /** Whether the decoded text before [offset] in the value leaves a JavaScript string open. No character reference runs on into a placeholder. */
+    fun inString(
+        valueStart: Int,
+        offset: Int,
+    ): Boolean {
+        val r = at(valueStart)
+        val map = r.decoded.map
+        val decodedOffset =
+            map
+                .asList()
+                .binarySearch { if (it < offset) -1 else 1 }
+                .let { -it - 1 }
+                .coerceAtMost(r.decoded.text.length)
+        return r.quotes.at(decodedOffset) != null
+    }
+}
+
+/** What `\s` matches in java.util.regex. */
+private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
@@ -273,14 +332,14 @@ public class Analyzer(
             // Somebody else's call: its strings are judged as any string handed to an unknown function.
             if (foreign(site.name, site.nameStart)) continue
             val issues = ArrayList<Issue>()
-            catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, hyphenated, opts, siteHelpers) }
-            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, hyphenated) }
+            catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, lex, hyphenated, opts, siteHelpers) }
+            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated) }
             html?.let { issues += it.issues }
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
-            for (judged in judgedStrings(site, src)) {
+            for (judged in judgedStrings(site, src, lex)) {
                 for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
             }
             if (issues.isNotEmpty() || html?.rewrite != null) out += SiteIssues(site, null, issues, html?.rewrite)
@@ -300,7 +359,9 @@ public class Analyzer(
             val issues = checkNonceSite(site)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
-        val hyphenSites = signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS, dsl), allSiteNames + "statements", foreign)
+        // The helpers the file can call, read from its imports once for all its calls and assignments.
+        val helpers = dslHelpers(src, EXPRESSION_HELPERS, dsl)
+        val hyphenSites = signalNameHyphenSites(src, lex, helpers, allSiteNames + "statements", foreign)
         for ((site, issues) in hyphenSites) {
             out += SiteIssues(site, null, issues)
         }
@@ -308,7 +369,7 @@ public class Analyzer(
             if (!lex.mask[m.range.first]) continue
             val value = attributesIndexValue(src, m, lex)
             value?.let { claimed += it.start }
-            val issues = checkAttributesIndex(m, value, opts, src, hyphenated)
+            val issues = checkAttributesIndex(m, value, opts, src, hyphenated, helpers)
             if (issues.isNotEmpty()) out += SiteIssues(null, value, issues)
         }
         // A literal joined to values with `+` is read as one string with a hole for each value.
@@ -334,12 +395,13 @@ public class Analyzer(
     private fun judgedStrings(
         site: CallSite,
         src: String,
+        lex: KotlinLex,
     ): List<KotlinString> {
         val out = ArrayList<KotlinString>(1)
-        catalog.htmlCallSites[site.name]?.let { spec -> markupString(site, spec, src)?.let { out += it } }
+        catalog.htmlCallSites[site.name]?.let { spec -> markupString(site, spec, src, lex)?.let { out += it } }
         catalog.expressionCallSites[site.name]?.let { spec ->
             if (!(spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null })) {
-                expressionString(site, spec, src)?.let { out += it }
+                expressionString(site, spec, src, lex)?.let { out += it }
             }
         }
         catalog.scriptCallSites[site.name]?.let { spec -> site.selectString(spec)?.let { out += it } }
@@ -423,6 +485,7 @@ public class Analyzer(
         opts: AnalyzeOptions,
         src: String,
         hyphenated: Set<String>,
+        helpers: Set<String>,
     ): List<Issue> {
         if (!opts.checkHtmlAttributes) return emptyList()
         val name = m.groupValues[1]
@@ -435,7 +498,7 @@ public class Analyzer(
         val kind = catalog.parseAttributeName(name.asciiLowercase(), opts.prefix)?.spec?.valueKind
         if (value != null && kind == ValueKind.EXPRESSION) {
             // kotlinx.html's own form: a helper is offered only where the file can call it.
-            issues += expressionHoles(value, src, opts, name, dslHelpers(src, EXPRESSION_HELPERS, Sdk.of(opts).htmlDsl))
+            issues += expressionHoles(value, src, opts, name, helpers)
         }
         if (value != null && kind == ValueKind.SIGNAL) issues += signalNameHoles(value, src, opts, name)
         // With a template in the value the interpolation issue speaks for it, as at a DSL call.
@@ -539,11 +602,12 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String? = null,
+        lex: KotlinLex? = null,
     ): KotlinString? {
         if (site.trailingLambda) return null
         val s = site.selectString(spec)
-        if (s != null || src == null) return s
-        return chainArg(site, spec, src)
+        if (s != null || src == null || lex == null) return s
+        return chainArg(site, spec, src, lex)
     }
 
     /** The argument a call site takes its string from, when it is a `+` chain that starts with a literal: `patchElements("<p>" + name + "</p>")`. */
@@ -551,14 +615,15 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
+        lex: KotlinLex,
     ): KotlinString? {
         val positional = site.positional
         val arg =
             spec.named?.let { site.named(it) }
                 ?: (if (spec.arg == null) positional.lastOrNull() else positional.getOrNull(spec.arg))
                 ?: return null
-        val lex = lex(src)
-        val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
+        // The strings come in the order of the file, so the one the argument starts with is looked up, not searched for.
+        val first = lex.strings.getOrNull(lex.strings.binarySearchBy(arg.start) { it.start }) ?: return null
         return chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end }
     }
 
@@ -617,7 +682,7 @@ public class Analyzer(
         for (site in findCallSites(src, allSiteNames, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             // The literals the analysis judges at the site are the site's; a `+` chain's are read as free strings, as ever.
-            for (judged in judgedStrings(site, src)) {
+            for (judged in judgedStrings(site, src, lex)) {
                 if (site.args.any { it.string?.start == judged.start && it.string.end == judged.end }) claimed += judged.start
             }
             catalog.expressionCallSites[site.name]?.let { spec ->
@@ -837,12 +902,13 @@ public class Analyzer(
         val uncertainFrom = unknown.minOrNull() ?: Int.MAX_VALUE
         val percentAt = { j: Int -> j >= format.interpolations.size }
         val trapOf = traps(format, src)
+        val attributeValues = ExpressionValues(view)
         for ((k, ip) in format.interpolations.withIndex()) {
             val landing = landings[k]
             val told = holeFact(format, src, opts, ip)
             val fact = told.plain()
             if (ip.kind == InterpolationKind.SIMPLE && landing.position == Position.DATASTAR) {
-                val judged = trapOf(ip)?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
+                val judged = trapOf(ip)?.let { datastarTrap(it, ip, landing, attributeValues, opts.prefix, fact) }
                 if (judged != null) {
                     issues += judged
                     continue
@@ -1392,6 +1458,8 @@ public class Analyzer(
             return rewrite.copy(title = title, preferred = preferred && same)
         }
         val issues = ArrayList<Issue>()
+        val attributeValues = ExpressionValues(view)
+        val operands = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
         for ((k, ip) in s.interpolations.withIndex()) {
             if (k in written) continue
             val landing = landings[k]
@@ -1512,7 +1580,7 @@ public class Analyzer(
 
                     Position.DATASTAR -> {
                         val attribute = landing.attribute ?: "a Datastar attribute"
-                        val trap = trapOf(ip)?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
+                        val trap = trapOf(ip)?.let { datastarTrap(it, ip, landing, attributeValues, opts.prefix, fact) }
                         when {
                             trap != null -> trap
                             factSays == Verdict.DIGITS -> unsigned(attribute)
@@ -1557,7 +1625,7 @@ public class Analyzer(
                                 issue(
                                     "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
                                     if (fact.scalar()) Severity.HINT else Severity.WARNING,
-                                    fixes = listOfNotNull(quoteFix(s, view, ip)),
+                                    fixes = listOfNotNull(quoteFix(s, view, ip, operands)),
                                 )
                             }
 
@@ -1766,7 +1834,7 @@ public class Analyzer(
         trap: Issue,
         ip: Interpolation,
         landing: HoleLanding,
-        view: String,
+        values: ExpressionValues,
         prefix: String,
         fact: ValueFact?,
     ): Issue? {
@@ -1774,11 +1842,8 @@ public class Analyzer(
         if (landing.valueStart < 0) return null
         val spec = catalog.parseAttributeName(attribute.asciiLowercase(), prefix)?.spec
         if (spec?.valueKind != ValueKind.EXPRESSION) return null
-        val quote = view.getOrNull(landing.valueStart - 1) ?: '"'
-        val valueEnd = view.indexOf(quote, landing.valueStart)
-        val value = view.substring(landing.valueStart, if (valueEnd < 0) view.length else valueEnd)
-        val before = decodeEntities(value.substring(0, ip.decodedStart - landing.valueStart)).text
-        if (quoteAt(before, before.length) != null) return null
+        val value = values.value(landing.valueStart)
+        if (values.inString(landing.valueStart, ip.decodedStart - landing.valueStart)) return null
         val name = ip.text
         val fixes = trap.fixes.filter { it.title.startsWith("Make it") || it.title.startsWith("Escape") }
         // data-signals:count="$initial" seeds a signal from the server, like the object form does.
@@ -1849,18 +1914,20 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
-    ): KotlinString? = site.selectString(spec) ?: chainArg(site, spec, src)
+        lex: KotlinLex,
+    ): KotlinString? = site.selectString(spec) ?: chainArg(site, spec, src, lex)
 
     private fun checkExpressionSite(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
+        lex: KotlinLex,
         hyphenated: Set<String>,
         opts: AnalyzeOptions,
         helpers: Set<String>,
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
-        val s = expressionString(site, spec, src) ?: return emptyList()
+        val s = expressionString(site, spec, src, lex) ?: return emptyList()
         if (s.unterminated) return emptyList()
         val attribute = catalog.attributesByKotlin[site.name]
         val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
@@ -1889,9 +1956,10 @@ public class Analyzer(
     ): List<Issue> {
         val trapOf = traps(s, src, helpers)
         val out = ArrayList<Issue>()
+        val quotes = QuoteScan(s.text)
         for (ip in s.interpolations) {
             val trap = trapOf(ip)
-            if (trap != null && quoteAt(s.text, ip.decodedStart) == null) {
+            if (trap != null && quotes.at(ip.decodedStart) == null) {
                 out += trap
                 continue
             }
@@ -1908,9 +1976,10 @@ public class Analyzer(
         spec: CallSiteSpec,
         opts: AnalyzeOptions,
         src: String,
+        lex: KotlinLex,
         hyphenated: Set<String>,
     ): Judged {
-        val s = markupString(site, spec, src)
+        val s = markupString(site, spec, src, lex)
         if (s == null && !site.trailingLambda) return Judged()
         if (s != null && s.unterminated) return Judged()
         // In every signature the selector and the mode follow the elements, so they may be given by
@@ -1935,7 +2004,7 @@ public class Analyzer(
         val judged = s?.let { judgeHoles(it, src, opts, view) }
         val issues = ArrayList(judged?.issues.orEmpty())
         if (modeArg != null && mode != null && mode != "outer" && mode != "replace" && selector == null) {
-            val assign = ASSIGN_BEFORE.find(src.substring(0, modeArg.start))?.value?.length ?: 0
+            val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
             issues +=
                 Issue(

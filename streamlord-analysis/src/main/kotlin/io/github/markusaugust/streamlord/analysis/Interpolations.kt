@@ -19,7 +19,6 @@ private val STRING_LITERAL = regex(""""(?:[^"\\$]|\\.)*"""")
 
 private val UNSIGNED_SUFFIX = regex("""[uU][lL]?$""")
 private val MARKUP_CALL_START = regex("""^(?:interpolate|Trusted)\s*\(""")
-private val UNQUOTED_VALUE = regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = regex("""[\p{L}\p{Nd}_]""")
 
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */
@@ -1852,18 +1851,34 @@ internal fun markupTextValue(
 ): Boolean = holeValues(value).all { IDENT.matchEntire(it.text) != null && markupText(src, it.text, at) }
 
 /**
+ * Where the unquoted attribute value that runs up to [end] starts, after its `=` and any white space,
+ * or null when [end] is not in one: read back from [end], so that each value costs its own length.
+ */
+private fun unquotedValueStart(
+    view: String,
+    end: Int,
+): Int? {
+    var k = end
+    while (k > 0 && view[k - 1] !in " \t\n\u000C\r\"'=<>`") k--
+    val start = k
+    while (k > 0 && view[k - 1] in " \t\n\u000C\r") k--
+    return if (k > 0 && view[k - 1] == '=') start else null
+}
+
+/**
  * The fix for a value written into an attribute value without quotes: quotes around the whole
  * value, which the browser reads the same, so a space in the value no longer starts an attribute.
- * Null when the value holds a quote of its own, or spans literals joined with `+`.
+ * Null when the value holds a quote of its own, or spans literals joined with `+`, which [operands]
+ * says of the string, asked once for all its values.
  */
 internal fun quoteFix(
     s: KotlinString,
     view: String,
     ip: Interpolation,
+    operands: Boolean,
 ): Fix? {
-    if (s.interpolations.any { it.kind == InterpolationKind.OPERAND }) return null
-    val m = UNQUOTED_VALUE.find(view.substring(0, ip.decodedStart)) ?: return null
-    val from = ip.decodedStart - m.groupValues[1].length
+    if (operands) return null
+    val from = unquotedValueStart(view, ip.decodedStart) ?: return null
     var to = ip.decodedStart
     while (to < view.length && view[to] !in " \t\n\u000C\r>") {
         if (view[to] in "\"'=<`") return null

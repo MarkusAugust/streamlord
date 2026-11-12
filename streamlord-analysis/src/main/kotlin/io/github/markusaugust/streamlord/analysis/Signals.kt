@@ -134,6 +134,7 @@ internal fun encodedSignalTypes(
     lex: KotlinLex = lexKotlin(src),
 ): Set<String> {
     val out = LinkedHashSet<String>()
+    val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
     for (site in findCallSites(src, setOf("dataSignals"), lex)) {
         if (foreign(site.name, site.nameStart)) continue
         val positional = site.positional
@@ -146,22 +147,23 @@ internal fun encodedSignalTypes(
                 ?: site.named("signals")
                 ?: continue
         if (a.string != null || PAIR.containsMatchIn(a.text) || ANY_PAIR.containsMatchIn(a.text)) continue
-        encodedType(a.text, src.substring(0, site.nameStart), depth = 0)?.let { out += it }
+        encodedType(a.text, declarations, site.nameStart, depth = 0)?.let { out += it }
     }
     return out
 }
 
-/** What [text] declares, read with the source [before] it, or null when it is no JSON value. */
+/** What [text] declares, read with the source before [at], or null when it is no JSON value. */
 private fun encodedType(
     text: String,
-    before: String,
+    declarations: Declarations,
+    at: Int,
     depth: Int,
 ): String? {
     TO_JSON.find(text)?.let { m ->
         m.groups[1]?.let { return named(it.value.substringAfterLast('.')) }
         m.groups[2]?.let { return it.value }
         m.groups[3]?.let { id ->
-            val type = variableType(id.value, before) ?: return ANY_SIGNAL
+            val type = declarations.typeOf(id.value, at) ?: return ANY_SIGNAL
             return if (type in VALUE_TYPES) null else named(type)
         }
         return ANY_SIGNAL
@@ -169,26 +171,57 @@ private fun encodedType(
     // dataSignals(signals), with `val signals = codec.toJsonValue(Form())` or `signals: JsonObject` before it.
     val id = IDENTIFIER_ARG.find(text)?.groupValues?.get(1) ?: return null
     if (depth > 0) return null
-    val name = Regex.escape(id)
-    val init =
-        regex("""\b(?:val|var)\s+$name\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
-            .findAll(before)
-            .lastOrNull()
-            ?.groupValues
-            ?.get(1)
-    if (init != null && TO_JSON.containsMatchIn(init)) return encodedType(init, before, depth + 1)
-    return variableType(id, before)?.takeIf { it in setOf("JsonValue", "JsonObject") }?.let { ANY_SIGNAL }
+    val init = declarations.initialiserOf(id, at)
+    if (init != null && TO_JSON.containsMatchIn(init)) return encodedType(init, declarations, at, depth + 1)
+    return declarations.typeOf(id, at)?.takeIf { it in setOf("JsonValue", "JsonObject") }?.let { ANY_SIGNAL }
 }
 
-/** The class a variable is last declared with in [before], `form: Form` or `val form = Form(...)`. */
-private fun variableType(
-    id: String,
-    before: String,
-): String? {
-    val name = Regex.escape(id)
-    val typed = regex("""\b$name\s*:\s*([A-Z][A-Za-z0-9_]*)""").findAll(before).lastOrNull()
-    val built = regex("""\b(?:val|var)\s+$name\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""").findAll(before).lastOrNull()
-    return listOfNotNull(typed, built).maxByOrNull { it.range.first }?.groupValues?.get(1)
+private val TYPED = regex("""\b([a-z_][A-Za-z0-9_]*)\s*:\s*([A-Z][A-Za-z0-9_]*)""")
+private val BUILT = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""")
+private val INITIALISED = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
+
+/**
+ * The variables [src] declares, by name, each with where the declaration ends: read once for a
+ * file, and asked what a name was last declared as before an offset, at every `dataSignals` call.
+ */
+private class Declarations(
+    private val src: String,
+) {
+    private val typed = byName(TYPED.findAll(src))
+    private val built = byName(BUILT.findAll(src))
+    private val initialised = byName(INITIALISED.findAll(src))
+
+    /** The class [id] is last declared with before [at], `form: Form` or `val form = Form(...)`. */
+    fun typeOf(
+        id: String,
+        at: Int,
+    ): String? = listOfNotNull(last(typed, id, at), last(built, id, at)).maxByOrNull { it.range.first }?.groupValues?.get(2)
+
+    /** What [id] is last set to before [at], `val signals = codec.toJsonValue(Form())`. */
+    fun initialiserOf(
+        id: String,
+        at: Int,
+    ): String? {
+        val found = initialised[id] ?: return null
+        val k = found.binarySearch { if (it.range.first < at) -1 else 1 }.let { -it - 2 }
+        val m = found.getOrNull(k) ?: return null
+        if (m.range.last < at) return m.groupValues[2]
+        // A declaration that runs on past [at] is read as far as the source before [at] goes.
+        return (INITIALISED.find(src.substring(m.range.first, at)) ?: found.getOrNull(k - 1))?.groupValues?.get(2)
+    }
+
+    private fun byName(matches: Sequence<MatchResult>): Map<String, List<MatchResult>> = matches.groupBy { it.groupValues[1] }
+
+    // The last match that ends before [at]: the matches of a name come in the order of the text.
+    private fun last(
+        index: Map<String, List<MatchResult>>,
+        id: String,
+        at: Int,
+    ): MatchResult? {
+        val found = index[id] ?: return null
+        val after = found.binarySearch { if (it.range.last < at) -1 else 1 }.let { -it - 1 }
+        return found.getOrNull(after - 1)
+    }
 }
 
 private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL else type

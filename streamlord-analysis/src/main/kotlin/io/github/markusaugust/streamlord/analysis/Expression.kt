@@ -28,23 +28,37 @@ private val BRACED_INTERPOLATION = regex("""\$\{[^{}]*\{""")
 internal fun quoteAt(
     text: String,
     offset: Int,
-): Char? {
-    var quote: Char? = null
-    var i = 0
-    while (i < offset) {
-        val c = text[i]
-        if (c == '\\') {
-            i += 2
-            continue
+): Char? = QuoteScan(text).at(offset)
+
+/** [quoteAt] for offsets asked in order, each read on from where the one before left off. */
+internal class QuoteScan(
+    private val text: String,
+) {
+    private var i = 0
+    private var asked = 0
+    private var quote: Char? = null
+
+    fun at(offset: Int): Char? {
+        if (offset < asked) {
+            i = 0
+            quote = null
         }
-        if (quote != null) {
-            if (c == quote) quote = null
-        } else if (c == '\'' || c == '"' || c == '`') {
-            quote = c
+        asked = offset
+        while (i < offset) {
+            val c = text[i]
+            if (c == '\\') {
+                i += 2
+                continue
+            }
+            if (quote != null) {
+                if (c == quote) quote = null
+            } else if (c == '\'' || c == '"' || c == '`') {
+                quote = c
+            }
+            i++
         }
-        i++
+        return quote
     }
-    return quote
 }
 
 /** What a character of an expression is to JavaScript; see [jsRegions]. */
