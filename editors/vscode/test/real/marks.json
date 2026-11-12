@@ -102,5 +102,10 @@
   {"file": "kotlin/RewritePlaces.kt", "at": "\"<p ti¦tle=\\\"$v\\\">x</p>\"", "actions": true},
   {"file": "kotlin/RewritePlaces.kt", "at": "\"<p>$¦v</p>\"", "actions": true},
   {"file": "kotlin/RewritePlaces.kt", "at": "</sty¦le><p title=", "actions": true},
-  {"file": "kotlin/RewritePlaces.kt", "at": "</scr¦ipt><p title=", "actions": true}
+  {"file": "kotlin/RewritePlaces.kt", "at": "</scr¦ipt><p title=", "actions": true},
+  {"file": "kotlin/RewriteLimits.kt", "at": "\"<p>\" + na¦me + \"</p>\".uppercase()", "actions": true},
+  {"file": "kotlin/RewriteLimits.kt", "at": "@Suppress(\"<p¦>$REWRITE_GREETING", "actions": true},
+  {"file": "kotlin/RewriteLimits.kt", "at": "\"<p>to¦tal $count</p>\"", "actions": true},
+  {"file": "kotlin/RewriteLimits.kt", "at": "</sty¦le><p title=\\\"$name\\\">x</p>\"", "actions": true},
+  {"file": "kotlin/RewriteLimits.kt", "at": "|</d¦iv>", "actions": true}
 ]
