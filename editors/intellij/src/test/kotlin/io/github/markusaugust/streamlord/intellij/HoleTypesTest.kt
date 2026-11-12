@@ -131,7 +131,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 "\${h.text}" to ValueFact.MARKUP,
                 "\$built" to ValueFact.MARKUP,
                 "\$fragment" to ValueFact.MARKUP,
-                "\${Trusted(q)}" to ValueFact.MARKUP,
+                "\${Trusted(q)}" to ValueFact.TRUSTED,
                 "\${\"<li>\$q</li>\".trimIndent()}" to ValueFact.MARKUP,
                 "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to ValueFact.MARKUP,
                 "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to ValueFact.MARKUP,
@@ -168,9 +168,9 @@ class HoleTypesTest : StreamlordTestCase() {
                     "fun f(own: Trusted, v: Vouched, vs: List<Vouched>) = \"<p>\$own \$v \${vs.first()}</p>\"",
             )
         assertEquals(ValueFact.OTHER, facts["\$own"])
-        assertEquals(ValueFact.MARKUP, facts["\$v"])
+        assertEquals(ValueFact.TRUSTED, facts["\$v"])
         // K1 does not infer what `first()` returns.
-        assertEquals(if (k1) null else ValueFact.MARKUP, facts["\${vs.first()}"])
+        assertEquals(if (k1) null else ValueFact.TRUSTED, facts["\${vs.first()}"])
     }
 
     fun `test a margin is passed over only where trimMargin is called on the literal`() {
@@ -298,6 +298,20 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(2, fixes.size)
         assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.startsWith("Mark ") })
         assertTrue("no fix is preferred", fixes.none { it is PreferredReplaceTextFix })
+    }
+
+    fun `test a Trusted the file does not declare gets no rewrite into an attribute, where interpolate would not escape it`() {
+        myFixture.addFileToProject(
+            "Users.kt",
+            "package users\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nclass User(val badge: Trusted, val name: String)",
+        )
+        myFixture.configureByText("Card.kt", "import users.User\nfun card(user: User): String = \"<p title=\\\"\${user.badge}\\\">x</p>\"")
+        assertEquals(1, myFixture.doHighlighting().count { it.inspectionToolId == "KotlinInterpolationInspection" })
+        assertEmpty(myFixture.getAllQuickFixes().mapNotNull { (QuickFixWrapper.unwrap(it) as? ReplaceTextFix)?.familyName })
+        // A String beside it is escaped by the rewrite, which is offered there.
+        myFixture.configureByText("Name.kt", "import users.User\nfun name(user: User): String = \"<p title=\\\"\${user.name}\\\">x</p>\"")
+        myFixture.doHighlighting()
+        assertEquals(1, myFixture.getAllQuickFixes().mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }.size)
     }
 
     fun `test an edit in another file that changes a type judges the file again`() {

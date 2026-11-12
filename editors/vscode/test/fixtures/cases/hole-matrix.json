@@ -1,5 +1,5 @@
 {
-  "$comment": "Where a Kotlin value lands, what it is and how the literal is written, and what the editor gives for each: read by HoleMatrixTest.kt, which builds one source for every place, value and form. A place is its markup, with § where the value goes, and the word its message names it by. A value is the type its parameter declares, the fact the editor gives of it (kotlinFact where only an editor that resolves types has one), what else the file imports or declares, and the sample core's interpolate is run with. A form is how the literal is written: what opens and closes it, how the value is written into it and how a message shows it, and whether its quotes are escaped. cells holds, by place and value, null where nothing is said, or the code and severity of the issue and its fixes in the order offered, {shown} standing for the value as shown; preferred is left out where no rule fixes it, fixes where no rule says what is offered, and forms holds what one form gets instead. The verdicts are core's: HoleMatrixTest.kt runs interpolate with each sample and fails a cell that offers a rewrite interpolate would refuse, or none where it escapes and keeps the value.",
+  "$comment": "Where a Kotlin value lands, what it is and how the literal is written, and what the editor gives for each: read by HoleMatrixTest.kt, which builds one source for every place, value and form. A place is its markup, with § where the value goes, and the word its message names it by. A value is the type its parameter declares, the fact the editor gives of it (kotlinFact where only an editor that resolves types has one; trusted is core's Trusted, which the text shows only where the value is declared one), what else the file imports or declares, and the sample core's interpolate is run with. A form is how the literal is written: what opens and closes it, how the value is written into it and how a message shows it, and whether its quotes are escaped. cells holds, by place and value, null where nothing is said, or the code and severity of the issue and its fixes in the order offered, {shown} standing for the value as shown; preferred is left out where no rule fixes it, fixes where no rule says what is offered, and forms holds what one form gets instead. The verdicts are core's: HoleMatrixTest.kt runs interpolate with each sample and fails a cell that offers a rewrite interpolate would refuse, or none where it escapes and keeps the value.",
   "places": [
     {"name":"element text","markup":"<p>§</p>","lands":"HTML"},
     {"name":"a quoted attribute","markup":"<p title=\"§\">x</p>","lands":"HTML"},
@@ -21,7 +21,8 @@
     {"name":"a boolean","type":"Boolean","fact":"boolean","sample":"boolean"},
     {"name":"a nullable number","type":"Int?","fact":"nullable","sample":"nullable"},
     {"name":"core's Html","type":"Html","fact":"markup","imports":["io.github.markusaugust.streamlord.core.domain.Html"],"sample":"html"},
-    {"name":"core's Trusted","type":"Trusted","fact":"markup","sample":"trusted"},
+    {"name":"core's Trusted","type":"Trusted","fact":"trusted","sample":"trusted"},
+    {"name":"a Trusted only the editor sees","type":"Badge","fact":"trusted","sample":"trusted"},
     {"name":"a constant","declares":"const val v = \"x\"\n","fact":"constant"},
     {"name":"an Html of another package","type":"Html","kotlinFact":"other","imports":["com.acme.Html"],"sample":"object"},
     {"name":"a value of unknown type","type":"Widget","sample":"object"}
@@ -42,6 +43,7 @@
       "a nullable number": null,
       "core's Html": null,
       "core's Trusted": null,
+      "a Trusted only the editor sees": null,
       "a constant": null,
       "an Html of another package": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
       "a value of unknown type": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]}
@@ -54,6 +56,7 @@
       "a nullable number": null,
       "core's Html": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
       "core's Trusted": {"code":"unescaped-interpolation","severity":"warning"},
+      "a Trusted only the editor sees": {"code":"unescaped-interpolation","severity":"warning"},
       "a constant": null,
       "an Html of another package": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
       "a value of unknown type": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]}
@@ -66,6 +69,7 @@
       "a nullable number": null,
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]}
@@ -78,6 +82,7 @@
       "a nullable number": null,
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
@@ -90,6 +95,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
@@ -102,6 +108,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
@@ -114,6 +121,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning"}
@@ -126,6 +134,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
@@ -138,6 +147,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
@@ -150,6 +160,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"hint","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"hint","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"hint","fixes":[]}
@@ -162,6 +173,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"hint","fixes":[]},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"hint","fixes":[]},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"hint","fixes":[]}
@@ -174,6 +186,7 @@
       "a nullable number": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
       "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}}
