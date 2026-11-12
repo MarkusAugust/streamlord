@@ -139,6 +139,10 @@ private class HoleReading(
 
 private val INTERPOLATE = setOf("interpolate")
 
+/** A list of plain string literals, as `interpolate` takes its prefixes: `listOf("data-x-")`. */
+private val PREFIX_LIST = regex("""(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")
+private val PLAIN_LITERAL = regex(""""([^"\\$]*)"""")
+
 /** What stands before the URL in the content of a refresh: a delay, a separator and `url=`, with a quote where one is written. */
 private val REFRESH_BEFORE_URL = regex("""\s*\d+(?:\.\d*)?\s*[;,]\s*(?:[Uu][Rr][Ll]\s*=\s*)?['"]?""")
 private val CONST_VAL_BEFORE = regex("""\bconst\s+val\s+[^=\n]*=\s*\z""")
@@ -679,6 +683,19 @@ public class Analyzer(
         return Judged(judged.issues + mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false)), judged.rewrite)
     }
 
+    /**
+     * The prefixes an `interpolate(prefixes, format, ...)` call is given, which it alone reads, where
+     * they are written as a list of plain literals; null where none are given or the text cannot tell them.
+     */
+    private fun literalPrefixes(
+        site: CallSite,
+        formatArg: Arg,
+    ): List<String>? {
+        val arg = site.named("prefixes") ?: site.positional.firstOrNull()?.takeIf { it.start < formatArg.start } ?: return null
+        val list = PREFIX_LIST.matchEntire(arg.text.trim()) ?: return null
+        return PLAIN_LITERAL.findAll(list.groupValues[1]).map { it.groupValues[1] }.toList()
+    }
+
     /** The format handed to `interpolate`: its first argument or `format =`, a literal or a `+` chain that starts with one. */
     private fun interpolateFormat(
         site: CallSite,
@@ -765,7 +782,7 @@ public class Analyzer(
             readHoles(
                 view,
                 starts.map { it until it + PLACEHOLDER.length },
-                listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
+                literalPrefixes(site, formatArg) ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
                 written,
             )
         val landings = reading.landings
