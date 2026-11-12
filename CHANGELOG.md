@@ -129,6 +129,17 @@ All notable changes to Streamlord are recorded here. The format follows
   other values say that the fix passes it so.
 - In both editors, a call to `interpolate` whose format has a trim call after it is checked as
   any other. Nothing in it was.
+- In both editors, a value whose shape says it is a number or a boolean, `${n.dec()}`,
+  `${xs.size}` or `${a * 2}`, gets the rewrite to `interpolate(...)` and is no longer offered
+  "Mark … as markup", whose `Trusted(...)` takes a String and did not compile. A value that may be
+  markup and is alone in the way of the rewrite says so in its message.
+- In both editors, a value joined with `+` that the analysis cannot read to its end is marked
+  only where it certainly is, and its message says that it cannot be read as a whole.
+- In both editors, a call `interpolate(listOf("data-x-"), format, ...)` is judged with the
+  prefixes it is given, as `interpolate` judges it, so a value it refuses in `data-x-text` is an
+  error.
+- In both editors, a `$name` a `$$"..."` literal leaves as text is offered after `$` like any
+  other signal the project reads.
 
 - In both editors, the text of a template literal is no longer said to be rewritten by Datastar:
   1.0.5 matches a template literal whole and rewrites only inside its `${...}`, so
