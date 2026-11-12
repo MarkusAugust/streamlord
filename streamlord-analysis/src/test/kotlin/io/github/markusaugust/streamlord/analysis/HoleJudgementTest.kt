@@ -57,6 +57,24 @@ class HoleJudgementTest {
     }
 
     @Test
+    fun `a value in a Datastar expression or a script is sent to an attribute read with el dataset, never to a signal`() {
+        // A String written into data-signals is refused by the same rule, so a signal is no way out.
+        val sources =
+            listOf(
+                "fun f(q: String) = \"<p data-show=\\\"\${q}\\\">x</p>\"",
+                "fun f(q: String) = interpolate(\"<p data-text=\\\"%s\\\">x</p>\", q)",
+                "fun f(q: String) = interpolate(\"<p data-text=\\\"\${q}\\\">x</p>\")",
+                "fun f(q: String) = interpolate(\"<script>%s</script>\", q)",
+                "fun f(q: String) = \"<script>\$q</script>\"",
+            )
+        for (src in sources) {
+            val message = analyzer.analyzeKotlin(src).single().message
+            assertTrue("in a signal" !in message && "or a signal" !in message, message)
+            if ("script" !in src) assertTrue("el.dataset" in message, message)
+        }
+    }
+
+    @Test
     fun `the editor is asked about a value without the comment after it`() {
         // Only the editor knows the value is a number, which a style takes.
         val src = "fun f(n: Any) = interpolate(\"<div style=\\\"%s\\\"></div>\", n /* id */ // id\n)"
