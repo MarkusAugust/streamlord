@@ -153,7 +153,8 @@ public fun nearestSignal(
         .filter { it != name && it != ANY_SIGNAL && ':' !in it }
         .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
-        .minByOrNull { it.second }
+        // By name where two are as near: the set comes in the order the project happened to be read in.
+        .minWithOrNull(compareBy({ it.second }, { it.first }))
         ?.first
 }
 
