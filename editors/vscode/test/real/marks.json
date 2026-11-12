@@ -91,5 +91,16 @@
   {"file": "kotlin/Plain.kt", "at": "data-on:click=\\\"@¦get"},
   {"file": "drawn/html/expressions.html", "at": "data-on:click=\"$¦count++\""},
   {"file": "aliased/aliased-4.html", "at": "data-star-on:¦click"},
-  {"file": "aliased/aliased-4.html", "at": "data-¦on:click=\"y(\""}
+  {"file": "aliased/aliased-4.html", "at": "data-¦on:click=\"y(\""},
+  {"file": "kotlin/RewriteWidget.kt", "at": "data-theme=¦\"light\"", "actions": true},
+  {"file": "kotlin/RewriteWidget.kt", "at": "<div id=\"${k.conte¦ntId}\">", "actions": true},
+  {"file": "kotlin/RewriteForms.kt", "at": "la¦ng=\"en\">$5 for", "actions": true},
+  {"file": "kotlin/RewriteForms.kt", "at": "\"<p ti¦tle=\\\"\" + a", "actions": true},
+  {"file": "kotlin/RewriteForms.kt", "at": "|   la¦ng=", "actions": true},
+  {"file": "kotlin/RewriteForms.kt", "at": "to¦tal $n</p>", "actions": true},
+  {"file": "kotlin/RewriteForms.kt", "at": "\"<p ti¦tle=\\\"$REWRITE_KIND", "actions": true},
+  {"file": "kotlin/RewritePlaces.kt", "at": "\"<p ti¦tle=\\\"$v\\\">x</p>\"", "actions": true},
+  {"file": "kotlin/RewritePlaces.kt", "at": "\"<p>$¦v</p>\"", "actions": true},
+  {"file": "kotlin/RewritePlaces.kt", "at": "</sty¦le><p title=", "actions": true},
+  {"file": "kotlin/RewritePlaces.kt", "at": "</scr¦ipt><p title=", "actions": true}
 ]
