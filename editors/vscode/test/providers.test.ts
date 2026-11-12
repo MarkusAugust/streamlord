@@ -423,12 +423,12 @@ describe("hover provider", () => {
 
 describe("code action provider", () => {
   /** The actions at `offset` of a Kotlin document linted as the extension lints it, and what applying one leaves. */
-  function actionsAt(text: string, offset: number) {
+  function actionsAt(text: string, offset: number, end = offset) {
     const doc = new MockDocument(text, "kotlin");
     const issues = new IssueStore();
     issues.set(doc.uri as never, diagnose(text, true, "data-", [], null));
-    const at = doc.positionAt(offset);
-    const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, new Range(at, at) as never, { diagnostics: [] } as never) as unknown as CodeAction[];
+    const range = new Range(doc.positionAt(offset), doc.positionAt(end));
+    const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, range as never, { diagnostics: [] } as never) as unknown as CodeAction[];
     const applied = (action: CodeAction) =>
       [...(action.edit?.replacements ?? [])]
         .sort((a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start))
@@ -441,7 +441,8 @@ describe("code action provider", () => {
   /** The literal of the case that found the defects, with each value written as given. */
   const widget = (root: string, css: string, content: string, body: string, events: string) =>
     `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
-  const ESCAPES = "Build this string with interpolate(...), which escapes the values";
+  const REWRITE = "Build this string with interpolate(...)";
+  const ESCAPES = `${REWRITE}, which escapes the values`;
 
   it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
     const css = "${customCss.orEmpty()}";
@@ -451,27 +452,33 @@ describe("code action provider", () => {
     for (const value of values) {
       const title = value === css ? `Build this string with interpolate(...), with ${css} as Trusted(...)` : ESCAPES;
       const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
-      const action = actions.find((a) => a.title === title);
-      assert.ok(action, `${value}: ${title} is not among ${JSON.stringify(actions.map((a) => a.title))}`);
-      assert.equal(applied(action), rewritten, value);
+      // The diagnostic's quick fix is the rewrite there, so no refactoring stands beside it.
+      const rewrites = actions.filter((a) => a.title.startsWith(REWRITE));
+      assert.deepEqual(rewrites.map((a) => [a.title, a.kind?.value]), [[title, "quickfix"]], value);
+      assert.equal(applied(rewrites[0] as CodeAction), rewritten, value);
     }
   });
 
-  it("offers the rewrite as a context action away from the warning", () => {
-    const text = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
-    const { actions, applied } = actionsAt(text, text.indexOf("class"));
-    const action = actions.find((a) => a.title.startsWith("Build this string with interpolate(...)"));
-    assert.ok(action, JSON.stringify(actions.map((a) => a.title)));
-    assert.notEqual(action.kind?.value, "quickfix");
-    assert.equal(applied(action), `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`);
+  const card = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
+  const carded = `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`;
+
+  it("offers the rewrite once, as a refactoring, at a caret away from the warning", () => {
+    const { actions, applied } = actionsAt(card, card.indexOf("class"));
+    const rewrites = actions.filter((a) => a.title.startsWith(REWRITE));
+    assert.deepEqual(rewrites.map((a) => [a.title, a.kind?.value, a.isPreferred ?? false]), [[ESCAPES, "refactor.rewrite", false]]);
+    assert.equal(applied(rewrites[0] as CodeAction), carded);
   });
 
-  it("offers the rewrite as a context action where no value has a warning", () => {
+  it("offers it for a selection inside the string, and not for one that reaches out of it", () => {
+    const inside = actionsAt(card, card.indexOf("<p"), card.indexOf("class") + 5);
+    assert.deepEqual(inside.actions.filter((a) => a.title.startsWith(REWRITE)).map((a) => a.kind?.value), ["refactor.rewrite"]);
+    assert.equal(inside.applied(inside.actions[0] as CodeAction), carded);
+    assert.deepEqual(actionsAt(card, card.indexOf("String ="), card.indexOf("class")).actions, []);
+  });
+
+  it("offers nothing where no value of the string is escaped", () => {
     const text = 'fun total(count: Int): String = "<p>total $count</p>"';
-    const { actions, applied } = actionsAt(text, text.indexOf("total $"));
-    const action = actions.find((a) => a.title.startsWith("Build this string with interpolate(...)"));
-    assert.ok(action, JSON.stringify(actions.map((a) => a.title)));
-    assert.equal(applied(action), `import ${DOMAIN}.interpolate\n\nfun total(count: Int): String = interpolate("<p>total %s</p>", count).text`);
+    assert.deepEqual(actionsAt(text, text.indexOf("total $")).actions, []);
   });
 });
 
