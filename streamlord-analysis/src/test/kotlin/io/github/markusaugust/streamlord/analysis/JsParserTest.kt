@@ -202,6 +202,17 @@ class JsParserTest {
     }
 
     @Test
+    fun `a value that stops short is said to end, though the client closes a parenthesis after it`() {
+        fun said(value: String) = Analyzer().analyzeHtml("<span data-text=\"$value\"></span>").map { it.message to it.start }
+        // The client compiles a value as `return (...);`, and its `)` is no token of the text.
+        assertEquals(listOf("Datastar expression: Unexpected end of input" to 20), said("1 +"))
+        assertEquals(listOf("Datastar expression: Unexpected end of input" to 19), said("(1"))
+        assertEquals(listOf("Datastar expression: Unexpected end of input" to 23), said("f(); 1 +"))
+        assertEquals(listOf("Datastar expression: Unexpected token" to 21), said("1 + )"))
+        assertEquals(listOf("Datastar expression: Unexpected token" to 18), said("1)"))
+    }
+
+    @Test
     fun `declarations need their initializer`() {
         ok("for (const x of y) {}", "for (const x in y) {}", "let a", "var [a] = b", "for (const [a, b] of c) {}")
         bad("const x", pos = 7)
