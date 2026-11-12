@@ -16,19 +16,10 @@ class FakeIndex {
     this.files.set(uri, { text, lang });
     return this;
   }
-  all() {
+  allDefinitions() {
     const out = new Set<string>();
-    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin").signals) out.add(s);
-    return out;
-  }
-  forFile(uri: string) {
-    const f = this.files.get(uri);
-    return new Set(f ? signalsOf(f.text, f.lang === "kotlin").signals : []);
-  }
-  selectorsForFile(uri: string) {
-    const f = this.files.get(uri);
-    const found = f && signalsOf(f.text, f.lang === "kotlin");
-    return { ids: new Set(found?.ids), classes: new Set(found?.classes) };
+    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin").definitions) out.add(s);
+    return [...out];
   }
   allSelectors() {
     const ids = new Set<string>();
@@ -143,10 +134,13 @@ describe("completion provider", () => {
       `<div id=x title="a b" data-x='c' hidden data-`,
       `<input {% if user.admin == true %}checked{% endif %} data-`,
       `<div {{ a == b ? 'x' : 'y' }} data-`,
-      "<a href=/x?a=b data-attr:title=`x` id= data-",
+      "<a href=/x?a=b data-attr:title=`x` id=y data-",
     ]) {
       assert.ok(complete(pdoc(tag), 0, tag.length, index).some((i) => i.label === "data-on"), tag);
     }
+    // After an equals sign and white space the browser reads a value, not a name.
+    const value = "<a href=/x id= data-";
+    assert.deepEqual(complete(pdoc(value), 0, value.length, index), [], value);
     const escaped = `val html = "<div class=\\"card\\" data-`;
     assert.ok(complete(new MockDocument(escaped, "kotlin"), 0, escaped.length, index).some((i) => i.label === "data-on"), escaped);
     // CodeQL's input, which never finished before. It ends on a name the caret completes, so the
@@ -178,6 +172,9 @@ describe("completion provider", () => {
   });
 });
 
+/** An item's name, whether its label is a string or carries a detail. */
+const name = (i: { label: unknown }) => (typeof i.label === "string" ? i.label : (i.label as { label: string }).label);
+
 describe("help inside an expression", () => {
   const index = new FakeIndex().add("file:///other.html", other, "html");
   /** Where an item's range starts; the provider sets a plain range. */
@@ -206,25 +203,27 @@ describe("help inside an expression", () => {
 
   it("offers the options of a backend action not yet written, with what each does", () => {
     const { items } = at(`<div data-on:click="@get('/x', {retry: 'never', re`);
-    const labels = items.map((i) => i.label);
+    const labels = items.map(name);
     assert.ok(labels.includes("retryInterval") && !labels.includes("retry"), labels.join());
-    assert.match(String((items.find((i) => i.label === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
+    // Its default shows after its name, as IntelliJ shows it.
+    assert.deepEqual(items.find((i) => name(i) === "retryInterval")?.label, { label: "retryInterval", detail: " = 1000" });
+    assert.match(String((items.find((i) => name(i) === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
   });
 
   it("offers the options in a template and in a Kotlin DSL string", () => {
-    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => i.label === "retryInterval"), "pebble");
+    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => name(i) === "retryInterval"), "pebble");
     const kotlin = new MockDocument(`${DSL}fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(kotlin as never, kotlin.positionAt(kotlin.text.indexOf("})")) as never);
-    assert.ok(items.some((i) => i.label === "retryInterval"), "kotlin");
+    assert.ok(items.some((i) => name(i) === "retryInterval"), "kotlin");
   });
 
   it("writes the colon after an option only where none follows", () => {
     const doc = new MockDocument(`<div data-on:click="@get('/x', {retr: 'never'})"></div>`, "html");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(doc as never, doc.positionAt(doc.text.indexOf(":", 35)) as never);
-    assert.equal(items.find((i) => i.label === "retry")?.insertText, "retry");
-    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => i.label === "retry")?.insertText, "retry: ");
+    assert.equal(items.find((i) => name(i) === "retry")?.insertText, "retry");
+    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => name(i) === "retry")?.insertText, "retry: ");
   });
 
   it("offers DOM events and Datastar's own after data-on:", () => {
@@ -368,7 +367,8 @@ describe("signature help", () => {
   it("shows the action's parameters with the one at the caret", () => {
     const h = signature(`<div data-on:click="@get('/x', `, "html");
     assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
-    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), ["uri", "options?"]);
+    // Each parameter by where it stands in the signature, as VS Code highlights it.
+    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), [[5, 8], [10, 18]]);
     assert.equal(h?.activeParameter, 1);
     const src = `${DSL}div { dataOnClick("@post(") }`;
     assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);

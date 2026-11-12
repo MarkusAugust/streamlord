@@ -4,35 +4,32 @@ package io.github.markusaugust.streamlord.editor
 
 import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
+import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
+import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
-import io.github.markusaugust.streamlord.analysis.actionDoc
-import io.github.markusaugust.streamlord.analysis.attributeDoc
+import io.github.markusaugust.streamlord.analysis.Workspace
+import io.github.markusaugust.streamlord.analysis.analyzeOptions
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
+import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.constantNames
-import io.github.markusaugust.streamlord.analysis.expressionAtCaret
-import io.github.markusaugust.streamlord.analysis.fetchOptionDoc
+import io.github.markusaugust.streamlord.analysis.foreignHelpers
+import io.github.markusaugust.streamlord.analysis.hover
+import io.github.markusaugust.streamlord.analysis.modulesOf
 import io.github.markusaugust.streamlord.analysis.otherDeclaredNames
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.analysis.signalSites
+import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
-import io.github.markusaugust.streamlord.analysis.tagBeforeCaret
 import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
-import io.github.markusaugust.streamlord.analysis.ActionCall as AnalysedCall
-import io.github.markusaugust.streamlord.analysis.ActionSpec as AnalysedAction
-import io.github.markusaugust.streamlord.analysis.AttributeSpec as AnalysedAttribute
-import io.github.markusaugust.streamlord.analysis.ExpressionAtCaret as AnalysedExpression
 import io.github.markusaugust.streamlord.analysis.Fix as AnalysedFix
 import io.github.markusaugust.streamlord.analysis.Issue as AnalysedIssue
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration as AnalysedDeclaration
 import io.github.markusaugust.streamlord.analysis.SignalSite as AnalysedSite
-import io.github.markusaugust.streamlord.analysis.actionCallAt as analysedCallAt
-import io.github.markusaugust.streamlord.analysis.actionPrefixAt as analysedActionPrefixAt
 import io.github.markusaugust.streamlord.analysis.rewriteAt as analysedRewriteAt
-import io.github.markusaugust.streamlord.analysis.signalPrefixAt as analysedSignalPrefixAt
 
 /*
  * The driving port of the analysis for an editor written in TypeScript: what the VS Code
@@ -126,8 +123,7 @@ private fun options(
     prefix: String,
 ): AnalyzeOptions {
     if (!kotlin) return AnalyzeOptions(prefix = prefix, prefixSetting = PREFIX_SETTING)
-    val modules = analyzer.modulesOf(src)
-    return AnalyzeOptions(prefix = prefix, htmlDsl = modules.htmlDsl, core = modules.core, prefixSetting = PREFIX_SETTING)
+    return analyzer.analyzeOptions(source(src, true, prefix)).copy(prefixSetting = PREFIX_SETTING)
 }
 
 /** The prefix setting by the id VS Code's settings are searched by. */
@@ -208,14 +204,11 @@ interface FileSignals {
     val others: Array<String>
 }
 
-/**
- * The calls of a file that are somebody else's and define no signal: in a Kotlin file without the
- * DSL's import, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too.
- */
+/** The calls of [src] that are somebody else's and define no signal, by the modules its imports show. */
 private fun foreignHelpers(
     src: String,
     kotlin: Boolean,
-): Set<String> = if (kotlin && !analyzer.modulesOf(src).htmlDsl) analyzer.catalog.signalNameHelpers.keys else emptySet()
+): Set<String> = foreignHelpers(htmlDsl = !kotlin || analyzer.modulesOf(source(src, true, "")).htmlDsl)
 
 @JsExport
 fun signalsOf(
@@ -352,270 +345,132 @@ fun renameText(
     newName: String,
 ): String? = analysed(site).renameText(text, old, newName)
 
-// ---- Where a caret stands, and what the catalog says: what completion, hover and signature help read
+// ---- Completion, hover and signature help -----------------------------------------------------
 
 @JsExport
-interface ExpressionAtCaret {
-    /** The expression before the caret, as Datastar is handed it. */
-    val before: String
-
-    /** Whether actions belong there: an expression, not a signal name. */
-    val allowActions: Boolean
-
-    /** Whether `patch` is in scope: data-on-signal-patch only. */
-    val patchInScope: Boolean
+interface SnippetPlace {
+    val start: Int
+    val end: Int
+    val choices: Array<String>
 }
 
 @JsExport
-interface OptionKey {
-    val typed: String
-    val written: Array<String>
+interface SnippetText {
+    val text: String
+
+    /** In the order the caret visits them. */
+    val places: Array<SnippetPlace>
 }
 
 @JsExport
-interface ActionCall {
-    val action: String
-    val argument: Int
-    val option: OptionKey?
-}
+interface CompletionItem {
+    val label: String
 
-private fun plain(e: AnalysedExpression): ExpressionAtCaret =
-    plain("before" to e.before, "allowActions" to e.allowActions, "patchInScope" to e.patchInScope)
-
-private fun plain(call: AnalysedCall): ActionCall =
-    plain(
-        "action" to call.action,
-        "argument" to call.argument,
-        "option" to call.option?.let { plain<OptionKey>("typed" to it.typed, "written" to it.written.plain()) },
-    )
-
-/** The Datastar expression [offset] stands in, or null: in a Kotlin file a DSL call's string only where the file can call the DSL. */
-@JsExport
-fun expressionAtCaret(
-    src: String,
-    offset: Int,
-    kotlin: Boolean,
-    prefix: String,
-): ExpressionAtCaret? {
-    val found =
-        if (kotlin) {
-            analyzer.expressionAtCaret(
-                src,
-                offset,
-                prefix,
-                analyzer.modulesOf(src),
-            )
-        } else {
-            analyzer.expressionAtCaret(src, offset, false, prefix)
-        }
-    return found?.let(::plain)
-}
-
-/** The innermost `@name(` still open at [offset] in the expression [text], or null. */
-@JsExport
-fun actionCallAt(
-    text: String,
-    offset: Int,
-): ActionCall? = analysedCallAt(text, offset)?.let(::plain)
-
-/** What is written of a signal's name before [offset], after its `$`, or null. */
-@JsExport
-fun signalPrefixAt(
-    text: String,
-    offset: Int,
-): String? = analysedSignalPrefixAt(text, offset)
-
-/** What is written of an action's name before [offset], after its `@`, or null. */
-@JsExport
-fun actionPrefixAt(
-    text: String,
-    offset: Int,
-): String? = analysedActionPrefixAt(text, offset)
-
-/** The markup of the tag [offset] stands in, from its `<`, or null: in a Kotlin file inside an HTML string alone. */
-@JsExport
-fun tagBeforeCaret(
-    src: String,
-    offset: Int,
-    kotlin: Boolean,
-    prefix: String,
-): String? {
-    if (!kotlin) return tagBeforeCaret(src, offset, prefix)
-    val html = analyzer.htmlStringAt(src, offset, analyzer.modulesOf(src)) ?: return null
-    return if (offset > html.contentStart && offset <= html.contentEnd) tagBeforeCaret(html, offset, prefix) else null
-}
-
-/** What is written before [offset] of the selector a Streamlord call in a Kotlin file is handed there, or null. */
-@JsExport
-fun selectorBefore(
-    src: String,
-    offset: Int,
-): String? = analyzer.selectorBefore(src, offset, analyzer.modulesOf(src))
-
-/** Whether [offset] is in a string of a Kotlin file that holds HTML. */
-@JsExport
-fun inHtmlString(
-    src: String,
-    offset: Int,
-): Boolean = analyzer.htmlStringAt(src, offset, analyzer.modulesOf(src)) != null
-
-/** Whether the Kotlin file [src] can call the DSL of streamlord-html. */
-@JsExport
-fun canCallDsl(src: String): Boolean = analyzer.modulesOf(src).htmlDsl
-
-/** Whether [offset] is in a call named as one of the DSL's in a Kotlin file that cannot call the DSL. */
-@JsExport
-fun inForeignDslCall(
-    src: String,
-    offset: Int,
-): Boolean = analyzer.inForeignDslCall(src, offset, analyzer.modulesOf(src))
-
-@JsExport
-interface Modifier {
-    val name: String
-
-    /** `flag`, `duration`, `enum`, `int`, `ident` or `idents`. */
-    val type: String
-    val values: Array<String>
-    val flags: Array<String>
-}
-
-@JsExport
-interface Attribute {
-    val name: String
-    val pro: Boolean
-    val forms: Array<String>
-    val keyRequired: Boolean
-
-    /** `expression`, `signal`, `filter`, `text` or `none`. */
-    val valueKind: String
-    val kotlin: Array<String>
-    val modifiers: Array<Modifier>
-    val onlyOn: Array<String>?
-}
-
-@JsExport
-interface Action {
-    val name: String
-    val pro: Boolean
+    /** `signal`, `action`, `option`, `scope`, `attribute`, `event`, `modifier`, `value`, `id` or `class`. */
     val kind: String
-    val signature: String
-    val kotlin: String
+
+    /** Where the text the item replaces starts; it ends at the caret. */
+    val replaceFrom: Int
+    val insert: String?
+    val snippet: SnippetText?
+    val detail: String?
+    val tail: String?
+
+    /** Markdown. */
+    val doc: String?
+    val filter: String?
+}
+
+@JsExport
+interface HoverText {
+    val start: Int
+    val end: Int
+    val markdown: String
+}
+
+@JsExport
+interface Signature {
+    val label: String
     val doc: String
-    val parameters: Array<String>
+
+    /** Where each parameter stands in [label], as `[start, end]`. */
+    val parameters: Array<Array<Int>>
+    val active: Int
 }
 
-@JsExport
-interface FetchOption {
-    val name: String
-    val type: String
-}
-
-@JsExport
-interface DatastarEvent {
-    val name: String
-    val doc: String
-}
-
-@JsExport
-interface DomEvent {
-    val name: String
-    val mdn: String?
-}
-
-@JsExport
-interface Catalog {
-    val prefix: String
-    val attributes: Array<Attribute>
-    val actions: Array<Action>
-    val fetchOptions: Array<FetchOption>
-    val compiledParameters: Array<String>
-    val datastarEvents: Array<DatastarEvent>
-    val domEvents: Array<DomEvent>
-}
-
-private fun plain(a: AnalysedAttribute): Attribute =
-    plain(
-        "name" to a.name,
-        "pro" to a.pro,
-        "forms" to a.forms.plain(),
-        "keyRequired" to a.keyRequired,
-        "valueKind" to a.valueKind.name.lowercase(),
-        "kotlin" to a.kotlin.plain(),
-        "modifiers" to
-            a.modifiers
-                .map {
-                    plain<Modifier>(
-                        "name" to it.name,
-                        "type" to it.type.name.lowercase(),
-                        "values" to it.values.plain(),
-                        "flags" to it.flags.plain(),
-                    )
-                }.toTypedArray(),
-        "onlyOn" to a.onlyOn?.plain(),
-    )
-
-private fun plain(a: AnalysedAction): Action =
-    plain(
-        "name" to a.name,
-        "pro" to a.pro,
-        "kind" to a.kind,
-        "signature" to a.signature,
-        "kotlin" to a.kotlin,
-        "doc" to a.doc,
-        "parameters" to a.parameters.plain(),
-    )
-
-private val attributes: Map<String, Attribute> by lazy { analyzer.catalog.attributes.associate { it.name to plain(it) } }
-
-private val plainCatalog: Catalog by lazy {
-    val c = analyzer.catalog
-    plain(
-        "prefix" to AnalyzeOptions().prefix,
-        "attributes" to attributes.values.toTypedArray(),
-        "actions" to c.actions.map(::plain).toTypedArray(),
-        "fetchOptions" to c.fetchOptions.map { plain<FetchOption>("name" to it.name, "type" to it.type) }.toTypedArray(),
-        "compiledParameters" to c.compiledParameters.plain(),
-        "datastarEvents" to c.datastarEvents.map { plain<DatastarEvent>("name" to it.name, "doc" to it.doc) }.toTypedArray(),
-        "domEvents" to c.domEvents.map { plain<DomEvent>("name" to it.name, "mdn" to it.mdn) }.toTypedArray(),
-    )
-}
-
-/** The attributes, actions, options and events of the Datastar version Streamlord speaks. */
-@JsExport
-fun catalog(): Catalog = plainCatalog
-
-/** The attribute a name as written stands for, `data-on:click__once` for `on`, or null. */
-@JsExport
-fun attributeNamed(
-    written: String,
+private fun source(
+    src: String,
+    kotlin: Boolean,
     prefix: String,
-): Attribute? =
-    analyzer.catalog
-        .parseAttributeName(written, prefix)
-        ?.spec
-        ?.let { attributes[it.name] }
+): Source = Source(src, language(kotlin), prefix)
 
-/** The attribute the DSL function [helper] writes, or null. */
+/** The attribute prefix Datastar reads when none is set. */
 @JsExport
-fun attributeOfHelper(helper: String): Attribute? = analyzer.catalog.attributesByKotlin[helper]?.let { attributes[it.name] }
+fun defaultPrefix(): String = AnalyzeOptions().prefix
 
-/** What the attribute [name] is and does, in Markdown; [withKotlin] names its DSL helpers too. */
+/**
+ * The items to offer at [offset] of [src], in the order shown: [signals], [ids] and [classes] are
+ * those the workspace defines, and [attributeNames] is false where the editor offers those already.
+ */
 @JsExport
-fun attributeDoc(
-    name: String,
+fun complete(
+    src: String,
+    offset: Int,
+    kotlin: Boolean,
     prefix: String,
-    withKotlin: Boolean,
-): String? = analyzer.catalog.attributesByName[name]?.let { attributeDoc(it, prefix, withKotlin) }
+    signals: Array<String>,
+    ids: Array<String>,
+    classes: Array<String>,
+    attributeNames: Boolean,
+): Array<CompletionItem> {
+    val workspace = Workspace(signals.asList(), ids.asList(), classes.asList(), called = "workspace")
+    return analyzer
+        .complete(source(src, kotlin, prefix), offset, workspace, attributeNames)
+        .items
+        .map(::plain)
+        .toTypedArray()
+}
 
-@JsExport
-fun actionDoc(
-    name: String,
-    withKotlin: Boolean,
-): String? = analyzer.catalog.actionsByName[name]?.let { actionDoc(it, withKotlin) }
+private fun plain(item: Completion): CompletionItem {
+    val snippet =
+        item.snippet?.let { s ->
+            val places = s.places.map { plain<SnippetPlace>("start" to it.start, "end" to it.end, "choices" to it.choices.plain()) }
+            plain<SnippetText>("text" to s.text, "places" to places.toTypedArray())
+        }
+    return plain(
+        "label" to item.label,
+        "kind" to item.kind.name.lowercase(),
+        "replaceFrom" to item.replaceFrom,
+        "insert" to item.insert,
+        "snippet" to snippet,
+        "detail" to item.detail,
+        "tail" to item.tail,
+        "doc" to item.doc,
+        "filter" to item.filter,
+    )
+}
 
+/** The documentation of what stands at [offset] of [src], or null. */
 @JsExport
-fun fetchOptionDoc(name: String): String? =
-    analyzer.catalog.fetchOptions
-        .firstOrNull { it.name == name }
-        ?.let(::fetchOptionDoc)
+fun hover(
+    src: String,
+    offset: Int,
+    kotlin: Boolean,
+    prefix: String,
+): HoverText? {
+    val found = analyzer.hover(source(src, kotlin, prefix), offset) ?: return null
+    return plain("start" to found.start, "end" to found.end, "markdown" to found.markdown)
+}
+
+/** The parameters of the action call [offset] of [src] stands in, or null. */
+@JsExport
+fun signatureHelp(
+    src: String,
+    offset: Int,
+    kotlin: Boolean,
+    prefix: String,
+): Signature? {
+    val help = analyzer.signatureHelp(source(src, kotlin, prefix), offset) ?: return null
+    val parameters = help.parameters.map { arrayOf(it.first, it.last + 1) }.toTypedArray()
+    return plain("label" to help.label, "doc" to help.doc, "parameters" to parameters, "active" to help.active)
+}

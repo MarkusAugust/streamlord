@@ -6,7 +6,10 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
-import io.github.markusaugust.streamlord.analysis.ActionSpec
+import io.github.markusaugust.streamlord.analysis.SignatureHelp
+import io.github.markusaugust.streamlord.analysis.Workspace
+import io.github.markusaugust.streamlord.analysis.complete
+import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
 import io.github.markusaugust.streamlord.intellij.completion.DatastarParameterInfoHandler
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
@@ -61,7 +64,7 @@ class ExpressionHelpTest : StreamlordTestCase() {
     }
 
     fun `test events after data-on`() {
-        assertContainsElements(lookups("d.html", "<button data-on:<caret>></button>"), "data-on:click", "data-on:datastar-fetch")
+        assertContainsElements(lookups("d.html", "<button data-on:<caret>></button>"), "click", "datastar-fetch")
     }
 
     fun `test parameter info shows the parameter at the caret`() {
@@ -69,7 +72,7 @@ class ExpressionHelpTest : StreamlordTestCase() {
         val handler = DatastarParameterInfoHandler()
         val create = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)
         assertNotNull(handler.findElementForParameterInfo(create))
-        assertEquals("get", (create.itemsToShow!!.single() as ActionSpec).name)
+        assertEquals("@get(uri, options?)", (create.itemsToShow!!.single() as SignatureHelp).label)
         val update = MockUpdateParameterInfoContext(myFixture.editor, myFixture.file, create.itemsToShow)
         val owner = handler.findElementForUpdatingParameterInfo(update)!!
         handler.updateParameterInfo(owner, update)
@@ -78,7 +81,7 @@ class ExpressionHelpTest : StreamlordTestCase() {
         myFixture.configureByText("View.kt", "fun f() { dataOnClick(\"@post(<caret>\") }")
         val kotlin = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)
         assertNotNull(handler.findElementForParameterInfo(kotlin))
-        assertEquals("post", (kotlin.itemsToShow!!.single() as ActionSpec).name)
+        assertEquals("@post(uri, options?)", (kotlin.itemsToShow!!.single() as SignatureHelp).label)
 
         myFixture.configureByText("f.html", "<div data-text=\"\$count<caret>\"></div>")
         assertNull(handler.findElementForParameterInfo(MockCreateParameterInfoContext(myFixture.editor, myFixture.file)))
@@ -90,7 +93,7 @@ class ExpressionHelpTest : StreamlordTestCase() {
         DumbModeTestUtils.runInDumbModeSynchronously(project) {
             val create = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)
             assertNotNull(DatastarParameterInfoHandler().findElementForParameterInfo(create))
-            assertEquals("post", (create.itemsToShow!!.single() as ActionSpec).name)
+            assertEquals("@post(uri, options?)", (create.itemsToShow!!.single() as SignatureHelp).label)
         }
     }
 
@@ -136,8 +139,19 @@ class ExpressionHelpTest : StreamlordTestCase() {
         )
         myFixture.configureByText("k.html", "<button data-on:<caret>></button>")
         myFixture.completeBasic()
-        assertTrue(docOf("data-on:datastar-fetch"), docOf("data-on:datastar-fetch").contains("document"))
-        assertTrue(docOf("data-on:click"), docOf("data-on:click").contains("developer.mozilla.org"))
+        assertTrue(docOf("datastar-fetch"), docOf("datastar-fetch").contains("document"))
+        assertTrue(docOf("click"), docOf("click").contains("developer.mozilla.org"))
+    }
+
+    /** The labels the analysis offers at [offset] of the open file, as its PSI reads now. */
+    private fun actionsAt(offset: Int): List<String> {
+        val asked = DatastarCaret.at(myFixture.file, offset) ?: return emptyList()
+        return StreamlordAnalysis
+            .getInstance(project)
+            .analyzer
+            .complete(asked.source, asked.offset, Workspace(emptyList(), emptyList(), emptyList(), called = "project"))
+            .items
+            .map { it.label }
     }
 
     // The help for what was typed is worked out once it is in the file, which the typed handler runs ahead of.
@@ -149,9 +163,9 @@ class ExpressionHelpTest : StreamlordTestCase() {
             myFixture.configureByText(name, text)
             val at = myFixture.caretOffset
             WriteCommandAction.runWriteCommandAction(project) { myFixture.editor.document.insertString(at, "@get") }
-            assertNull(name, DatastarCaret.expressionAt(myFixture.file, at + 4))
+            assertFalse(name, "@get" in actionsAt(at + 4))
             PsiDocumentManager.getInstance(project).commitAllDocuments()
-            assertEquals(name, "@get", DatastarCaret.expressionAt(myFixture.file, at + 4)?.before)
+            assertTrue(name, "@get" in actionsAt(at + 4))
         }
     }
 

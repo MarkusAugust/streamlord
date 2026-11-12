@@ -482,6 +482,9 @@ private fun StringBuilder.escaped(value: Any?) {
  * @property tagStart Where the tag it landed in starts in the markup, at its `<`, when it landed
  *   in a tag, on an attribute's name or in its value; or -1. A tag over several lines starts on the
  *   first, and raw text, a comment or a quoted value holds no tag.
+ * @property nameStart Where the attribute name it landed on starts in the markup, when it landed on
+ *   one; or -1. The name is the browser's: an `=` first in it is part of it, a value after an `=`
+ *   and white space is no name.
  */
 @InternalStreamlordApi
 public class HoleLanding(
@@ -490,6 +493,7 @@ public class HoleLanding(
     public val valueStart: Int,
     public val loadsCode: Boolean,
     public val tagStart: Int = -1,
+    public val nameStart: Int = -1,
 )
 
 /**
@@ -551,6 +555,7 @@ private fun HoleLanding.inSource(written: Written): HoleLanding =
         if (valueStart < 0) valueStart else written.sourceOf(valueStart),
         loadsCode,
         if (tagStart < 0) tagStart else written.sourceOf(tagStart),
+        if (nameStart < 0) nameStart else written.sourceOf(nameStart),
     )
 
 /**
@@ -731,6 +736,7 @@ private fun landingOf(
         strictest.valueStartAt(hole),
         strictest.loadsCodeAt(hole),
         strictest.tagStartAt(hole),
+        strictest.nameStartAt(hole),
     )
 }
 
@@ -860,6 +866,8 @@ private class Landscape(
     private val attributeEnds = ArrayList<Int>()
     private val tagStarts = ArrayList<Int>()
     private val tagEnds = ArrayList<Int>()
+    private val nameStarts = ArrayList<Int>()
+    private val nameEnds = ArrayList<Int>()
     private val codeStarts = ArrayList<Int>()
     private val codeEnds = ArrayList<Int>()
     private val opaqueStarts = ArrayList<Int>()
@@ -876,6 +884,8 @@ private class Landscape(
         valueEnd: Int,
         quoted: Boolean,
     ) {
+        nameStarts += nameStart
+        nameEnds += nameStart + name.length
         // An unquoted value ends at the first space, so a value written into one can add
         // attributes beside it. It is left to the tag spans, which refuse.
         if (!quoted || valueStart < 0) return
@@ -1083,6 +1093,8 @@ private class Landscape(
     fun loadsCodeAt(hole: Int): Boolean = indexOfSpan(hole, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
 
     fun tagStartAt(hole: Int): Int = indexOfSpan(hole, tagStarts, tagEnds).let { if (it >= 0) tagStarts[it] else -1 }
+
+    fun nameStartAt(hole: Int): Int = indexOfSpan(hole, nameStarts, nameEnds).let { if (it >= 0) nameStarts[it] else -1 }
 
     // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
     private val signalPaths = CatalogNames.signalAttributes

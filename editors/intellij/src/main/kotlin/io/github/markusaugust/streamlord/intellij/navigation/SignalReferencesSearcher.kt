@@ -13,6 +13,7 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.parentsOfType
 import com.intellij.util.Processor
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
+import io.github.markusaugust.streamlord.analysis.SignalSite as AnalysedSite
 
 /**
  * The references to a signal, from the files [SignalIndex] says name it: no word search, and no
@@ -43,8 +44,7 @@ internal fun signalReferences(
 ) {
     for (file in filesNaming(project, name, scope)) {
         for (site in SignalSites.of(file)) {
-            val names = site.signal == name || (under && site.declaration != null && site.signal.startsWith("$name."))
-            if (!names) continue
+            if (!AnalysedSite(site.start, site.end, site.signal, site.declaration).names(name, under)) continue
             val ref = signalReferenceAt(file, site.start) ?: continue
             if (!consumer(ref)) return
         }

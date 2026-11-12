@@ -61,5 +61,10 @@ class SignalSitesTest {
         val json = """<div data-signals="{user: {name: ''}}"></div>"""
         val keys = signalSites(emptyList(), signalDeclarations(json, SourceLanguage.HTML), emptySet())
         assertEquals(listOf("person", "name"), keys.map { it.renameText(json, "user", "person") })
+        // A key inside the object stays as it is, so a rename of the object leaves it alone.
+        val keyed = """<div data-signals:hero="{strength: 1}" data-signals="{user: {name: ''}}"></div>"""
+        val moved = signalSites(emptyList(), signalDeclarations(keyed, SourceLanguage.HTML), emptySet())
+        assertEquals(listOf("hero"), moved.filter { it.names("hero", under = true) }.map { keyed.substring(it.start, it.end) })
+        assertEquals(listOf("user"), moved.filter { it.names("user", under = true) }.map { keyed.substring(it.start, it.end) })
     }
 }

@@ -11,7 +11,7 @@ import io.github.markusaugust.streamlord.core.domain.landingAsParsed
  */
 
 /** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
-public data class ValueAtCaret(
+internal data class ValueAtCaret(
     val attribute: String,
     val valueStart: Int,
     val before: String,
@@ -28,7 +28,7 @@ private const val CARET = 'x'
  * strictest reading, still judges a value there. With [templates], as in a template file, a value in
  * a template comment is not found, as the checks skip it.
  */
-public fun valueAtCaret(
+internal fun valueAtCaret(
     markup: String,
     offset: Int,
     prefix: String,
@@ -43,33 +43,44 @@ public fun valueAtCaret(
     return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text)
 }
 
+/** The attribute name a caret stands on in a tag: the tag's name, lowercased, and the name as written up to the caret. */
+internal class NameAtCaret(
+    val tag: String,
+    val typed: String,
+)
+
+private val TAG_NAME = regex("""<([A-Za-z][^\s/>]*)""")
+
 /**
- * The markup of the tag [offset] stands in, from its `<` up to [offset], read as [valueAtCaret]
- * reads it, or null in text, a comment, raw text or a quoted value. The tag may begin lines above,
- * with its attributes on lines of their own.
+ * The attribute name [offset] stands on, in [markup] read as [valueAtCaret] reads it, or null in
+ * text, a comment, raw text, a value or a tag's name. The tag may begin lines above, with its
+ * attributes on lines of their own; the name is the browser's, so a value after `=` and white
+ * space is none.
  */
-public fun tagBeforeCaret(
+internal fun nameAtCaret(
     markup: String,
     offset: Int,
     prefix: String,
     templates: Boolean = true,
-): String? {
+): NameAtCaret? {
     if (offset !in 0..markup.length) return null
     val probe = StringBuilder(withTemplateTagNames(markup)).insert(offset, CARET).toString()
     val landing = landingAsParsed(probe, offset..offset, listOf(prefix), templates)
     if (landing.position != Position.STRUCTURE || landing.attribute != null || landing.tagStart !in 0..offset) return null
-    return markup.substring(landing.tagStart, offset)
+    if (landing.nameStart !in landing.tagStart..offset) return null
+    val tag = TAG_NAME.matchAt(markup, landing.tagStart)?.groupValues?.get(1) ?: return null
+    return NameAtCaret(tag.asciiLowercase(), markup.substring(landing.nameStart, offset))
 }
 
-/** [tagBeforeCaret] in an HTML string in Kotlin, read decoded, as its values are. */
-public fun tagBeforeCaret(
+/** [nameAtCaret] in an HTML string in Kotlin, read decoded, as its values are. */
+internal fun nameAtCaret(
     html: KotlinString,
     offset: Int,
     prefix: String,
-): String? = tagBeforeCaret(html.text, decodedIndex(html, offset), prefix, templates = false)
+): NameAtCaret? = nameAtCaret(html.text, decodedIndex(html, offset), prefix, templates = false)
 
 /** The Datastar expression before a caret, as Datastar is handed it, and what belongs there. */
-public data class ExpressionAtCaret(
+internal data class ExpressionAtCaret(
     val before: String,
     /** Whether actions belong there: an expression, not a signal name. */
     val allowActions: Boolean,
@@ -82,7 +93,7 @@ public data class ExpressionAtCaret(
  * otherwise: an attribute value by [valueAtCaret], in markup or in an HTML string in Kotlin, the value of
  * an `attributes["data-..."] =`, or the string handed to a DSL expression call. Kotlin's escapes and character references are decoded.
  */
-public fun Analyzer.expressionAtCaret(
+internal fun Analyzer.expressionAtCaret(
     src: String,
     offset: Int,
     kotlin: Boolean,
@@ -129,7 +140,7 @@ private fun Analyzer.expressionInMarkup(
 }
 
 /** The decoded index of a source offset in a Kotlin string: the last character that starts at or before it. */
-private fun decodedIndex(
+internal fun decodedIndex(
     s: KotlinString,
     offset: Int,
 ): Int {
@@ -139,14 +150,14 @@ private fun decodedIndex(
 }
 
 /** The action call a caret stands in: the action's name, which argument, and the key of the options object when the caret is on one. */
-public data class ActionCall(
+internal data class ActionCall(
     val action: String,
     val argument: Int,
     val option: OptionKeyAt?,
 )
 
 /** A key of a backend action's options object at the caret: what is typed of it, and the keys the object already holds. */
-public data class OptionKeyAt(
+internal data class OptionKeyAt(
     val typed: String,
     val written: List<String>,
 )
@@ -169,7 +180,7 @@ private class OpenBracket(
 }
 
 /** The innermost `@name(` still open at [offset] in the expression [text], read from the text before the caret, or null. */
-public fun actionCallAt(
+internal fun actionCallAt(
     text: String,
     offset: Int,
 ): ActionCall? {

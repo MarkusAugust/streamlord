@@ -1111,13 +1111,13 @@ public class ExpressionValidator(
 private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null
 
 /** The signal name typed so far just before [offset] (`$cou|` gives `cou`, `$|` gives ""), or null when not in a signal. */
-public fun signalPrefixAt(
+internal fun signalPrefixAt(
     text: String,
     offset: Int,
 ): String? = SIGNAL_PREFIX.find(text.substring(0, offset.coerceIn(0, text.length)))?.let { it.groupValues[1] }
 
 /** The action name typed so far just before [offset], or null when not in an action. */
-public fun actionPrefixAt(
+internal fun actionPrefixAt(
     text: String,
     offset: Int,
 ): String? = ACTION_PREFIX.find(text.substring(0, offset.coerceIn(0, text.length)))?.let { it.groupValues[1] }

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { catalog, type Issue, type Route } from "./analysis.ts";
+import { defaultPrefix, type Issue, type Route } from "./analysis.ts";
 import { IssueStore, StreamlordCodeActionProvider } from "./codeActions.ts";
 import { applyRecommendedColors, removeRecommendedColors } from "./colors.ts";
 import { StreamlordCompletionProvider } from "./completion.ts";
@@ -20,7 +20,7 @@ function markupLanguages(): string[] {
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = () => vscode.workspace.getConfiguration("streamlord");
-  const prefix = () => config().get<string>("attributePrefix", catalog().prefix);
+  const prefix = () => config().get<string>("attributePrefix", defaultPrefix());
   const markup = new Set(markupLanguages());
   const selector: vscode.DocumentSelector = [{ language: "kotlin" }, ...[...markup].map((language) => ({ language }))];
   const issues = new IssueStore();

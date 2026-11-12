@@ -1,5 +1,5 @@
 {
-  "$comment": "Which attribute value a caret stands in, read as the browser reads the markup (valueAtCaret): the markup is before + after, the caret between them, prefix the attribute prefix (data- when left out). attribute is the attribute's name as written, or null when the caret stands in no quoted attribute value; value is the value before the caret with character references decoded. templates (true when left out) reads the markup as a template file does, template comments skipped. A case with tag also holds tagBeforeCaret: the markup of the tag the caret stands in, from its < up to the caret, or null in text, a comment, raw text or a quoted value. Read by CompletionContextsTest.kt.",
+  "$comment": "Which attribute value a caret stands in, read as the browser reads the markup (valueAtCaret): the markup is before + after, the caret between them, prefix the attribute prefix (data- when left out). attribute is the attribute's name as written, or null when the caret stands in no quoted attribute value; value is the value before the caret with character references decoded. templates (true when left out) reads the markup as a template file does, template comments skipped. A case with nameAt also holds nameAtCaret: the attribute name the caret stands on, as its tag's name lowercased and the name typed up to the caret, or null in text, a comment, raw text or a quoted value. Read by CompletionContextsTest.kt.",
   "cases": [
     {
       "name": "a value over several lines",
@@ -140,7 +140,7 @@
       "before": "<input\n  type=\"search\"\n  data-bind:query\n  data-on:input__",
       "after": ">",
       "attribute": null,
-      "tag": "<input\n  type=\"search\"\n  data-bind:query\n  data-on:input__"
+      "nameAt": {"tag": "input", "typed": "data-on:input__"}
     },
     {
       "name": "no tag in a quoted value",
@@ -148,42 +148,42 @@
       "after": "\"></div>",
       "attribute": "data-text",
       "value": "$a",
-      "tag": null
+      "nameAt": null
     },
     {
       "name": "no tag in text",
       "before": "<p>x</p> data-on:click__",
       "after": "",
       "attribute": null,
-      "tag": null
+      "nameAt": null
     },
     {
       "name": "no tag in a comment",
       "before": "<!-- <div data-on:click__",
       "after": " -->",
       "attribute": null,
-      "tag": null
+      "nameAt": null
     },
     {
       "name": "no tag in a script's text",
       "before": "<script>if (a<b && data-on:click__",
       "after": "</script>",
       "attribute": null,
-      "tag": null
+      "nameAt": null
     },
     {
       "name": "the tag after a textarea holding <b",
       "before": "<textarea><b</textarea>\n<div data-on:click__",
       "after": "></div>",
       "attribute": null,
-      "tag": "<div data-on:click__"
+      "nameAt": {"tag": "div", "typed": "data-on:click__"}
     },
     {
       "name": "a template comment is skipped with templates",
       "before": "{{!-- <i --}}<div data-on:click__",
       "after": "></div>",
       "attribute": null,
-      "tag": "<div data-on:click__"
+      "nameAt": {"tag": "div", "typed": "data-on:click__"}
     },
     {
       "name": "a template comment opens a tag without templates",
@@ -191,7 +191,7 @@
       "before": "{{!-- <i --}}<div data-on:click__",
       "after": "></div>",
       "attribute": null,
-      "tag": "<i --}}<div data-on:click__"
+      "nameAt": {"tag": "i", "typed": "data-on:click__"}
     }
   ]
 }

@@ -13,6 +13,7 @@ import com.intellij.platform.backend.documentation.DocumentationTargetProvider
 import com.intellij.platform.backend.documentation.LookupElementDocumentationTargetProvider
 import com.intellij.platform.backend.presentation.TargetPresentation
 import com.intellij.psi.PsiFile
+import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.intellij.completion.LookupDoc
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtFile
@@ -67,11 +68,14 @@ class StreamlordDocumentationTargetProvider : DocumentationTargetProvider {
     }
 }
 
-/** An option or an event in the completion list, which carries its documentation: F1 or Ctrl+Q while the list is open. */
+/** An item of the completion list that has documentation, shown with F1 or Ctrl+Q while the list is open. */
 class StreamlordLookupDocumentationTargetProvider : LookupElementDocumentationTargetProvider {
     override fun documentationTarget(
         psiFile: PsiFile,
         element: LookupElement,
         offset: Int,
-    ): DocumentationTarget? = (element.`object` as? LookupDoc)?.let { StreamlordDocumentationTarget(it.name, it.html) }
+    ): DocumentationTarget? {
+        val item = element.`object` as? LookupDoc ?: return null
+        return item.markdown?.let { StreamlordDocumentationTarget(item.name, markdownToHtml(it)) }
+    }
 }
