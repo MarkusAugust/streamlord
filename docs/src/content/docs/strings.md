@@ -335,15 +335,17 @@ fun mixedBefore(name: String, note: String) = "<li title=\"" + name + """">""" +
 fun mixedAfter(name: String, note: String) = interpolate("<li title=\"%s" + """">%s""" + "</li>", name, note).text
 ```
 
-One value alone whose type the editor does not know is passed as `listOf(value)`. Kotlin would
-otherwise take a value that is itself a `List` for the list of values:
+Every value is passed as it is written, a collection too. `interpolate` writes a `List` handed to
+it as one value, the way a template does, so the page stays as it was:
 
 ```kotlin sample=declarations
 class Hero(val tags: List<String>)
 
 fun tagsBefore(hero: Hero) = "<p>${hero.tags}</p>"
-fun tagsAfter(hero: Hero) = interpolate("<p>%s</p>", listOf(hero.tags)).text
+fun tagsAfter(hero: Hero) = interpolate("<p>%s</p>", hero.tags).text
 ```
+
+To pass the elements of a list as the values, spread it: `interpolate(format, *values.toTypedArray())`.
 
 When no rewrite is offered, the warning of each value ends with the reason:
 

@@ -54,7 +54,7 @@ class RewriteAtTest {
         val src = "fun list(xs: List<String>, t: String) = \"<ul title=\\\"\$t\\\">\${xs.joinToString(\"\") { \"<li>\$it</li>\" }}</ul>\""
         assertEquals(
             import + "fun list(xs: List<String>, t: String) = \"<ul title=\\\"\$t\\\">" +
-                "\${xs.joinToString(\"\") { interpolate(\"<li>%s</li>\", listOf(it)).text }}</ul>\"",
+                "\${xs.joinToString(\"\") { interpolate(\"<li>%s</li>\", it).text }}</ul>\"",
             offered(src, "li>")?.apply(src),
         )
     }

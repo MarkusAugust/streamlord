@@ -2048,16 +2048,14 @@ internal fun trustedRewriteTitle(shown: List<String>): String = "$REWRITE_TITLE,
  * twice, so `interpolate` prints it once. A multi-dollar literal keeps its prefix, so a `$name`
  * that was text stays text, and [trim], the trim call after a literal, stays on the format. A value
  * joined with `+` is a `%s` at the end of the literal before it, and literals written alike become
- * one. Each value of [trusted], by its place among the values, is passed as `Trusted(...)`, and
- * [listed] passes the one value as a list of one, so that a value that is itself a List is not
- * taken for the values. Made the first time it is read, once for all the fixes that offer it.
+ * one. Each value of [trusted], by its place among the values, is passed as `Trusted(...)`; any
+ * other is passed as it is written. Made the first time it is read, once for all the fixes that offer it.
  */
 internal fun interpolateText(
     src: String,
     s: KotlinString,
     trim: String,
     trusted: Set<Int>,
-    listed: Boolean,
 ): Lazy<String> =
     lazy(LazyThreadSafetyMode.PUBLICATION) {
         val literals = s.literals.ifEmpty { listOf(s) }
@@ -2090,7 +2088,7 @@ internal fun interpolateText(
             }
         // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
         // would break whatever took the String.
-        "interpolate($format$trim, ${if (listed) "listOf(${values.single()})" else values.joinToString(", ")}).text"
+        "interpolate($format$trim, ${values.joinToString(", ")}).text"
     }
 
 /** What the literal holds, as source, with each template a `%s` and each per cent sign it writes doubled. */

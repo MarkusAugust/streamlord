@@ -53,6 +53,14 @@ All notable changes to Streamlord are recorded here. The format follows
   `Docs.STRINGS`, where it linked to Datastar's guide to expressions. One about a `data-*`
   expression links there as before. The message for a value in a script or an event handler no
   longer advises a signal.
+- `interpolate(format, values: List<Any?>, prefixes)` in streamlord-core is gone. The values of
+  `interpolate(format, vararg values)` are always the values: a `List`, a `Set` or an array handed
+  over as one of them is one value, written as a Kotlin template writes it, `[a, b]`, and escaped.
+  Until now a `List` passed alone was silently taken for the list of values, so
+  `interpolate("<p>%s</p>", tags)` threw for two tags and wrote the one for one. To pass the
+  elements of a collection, spread it: `interpolate(format, *values.toTypedArray())`; where that was
+  meant and the count no longer fits, the exception says so. The prefixes of an aliased bundle now
+  come first: `interpolate(prefixes, format, vararg values)`. Both editors count a list as one value.
 - The message `interpolate` throws for a `String` in a `data-*` expression advises an attribute of
   its own read with `el.dataset`, where it advised a signal, since a `String` written into
   `data-signals` is refused by the same rule.
@@ -91,9 +99,6 @@ All notable changes to Streamlord are recorded here. The format follows
 - In both editors, a value joined before the first literal, `name + "<p>"`, one after a comment,
   one joined to a literal with a call after it, and a name in backticks, `` $`my name` ``, are
   judged; none was. The URL of a `<meta>` refresh is judged as a URL.
-- In both editors, one value alone that may be a `List` is passed to `interpolate` as
-  `listOf(value)` by the rewrite. Kotlin took a `List` for the list of values, so the call threw
-  or wrote one element.
 - In both editors, a `+` chain with a call or an index after one of its literals,
   `"<p>" + name + "</p>".uppercase()`, gets no rewrite, since the call is that literal's alone and
   the rewrite moved it to the whole string. Nor does a string in an annotation's argument or a

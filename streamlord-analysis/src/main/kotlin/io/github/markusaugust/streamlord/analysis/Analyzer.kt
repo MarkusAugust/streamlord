@@ -692,7 +692,17 @@ public class Analyzer(
         site: CallSite,
         src: String,
     ): Pair<Arg, KotlinString>? {
-        val arg = site.named("format") ?: site.positional.firstOrNull() ?: return null
+        // The prefixes of an aliased bundle may come first, as a list; the format is the first string.
+        val arg =
+            site.named("format") ?: site.positional.firstOrNull()?.let { first ->
+                if (first.string == null &&
+                    lex(src).strings.none { it.start == first.start }
+                ) {
+                    site.positional.getOrNull(1) ?: first
+                } else {
+                    first
+                }
+            } ?: return null
         arg.string?.let { return if (it.unterminated) null else arg to it }
         val lex = lex(src)
         val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
@@ -720,7 +730,8 @@ public class Analyzer(
         val holes = percentHoles(s.text)
         val (format, at) = withPercentHoles(s, holes)
         // Each value as the code writes it, without a comment after it, which the editor's range leaves out too.
-        val values = site.args.filter { it !== formatArg && it.named == null }.map { uncommented(src, it) }
+        // What stands before the format is the prefixes of an aliased bundle, and no value.
+        val values = site.args.filter { it.start > formatArg.start && it.named == null }.map { uncommented(src, it) }
         // The values one by one, as the vararg overload takes them: no spread and nothing by name.
         val plain = site.args.all { it.named == null } && values.none { it.text.startsWith("*") }
         val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
@@ -729,9 +740,8 @@ public class Analyzer(
                 if (known[k].isOther()) null else known[k].argKind() ?: valueKind(src, it.text, it.string != null, s.start)
             }
         val issues = ArrayList<Issue>()
-        // The overload that takes a List is called with one or two values, each of which could be a List.
-        val counted = plain && (values.isEmpty() || values.size >= 3 || kinds.any { it != null })
-        if (counted && holes.size != values.size) {
+        // The values are always the values: a List among them is one, written as a template writes it.
+        if (plain && holes.size != values.size) {
             val h = holes.size
             val v = values.size
             // `%d` as String.format writes it: interpolate knows only %s.
@@ -754,10 +764,6 @@ public class Analyzer(
                 )
         }
         val mapped = plain && holes.size == values.size
-        // With one or two values the first of which is a List, the call is the List overload's, and a
-        // value added would make it the vararg one's, which writes the List as one value.
-        val listOverload =
-            values.size in 1..2 && kinds[0] == null && known[0] == null && visiblyList(src, values[0].text, s.start)
         val view = markupView(src, format)
         val starts = format.interpolations.map { it.decodedStart } + at
         // interpolate reads the markup with each Trusted value's text in place: known where the value is a literal.
@@ -815,7 +821,7 @@ public class Analyzer(
             val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
             val fixable =
                 landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
-                    !listOverload && percents % 2 == 0 && keeps
+                    percents % 2 == 0 && keeps
             val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg, markupText)) else emptyList()
             val message =
                 when {
@@ -1327,10 +1333,8 @@ public class Analyzer(
             }
         // interpolate(...) can take the string only when every value is one it accepts where it lands.
         val fixable = canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched }
-        // One value alone that may be a List is passed as a list of one, or Kotlin would take it for the values.
-        val listed = holes.count() == 1 && (told[0] == null || told[0].isOther()) && !trusted[0] && 0 !in vouched
         // The rewrite is made once for the string, and only when a fix is applied.
-        val rewrite = interpolateText(src, s, trim?.text.orEmpty(), vouched, listed)
+        val rewrite = interpolateText(src, s, trim?.text.orEmpty(), vouched)
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
         // value, where one may be null, which a template writes as `null` and interpolate as nothing, nor under
         // trimIndent, where a value with a line break changed what was trimmed.
