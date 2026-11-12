@@ -171,15 +171,14 @@ class StreamlordAnalysis(
         return known + foreignCalls(file, resolved, doubted)
     }
 
-    /** Whether the innermost call with one of [names] whose parentheses hold [offset] resolves to something other than Streamlord. */
-    fun isForeignCallAt(
+    /** Whether the call named [name], its name starting at [nameStart], resolves to something other than Streamlord. */
+    fun isForeign(
         file: KtFile,
-        offset: Int,
-        names: Set<String>,
+        name: String,
+        nameStart: Int,
     ): Boolean {
         val src = file.text
-        val site =
-            findCallSites(src, names, analyzer.lex(src)).lastOrNull { it.openParen < offset && offset <= it.closeParen } ?: return false
+        val site = findCallSites(src, setOf(name), analyzer.lex(src)).firstOrNull { it.nameStart == nameStart } ?: return false
         return foreignAmong(file, listOf(site)).isNotEmpty()
     }
 
