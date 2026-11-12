@@ -60,6 +60,9 @@ internal object CallShapes {
             "(",
             ")",
             "@A(\"<p>\$v</p>\")",
+            "'a' + w + \"<p>\$v</p>\" + '",
+            "g<A, B>(v) + \"<p>\" + if (c) v else w",
+            "v as String + (\"<b>\" + v + \"</b>\")\n    + \"<p>\"",
         )
     private val lambdas = listOf("", "", "", " { }", " { li { +\"x\" } }", " { case = Case.CAMEL }", " { debounce(1) }", " {")
     private val frames =
@@ -70,6 +73,7 @@ internal object CallShapes {
             "import io.github.markusaugust.streamlord.html.*\nfun f(v: String) = div { §; § }",
             "div { attributes[\"data-on:click\"] = § }",
             "const val A = §",
+            "fun f(v: String) = div {\n    v.length\n    +§\n    +v + §\n}",
         )
 
     private fun call(random: Random): String {

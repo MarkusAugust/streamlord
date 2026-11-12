@@ -22,12 +22,6 @@ private val MARKUP_CALL_START = regex("""^(?:interpolate|Trusted)\s*\(""")
 private val UNQUOTED_VALUE = regex("""=[ \t\n\u000C\r]*([^ \t\n\u000C\r"'=<>`]*)\z""")
 private val WORD_CHAR = regex("""[\p{L}\p{Nd}_]""")
 
-/** What may end an operand of `+` at the top level: an argument or statement boundary, or an operator that binds less tightly. */
-private val OPERAND_END = regex("""^(?:[,)\]};]|\?:|&&|\|\||==|!=|<=|>=|\.\.)""")
-
-/** The words that end an operand, as words of their own: `photo` is a name, not `pho` and `to`. */
-private val OPERAND_END_WORDS = listOf("to", "else")
-
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */
 internal fun shortened(text: String): String {
     val e = text.trim().replace(SPACES, " ")
@@ -1827,88 +1821,27 @@ internal fun quoteFix(
     return Fix("Quote the value", start, start, quote, listOf(Edit(end, end, quote)))
 }
 
-/** What may stand before a value joined with `+` when the value is the whole of what is joined: plus binds tighter than each. */
-private val OPERAND_BOUNDARY = regex("""(?:^|[(\[{},;]|(?<![=!<>])=|->|\?:|&&|\|\||[=!<>]=|[<>]|\b(?:return|else|in|throw|to))\s*\z""")
-
-/**
- * The values joined before the literal at [at], `greet(name) + names[0] + "<p>"`, first to last:
- * each a name, a call, an index, a bracketed expression or a chain of them, read backwards from
- * its `+`. None where what stands before the first of them is an operator that binds as tight as
- * plus or tighter (`a * b + "<p>"`, `a - b + "<p>"`, `!a + "<p>"`) or a word the text cannot place
- * (`x as T + "<p>"`): the value joined is then more than the text delimits.
- */
-private fun leadingValues(
-    src: String,
-    mask: BooleanArray,
-    at: Int,
-): List<IntRange> {
-    val out = ArrayList<IntRange>()
-    var end = at
-    while (true) {
-        var k = end
-        while (k > 0 && (src[k - 1] == ' ' || src[k - 1] == '\t')) k--
-        if (k < 1 || src[k - 1] != '+' || src.getOrNull(k - 2) == '+' || !mask[k - 1]) break
-        k--
-        while (k > 0 && src[k - 1].isWhitespace()) k--
-        val stop = k
-        // Backwards over names, dots and what brackets close: `user.tags[0]`, `greet(name)`, `(a ?: b)`.
-        while (k > 0 && mask[k - 1]) {
-            val c = src[k - 1]
-            k =
-                when {
-                    c == ')' || c == ']' -> matchingBracket(src, mask, k - 1).takeIf { it >= 0 } ?: break
-                    c.isLetterOrDigit() || c == '_' || c == '`' || c == '.' -> k - 1
-                    c == '?' && src.getOrNull(k) == '.' -> k - 1
-                    c == '!' && src.getOrNull(k - 2) == '!' -> k - 2
-                    else -> break
-                }
-        }
-        if (k == stop) break
-        out.add(0, k until stop)
-        end = k
-    }
-    val whole = out.isNotEmpty() && OPERAND_BOUNDARY.containsMatchIn(src.substring(maxOf(0, out[0].first - 40), out[0].first))
-    return if (whole) out else emptyList()
-}
-
-/** The bracket that matches the one at [at], after it or before it, strings and comments stepped over; -1 where none does. */
-private fun matchingBracket(
-    src: String,
-    mask: BooleanArray,
-    at: Int,
-): Int {
-    val step = if (src[at] in "([{") 1 else -1
-    var depth = 0
-    var k = at
-    while (k in src.indices) {
-        if (mask[k]) {
-            when (src[k]) {
-                '(', '[', '{' -> depth += step
-                ')', ']', '}' -> depth -= step
-            }
-            if (depth == 0) return k
-        }
-        k += step
-    }
-    return -1
-}
-
 /**
  * The `+` chain the literal [first] stands in, read as one string: each literal's text, and a hole
- * for each value joined to them, mapped back to the source. A value may come first, a comment may
- * stand between the parts, and a call or an index after a literal is passed over and noted
- * ([KotlinString.called]). Null when the literal is joined to nothing. [mask] is the lexer's:
- * `false` inside literals and comments.
+ * for each value joined to them, mapped back to the source. The values are read as Kotlin has
+ * them ([Operands]): what is joined before the first literal is one value, a chain in brackets
+ * that starts with a literal is read through, and an `if` goes on to the end of the expression.
+ * A call or an index after a literal is passed over and noted ([KotlinString.called]), and so is
+ * anything joined that could not be read as a value ([KotlinString.unread]). Null when the
+ * literal is joined to nothing. [mask] is the lexer's: `false` inside literals and comments.
  */
 internal fun chainFrom(
     src: String,
     first: KotlinString,
     mask: BooleanArray,
 ): KotlinString? {
+    val read = Operands(src, mask)
     val text = StringBuilder()
     val map = ArrayList<Int>()
     val interpolations = ArrayList<Interpolation>()
     val literals = ArrayList<KotlinString>()
+    var called = false
+    var unread = false
     // Where the last part read ends, and where its text does: a literal's before its closing quotes.
     var end = 0
     var contentEnd = 0
@@ -1924,110 +1857,67 @@ internal fun chainFrom(
         contentEnd = to
     }
 
-    fun literal(lit: KotlinString) {
-        for (ip in lit.interpolations) interpolations += ip.copy(decodedStart = ip.decodedStart + text.length)
-        for (c in lit.text.indices) map += lit.map[c]
-        text.append(lit.text)
-        literals += lit
-        end = lit.end
-        contentEnd = lit.contentEnd
-    }
-    val leading = leadingValues(src, mask, first.start)
-    for (v in leading) value(v.first, v.last + 1)
-    literal(first)
-
-    fun spaces(
-        from: Int,
-        newlines: Boolean,
-    ): Int {
-        var k = from
-        while (k < src.length) {
-            val c = src[k]
-            if (c == ' ' || c == '\t' || (newlines && (c == '\n' || c == '\r'))) {
-                k++
-            } else if (src.startsWith("/*", k)) {
-                k = src.indexOf("*/", k + 2).let { if (it < 0) return k else it + 2 }
-            } else if (newlines && src.startsWith("//", k)) {
-                k = src.indexOf('\n', k).let { if (it < 0) return k else it }
-            } else {
-                break
-            }
-        }
-        return k
-    }
-
-    // Just past the calls and indexes after a literal, `.trim()`, `[0]`, `!!`, which are that literal's alone.
-    fun postfix(from: Int): Int {
-        var k = from
+    // The literal and what is joined after it, up to [newlines]: whether a line break ends nothing, as inside brackets.
+    fun parts(
+        literal: KotlinString,
+        newlines: () -> Boolean,
+    ) {
+        var lit = literal
         while (true) {
-            val j = spaces(k, true)
-            val c = src.getOrNull(j)
-            val dot =
-                when {
-                    src.startsWith("?.", j) -> j + 2
-                    c == '.' && src.getOrNull(j + 1) != '.' -> j + 1
-                    else -> -1
-                }
-            k =
-                if (dot >= 0) {
-                    var e = spaces(dot, true)
-                    while (e < src.length && (src[e].isLetterOrDigit() || src[e] == '_' || src[e] == '`')) e++
-                    e
-                } else if ((j == k && (c == '(' || c == '[')) || (k > from && j == spaces(k, false) && c == '{')) {
-                    matchingBracket(src, mask, j).takeIf { it >= 0 }?.plus(1) ?: return k
-                } else if (j == k && src.startsWith("!!", j)) {
-                    j + 2
-                } else {
-                    return k
-                }
-        }
-    }
-    var i = postfix(first.end)
-    var called = i != first.end
-    while (true) {
-        val plus = spaces(i, false)
-        if (src.getOrNull(plus) != '+' || src.getOrNull(plus + 1) == '+' || src.getOrNull(plus + 1) == '=') break
-        var k = spaces(plus + 1, true)
-        if (k < src.length && (src[k] == '"' || src[k] == '$') && isStringStart(src, k)) {
-            val lit = readKotlinStringAt(src, k)
-            if (lit == null || lit.unterminated) break
-            literal(lit)
-            i = postfix(end)
+            for (ip in lit.interpolations) interpolations += ip.copy(decodedStart = ip.decodedStart + text.length)
+            for (c in lit.text.indices) map += lit.map[c]
+            text.append(lit.text)
+            literals += lit
+            end = lit.end
+            contentEnd = lit.contentEnd
+            // The calls and indexes after a literal, `.trim()`, `[0]`, `!!`, are that literal's alone.
+            var i = read.postfixEnd(end, false)
             if (i != end) called = true
-            continue
-        }
-        val start = k
-        var depth = 0
-        while (k < src.length) {
-            if (!mask[k]) {
-                // A comment ends the operand; a string inside it is part of it.
-                if (depth == 0 && (src.startsWith("//", k) || src.startsWith("/*", k))) break
-                k++
-                continue
+            while (true) {
+                var plus = read.skip(i, false)
+                if (src.getOrNull(plus).let { it == '\n' || it == '\r' } && newlines()) plus = read.skip(i, true)
+                if (!read.plusAt(plus)) return
+                val k = read.skip(plus + 1, true)
+                if (isStringStart(src, k)) {
+                    lit = readKotlinStringAt(src, k)?.takeIf { !it.unterminated } ?: return
+                    break
+                }
+                val close = if (src.getOrNull(k) == '(') read.matching(k) else -1
+                val inner = read.skip(k + 1, true)
+                val opens = close > 0 && isStringStart(src, inner)
+                val group = if (opens) readKotlinStringAt(src, inner)?.takeIf { !it.unterminated } else null
+                if (group != null) {
+                    // Brackets around a chain that starts with a literal join nothing differently.
+                    parts(group) { true }
+                    if (read.skip(end, true) != close) unread = true
+                    end = close + 1
+                    contentEnd = end
+                    i = read.postfixEnd(end, true)
+                    if (i != end) called = true
+                    continue
+                }
+                val term = read.termEnd(k, false)
+                if (term < 0) {
+                    // An `if` goes on to the end of the expression; so does what could not be read, which is warned of whole.
+                    val rest = read.expressionEnd(k, newlines())
+                    if (rest > k) value(k, rest)
+                    if (rest > k && read.word(k) != "if") unread = true
+                    return
+                }
+                value(k, term)
+                i = term
             }
-            val c = src[k]
-            if (c == '(' || c == '[' || c == '{') {
-                depth++
-            } else if (c == ')' || c == ']' || c == '}') {
-                if (depth == 0) break
-                depth--
-            } else if (depth == 0) {
-                if (c == '\n' || c == '\r') break
-                if (c == '+' && src.getOrNull(k + 1) != '+' && src.getOrNull(k + 1) != '=') break
-                if (OPERAND_END.containsMatchIn(src.substring(k, minOf(src.length, k + 4)))) break
-                if (OPERAND_END_WORDS.any { wordAt(src, k, it) }) break
-            }
-            k++
         }
-        while (k > start && src[k - 1].isWhitespace()) k--
-        if (k <= start) break
-        value(start, k)
-        i = k
     }
-    if (leading.isEmpty() && end == first.end) return null
+    val leading = read.leading(first.start)
+    if (leading != null && leading.end > leading.start) value(leading.start, leading.end)
+    if (leading != null && !leading.read) unread = true
+    val inBrackets by lazy(LazyThreadSafetyMode.NONE) { read.inBrackets(first.start) }
+    parts(first) { inBrackets }
+    if (leading == null && end == first.end) return null
     map += contentEnd
     return KotlinString(
-        start = leading.firstOrNull()?.first ?: first.start,
+        start = leading?.takeIf { it.end > it.start }?.start ?: first.start,
         end = end,
         raw = first.raw,
         dollars = 1,
@@ -2040,6 +1930,7 @@ internal fun chainFrom(
         nested = literals.flatMap { it.nested },
         literals = literals,
         called = called,
+        unread = unread,
     )
 }
 

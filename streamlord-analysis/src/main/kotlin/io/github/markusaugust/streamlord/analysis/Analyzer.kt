@@ -1294,6 +1294,8 @@ public class Analyzer(
             when {
                 s.called -> "a call after one literal of the + chain applies to that literal alone"
 
+                s.unread -> "what is joined to the string with + cannot be read as values"
+
                 // The trim call stays on the format, inside the call: one read here, with a margin that is no format character.
                 trim != null && (trim.text == null || trim.margin?.contains('%') == true) -> "the trim call after the string cannot be kept"
 

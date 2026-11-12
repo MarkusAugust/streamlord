@@ -55,6 +55,8 @@ public data class KotlinString(
     val literals: List<KotlinString> = emptyList(),
     /** Whether a call or an index follows one of the chain's [literals], `"</p>".uppercase()`: it is that literal's alone. */
     val called: Boolean = false,
+    /** Whether something a `+` joins to the chain could not be read as a value: the chain is then part of more than it shows. */
+    val unread: Boolean = false,
 ) {
     /** Map a decoded range back to source offsets. */
     public fun toSource(
