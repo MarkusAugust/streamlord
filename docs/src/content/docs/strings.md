@@ -68,7 +68,7 @@ With it on, every element patch and elements response leaving that instance is w
 The same walk catches a mistyped attribute. `data-onn:click` is one letter from `data-on:click`
 and throws `MistypedAttributeException` saying so. A name that carries a key or a modifier is
 judged on any one-letter slip, because `data-signal:name` is nobody's own attribute. A bare
-`data-*` name is judged far more narrowly: only a swapped letter in a long name, so
+`data-*` name is judged far more narrowly: only a changed letter in a long name, so
 `data-indicater` and `data-computer` are caught while `data-test`, `data-kind`, `data-size` and
 `data-theme` are yours and pass untouched. A bare name that merely adds a letter passes too:
 `data-signal` is left alone, because `data-animated` and `data-effects` are honest words in the
