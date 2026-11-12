@@ -68,7 +68,7 @@ class StreamlordDocumentationTargetProvider : DocumentationTargetProvider {
     }
 }
 
-/** An option or an event in the completion list, which carries its documentation: F1 or Ctrl+Q while the list is open. */
+/** An item of the completion list that has documentation, shown with F1 or Ctrl+Q while the list is open. */
 class StreamlordLookupDocumentationTargetProvider : LookupElementDocumentationTargetProvider {
     override fun documentationTarget(
         psiFile: PsiFile,

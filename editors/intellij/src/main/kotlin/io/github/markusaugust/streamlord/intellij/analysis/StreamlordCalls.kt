@@ -2,7 +2,8 @@ package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.psi.PsiElement
 import io.github.markusaugust.streamlord.analysis.KotlinString
-import io.github.markusaugust.streamlord.analysis.isHtmlString
+import io.github.markusaugust.streamlord.analysis.htmlStringAt
+import io.github.markusaugust.streamlord.analysis.streamlordCallNames
 
 /**
  * Which of the calls the analysis knows by name are Streamlord's in a Kotlin file, as its module
@@ -14,22 +15,14 @@ class StreamlordCalls private constructor(
     val dsl: Boolean,
 ) {
     /** The names of the calls the analysis reads Datastar in that are Streamlord's here. */
-    fun siteNames(analysis: StreamlordAnalysis): Set<String> =
-        when {
-            !core -> emptySet()
-            !dsl -> analysis.analyzer.callSiteNames - analysis.analyzer.dslNames
-            else -> analysis.analyzer.callSiteNames
-        }
+    fun siteNames(analysis: StreamlordAnalysis): Set<String> = analysis.analyzer.streamlordCallNames(core, dsl)
 
     /** The HTML string at [offset]: a literal that looks like HTML, or the markup handed to a call of Streamlord's. */
     fun htmlStringAt(
         analysis: StreamlordAnalysis,
         src: String,
         offset: Int,
-    ): KotlinString? {
-        val s = analysis.analyzer.htmlStringAt(src, offset) ?: return null
-        return if (core || isHtmlString(src, s)) s else null
-    }
+    ): KotlinString? = analysis.analyzer.htmlStringAt(src, offset, core)
 
     companion object {
         private val ALL = StreamlordCalls(core = true, dsl = true)

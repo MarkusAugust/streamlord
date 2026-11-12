@@ -78,15 +78,8 @@ public fun markdownToHtml(md: String): String {
     val codes = ArrayList<String>()
     val withoutCode =
         regex("""`([^`]+)`|\[([^\]]+)]\(([^)\s]+)\)""").replace(escaped) {
-            codes +=
-                if (it.value.startsWith(
-                        "`",
-                    )
-                ) {
-                    "<code>${it.groupValues[1]}</code>"
-                } else {
-                    "<a href=\"${it.groupValues[3]}\">${it.groupValues[2]}</a>"
-                }
+            val (code, text, url) = it.destructured
+            codes += if (it.value.startsWith("`")) "<code>$code</code>" else "<a href=\"$url\">$text</a>"
             "\u0000${codes.size - 1}\u0000"
         }
     val bold = regex("""\*\*(.+?)\*\*""").replace(withoutCode) { "<b>${it.groupValues[1]}</b>" }

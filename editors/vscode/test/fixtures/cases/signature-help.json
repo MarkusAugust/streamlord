@@ -1,5 +1,5 @@
 {
-  "$comment": "What signature help shows at a caret (signatureHelp): text, language, prefix, core and htmlDsl as in completions.json. signature is null where none is shown, or the action's signature, how its documentation starts, its parameters and the one active. Read by EditorHelpTest.kt.",
+  "$comment": "What signature help shows at a caret (signatureHelp): text, language, prefix, core and htmlDsl as in completions.json. signature is null where none is shown, or the action's signature, its documentation whole, its parameters and the one active. Read by EditorHelpTest.kt.",
   "cases": [
     {"name":"the parameter at the caret","language":"html","text":"<div data-on:click=\"@get('/x', ¦","signature":{"label":"@get(uri, options?)","doc":"GET with signals in the query string.","parameters":["uri","options?"],"active":1}},
     {"name":"the first parameter in a DSL string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataOnClick(\"@post(¦\") }","signature":{"label":"@post(uri, options?)","doc":"POST with signals in the body.","parameters":["uri","options?"],"active":0}},

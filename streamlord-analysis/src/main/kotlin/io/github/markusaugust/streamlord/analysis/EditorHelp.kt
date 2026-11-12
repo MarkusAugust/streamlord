@@ -28,55 +28,68 @@ public class Source(
 
 /** What the rest of the workspace defines: signals, ids and classes, this file's among them or not. */
 public class Workspace(
-    public val signals: Collection<String> = emptyList(),
-    public val ids: Collection<String> = emptyList(),
-    public val classes: Collection<String> = emptyList(),
+    public val signals: Collection<String>,
+    public val ids: Collection<String>,
+    public val classes: Collection<String>,
     /** What the editor calls it in an item's detail: `workspace`, `project`. */
-    public val called: String = "workspace",
+    public val called: String,
 )
 
 public enum class CompletionKind { SIGNAL, ACTION, OPTION, SCOPE, ATTRIBUTE, EVENT, MODIFIER, VALUE, ID, CLASS }
 
+/** Text to write with places in it to fill, in the order the caret visits them. */
+public class Snippet internal constructor(
+    public val text: String,
+    public val places: List<Place>,
+)
+
+/** A place of a [Snippet]: what stands there to begin with, from [start] to [end], and the [choices] it may take, if it has any. */
+public class Place internal constructor(
+    public val start: Int,
+    public val end: Int,
+    public val choices: List<String>,
+)
+
 /**
- * One item of a completion list. It replaces the text from [replaceFrom] up to the caret with
- * [snippet], whose `${1:...}` are the places to fill, or else [insert], or else the [label].
+ * One item of a completion list, in the order the list shows. It replaces the text from
+ * [replaceFrom] up to the caret with [snippet], or else [insert], or else the [label].
  */
-public data class Completion(
-    val label: String,
-    val kind: CompletionKind,
-    val replaceFrom: Int,
-    val insert: String? = null,
-    val snippet: String? = null,
-    val detail: String? = null,
+public class Completion internal constructor(
+    public val label: String,
+    public val kind: CompletionKind,
+    public val replaceFrom: Int,
+    public val insert: String? = null,
+    public val snippet: Snippet? = null,
+    public val detail: String? = null,
     /** Shown after the label: an option's default. */
-    val tail: String? = null,
+    public val tail: String? = null,
     /** Markdown. */
-    val doc: String? = null,
+    public val doc: String? = null,
     /** What the typed text is matched against, where it is not the label. */
-    val filter: String? = null,
+    public val filter: String? = null,
     /** What the list is ordered by, where it is not the label. */
-    val sort: String? = null,
+    internal val key: String? = null,
 )
 
 /** The items at a caret, in the order shown, and whether nothing else belongs there: a signal, an action, an option or a selector is being named. */
-public class Completions(
+public class Completions internal constructor(
     public val items: List<Completion>,
     public val alone: Boolean,
 )
 
 /** What hover shows: the Markdown for the text from [start] to [end]. */
-public data class Hover(
-    val start: Int,
-    val end: Int,
-    val markdown: String,
+public class Hover internal constructor(
+    public val start: Int,
+    public val end: Int,
+    public val markdown: String,
 )
 
 /** The action a caret stands in the arguments of: its signature, what it does, where each parameter stands in [label], and which is at the caret. */
-public data class SignatureHelp(
-    val label: String,
-    val doc: String,
-    val parameters: List<IntRange>,
-    val active: Int,
+public class SignatureHelp internal constructor(
+    public val label: String,
+    public val doc: String,
+    public val parameters: List<IntRange>,
+    public val active: Int,
 )
 
 /**
@@ -88,7 +101,7 @@ public data class SignatureHelp(
 public fun Analyzer.complete(
     source: Source,
     offset: Int,
-    workspace: Workspace = Workspace(),
+    workspace: Workspace,
     attributeNames: Boolean = true,
     domEvents: Boolean = true,
 ): Completions = Asked(this, source, offset).complete(workspace, attributeNames, domEvents)
@@ -118,10 +131,12 @@ public fun Analyzer.signatureHelp(
     val expression = asked.expression(offset)?.takeIf { it.allowActions } ?: return null
     val call = actionCallAt(expression.before, expression.before.length) ?: return null
     val action = catalog.actionsByName[call.action] ?: return null
+    // The parameters follow one another in the signature, after its parenthesis, as the catalog writes them.
     var from = action.signature.indexOf('(') + 1
     val parameters =
         action.parameters.map { name ->
-            val at = action.signature.indexOf(name, from).coerceAtLeast(0)
+            val at = action.signature.indexOf(name, from)
+            check(at >= 0) { "The catalog's signature ${action.signature} does not name its parameter $name." }
             from = at + name.length
             at until at + name.length
         }
@@ -132,7 +147,6 @@ private val NOTHING = Completions(emptyList(), alone = false)
 private val DURATIONS = listOf("500ms", "1s", "300ms", "100ms")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
 private val SELECTOR_TOKEN = regex("""[#.]?[\w-]*$""")
-private val ATTRIBUTES_KEY = regex("""\battributes\s*\[\s*$""")
 private val ACTION_WORD = regex("""@[A-Za-z_][A-Za-z0-9_]*""")
 private val OPTION_WORD = regex("""[A-Za-z_$][\w$]*""")
 private val ATTRIBUTE_WORD = regex("""[A-Za-z][A-Za-z0-9_:.-]*""")
@@ -171,13 +185,8 @@ private class Asked(
             val before = e.before
             if (signalPrefixAt(before, before.length) != null) return true
             if (!e.allowActions) return false
-            return actionCallAt(before, before.length)?.option != null || actionPrefixAt(before, before.length) != null ||
-                SCOPE_WORD
-                    .find(before)
-                    ?.groupValues
-                    ?.get(1)
-                    .orEmpty()
-                    .isNotEmpty()
+            val option = actionCallAt(before, before.length)?.option
+            return option != null || actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
         }
         if (!names) return false
         val at = Names(attributeNames = true, domEvents = false)
@@ -192,9 +201,8 @@ private class Asked(
 
     /** The key of `attributes["data-..."]` the caret stands in, as typed up to it. */
     fun attributesKey(): String? {
-        val s = analyzer.lex(text).stringAt(offset)?.takeIf { offset > it.contentStart && offset <= it.contentEnd } ?: return null
-        if (!ATTRIBUTES_KEY.containsMatchIn(text.substring(maxOf(0, s.start - 40), s.start))) return null
-        return s.text.substring(0, decodedIndex(s, offset))
+        val key = analyzer.attributesIndexes(text).firstOrNull { offset in it.nameStart..it.nameStart + it.name.length } ?: return null
+        return key.name.substring(0, offset - key.nameStart)
     }
 
     /** The attribute name at the caret in an HTML string of a Kotlin file, or in the markup of a `+` chain that opens with a tag. */
@@ -223,7 +231,7 @@ private class Asked(
             for (name in (names + ownNames).toSet()) {
                 val here = name in ownNames
                 val detail = "${if (kind == CompletionKind.ID) "id" else "class"} (${if (here) "this file" else workspace.called})"
-                items += Completion(sigil + name, kind, from, detail = detail, sort = "${if (here) rank else rank + 1}$name")
+                items += Completion(sigil + name, kind, from, detail = detail, key = "${if (here) rank else rank + 1}$name")
             }
         }
         if (!token.startsWith(".")) add(workspace.ids, own.ids, "#", CompletionKind.ID, 0)
@@ -255,7 +263,7 @@ private class Asked(
                         insert = dollar + name,
                         detail = "signal (${if (here) "this file" else workspace.called})",
                         filter = dollar + name,
-                        sort = (if (here) "0" else "1") + name,
+                        key = (if (here) "0" else "1") + name,
                     )
                 }
             return ordered(items, alone = true)
@@ -274,7 +282,6 @@ private class Asked(
                         detail = it.type,
                         tail = " = ${it.default}",
                         doc = fetchOptionDoc(it),
-                        sort = it.name,
                     )
                 }
             return ordered(items, alone = true)
@@ -282,30 +289,27 @@ private class Asked(
         actionPrefixAt(before, before.length)?.let { typed ->
             val items =
                 catalog.actions.map {
-                    val arguments =
-                        when {
-                            it.kind == "backend" -> "('\${1:/path}')"
-                            it.name == "peek" -> "(() => \${1})"
-                            else -> "(\${1})"
-                        }
+                    val call = Snip().text("@${it.name}")
+                    when {
+                        it.kind == "backend" -> call.text("('").place("/path").text("')")
+                        it.name == "peek" -> call.text("(() => ").place().text(")")
+                        else -> call.text("(").place().text(")")
+                    }
+                    val detail = (if (it.pro) "Pro · " else "") + it.signature
+                    val key = (if (it.pro) "1" else "0") + it.name
                     Completion(
                         "@${it.name}",
                         CompletionKind.ACTION,
                         offset - typed.length - 1,
-                        snippet = "@${it.name}$arguments",
-                        detail = (if (it.pro) "Pro · " else "") + it.signature,
+                        snippet = call.done(),
+                        detail = detail,
                         doc = it.doc,
-                        sort = (if (it.pro) "1" else "0") + it.name,
+                        key = key,
                     )
                 }
             return ordered(items, alone = true)
         }
-        val word =
-            SCOPE_WORD
-                .find(before)
-                ?.groupValues
-                ?.get(1)
-                .orEmpty()
+        val word = scopeWord(before)
         if (word.isEmpty()) return NOTHING
         // `patch` is a name only in `data-on-signal-patch`, the one attribute the client hands it to.
         val names = catalog.compiledParameters.filter { it.first() in 'a'..'z' } + listOfNotNull("patch".takeIf { expression.patchInScope })
@@ -316,15 +320,10 @@ private class Asked(
      * The signals this file defines, read with the modules it can use: what makes a signal this
      * file's. The editor is asked about none of its calls, which there may be thousands of.
      */
-    private fun definitions(): Set<String> =
-        collectSignalDefinitions(
-            text,
-            source.language,
-            foreignHelpers(
-                htmlDsl =
-                    !kotlin || modules.htmlDsl,
-            ),
-        )
+    private fun definitions(): Set<String> {
+        val foreign = foreignHelpers(htmlDsl = !kotlin || modules.htmlDsl)
+        return collectSignalDefinitions(text, source.language, foreign)
+    }
 
     /** Attribute names, the events of `data-on:`, modifiers and their values, for a name typed in a tag or the key of the attributes form. */
     private inner class Names(
@@ -343,23 +342,23 @@ private class Asked(
             if (!typed.startsWith(prefix.substring(0, minOf(prefix.length, maxOf(1, typed.length)))) || !attributeNames) return NOTHING
             val items =
                 catalog.attributes.filter { it.onlyOn == null || tag in it.onlyOn }.map {
-                    val key = if (it.keyRequired) ":\${1:key}" else ""
-                    val value = if (it.valueKind != ValueKind.NONE) "=\"\${2}\"" else ""
+                    val name = prefix + it.name
+                    val snippet = Snip().text(name)
+                    if (it.keyRequired) snippet.text(":").place("key")
+                    // In the key of the attributes form the name stands alone: the value is Kotlin's.
+                    if (tag != null && it.valueKind != ValueKind.NONE) snippet.text("=\"").place().text("\"")
+                    val written = snippet.done().takeIf { s -> tag != null || s.places.isNotEmpty() }
+                    val detail = (if (it.pro) "Datastar Pro · " else "Datastar · ") + it.forms.firstOrNull().orEmpty()
+                    val doc = attributeDoc(it, prefix, withKotlin = true)
                     Completion(
-                        prefix + it.name,
+                        name,
                         CompletionKind.ATTRIBUTE,
                         offset - typed.length,
-                        snippet =
-                            if (tag !=
-                                null
-                            ) {
-                                prefix + it.name + key + value
-                            } else {
-                                key.takeIf { k -> k.isNotEmpty() }?.let { k -> prefix + it.name + k }
-                            },
-                        detail = (if (it.pro) "Datastar Pro · " else "Datastar · ") + it.forms.firstOrNull().orEmpty(),
-                        doc = attributeDoc(it, prefix, withKotlin = true),
-                        sort = (if (it.pro) "1" else "0") + it.name,
+                        snippet = written,
+                        detail = detail,
+                        doc = doc,
+                        key =
+                            (if (it.pro) "1" else "0") + it.name,
                     )
                 }
             return ordered(items, alone = false)
@@ -378,17 +377,17 @@ private class Asked(
                         else -> emptyList()
                     }
                 val from = offset - (current.length - current.lastIndexOf('.') - 1)
-                return ordered(values.mapIndexed { i, v -> Completion(v, CompletionKind.VALUE, from, sort = "$i") }, alone = false)
+                return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = false)
             }
             val items =
                 spec.modifiers.map {
                     val snippet =
                         when (it.type) {
                             ModifierType.FLAG -> null
-                            ModifierType.DURATION -> "${it.name}.\${1:500ms}"
-                            ModifierType.ENUM -> "${it.name}.\${1|${it.values.joinToString(",")}|}"
-                            ModifierType.INT -> "${it.name}.\${1:50}"
-                            ModifierType.IDENT, ModifierType.IDENTS -> "${it.name}.\${1:name}"
+                            ModifierType.DURATION -> Snip().text("${it.name}.").place("500ms")
+                            ModifierType.ENUM -> Snip().text("${it.name}.").place(it.values.first(), it.values)
+                            ModifierType.INT -> Snip().text("${it.name}.").place("50")
+                            ModifierType.IDENT, ModifierType.IDENTS -> Snip().text("${it.name}.").place("name")
                         }
                     val form =
                         when (it.type) {
@@ -402,9 +401,8 @@ private class Asked(
                         it.name,
                         CompletionKind.MODIFIER,
                         offset - current.length,
-                        snippet = snippet,
+                        snippet = snippet?.done(),
                         detail = "__${it.name}$form",
-                        sort = it.name,
                     )
                 }
             return ordered(items, alone = false)
@@ -415,7 +413,7 @@ private class Asked(
             typed: String,
             value: Boolean,
         ): Completions {
-            val tail = if (value && !text.substring(offset).trimStart().startsWith("=")) "=\"\${1}\"" else ""
+            val opens = value && !text.substring(offset).trimStart().startsWith("=")
             val from = offset - typed.length
 
             fun event(
@@ -423,15 +421,21 @@ private class Asked(
                 detail: String,
                 doc: String?,
                 rank: Int,
-            ) = Completion(
-                name,
-                CompletionKind.EVENT,
-                from,
-                snippet = if (value) name + tail else null,
-                detail = detail,
-                doc = doc,
-                sort = "$rank$name",
-            )
+            ): Completion {
+                val snippet = if (opens) Snip().text("$name=\"").place().text("\"") else Snip().text(name)
+                return Completion(
+                    name,
+                    CompletionKind.EVENT,
+                    from,
+                    snippet =
+                        snippet.done().takeIf {
+                            value
+                        },
+                    detail = detail,
+                    doc = doc,
+                    key = "$rank$name",
+                )
+            }
             val datastar = catalog.datastarEvents.map { event(it.name, "Datastar event", it.doc, 0) }
             val dom =
                 if (domEvents) {
@@ -457,22 +461,16 @@ private class Asked(
         val withKotlin = modules.htmlDsl
         wordAt(ACTION_WORD)?.let { range ->
             val action = catalog.actionsByName[text.substring(range.first + 1, range.last + 1)]
-            if (action != null &&
-                !(kotlin && analyzer.inForeignDslCall(text, offset, modules))
-            ) {
-                return Hover(range, actionDoc(action, withKotlin))
-            }
+            val foreign = kotlin && analyzer.inForeignDslCall(text, offset, modules)
+            if (action != null && !foreign) return Hover(range, actionDoc(action, withKotlin))
         }
         wordAt(OPTION_WORD)?.let { range ->
             val word = text.substring(range.first, range.last + 1)
             val option = catalog.fetchOptions.firstOrNull { it.name == word }
             // The key it is when the caret stands at its end.
-            val expression = option?.let { expression(range.last + 1) }
-            if (expression != null && expression.allowActions &&
-                actionCallAt(expression.before, expression.before.length)?.option?.typed == word
-            ) {
-                return Hover(range, fetchOptionDoc(option))
-            }
+            val expression = option?.let { expression(range.last + 1) }?.takeIf { it.allowActions }
+            val typed = expression?.let { actionCallAt(it.before, it.before.length)?.option?.typed }
+            if (option != null && typed == word) return Hover(range, fetchOptionDoc(option))
         }
         if (!kotlin || analyzer.htmlStringAt(text, offset, modules) != null || inAttributesKey()) {
             val range = wordAt(ATTRIBUTE_WORD) ?: return null
@@ -507,8 +505,34 @@ private fun Hover(
     markdown: String,
 ): Hover = Hover(range.first, range.last + 1, markdown)
 
-/** [items] in the order shown: by what each is sorted by, then by label. */
+/** [items] in the order shown: by what each is ordered by, then by label. */
 private fun ordered(
     items: List<Completion>,
     alone: Boolean,
-): Completions = Completions(items.sortedWith(compareBy<Completion> { it.sort ?: it.label }.thenBy { it.label }), alone)
+): Completions = Completions(items.sortedWith(compareBy<Completion> { it.key ?: it.label }.thenBy { it.label }), alone)
+
+/** The bare lowercase word before the end of [before], or nothing. */
+private fun scopeWord(before: String): String =
+    SCOPE_WORD
+        .find(before)
+        ?.groupValues
+        ?.get(1)
+        .orEmpty()
+
+/** A [Snippet] as it is written: text, and places with what stands there. */
+private class Snip {
+    private val text = StringBuilder()
+    private val places = ArrayList<Place>()
+
+    fun text(s: String) = apply { text.append(s) }
+
+    fun place(
+        default: String = "",
+        choices: List<String> = emptyList(),
+    ) = apply {
+        places += Place(text.length, text.length + default.length, choices)
+        text.append(default)
+    }
+
+    fun done(): Snippet = Snippet(text.toString(), places)
+}

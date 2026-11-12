@@ -12,6 +12,8 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupElementDecorator
 import com.intellij.codeInsight.lookup.LookupElementWeigher
+import com.intellij.codeInsight.template.TemplateManager
+import com.intellij.codeInsight.template.impl.ConstantNode
 import com.intellij.icons.AllIcons
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.lang.injection.InjectedLanguageManager
@@ -20,6 +22,7 @@ import com.intellij.psi.PsiLanguageInjectionHost
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.CompletionKind
+import io.github.markusaugust.streamlord.analysis.Snippet
 import io.github.markusaugust.streamlord.analysis.Workspace
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.intellij.Streamlord
@@ -92,7 +95,6 @@ private fun element(
     rank: Int,
 ): LookupElement {
     val lookup = item.filter ?: item.label
-    val text = item.snippet ?: item.insert
     val builder =
         LookupElementBuilder
             .create(LookupDoc(item.label, item.doc, rank), lookup)
@@ -100,45 +102,44 @@ private fun element(
             .withTypeText(item.detail)
             .withTailText(item.tail, true)
             .withIcon(ICONS[item.kind])
-    return if (text == null ||
-        text == lookup
-    ) {
-        builder
-    } else {
-        builder.withInsertHandler { context, _ -> insert(context, text, item.snippet != null) }
+    val snippet = item.snippet
+    val insert = item.insert
+    return when {
+        snippet != null && snippet.places.isNotEmpty() -> builder.withInsertHandler { context, _ -> write(context, snippet) }
+        snippet != null && snippet.text != lookup -> builder.withInsertHandler { context, _ -> write(context, snippet.text) }
+        insert != null && insert != lookup -> builder.withInsertHandler { context, _ -> write(context, insert) }
+        else -> builder
     }
 }
 
-/** What the item writes in place of the name it was picked by: a snippet's text with its first place to fill selected. */
-private fun insert(
+/** [text] in place of the name the item was picked by, the caret after it. */
+private fun write(
     context: InsertionContext,
     text: String,
-    snippet: Boolean,
 ) {
-    val (written, place) = if (snippet) expand(text) else text to (text.length until text.length)
-    context.document.replaceString(context.startOffset, context.tailOffset, written)
-    val start = context.startOffset
-    context.editor.caretModel.moveToOffset(start + place.last + 1)
-    if (!place.isEmpty()) context.editor.selectionModel.setSelection(start + place.first, start + place.last + 1)
+    context.document.replaceString(context.startOffset, context.tailOffset, text)
+    context.editor.caretModel.moveToOffset(context.startOffset + text.length)
 }
 
-private val PLACE = Regex("""\$\{(\d+)(?::([^}]*)|\|([^|}]*)\|)?}""")
-
-/** A snippet's text, each place to fill written with its default or first choice, and where the place numbered lowest stands. */
-internal fun expand(snippet: String): Pair<String, IntRange> {
-    val out = StringBuilder()
-    var first: Pair<Int, IntRange>? = null
-    var from = 0
-    for (m in PLACE.findAll(snippet)) {
-        out.append(snippet, from, m.range.first)
-        val default = m.groups[2]?.value ?: m.groups[3]?.value?.substringBefore(',') ?: ""
-        val number = m.groupValues[1].toInt()
-        if (first == null || number < first.first) first = number to (out.length until out.length + default.length)
-        out.append(default)
-        from = m.range.last + 1
+/** The snippet in place of the name the item was picked by, as a live template whose places the tab moves through. */
+private fun write(
+    context: InsertionContext,
+    snippet: Snippet,
+) {
+    context.document.deleteString(context.startOffset, context.tailOffset)
+    context.editor.caretModel.moveToOffset(context.startOffset)
+    val manager = TemplateManager.getInstance(context.project)
+    val template = manager.createTemplate("", "")
+    template.isToReformat = false
+    var at = 0
+    snippet.places.forEachIndexed { i, place ->
+        template.addTextSegment(snippet.text.substring(at, place.start))
+        val node = ConstantNode(snippet.text.substring(place.start, place.end)).withLookupStrings(place.choices)
+        template.addVariable("place$i", node, node, true)
+        at = place.end
     }
-    out.append(snippet, from, snippet.length)
-    return out.toString() to (first?.second ?: (out.length until out.length))
+    template.addTextSegment(snippet.text.substring(at))
+    manager.startTemplate(context.editor, template)
 }
 
 /** The order the analysis gave the items. */

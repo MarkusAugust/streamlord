@@ -4,16 +4,19 @@ package io.github.markusaugust.streamlord.editor
 
 import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
+import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.Workspace
+import io.github.markusaugust.streamlord.analysis.analyzeOptions
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.constantNames
+import io.github.markusaugust.streamlord.analysis.foreignHelpers
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.modulesOf
 import io.github.markusaugust.streamlord.analysis.otherDeclaredNames
@@ -120,13 +123,7 @@ private fun options(
     prefix: String,
 ): AnalyzeOptions {
     if (!kotlin) return AnalyzeOptions(prefix = prefix, prefixSetting = PREFIX_SETTING)
-    val modules = analyzer.modulesOf(source(src, true, prefix))
-    return AnalyzeOptions(
-        prefix = prefix,
-        htmlDsl = modules.htmlDsl,
-        core = if (modules.core) null else false,
-        prefixSetting = PREFIX_SETTING,
-    )
+    return analyzer.analyzeOptions(source(src, true, prefix)).copy(prefixSetting = PREFIX_SETTING)
 }
 
 /** The prefix setting by the id VS Code's settings are searched by. */
@@ -207,14 +204,11 @@ interface FileSignals {
     val others: Array<String>
 }
 
-/**
- * The calls of a file that are somebody else's and define no signal: in a Kotlin file without the
- * DSL's import, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too.
- */
+/** The calls of [src] that are somebody else's and define no signal, by the modules its imports show. */
 private fun foreignHelpers(
     src: String,
     kotlin: Boolean,
-): Set<String> = if (kotlin && !analyzer.modulesOf(source(src, true, "")).htmlDsl) analyzer.catalog.signalNameHelpers.keys else emptySet()
+): Set<String> = foreignHelpers(htmlDsl = !kotlin || analyzer.modulesOf(source(src, true, "")).htmlDsl)
 
 @JsExport
 fun signalsOf(
@@ -354,6 +348,21 @@ fun renameText(
 // ---- Completion, hover and signature help -----------------------------------------------------
 
 @JsExport
+interface SnippetPlace {
+    val start: Int
+    val end: Int
+    val choices: Array<String>
+}
+
+@JsExport
+interface SnippetText {
+    val text: String
+
+    /** In the order the caret visits them. */
+    val places: Array<SnippetPlace>
+}
+
+@JsExport
 interface CompletionItem {
     val label: String
 
@@ -363,16 +372,13 @@ interface CompletionItem {
     /** Where the text the item replaces starts; it ends at the caret. */
     val replaceFrom: Int
     val insert: String?
-
-    /** With `${1:...}` for the places to fill. */
-    val snippet: String?
+    val snippet: SnippetText?
     val detail: String?
     val tail: String?
 
     /** Markdown. */
     val doc: String?
     val filter: String?
-    val sort: String?
 }
 
 @JsExport
@@ -386,7 +392,9 @@ interface HoverText {
 interface Signature {
     val label: String
     val doc: String
-    val parameters: Array<String>
+
+    /** Where each parameter stands in [label], as `[start, end]`. */
+    val parameters: Array<Array<Int>>
     val active: Int
 }
 
@@ -414,24 +422,33 @@ fun complete(
     ids: Array<String>,
     classes: Array<String>,
     attributeNames: Boolean,
-): Array<CompletionItem> =
-    analyzer
-        .complete(source(src, kotlin, prefix), offset, Workspace(signals.asList(), ids.asList(), classes.asList()), attributeNames)
+): Array<CompletionItem> {
+    val workspace = Workspace(signals.asList(), ids.asList(), classes.asList(), called = "workspace")
+    return analyzer
+        .complete(source(src, kotlin, prefix), offset, workspace, attributeNames)
         .items
-        .map {
-            plain<CompletionItem>(
-                "label" to it.label,
-                "kind" to it.kind.name.lowercase(),
-                "replaceFrom" to it.replaceFrom,
-                "insert" to it.insert,
-                "snippet" to it.snippet,
-                "detail" to it.detail,
-                "tail" to it.tail,
-                "doc" to it.doc,
-                "filter" to it.filter,
-                "sort" to it.sort,
-            )
-        }.toTypedArray()
+        .map(::plain)
+        .toTypedArray()
+}
+
+private fun plain(item: Completion): CompletionItem {
+    val snippet =
+        item.snippet?.let { s ->
+            val places = s.places.map { plain<SnippetPlace>("start" to it.start, "end" to it.end, "choices" to it.choices.plain()) }
+            plain<SnippetText>("text" to s.text, "places" to places.toTypedArray())
+        }
+    return plain(
+        "label" to item.label,
+        "kind" to item.kind.name.lowercase(),
+        "replaceFrom" to item.replaceFrom,
+        "insert" to item.insert,
+        "snippet" to snippet,
+        "detail" to item.detail,
+        "tail" to item.tail,
+        "doc" to item.doc,
+        "filter" to item.filter,
+    )
+}
 
 /** The documentation of what stands at [offset] of [src], or null. */
 @JsExport
@@ -440,8 +457,10 @@ fun hover(
     offset: Int,
     kotlin: Boolean,
     prefix: String,
-): HoverText? =
-    analyzer.hover(source(src, kotlin, prefix), offset)?.let { plain("start" to it.start, "end" to it.end, "markdown" to it.markdown) }
+): HoverText? {
+    val found = analyzer.hover(source(src, kotlin, prefix), offset) ?: return null
+    return plain("start" to found.start, "end" to found.end, "markdown" to found.markdown)
+}
 
 /** The parameters of the action call [offset] of [src] stands in, or null. */
 @JsExport
@@ -450,12 +469,8 @@ fun signatureHelp(
     offset: Int,
     kotlin: Boolean,
     prefix: String,
-): Signature? =
-    analyzer.signatureHelp(source(src, kotlin, prefix), offset)?.let { help ->
-        plain(
-            "label" to help.label,
-            "doc" to help.doc,
-            "parameters" to help.parameters.map { help.label.substring(it) }.toTypedArray(),
-            "active" to help.active,
-        )
-    }
+): Signature? {
+    val help = analyzer.signatureHelp(source(src, kotlin, prefix), offset) ?: return null
+    val parameters = help.parameters.map { arrayOf(it.first, it.last + 1) }.toTypedArray()
+    return plain("label" to help.label, "doc" to help.doc, "parameters" to parameters, "active" to help.active)
+}

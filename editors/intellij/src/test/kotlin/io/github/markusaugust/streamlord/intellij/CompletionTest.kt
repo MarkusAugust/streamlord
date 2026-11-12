@@ -1,8 +1,10 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.codeInsight.template.impl.TemplateManagerImpl
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.statistics.StatisticsManager
 import com.intellij.psi.statistics.impl.StatisticsManagerImpl
 
@@ -104,6 +106,23 @@ class CompletionTest : StreamlordTestCase() {
         myFixture.configureByText("page3.html", "<div data-on:click__debounce.<caret>")
         val values = myFixture.completeBasic()!!.map { it.lookupString }
         assertEquals(listOf("500ms", "1s", "300ms", "100ms"), values)
+    }
+
+    fun `test an attribute that needs a key is written with its key and value, each a place the tab moves to`() {
+        TemplateManagerImpl.setTemplateTesting(testRootDisposable)
+        myFixture.configureByText("tabs.html", "<div data-<caret>></div>")
+        myFixture.completeBasic()
+        myFixture.lookup.currentItem = myFixture.lookupElements!!.first { it.lookupString == "data-on" }
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("<div data-on:key=\"\"></div>", myFixture.editor.document.text)
+        assertEquals("key", myFixture.editor.selectionModel.selectedText)
+        val template = TemplateManagerImpl.getTemplateState(myFixture.editor)!!
+        WriteCommandAction.runWriteCommandAction(project) { template.nextTab() }
+        assertEquals(
+            myFixture.editor.document.text
+                .indexOf("\"\"") + 1,
+            myFixture.caretOffset,
+        )
     }
 
     fun `test no attribute names in a textarea's text`() {

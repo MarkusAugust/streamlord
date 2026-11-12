@@ -49,12 +49,35 @@ private fun Analyzer.importsDsl(src: String): Boolean {
     return USES_HTML_DSL.findAll(text).any { m -> mask[m.range.first + IMPORT_OR_PACKAGE.find(m.value)!!.range.first] }
 }
 
-/** The HTML string at [offset]: one that looks like HTML, or the markup handed to a Streamlord call where the file has core. */
+/** The options a [source] is judged with by the checks: the modules as [modulesOf] settles them, read once. */
+internal fun Analyzer.analyzeOptions(source: Source): AnalyzeOptions {
+    val modules = modulesOf(source)
+    return AnalyzeOptions(prefix = source.prefix, htmlDsl = modules.htmlDsl, core = modules.core)
+}
+
+/** The HTML string at [offset]: one that looks like HTML, or the markup handed to a Streamlord call where the file has [core]. */
+public fun Analyzer.htmlStringAt(
+    src: String,
+    offset: Int,
+    core: Boolean,
+): KotlinString? = htmlStringAt(src, offset)?.takeIf { core || isHtmlString(src, it) }
+
 internal fun Analyzer.htmlStringAt(
     src: String,
     offset: Int,
     modules: Modules,
-): KotlinString? = htmlStringAt(src, offset)?.takeIf { modules.core || isHtmlString(src, it) }
+): KotlinString? = htmlStringAt(src, offset, modules.core)
+
+/** The calls the analysis reads Datastar in that are Streamlord's in a module with [core] and [htmlDsl]: none without core, none of the DSL's without it. */
+public fun Analyzer.streamlordCallNames(
+    core: Boolean,
+    htmlDsl: Boolean,
+): Set<String> =
+    when {
+        !core -> emptySet()
+        !htmlDsl -> callSiteNames - dslNames
+        else -> callSiteNames
+    }
 
 /**
  * The markup of the `+` chain whose literals [offset] stands in, read as one string, when it opens
@@ -126,12 +149,7 @@ internal fun Analyzer.selectorBefore(
     offset: Int,
     modules: Modules,
 ): String? {
-    val sites =
-        when {
-            !modules.core -> return null
-            !modules.htmlDsl -> catalog.allCallSiteNames - dslNames
-            else -> catalog.allCallSiteNames
-        }
+    val sites = streamlordCallNames(modules.core, modules.htmlDsl).takeIf { it.isNotEmpty() } ?: return null
     val site = findCallSites(src, sites, lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen } ?: return null
     val arg =
         site.args.firstOrNull { a ->

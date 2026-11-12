@@ -7,6 +7,7 @@ import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
 import io.github.markusaugust.streamlord.analysis.SignatureHelp
+import io.github.markusaugust.streamlord.analysis.Workspace
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCaret
@@ -148,7 +149,7 @@ class ExpressionHelpTest : StreamlordTestCase() {
         return StreamlordAnalysis
             .getInstance(project)
             .analyzer
-            .complete(asked.source, asked.offset)
+            .complete(asked.source, asked.offset, Workspace(emptyList(), emptyList(), emptyList(), called = "project"))
             .items
             .map { it.label }
     }

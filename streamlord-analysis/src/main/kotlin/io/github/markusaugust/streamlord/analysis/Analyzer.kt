@@ -213,6 +213,7 @@ private val ANNOTATION_BEFORE = regex("""@[\p{L}_][\p{L}\p{Nd}_.:]*\s*\z""")
 private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
+private val ATTRIBUTES_KEY = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]""")
 private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
 /** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
@@ -443,11 +444,17 @@ public class Analyzer(
     public fun attributesIndexes(src: String): List<AttributesIndex> {
         val lex = lex(src)
         val out = ArrayList<AttributesIndex>()
-        for (m in ATTRIBUTES_INDEX.findAll(src)) {
+        for (m in ATTRIBUTES_KEY.findAll(src)) {
             if (!lex.mask[m.range.first]) continue
-            val value = lex.stringAt(m.range.last + 2)?.takeIf { it.start == m.range.last + 1 }
             val nameStart = m.range.first + m.value.indexOf('"') + 1
-            out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, m, lex) != null)
+            // While the assignment is still being typed the key stands alone, with no value.
+            val assigned =
+                ATTRIBUTES_INDEX.matchAt(src, m.range.first) ?: run {
+                    out += AttributesIndex(m.groupValues[1], nameStart, null, false)
+                    continue
+                }
+            val value = lex.stringAt(assigned.range.last + 2)?.takeIf { it.start == assigned.range.last + 1 }
+            out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, assigned, lex) != null)
         }
         return out
     }

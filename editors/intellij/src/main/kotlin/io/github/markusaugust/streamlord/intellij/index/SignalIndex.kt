@@ -24,6 +24,7 @@ import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignals
+import io.github.markusaugust.streamlord.analysis.foreignHelpers
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
@@ -422,11 +423,8 @@ class SignalIndex(
 
     private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 
-    /** The DSL's helpers that name a signal, whose names other APIs use too. */
-    private fun shortHelpers(): Set<String> =
-        StreamlordAnalysis
-            .getInstance(project)
-            .catalog.signalNameHelpers.keys
+    /** The DSL's helpers that name a signal, somebody else's in a module without the DSL. */
+    private fun shortHelpers(): Set<String> = foreignHelpers(htmlDsl = false)
 
     /** Whether [text] calls one of [names] on no receiver: a file without such a call reads the same in every module. */
     private fun callsAny(

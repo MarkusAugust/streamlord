@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,13 +25,14 @@ class EditorHelpTest {
                 prefix = case.string("prefix") ?: "data-",
                 core = case.boolean("core"),
                 htmlDsl = case.boolean("htmlDsl"),
-                foreign = { name, _ -> name in foreign },
+                // As an editor that resolves calls answers: by the call whose name starts there.
+                foreign = { name, at -> name in foreign && written.removeRange(caret, caret + 1).startsWith(name, at) },
             )
         return source to caret
     }
 
     private fun workspace(case: JsonObject): Workspace {
-        val w = case.obj("workspace") ?: return Workspace()
+        val w = case.obj("workspace") ?: return Workspace(emptyList(), emptyList(), emptyList(), called = "workspace")
         return Workspace(
             signals = w.array("signals")?.strings().orEmpty(),
             ids = w.array("ids")?.strings().orEmpty(),
@@ -54,32 +57,43 @@ class EditorHelpTest {
             for (expected in case.array("items")!!.objects()) {
                 val label = expected.string("label")!!
                 val item = found.items.first { it.label == label }
-                val doc = expected.string("doc")
+                val snippet =
+                    item.snippet?.let { s -> s.text to s.places.map { listOf(it.start, it.end, it.choices) } }
+                val wantedSnippet =
+                    expected.obj("snippet")?.let { s ->
+                        s.string("text") to
+                            s.array("places")!!.map { p ->
+                                val place = p as JsonArray
+                                listOf(
+                                    (place[0] as JsonNumber).toIntOrNull(),
+                                    (place[1] as JsonNumber).toIntOrNull(),
+                                    (place[2] as JsonArray).strings(),
+                                )
+                            }
+                    }
                 val actual =
                     listOf(
                         item.kind.name.lowercase(),
                         item.replaceFrom - caret,
                         item.insert,
-                        item.snippet,
+                        snippet,
                         item.detail,
                         item.tail,
-                        if (doc != null && item.doc?.startsWith(doc) == true) doc else item.doc,
+                        item.doc,
                         item.filter,
-                        item.sort,
                     )
                 val wanted =
                     listOf(
                         expected.string("kind"),
                         expected.int("from"),
                         expected.string("insert"),
-                        expected.string("snippet"),
+                        wantedSnippet,
                         expected.string("detail"),
                         expected.string("tail"),
-                        doc,
+                        expected.string("doc"),
                         expected.string("filter"),
-                        expected.string("sort"),
                     )
-                assertEquals(wanted, actual, "$label: kind, from, insert, snippet, detail, tail, doc, filter, sort")
+                assertEquals(wanted, actual, "$label: kind, from, insert, snippet, detail, tail, doc, filter")
             }
             assertEquals(case.boolean("alone") ?: false, found.alone, "alone")
         }
@@ -98,8 +112,7 @@ class EditorHelpTest {
             assertNotNull(found, "a hover")
             assertTrue(found.start <= caret && caret <= found.end, "the hover holds the caret: ${found.start}..${found.end}")
             assertEquals(expected.string("word"), source.text.substring(found.start, found.end), "word")
-            assertTrue(found.markdown.startsWith(expected.string("doc")!!), found.markdown)
-            expected.string("without")?.let { assertTrue(it !in found.markdown, found.markdown) }
+            assertEquals(expected.string("doc"), found.markdown, "doc")
         }
     }
 
@@ -115,7 +128,7 @@ class EditorHelpTest {
             }
             assertNotNull(found, "signature help")
             assertEquals(expected.string("label"), found.label, "label")
-            assertTrue(found.doc.startsWith(expected.string("doc")!!), found.doc)
+            assertEquals(expected.string("doc"), found.doc, "doc")
             assertEquals(
                 expected.array("parameters")!!.strings(),
                 found.parameters.map { found.label.substring(it) },
@@ -132,9 +145,19 @@ class EditorHelpTest {
         var asked = 0
         val source = Source(text, SourceLanguage.KOTLIN, foreign = { _, _ -> asked++ < 0 })
         val caret = text.lastIndexOf("\")")
-        assertTrue(analyzer.complete(source, caret).items.any { it.label == "\$s1999" })
+        val workspace = Workspace(emptyList(), emptyList(), emptyList(), called = "workspace")
+        assertTrue(analyzer.complete(source, caret, workspace).items.any { it.label == "\$s1999" })
         assertTrue(analyzer.offers(source, caret, names = true))
         assertTrue(asked <= 4, "asked $asked times")
+    }
+
+    @Test
+    fun `every action's parameters stand in its signature, in order`() {
+        for (action in analyzer.catalog.actions) {
+            val text = "<div data-on:click=\"@${action.name}("
+            val help = analyzer.signatureHelp(Source(text, SourceLanguage.HTML), text.length)
+            assertEquals(action.parameters, help?.parameters?.map { action.signature.substring(it) }, action.name)
+        }
     }
 
     private companion object {

@@ -367,7 +367,8 @@ describe("signature help", () => {
   it("shows the action's parameters with the one at the caret", () => {
     const h = signature(`<div data-on:click="@get('/x', `, "html");
     assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
-    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), ["uri", "options?"]);
+    // Each parameter by where it stands in the signature, as VS Code highlights it.
+    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), [[5, 8], [10, 18]]);
     assert.equal(h?.activeParameter, 1);
     const src = `${DSL}div { dataOnClick("@post(") }`;
     assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);

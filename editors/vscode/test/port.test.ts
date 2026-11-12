@@ -155,8 +155,14 @@ describe("what crosses the port", () => {
 
   it("hands completion over as data", () => {
     const [item] = complete("<div data-on:click__deb", 23, false, "data-", [], [], [], true).filter((i) => i.label === "debounce");
-    assert.deepEqual({ ...item }, { label: "debounce", kind: "modifier", replaceFrom: 20, snippet: "debounce.${1:500ms}", detail: "__debounce.<duration>", sort: "debounce" });
-    assert.deepEqual(signatureHelp("<div data-on:click=\"@get('/x', ", 30, false, "data-")?.parameters, ["uri", "options?"]);
+    assert.deepEqual(JSON.parse(JSON.stringify(item)), {
+      label: "debounce",
+      kind: "modifier",
+      replaceFrom: 20,
+      snippet: { text: "debounce.500ms", places: [{ start: 9, end: 14, choices: [] }] },
+      detail: "__debounce.<duration>",
+    });
+    assert.deepEqual(signatureHelp("<div data-on:click=\"@get('/x', ", 30, false, "data-")?.parameters, [[5, 8], [10, 18]]);
   });
 
   it("opens a route as the request the inspector sends", () => {
