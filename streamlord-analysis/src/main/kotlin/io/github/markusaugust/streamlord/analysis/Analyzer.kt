@@ -121,6 +121,9 @@ private const val UNQUOTED_STOP = " \t\n\u000C\r\u000B\"'=<>`"
 /** Where escaping is all a value needs, so that `interpolate(...)` takes it. */
 private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Position.URL)
 
+/** Why no rewrite is offered where the value alone stands in its way. */
+private const val OWN_MARKUP_NOTE = " interpolate(...) is not offered here: it would escape this value, which may be markup you built."
+
 /** What interpolate does with a URL whose value decides the scheme. */
 private const val REFUSES_SCHEME = "interpolate(...), which refuses a scheme that runs"
 
@@ -743,7 +746,17 @@ public class Analyzer(
             }
         val issues = ArrayList<Issue>()
         // The values are always the values: a List among them is one, written as a template writes it.
-        val collections = if (plain) values.mapIndexedNotNull { k, v -> collectionElements(v.text)?.takeIf { it.isNotEmpty() }?.let { k to it } } else emptyList()
+        val collections =
+            if (plain) {
+                values.mapIndexedNotNull { k, v ->
+                    collectionElements(v.text)?.takeIf { it.isNotEmpty() }?.let {
+                        k to
+                            it
+                    }
+                }
+            } else {
+                emptyList()
+            }
 
         fun writtenOut(of: List<Pair<Int, List<String>>>) =
             Fix(
@@ -1401,9 +1414,7 @@ public class Analyzer(
                 if (!unfit.isNullOrEmpty()) return " interpolate(...) is not offered here: $unfit."
                 // This value alone in the way, for the reason interpolateKeeps gives in element text.
                 val own = !keeps[k] && landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants)
-                val other =
-                    inTheWay.firstOrNull { it != k }
-                        ?: return if (own) " interpolate(...) is not offered here: it would escape this value, which may be markup you built." else ""
+                val other = inTheWay.firstOrNull { it != k } ?: return if (own) OWN_MARKUP_NOTE else ""
                 val named = holeDisplay(s.interpolations[other])
                 val place = refusedPlace(view, landings[other], starts[other])
                 val refused = loose[other] || landings[other].position !in ESCAPED_POSITIONS

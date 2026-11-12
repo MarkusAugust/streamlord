@@ -1693,10 +1693,8 @@ private fun markupInLiteral(e: String): Boolean {
 /** The calls whose result is a number or a boolean, whatever they are called on. */
 private val NUMBER_CALLS =
     NUMBER_CONVERSIONS +
-        setOf(
-            "dec", "inc", "count", "sum", "compareTo", "hashCode", "indexOf", "lastIndexOf", "isEmpty", "isNotEmpty",
-            "isBlank", "isNotBlank", "contains", "startsWith", "endsWith", "equals", "any", "all", "none",
-        )
+        "dec inc count sum compareTo hashCode indexOf lastIndexOf isEmpty isNotEmpty isBlank isNotBlank contains startsWith endsWith equals any all none"
+            .split(" ")
 private val NUMBER_PROPERTY = regex("""[\p{L}\p{Nd}_)\]]\s*\??\.\s*(?:size|length|lastIndex)$""")
 
 /** Outside brackets: an operator whose result is a Boolean, which binds looser than any that may give a String. */

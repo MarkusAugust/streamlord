@@ -117,7 +117,9 @@ class CorpusTest {
                 for (issue in run("kotlin", case)) {
                     val advises = "build the string with interpolate(...)" in issue.message
                     val offered = issue.fixes.any { it.title.startsWith(REWRITE_TITLE) }
-                    val why = "interpolate(...) is not offered here" in issue.message || "interpolate(...) cannot take this string" in issue.message
+                    val why =
+                        "interpolate(...) is not offered here" in issue.message ||
+                            "interpolate(...) cannot take this string" in issue.message
                     if (advises && !offered && !why) failures += "$file: ${case.string("name")}: ${issue.message}"
                 }
             }
