@@ -50,6 +50,7 @@ class StreamlordAnalysis(
             checkHtmlAttributes = true,
             htmlDsl = file?.let { ProjectLibraries.known(it, StreamlordLibrary.HTML) },
             core = file?.let { ProjectLibraries.known(it, StreamlordLibrary.CORE) },
+            coreHtml = file?.let { ProjectLibraries.coreHtml(it) },
         )
 
     /**

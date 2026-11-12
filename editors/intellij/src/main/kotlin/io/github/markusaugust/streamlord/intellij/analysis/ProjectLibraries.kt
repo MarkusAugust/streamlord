@@ -37,8 +37,16 @@ object ProjectLibraries {
         // An injected fragment is a file of its own, outside every module; its host's module is the one.
         val file = InjectedLanguageManager.getInstance(project).getTopLevelFile(element) ?: element.containingFile ?: return null
         if (DumbService.isDumb(project)) return null
-        return find(project, ModuleUtilCore.findModuleForPsiElement(file), library)
+        return find(project, ModuleUtilCore.findModuleForPsiElement(file), library.marker)
     }
+
+    /** Whether the core [element] can use has `Html`, which came in 0.16.0; null while the IDE indexes. */
+    fun coreHtml(element: PsiElement): Boolean? {
+        if (DumbService.isDumb(element.project)) return null
+        return find(element.project, ModuleUtilCore.findModuleForPsiElement(element), CORE_HTML)
+    }
+
+    private const val CORE_HTML = "io.github.markusaugust.streamlord.core.domain.Html"
 
     /** Whether [library] is there for the project file [file], as [known] says for an element; no tree is built for it. */
     fun known(
@@ -47,21 +55,21 @@ object ProjectLibraries {
         library: StreamlordLibrary,
     ): Boolean? {
         if (DumbService.isDumb(project)) return null
-        return find(project, ProjectFileIndex.getInstance(project).getModuleForFile(file), library)
+        return find(project, ProjectFileIndex.getInstance(project).getModuleForFile(file), library.marker)
     }
 
     private fun find(
         project: Project,
         module: Module?,
-        library: StreamlordLibrary,
+        marker: String,
     ): Boolean? {
         UiThreadWork.note()
         // A scratch file or one in memory belongs to no module: what the project has is the best guess.
         val found =
             if (module != null) {
-                JavaLibraryUtil.hasLibraryClass(module, library.marker)
+                JavaLibraryUtil.hasLibraryClass(module, marker)
             } else {
-                JavaLibraryUtil.hasLibraryClass(project, library.marker)
+                JavaLibraryUtil.hasLibraryClass(project, marker)
             }
         // The platform answers false once indexing has begun, which says nothing.
         return if (!found && DumbService.isDumb(project)) null else found

@@ -48,6 +48,8 @@ class RewriteActionTest : StreamlordTestCase() {
             val offered = myFixture.availableIntentions
             val action = offered.firstOrNull { it.text == title }
             assertNotNull("$value: $title is not among ${offered.map { it.text }}", action)
+            // The warning's quick fix is the rewrite there, so the context action stands back.
+            assertEquals(value, 1, offered.count { it.text.startsWith("Build it with interpolate(...)") })
             myFixture.launchAction(action!!)
             myFixture.checkResult(rewritten)
         }

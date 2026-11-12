@@ -208,5 +208,11 @@
             enabledByDefault="true"
             level="WARNING"
             implementationClass="io.github.markusaugust.streamlord.intellij.inspections.StreamlordMarkupInspection" />
+
+        <intentionAction>
+            <language>kotlin</language>
+            <className>io.github.markusaugust.streamlord.intellij.inspections.InterpolateIntention</className>
+            <category>Streamlord</category>
+        </intentionAction>
     </extensions>
 </idea-plugin>
