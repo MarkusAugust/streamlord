@@ -1,5 +1,5 @@
 {"what":"file","language":"html"}
-{"what":"diagnostic","code":"expression-syntax","link":"https://data-star.dev/guide/datastar_expressions","message":"Datastar expression: Unexpected token","range":"2:18-2:19","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"expression-syntax","link":"https://data-star.dev/guide/datastar_expressions","message":"Datastar expression: Unexpected end of input","range":"2:18-2:19","severity":"Error","source":"streamlord"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:24","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"1:6-1:24"}]}
 {"what":"hover","at":"1:31-1:34","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:31-1:34"}]}
