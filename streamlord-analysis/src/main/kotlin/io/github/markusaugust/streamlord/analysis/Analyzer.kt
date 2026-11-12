@@ -1343,14 +1343,20 @@ public class Analyzer(
 
             val link = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
 
-            // Why another value keeps the rewrite from this one: the first that interpolate refuses where it stands.
+            // The first other value interpolate refuses where it stands: why no rewrite is offered here, or what the
+            // rewrite does about it where it passes that value as Trusted(...).
             val inTheWay =
                 holes
                     .firstOrNull { it != k && !keeps[it] && (loose[it] || landings[it].position !in ESCAPED_POSITIONS) }
                     ?.takeIf { canInterpolate }
                     ?.let {
-                        " interpolate(...) cannot take this string while ${holeDisplay(s.interpolations[it], s.dollars)} stands in " +
-                            "${refusedPlace(view, landings[it], starts[it])}."
+                        val other = holeDisplay(s.interpolations[it], s.dollars)
+                        val place = refusedPlace(view, landings[it], starts[it])
+                        if (fixable) {
+                            " interpolate(...) takes this string once $other, which stands in $place, is passed as Trusted(...), as the fix does."
+                        } else {
+                            " interpolate(...) cannot take this string while $other stands in $place."
+                        }
                     }.orEmpty()
 
             fun issue(
