@@ -56,12 +56,15 @@ All notable changes to Streamlord are recorded here. The format follows
   own and read it with `el.dataset`.
 - `interpolate(format, values: List<Any?>, prefixes)` in streamlord-core is gone. The values of
   `interpolate(format, vararg values)` are always the values: a `List`, a `Set` or an array handed
-  over as one of them is one value, written as a Kotlin template writes it, `[a, b]`, and escaped.
+  over as one of them is one value, written in brackets, `[a, b]`, and escaped. An array is
+  written so too, where a Kotlin template writes its class and hash.
   Until now a `List` passed alone was silently taken for the list of values, so
   `interpolate("<p>%s</p>", tags)` threw for two tags and wrote the one for one. To pass the
   elements of a collection, spread it: `interpolate(format, *values.toTypedArray())`; where that was
   meant and the count no longer fits, the exception says so. The prefixes of an aliased bundle now
-  come first: `interpolate(prefixes, format, vararg values)`. Both editors count a list as one value.
+  come first: `interpolate(prefixes, format, vararg values)`. Both editors count a list as one value,
+  and give a hint where a `listOf(...)`, `setOf(...)` or `arrayOf(...)` is handed over, with a fix
+  that writes its elements out as the values.
 - The message `interpolate` throws for a `String` in a `data-*` expression advises an attribute of
   its own read with `el.dataset`, where it advised a signal, since a `String` written into
   `data-signals` is refused by the same rule.

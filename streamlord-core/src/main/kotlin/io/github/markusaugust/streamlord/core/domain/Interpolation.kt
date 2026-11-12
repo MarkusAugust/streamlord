@@ -246,9 +246,11 @@ public class UnsafeInterpolationException(
  * `${'$'}{...}`. At render time the source is gone, so the placeholders have to be left standing. That is
  * the whole of what this function asks of you.
  *
- * The values are always the values: a `List` or an array handed over as one of them is written as
- * a Kotlin template writes it, `[a, b]`, escaped like any text. To pass the elements of a
- * collection as the values, spread them: `interpolate(format, *values.toTypedArray())`.
+ * The values are always the values: a `List` or an array handed over as one of them is one value,
+ * written in brackets as Kotlin writes a list, `[a, b]`, escaped like any text. An array is
+ * written that way too, where a Kotlin template writes its class and hash. To pass the elements of
+ * a collection as the values, spread them: `interpolate(format, *values.toTypedArray())`. From
+ * Java, `values` is varargs, so a `String[]` passed alone is spread: it is the values.
  *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
  * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
@@ -433,8 +435,24 @@ internal fun safeUrl(url: String): Boolean {
     return scheme.asciiLowercase() in SAFE_SCHEMES
 }
 
+/** A value as interpolate writes it: an array as a list is written, `[a, b]`, where a template writes its class and hash. */
+private fun textOf(value: Any?): String =
+    when (value) {
+        null -> ""
+        is Array<*> -> value.contentDeepToString()
+        is IntArray -> value.contentToString()
+        is LongArray -> value.contentToString()
+        is ShortArray -> value.contentToString()
+        is ByteArray -> value.contentToString()
+        is DoubleArray -> value.contentToString()
+        is FloatArray -> value.contentToString()
+        is BooleanArray -> value.contentToString()
+        is CharArray -> value.contentToString()
+        else -> value.toString()
+    }
+
 private fun StringBuilder.escaped(value: Any?) {
-    val text = value?.toString() ?: ""
+    val text = textOf(value)
     for (ch in text) {
         when (ch) {
             '&' -> append("&amp;")
