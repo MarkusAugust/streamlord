@@ -81,6 +81,22 @@ class CompletionTest : StreamlordTestCase() {
         myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
     }
 
+    fun `test tab replaces the rest of the word the analysis names, enter inserts as the platform does`() {
+        val source = "<div data-signals=\"{user: {name: ''}}\"></div><p data-text=\"\$us<caret>er.name\"></p>"
+        for ((char, wanted) in listOf(Lookup.REPLACE_SELECT_CHAR to "\$user.name\"", Lookup.NORMAL_SELECT_CHAR to "\$user.nameer.name\"")) {
+            myFixture.configureByText("word.html", source)
+            myFixture.completeBasic()
+            val lookup = myFixture.lookup!!
+            lookup.currentItem = lookup.items.first { it.lookupString == "\$user.name" }
+            myFixture.finishLookup(char)
+            assertTrue(
+                myFixture.editor.document.text,
+                myFixture.editor.document.text
+                    .contains("data-text=\"$wanted"),
+            )
+        }
+    }
+
     fun `test ids and classes in a selector argument`() {
         myFixture.addFileToProject("other.html", "<div id=\"feed\" class=\"card\"></div>")
         myFixture.configureByText(

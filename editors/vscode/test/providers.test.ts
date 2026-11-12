@@ -66,6 +66,16 @@ describe("completion provider", () => {
     assert.ok((items[0]?.sortText ?? "") < (items.find((i) => i.label === "$busy")?.sortText ?? ""));
   });
 
+  it("inserts up to the caret and replaces the rest of the word, as the insert mode setting picks", () => {
+    const html = new MockDocument(`<div data-on:click="@post('/x', {contentType: 'form'})"></div>`, "html");
+    const at = html.getText().indexOf("form'");
+    const items = complete(html, 0, at, index);
+    const json = items.find((i) => i.label === "json");
+    const range = json?.range as unknown as { inserting: Range; replacing: Range };
+    assert.deepEqual([range.inserting.start.character, range.inserting.end.character], [at, at]);
+    assert.deepEqual([range.replacing.start.character, range.replacing.end.character], [at, at + 4]);
+  });
+
   it("offers actions after @ with pro last", () => {
     const items = complete(doc, 4, 18, index);
     const labels = items.map((i) => i.label);
