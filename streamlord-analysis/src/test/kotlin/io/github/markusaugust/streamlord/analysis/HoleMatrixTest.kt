@@ -204,9 +204,16 @@ class HoleMatrixTest {
         sample: Any?,
     ): String {
         val at = fixed.indexOf("= interpolate(")
-        val literal = lexKotlin(fixed).strings.first { it.start > at }
+        val literals = lexKotlin(fixed).strings
+        var literal = literals.first { it.start > at }
+        var joined = literal.text
+        // A format of several literals joined with `+` is what they write one after the other.
+        while (fixed.startsWith(" + ", literal.end)) {
+            literal = literals.first { it.start == literal.end + 3 }
+            joined += literal.text
+        }
         val rest = fixed.substring(literal.end)
-        val format = if (rest.startsWith(".trimIndent()")) literal.text.trimIndent() else literal.text
+        val format = if (rest.startsWith(".trimIndent()")) joined.trimIndent() else joined
         val value =
             when (val argument = ARGUMENT.find(rest)?.groupValues?.get(1)) {
                 "v" -> sample
@@ -222,6 +229,6 @@ class HoleMatrixTest {
 
         /** The value as each form writes it, and as a rewrite passes it. */
         val WRITTEN = setOf("\${v}", "\$\${v}", "v")
-        val ARGUMENT = Regex("""^(?:\.trimIndent\(\)| \+ "")?,\s*(.+)\)\.text\s*$""")
+        val ARGUMENT = Regex("""^(?:\.trimIndent\(\))?,\s*(.+)\)\.text\s*$""")
     }
 }

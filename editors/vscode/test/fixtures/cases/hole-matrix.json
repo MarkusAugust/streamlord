@@ -33,7 +33,8 @@
     {"name":"a raw string with trimIndent","open":"\"\"\"\n    ","close":"\n    \"\"\".trimIndent()","hole":"${v}","shown":"${v}"},
     {"name":"a multi-dollar raw string","open":"$$\"\"\"","close":"\"\"\"","hole":"$${v}","shown":"$${v}"},
     {"name":"strings joined with +","open":"\"","close":"\"","hole":"\" + v + \"","shown":"the value `v`","escaped":true},
-    {"name":"a multi-dollar string joined to another with +","open":"$$\"","close":"\" + \"\"","hole":"$${v}","shown":"$${v}","escaped":true}
+    {"name":"a multi-dollar string joined to another with +","open":"$$\"","close":"\" + \"\"","hole":"$${v}","shown":"$${v}","escaped":true},
+    {"name":"a value joined to strings written differently","open":"$$\"","close":"\"","hole":"\" + v + \"","shown":"the value `v`","escaped":true}
   ],
   "cells": {
     "element text": {
@@ -180,17 +181,17 @@
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"hint","fixes":[]}
     },
     "an unquoted value": {
-      "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "a String?": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "a number": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "a boolean": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "a nullable number": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
+      "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "a String?": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "a number": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "a boolean": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "a nullable number": {"code":"unsafe-interpolation","severity":"hint","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
       "a constant": null,
-      "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}},
-      "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]}}}
+      "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}},
+      "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Quote the value","preferred":true}],"forms":{"strings joined with +":{"fixes":[]},"a value joined to strings written differently":{"fixes":[]}}}
     }
   }
 }
