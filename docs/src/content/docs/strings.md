@@ -74,10 +74,12 @@ judged on any one-letter slip, because `data-signal:name` is nobody's own attrib
 `data-signal` is left alone, because `data-animated` and `data-effects` are honest words in the
 same shape.
 
-The editors warn about the names the guard throws for, and go one step further with a hint, where
-a bare name one edit away shows that Datastar was meant: its value names a signal or an action,
-`data-shwo="$open"`, or it stands without a value as the attribute it is near is written,
-`data-persits`. `data-test="login"` says nothing there either.
+The guard takes two letters swapped for one slip as well, where a key or a modifier follows:
+`data-no:click`. The editors warn about the names the guard throws for, and go one step further
+with a hint, where a bare name one edit away shows that Datastar was meant: its value reads a
+signal or calls an action where an expression could start, `data-shwo="$open"`, or it stands
+without a value as the attribute it is near is written, `data-persits`. `data-test="login"` says
+nothing there, and neither does `data-test="costs $5"` or a value with a template of its own.
 
 It is a small scan that builds no tree and copies no markup, and it skips `<script>` and `<style>`
 bodies. `ElementsGuard.check(html)` is also there to call directly, which is worth doing in the
@@ -248,7 +250,7 @@ straight to a DSL call too:
 | Where the value lands | What the editors say |
 |---|---|
 | Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, or markup anywhere but element text, where markup says nothing; with a fix that rewrites the literal as `interpolate(...)`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
-| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there; at the start of a URL with the fix to build it with `interpolate(...)`, which refuses a URL that runs |
+| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there; at the start of a URL, the URL of a `<meta>` refresh among them, with the fix to build it with `interpolate(...)`, which refuses a URL that runs; in the body of a `<style>` with the fix that passes the value as `Trusted(...)` |
 | A URL the browser loads code from (`src` of a script, an iframe or an embed, `href` of a base or a link, `data` of an object) whose literal start does not fix the host | `unsafe-interpolation`: a warning, and no fix, since `interpolate` refuses it too; in a call to `interpolate`, an error where the value is known |
 | An attribute value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value |
 | A tag name, an attribute name, a list of attributes, an end tag | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup; an end tag takes no attributes, so write it from literals alone |
@@ -277,21 +279,84 @@ so `${if (blank) "nothing" else query}` is the `String` it may be.
 VS Code knows what the file it is in declares, each name in the scope it is declared in, and every
 `const val` in the workspace that the file does not declare as something else; IntelliJ also knows
 the types, and what it knows of a value comes before anything the text suggests. Nothing here is an error, because a value the text cannot see into may well
-be a number. The `interpolate(...)` fix is offered wherever `interpolate` keeps every value of the
-string. A `.trimIndent()` or `.trimMargin()` after the literal stays on the format, inside the
-call; a `$$"..."` literal keeps its prefix; and literals joined to values with `+` become one
-format. It is not offered when a value in element text may be markup, which `interpolate` would
-escape. For a value that may be null, which a template writes as `null` and `interpolate` as
-nothing, it is offered and not put first. When `interpolate` refuses one value where it stands, in
-a `data-*` expression, in `style`, in a script or in the markup's structure, the string cannot be
-rewritten, and the message of each other value says which value is in the way. CSS in the body of
-a `<style>` is the exception: the fix on that value passes it as `Trusted(...)`, your word that
-the CSS is yours. Anywhere in a string that can take the rewrite it is also a context action:
-among the intentions in IntelliJ, under Refactor in VS Code.
+be a number.
+
 For a `String` in element text the editors cannot tell which you hold, so they offer both the
 rewrite and "Mark … as markup", which wraps the value in `Trusted(...)`, and put neither first:
 text from outside wants the rewrite, a fragment you rendered yourself wants `Trusted`, or better,
 to be declared `Html`.
+
+### The rewrite, before and after
+
+"Build this string with interpolate(...)" is offered on a value's warning wherever `interpolate`
+accepts every value of the string, and as a context action anywhere else in such a string: among
+the intentions in IntelliJ, under Refactor in VS Code. This is what it writes.
+
+A trim call stays on the format, inside the call, and CSS in the body of a `<style>` is passed as
+`Trusted(...)`, your word that it is yours. That fix is on the value in the `<style>`, and the
+other values say that the fix passes it so:
+
+```kotlin sample=declarations
+class WidgetContext(val rootId: String, val contentId: String)
+
+fun rootHtmlBefore(k: WidgetContext, customCss: String?, bodyHtml: String): String =
+    """
+    <div id="${k.rootId}">
+        <style>${customCss.orEmpty()}</style>
+        <div id="${k.contentId}">$bodyHtml</div>
+    </div>
+    """.trimIndent()
+
+fun rootHtmlAfter(k: WidgetContext, customCss: String?, bodyHtml: String): String =
+    interpolate("""
+    <div id="%s">
+        <style>%s</style>
+        <div id="%s">%s</div>
+    </div>
+    """.trimIndent(), k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml).text
+```
+
+Under `.trimIndent()` the fix is never put first, because the trim now runs before the values go
+in: a value that holds a line break no longer changes how much is trimmed. `.trimMargin()` has no
+such catch.
+
+A `$$"..."` literal keeps its prefix, so a single dollar that was text for the browser stays text.
+Literals joined to values with `+` become one format, and where they are written differently each
+keeps its form, with the value a `%s` at the end of the one before it:
+
+```kotlin sample=declarations
+fun priceBefore(name: String) = $$"""<p title="$${name}" data-text="$price"></p>"""
+fun priceAfter(name: String) = interpolate($$"""<p title="%s" data-text="$price"></p>""", name).text
+
+fun rowBefore(name: String, note: String) = "<li title=\"" + name + "\">" + note + "</li>"
+fun rowAfter(name: String, note: String) = interpolate("<li title=\"%s\">%s</li>", name, note).text
+
+fun mixedBefore(name: String, note: String) = "<li title=\"" + name + """">""" + note + "</li>"
+fun mixedAfter(name: String, note: String) = interpolate("<li title=\"%s" + """">%s""" + "</li>", name, note).text
+```
+
+One value alone whose type the editor does not know is passed as `listOf(value)`. Kotlin would
+otherwise take a value that is itself a `List` for the list of values:
+
+```kotlin sample=declarations
+class Hero(val tags: List<String>)
+
+fun tagsBefore(hero: Hero) = "<p>${hero.tags}</p>"
+fun tagsAfter(hero: Hero) = interpolate("<p>%s</p>", listOf(hero.tags)).text
+```
+
+When no rewrite is offered, the warning of each value ends with the reason:
+
+| What stands in the way | What to do |
+|---|---|
+| A value where `interpolate` refuses a `String`: a `data-*` expression, `style`, a `<script>`, an event handler, the markup's structure | Move that value out first: into an attribute of its own read with `el.dataset`, a class, or a literal. A `Trusted` there is accepted as it is. |
+| A call or an `if` in element text that may give markup, `${if (open) "<li>$name</li>" else ""}` | Build that part with `interpolate` or declare it `Html`, so that the rewrite does not escape it. |
+| A call or an index after one literal of a `+` chain, `"<p>" + name + "</p>".uppercase()` | The call is that literal's alone. Put the chain in brackets, or the call on the result. |
+| A trim call with a margin that is not a literal, or one that holds a per cent sign | Trim the format yourself, or use `|`. |
+
+A string in an annotation's argument or a `const val` gets no rewrite, since Kotlin takes a
+constant there, and neither does a string whose values need no escaping: numbers, constants, an
+`Html` in element text.
 
 A call to `interpolate` is judged as it will run. A miscounted `%s` is an error,
 `interpolate-placeholders`, because it always throws. A `%s` whose value `interpolate` will refuse,
