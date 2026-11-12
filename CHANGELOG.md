@@ -61,6 +61,8 @@ All notable changes to Streamlord are recorded here. The format follows
   an `Unexpected token`.
 - In both editors, the signals of a `@Serializable` class stay known while the class is being
   typed and its parenthesis is still open.
+- In both editors, where two defined signals are as near a misspelt one, the one suggested is the
+  first by name, where it could change with the order the project's files were read in.
 - In VS Code, a file the analysis fails on, one with templates nested thousands deep say, gets no
   diagnostics and a line in the Streamlord output channel, and no longer keeps the other open
   files from being checked.
