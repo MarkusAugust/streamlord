@@ -3,6 +3,8 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
+import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
+import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection
 import kotlin.time.measureTime
 
@@ -84,5 +86,15 @@ class SignalDriftInspectionTest : StreamlordTestCase() {
         assertEquals(listOf("page"), found)
         println("1,000 pages, highlighted after one edit: $took")
         assertTrue("the pass took $took", took.inWholeMilliseconds < 5_000)
+    }
+
+    // A file with no signals class and no lookup can report nothing, so the other files are not walked for it: the
+    // project's read, which the counter sees on this thread, is not even asked for.
+    fun `test a kotlin file that reads no signal asks the project nothing`() {
+        myFixture.addFileToProject("page.html", "<input data-bind:query>")
+        val file = myFixture.configureByText("Plain.kt", "fun f() = 1")
+        val before = UiThreadWork.count.get()
+        assertEquals(emptyList<Any>(), SignalIndex.getInstance(project).driftIn(file))
+        assertEquals(0, UiThreadWork.count.get() - before)
     }
 }

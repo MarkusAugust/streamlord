@@ -242,18 +242,21 @@ class SignalIndex(
      * change in any file; [refresh] is what finds it.
      */
     fun driftIn(file: PsiFile): List<Issue> {
-        refresh()
-        val own = entryFor(file) ?: return emptyList()
         val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
         if (language != SourceLanguage.KOTLIN) return emptyList()
+        val own = entryFor(file) ?: return emptyList()
+        val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(file.text, language)
+        // A file with no signals class and no lookup can report nothing, whatever the others say.
+        if (ownFacts.classes.isEmpty() && ownFacts.lookups.isEmpty()) return emptyList()
+        refresh()
         val facts = HashMap<String, SignalFacts>()
         for ((key, e) in entries) {
-            if (e === own) continue
+            if (e === own || e.file == own.file) continue
             ProgressManager.checkCanceled()
             // Only this file's issues are asked for, so another file's lookups play no part.
             factsIn(e, null)?.let { facts[key] = it.copy(lookups = emptyList()) }
         }
-        facts[THIS_FILE] = factsIn(own, file.text) ?: collectSignalFacts(file.text, language)
+        facts[THIS_FILE] = ownFacts
         return signalDrift(facts).issues[THIS_FILE].orEmpty()
     }
 
