@@ -24,7 +24,9 @@ class CompletionScaleTest : StreamlordTestCase() {
             "Many.kt",
             "import io.github.markusaugust.streamlord.html.*\n$calls\nfun g() = div { dataText(\"\\\$s1999<caret>\") }",
         )
-        myFixture.completeBasic()
+        // The first completion reads the file's references as well, which resolves each call that reads a signal once and
+        // looks each signal up once; looked up per signal, it ran past the platform's 100 s.
+        val first = measureTime { myFixture.completeBasic() }
         var items: List<String> = emptyList()
         val completion = measureTime { items = myFixture.completeBasic()?.map { it.lookupString }.orEmpty() }
         assertTrue(
@@ -36,7 +38,8 @@ class CompletionScaleTest : StreamlordTestCase() {
         var answer = ThreeState.UNSURE
         val question = measureTime { answer = confidence() }
         assertEquals(ThreeState.NO, answer)
-        println("2,000 DSL functions: completion $completion, the autopopup's question $question")
+        println("2,000 DSL functions: first completion $first, completion $completion, the autopopup's question $question")
+        assertTrue("the first completion took $first", first.inWholeMilliseconds < 20_000)
         assertTrue("completion took $completion", completion.inWholeMilliseconds < 1000)
         assertTrue("the question took $question", question.inWholeMilliseconds < 100)
     }

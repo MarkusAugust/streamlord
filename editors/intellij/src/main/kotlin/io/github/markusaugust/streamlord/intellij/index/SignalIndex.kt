@@ -151,6 +151,16 @@ class SignalIndex(
         }
     }
 
+    /** Every place in the project that defines a signal, by its name: [declarationsOf] for all names at once. */
+    fun declarationsByName(): Map<String, List<Place>> {
+        refresh()
+        return places { e ->
+            declaredIn(e, null)
+                ?.let { if (withoutDsl(e)) it.withoutDsl ?: it.declarations else it.declarations }
+                ?.map { Triple(it.start, it.end, it.name) }
+        }.groupBy { it.name }
+    }
+
     /** Every place in the project that reads the signal [name] or reads into it, `$user.name` for `user`. */
     fun readsOf(name: String): List<Place> {
         refresh()

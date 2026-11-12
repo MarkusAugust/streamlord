@@ -95,9 +95,18 @@ object SignalSites {
             }
         // A name the project defines only where go to declaration finds no place, in somebody else's `set` say, is no
         // link: a reference that resolves to nothing would say "Cannot find declaration".
+        // The project's places are read once for every path, not once for each: a file may read thousands.
         val targeted = HashMap<String, Boolean>()
+        val places by lazy(LazyThreadSafetyMode.NONE) { index.declarationsByName() }
+        val manager = PsiManager.getInstance(file.project)
 
-        fun linked(path: String) = targeted.getOrPut(path) { SignalTarget.of(file, path).isNotEmpty() }
+        fun linked(path: String) =
+            targeted.getOrPut(path) {
+                places[path].orEmpty().any { place ->
+                    val target = psiOf(manager, place.file)
+                    target != null && (target !is KtFile || byStreamlord(target, place.start))
+                }
+            }
         return signalSites(reads, declarations, defined)
             .filter { it.declaration != null || linked(it.signal) }
             .map { SignalSite(it.start, it.end, it.signal, it.declaration, host(it.start)) }
