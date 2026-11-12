@@ -542,20 +542,19 @@ private fun declared(
                         }
                     }
                 }
+                // dataSignals("{quests: {urgent: 0}}") writes data-signals="{...}": its keys are the signals.
+                if (site.name == "dataSignals" && idx == 0 &&
+                    positional.getOrNull(1)?.string == null
+                ) {
+                    a.string?.let { out += objectDeclarations(it, "") }
+                }
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (site.name == "removeSignals") out += declarationAt(name, a.start)
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
                     out += declarationAt(name, a.start)
                     // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.
-                    val value = positional[1].string!!
-                    if (JSON_OBJECT.containsMatchIn(value.text)) {
-                        val open = value.text.indexOf('{') + 1
-                        for (k in objectKeys(value.text.substring(open, maxOf(open, value.text.lastIndexOf('}'))))) {
-                            val at = value.toSource(open + k.nameStart, open + k.nameStart + k.key.length)
-                            out += SignalDeclaration(at.first, at.last + 1, "${name.value}.${k.path}", SignalDeclaration.Kind.OBJECT_KEY)
-                        }
-                    }
+                    out += objectDeclarations(positional[1].string!!, "${name.value}.")
                 }
             }
         }
@@ -598,6 +597,19 @@ private fun declared(
         }
     }
     return out
+}
+
+/** The keys of the object literal [s] holds, each a signal under [under], where it is written; none when [s] holds no object. */
+private fun objectDeclarations(
+    s: KotlinString,
+    under: String,
+): List<SignalDeclaration> {
+    if (!JSON_OBJECT.containsMatchIn(s.text)) return emptyList()
+    val open = s.text.indexOf('{') + 1
+    return objectKeys(s.text.substring(open, maxOf(open, s.text.lastIndexOf('}')))).map { k ->
+        val at = s.toSource(open + k.nameStart, open + k.nameStart + k.key.length)
+        SignalDeclaration(at.first, at.last + 1, under + k.path, SignalDeclaration.Kind.OBJECT_KEY)
+    }
 }
 
 private fun collect(
