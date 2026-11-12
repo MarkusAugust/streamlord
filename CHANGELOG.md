@@ -56,6 +56,14 @@ All notable changes to Streamlord are recorded here. The format follows
 - In VS Code, an expression that stops short, `$count +` or `@post('/x'`, is said to hold an
   `Unexpected end of input`, as the IntelliJ plugin says, where the extension said
   `Unexpected token` of a place that holds none.
+- In both editors, a value that stops short, `data-text="1 +"`, is said to hold an
+  `Unexpected end of input` as well, where the parenthesis Datastar closes a value with was called
+  an `Unexpected token`.
+- In both editors, the signals of a `@Serializable` class stay known while the class is being
+  typed and its parenthesis is still open.
+- In VS Code, a file the analysis fails on, one with templates nested thousands deep say, gets no
+  diagnostics and a line in the Streamlord output channel, and no longer keeps the other open
+  files from being checked.
 - In VS Code, a file in no folder of the workspace, and any file in a window without a folder, is
   read for its signals when it is opened. Go to definition and find references answered nothing
   from a place such a file defines a signal, and a rename there was offered and wrote nothing,
