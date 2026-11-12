@@ -61,7 +61,7 @@ internal fun <T> assertGrowsLinearly(
         // hides how the work grows: the size is doubled until it is under a quarter of the smallest's time.
         val fixed = (small - time(n, 1)) / (count(0) - count(1)).toDouble()
         val tooQuick = small < 30_000 && n < size * 8
-        val fixedBound = fixed * count(0) >= small / 4.0 && n < size * 64
+        val fixedBound = fixed * count(0) >= small / 4.0 && n < size * 16
         if (!tooQuick && !fixedBound) break
         n *= 2
     }

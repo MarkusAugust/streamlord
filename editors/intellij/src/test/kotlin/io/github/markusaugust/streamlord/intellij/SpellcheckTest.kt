@@ -6,6 +6,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.util.IdempotenceChecker
 import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
+import org.jetbrains.kotlin.psi.KtFile
 
 /** In a Datastar expression only the text in quotes is prose: a signal or an action name is no word to spell. */
 class SpellcheckTest : StreamlordTestCase() {
@@ -48,7 +49,11 @@ class SpellcheckTest : StreamlordTestCase() {
             val src =
                 (0 until n).joinToString("\n") { "fun T.f$it() { val s = \"text $it\"; attributes[\"data-on:click\"] = \"\\\$n$it++\" }" }
             // Its syntax tree built untimed, so that what is timed is the strategy and not the parser.
-            myFixture.addFileToProject("Big${copy++}.kt", src).also { PsiTreeUtil.processElements(it) { true } }
+            // A file past the IDE's size for code insight is plain text, which the strategy rightly claims nothing of.
+            myFixture.addFileToProject("Big${copy++}.kt", src).also {
+                assertTrue("${it.name} of ${it.textLength} characters is not read as Kotlin", it is KtFile)
+                PsiTreeUtil.processElements(it) { true }
+            }
         }
         assertGrowsLinearly("the spelling strategy over a Kotlin file", 10, file) {
             var claimed = 0

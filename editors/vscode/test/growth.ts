@@ -42,7 +42,7 @@ export function assertGrowsLinearly<T>(what: string, size: number, input: (n: nu
     // hides how the work grows: the size is doubled until it is under a quarter of the smallest's time.
     const fixed = (small - time(n, 1)) / (count(0) - count(1));
     const tooQuick = small < 30 && n < size * 8;
-    const fixedBound = fixed * count(0) >= small / 4 && n < size * 64;
+    const fixedBound = fixed * count(0) >= small / 4 && n < size * 16;
     if (!tooQuick && !fixedBound) break;
     n *= 2;
   }
