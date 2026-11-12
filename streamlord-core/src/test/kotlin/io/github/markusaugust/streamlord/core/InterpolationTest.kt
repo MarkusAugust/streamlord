@@ -166,6 +166,29 @@ class InterpolationTest {
     }
 
     @Test
+    fun `a value that is a list or an array is one value, written as a Kotlin template writes it`() {
+        val two = listOf("a", "<b>")
+        assertEquals("<p>[a, &lt;b&gt;]</p>", interpolate("<p>%s</p>", two).text)
+        assertEquals("<p>[x]</p>", interpolate("<p>%s</p>", listOf("x")).text)
+        assertEquals("<p>[]</p>", interpolate("<p>%s</p>", emptyList<String>()).text)
+        assertEquals("<p>[1, 2]</p>", interpolate("<p>%s</p>", setOf(1, 2)).text)
+        val array = arrayOf("a", "b")
+        assertEquals("<p>$array</p>", interpolate("<p>%s</p>", array as Any?).text)
+        // Spread, its elements are the values.
+        assertEquals("<p>a b</p>", interpolate("<p>%s %s</p>", *array).text)
+        assertEquals("<p>a &lt;b&gt;</p>", interpolate("<p>%s %s</p>", *two.toTypedArray()).text)
+    }
+
+    @Test
+    fun `a list handed over for several placeholders is said to be one value, to be spread`() {
+        val failure = assertFailsWith<IllegalArgumentException> { interpolate("<p>%s %s</p>", listOf("a", "b")) }
+        assertTrue("2 %s placeholders and 1 value" in failure.message!!, failure.message!!)
+        assertTrue("*values.toTypedArray()" in failure.message!!, failure.message!!)
+        val plain = assertFailsWith<IllegalArgumentException> { interpolate("<p>%s %s</p>", "a") }
+        assertTrue("toTypedArray" !in plain.message!!, plain.message!!)
+    }
+
+    @Test
     fun `the index names which value was refused`() {
         val failure =
             assertFailsWith<UnsafeInterpolationException> {
