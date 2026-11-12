@@ -221,9 +221,10 @@ public object JsonWriter {
             return
         }
         when (n) {
-            is Int, is Long, is Short, is Byte -> sb.append(n.toString())
-
+            // First: in JavaScript every number is a Double, and NaN passes for a Short.
             is Double -> sb.append(finite(n))
+
+            is Int, is Long, is Short, is Byte -> sb.append(n.toString())
 
             // Its own shortest form: widened to a Double, 0.1f is written as 0.10000000149011612.
             is Float -> finite(n.toDouble()).let { sb.append(n.toString()) }
