@@ -120,7 +120,7 @@ jobs:
               streamlord-test/*)  kotlin=true; image=true ;;
               streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
                 kotlin=true; image=true ;;
-              streamlord-*/*|docs-samples/*)
+              streamlord-*/*|docs-samples/*|rewrite-probes/*)
                 kotlin=true ;;
               # The README carries coordinates checkDocSamples verifies, and LICENSE goes into every jar.
               README.md|LICENSE)  kotlin=true ;;
