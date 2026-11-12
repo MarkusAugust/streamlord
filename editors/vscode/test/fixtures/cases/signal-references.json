@@ -32,6 +32,7 @@
     {"name":"an object holds its paths (2)","defined":["user","form.email"],"path":"form.email","known":true},
     {"name":"a path reaches into a defined signal (2)","defined":["user","form.email"],"path":"forms","known":false},
     {"name":"no fix when nothing is close","defined":["teller"],"path":"telefon","nearest":null},
-    {"name":"a fix when a name is close","defined":["teller","total"],"path":"telelr","nearest":"teller"}
+    {"name":"a fix when a name is close","defined":["teller","total"],"path":"telelr","nearest":"teller"},
+    {"name":"of two names as near, the suggestion is the first by name, whatever order the project was read in","defined":["b","count","a"],"path":"s","nearest":"a"}
   ]
 }
