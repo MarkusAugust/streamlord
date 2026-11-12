@@ -4,13 +4,13 @@ import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.measureTime
 
 /**
  * Hostile input for the built-in parser. The only acceptable outcomes are a [JsonValue] or a
@@ -59,24 +59,22 @@ class JsonRobustnessTest {
 
     @Test
     fun `one mebibyte parses in linear time`() {
-        val big =
-            buildString {
-                append('{')
-                var i = 0
-                while (length < 1_048_576) {
-                    if (i > 0) append(',')
-                    append("\"k")
-                        .append(i)
-                        .append("\":\"")
-                        .append("v".repeat(50))
-                        .append('"')
-                    i++
-                }
-                append('}')
-            }
-        val elapsed = measureTime { assertTrue((JsonParser.parse(big) as JsonObject).size > 10_000) }
-        assertTrue(elapsed.inWholeMilliseconds < 2_000, "took $elapsed")
+        assertGrowsLinearly("parsing an object of many keys", 16_000, ::manyKeys) { text ->
+            assertTrue((JsonParser.parse(text) as JsonObject).size > text.length / 100)
+        }
     }
+
+    private fun manyKeys(length: Int) =
+        buildString {
+            append('{')
+            var i = 0
+            while (this.length < length) {
+                if (i > 0) append(',')
+                append("\"k$i\":\"${"v".repeat(50)}\"")
+                i++
+            }
+            append('}')
+        }
 
     @Test
     fun `pathological numbers do not throw from accessors`() {

@@ -7,6 +7,7 @@ import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
 import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
 import { diagnose, signalsOf } from "../src/analysis.ts";
+import { assertGrowsLinearly } from "./growth.ts";
 
 /** A stand-in for SignalIndex over a fixed set of documents. */
 class FakeIndex {
@@ -148,13 +149,12 @@ describe("completion provider", () => {
     }
     const escaped = `val html = "<div class=\\"card\\" data-`;
     assert.ok(complete(new MockDocument(escaped, "kotlin"), 0, escaped.length, index).some((i) => i.label === "data-on"), escaped);
-    // CodeQL's input, as long as the 400 characters the provider reads, which never finished
-    // before. It ends on a name the caret completes, so the whole reading is timed.
-    const hostile = "<A " + "!= ".repeat(132) + "data-on:click__";
-    const started = performance.now();
-    const items = complete(pdoc(hostile), 0, hostile.length, index);
-    assert.ok(performance.now() - started < 1000, `${Math.round(performance.now() - started)} ms`);
-    assert.ok(items.some((i) => i.label === "debounce"), "modifiers at the end of the hostile input");
+    // CodeQL's input, which never finished before. It ends on a name the caret completes, so the
+    // whole reading is timed.
+    const hostile = (n: number) => "<A " + "!= ".repeat(n) + "data-on:click__";
+    assertGrowsLinearly("completing after a run of !=", 200, hostile, (src) => {
+      assert.ok(complete(pdoc(src), 0, src.length, index).some((i) => i.label === "debounce"), "modifiers at the end of the hostile input");
+    });
   });
 
   it("offers signals inside html attribute values", () => {
@@ -300,14 +300,11 @@ describe("an attribute on its own line", () => {
   });
 
   it("answers in time on a long document of tags never closed", () => {
-    let hostile = "";
-    while (hostile.length < 50_000) hostile += "<a " + "!= ".repeat(40) + "\n";
-    hostile += "<a " + "!= ".repeat(40) + "data-on:click__";
-    const started = performance.now();
-    const items = labels(hostile, "pebble");
-    const took = performance.now() - started;
-    assert.ok(took < 1000, `${Math.round(took)} ms`);
-    assert.ok(items.includes("debounce"), "modifiers at the end of the long document");
+    const tag = "<a " + "!= ".repeat(40);
+    const hostile = (lines: number) => `${tag}\n`.repeat(lines) + tag + "data-on:click__";
+    assertGrowsLinearly("completing after lines of tags never closed", 6, hostile, (src) => {
+      assert.ok(labels(src, "pebble").includes("debounce"), "modifiers at the end of the long document");
+    });
   });
 
   it("completes after a stray quote elsewhere in the markup", () => {

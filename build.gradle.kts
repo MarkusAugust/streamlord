@@ -43,8 +43,8 @@ subprojects {
 
     /*
      * Modules that exist for the build itself and never leave it. They are not
-     * published, they are not held to explicit API mode, and an unused value in
-     * a documentation sample is not worth failing a release over.
+     * published and not held to explicit API mode; a warning fails them as it
+     * fails the rest.
      */
     val internal = name in setOf("docs-samples", "demo", "rewrite-probes")
 
@@ -93,7 +93,7 @@ subprojects {
         jvmToolchain(21)
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
-            allWarningsAsErrors.set(!internal)
+            allWarningsAsErrors.set(true)
             freeCompilerArgs.addAll("-Xjdk-release=17", "-Xjsr305=strict")
             // The API the modules share among themselves. The samples and the demo stand for an
             // application's code, so they compile without it, as an application would.

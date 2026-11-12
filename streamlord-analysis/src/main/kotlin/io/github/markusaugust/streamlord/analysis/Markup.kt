@@ -375,8 +375,10 @@ private fun valueEnd(
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
  * inside a JavaScript template literal is JavaScript's own and does not count.
  */
-public fun hasTemplateSyntax(value: String): Boolean =
-    TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quoteAt(value, it.range.first) != '`' }
+public fun hasTemplateSyntax(value: String): Boolean {
+    val quotes = QuoteScan(value)
+    return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
+}
 
 /** Whether a template construct starts at [at] in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
 private fun cutByTemplate(

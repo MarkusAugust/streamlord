@@ -56,16 +56,15 @@ public class KotlinLex(
     public val mask: BooleanArray,
 ) {
     /**
-     * The string literal that contains an offset, if any. Scans from the start of the file rather
-     * than backwards from the offset: a quote inside a raw HTML string (`data-text="$count"`) is
-     * not the start of a literal, and only a forward scan knows that.
+     * The string literal that contains an offset, if any. Taken from the literals the lexer found
+     * reading forward from the start of the file, not by reading back from the offset: a quote inside
+     * a raw HTML string (`data-text="$count"`) is not the start of a literal, and only the forward
+     * reading knows that. They come in source order and apart, so the one that may hold the offset is
+     * the last to start before it.
      */
     public fun stringAt(offset: Int): KotlinString? {
-        for (s in strings) {
-            if (s.start >= offset) return null
-            if (offset <= s.end) return s
-        }
-        return null
+        val before = strings.binarySearch { if (it.start < offset) -1 else 1 }.let { -it - 2 }
+        return strings.getOrNull(before)?.takeIf { offset <= it.end }
     }
 
     /** The literals that lie wholly from [start] up to [end], found by where they start, since [strings] is in source order. */

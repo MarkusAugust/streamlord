@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# The checks CI runs on a pull request, in the same order and with the same commands. CI's jobs
+# call this script for their commands, so the two cannot drift apart.
+#
+#   ./check                  every part
+#   ./check sdk vscode       only those parts, in the order below
+#   ./check --changed [BASE] the parts a change since BASE touches, as CI decides; BASE defaults to
+#                            the newest origin/release/* branch
+#   ./check --parts BASE     print which parts a change since BASE touches, as name=true|false lines
+#   ./check --fetch-ktlint   fetch and verify the pinned ktlint, and print where it is
+#
+# The parts: sdk, ktlint, vscode, intellij, docs. The image is built by CI alone. Before a pull
+# request that changes an editor, also run the real VS Code check: cd editors/vscode && npm run real -- --check
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")" && pwd)
+order=(sdk ktlint vscode intellij docs)
+
+# The ktlint release CI holds the sources to, and the sha256 GitHub lists for its jar.
+KTLINT_VERSION=1.8.0
+KTLINT_SHA256=a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75
+
+gradle_flags=()
+[ "${CI:-}" = "true" ] && gradle_flags=(--no-daemon)
+
+passed=()
+current=""
+
+summary() {
+    echo
+    echo "Passed:"
+    [ ${#passed[@]} -eq 0 ] && echo "  nothing" && return
+    for p in "${passed[@]}"; do echo "  $p"; done
+}
+
+# Stops everything with $1 as the last line, and as an error annotation in CI. To stderr, so that a
+# failure inside a command substitution is still seen.
+die() {
+    {
+        summary
+        echo
+        echo "FAILED: $1"
+        [ "${CI:-}" = "true" ] && echo "::error title=./check failed::$1"
+    } >&2
+    exit 1
+}
+
+# Which parts the files changed since $1 touch. A change to the workflow, or one that cannot be
+# compared, touches everything.
+parts_for() {
+    local base=$1 files file
+    local kotlin=false vscode=false intellij=false docs=false image=false ktlint=false
+    if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] ||
+        ! git -C "$root" cat-file -e "$base^{commit}" 2>/dev/null; then
+        echo "Nothing to compare against: checking everything." >&2
+        kotlin=true vscode=true intellij=true docs=true image=true ktlint=true
+    else
+        files=$(git -C "$root" diff --name-only "$base" "${2:-HEAD}") || die "git diff $base ${2:-HEAD}"
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            # Any Kotlin file, wherever it lives, and the rules it is held to, at the root or
+            # in an .editorconfig nearer the sources.
+            case "$file" in
+                *.kt | .editorconfig | */.editorconfig) ktlint=true ;;
+            esac
+            case "$file" in
+                # The workflow and this script decide what runs, so a change to them runs everything.
+                .github/workflows/* | check | check.test.sh)
+                    kotlin=true vscode=true intellij=true docs=true image=true ktlint=true ;;
+                # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
+                # and the front page counts it, so it is site content as well.
+                editors/vscode/test/fixtures/corpus/*) vscode=true kotlin=true intellij=true docs=true ;;
+                # The other shared fixtures: the cases of the analysis under cases/, which core reads
+                # some of too, the SSE corpus, and the templates IntelliJ reads.
+                editors/vscode/test/fixtures/*) vscode=true kotlin=true intellij=true ;;
+                # The site highlights its code with the extension's grammars and palette, and shows its icon.
+                editors/vscode/syntaxes/* | editors/vscode/media/* | editors/vscode/src/palette.ts) vscode=true docs=true ;;
+                # The analysis compiled to JavaScript: a project of the Gradle build, which builds and tests
+                # it, and which the plugin's build and the image's configure with every other project.
+                editors/vscode/analysis-js/*) vscode=true kotlin=true intellij=true image=true ;;
+                editors/vscode/*) vscode=true ;;
+                editors/intellij/*) intellij=true ;;
+                # The catalog feeds the analysis, which the image bundles for /judge, VS Code's generated
+                # custom data, and the counts on the front page.
+                catalog/*) kotlin=true vscode=true intellij=true docs=true image=true ;;
+                # The pages are compiled by docs-samples and indexed into the image, so
+                # they are Kotlin sources and image content as much as they are prose.
+                docs/src/content/docs/*) docs=true kotlin=true image=true ;;
+                # The front page's samples are compiled by docs-samples too.
+                docs/src/samples/*) docs=true kotlin=true ;;
+                # The transcripts the pages import are goldens the Kotlin build checks.
+                docs/src/generated/*) docs=true kotlin=true ;;
+                docs/*) docs=true ;;
+                # Netlify's build of the site, which deploys from master with no other check.
+                netlify.toml) docs=true ;;
+                demo/*) kotlin=true image=true ;;
+                # The fixtures are read by the Kotlin tests, on the JVM and on Node, and the front page;
+                # the image, the extension's own tests and the IntelliJ plugin read none of them.
+                conformance/*) kotlin=true docs=true ;;
+                # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source, and the
+                # VS Code extension compiles the same sources to JavaScript.
+                streamlord-core/*) kotlin=true image=true intellij=true vscode=true ;;
+                # The image runs the analysis in /judge and streamlord-test in /assert.
+                streamlord-analysis/*) kotlin=true image=true intellij=true vscode=true ;;
+                streamlord-test/*) kotlin=true image=true ;;
+                streamlord-html/* | streamlord-ktor/* | streamlord-json-kotlinx/*) kotlin=true image=true ;;
+                streamlord-*/* | docs-samples/* | rewrite-probes/*) kotlin=true ;;
+                # The README carries coordinates checkDocSamples verifies, and LICENSE goes into every jar.
+                README.md | LICENSE) kotlin=true ;;
+                # The version catalog and the settings scripts are the plugin's build too.
+                # The site reads the catalog for the versions on the front page.
+                # The extension's analysis is built by the same Gradle build.
+                gradle/libs.versions.toml) kotlin=true image=true intellij=true docs=true vscode=true ;;
+                # The site reads the version out of gradle.properties.
+                gradle.properties) kotlin=true image=true intellij=true docs=true vscode=true ;;
+                # What Kotlin/JS fetches from npm to run the analysis's tests on Node.
+                kotlin-js-store/*) kotlin=true vscode=true ;;
+                gradle/* | gradlew* | *.gradle.kts) kotlin=true image=true intellij=true vscode=true ;;
+            esac
+        done <<<"$files"
+    fi
+    printf '%s\n' "kotlin=$kotlin" "vscode=$vscode" "intellij=$intellij" "docs=$docs" "image=$image" "ktlint=$ktlint"
+}
+
+# Sets KTLINT to the ktlint on the PATH when it is the pinned release, else to the pinned release
+# fetched once into a cache and kept only when its sha256 is the pinned one. KTLINT_URL fetches it
+# from elsewhere, as check.test.sh does, and skips the PATH. Never called inside $( ), where a
+# failing command would not stop the script.
+fetch_ktlint() {
+    if [ -z "${KTLINT_URL:-}" ] && command -v ktlint >/dev/null &&
+        [ "$(ktlint --version 2>/dev/null || true)" = "ktlint version $KTLINT_VERSION" ]; then
+        KTLINT=$(command -v ktlint)
+        return
+    fi
+    local dir=${KTLINT_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/streamlord/ktlint-$KTLINT_VERSION}
+    local url=${KTLINT_URL:-https://github.com/pinterest/ktlint/releases/download/$KTLINT_VERSION/ktlint}
+    KTLINT=$dir/ktlint
+    [ -x "$KTLINT" ] && return
+    mkdir -p "$dir" || die "ktlint: cannot make $dir"
+    local download=$dir/ktlint.download
+    rm -f "$download"
+    curl -sSfL -o "$download" "$url" || { rm -f "$download"; die "ktlint: cannot fetch $url"; }
+    local sum
+    if command -v sha256sum >/dev/null; then
+        sum=$(sha256sum "$download") || { rm -f "$download"; die "ktlint: cannot read the sha256 of $download"; }
+    else
+        sum=$(shasum -a 256 "$download") || { rm -f "$download"; die "ktlint: cannot read the sha256 of $download"; }
+    fi
+    if [ "${sum%% *}" != "$KTLINT_SHA256" ]; then
+        rm -f "$download"
+        die "ktlint: $url has the sha256 ${sum%% *}, not the pinned $KTLINT_SHA256; nothing was kept"
+    fi
+    chmod +x "$download" || die "ktlint: cannot make $download executable"
+    mv "$download" "$KTLINT" || die "ktlint: cannot move $download to $KTLINT"
+}
+
+# Each part's commands, as its job in .github/workflows/ci.yml runs them.
+go() { cd "$root/$1" || die "$current: no folder $1"; }
+
+part_sdk() {
+    go .
+    step "./gradlew build" ./gradlew build ${gradle_flags[@]+"${gradle_flags[@]}"}
+}
+part_ktlint() {
+    go .
+    # This script's own test first, of how it fetches ktlint.
+    step "check.test.sh" ./check.test.sh
+    fetch_ktlint
+    # Relative globs: ktlint walks from here. The .kts build scripts are left out, as they
+    # are everywhere ktlint is run in this repository.
+    step "ktlint $KTLINT_VERSION" "$KTLINT" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**" "!editors/vscode/test/fixtures/**"
+}
+part_vscode() {
+    go editors/vscode
+    step "npm ci" npm ci
+    step "npm run typecheck" npm run typecheck
+    step "npm test" npm test
+    step "npm run build" npm run build
+    step "vsce package" npx vsce package --no-dependencies
+}
+part_intellij() {
+    go editors/intellij
+    step "./gradlew buildPlugin test verifyPlugin" ./gradlew buildPlugin test verifyPlugin ${gradle_flags[@]+"${gradle_flags[@]}"}
+}
+part_docs() {
+    go docs
+    step "bun install" bun install --frozen-lockfile
+    step "bun run build" bun run build
+    step "bun run check:links" bun run check:links
+    step "bun run lint" bun run lint
+    step "bun run typecheck" bun run typecheck
+}
+
+step() {
+    local name=$1
+    shift
+    echo "==> $current: $name"
+    local started=$SECONDS
+    "$@" || die "$current, at $name"
+    passed+=("$current: $name ($((SECONDS - started)) s)")
+}
+
+wanted=()
+case "${1:-}" in
+    --parts)
+        parts_for "${2:?a base commit}" "${3:-HEAD}"
+        exit 0
+        ;;
+    --fetch-ktlint)
+        fetch_ktlint
+        echo "$KTLINT"
+        exit 0
+        ;;
+    --changed)
+        # Pull requests go to the release branch of the next version.
+        against=${2:-$(git -C "$root" for-each-ref --sort=-version:refname --count=1 --format='%(refname:short)' 'refs/remotes/origin/release/*')} ||
+            die "cannot list the release branches"
+        [ -n "$against" ] || die "no origin/release/* branch to compare with: name one, ./check --changed BASE"
+        base=$(git -C "$root" merge-base "$against" HEAD) || die "no merge base of $against and HEAD"
+        echo "Comparing with $against, at ${base:0:12}."
+        touched=$(parts_for "$base" HEAD) || exit 1
+        # The sdk part is the kotlin answer; the image is CI's alone.
+        for part in "${order[@]}"; do
+            key=$part
+            [ "$part" = sdk ] && key=kotlin
+            grep -qx "$key=true" <<<"$touched" && wanted+=("$part")
+        done
+        ;;
+    -h | --help)
+        sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+        exit 0
+        ;;
+    "") wanted=("${order[@]}") ;;
+    *)
+        for part in "${order[@]}"; do
+            for asked in "$@"; do [ "$asked" = "$part" ] && wanted+=("$part"); done
+        done
+        for asked in "$@"; do
+            case " ${order[*]} " in *" $asked "*) ;; *)
+                echo "No part named $asked; the parts are: ${order[*]}" >&2
+                exit 2
+                ;;
+            esac
+        done
+        ;;
+esac
+
+[ ${#wanted[@]} -eq 0 ] && echo "Nothing to check." && exit 0
+for part in "${wanted[@]}"; do
+    current=$part
+    "part_$part"
+done
+summary

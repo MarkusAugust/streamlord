@@ -3,7 +3,10 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.grazie.ide.inspection.grammar.GrazieInspection
 import com.intellij.grazie.spellcheck.GrazieSpellCheckingInspection
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.util.IdempotenceChecker
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
+import org.jetbrains.kotlin.psi.KtFile
 
 /** In a Datastar expression only the text in quotes is prose: a signal or an action name is no word to spell. */
 class SpellcheckTest : StreamlordTestCase() {
@@ -33,21 +36,33 @@ class SpellcheckTest : StreamlordTestCase() {
         assertTrue(found.toString(), found.any { "Lagree" in it })
     }
 
-    // The spell checker asks for every element of every pass, so the answer must not read the whole file each time.
+    // The spell checker asks for every element of every pass, so the answer must not read the whole
+    // file each time: eight seconds for 600 functions before the strings were cached.
     fun `test the strategy answers in time for a large kotlin file`() {
-        val src = (0 until 600).joinToString("\n") { "fun f$it() { val s = \"text $it\"; dataOnClick(\"\\\$n$it++\") }" }
-        myFixture.configureByText("Big.kt", src)
+        // In tests the platform works a cached value out again now and then, to check that it comes out
+        // the same: once in so many reads, so on a large file the strings are found again and again.
+        IdempotenceChecker.disableRandomChecksUntil(testRootDisposable)
         val strategy = DatastarSpellcheckingStrategy()
-        val started = System.nanoTime()
-        var claimed = 0
-        PsiTreeUtil.processElements(myFixture.file) {
-            if (strategy.isMyContext(it)) claimed++
-            true
+        var copy = 0
+        val file = { n: Int ->
+            // kotlinx.html's own form, which is Datastar whatever libraries the project is found to have.
+            val src =
+                (0 until n).joinToString("\n") { "fun T.f$it() { val s = \"text $it\"; attributes[\"data-on:click\"] = \"\\\$n$it++\" }" }
+            // Its syntax tree built untimed, so that what is timed is the strategy and not the parser.
+            // A file past the IDE's size for code insight is plain text, which the strategy rightly claims nothing of.
+            myFixture.addFileToProject("Big${copy++}.kt", src).also {
+                assertTrue("${it.name} of ${it.textLength} characters is not read as Kotlin", it is KtFile)
+                PsiTreeUtil.processElements(it) { true }
+            }
         }
-        val ms = (System.nanoTime() - started) / 1_000_000
-        assertTrue("claimed $claimed", claimed > 0)
-        // Eight seconds before the strings were cached, a fifth of one after.
-        assertTrue("took $ms ms", ms < 3000)
+        assertGrowsLinearly("the spelling strategy over a Kotlin file", 10, file) {
+            var claimed = 0
+            PsiTreeUtil.processElements(it) { element ->
+                if (strategy.isMyContext(element)) claimed++
+                true
+            }
+            assertTrue("claimed $claimed", claimed > 0)
+        }
     }
 
     // ${'$'} writes the dollar, so the browser gets $usrnm: a plain $usrnm here would be Kotlin's.

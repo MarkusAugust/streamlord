@@ -74,6 +74,7 @@ kotlin {
         getByName("jsTest") {
             kotlin.srcDir(analysis.layout.projectDirectory.dir("src/test/kotlin"))
             kotlin.srcDir(core.layout.projectDirectory.dir("src/test/kotlin"))
+            kotlin.srcDir(core.layout.projectDirectory.dir("src/testCommon/kotlin"))
             kotlin.exclude(
                 "**/*JvmTest.kt",
                 // Reads a project's files.
@@ -106,8 +107,11 @@ kotlin {
     compilerOptions {
         languageVersion.set(floor)
         apiVersion.set(floor)
+        allWarningsAsErrors.set(true)
         optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
         freeCompilerArgs.add("-Xexpect-actual-classes")
+        // As the JVM modules build these sources: an annotation on a constructor property lands on the parameter and the field.
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 

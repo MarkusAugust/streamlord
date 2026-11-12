@@ -2,11 +2,10 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
-import kotlin.time.TimeSource
 
 /** How long the markup takes to read, and where a comment ends; what it reports is in the shared corpus. */
 class MarkupTest {
@@ -15,40 +14,37 @@ class MarkupTest {
 
     private fun html(src: String) = analyzer.analyzeHtml(src, opts)
 
-    // Each of these took seconds, or minutes, with the form it replaces and takes milliseconds now:
-    // the limit leaves a slow machine a wide margin.
-    private fun within(
-        ms: Long,
-        block: () -> Unit,
-    ) {
-        // The first analysis loads the catalog, which is no part of what is timed.
-        html("<div data-text=\"1\"></div>")
-        val start = TimeSource.Monotonic.markNow()
-        block()
-        val took = start.elapsedNow().inWholeMilliseconds
-        assertTrue(took < ms, "took $took ms")
-    }
+    // Each of these took seconds, or minutes, with the form it replaces, which read the markup again
+    // or backtracked for each part of it.
+    private fun grows(
+        what: String,
+        size: Int,
+        page: (Int) -> String,
+    ) = assertGrowsLinearly(what, size, page) { html(it) }
 
     @Test
     fun `reads a filter string full of escapes without backtracking`() {
-        within(1000) { html("<pre data-json-signals=\"{include: '/${"\\\\".repeat(19)}x'}\"></pre>") }
-        val path = (0 until 16).joinToString("\\\\.") { "a$it" }
-        within(1000) { html("<pre data-json-signals='{\"include\": \"/^$path\"}'></pre>") }
+        grows("a filter of escapes", 300) { n -> "<pre data-json-signals=\"{include: '/${"\\\\".repeat(n)}x'}\"></pre>" }
+        grows("a filter of escaped dots", 150) { n ->
+            "<pre data-json-signals='{\"include\": \"/^${(0 until n).joinToString("\\\\.") { "a$it" }}\"}'></pre>"
+        }
     }
 
     @Test
     fun `reads a line of slashes that never close in linear time`() {
-        // A tenth of it first, so that the time measured is not the compiler's.
-        html("<div data-text=\"${"(/[".repeat(2000)}\"></div>")
-        within(2000) { html("<div data-text=\"${"(/[".repeat(20000)}\"></div>") }
+        grows("slashes that never close", 300) { n -> "<div data-text=\"${"(/[".repeat(n)}\"></div>" }
     }
 
     @Test
     fun `tells each signal in a string the client pairs otherwise in linear time`() {
-        // 60 KB of rewrites inside one string, each told which quote opens it; a tenth first, so the compiler is not timed.
-        fun page(n: Int) = "<div data-text=\"/'/.test('x') + '${"\$a ".repeat(n)}'\"></div>"
-        html(page(2000))
-        within(2000) { html(page(20000)) }
+        // Rewrites inside one string, each told which quote opens it, and inside one template literal, each told why.
+        grows("signals in one string", 300) { n -> "<div data-text=\"/'/.test('x') + '${"\$a ".repeat(n)}'\"></div>" }
+        grows("signals in one template literal", 300) { n -> "<div data-text=\"`\${{a: 1}.a} ${"\$a ".repeat(n)}`\"></div>" }
+    }
+
+    @Test
+    fun `tells template syntax from the template literals of JavaScript in linear time`() {
+        assertGrowsLinearly("template literals in one value", 300, { "`\${a}`".repeat(it) }) { hasTemplateSyntax(it) }
     }
 
     /** `conformance/dom/comment-ends.json`: where a comment ends, as the browser's parser reads it. */
