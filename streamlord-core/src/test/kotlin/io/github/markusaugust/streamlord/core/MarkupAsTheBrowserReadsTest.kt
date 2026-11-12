@@ -187,4 +187,4 @@ private fun render(
     format: String,
     values: List<Any?>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
-): String = interpolate(format, values, prefixes).text
+): String = interpolate(prefixes, format, *values.toTypedArray()).text

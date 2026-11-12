@@ -35,7 +35,7 @@ class MarkupScanTimingTest {
     @Test
     fun `many Html values are each judged without reading the markup before them again`() {
         val row = interpolate("<b>%s</b>", "x")
-        assertQuick("20000 Html holes") { interpolate("<p>%s</p>".repeat(20_000), List(20_000) { row }) }
+        assertQuick("20000 Html holes") { interpolate("<p>%s</p>".repeat(20_000), *Array(20_000) { row }) }
     }
 
     @Test

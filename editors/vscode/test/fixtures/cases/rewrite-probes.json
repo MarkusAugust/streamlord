@@ -39,6 +39,9 @@
     {"name":"a template of a name in backticks","params":"`my name`: String","body":"\"<p title=\\\"$`my name`\\\">x</p>\"","rewrite":"preferred","marks":["$`my name`"]},
     {"name":"a URL beside a value in srcdoc","params":"doc: String, url: String","body":"\"<iframe srcdoc=\\\"$doc\\\"></iframe><button formaction=\\\"$url\\\">x</button>\"","rewrite":"none"},
     {"name":"the URL of a meta refresh is judged as a URL","params":"url: String","body":"\"<meta http-equiv=\\\"refresh\\\" content=\\\"0;url=$url\\\">\"","says":["scheme"]},
-    {"name":"two values in one style are both passed as Trusted","params":"css: String, user: User","body":"\"<style>$css ${user.name}</style>\"","rewrite":"offered"}
+    {"name":"two values in one style are both passed as Trusted","params":"css: String, user: User","body":"\"<style>$css ${user.name}</style>\"","rewrite":"offered"},
+    {"name":"one value of any type is passed as it is written","params":"x: Any?","body":"\"<p>$x</p>\"","rewrite":"offered"},
+    {"name":"one value that is an Int","params":"n: Int, name: String","body":"\"<p title=\\\"$name\\\">$n</p>\"","rewrite":"preferred"},
+    {"name":"a list among other values","params":"tags: List<String>, name: String","body":"\"<p title=\\\"$name\\\">$tags</p>\"","rewrite":"preferred"}
   ]
 }

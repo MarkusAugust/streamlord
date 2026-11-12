@@ -246,30 +246,47 @@ public class UnsafeInterpolationException(
  * `${'$'}{...}`. At render time the source is gone, so the placeholders have to be left standing. That is
  * the whole of what this function asks of you.
  *
+ * The values are always the values: a `List` or an array handed over as one of them is written as
+ * a Kotlin template writes it, `[a, b]`, escaped like any text. To pass the elements of a
+ * collection as the values, spread them: `interpolate(format, *values.toTypedArray())`.
+ *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
  * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
  */
 public fun interpolate(
     @Language("HTML") format: String,
     vararg values: Any?,
-): Html = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
+): Html = interpolated(format, values.asList(), ElementsGuard.defaultPrefixes)
 
 /**
- * [interpolate] with the values as a list, and the `data-*` prefixes to recognise.
+ * [interpolate] with the `data-*` prefixes to recognise, which come first.
  *
  * Pass [prefixes] when your Datastar bundle is aliased to something other than `data-` or
  * `data-star-`; the attributes of an alias this function does not know are attributes it cannot
  * refuse a value in.
  */
 public fun interpolate(
+    prefixes: List<String>,
     @Language("HTML") format: String,
+    vararg values: Any?,
+): Html = interpolated(format, values.asList(), prefixes)
+
+private fun interpolated(
+    format: String,
     values: List<Any?>,
-    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    prefixes: List<String>,
 ): Html {
     val holes = holes(format)
     require(holes.size == values.size) {
+        // Until 0.22.0 a List handed over alone was the values; it is one value now, as any other.
+        val spread =
+            if (values.size == 1 && values[0].let { it is Iterable<*> || it is Array<*> }) {
+                ". That value is a collection, which is one value: to pass its elements, spread them, interpolate(format, *values.toTypedArray())"
+            } else {
+                ""
+            }
         "The markup has ${holes.size} %s ${if (holes.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
-            "${if (values.size == 1) "value was" else "values were"} given"
+            "${if (values.size == 1) "value was" else "values were"} given$spread"
     }
     if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 

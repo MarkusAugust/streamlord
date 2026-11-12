@@ -59,6 +59,8 @@ class RewriteProbesTest {
                 "Any" -> {
                     with("plain", listOf("a", "b"))
                     with("plain", listOf("a"))
+                    with("plain", arrayOf("a", "b"))
+                    with("plain", 3)
                     with("hostile", HOSTILE)
                 }
 
@@ -69,6 +71,10 @@ class RewriteProbesTest {
                 // Tried as com.acme's Html where the probe means that one.
                 "Html" -> {
                     with("hostile", interpolate("<b>%s</b>", "x"))
+                }
+
+                "Array<String>" -> {
+                    with("plain", arrayOf("a"))
                 }
 
                 "List<String>" -> {
