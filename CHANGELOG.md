@@ -38,13 +38,22 @@ All notable changes to Streamlord are recorded here. The format follows
   whether a call or an index follows one of them. Code compiled against the old constructors needs
   a rebuild.
 - Completion, hover and signature help in streamlord-analysis are three functions both editors
-  call, `complete`, `hover` and `signatureHelp`, over a `Source` (the text, its language, the
-  prefix and what the editor knows of the module) and, for completion, a `Workspace` (the signals,
-  ids and classes defined elsewhere). The caret readings they replace are internal now:
-  `expressionAtCaret`, `actionCallAt`, `signalPrefixAt`, `actionPrefixAt`, `tagBeforeCaret`,
-  `valueAtCaret`, `attributeDoc`, `actionDoc`, `fetchOptionDoc`, `modifierForm`, `casingNote` and
-  their result types. `HoleLanding` in streamlord-core has one more value, `nameStart`: where the
-  attribute name at a hole starts.
+  call, `complete`, `hover` and `signatureHelp`, with `offers` for the quick question an editor
+  asks as a character is typed, over a `Source` (the text, its language, the prefix and what the
+  editor knows of the module) and, for completion, a `Workspace` (the signals, ids and classes
+  defined elsewhere, and what the editor calls it). An item's snippet is its text and the places
+  to fill. The caret readings they replace are internal now: `expressionAtCaret`, `actionCallAt`,
+  `signalPrefixAt`, `actionPrefixAt`, `valueAtCaret`, `attributeDoc`, `actionDoc`,
+  `fetchOptionDoc`, `modifierForm`, `casingNote` and their result types; `tagBeforeCaret` is gone.
+  `landingAsParsed` in streamlord-core also says where the attribute name at the place asked
+  about starts, `nameStart`.
+- In IntelliJ the events after `data-on:` are listed by their names, `click`, as in VS Code, where
+  they were `data-on:click`. An attribute that needs a key, `data-on`, is written
+  `data-on:key=""` with `key` selected and the tab moving on to the value, in both editors.
+- Completion after `$` offers the signals some markup or code defines, and no longer every name
+  that is only read somewhere, a misspelt one among them; a signal is "this file"'s where this
+  file defines it.
+- In VS Code an option of a backend action shows its default after its name, as in IntelliJ.
 - `ValueFact` in streamlord-analysis has one more value, `TRUSTED`: core's `Trusted`, which
   `ofTypeName` now gives for that type where it gave `MARKUP`. It is judged as `MARKUP` is, and
   `isMarkup()` holds for both. The IntelliJ plugin gives it from the resolved type, so also for a
@@ -104,6 +113,20 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- The keys of an object a signal is given are signals, as the client merges them in:
+  `data-signals:hero="{strength: 1}"`, `dataSignals("hero", "{strength: 1}")` and
+  `dataSignals("{quests: {urgent: 0}}")` define `hero.strength` and `quests.urgent`. Both editors
+  offer them, go to them and rename them, and no longer report them as defined nowhere.
+- `$tick++`, `--$n`, `$total += 1` and the other assignments define their signal, as the client's
+  store creates it, so the warning that no markup or code defines it goes. A plain read still
+  defines nothing, so a misspelt one is still reported.
+- Renaming an object signal no longer writes each key inside the object over itself.
+- In both editors the key of `attributes["data-..."]` completes the attribute names, the events
+  after `data-on:` and the modifiers, and VS Code documents the attribute named there on hover.
+- After an equals sign and white space, `<div a= data-`, and after a no-break space, completion
+  offers no attribute names: the browser reads a value and a tag's name there.
+- In IntelliJ completion and the autopopup no longer slow down on a Kotlin file of thousands of
+  DSL calls; on one of 2,000 they took 8 s.
 - In both editors, the rewrite of an HTML string to `interpolate(...)` is offered for a literal
   with `.trimIndent()` or `.trimMargin()` after it, which stays on the format inside the call; for
   a `$$"..."` literal, which keeps its prefix; and for literals joined to values with `+`, which
