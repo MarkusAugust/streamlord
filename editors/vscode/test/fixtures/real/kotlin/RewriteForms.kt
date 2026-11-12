@@ -38,3 +38,8 @@ fun trusted(t: Trusted) = "<p title=\"$t\">$t</p>"
 fun number(n: Int) = "<p title=\"$n\">total $n</p>"
 
 fun constant() = "<p title=\"$REWRITE_KIND\">$REWRITE_KIND</p>"
+
+// Literals joined with +, each with its own dollars: a value is shown and marked as its own literal writes it.
+fun joinedDollars(a: String, b: String) = $$"<p title=\"$${a}\">" + b + $$"</p>"
+
+fun mixedDollars(b: String) = "<div>" + $$"<p>$${b}</p></div>"

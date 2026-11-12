@@ -36,14 +36,34 @@ internal fun shortened(text: String): String {
 
 private val SPACES = regex("""\s+""")
 
-/** How a hole is named in a message: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
-internal fun holeDisplay(
-    ip: Interpolation,
-    dollars: Int,
-): String {
-    if (ip.kind == InterpolationKind.SIMPLE) return "$".repeat(dollars) + ip.text
+/**
+ * How many dollars open the template, as its own literal has it: literals joined with `+` each
+ * have their own prefix, so the string they make says nothing of it. None for a value joined with `+`.
+ */
+internal val Interpolation.dollars: Int
+    get() =
+        when (kind) {
+            InterpolationKind.SIMPLE -> end - start - text.length
+            InterpolationKind.BRACED -> end - start - text.length - 2
+            InterpolationKind.OPERAND -> 0
+        }
+
+/** How a hole is named in a message, as it is written: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
+internal fun holeDisplay(ip: Interpolation): String {
+    if (ip.kind == InterpolationKind.SIMPLE) return "$".repeat(ip.dollars) + ip.text
     if (ip.kind == InterpolationKind.OPERAND) return "the value `${shortened(ip.text)}`"
-    return "$".repeat(dollars) + "{" + shortened(ip.text) + "}"
+    return "$".repeat(ip.dollars) + "{" + shortened(ip.text) + "}"
+}
+
+/** Whether the literal [ip] is written in is a raw one, in a `+` chain whose literals may differ. */
+internal fun inRawLiteral(
+    src: String,
+    s: KotlinString,
+    ip: Interpolation,
+): Boolean {
+    var raw = s.raw
+    chainParts(src, s, {}, {}) { if (ip.start >= it.start && ip.end <= it.end) raw = it.raw }
+    return raw
 }
 
 /**
@@ -1787,6 +1807,7 @@ internal fun quoteFix(
     s: KotlinString,
     view: String,
     ip: Interpolation,
+    raw: Boolean,
 ): Fix? {
     if (s.interpolations.any { it.kind == InterpolationKind.OPERAND }) return null
     val m = UNQUOTED_VALUE.find(view.substring(0, ip.decodedStart)) ?: return null
@@ -1796,7 +1817,7 @@ internal fun quoteFix(
         if (view[to] in "\"'=<`") return null
         to++
     }
-    val quote = if (s.raw) "\"" else "\\\""
+    val quote = if (raw) "\"" else "\\\""
     val start = s.map[from]
     val end = s.map[to]
     return Fix("Quote the value", start, start, quote, listOf(Edit(end, end, quote)))
@@ -2294,7 +2315,7 @@ internal fun trustedFix(
 ): Fix {
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
     // A value joined with `+` is wrapped where it stands; a template keeps the dollars its literal opens one with.
-    val text = if (ip.kind == InterpolationKind.OPERAND) "Trusted($expr)" else "$".repeat(s.dollars) + "{Trusted($expr)}"
+    val text = if (ip.kind == InterpolationKind.OPERAND) "Trusted($expr)" else "$".repeat(ip.dollars) + "{Trusted($expr)}"
     return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, DOMAIN, "Trusted"), preferred = false)
 }
 

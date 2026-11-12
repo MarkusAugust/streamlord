@@ -490,7 +490,7 @@ public class Analyzer(
             // A constant or a number the author wrote is the name, as it is in markup.
             val fact = holeFact(s, src, opts, ip).plain()
             if (fact.writesItself()) continue
-            if (ip.kind == InterpolationKind.SIMPLE && s.dollars == 1) {
+            if (ip.kind == InterpolationKind.SIMPLE && ip.dollars == 1) {
                 // The literal without the dollar, as written: what the fix writes and the message shows.
                 val written = src.substring(s.contentStart, ip.start) + src.substring(ip.start + 1, s.contentEnd)
                 out +=
@@ -510,7 +510,7 @@ public class Analyzer(
                 Issue(
                     start = ip.start,
                     end = ip.end,
-                    message = datastarMessage(holeDisplay(ip, s.dollars), attribute),
+                    message = datastarMessage(holeDisplay(ip), attribute),
                     severity = Severity.WARNING,
                     code = "unsafe-interpolation",
                     link = Docs.EXPRESSIONS,
@@ -805,7 +805,7 @@ public class Analyzer(
             if (fact.isNullable() && landing.position in ESCAPED_POSITIONS) continue
             // Markup in element text is safe as markup, but interpolate reads it as format: a %s in it is a hole.
             val markupText = fact.isMarkup() && landing.position == Position.TEXT
-            val shown = holeDisplay(ip, format.dollars)
+            val shown = holeDisplay(ip)
             // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
             val percents = runBefore(format.text, ip.decodedStart, '%')
             // A %s hole writes nothing for null and escapes markup held as a String, so the fix would change the page;
@@ -1214,8 +1214,6 @@ public class Analyzer(
         src: String,
         available: Set<String>? = null,
     ): (Interpolation) -> Issue? {
-        // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
-        if (s.dollars > 1) return { null }
         val shared by lazy(LazyThreadSafetyMode.NONE) {
             // Literals joined with `+` are one string to the judgement, but a prefix makes only the first a `$$` literal.
             val whole = readKotlinStringAt(src, s.start)?.end == s.end
@@ -1240,11 +1238,12 @@ public class Analyzer(
         // Where the DSL may be missing, signal(...) is advised only where it can be called.
         val advisesSignal = available == null || "signal" in available
         return trap@{ ip ->
-            if (ip.kind != InterpolationKind.SIMPLE) return@trap null
+            // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
+            if (ip.kind != InterpolationKind.SIMPLE || ip.dollars > 1) return@trap null
             val fixes = ArrayList<Fix>(shared.helpers)
             if (shared.whole) fixes += multiDollarFix(s, src, ip, shared.dollars)
             fixes += Fix("Escape as \${'$'}${ip.text}", ip.start, ip.start + 1, "\${'$'}")
-            if (!s.raw) fixes += Fix("Escape as \\$${ip.text}", ip.start, ip.start, "\\")
+            if (!(if (shared.whole) s.raw else inRawLiteral(src, s, ip))) fixes += Fix("Escape as \\$${ip.text}", ip.start, ip.start, "\\")
             Issue(
                 start = ip.start,
                 end = ip.end,
@@ -1335,7 +1334,7 @@ public class Analyzer(
             if (k in written) continue
             val landing = landings[k]
             val fact = told[k].plain()
-            val shown = holeDisplay(ip, s.dollars)
+            val shown = holeDisplay(ip)
             val factSays = verdict(fact, landing.position)
             val severity = if (fact.knownCharacters()) Severity.WARNING else Severity.HINT
 
@@ -1353,7 +1352,7 @@ public class Analyzer(
                     .firstOrNull { it != k && !keeps[it] && (loose[it] || landings[it].position !in ESCAPED_POSITIONS) }
                     ?.takeIf { canInterpolate }
                     ?.let {
-                        val other = holeDisplay(s.interpolations[it], s.dollars)
+                        val other = holeDisplay(s.interpolations[it])
                         val place = refusedPlace(view, landings[it], starts[it])
                         if (fixable) {
                             " interpolate(...) takes this string once $other, which stands in $place, is passed as Trusted(...), as the fix does."
@@ -1512,7 +1511,7 @@ public class Analyzer(
                                     if (fact.scalar()) Severity.HINT else Severity.WARNING,
                                     "unsafe-interpolation",
                                     "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
-                                    listOfNotNull(quoteFix(s, view, ip)),
+                                    listOfNotNull(quoteFix(s, view, ip, inRawLiteral(src, s, ip))),
                                 )
                             }
 
@@ -1531,7 +1530,7 @@ public class Analyzer(
         }
         val offered =
             if (fixable) {
-                val first = vouched.minOrNull()?.let { trustedRewriteTitle(holeDisplay(s.interpolations[it], s.dollars)) }
+                val first = vouched.minOrNull()?.let { trustedRewriteTitle(holeDisplay(s.interpolations[it])) }
                 rewriteFix(first ?: ESCAPES_TITLE, false)
             } else {
                 null
@@ -1825,7 +1824,7 @@ public class Analyzer(
                 Issue(
                     start = ip.start,
                     end = ip.end,
-                    message = datastarMessage(holeDisplay(ip, s.dollars), attribute),
+                    message = datastarMessage(holeDisplay(ip), attribute),
                     severity = Severity.WARNING,
                     code = "unsafe-interpolation",
                     link = Docs.EXPRESSIONS,
