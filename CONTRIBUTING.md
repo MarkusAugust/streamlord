@@ -21,6 +21,17 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 | `rewrite-probes/` | compiles HTML strings as written and as each fix of the editors' analysis leaves them, against core, and runs both; the cases are `editors/vscode/test/fixtures/cases/rewrite-probes.json` and every cell of `hole-matrix.json` |
 | `docs-samples/` | compiles every Kotlin example in the documentation, and generates the wire examples the pages show |
 
+## Before calling work done
+
+Run `./check` from the root and have it green before you call a change done or open a pull
+request. It runs what CI runs on a pull request, in the same order, and CI's jobs call it, so a
+green `./check` is a green CI. `./check --changed origin/release/<version>` runs only the parts
+the change touches, as CI decides them, and `./check sdk ktlint` names the parts to run.
+
+Never make it pass by weakening a rule, raising a limit, adding to an exclusion or deleting a
+test. Fix what it found. When an editor changes, also run the check in real VS Code,
+`cd editors/vscode && npm run real -- --check`, which needs a Mac with VS Code and takes minutes.
+
 ## Building and releasing
 
 ```sh

@@ -70,82 +70,8 @@ jobs:
           echo "Changed:"
           echo "$files" | sed 's/^/  /'
 
-          kotlin=false; vscode=false; intellij=false; docs=false; image=false; ktlint=false
-          while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            # Any Kotlin file, wherever it lives, and the rules it is held to, at the root or
-            # in an .editorconfig nearer the sources.
-            case "$file" in
-              *.kt|.editorconfig|*/.editorconfig) ktlint=true ;;
-            esac
-            case "$file" in
-              # This file decides what runs, so a change to it runs everything.
-              .github/workflows/*)
-                kotlin=true; vscode=true; intellij=true; docs=true; image=true; ktlint=true ;;
-              # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
-              # and the front page counts it, so it is site content as well.
-              editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true; docs=true ;;
-              # The other shared fixtures: the cases of the analysis under cases/, which core reads
-              # some of too, the SSE corpus, and the templates IntelliJ reads.
-              editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
-              # The site highlights its code with the extension's grammars and palette, and shows its icon.
-              editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;
-              # The analysis compiled to JavaScript: a project of the Gradle build, which builds and tests
-              # it, and which the plugin's build and the image's configure with every other project.
-              editors/vscode/analysis-js/*) vscode=true; kotlin=true; intellij=true; image=true ;;
-              editors/vscode/*)   vscode=true ;;
-              editors/intellij/*) intellij=true ;;
-              # The catalog feeds the analysis, which the image bundles for /judge, VS Code's generated
-              # custom data, and the counts on the front page.
-              catalog/*)          kotlin=true; vscode=true; intellij=true; docs=true; image=true ;;
-              # The pages are compiled by docs-samples and indexed into the image, so
-              # they are Kotlin sources and image content as much as they are prose.
-              docs/src/content/docs/*) docs=true; kotlin=true; image=true ;;
-              # The front page's samples are compiled by docs-samples too.
-              docs/src/samples/*) docs=true; kotlin=true ;;
-              # The transcripts the pages import are goldens the Kotlin build checks.
-              docs/src/generated/*) docs=true; kotlin=true ;;
-              docs/*)             docs=true ;;
-              # Netlify's build of the site, which deploys from master with no other check.
-              netlify.toml)       docs=true ;;
-              demo/*)             kotlin=true; image=true ;;
-              # The fixtures are read by the Kotlin tests, on the JVM and on Node, and the front page;
-              # the image, the extension's own tests and the IntelliJ plugin read none of them.
-              conformance/*)      kotlin=true; docs=true ;;
-              # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source, and the
-              # VS Code extension compiles the same sources to JavaScript.
-              streamlord-core/*)  kotlin=true; image=true; intellij=true; vscode=true ;;
-              # The image runs the analysis in /judge and streamlord-test in /assert.
-              streamlord-analysis/*) kotlin=true; image=true; intellij=true; vscode=true ;;
-              streamlord-test/*)  kotlin=true; image=true ;;
-              streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
-                kotlin=true; image=true ;;
-              streamlord-*/*|docs-samples/*|rewrite-probes/*)
-                kotlin=true ;;
-              # The README carries coordinates checkDocSamples verifies, and LICENSE goes into every jar.
-              README.md|LICENSE)  kotlin=true ;;
-              # The version catalog and the settings scripts are the plugin's build too.
-              # The site reads the catalog for the versions on the front page.
-              # The extension's analysis is built by the same Gradle build.
-              gradle/libs.versions.toml) kotlin=true; image=true; intellij=true; docs=true; vscode=true ;;
-              # The site reads the version out of gradle.properties.
-              gradle.properties)  kotlin=true; image=true; intellij=true; docs=true; vscode=true ;;
-              # What Kotlin/JS fetches from npm to run the analysis's tests on Node.
-              kotlin-js-store/*)  kotlin=true; vscode=true ;;
-              gradle/*|gradlew*|*.gradle.kts)
-                kotlin=true; image=true; intellij=true; vscode=true ;;
-            esac
-          done <<< "$files"
-
-          {
-            echo "kotlin=$kotlin"
-            echo "vscode=$vscode"
-            echo "intellij=$intellij"
-            echo "docs=$docs"
-            echo "image=$image"
-            echo "ktlint=$ktlint"
-          } >> "$GITHUB_OUTPUT"
-          echo "Running: kotlin=$kotlin vscode=$vscode intellij=$intellij docs=$docs image=$image ktlint=$ktlint"
+          # The table of which paths touch which part is ./check's, which runs the same parts locally.
+          ./check --parts "$base" "$GITHUB_SHA" | tee -a "$GITHUB_OUTPUT"
 
   sdk:
     name: Kotlin SDK
@@ -173,7 +99,7 @@ jobs:
           cache-provider: basic
 
       - name: Build and test
-        run: ./gradlew build --no-daemon
+        run: ./check sdk
 
       - name: Upload test reports
         if: failure()
@@ -188,11 +114,8 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ktlint == 'true'
     # The CLI rather than a Gradle plugin: one jar, no new dependency in the build, and it covers
-    # the IntelliJ plugin's sources as well, which are a build of their own. The checksum is the
-    # one GitHub lists for the release asset; a new version needs both changed together.
-    env:
-      KTLINT_VERSION: 1.8.0
-      KTLINT_SHA256: a3fd620207d5c40da6ca789b95e7f823c54e854b7fade7f613e91096a3706d75
+    # the IntelliJ plugin's sources as well, which are a build of their own. ./check pins the
+    # version and the checksum GitHub lists for the release asset, and fetches it.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -203,19 +126,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Fetch ktlint
-        run: |
-          set -euo pipefail
-          curl -sSfL -o "$RUNNER_TEMP/ktlint" \
-            "https://github.com/pinterest/ktlint/releases/download/$KTLINT_VERSION/ktlint"
-          echo "$KTLINT_SHA256  $RUNNER_TEMP/ktlint" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/ktlint"
-
-      # Relative globs: ktlint walks from here. The .kts build scripts are left out, as they
-      # are everywhere ktlint is run in this repository.
       - name: Check the Kotlin sources
-        run: |
-          "$RUNNER_TEMP/ktlint" --relative "**/*.kt" "!**/build/**" "!**/node_modules/**" "!editors/vscode/test/fixtures/**"
+        run: ./check ktlint
 
   vscode:
     name: VS Code extension
@@ -247,11 +159,8 @@ jobs:
         with:
           cache-provider: basic
 
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - run: npx vsce package --no-dependencies
+      # npm ci, typecheck, test, build and vsce package.
+      - run: ../../check vscode
 
       - name: Upload vsix
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -282,7 +191,7 @@ jobs:
           cache-provider: basic
 
       - name: Build, test and verify
-        run: ./gradlew buildPlugin test verifyPlugin --no-daemon
+        run: ../../check intellij
 
       - name: Upload plugin archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -316,19 +225,10 @@ jobs:
           # BUN_VERSION in netlify.toml is the same pin for the build that deploys.
           bun-version: 1.4.3
 
-      - run: bun install --frozen-lockfile
-
-      # The site reads the TextMate grammars and the token colours out of
-      # editors/vscode, so a change there can break this build. That is the
-      # coupling working, not a mistake.
-      - name: Build
-        run: bun run build
-
-      - name: Check internal links
-        run: bun run check:links
-
-      - run: bun run lint
-      - run: bun run typecheck
+      # bun install, build, the internal links, lint and typecheck. The site reads the TextMate
+      # grammars and the token colours out of editors/vscode, so a change there can break this
+      # build. That is the coupling working, not a mistake.
+      - run: ../check docs
 
   demo-image:
     name: streamlord-live image
