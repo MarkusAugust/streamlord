@@ -815,6 +815,7 @@ val checkKotlinFloor =
                     "-jvm-target",
                     "17",
                     "-Xjsr305=strict",
+                    "-Werror",
                     "-Xplugin=" + plugins.singleFile.absolutePath,
                     "-classpath",
                     compileClasspath.asPath,
