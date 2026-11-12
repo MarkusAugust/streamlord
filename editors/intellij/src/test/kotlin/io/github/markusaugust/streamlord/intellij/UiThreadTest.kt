@@ -20,6 +20,17 @@ class UiThreadTest : StreamlordTestCase() {
         assertEquals(0, UiThreadWork.count.get() - before)
     }
 
+    // The check of what the server reads against the pages runs in the daemon's inspection pass, never on a keystroke.
+    fun `test typing in a file the server reads signals in asks nothing on the UI thread`() {
+        myFixture.addFileToProject("page.html", "<input data-bind:query>")
+        myFixture.configureByText("Search.kt", "@Serializable\ndata class Form(val query: String<caret>)\nfun f() = readSignals<Form>()")
+        val before = UiThreadWork.count.get()
+
+        myFixture.type(", val page: Int")
+
+        assertEquals(0, UiThreadWork.count.get() - before)
+    }
+
     // The help is asked for in the background, and the answer is the one for the text with the character in it.
     fun `test parameter info is wanted after a parenthesis in a Datastar expression, and nowhere else`() {
         for ((name, text, wanted) in listOf(

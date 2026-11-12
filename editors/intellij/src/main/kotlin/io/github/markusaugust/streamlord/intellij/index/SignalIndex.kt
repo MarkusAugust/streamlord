@@ -17,15 +17,19 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
+import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
+import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
+import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.foreignHelpers
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
+import io.github.markusaugust.streamlord.analysis.signalDrift
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
@@ -76,6 +80,10 @@ class SignalIndex(
 
         @Volatile
         var reads: List<SignalReference>? = null
+
+        /** What the file tells the others about the signals the server reads, for [driftIn]; the check alone asks. */
+        @Volatile
+        var facts: SignalFacts? = null
     }
 
     private class Names(
@@ -223,6 +231,40 @@ class SignalIndex(
             }.map { SignalReference(it.start, it.end, it.name) }
         if (keep) e.reads = reads
         return reads
+    }
+
+    /**
+     * The signals the Kotlin [file] reads, through a `@Serializable` class or a `Signals` lookup, that no file of the
+     * project declares: the analysis's `signalDrift`, as the VS Code extension asks it. Each file's facts are kept with
+     * its entry and read again only when the file changes, so a pass costs one read of the file that changed and a walk
+     * over what is kept ("Cache Results of Heavy Computations",
+     * https://plugins.jetbrains.com/docs/intellij/psi-performance.html). The daemon runs the inspection again on a
+     * change in any file; [refresh] is what finds it.
+     */
+    fun driftIn(file: PsiFile): List<Issue> {
+        refresh()
+        val own = entryFor(file) ?: return emptyList()
+        val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
+        if (language != SourceLanguage.KOTLIN) return emptyList()
+        val facts = HashMap<String, SignalFacts>()
+        for ((key, e) in entries) {
+            if (e === own) continue
+            ProgressManager.checkCanceled()
+            // Only this file's issues are asked for, so another file's lookups play no part.
+            factsIn(e, null)?.let { facts[key] = it.copy(lookups = emptyList()) }
+        }
+        facts[THIS_FILE] = factsIn(own, file.text) ?: collectSignalFacts(file.text, language)
+        return signalDrift(facts).issues[THIS_FILE].orEmpty()
+    }
+
+    private fun factsIn(
+        e: Entry,
+        text: String?,
+    ): SignalFacts? {
+        e.facts?.let { return it }
+        val language = e.file?.let(::languageOf) ?: return null
+        val (current, keep) = textOf(e, text) ?: return null
+        return collectSignalFacts(current, language).also { if (keep) e.facts = it }
     }
 
     private fun places(of: (Entry) -> List<Triple<Int, Int, String>>?): List<Place> {
@@ -470,6 +512,8 @@ class SignalIndex(
         }
 
     companion object {
+        /** The key of the file [driftIn] judges, which no path is. */
+        private const val THIS_FILE = ""
         private val CALL = Pattern.compile("""\b([A-Za-z_]\w*)\s*\(""")
         private const val FILE_CAP = 5000
         private const val SIZE_CAP = 1_000_000L
