@@ -123,7 +123,9 @@ and for the DSL functions, in HTML files, templates and HTML strings in Kotlin a
 **Syntax highlighting** of Datastar expressions and HTML inside the DSL strings and in
 free-standing HTML strings, and of Datastar's attributes in HTML, the catalog's and no other
 `data-*` (plugin, key, modifiers and modifier arguments each get their own scope, and the value
-of an attribute that takes an expression is highlighted as a Datastar expression). Most themes color only
+of an attribute that takes an expression is highlighted as a Datastar expression). In Kotlin
+this needs a Kotlin grammar, which a Kotlin extension brings; with Streamlord alone a `.kt` file
+gets every other feature here, uncoloured. Most themes color only
 a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
 into your user settings; `Streamlord: Remove recommended colors` takes it out again.
 
