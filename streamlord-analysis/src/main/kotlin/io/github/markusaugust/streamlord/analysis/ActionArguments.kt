@@ -55,43 +55,26 @@ private fun ArgumentKind.phrase(): String =
         ArgumentKind.ANY -> "anything"
     }
 
-/** Whether a value written so is one of [kind]: a string of digits counts as a number, as the client counts with it. */
-private fun ArgumentKind.takes(value: Value): Boolean =
-    when (value.written) {
-        Written.EXPRESSION, Written.NULLISH -> {
-            true
-        }
+/** The kinds a literal written so is one of, besides [ArgumentKind.ANY]. */
+private val TAKEN =
+    mapOf(
+        Written.STRING to setOf(ArgumentKind.STRING, ArgumentKind.PATTERN),
+        Written.NUMBER to setOf(ArgumentKind.NUMBER, ArgumentKind.BOOLEAN),
+        Written.BOOLEAN to setOf(ArgumentKind.BOOLEAN),
+        Written.OBJECT to setOf(ArgumentKind.OBJECT, ArgumentKind.OPTIONS, ArgumentKind.FILTER),
+        Written.REGEX to setOf(ArgumentKind.PATTERN),
+        Written.FUNCTION to setOf(ArgumentKind.FUNCTION),
+    )
 
-        Written.STRING -> {
-            this == ArgumentKind.STRING || this == ArgumentKind.PATTERN || this == ArgumentKind.ANY ||
-                (this == ArgumentKind.NUMBER && (value.text == null || NUMERIC_STRING.matchEntire(value.text) != null))
-        }
-
-        Written.NUMBER -> {
-            this == ArgumentKind.NUMBER || this == ArgumentKind.BOOLEAN || this == ArgumentKind.ANY
-        }
-
-        Written.BOOLEAN -> {
-            this == ArgumentKind.BOOLEAN || this == ArgumentKind.ANY
-        }
-
-        Written.OBJECT -> {
-            this == ArgumentKind.OBJECT || this == ArgumentKind.OPTIONS || this == ArgumentKind.FILTER ||
-                this == ArgumentKind.ANY
-        }
-
-        Written.REGEX -> {
-            this == ArgumentKind.PATTERN || this == ArgumentKind.ANY
-        }
-
-        Written.FUNCTION -> {
-            this == ArgumentKind.FUNCTION || this == ArgumentKind.ANY
-        }
-
-        Written.ARRAY -> {
-            this == ArgumentKind.ANY
-        }
-    }
+/** Whether a value written so is one of [kind]; an expression always is, and a string of digits is a number, as the client counts with it. */
+private fun ArgumentKind.takes(value: Value): Boolean {
+    val taken = TAKEN[value.written] ?: return value.written != Written.ARRAY || this == ArgumentKind.ANY
+    return this == ArgumentKind.ANY || this in taken ||
+        (
+            this == ArgumentKind.NUMBER && value.written == Written.STRING &&
+                (value.text == null || NUMERIC_STRING.matchEntire(value.text) != null)
+        )
+}
 
 /**
  * The brackets of [js] in code, read in one pass: where each closes, and the commas and colons
