@@ -43,8 +43,8 @@
     {"name":"one value of any type is passed as it is written","params":"x: Any?","body":"\"<p>$x</p>\"","rewrite":"offered"},
     {"name":"one value that is an Int","params":"n: Int, name: String","body":"\"<p title=\\\"$name\\\">$n</p>\"","rewrite":"preferred"},
     {"name":"a list among other values","params":"tags: List<String>, name: String","body":"\"<p title=\\\"$name\\\">$tags</p>\"","rewrite":"preferred"},
-    {"name":"a call before the first literal","declares":"fun greet(name: String) = \"Hi $name\"","params":"name: String, url: String","body":"greet(name) + \"<p title=\\\"\" + url + \"\\\">x</p>\"","rewrite":"preferred","marks":["greet(name)","url"]},
-    {"name":"an index and a call on a property before the first literal","params":"names: List<String>, user: User","body":"names[0] + user.name.trim() + \"<p>x</p>\"","rewrite":"offered","marks":["names[0]","user.name.trim()"]},
+    {"name":"a call before the first literal","declares":"fun greet(name: String) = \"Hi $name\"","params":"name: String, url: String","body":"greet(name) + \"<p title=\\\"\" + url + \"\\\">x</p>\"","rewrite":"none","marks":["greet(name)","url"],"says":["may be markup"]},
+    {"name":"an index and a call on a property before the first literal","params":"names: List<String>, user: User","body":"names[0] + user.name.trim() + \"<p>x</p>\"","rewrite":"none","marks":["names[0]","user.name.trim()"],"says":["may be markup"]},
     {"name":"a bracketed expression before the first literal","params":"first: String?, last: String","body":"(first ?: last) + \"<p>x</p>\"","rewrite":"offered","marks":["(first ?: last)"]},
     {"name":"a value before the first literal in a lambda and after a return","params":"names: List<String>","body":"names.joinToString(\"\") { it + \"<br>\" }","marks":["it"]},
     {"name":"a value after an elvis is the whole of what is joined, since plus binds tighter","params":"first: String?, last: String","body":"first ?: last + \"<p>x</p>\"","marks":["last"]}

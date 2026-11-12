@@ -97,7 +97,7 @@ All notable changes to Streamlord are recorded here. The format follows
   become one format, or each keep their own form where they are written differently. None of
   them was offered it. A string written with `.trimMargin()`, each line after its margin, is read
   as HTML, so its values are judged at all.
-- In both editors, a value joined before the first literal, `name + "<p>"`, one after a comment,
+- In both editors, a value joined before the first literal, `name + "<p>"` or `greet(name) + "<p>"`, one after a comment,
   one joined to a literal with a call after it, and a name in backticks, `` $`my name` ``, are
   judged; none was. The URL of a `<meta>` refresh is judged as a URL.
 - In both editors, a `+` chain with a call or an index after one of its literals,

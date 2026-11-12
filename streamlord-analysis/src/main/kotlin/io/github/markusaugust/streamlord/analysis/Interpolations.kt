@@ -1846,10 +1846,71 @@ private class ChainPart(
     val end: Int,
 )
 
-// Values joined before the first literal, `name + "<p>"`: names and property chains, which the text reads backwards.
-private const val PROPERTY = """[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*"""
-private val LEADING_VALUES = regex("""(?<![\p{L}\p{Nd}_.)\]"'`])(?:$PROPERTY[ \t]*\+[ \t]*)+\z""")
-private val PROPERTY_NAME = regex(PROPERTY)
+/** What may stand before a value joined with `+` when the value is the whole of what is joined: plus binds tighter than each. */
+private val OPERAND_BOUNDARY = regex("""(?:^|[(\[{},;]|(?<![=!<>])=|->|\?:|&&|\|\||[=!<>]=|[<>]|\b(?:return|else|in|throw|to))\s*\z""")
+
+/**
+ * The values joined before the literal at [at], `greet(name) + names[0] + "<p>"`, first to last:
+ * each a name, a call, an index, a bracketed expression or a chain of them, read backwards from
+ * its `+`. None where what stands before the first of them is an operator that binds as tight as
+ * plus or tighter (`a * b + "<p>"`, `a - b + "<p>"`, `!a + "<p>"`) or a word the text cannot place
+ * (`x as T + "<p>"`): the value joined is then more than the text delimits.
+ */
+private fun leadingValues(
+    src: String,
+    mask: BooleanArray,
+    at: Int,
+): List<IntRange> {
+    val out = ArrayList<IntRange>()
+    var end = at
+    while (true) {
+        var k = end
+        while (k > 0 && (src[k - 1] == ' ' || src[k - 1] == '\t')) k--
+        if (k < 1 || src[k - 1] != '+' || src.getOrNull(k - 2) == '+' || !mask[k - 1]) break
+        k--
+        while (k > 0 && src[k - 1].isWhitespace()) k--
+        val stop = k
+        // Backwards over names, dots and what brackets close: `user.tags[0]`, `greet(name)`, `(a ?: b)`.
+        while (k > 0 && mask[k - 1]) {
+            val c = src[k - 1]
+            k =
+                when {
+                    c == ')' || c == ']' -> openingBefore(src, mask, k - 1).takeIf { it >= 0 } ?: break
+                    c.isLetterOrDigit() || c == '_' || c == '`' || c == '.' -> k - 1
+                    c == '?' && src.getOrNull(k) == '.' -> k - 1
+                    c == '!' && src.getOrNull(k - 2) == '!' -> k - 2
+                    else -> break
+                }
+        }
+        if (k == stop) break
+        out.add(0, k until stop)
+        end = k
+    }
+    return if (out.isNotEmpty() &&
+        OPERAND_BOUNDARY.containsMatchIn(src.substring(maxOf(0, out[0].first - 40), out[0].first))
+    ) {
+        out
+    } else {
+        emptyList()
+    }
+}
+
+/** The bracket that opens the one closed at [close], strings and comments stepped over; -1 where none does. */
+private fun openingBefore(
+    src: String,
+    mask: BooleanArray,
+    close: Int,
+): Int {
+    var depth = 0
+    for (k in close downTo 0) {
+        if (!mask[k]) continue
+        when (src[k]) {
+            ')', ']', '}' -> depth++
+            '(', '[', '{' -> if (--depth == 0) return k
+        }
+    }
+    return -1
+}
 
 /** Just past the bracket that closes the one at [open], strings and comments stepped over; -1 where it never closes. */
 private fun closingAfter(
@@ -1881,11 +1942,7 @@ internal fun chainFrom(
     mask: BooleanArray,
 ): KotlinString? {
     val parts = ArrayList<ChainPart>()
-    val lead = LEADING_VALUES.find(src.substring(maxOf(0, first.start - 200), first.start))
-    if (lead != null) {
-        val base = first.start - lead.value.length
-        if (mask[base]) for (m in PROPERTY_NAME.findAll(lead.value)) parts += ChainPart(null, base + m.range.first, base + m.range.last + 1)
-    }
+    for (value in leadingValues(src, mask, first.start)) parts += ChainPart(null, value.first, value.last + 1)
     parts += ChainPart(first, first.start, first.end)
 
     fun spaces(

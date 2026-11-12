@@ -158,10 +158,13 @@ class RewriteProbesTest {
                                     .split(",")[vector.at]
                                     .substringBefore(":")
                                     .trim()
-                            val vouched = Regex("""Trusted\(\s*${Regex.escape(name)}""").containsMatchIn(variant.source)
-                            // The rewrite of a string inside a template of another leaves the outer string's values to Kotlin.
-                            val template = Regex("""\$\{?${Regex.escape(name)}""").containsMatchIn(variant.source)
-                            if (!vouched && !template && HOSTILE in wrote!!) failures += "$at\n    wrote the value as it is: $wrote"
+                            // The value is one the rewrite hands to interpolate to be escaped: not one it wraps in
+                            // Trusted, nor one a string around the rewritten one still writes itself.
+                            val passed =
+                                Regex(
+                                    """interpolate\((?s:.*)(?<!Trusted)[,(]\s*${Regex.escape(name)}\s*[,)]""",
+                                ).containsMatchIn(variant.source)
+                            if (passed && HOSTILE in wrote!!) failures += "$at\n    wrote the value as it is: $wrote"
                         }
                     }
                 }
