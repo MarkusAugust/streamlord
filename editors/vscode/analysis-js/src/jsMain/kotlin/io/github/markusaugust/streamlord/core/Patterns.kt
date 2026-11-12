@@ -8,9 +8,11 @@ package io.github.markusaugust.streamlord.core
  */
 
 // java.util.regex's line terminators: \n, \r, U+0085, U+2028 and U+2029, with \r\n as one.
-private const val INPUT_END = """(?=(?:\r\n|[\r\u0085  ]|(?<!\r)\n)?(?![\s\S]))"""
-private const val LINE_END = """(?=\r\n|[\r\u0085  ]|(?<!\r)\n|(?![\s\S]))"""
-private const val LINE_START = """(?:(?<![\s\S])|(?<=[\n\u0085  ])|(?<=\r)(?!\n))(?=[\s\S])"""
+// The ends are JavaScript's own `^` and `$`, which the `m` flag, never set, would move: a look around
+// for any character finds none between the halves of an astral one.
+private const val INPUT_END = """(?=(?:\r\n|[\r\u0085  ]|(?<!\r)\n)?$)"""
+private const val LINE_END = """(?=\r\n|[\r\u0085  ]|(?<!\r)\n|$)"""
+private const val LINE_START = """(?:^|(?<=[\n\u0085  ])|(?<=\r)(?!\n))(?=[\s\S])"""
 private const val DOT = """[^\n\r\u0085  ]"""
 
 // What a backslash may stand before in JavaScript's `u` mode and keep its meaning.
@@ -146,7 +148,7 @@ internal class JavaScriptPattern(
 
             c == 'S' && !inClass -> emit("""[^\t-\r ]""", 2)
 
-            c == 'z' && !inClass -> emit("""(?![\s\S])""", 2)
+            c == 'z' && !inClass -> emit("$", 2)
 
             c == 'x' && source.getOrNull(at + 2) == '{' -> emit("\\u", 2)
 
