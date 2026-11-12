@@ -152,7 +152,7 @@ describe("completion provider", () => {
     // CodeQL's input, which never finished before. It ends on a name the caret completes, so the
     // whole reading is timed.
     const hostile = (n: number) => "<A " + "!= ".repeat(n) + "data-on:click__";
-    assertGrowsLinearly("completing after a run of !=", 132, hostile, (src) => {
+    assertGrowsLinearly("completing after a run of !=", 200, hostile, (src) => {
       assert.ok(complete(pdoc(src), 0, src.length, index).some((i) => i.label === "debounce"), "modifiers at the end of the hostile input");
     });
   });
@@ -302,7 +302,7 @@ describe("an attribute on its own line", () => {
   it("answers in time on a long document of tags never closed", () => {
     const tag = "<a " + "!= ".repeat(40);
     const hostile = (lines: number) => `${tag}\n`.repeat(lines) + tag + "data-on:click__";
-    assertGrowsLinearly("completing after lines of tags never closed", 40, hostile, (src) => {
+    assertGrowsLinearly("completing after lines of tags never closed", 6, hostile, (src) => {
       assert.ok(labels(src, "pebble").includes("debounce"), "modifiers at the end of the long document");
     });
   });

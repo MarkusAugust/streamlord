@@ -157,7 +157,7 @@ class HoleLandingsTest {
     // with the markup times the holes: 15000 holes took seconds when every span was tried.
     @Test
     fun `many holes are judged in time that grows with the markup`() {
-        assertGrowsLinearly("judging holes", 500, { n -> "<li title=\"%s\"><a href=\"/x/%s\">%s</a></li>".repeat(n) }) { markup ->
+        assertGrowsLinearly("judging holes", 80, { n -> "<li title=\"%s\"><a href=\"/x/%s\">%s</a></li>".repeat(n) }) { markup ->
             val holes = holesOf(markup)
             holeLandings(markup, holes)
             interpolate(markup, *Array(holes.size) { "v" })

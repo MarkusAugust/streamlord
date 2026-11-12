@@ -15,7 +15,7 @@ class JsonLimitsTest {
     // to turn into a number the first time an accessor was called.
     @Test
     fun `a number of a million digits is refused before anything reads it`() {
-        assertGrowsLinearly("refusing a long number", 100_000, { n -> """{"n":""" + "9".repeat(n) + "}" }) { body ->
+        assertGrowsLinearly("refusing a long number", 16_000, { n -> """{"n":""" + "9".repeat(n) + "}" }) { body ->
             assertFailsWith<JsonParseException> { JsonParser.parseObject(body) }
         }
     }

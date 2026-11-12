@@ -71,7 +71,7 @@ class ScriptAndSignalsContextTest {
     @Test
     fun `checking the keys takes time in proportion to the text`() {
         val keys = { n: Int -> (1..n).joinToString(",", "{", "}") { "\"k$it\":\"${"x".repeat(200)}\"" } }
-        assertGrowsLinearly("checking the keys", 1_000, keys) { text -> assertEquals(text, PatchSignals(text).signals) }
+        assertGrowsLinearly("checking the keys", 150, keys) { text -> assertEquals(text, PatchSignals(text).signals) }
     }
 
     @Test

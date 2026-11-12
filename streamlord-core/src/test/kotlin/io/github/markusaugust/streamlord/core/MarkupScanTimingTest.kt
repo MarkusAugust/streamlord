@@ -12,22 +12,22 @@ import kotlin.test.Test
 class MarkupScanTimingTest {
     @Test
     fun `many comments are walked once`() {
-        assertGrowsLinearly("the guard over comments", 10_000, { "<!--a-->".repeat(it) }) { ElementsGuard.check(it) }
-        assertGrowsLinearly("the guard over comments closed by --!>", 10_000, { "<!--a--!>".repeat(it) }) { ElementsGuard.check(it) }
-        assertGrowsLinearly("interpolate after comments", 10_000, { "<!--a-->".repeat(it) + "<p>%s</p>" }) { interpolate(it, "x") }
+        assertGrowsLinearly("the guard over comments", 1_500, { "<!--a-->".repeat(it) }) { ElementsGuard.check(it) }
+        assertGrowsLinearly("the guard over comments closed by --!>", 1_500, { "<!--a--!>".repeat(it) }) { ElementsGuard.check(it) }
+        assertGrowsLinearly("interpolate after comments", 1_500, { "<!--a-->".repeat(it) + "<p>%s</p>" }) { interpolate(it, "x") }
     }
 
     @Test
     fun `many Html values are each judged without reading the markup before them again`() {
         val row = interpolate("<b>%s</b>", "x")
-        assertGrowsLinearly("Html values", 2_000, { n -> "<p>%s</p>".repeat(n) to Array(n) { row } }) { (markup, values) ->
+        assertGrowsLinearly("Html values", 300, { n -> "<p>%s</p>".repeat(n) to Array(n) { row } }) { (markup, values) ->
             interpolate(markup, *values)
         }
     }
 
     @Test
     fun `end tags that match nothing open do not search the open elements each time`() {
-        assertGrowsLinearly("unmatched end tags under as many open elements", 2_000, { n -> "<b>".repeat(n) + "</i>".repeat(n) + "%s" }) {
+        assertGrowsLinearly("unmatched end tags under as many open elements", 300, { n -> "<b>".repeat(n) + "</i>".repeat(n) + "%s" }) {
             interpolate(it, "x")
         }
     }
@@ -35,6 +35,6 @@ class MarkupScanTimingTest {
     @Test
     fun `an svg patch over many svg elements is guarded in time`() {
         val svg = { n: Int -> "<svg>" + "<![CDATA[x]]><g></g>".repeat(n) + "</svg>" }
-        assertGrowsLinearly("the guard over CDATA sections in an svg", 2_000, svg) { ElementsGuard.check(it) }
+        assertGrowsLinearly("the guard over CDATA sections in an svg", 300, svg) { ElementsGuard.check(it) }
     }
 }

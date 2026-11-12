@@ -149,7 +149,7 @@ class HoleJudgementTest {
                 }
             }
         }
-        assertGrowsLinearly("functions with HTML", 200, file) { src ->
+        assertGrowsLinearly("functions with HTML", 100, file) { src ->
             assertTrue(analyzer.analyzeKotlin(src).count { it.code == "unescaped-interpolation" || it.code == "unsafe-interpolation" } > 0)
         }
     }

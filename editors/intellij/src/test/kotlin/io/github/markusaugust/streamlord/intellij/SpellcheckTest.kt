@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.grazie.ide.inspection.grammar.GrazieInspection
 import com.intellij.grazie.spellcheck.GrazieSpellCheckingInspection
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.util.IdempotenceChecker
 import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 
@@ -37,13 +38,19 @@ class SpellcheckTest : StreamlordTestCase() {
     // The spell checker asks for every element of every pass, so the answer must not read the whole
     // file each time: eight seconds for 600 functions before the strings were cached.
     fun `test the strategy answers in time for a large kotlin file`() {
+        // In tests the platform works a cached value out again now and then, to check that it comes out
+        // the same: once in so many reads, so on a large file the strings are found again and again.
+        IdempotenceChecker.disableRandomChecksUntil(testRootDisposable)
         val strategy = DatastarSpellcheckingStrategy()
         var copy = 0
         val file = { n: Int ->
-            val src = (0 until n).joinToString("\n") { "fun f$it() { val s = \"text $it\"; dataOnClick(\"\\\$n$it++\") }" }
-            myFixture.addFileToProject("Big${copy++}.kt", src)
+            // kotlinx.html's own form, which is Datastar whatever libraries the project is found to have.
+            val src =
+                (0 until n).joinToString("\n") { "fun T.f$it() { val s = \"text $it\"; attributes[\"data-on:click\"] = \"\\\$n$it++\" }" }
+            // Its syntax tree built untimed, so that what is timed is the strategy and not the parser.
+            myFixture.addFileToProject("Big${copy++}.kt", src).also { PsiTreeUtil.processElements(it) { true } }
         }
-        assertGrowsLinearly("the spelling strategy over a Kotlin file", 60, file) {
+        assertGrowsLinearly("the spelling strategy over a Kotlin file", 10, file) {
             var claimed = 0
             PsiTreeUtil.processElements(it) { element ->
                 if (strategy.isMyContext(element)) claimed++

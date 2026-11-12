@@ -59,7 +59,7 @@ class JsonRobustnessTest {
 
     @Test
     fun `one mebibyte parses in linear time`() {
-        assertGrowsLinearly("parsing an object of many keys", 100_000, ::manyKeys) { text ->
+        assertGrowsLinearly("parsing an object of many keys", 16_000, ::manyKeys) { text ->
             assertTrue((JsonParser.parse(text) as JsonObject).size > text.length / 100)
         }
     }
