@@ -231,6 +231,74 @@ class ClientOracleTest {
         assertEquals(emptyList(), wrong)
     }
 
+    /**
+     * The kind the catalog gives a value of the client's TypeScript type [type], with the strings an
+     * enum takes: an `AbortController` comes only from an expression, which no check judges.
+     */
+    private fun kindOf(type: String): Pair<String, List<String>> {
+        val quoted = type.split("|").map { it.trim() }.filter { it != "AbortController" }
+        if (quoted.all { it.length > 1 && it.startsWith("'") && it.endsWith("'") }) return "string" to quoted.map { it.trim('\'') }
+        val kinds =
+            mapOf(
+                "string" to "string",
+                "number" to "number",
+                "boolean" to "boolean",
+                "any" to "any",
+                "Record<string, string>" to "object",
+                "SignalFilterOptions" to "filter",
+                "FetchArgs" to "options",
+                "() => any" to "function",
+                "RegExp | string" to "pattern",
+            )
+        return (kinds[type] ?: fail("no kind for the client's type $type")) to emptyList()
+    }
+
+    private val rawCatalog = JsonParser.parseObject(fixtureText("catalog/datastar-1.0.5.json"))
+
+    private fun JsonObject.kinded(): Pair<String?, List<String>> = string("kind") to (array("values")?.strings() ?: emptyList())
+
+    /**
+     * `actions.json`: the kind and the values the catalog gives each fetch option and each key of a
+     * signal filter are those of the client's FetchArgs and SignalFilterOptions types.
+     */
+    @Test
+    fun `gives each option the kind the client's type declares`() {
+        val actions = fixture("actions.json")
+        val wrong = ArrayList<String>()
+        for ((table, types) in listOf("fetchOptions" to actions.obj("fetchArgs")!!, "signalFilter" to actions.obj("signalFilter")!!)) {
+            val listed = rawCatalog.array(table)?.objects() ?: fail("the catalog has no $table")
+            for (field in listed) {
+                val name = field.string("name")!!
+                val type = types.string(name) ?: fail("$table: the client's type has no $name")
+                if (field.kinded() != kindOf(type)) wrong += "$table $name: the catalog says ${field.kinded()}, the client's type is $type"
+            }
+            if (table == "signalFilter") assertEquals(types.keys.toList(), listed.map { it.string("name") })
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * `actions.json`: each free action of the catalog takes as many arguments as its apply declares,
+     * of the kinds its types say, and those with a default are optional in its signature. A filter
+     * is optional too: `filtered` in engine/signals.ts gives it a default of its own.
+     */
+    @Test
+    fun `gives each free action the parameters its source declares`() {
+        val declared = cases("actions.json").associateBy { it.string("action")!! }
+        val wrong = ArrayList<String>()
+        for (action in rawCatalog.array("actions")!!.objects().filter { it.boolean("pro") != true }) {
+            val name = action.string("name")!!
+            val parameters = declared[name]?.array("parameters")?.objects() ?: fail("the client has no action $name")
+            val kinds = action.array("kinds")?.strings() ?: fail("@$name has no kinds in the catalog")
+            val signature = Catalog.default.actionsByName.getValue(name).parameters
+            val wanted = parameters.map { kindOf(it.string("type")!!).first }
+            if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the client declares $wanted"
+            val optional = parameters.map { it.boolean("optional") == true || kindOf(it.string("type")!!).first == "filter" }
+            if (signature.map { it.endsWith("?") } != optional) wrong += "@$name: the signature $signature, and the client's defaults $optional"
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
     /** The reading of the case in `conformance/dsl/free.json` whose name starts with [name]. */
     private fun reading(name: String): JsonObject =
         dslCases.entries
