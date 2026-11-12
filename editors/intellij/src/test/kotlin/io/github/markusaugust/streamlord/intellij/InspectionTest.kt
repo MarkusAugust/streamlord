@@ -135,7 +135,7 @@ class InspectionTest : StreamlordTestCase() {
         val q = "\"\"\""
         myFixture.configureByText(
             "Demo.kt",
-            "fun f(): String = \$\$$q<div data-signals:teller=\"0\"><button data-on:click=\"\$telefon++\">x</button>" +
+            "fun f(): String = \$\$$q<div data-signals:teller=\"0\"><button data-on:click=\"\$telefon + 1\">x</button>" +
                 "<span data-text=\"\$teller\"></span></div>$q",
         )
         val highlights = myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }

@@ -67,8 +67,16 @@ private val VALUE_ATTRIBUTE =
 // data-computed="{total: () => ...}" declares its keys the same way.
 private val OBJECT_ATTRIBUTE = regex("""(?i)data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
 
-/** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
-private val ASSIGNED_SIGNAL = regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
+/**
+ * `$name = ...`, `$name += 1`, `$name++` or `--$name` in an expression: the client's store creates a
+ * signal it is written to, so every assignment defines it. A read creates one too, holding `''`, but
+ * counts for nothing here, so that a misspelt read is still reported.
+ */
+private val ASSIGNED_SIGNAL =
+    regex(
+        """(?:\+\+|--)\s*(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)|(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)""" +
+            """\s*(?:(?:\*\*|&&|\|\||\?\?|<<|>>>|>>|[-+*/%&|^])?=(?![=>])|\+\+|--)""",
+    )
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
@@ -505,8 +513,9 @@ private fun definedAt(
         }
     }
     for (m in ASSIGNED_SIGNAL.findAll(src)) {
-        val at = m.range.first
-        if (templates.none { at >= it.start && at < it.end }) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
+        val name = ASSIGNED_SIGNAL.groupAt(src, m, 1) ?: ASSIGNED_SIGNAL.groupAt(src, m, 2)!!
+        val at = name.range.first - 1
+        if (templates.none { at >= it.start && at < it.end }) out += declarationAt(name, 0)
     }
     return out.filter { PLACEHOLDER !in it.name }.distinct()
 }
