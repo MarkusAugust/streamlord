@@ -14,7 +14,14 @@ another repository, is reported too; suppress it there, or turn the inspection o
 The other direction is reported in a Kotlin file: a signal the server reads, through a property of a <code>@Serializable</code>
 class that <code>readSignals</code> reads into or a lookup such as <code>signals.string("query")</code>, that no page in the project
 declares. The handler gets the default, or null, and nobody is told. This is the <code>signal-never-declared</code> check that
-<code>signalDrift</code> runs in your own tests.
+<code>signalDrift</code> runs in your own tests. A handler that patches a class, <code>patchSignals(Form(...))</code>, declares
+its properties as a page does.
+</p>
+<p>
+The check sees the files of the project and nothing else. A signal set by a server patch whose class or keys the file does not
+write down, <code>patchSignals(json)</code> with a string built elsewhere, or declared by pages outside the project, a service opened
+alone whose pages are in another folder, is warned on though the browser has it. Open the folder that holds both, suppress the
+warning there, or turn the inspection off.
 </p>
 <!-- tooltip end -->
 </body>

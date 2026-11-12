@@ -118,6 +118,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `signalDrift` counts a class a handler patches, `patchSignals(Form(...))`,
+  `call.respondSignals(form)` or `datastarSignals(Form())`, as declaring its properties; reads a
+  `readSignals<Form>()` written in a comment or a string as no read; and judges the class a read
+  names by the reading file's imports and package, so another `Form` elsewhere in the project is
+  not warned on, and a name that could mean two classes is not judged.
 - The keys of an object a signal is given are signals, as the client merges them in:
   `data-signals:hero="{strength: 1}"`, `dataSignals("hero", "{strength: 1}")` and
   `dataSignals("{quests: {urgent: 0}}")` define `hero.strength` and `quests.urgent`. Both editors
