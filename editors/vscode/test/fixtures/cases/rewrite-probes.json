@@ -81,6 +81,8 @@
     {"name":"in binds less tightly than plus","params":"a: String, b: String","body":"\"<p>\" + a in setOf(b)","rewrite":"offered","marks":["a"]},
     {"name":"a comparison binds less tightly than plus","params":"a: String, b: String","body":"\"<p>\" + a < b","rewrite":"offered","marks":["a"]},
     {"name":"an infix call binds less tightly than plus","params":"a: String, b: String","body":"\"<p>\" + a to b + \"</p>\"","rewrite":"offered","marks":["a"]},
-    {"name":"a value the reading cannot take apart is warned of and gets no rewrite","params":"a: String","body":"\"<p>\" + object { override fun toString() = a } + \"</p>\"","rewrite":"none","says":["cannot be read"],"marks":["object { override fun toString() = a } + \"</p>\""]}
+    {"name":"a value the reading cannot take apart is warned of where it certainly is, and gets no rewrite","params":"a: String","body":"\"<p>\" + object { override fun toString() = a } + \"</p>\"","rewrite":"none","says":["a value joined with + that cannot be read as a whole","cannot be read as values"],"marks":["object"]},
+    {"name":"a value before the first literal the reading cannot take apart is warned of where it certainly ends","params":"a: String","body":"try { a } catch (e: Exception) { a } + \"<p>x</p>\"","rewrite":"none","says":["cannot be read as a whole"],"marks":["{ a }"]},
+    {"name":"a call on a value the reading cannot take apart is all that is certain of it, and is not marked as markup","params":"a: String","body":"object { override fun toString() = a }.toString() + \"<p>x</p>\"","rewrite":"none","says":["cannot be read as a whole"],"marks":["toString()"]}
   ]
 }
