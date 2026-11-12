@@ -30,6 +30,49 @@ All notable changes to Streamlord are recorded here. The format follows
   how the editor names its attribute prefix setting, which the warning about an aliased attribute
   points to. `Markup.validateAttributes` takes it last. Each has a default, the IntelliJ plugin's
   words, but code compiled against the old constructors needs a rebuild.
+- `AnalyzeOptions` in streamlord-analysis has one more value, `coreHtml`, last: `false` says the
+  project's core has no `Html` (it came in 0.16.0), and the advice for a value in an HTML string
+  then names `Trusted(...)` alone. `SiteIssues` has a fourth value, `rewrite`, and
+  `analyzeKotlinSites` now also lists an HTML string that has no issue and can be rewritten.
+  `KotlinString` has two more values, `literals` and `called`: the literals a `+` chain joins, and
+  whether a call or an index follows one of them. Code compiled against the old constructors needs
+  a rebuild.
+- `ValueFact` in streamlord-analysis has one more value, `TRUSTED`: core's `Trusted`, which
+  `ofTypeName` now gives for that type where it gave `MARKUP`. It is judged as `MARKUP` is, and
+  `isMarkup()` holds for both. The IntelliJ plugin gives it from the resolved type, so also for a
+  value the file does not declare, `user.badge`. In a call to `interpolate`, a value the plugin
+  resolves to a `Trusted` is let in wherever it lands, as core lets it.
+- In both editors, the fix that rewrites an HTML string to `interpolate(...)` is titled
+  "Build this string with interpolate(...)", where it was "Build it with interpolate(...)". It is
+  now offered for a value that may be null, and not as the preferred fix: a template writes `null`
+  for it and `interpolate` nothing. Under `.trimIndent()` it is not preferred either, since the
+  trim then runs before the values go in. The warning of a `Trusted` in an attribute or at the
+  start of a URL no longer offers it, since `interpolate` writes a `Trusted` as it is.
+- A warning about a Kotlin value in element text, an attribute, a URL, `style`, a script or the
+  markup's structure links to [the page on HTML strings](https://streamlord-docs.netlify.app/strings/),
+  `Docs.STRINGS`, where it linked to Datastar's guide to expressions. One about a `data-*`
+  expression links there as before. No message for a value in a Datastar expression, a script or
+  an event handler advises a signal any longer: each says to put the value in an attribute of its
+  own and read it with `el.dataset`.
+- `interpolate(format, values: List<Any?>, prefixes)` in streamlord-core is gone. The values of
+  `interpolate(format, vararg values)` are always the values: a `List`, a `Set` or an array handed
+  over as one of them is one value, written in brackets, `[a, b]`, and escaped. An array is
+  written so too, where a Kotlin template writes its class and hash.
+  Until now a `List` passed alone was silently taken for the list of values, so
+  `interpolate("<p>%s</p>", tags)` threw for two tags and wrote the one for one. To pass the
+  elements of a collection, spread it: `interpolate(format, *values.toTypedArray())`; where that was
+  meant and the count no longer fits, the exception says so. The prefixes of an aliased bundle now
+  come first: `interpolate(prefixes, format, vararg values)`. Both editors count a list as one value,
+  and give a hint where a `listOf(...)`, `setOf(...)` or `arrayOf(...)` is handed over, with a fix
+  that writes its elements out as the values.
+- The message `interpolate` throws for a `String` in a `data-*` expression advises an attribute of
+  its own read with `el.dataset`, where it advised a signal, since a `String` written into
+  `data-signals` is refused by the same rule.
+- With `guardElements` on, a `data-*` name with a key or a modifier and two letters swapped,
+  `data-no:click`, throws `MistypedAttributeException`, as one with a letter added, left out or
+  changed already did. Both editors warn about it. A bare name is judged as before.
+- The IntelliJ plugin runs only with the Kotlin plugin in K2 mode, the default. K1 is gone from
+  IntelliJ 2026.2, and an IntelliJ 2026.1 with K1 turned on no longer loads the plugin.
 
 ### Added
 
@@ -37,8 +80,68 @@ All notable changes to Streamlord are recorded here. The format follows
   `viewTransitionSelector`, sent as the header `datastar-view-transition-selector`, which
   Datastar 1.0.5 reads. It is sent only with `useViewTransition`, as in a stream.
   `DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR` names it.
+- In both editors, the rewrite of an HTML string to `interpolate(...)` is a context action for a
+  caret or a selection anywhere in a string that has a value to escape and whose values
+  `interpolate` accepts: among the intentions in IntelliJ, as a refactoring in VS Code.
+  streamlord-analysis has `rewriteAt` for it.
+- In both editors, a bare `data-*` name one edit from a Datastar attribute (a letter added, left
+  out, changed, or two swapped) gets a hint with the fix, where something says Datastar was meant:
+  the value reads a signal or calls an action where an expression could start, or the attribute
+  stands without a value as that Datastar attribute is written, as `data-persits` does.
+  `data-test`, `data-kind` and `data-unit` say nothing, as before, and neither does
+  `data-test="costs $5"` or a value with a template of its own.
+- The project `rewrite-probes` compiles HTML strings as they are written and as each fix of the
+  analysis leaves them, against core, and runs both: every cell of the editors' matrix of values,
+  and the cases in `rewrite-probes.json`.
 
 ### Fixed
+
+- In both editors, the rewrite of an HTML string to `interpolate(...)` is offered for a literal
+  with `.trimIndent()` or `.trimMargin()` after it, which stays on the format inside the call; for
+  a `$$"..."` literal, which keeps its prefix; and for literals joined to values with `+`, which
+  become one format, or each keep their own form where they are written differently. None of
+  them was offered it. A string written with `.trimMargin()`, each line after its margin, is read
+  as HTML, so its values are judged at all.
+- In both editors, a value joined before the first literal, `name + "<p>"` or `greet(name) + "<p>"`, one after a comment,
+  one joined to a literal with a call after it, and a name in backticks, `` $`my name` ``, are
+  judged; none was. The URL of a `<meta>` refresh is judged as a URL.
+- In both editors, a helper of the DSL whose attribute name is given by name and is no plain
+  literal, `dataAttr(name = "tab-index".uppercase(), expression = "0")`, no longer stops the
+  analysis of the whole file, as it did in the released editors too.
+- In both editors, a trim call after one literal of a `+` chain trims that literal alone, as Kotlin
+  binds it: a value after `"""…""".trimMargin() + name` is judged where the page has it, a URL in
+  `href` as a URL, and a `|` in a literal before the trimmed one stays the character it is.
+- In both editors, a `+` chain with a call or an index after one of its literals,
+  `"<p>" + name + "</p>".uppercase()`, gets no rewrite, since the call is that literal's alone and
+  the rewrite moved it to the whole string. Nor does a string in an annotation's argument or a
+  `const val`, where no call compiles.
+- In both editors, a Kotlin template before an equals sign in a string, `"<p $name=\"x\">"` or
+  `println("$key=$value")`, no longer defines a signal of that name. It was read as an assignment
+  to a signal, so the name was offered after `$` everywhere and a misspelt signal of that name got
+  no warning. An escaped dollar, `\$count = 1`, assigns as before.
+- In both editors, a value in a `$$"..."` literal that is joined to other literals with `+` is
+  shown as written, `$${name}`, and "Mark … as markup" writes it with both dollars, where it wrote
+  one and left text. A value in a raw literal of such a chain is quoted without a backslash.
+- In both editors, one value `interpolate` refuses no longer silently removes the rewrite from
+  the others: the message of each other value names the value in the way and where it stands, and
+  says likewise when a value may be markup the rewrite would escape, when a call follows a literal
+  of a chain, and when a trim call cannot be kept. A `Trusted` is in nobody's way, since
+  `interpolate` accepts it wherever it lands. CSS in the body of a `<style>` can be passed as
+  `Trusted(...)`: the fix is on that value, the rewrite then covers the whole string, and the
+  other values say that the fix passes it so.
+- In both editors, a call to `interpolate` whose format has a trim call after it is checked as
+  any other. Nothing in it was.
+- In both editors, a value whose shape says it is a number or a boolean, `${n.dec()}`,
+  `${xs.size}` or `${a * 2}`, gets the rewrite to `interpolate(...)` and is no longer offered
+  "Mark … as markup", whose `Trusted(...)` takes a String and did not compile. A value that may be
+  markup and is alone in the way of the rewrite says so in its message.
+- In both editors, a value joined with `+` that the analysis cannot read to its end is marked
+  only where it certainly is, and its message says that it cannot be read as a whole.
+- In both editors, a call `interpolate(listOf("data-x-"), format, ...)` is judged with the
+  prefixes it is given, as `interpolate` judges it, so a value it refuses in `data-x-text` is an
+  error.
+- In both editors, a `$name` a `$$"..."` literal leaves as text is offered after `$` like any
+  other signal the project reads.
 
 - In both editors, the text of a template literal is no longer said to be rewritten by Datastar:
   1.0.5 matches a template literal whole and rewrites only inside its `${...}`, so

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.impl.source.tree.injected.InjectedLanguageEditorUtil
 import com.intellij.testFramework.PlatformTestUtil
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.completion.ExpressionHelp
@@ -57,6 +58,26 @@ class UiThreadTest : StreamlordTestCase() {
         assertEquals("<b data-text=\"\$total\"></b><i></i>", myFixture.file.text)
         assertEquals("<div data-signals:total=\"0\"></div>", page.text)
         assertEquals("fun h() = patchSignals(mapOf(\"total\" to 1))", view.text)
+        assertEquals(0, UiThreadWork.count.get() - before)
+    }
+
+    // The action was found for the text before the edit: applying it reads the text as it is now, in the background.
+    fun `test the rewrite to interpolate applied after an edit analyses nothing on the UI thread`() {
+        myFixture.configureByText("Applied.kt", "fun card(name: String): String = \"<p cl<caret>ass=\\\"x\\\">\$name</p>\"")
+        val action = myFixture.availableIntentions.first { it.text.startsWith("Build this string with interpolate(...)") }
+        // The caret stands in HTML injected into the string: the Kotlin file's own document is the one edited.
+        val document = InjectedLanguageEditorUtil.getTopLevelEditor(myFixture.editor).document
+        WriteCommandAction.runWriteCommandAction(project) { document.insertString(document.textLength, "\n") }
+        PsiDocumentManager.getInstance(project).commitAllDocuments()
+        val before = UiThreadWork.count.get()
+
+        myFixture.launchAction(action)
+
+        assertEquals(
+            "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
+                "fun card(name: String): String = interpolate(\"<p class=\\\"x\\\">%s</p>\", name).text\n",
+            document.text,
+        )
         assertEquals(0, UiThreadWork.count.get() - before)
     }
 }

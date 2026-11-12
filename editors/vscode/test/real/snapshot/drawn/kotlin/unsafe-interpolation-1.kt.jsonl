@@ -1,5 +1,5 @@
 {"what":"file","language":"kotlin"}
-{"what":"diagnostic","code":"unsafe-interpolation","link":"https://data-star.dev/guide/datastar_expressions","message":"Kotlin writes $n into an attribute value without quotes, where a space starts a new attribute. Quote the value.","range":"1:27-1:29","severity":"Hint","source":"streamlord"}
+{"what":"diagnostic","code":"unsafe-interpolation","link":"https://streamlord-docs.netlify.app/strings/","message":"Kotlin writes $n into an attribute value without quotes, where a space starts a new attribute. Quote the value.","range":"1:27-1:29","severity":"Hint","source":"streamlord"}
 {"what":"action","at":"1:1-2:1","n":0,"after":"fun f(n: Int) = \"<p width=\\\"$n/\\\"></p>\"\n","edits":[{"file":"drawn/kotlin/unsafe-interpolation-1.kt","range":"1:27-1:27","text":"\\\""},{"file":"drawn/kotlin/unsafe-interpolation-1.kt","range":"1:30-1:30","text":"\\\""}],"kind":"quickfix","preferred":true,"title":"Quote the value"}
 {"what":"action","at":"1:27-1:29","n":0,"after":"fun f(n: Int) = \"<p width=\\\"$n/\\\"></p>\"\n","edits":[{"file":"drawn/kotlin/unsafe-interpolation-1.kt","range":"1:27-1:27","text":"\\\""},{"file":"drawn/kotlin/unsafe-interpolation-1.kt","range":"1:30-1:30","text":"\\\""}],"kind":"quickfix","preferred":true,"title":"Quote the value"}
 {"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}

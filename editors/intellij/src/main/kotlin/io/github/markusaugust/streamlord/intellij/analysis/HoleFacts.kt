@@ -1,16 +1,12 @@
 package io.github.markusaugust.streamlord.intellij.analysis
 
 import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiMethod
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.isMarkup
-import io.github.markusaugust.streamlord.analysis.isMarkupCollection
 import io.github.markusaugust.streamlord.analysis.ofResolvedClass
-import io.github.markusaugust.streamlord.analysis.ofTypeName
 import io.github.markusaugust.streamlord.analysis.opensWithTag
 import io.github.markusaugust.streamlord.analysis.writesItself
 import org.jetbrains.kotlin.analysis.api.KaSession
@@ -26,9 +22,7 @@ import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
 import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtClass
-import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtConstantExpression
-import org.jetbrains.kotlin.psi.KtConstructor
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
@@ -37,27 +31,22 @@ import org.jetbrains.kotlin.psi.KtLambdaExpression
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
-import org.jetbrains.kotlin.psi.KtNullableType
 import org.jetbrains.kotlin.psi.KtParenthesizedExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtReturnExpression
-import org.jetbrains.kotlin.psi.KtSafeQualifiedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
-import org.jetbrains.kotlin.psi.KtTypeElement
 import org.jetbrains.kotlin.psi.KtTypeReference
-import org.jetbrains.kotlin.psi.KtUserType
 import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.KtWhenExpression
 
 /**
  * What the Kotlin plugin knows of each value joined into an HTML string, for the analysis to
- * judge the hole by: a constant, markup, a number or a boolean, or a string. In K2 mode the types
- * come from the Analysis API; in K1 mode only what the declarations spell out. The analysis takes
- * these over what the text shows, so markup is only a hole whose whole value is markup. Plain
- * values out, so nothing of an analysis session outlives the call.
+ * judge the hole by: a constant, markup, a number or a boolean, or a string, by the types the
+ * Analysis API gives. The analysis takes these over what the text shows, so markup is only a hole
+ * whose whole value is markup. Plain values out, so nothing of an analysis session outlives the call.
  */
 object HoleFacts {
     private val HTML_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Html")
@@ -81,21 +70,14 @@ object HoleFacts {
         val holes = holes(file)
         val arguments = interpolateArguments(file)
         if (holes.isEmpty() && arguments.isEmpty()) return emptyMap()
-        // The property the Kotlin plugin's own plugin.xml switches K1 on with; KotlinPluginModeProvider,
-        // which reads it too, is scheduled for removal in 2026.2.
-        val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
-        return if (k1) {
-            judge(holes, ::constantK1, ::typeK1, ::markupElementsK1) { typeFactK1(it).isMarkup() } + resolved(arguments, ::classK1)
-        } else {
-            analyze(file) {
-                judge(
-                    holes,
-                    { it.evaluate() != null || enumEntry(it) },
-                    { typeFact(it.expressionType) },
-                    { markupElements(it.expressionType) },
-                    { typeFact(it.type).isMarkup() },
-                ) + resolved(arguments) { classOf(it.expressionType) }
-            }
+        return analyze(file) {
+            judge(
+                holes,
+                { it.evaluate() != null || enumEntry(it) },
+                { typeFact(it.expressionType) },
+                { markupElements(it.expressionType) },
+                { typeFact(it.type).isMarkup() },
+            ) + resolved(arguments) { classOf(it.expressionType) }
         }
     }
 
@@ -122,13 +104,6 @@ object HoleFacts {
         return (lower as? KaClassType)?.classId?.asFqNameString()
     }
 
-    /** K1: the qualified name of the class a call constructs, or a reference's declaration is declared. */
-    private fun classK1(expr: KtExpression): String? {
-        constructedK1(expr)?.let { return it }
-        val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
-        return classK1(target.typeReference ?: return null)
-    }
-
     /**
      * Each hole by what [constant] and [typed] say of it, and what its source shows: a constant, a
      * call to a helper with the author's own arguments, markup, a literal only, or its type.
@@ -150,7 +125,7 @@ object HoleFacts {
             val fact = typed(expr)
             facts[range] =
                 when {
-                    fact.isMarkup() -> ValueFact.MARKUP
+                    fact != null && fact.isMarkup() -> fact
                     isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
                     markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
                     literalOnly(expr) -> ValueFact.CONSTANT
@@ -282,7 +257,7 @@ object HoleFacts {
 
             // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
             definite && lower.isClass(TRUSTED_CLASS) -> {
-                ValueFact.MARKUP
+                ValueFact.TRUSTED
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
@@ -316,66 +291,6 @@ object HoleFacts {
         val element = (lower as? KaClassType)?.typeArguments?.singleOrNull()?.type ?: return false
         val bare = (element as? KaFlexibleType)?.lowerBound ?: element
         return bare.isClass(HTML_CLASS) || bare.isClass(TRUSTED_CLASS)
-    }
-
-    /** K1: a collection the declaration a reference resolves to writes out as one of Html or Trusted. */
-    private fun markupElementsK1(expr: KtExpression): Boolean {
-        val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return false
-        val ref = target.typeReference ?: return false
-        val element = unwrapped(ref)
-        val argument = (element as? KtUserType)?.typeArgumentsAsTypes?.singleOrNull()
-        return isMarkupCollection(ref.text) && (argument == null || typeFactK1(argument).isMarkup())
-    }
-
-    /** The type a nullable type reference wraps, or the reference's own. */
-    private fun unwrapped(ref: KtTypeReference): KtTypeElement? = ref.typeElement.let { (it as? KtNullableType)?.innerType ?: it }
-
-    /**
-     * K1: the fact of the type [ref] writes, by the class it resolves to, so an `Html` or a `Trusted`
-     * of another package is [ValueFact.OTHER]. Where it does not resolve, none: the analysis reads
-     * the declaration and the file's imports itself.
-     */
-    private fun typeFactK1(ref: KtTypeReference): ValueFact? {
-        val nullable = if (ref.typeElement is KtNullableType) "?" else ""
-        val qualified = classK1(ref) ?: return null
-        return ValueFact.ofResolvedClass(qualified) ?: ValueFact.ofTypeName(qualified + nullable)
-    }
-
-    /** K1: the qualified name of the class the type [ref] writes resolves to. */
-    private fun classK1(ref: KtTypeReference): String? =
-        when (val resolved = (unwrapped(ref) as? KtUserType)?.referenceExpression?.mainReference?.resolve()) {
-            is KtClassOrObject -> resolved.fqName?.asString()
-            is PsiClass -> resolved.qualifiedName
-            else -> null
-        }
-
-    /** K1: the qualified name of the class a call constructs, `Trusted(x)`; null for any other call. */
-    private fun constructedK1(expr: KtExpression): String? {
-        val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return null
-        return when (val target = (call.calleeExpression as? KtNameReferenceExpression)?.mainReference?.resolve()) {
-            is KtClassOrObject -> target.fqName?.asString()
-            is KtConstructor<*> -> target.getContainingClassOrObject().fqName?.asString()
-            is PsiClass -> target.qualifiedName
-            is PsiMethod -> if (target.isConstructor) target.containingClass?.qualifiedName else null
-            else -> null
-        }
-    }
-
-    /** K1: a `const val` the reference resolves to, or an enum entry. */
-    private fun constantK1(expr: KtExpression): Boolean {
-        if (enumEntry(expr)) return true
-        if (KtPsiUtil.safeDeparenthesize(expr) is KtCallExpression) return false
-        val target = reference(expr)?.mainReference?.resolve() as? KtProperty ?: return false
-        return target.hasModifier(KtTokens.CONST_KEYWORD)
-    }
-
-    /** K1: the type the declaration a reference resolves to writes out. */
-    private fun typeK1(expr: KtExpression): ValueFact? {
-        constructedK1(expr)?.let { ValueFact.ofResolvedClass(it) }?.let { return it }
-        // `a?.b` may be null whatever `b` declares.
-        if (KtPsiUtil.safeDeparenthesize(expr) is KtSafeQualifiedExpression) return null
-        val target = reference(expr)?.mainReference?.resolve() as? KtCallableDeclaration ?: return null
-        return typeFactK1(target.typeReference ?: return null)
     }
 
     /** Whether `.trimMargin()` is called on [literal], which then starts past its first `|`. */

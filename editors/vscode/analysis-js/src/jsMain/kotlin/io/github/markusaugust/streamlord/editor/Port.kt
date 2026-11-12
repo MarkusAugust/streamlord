@@ -5,6 +5,7 @@ package io.github.markusaugust.streamlord.editor
 import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.SignalReference
+import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.actionDoc
 import io.github.markusaugust.streamlord.analysis.attributeDoc
@@ -30,6 +31,7 @@ import io.github.markusaugust.streamlord.analysis.SignalDeclaration as AnalysedD
 import io.github.markusaugust.streamlord.analysis.SignalSite as AnalysedSite
 import io.github.markusaugust.streamlord.analysis.actionCallAt as analysedCallAt
 import io.github.markusaugust.streamlord.analysis.actionPrefixAt as analysedActionPrefixAt
+import io.github.markusaugust.streamlord.analysis.rewriteAt as analysedRewriteAt
 import io.github.markusaugust.streamlord.analysis.signalPrefixAt as analysedSignalPrefixAt
 
 /*
@@ -163,10 +165,35 @@ fun diagnose(
     defined: Array<String>?,
 ): Array<Issue> {
     val opts = options(src, kotlin, prefix).copy(constants = constants.toHashSet())
-    val found = if (kotlin) analyzer.analyzeKotlin(src, opts) else analyzer.analyzeHtml(src, opts)
+    val found = if (kotlin) sites(src, opts).flatMap { it.issues } else analyzer.analyzeHtml(src, opts)
     val unknown = if (defined == null) emptyList() else reads(src, kotlin, opts).mapNotNull { unknownSignalIssue(it, setOf(defined)) }
     return (found + unknown).map(::plain).toTypedArray()
 }
+
+// The Kotlin file analysed last: the lightbulb asks about the text the diagnostics were just made for.
+private var lastSites: Triple<String, AnalyzeOptions, List<SiteIssues>>? = null
+
+private fun sites(
+    src: String,
+    opts: AnalyzeOptions,
+): List<SiteIssues> {
+    lastSites?.takeIf { it.first == src && it.second == opts }?.let { return it.third }
+    return analyzer.analyzeKotlinSites(src, opts).also { lastSites = Triple(src, opts, it) }
+}
+
+/**
+ * The rewrite of an HTML string of the Kotlin file [src] to a call of `interpolate`, to offer as a
+ * context action for the caret or selection from [start] to [end]: null where that lies in no one
+ * string that can take it, and where an issue it touches offers the rewrite already.
+ */
+@JsExport
+fun rewriteAt(
+    src: String,
+    start: Int,
+    end: Int,
+    prefix: String,
+    constants: Array<String>,
+): Fix? = analysedRewriteAt(sites(src, options(src, true, prefix).copy(constants = constants.toHashSet())), start, end)?.let(::plain)
 
 // ---- The workspace's signals -------------------------------------------------------------------
 

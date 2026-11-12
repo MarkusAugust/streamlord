@@ -46,7 +46,7 @@ subprojects {
      * published, they are not held to explicit API mode, and an unused value in
      * a documentation sample is not worth failing a release over.
      */
-    val internal = name in setOf("docs-samples", "demo")
+    val internal = name in setOf("docs-samples", "demo", "rewrite-probes")
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "java-library")
@@ -97,7 +97,7 @@ subprojects {
             freeCompilerArgs.addAll("-Xjdk-release=17", "-Xjsr305=strict")
             // The API the modules share among themselves. The samples and the demo stand for an
             // application's code, so they compile without it, as an application would.
-            if (name !in setOf("docs-samples", "demo")) optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
+            if (name !in setOf("docs-samples", "demo", "rewrite-probes")) optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
             /*
              * A Kotlin compiler reads metadata at most one version ahead of its own, so modules
              * built by this Kotlin at its own level would refuse to compile in a project on the

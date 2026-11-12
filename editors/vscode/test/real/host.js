@@ -192,9 +192,18 @@ async function record(name, marks, folder = job.workspace) {
   const found = await settled(uri, name);
   const out = { language: document.languageId, diagnostics: found.map(diagnostic).sort((a, b) => rank(a.range) - rank(b.range) || order(JSON.stringify(a), JSON.stringify(b))) };
 
-  // The lightbulb at each diagnostic, and the one over the whole file.
+  /** Where the caret of a mark stands. */
+  const caretOf = (mark) => {
+    const caret = mark.at.indexOf(job.caret);
+    const start = nth(document.getText(), mark.at.replace(job.caret, ""), mark.nth ?? 0);
+    if (caret < 0 || start < 0) throw new Error(`The mark ${JSON.stringify(mark)} is not in ${name}.`);
+    return document.positionAt(start + caret);
+  };
+
+  // The lightbulb at each diagnostic, the one over the whole file, and the one at each caret a mark asks it at.
   const whole = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
-  const ranges = new Map([[span(whole), whole], ...found.map((d) => [span(d.range), d.range])]);
+  const carets = marks.filter((m) => m.actions).map((m) => new vscode.Range(caretOf(m), caretOf(m)));
+  const ranges = new Map([[span(whole), whole], ...found.map((d) => [span(d.range), d.range]), ...carets.map((r) => [span(r), r])]);
   out.actions = [];
   for (const [key, range] of [...ranges].sort(([a], [b]) => rank(a) - rank(b) || order(a, b))) {
     const actions = (await run("vscode.executeCodeActionProvider", uri, range)) ?? [];
@@ -215,11 +224,8 @@ async function record(name, marks, folder = job.workspace) {
   }
 
   out.completions = [];
-  for (const mark of marks) {
-    const caret = mark.at.indexOf(job.caret);
-    const start = nth(document.getText(), mark.at.replace(job.caret, ""), mark.nth ?? 0);
-    if (caret < 0 || start < 0) throw new Error(`The mark ${JSON.stringify(mark)} is not in ${name}.`);
-    const position = document.positionAt(start + caret);
+  for (const mark of marks.filter((m) => !m.actions)) {
+    const position = caretOf(mark);
     const list = await run("vscode.executeCompletionItemProvider", uri, position, mark.trigger, 10_000);
     const items = list.items.map((i) => completion(i, position)).sort((a, b) => order(a.sort ?? a.label, b.sort ?? b.label) || order(JSON.stringify(a), JSON.stringify(b)));
     out.completions.push({ mark: mark.at, nth: mark.nth, at: at(position), trigger: mark.trigger, incomplete: list.isIncomplete || undefined, items });

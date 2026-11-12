@@ -84,7 +84,7 @@ class HoleLandingsTest {
                         }
                     val refused =
                         try {
-                            interpolate(markup, values)
+                            interpolate(markup, *values.toTypedArray())
                             null
                         } catch (e: UnsafeInterpolationException) {
                             e
@@ -162,7 +162,7 @@ class HoleLandingsTest {
         val holes = holesOf(markup)
         val values = List(holes.size) { "v" }
         holeLandings(markup, holes)
-        val took = measureTime { holeLandings(markup, holes) } + measureTime { interpolate(markup, values) }
+        val took = measureTime { holeLandings(markup, holes) } + measureTime { interpolate(markup, *values.toTypedArray()) }
         assertTrue(took < 3.seconds, "15000 holes took $took")
     }
 }

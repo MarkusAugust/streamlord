@@ -50,15 +50,6 @@ class HoleTypesTest : StreamlordTestCase() {
             ("\${buttonAttributes()}" to "unsafe-interpolation") to "warning",
         )
 
-    /**
-     * Whether the Kotlin plugin runs in K1 mode, `test -PkotlinK1`. K1 reads only the types a
-     * declaration writes out, so where a type is inferred it gives no fact and the text decides.
-     */
-    private val k1 = System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()
-
-    /** The holes of [withTypes] whose type is inferred, which K1 leaves to the text. */
-    private val inferred = setOf("\$count", "\$name", "\$error")
-
     override fun setUp() {
         super.setUp()
         myFixture.enableInspections(KotlinInterpolationInspection())
@@ -81,8 +72,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 (issues as JsonArray).objects().mapNotNull {
                     val hole = it.string("hole")!!
                     val key = hole to it.string("code")!!
-                    val typed = key in withTypes && !(k1 && hole in inferred)
-                    val severity = if (typed) withTypes[key] else it.string("severity")
+                    val severity = if (key in withTypes) withTypes[key] else it.string("severity")
                     severity?.let { s -> "${it.int("start")}-${it.int("end")} $hole $s" }
                 }
             assertEquals(name, wanted.joinToString("\n"), seen.joinToString("\n"))
@@ -108,8 +98,8 @@ class HoleTypesTest : StreamlordTestCase() {
                 .doHighlighting()
                 .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
                 .map { "${it.text} ${severity(it.severity)}" }
-        // An Int? prints digits or null, both safe in element text. K1 cannot see that total is a number.
-        assertEquals(if (k1) listOf("\$total hint") else emptyList(), seen)
+        // An Int? prints digits or null, both safe in element text.
+        assertEquals(emptyList<String>(), seen)
     }
 
     fun `test a hole is markup only when its whole value is`() {
@@ -131,7 +121,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 "\${h.text}" to ValueFact.MARKUP,
                 "\$built" to ValueFact.MARKUP,
                 "\$fragment" to ValueFact.MARKUP,
-                "\${Trusted(q)}" to ValueFact.MARKUP,
+                "\${Trusted(q)}" to ValueFact.TRUSTED,
                 "\${\"<li>\$q</li>\".trimIndent()}" to ValueFact.MARKUP,
                 "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to ValueFact.MARKUP,
                 "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to ValueFact.MARKUP,
@@ -146,14 +136,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 "\${signal(\"count\")}" to ValueFact.CONSTANT,
                 "\${increment(\"n\")}" to ValueFact.CONSTANT,
                 "\${n}" to ValueFact.NUMBER,
-            ) +
-                // An expression's type, and a function's that no declaration writes out, are inferred.
-                if (k1) {
-                    listOf("\${\"<b>\" + q}", "\${q + \"<b>\"}", "\${bold(q)}", "\${deep1()}", "\${if (c) \"<b>a</b>\" else q}")
-                        .associateWith { null }
-                } else {
-                    emptyMap()
-                }
+            )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
         // A string with no tag in it is not HTML, so nothing in it is typed.
@@ -168,16 +151,14 @@ class HoleTypesTest : StreamlordTestCase() {
                     "fun f(own: Trusted, v: Vouched, vs: List<Vouched>) = \"<p>\$own \$v \${vs.first()}</p>\"",
             )
         assertEquals(ValueFact.OTHER, facts["\$own"])
-        assertEquals(ValueFact.MARKUP, facts["\$v"])
-        // K1 does not infer what `first()` returns.
-        assertEquals(if (k1) null else ValueFact.MARKUP, facts["\${vs.first()}"])
+        assertEquals(ValueFact.TRUSTED, facts["\$v"])
+        assertEquals(ValueFact.TRUSTED, facts["\${vs.first()}"])
     }
 
     fun `test a margin is passed over only where trimMargin is called on the literal`() {
         val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
         assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
-        // K1 does not infer the type of a `+`.
-        assertEquals(if (k1) null else ValueFact.STRING, facts["\${\"|<u>\" + q}"])
+        assertEquals(ValueFact.STRING, facts["\${\"|<u>\" + q}"])
     }
 
     fun `test a helper is the author's own only with the author's own arguments`() {
@@ -218,17 +199,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 "\${built.joinToString(\"\")}" to ValueFact.MARKUP,
                 "\${trusted.joinToString(\"\")}" to ValueFact.MARKUP,
                 "\${names.joinToString(\"\")}" to ValueFact.STRING,
-            ) +
-                // Inferred vals. K1 sees neither what w is nor the elements, so a joinToString is only the String it returns.
-                if (k1) {
-                    mapOf(
-                        "\${w}" to null,
-                        "\${built.joinToString(\"\")}" to ValueFact.STRING,
-                        "\${trusted.joinToString(\"\")}" to ValueFact.STRING,
-                    )
-                } else {
-                    emptyMap()
-                }
+            )
         val seen = wanted.keys.associateWith { facts[it] }
         assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
     }
@@ -298,6 +269,20 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(2, fixes.size)
         assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.startsWith("Mark ") })
         assertTrue("no fix is preferred", fixes.none { it is PreferredReplaceTextFix })
+    }
+
+    fun `test a Trusted the file does not declare gets no rewrite into an attribute, where interpolate would not escape it`() {
+        myFixture.addFileToProject(
+            "Users.kt",
+            "package users\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nclass User(val badge: Trusted, val name: String)",
+        )
+        myFixture.configureByText("Card.kt", "import users.User\nfun card(user: User): String = \"<p title=\\\"\${user.badge}\\\">x</p>\"")
+        assertEquals(1, myFixture.doHighlighting().count { it.inspectionToolId == "KotlinInterpolationInspection" })
+        assertEmpty(myFixture.getAllQuickFixes().mapNotNull { (QuickFixWrapper.unwrap(it) as? ReplaceTextFix)?.familyName })
+        // A String beside it is escaped by the rewrite, which is offered there.
+        myFixture.configureByText("Name.kt", "import users.User\nfun name(user: User): String = \"<p title=\\\"\${user.name}\\\">x</p>\"")
+        myFixture.doHighlighting()
+        assertEquals(1, myFixture.getAllQuickFixes().mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }.size)
     }
 
     fun `test an edit in another file that changes a type judges the file again`() {

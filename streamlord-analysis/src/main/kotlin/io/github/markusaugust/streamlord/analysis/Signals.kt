@@ -460,7 +460,18 @@ private fun definedAt(
             }
         }
     }
-    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
+    // In Kotlin a dollar that opens a template writes a Kotlin value, which is assigned nothing.
+    val templates by lazy(LazyThreadSafetyMode.NONE) {
+        if (language != SourceLanguage.KOTLIN) {
+            emptyList()
+        } else {
+            withNested((lex ?: lexKotlin(src)).strings).flatMap { s -> s.interpolations.filter { it.kind == InterpolationKind.SIMPLE } }
+        }
+    }
+    for (m in ASSIGNED_SIGNAL.findAll(src)) {
+        val at = m.range.first
+        if (templates.none { at >= it.start && at < it.end }) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
+    }
     return out.filter { PLACEHOLDER !in it.name }.distinct()
 }
 
@@ -551,6 +562,16 @@ private fun collect(
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
+        // In a `$$"..."` literal a shorter run of dollars is text, as an escaped one is elsewhere: `$count` reads a signal.
+        if (reads) {
+            for (s in withNested(lexKotlin(src).strings)) {
+                if (s.dollars < 2) continue
+                for (m in BARE_SIGNAL.findAll(src.substring(s.contentStart, s.contentEnd))) {
+                    val at = s.contentStart + m.range.first
+                    if (s.interpolations.none { at >= it.start && at < it.end }) out += m.groupValues[1]
+                }
+            }
+        }
         if (reads) {
             for (m in HELPER_READS.findAll(src)) {
                 if (foreign(m.value.substringBefore('('), m.range.first) || onReceiver(src, m.range.first)) continue

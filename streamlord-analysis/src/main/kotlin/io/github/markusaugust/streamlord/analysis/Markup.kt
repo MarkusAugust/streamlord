@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.radixDouble
 import io.github.markusaugust.streamlord.core.client.regex
@@ -383,6 +384,9 @@ private fun cutByTemplate(
     at: Int,
 ): Boolean = tagSource.getOrNull(at) == '{' || (at < tagSource.length && templateConstructEnd(tagSource, at) > at)
 
+/** What a signal's read follows where an expression starts: nothing, an operator or an opening bracket. */
+private const val EXPRESSION_STARTS = "(!&|=+-*/%<>?:,[{;"
+
 /** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
 private val KOTLIN_TEMPLATE = regex("""\$[A-Za-z_{]""")
 
@@ -744,6 +748,37 @@ public class MarkupValidator(
     ): List<Issue> = validateAttributes(tag, prefix, null)
 
     /**
+     * The one Datastar attribute the bare name of [attr] is one edit from, two letters swapped
+     * among them, where something says the author meant Datastar. `data-test`, `data-kind` and
+     * `data-unit` are honest names one edit from Datastar's, so the name alone says nothing. The
+     * value says it where it reads a signal or calls an action of the catalog, as the client
+     * finds them, at a place an expression could start, and holds no template of its own: `$5`,
+     * `costs $five`, `{{ $foo }}` and `@if($x)` are money and another language. No value says it
+     * where that attribute is written without one. An attribute that needs a key is never meant by
+     * a name without one.
+     */
+    private fun meantAttribute(
+        base: String,
+        attr: Attribute,
+    ): AttributeSpec? {
+        val near = catalog.attributes.filter { ElementsGuard.oneEditAway(base, it.name, swaps = true) }.singleOrNull() ?: return null
+        if (near.keyRequired) return null
+        val value = decodeEntities(attr.value.orEmpty()).text
+        if (value.isEmpty()) return near.takeIf { it.valueKind == ValueKind.NONE || it.valueKind == ValueKind.FILTER }
+        val read = clientRewrite(value).rewrites
+        val meant =
+            !hasTemplateSyntax(value) && "<?" !in value && "<%" !in value && read.all { it.signal || it.name in catalog.actionsByName } &&
+                read.any { r ->
+                    !r.signal ||
+                        (
+                            r.name.first().let { it.isLetter() || it == '_' } &&
+                                value.lastNonSpaceBefore(r.start).let { it == null || it in EXPRESSION_STARTS }
+                        )
+                }
+        return near.takeIf { meant }
+    }
+
+    /**
      * Validate the Datastar attributes on one tag, whose text is [tagSource]: with it, a template
      * construct the tokenizer stepped over inside the tag is seen too. [kotlin] says the names are
      * written in Kotlin source, where `$name` and `${...}` are templates.
@@ -787,17 +822,26 @@ public class MarkupValidator(
                         .nearAttribute(parsed.base, qualified = parsed.key != null || parsed.modifiers.isNotEmpty())
                         ?.let { catalog.attributesByName.getValue(it) }
                 val baseEnd = attr.nameStart + prefix.length + parsed.base.length
+
+                // A name the guard refuses is a mistake for certain; one it lets pass may be the author's own.
+                fun nearName(
+                    meant: AttributeSpec,
+                    sure: Boolean,
+                ): Issue {
+                    val written = "$prefix${parsed.base}"
+                    val message = if (sure) "Unknown Datastar attribute $written." else "$written is not a Datastar attribute."
+                    return Issue(
+                        start = attr.nameStart,
+                        end = nameEnd,
+                        message = "$message Did you mean $prefix${meant.name}?",
+                        severity = if (sure) Severity.WARNING else Severity.HINT,
+                        code = "unknown-attribute",
+                        link = Docs.attribute(meant.name),
+                        fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
+                    )
+                }
                 if (near != null) {
-                    issues +=
-                        Issue(
-                            start = attr.nameStart,
-                            end = nameEnd,
-                            message = "Unknown Datastar attribute $prefix${parsed.base}. Did you mean $prefix${near.name}?",
-                            severity = Severity.WARNING,
-                            code = "unknown-attribute",
-                            link = Docs.attribute(near.name),
-                            fixes = listOf(Fix("Change to $prefix${near.name}", attr.nameStart, baseEnd, "$prefix${near.name}")),
-                        )
+                    issues += nearName(near, sure = true)
                     continue
                 }
                 // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
@@ -830,6 +874,12 @@ public class MarkupValidator(
                             link = Docs.attribute(if (init) "init" else keyedSpec.name),
                             fixes = listOf(Fix("Change to $fixed", attr.nameStart, baseEnd, fixed)),
                         )
+                    continue
+                }
+                if (parsed.key == null &&
+                    parsed.modifiers.isEmpty()
+                ) {
+                    meantAttribute(parsed.base, attr)?.let { issues += nearName(it, sure = false) }
                 }
                 continue
             }

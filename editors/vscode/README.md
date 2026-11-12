@@ -74,8 +74,10 @@ template file; the id and completeness rules apply only where the string is hand
 **Quick fixes** on the lightbulb: `$count` becomes `increment("count")`, `signal("count")`,
 `toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`, `__debounce_150ms`
 becomes `__debounce.150ms` and `__prevent.stop` becomes `__prevent__stop`; `@Post` becomes
-`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added.
-Every diagnostic links to the matching page of the Datastar reference.
+`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added;
+an HTML string with Kotlin values in it becomes a call of `interpolate(...)`, which is also a
+refactoring anywhere in a string that can take it. Every diagnostic links to the matching page of
+the Datastar reference, or to Streamlord's page on HTML strings.
 
 **Snippets** for Ktor and Spring routes and the DSL calls in Kotlin, for a function that
 returns HTML as a `$$"""..."""` string (`htmlFunction`), and for every `data-*` attribute in
@@ -269,8 +271,8 @@ Press F5 in the `streamlord.code-workspace` to launch an Extension Development H
 file of `test/fixtures/real` and writes down what the editor answers: diagnostics with their
 links, each quick fix and the file after it, and at every offset of every file the hover, the
 signature help, the definitions, the references and the rename with its edits; completions at the
-places `test/real/marks.json` names, code lenses, document links, colors and the registered
-commands. The answers are the snapshot in `test/real/snapshot`, one record a line.
+places `test/real/marks.json` names, and at those it marks `"actions": true` the lightbulb at the
+caret instead; code lenses, document links, colors and the registered commands. The answers are the snapshot in `test/real/snapshot`, one record a line.
 
 ```
 npm run real              # record the snapshot again

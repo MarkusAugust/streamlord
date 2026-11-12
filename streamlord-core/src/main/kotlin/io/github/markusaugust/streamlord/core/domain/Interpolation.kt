@@ -175,8 +175,9 @@ public class UnsafeInterpolationException(
             val fix =
                 when (position) {
                     Position.DATASTAR -> {
-                        "Put the value in a signal and reference it from the expression, write a signal name in the " +
-                            "markup yourself, or pass a Number or Boolean, which can carry neither an expression nor a path."
+                        // A string written into data-signals is refused by this same rule, so no signal is advised.
+                        "Put the value in an attribute of its own, such as data-label, and read it in the expression with " +
+                            "el.dataset.label, or pass a Number or Boolean, which can carry neither an expression nor a path."
                     }
 
                     Position.URL -> {
@@ -245,30 +246,49 @@ public class UnsafeInterpolationException(
  * `${'$'}{...}`. At render time the source is gone, so the placeholders have to be left standing. That is
  * the whole of what this function asks of you.
  *
+ * The values are always the values: a `List` or an array handed over as one of them is one value,
+ * written in brackets as Kotlin writes a list, `[a, b]`, escaped like any text. An array is
+ * written that way too, where a Kotlin template writes its class and hash. To pass the elements of
+ * a collection as the values, spread them: `interpolate(format, *values.toTypedArray())`. From
+ * Java, `values` is varargs, so a `String[]` passed alone is spread: it is the values.
+ *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
  * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
  */
 public fun interpolate(
     @Language("HTML") format: String,
     vararg values: Any?,
-): Html = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
+): Html = interpolated(format, values.asList(), ElementsGuard.defaultPrefixes)
 
 /**
- * [interpolate] with the values as a list, and the `data-*` prefixes to recognise.
+ * [interpolate] with the `data-*` prefixes to recognise, which come first.
  *
  * Pass [prefixes] when your Datastar bundle is aliased to something other than `data-` or
  * `data-star-`; the attributes of an alias this function does not know are attributes it cannot
  * refuse a value in.
  */
 public fun interpolate(
+    prefixes: List<String>,
     @Language("HTML") format: String,
+    vararg values: Any?,
+): Html = interpolated(format, values.asList(), prefixes)
+
+private fun interpolated(
+    format: String,
     values: List<Any?>,
-    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    prefixes: List<String>,
 ): Html {
     val holes = holes(format)
     require(holes.size == values.size) {
+        // Until 0.22.0 a List handed over alone was the values; it is one value now, as any other.
+        val spread =
+            if (values.size == 1 && values[0].let { it is Iterable<*> || it is Array<*> }) {
+                ". That value is a collection, which is one value: to pass its elements, spread them, interpolate(format, *values.toTypedArray())"
+            } else {
+                ""
+            }
         "The markup has ${holes.size} %s ${if (holes.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
-            "${if (values.size == 1) "value was" else "values were"} given"
+            "${if (values.size == 1) "value was" else "values were"} given$spread"
     }
     if (holes.isEmpty()) return Html(format.replace("%%", "%"))
 
@@ -415,8 +435,24 @@ internal fun safeUrl(url: String): Boolean {
     return scheme.asciiLowercase() in SAFE_SCHEMES
 }
 
+/** A value as interpolate writes it: an array as a list is written, `[a, b]`, where a template writes its class and hash. */
+private fun textOf(value: Any?): String =
+    when (value) {
+        null -> ""
+        is Array<*> -> value.contentDeepToString()
+        is IntArray -> value.contentToString()
+        is LongArray -> value.contentToString()
+        is ShortArray -> value.contentToString()
+        is ByteArray -> value.contentToString()
+        is DoubleArray -> value.contentToString()
+        is FloatArray -> value.contentToString()
+        is BooleanArray -> value.contentToString()
+        is CharArray -> value.contentToString()
+        else -> value.toString()
+    }
+
 private fun StringBuilder.escaped(value: Any?) {
-    val text = value?.toString() ?: ""
+    val text = textOf(value)
     for (ch in text) {
         when (ch) {
             '&' -> append("&amp;")

@@ -64,8 +64,13 @@ internal fun verdict(
 public fun ValueFact?.writesItself(): Boolean =
     this == ValueFact.CONSTANT || this == ValueFact.NUMBER || this == ValueFact.BOOLEAN || this == ValueFact.UNSIGNED
 
-/** A fact as the judgement reads it: a `String?` is a String, whose null only the fixes ask about. */
-internal fun ValueFact?.plain(): ValueFact? = if (this == ValueFact.NULLABLE_STRING) ValueFact.STRING else this
+/** A fact as the judgement reads it: a `String?` is a String and a `Trusted` markup, whose difference only the fixes ask about. */
+internal fun ValueFact?.plain(): ValueFact? =
+    when (this) {
+        ValueFact.NULLABLE_STRING -> ValueFact.STRING
+        ValueFact.TRUSTED -> ValueFact.MARKUP
+        else -> this
+    }
 
 /** Markup is the author's own in element text; in an attribute or code it is characters that can break out. */
 private fun ValueFact?.ownAt(position: Position): Boolean =
@@ -100,6 +105,7 @@ internal fun ValueFact?.argKind(): ArgKind? =
         ValueFact.UNSIGNED -> ArgKind.UNSIGNED
         ValueFact.BOOLEAN -> ArgKind.BOOLEAN
         ValueFact.MARKUP -> ArgKind.MARKUP
+        ValueFact.TRUSTED -> ArgKind.TRUSTED
         else -> null
     }
 
@@ -119,7 +125,7 @@ internal fun ValueFact?.isNullable(): Boolean = this == ValueFact.NULLABLE
 internal fun ValueFact?.isOther(): Boolean = this == ValueFact.OTHER
 
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */
-public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP
+public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP || this == ValueFact.TRUSTED
 
 /** Each kind from the one safe in the fewest places to the one safe everywhere. */
 private val WEAKEST_FIRST =
@@ -128,6 +134,7 @@ private val WEAKEST_FIRST =
         null,
         ValueFact.OTHER,
         ValueFact.MARKUP,
+        ValueFact.TRUSTED,
         ValueFact.NULLABLE,
         ValueFact.UNSIGNED,
         ValueFact.BOOLEAN,

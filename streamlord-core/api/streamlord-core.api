@@ -291,6 +291,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
 	public final fun getEvaluatedAttributes ()Ljava/util/Set;
 	public final fun getExpressionAttributes ()Ljava/util/Set;
 	public final fun nearAttribute (Ljava/lang/String;Z)Ljava/lang/String;
+	public final fun oneEditAway (Ljava/lang/String;Ljava/lang/String;Z)Z
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ElementsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {
@@ -380,9 +381,8 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExp
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
 	public static final fun holeLandings (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;)Ljava/util/List;
 	public static synthetic fun holeLandings$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Ljava/util/List;
-	public static final fun interpolate (Ljava/lang/String;Ljava/util/List;Ljava/util/List;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
-	public static synthetic fun interpolate$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun interpolate (Ljava/util/List;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;

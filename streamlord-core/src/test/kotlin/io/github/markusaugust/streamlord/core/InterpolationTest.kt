@@ -147,6 +147,52 @@ class InterpolationTest {
     }
 
     @Test
+    fun `the message for a Datastar expression advises only what interpolate takes`() {
+        val message = assertFailsWith<UnsafeInterpolationException> { render("""<li data-text="%s"></li>""", "x") }.message!!
+
+        assertTrue("data-" in message && "el.dataset" in message, message)
+        // A string written into data-signals is refused by the same rule, so that way is none.
+        assertFailsWith<UnsafeInterpolationException> { render("""<li data-signals="{label: '%s'}"></li>""", "x") }
+        // Each way the message may name, by the words that name it, built as it says.
+        val ways =
+            mapOf<String, () -> String>(
+                "el.dataset" to { render("""<li data-label="%s" data-text="el.dataset.label"></li>""", "x") },
+                "in a signal" to { render("""<li data-signals="{label: '%s'}" data-text="${'$'}label"></li>""", "x") },
+                "signal name" to { render("""<li data-label="%s" data-text="${'$'}label"></li>""", "x") },
+                "Number" to { render("""<li data-text="%s"></li>""", 3) },
+                "Boolean" to { render("""<li data-text="%s"></li>""", true) },
+            )
+        for ((words, way) in ways) if (words in message) way()
+    }
+
+    @Test
+    fun `a value that is a list or an array is one value, written in brackets with each element escaped`() {
+        val two = listOf("a", "<b>")
+        assertEquals("<p>[a, &lt;b&gt;]</p>", interpolate("<p>%s</p>", two).text)
+        assertEquals("<p>[x]</p>", interpolate("<p>%s</p>", listOf("x")).text)
+        assertEquals("<p>[]</p>", interpolate("<p>%s</p>", emptyList<String>()).text)
+        assertEquals("<p>[1, 2]</p>", interpolate("<p>%s</p>", setOf(1, 2)).text)
+        val array = arrayOf("a", "b")
+        // A template writes an array as its class and hash; interpolate writes it as it writes a list.
+        assertEquals("<p>[a, b]</p>", interpolate("<p>%s</p>", array as Any?).text)
+        assertEquals("<p>[&lt;b&gt;]</p>", interpolate("<p>%s</p>", arrayOf("<b>") as Any?).text)
+        assertEquals("<p title=\"[1, 2]\">[true]</p>", interpolate("<p title=\"%s\">%s</p>", intArrayOf(1, 2), booleanArrayOf(true)).text)
+        assertEquals("<p>[[a], [1]] [a]</p>", interpolate("<p>%s %s</p>", arrayOf<Any>(arrayOf("a"), intArrayOf(1)), charArrayOf('a')).text)
+        // Spread, its elements are the values.
+        assertEquals("<p>a b</p>", interpolate("<p>%s %s</p>", *array).text)
+        assertEquals("<p>a &lt;b&gt;</p>", interpolate("<p>%s %s</p>", *two.toTypedArray()).text)
+    }
+
+    @Test
+    fun `a list handed over for several placeholders is said to be one value, to be spread`() {
+        val failure = assertFailsWith<IllegalArgumentException> { interpolate("<p>%s %s</p>", listOf("a", "b")) }
+        assertTrue("2 %s placeholders and 1 value" in failure.message!!, failure.message!!)
+        assertTrue("*values.toTypedArray()" in failure.message!!, failure.message!!)
+        val plain = assertFailsWith<IllegalArgumentException> { interpolate("<p>%s %s</p>", "a") }
+        assertTrue("toTypedArray" !in plain.message!!, plain.message!!)
+    }
+
+    @Test
     fun `the index names which value was refused`() {
         val failure =
             assertFailsWith<UnsafeInterpolationException> {
@@ -439,4 +485,4 @@ private fun render(
     format: String,
     values: List<Any?>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
-): String = interpolate(format, values, prefixes).text
+): String = interpolate(prefixes, format, *values.toTypedArray()).text

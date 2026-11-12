@@ -59,6 +59,9 @@ public class Fix private constructor(
 
     override fun toString(): String = "Fix(title=$title, start=$start, end=$end, text=$text, edits=$edits, preferred=$preferred)"
 
+    /** Whether this fix and [other] write the same text, made once for both: the rewrite of a literal, of which each value offers a [copy]. */
+    internal fun sharesTextWith(other: Fix): Boolean = made === other.made
+
     internal companion object {
         /** A fix whose text is made the first time it is read. */
         fun later(
@@ -143,8 +146,10 @@ public fun sourcePosition(
     return SourcePosition(line, at - lineStart + 1)
 }
 
-/** Where the diagnostics point in the Datastar reference. */
+/** Where the diagnostics point: in the Datastar reference, and for a Kotlin value in an HTML string in Streamlord's own documentation. */
 public object Docs {
+    /** Streamlord's page on HTML strings and `interpolate`. */
+    public const val STRINGS: String = "https://streamlord-docs.netlify.app/strings/"
     public const val ATTRIBUTES: String = "https://data-star.dev/reference/attributes"
     public const val ACTIONS: String = "https://data-star.dev/reference/actions"
     public const val SSE: String = "https://data-star.dev/reference/sse_events"

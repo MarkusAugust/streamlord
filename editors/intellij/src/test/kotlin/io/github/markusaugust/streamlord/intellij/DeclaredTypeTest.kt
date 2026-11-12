@@ -1,19 +1,14 @@
 package io.github.markusaugust.streamlord.intellij
 
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
-import org.jetbrains.kotlin.idea.base.plugin.KotlinPluginModeProvider
 
 /**
  * Whether a value is Streamlord's markup by the type it is declared with, as the inspection judges
- * it, in the mode the test JVM runs the Kotlin plugin in: K2 under `test`, K1 under `test -PkotlinK1`.
- * A value that is not markup gets the hint to write it through `interpolate`.
+ * it. A value that is not markup gets the hint to write it through `interpolate`.
  */
 class DeclaredTypeTest : StreamlordTestCase() {
     override fun setUp() {
         super.setUp()
-        // So a Kotlin plugin that ignored the switch fails here rather than passing as K2.
-        @Suppress("DEPRECATION")
-        if (System.getProperty("idea.kotlin.plugin.use.k1").toBoolean()) assertTrue(KotlinPluginModeProvider.isK1Mode())
         myFixture.addFileToProject(
             "com/acme/Html.kt",
             "package com.acme\n\nclass Html\n\nclass Markup\n\nclass Trusted(val html: String)\n",

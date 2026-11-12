@@ -113,7 +113,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerDefinitionProvider(selector, navigation),
     vscode.languages.registerReferenceProvider(selector, navigation),
     vscode.languages.registerRenameProvider(selector, navigation),
-    vscode.languages.registerCodeActionsProvider(selector, new StreamlordCodeActionProvider(issues), { providedCodeActionKinds: StreamlordCodeActionProvider.kinds }),
+    vscode.languages.registerCodeActionsProvider(selector, new StreamlordCodeActionProvider(issues, () => ({ prefix: prefix(), constants: signals.allConstants() })), { providedCodeActionKinds: StreamlordCodeActionProvider.kinds }),
     vscode.commands.registerCommand("streamlord.inspector.open", () => inspector.open()),
     vscode.commands.registerCommand("streamlord.colors.apply", () => applyRecommendedColors()),
     vscode.commands.registerCommand("streamlord.colors.remove", () => removeRecommendedColors()),

@@ -26,6 +26,8 @@ public data class Interpolation(
     val text: String,
     /** Offset in the decoded text where the placeholder starts. */
     val decodedStart: Int,
+    /** For an [InterpolationKind.OPERAND] that could not be read as a whole: it then covers only what is certainly the value's. */
+    val unread: Boolean = false,
 )
 
 public data class KotlinString(
@@ -51,6 +53,12 @@ public data class KotlinString(
     val unterminated: Boolean,
     /** The literals inside this one's templates, `"<ul>${xs.joinToString { "<li>$it</li>" }}</ul>"`, outermost first. */
     val nested: List<KotlinString> = emptyList(),
+    /** The literals a `+` chain joins, in source order, each as it is written; none for a literal that stands alone. */
+    val literals: List<KotlinString> = emptyList(),
+    /** Whether a call or an index follows one of the chain's [literals], `"</p>".uppercase()`: it is that literal's alone. */
+    val called: Boolean = false,
+    /** Whether something a `+` joins to the chain could not be read as a value: the chain is then part of more than it shows. */
+    val unread: Boolean = false,
 ) {
     /** Map a decoded range back to source offsets. */
     public fun toSource(
@@ -141,6 +149,27 @@ public fun readKotlinStringAt(
     val interpolations = ArrayList<Interpolation>()
     val nested = ArrayList<KotlinString>()
 
+    // The literal read up to [contentEnd], where its closing quotes start, or where an unterminated one stops.
+    fun read(
+        contentEnd: Int,
+        end: Int,
+    ): KotlinString {
+        d.map.add(contentEnd)
+        return KotlinString(
+            start = at,
+            end = end,
+            raw = raw,
+            dollars = dollars,
+            contentStart = contentStart,
+            contentEnd = contentEnd,
+            text = d.out.toString(),
+            map = d.map.toIntArray(),
+            interpolations = interpolations,
+            unterminated = end == contentEnd,
+            nested = nested,
+        )
+    }
+
     while (i < src.length) {
         val c = src[i]
         if (raw) {
@@ -150,39 +179,10 @@ public fun readKotlinStringAt(
                 while (j < src.length && src[j] == '"') j++
                 val extra = j - i - 3
                 for (k in 0 until extra) d.push('"', i + k)
-                // The end of the text is where the closing quotes start, as in an ordinary literal.
-                d.map.add(j - 3)
-                return KotlinString(
-                    start = at,
-                    end = j,
-                    raw = true,
-                    dollars = dollars,
-                    contentStart = contentStart,
-                    contentEnd = j - 3,
-                    text = d.out.toString(),
-                    map = d.map.toIntArray(),
-                    interpolations = interpolations,
-                    unterminated = false,
-                    nested = nested,
-                )
+                return read(j - 3, j)
             }
         } else {
-            if (c == '"') {
-                d.map.add(i)
-                return KotlinString(
-                    start = at,
-                    end = i + 1,
-                    raw = false,
-                    dollars = dollars,
-                    contentStart = contentStart,
-                    contentEnd = i,
-                    text = d.out.toString(),
-                    map = d.map.toIntArray(),
-                    interpolations = interpolations,
-                    unterminated = false,
-                    nested = nested,
-                )
-            }
+            if (c == '"') return read(i, i + 1)
             if (c == '\n') break
             if (c == '\\') {
                 val n = src.getOrNull(i + 1)
@@ -254,9 +254,18 @@ public fun readKotlinStringAt(
                 i = j
                 continue
             }
-            if (n != null && n.isKotlinIdentStart()) {
-                var j = i + dollars
-                while (j < src.length && src[j].isKotlinIdentPart()) j++
+            // A name in backticks is a template too: "$`my name`".
+            val ticked =
+                if (n ==
+                    '`'
+                ) {
+                    src.indexOf('`', i + dollars + 1).takeIf { it > i + dollars + 1 && '\n' !in src.substring(i, it) }
+                } else {
+                    null
+                }
+            if (ticked != null || (n != null && n.isKotlinIdentStart())) {
+                var j = if (ticked != null) ticked + 1 else i + dollars
+                while (ticked == null && j < src.length && src[j].isKotlinIdentPart()) j++
                 interpolations +=
                     Interpolation(
                         start = i,
@@ -273,20 +282,7 @@ public fun readKotlinStringAt(
         d.push(c, i)
         i++
     }
-    d.map.add(i)
-    return KotlinString(
-        start = at,
-        end = i,
-        raw = raw,
-        dollars = dollars,
-        contentStart = contentStart,
-        contentEnd = i,
-        text = d.out.toString(),
-        map = d.map.toIntArray(),
-        interpolations = interpolations,
-        unterminated = true,
-        nested = nested,
-    )
+    return read(i, i)
 }
 
 private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
