@@ -55,6 +55,19 @@ class RewriteActionTest : StreamlordTestCase() {
         }
     }
 
+    fun `test the rewrite of the widget is a context action in its markup, away from every warning`() {
+        val source = IMPORTS + SIGNATURE + widget("\${k.rootId}", CSS, "\${k.contentId}", "\$bodyHtml", "\${k.eventsId}") + "\n"
+        val at = source.indexOf("data-theme") + 3
+        myFixture.configureByText("Widget.kt", source.substring(0, at) + "<caret>" + source.substring(at))
+        val offered = myFixture.availableIntentions.filter { it.text.startsWith("Build it with interpolate(...)") }
+        assertEquals(listOf("Build it with interpolate(...), with $CSS as Trusted(...)"), offered.map { it.text })
+        myFixture.launchAction(offered.single())
+        myFixture.checkResult(
+            IMPORTS + SIGNATURE + "interpolate(" + widget("%s", "%s", "%s", "%s", "%s") +
+                ", k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n",
+        )
+    }
+
     fun `test the rewrite is a context action away from the warning`() {
         myFixture.configureByText("Card.kt", "fun card(name: String): String = \"<p cl<caret>ass=\\\"x\\\">\$name</p>\"")
         val offered = myFixture.availableIntentions
