@@ -81,6 +81,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!signals.ready || !config().get<boolean>("diagnostics.unknownSignals", true)) return null;
     // The index reads this version of the document once; a lint right after an edit finds it read.
     signals.update(document);
+    signals.readDrift(document);
     return signals.allDefinitions();
   };
 

@@ -227,7 +227,6 @@ interface FileSignals {
     val classes: Array<String>
     val constants: Array<String>
     val others: Array<String>
-    val drift: DriftFacts
 }
 
 /** A `@Serializable` class of a file and the names of its properties, which are signals once something reads signals into it. */
@@ -240,7 +239,8 @@ interface SignalClass {
 /**
  * What one file tells another about the signals the server reads: the signals it declares, the
  * classes it reads signals into ([readInto]) and declares a page from ([encoded]), and its own
- * `@Serializable` classes.
+ * `@Serializable` classes. [reads] are the names it may read, its lookups and every property of
+ * its classes: a name declared elsewhere or no more changes its verdict only when it is one.
  */
 @JsExport
 interface DriftFacts {
@@ -248,10 +248,25 @@ interface DriftFacts {
     val readInto: Array<String>
     val encoded: Array<String>
     val classes: Array<SignalClass>
+    val reads: Array<String>
 }
+
+/** What [src] tells the other files about the signals the server reads. */
+@JsExport
+fun driftFactsOf(
+    src: String,
+    kotlin: Boolean,
+): DriftFacts = plain(collectSignalFacts(src, language(kotlin)))
 
 private fun plain(facts: SignalFacts): DriftFacts =
     plain(
+        "reads" to
+            (
+                facts.lookups.map { it.name } +
+                    facts.classes.values
+                        .flatten()
+                        .map { it.name }
+            ).toSet().plain(),
         "declared" to facts.declared.plain(),
         "readInto" to facts.signalTypes.plain(),
         "encoded" to facts.encodedTypes.plain(),
@@ -281,7 +296,6 @@ fun signalsOf(
         "classes" to selectors.classes.plain(),
         "constants" to (if (kotlin) constantNames(src) else emptySet()).plain(),
         "others" to (if (kotlin) otherDeclaredNames(src) else emptySet()).plain(),
-        "drift" to plain(collectSignalFacts(src, language(kotlin))),
     )
 }
 

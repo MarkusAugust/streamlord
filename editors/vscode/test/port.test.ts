@@ -6,6 +6,7 @@ import {
   baseUrlSuggestion,
   complete,
   diagnose,
+  driftFactsOf,
   environment,
   findRoutes,
   parseHeaderLines,
@@ -138,13 +139,13 @@ describe("what crosses the port", () => {
     const codes = (others: DriftFacts[] | null) => diagnose(handler, true, "data-", [], [], others).map((i) => i.code);
     assert.deepEqual(codes(null), []);
     assert.deepEqual(codes([]), ["signal-never-declared"]);
-    assert.deepEqual(codes([signalsOf(`<input data-bind:query>`, false).drift]), []);
+    assert.deepEqual(codes([driftFactsOf(`<input data-bind:query>`, false)]), []);
   });
 
   it("reports a property of a class another file reads signals into, which no page declares", () => {
     const form = `import kotlinx.serialization.Serializable\n\n@Serializable\ndata class Form(val query: String, val page: Int)`;
-    const reads = signalsOf(`fun Route.search() {\n    post("/s") { val form = call.readSignals<Form>() }\n}`, true).drift;
-    const page = signalsOf(`<input data-bind:query>`, false).drift;
+    const reads = driftFactsOf(`fun Route.search() {\n    post("/s") { val form = call.readSignals<Form>() }\n}`, true);
+    const page = driftFactsOf(`<input data-bind:query>`, false);
     const [issue, ...rest] = diagnose(form, true, "data-", [], [], [reads, page]);
     assert.deepEqual(rest, []);
     assert.deepEqual(issue && [issue.code, form.slice(issue.start, issue.end)], ["signal-never-declared", "page"]);

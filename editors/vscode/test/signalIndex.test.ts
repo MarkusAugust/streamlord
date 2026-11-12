@@ -57,6 +57,40 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()], ["total"]);
   });
 
+  it("re-lints the other files for what the server reads only when their verdict can change", () => {
+    const index = new SignalIndex(new Set());
+    let fired = 0;
+    index.onDidChangeDefinitions(() => fired++);
+    // What the extension does for a document: read it on each change, and once more when it is linted.
+    const edit = (d: vscode.TextDocument) => {
+      index.update(d);
+      index.readDrift(d);
+    };
+    edit(doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("query") }\n}`, 1));
+    edit(doc("/t/a.html", "html", `<p data-text="$co"></p>`, 1));
+    fired = 0;
+    // A read typed in a page names nothing the server reads.
+    edit(doc("/t/a.html", "html", `<p data-text="$cou"></p>`, 2));
+    edit(doc("/t/a.html", "html", `<p data-text="$quer"></p>`, 3));
+    assert.equal(fired, 0);
+    // Now it names what the handler reads, whose warning goes.
+    edit(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 4));
+    assert.equal(fired, 1);
+    // A handler that reads another name changes only its own verdict.
+    edit(doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("page") }\n}`, 2));
+    assert.equal(fired, 1);
+  });
+
+  it("reads what a document tells the others about server reads when it is linted, not on each change", () => {
+    const index = new SignalIndex(new Set());
+    const handler = doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("query") }\n}`, 1);
+    index.update(handler);
+    index.update(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 1));
+    assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [[]]);
+    index.readDrift(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 1));
+    assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [["query"]]);
+  });
+
   it("rebuilds aside, reads templates from disk and keeps an open document's edits", async () => {
     files.set("/w/page.peb", new TextEncoder().encode(`<div data-signals:fromDisk="1"></div>`));
     files.set("/w/open.html", new TextEncoder().encode(`<div data-signals:stale="1"></div>`));
