@@ -185,8 +185,13 @@ private class Asked(
             val before = e.before
             if (signalPrefixAt(before, before.length) != null) return true
             if (!e.allowActions) return false
-            val option = actionCallAt(before, before.length)?.option
-            return option != null || actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
+            val call = actionCallAt(before, before.length)
+            return call?.option != null || call
+                ?.value
+                ?.field
+                ?.values
+                ?.isNotEmpty() == true ||
+                actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
         }
         if (!names) return false
         val at = Names(attributeNames = true, domEvents = false)
@@ -269,22 +274,32 @@ private class Asked(
             return ordered(items, alone = true)
         }
         if (!expression.allowActions) return NOTHING
-        actionCallAt(before, before.length)?.option?.let { option ->
+        val call = actionCallAt(before, before.length)
+        call?.option?.let { option ->
             // The colon is written only where none follows yet.
             val colon = if (text.substring(offset).trimStart().startsWith(":")) "" else ": "
             val items =
-                catalog.fetchOptions.filter { it.name !in option.written }.map {
+                option.fields.filter { it.name !in option.written }.map {
                     Completion(
                         it.name,
                         CompletionKind.OPTION,
                         offset - option.typed.length,
                         insert = it.name + colon,
                         detail = it.type,
-                        tail = " = ${it.default}",
-                        doc = fetchOptionDoc(it),
+                        tail = it.default.takeIf { d -> d.isNotEmpty() }?.let { d -> " = $d" },
+                        doc = if (it.doc.isEmpty()) null else fetchOptionDoc(it),
                     )
                 }
             return ordered(items, alone = true)
+        }
+        call?.value?.let { value ->
+            // In a string already opened the value is written bare, and quoted otherwise, as an action's path is.
+            val items =
+                value.field.values.mapIndexed { n, v ->
+                    val label = if (value.quoted) v else "'$v'"
+                    Completion(label, CompletionKind.VALUE, offset - value.typed.length, key = n.toString().padStart(3, '0'))
+                }
+            if (items.isNotEmpty() || value.quoted) return ordered(items, alone = items.isNotEmpty())
         }
         actionPrefixAt(before, before.length)?.let { typed ->
             val items =

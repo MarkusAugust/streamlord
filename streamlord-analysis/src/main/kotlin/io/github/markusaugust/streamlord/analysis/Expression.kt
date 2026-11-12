@@ -855,6 +855,8 @@ public class ExpressionValidator(
             if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
 
+        if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
+
         val starts by lazy { stringStarts(regions) }
         val templates by lazy { TemplateReasons(js, rewritten.runs) }
         for (r in rewritten.rewrites) {

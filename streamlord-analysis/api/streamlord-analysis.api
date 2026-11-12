@@ -1,16 +1,19 @@
 public final class io/github/markusaugust/streamlord/analysis/ActionSpec {
-	public fun <init> (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Z
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
 	public final fun component5 ()Ljava/lang/String;
 	public final fun component6 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ActionSpec;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ActionSpec;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ActionSpec;
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/ActionSpec;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ActionSpec;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ActionSpec;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDoc ()Ljava/lang/String;
 	public final fun getKind ()Ljava/lang/String;
+	public final fun getKinds ()Ljava/util/List;
 	public final fun getKotlin ()Ljava/lang/String;
 	public final fun getName ()Ljava/lang/String;
 	public final fun getParameters ()Ljava/util/List;
@@ -97,6 +100,21 @@ public final class io/github/markusaugust/streamlord/analysis/Arg {
 	public final fun getText ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ArgumentKind : java/lang/Enum {
+	public static final field ANY Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field BOOLEAN Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field FILTER Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field FUNCTION Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field NUMBER Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field OBJECT Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field OPTIONS Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field PATTERN Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static final field STRING Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/Attribute {
@@ -247,6 +265,7 @@ public final class io/github/markusaugust/streamlord/analysis/Catalog {
 	public final fun getScriptCallSites ()Ljava/util/Map;
 	public final fun getSelectorCallSites ()Ljava/util/Map;
 	public final fun getSignalCalls ()Ljava/util/Map;
+	public final fun getSignalFilter ()Ljava/util/List;
 	public final fun getSignalKeyAttributes ()Ljava/util/List;
 	public final fun getSignalNameHelpers ()Ljava/util/Map;
 	public final fun parseAttributeName (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ParsedAttribute;
@@ -394,19 +413,25 @@ public final class io/github/markusaugust/streamlord/analysis/ExpressionValidato
 }
 
 public final class io/github/markusaugust/streamlord/analysis/FetchOption {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/ArgumentKind;Ljava/util/List;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/ArgumentKind;Ljava/util/List;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Ljava/lang/String;
 	public final fun component3 ()Ljava/lang/String;
 	public final fun component4 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/FetchOption;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/FetchOption;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/FetchOption;
+	public final fun component5 ()Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
+	public final fun component6 ()Ljava/util/List;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/ArgumentKind;Ljava/util/List;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/FetchOption;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/FetchOption;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/ArgumentKind;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/FetchOption;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDefault ()Ljava/lang/String;
 	public final fun getDoc ()Ljava/lang/String;
+	public final fun getKind ()Lio/github/markusaugust/streamlord/analysis/ArgumentKind;
 	public final fun getName ()Ljava/lang/String;
+	public final fun getOtherwise ()Ljava/lang/String;
 	public final fun getType ()Ljava/lang/String;
+	public final fun getValues ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

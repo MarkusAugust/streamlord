@@ -61,6 +61,12 @@ public data class AttributeSpec(
     val keyIsAttributeName: Boolean = false,
 )
 
+/**
+ * What a value Datastar reads is meant to be: an argument of an action, an option of a backend
+ * action, a key of a signal filter. [PATTERN] is a regular expression or a string.
+ */
+public enum class ArgumentKind { STRING, NUMBER, BOOLEAN, OBJECT, OPTIONS, FILTER, FUNCTION, PATTERN, ANY }
+
 public data class ActionSpec(
     val name: String,
     val pro: Boolean,
@@ -68,6 +74,8 @@ public data class ActionSpec(
     val signature: String,
     val kotlin: String,
     val doc: String,
+    /** The kind of each of [parameters], in order. */
+    val kinds: List<ArgumentKind> = emptyList(),
 ) {
     /** The parameters as the signature names them: `@get(uri, options?)` takes `uri` and `options?`. */
     val parameters: List<String>
@@ -92,12 +100,18 @@ public data class CallSiteSpec(
     val last: Boolean get() = arg == null
 }
 
+/** An option of a backend action, or a key of a signal filter. */
 public data class FetchOption(
     val name: String,
     val type: String,
     val default: String,
     /** What the option does, as Datastar 1.0.5's `fetch.ts` reads it. */
     val doc: String = "",
+    val kind: ArgumentKind = ArgumentKind.ANY,
+    /** The strings the option takes, where it takes only some. */
+    val values: List<String> = emptyList(),
+    /** What Datastar does with a string outside [values]. */
+    val otherwise: String = "",
 )
 
 /** An event Datastar dispatches on the document, with what its listener is handed: not an SSE event, which core.domain.DatastarEvent is. */
@@ -138,6 +152,9 @@ public class Catalog private constructor(
     public val attributes: List<AttributeSpec>
     public val actions: List<ActionSpec>
     public val fetchOptions: List<FetchOption>
+
+    /** The keys of a signal filter: of `filterSignals`, and of the filter `@setAll` and `@toggleAll` take. */
+    public val signalFilter: List<FetchOption>
     public val fetchEvents: List<String>
 
     /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
@@ -197,12 +214,11 @@ public class Catalog private constructor(
                     signature = a.string("signature") ?: "",
                     kotlin = a.string("kotlin") ?: "",
                     doc = a.string("doc") ?: "",
+                    kinds = a.array("kinds")?.strings()?.map { ArgumentKind.valueOf(it.uppercase()) } ?: emptyList(),
                 )
             }
-        fetchOptions =
-            (raw.array("fetchOptions")?.objects() ?: emptyList()).map {
-                FetchOption(it.string("name") ?: "", it.string("type") ?: "", it.string("default") ?: "", it.string("doc") ?: "")
-            }
+        fetchOptions = (raw.array("fetchOptions")?.objects() ?: emptyList()).map(::toOption)
+        signalFilter = (raw.array("signalFilter")?.objects() ?: emptyList()).map(::toOption)
         fetchEvents = raw.array("fetchEvents")?.strings() ?: emptyList()
         compiledParameters = raw.array("compiledParameters")!!.strings()
         patchModes = raw.obj("sse")?.array("patchModes")?.strings() ?: emptyList()
@@ -272,6 +288,17 @@ public class Catalog private constructor(
         }
         return ParsedAttribute(base, key, modifiers, attributesByName[base])
     }
+
+    private fun toOption(o: JsonObject): FetchOption =
+        FetchOption(
+            name = o.string("name") ?: "",
+            type = o.string("type") ?: "",
+            default = o.string("default") ?: "",
+            doc = o.string("doc") ?: "",
+            kind = ArgumentKind.valueOf((o.string("kind") ?: "any").uppercase()),
+            values = o.array("values")?.strings() ?: emptyList(),
+            otherwise = o.string("otherwise") ?: "",
+        )
 
     private fun toModifier(m: JsonObject): Modifier =
         Modifier(

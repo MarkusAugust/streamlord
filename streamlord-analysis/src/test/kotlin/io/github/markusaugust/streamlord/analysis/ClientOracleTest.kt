@@ -290,11 +290,18 @@ class ClientOracleTest {
             val name = action.string("name")!!
             val parameters = declared[name]?.array("parameters")?.objects() ?: fail("the client has no action $name")
             val kinds = action.array("kinds")?.strings() ?: fail("@$name has no kinds in the catalog")
-            val signature = Catalog.default.actionsByName.getValue(name).parameters
+            val signature =
+                Catalog.default.actionsByName
+                    .getValue(name)
+                    .parameters
             val wanted = parameters.map { kindOf(it.string("type")!!).first }
             if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the client declares $wanted"
             val optional = parameters.map { it.boolean("optional") == true || kindOf(it.string("type")!!).first == "filter" }
-            if (signature.map { it.endsWith("?") } != optional) wrong += "@$name: the signature $signature, and the client's defaults $optional"
+            if (signature.map { it.endsWith("?") } !=
+                optional
+            ) {
+                wrong += "@$name: the signature $signature, and the client's defaults $optional"
+            }
         }
         assertEquals(emptyList(), wrong)
     }

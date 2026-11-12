@@ -115,6 +115,20 @@ All notable changes to Streamlord are recorded here. The format follows
   warning, which `signalDrift` gives in your own tests. It goes with the unknown-signal check, the
   setting `streamlord.diagnostics.unknownSignals` in VS Code and the inspection Signal no file
   defines in IntelliJ.
+- In both editors, the options of a backend action are judged as the client reads them: an option
+  it has none of, such as `contentTyp`, is a warning with the near name as a fix where there is
+  one, and so is a value of the wrong kind or one it does not know, such as `retry: 'sometimes'`,
+  `contentType: 'xml'` or `openWhenHidden: 'yes'`. Only a value written as a literal is judged; one
+  an expression computes is left alone.
+- In both editors, every action is given the arguments it takes: too few or too many is a warning,
+  and so is a literal of the wrong kind, such as a string where `@get` takes its options or
+  `@setAll` its filter. A signal filter, in `filterSignals`, `@setAll` or `@toggleAll`, is held to
+  `include` and `exclude`.
+- Completion offers the values an option takes after `retry:`, `contentType:` and
+  `requestCancellation:`, and `include` and `exclude` in a signal filter.
+- The catalog gives each action the kinds of its arguments and each option its kind and the values
+  it takes, and `conformance/client/actions.json` records what the client declares, which the
+  tests hold the catalog to.
 
 ### Fixed
 

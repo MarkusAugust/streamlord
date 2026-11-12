@@ -149,34 +149,68 @@ internal fun decodedIndex(
     return minOf(i, s.text.length)
 }
 
-/** The action call a caret stands in: the action's name, which argument, and the key of the options object when the caret is on one. */
+/** The action call a caret stands in: the action's name, which argument, and the key or the value of an object it reads when the caret is on one. */
 internal data class ActionCall(
     val action: String,
     val argument: Int,
     val option: OptionKeyAt?,
+    val value: OptionValueAt? = null,
 )
 
-/** A key of a backend action's options object at the caret: what is typed of it, and the keys the object already holds. */
+/** A key of an object an action reads at the caret: what is typed of it, the keys the object already holds, and the keys it takes. */
 internal data class OptionKeyAt(
     val typed: String,
     val written: List<String>,
+    val fields: List<FetchOption> = emptyList(),
+)
+
+/** The value of a key of such an object at the caret: the key, what is typed, and whether in a string already opened. */
+internal data class OptionValueAt(
+    val field: FetchOption,
+    val typed: String,
+    val quoted: Boolean,
 )
 
 private val ACTION_OPEN = regex("""@([A-Za-z_$][\w$]*)\s*\(""")
 private val WRITTEN_KEY = regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
 private val TYPED_KEY = regex("""\s*([A-Za-z_$][\w$]*)?""")
-private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
+private val VALUE_KEY = regex("""\s*([A-Za-z_$][\w$]*)\s*:\s*(#*)""")
 
-/** A bracket open at the caret, with the action whose argument list it is and the key text of an options object. */
+/** Something the keys of an object hold that is no key: a string, a regular expression, a bracket. */
+private const val OTHER = '#'
+
+/** A bracket open at the caret, with the action whose argument list it is and the keys of the object an action reads. */
 private class OpenBracket(
     val close: Char,
     val action: String?,
-    val options: Boolean,
+    val fields: List<FetchOption>?,
 ) {
     var argument = 0
 
-    /** The code of an options object at its own depth, without strings or nested brackets: where its keys are read. */
+    /** The code of such an object at its own depth, everything else written as [OTHER]: where its keys are read. */
     val keys = StringBuilder()
+
+    /** The key whose value the text after the last comma begins, or null. */
+    fun valueKey(): FetchOption? {
+        val m = VALUE_KEY.matchEntire(keys.substring(keys.lastIndexOf(",") + 1)) ?: return null
+        return fields?.firstOrNull { it.name == m.groupValues[1] }
+    }
+}
+
+/** The keys an object opened in [top] takes: the options or a filter as an argument, or a filter as the value of an option. */
+private fun fieldsOf(top: OpenBracket?): List<FetchOption>? {
+    val catalog = Catalog.default
+    val kind =
+        when {
+            top == null -> null
+            top.action != null -> catalog.actionsByName[top.action]?.kinds?.getOrNull(top.argument)
+            else -> top.valueKey()?.kind
+        }
+    return when (kind) {
+        ArgumentKind.OPTIONS -> catalog.fetchOptions
+        ArgumentKind.FILTER -> catalog.signalFilter
+        else -> null
+    }
 }
 
 /** The innermost `@name(` still open at [offset] in the expression [text], read from the text before the caret, or null. */
@@ -191,22 +225,24 @@ internal fun actionCallAt(
     var i = 0
     while (i < source.length) {
         val c = source[i]
+        val top = stack.lastOrNull()
         if (regions[i] != Region.CODE) {
+            if (top?.fields != null) top.keys.append(OTHER)
             i++
             continue
         }
-        val top = stack.lastOrNull()
         val open = if (c == '@') ACTION_OPEN.matchAt(source, i) else null
         when {
             open != null -> {
-                stack += OpenBracket(')', open.groupValues[1], options = false)
+                if (top?.fields != null) top.keys.append(OTHER)
+                stack += OpenBracket(')', open.groupValues[1], null)
                 i = open.range.last + 1
                 continue
             }
 
             c == '(' || c == '[' || c == '{' -> {
-                val options = c == '{' && top?.action in BACKEND_ACTIONS && top?.argument == 1
-                stack += OpenBracket(CLOSERS.getValue(c), null, options)
+                if (top?.fields != null) top.keys.append(OTHER)
+                stack += OpenBracket(CLOSERS.getValue(c), null, if (c == '{') fieldsOf(top) else null)
             }
 
             c == ')' || c == ']' || c == '}' -> {
@@ -217,7 +253,7 @@ internal fun actionCallAt(
                 top.argument++
             }
 
-            top?.options == true -> {
+            top?.fields != null -> {
                 top.keys.append(c)
             }
         }
@@ -227,16 +263,32 @@ internal fun actionCallAt(
     if (index < 0) return null
     val call = stack[index]
     val top = stack.last()
-    val option =
-        if (top.options && regions[source.length] == Region.CODE) {
-            val keys = top.keys.toString()
+    val fields = top.fields ?: return ActionCall(call.action!!, call.argument, null)
+    val keys = top.keys.toString()
+    val atEnd = regions[source.length]
+    if (atEnd == Region.CODE) {
+        val option =
             TYPED_KEY.matchEntire(keys.substringAfterLast(','))?.let { typed ->
-                OptionKeyAt(typed.groupValues[1], WRITTEN_KEY.findAll(keys).map { it.groupValues[1] }.toList())
+                OptionKeyAt(typed.groupValues[1], WRITTEN_KEY.findAll(keys).map { it.groupValues[1] }.toList(), fields)
             }
-        } else {
-            null
+        val value = top.valueKey()?.takeIf { keys.endsWith(OTHER).not() }?.let { OptionValueAt(it, "", quoted = false) }
+        return ActionCall(call.action!!, call.argument, option, value)
+    }
+    // In a string opened as the value: what is typed since its quote.
+    var quote = source.length
+    while (quote > 0 && regions[quote - 1] == atEnd) quote--
+    val typed = source.substring(minOf(quote + 1, source.length))
+    val other =
+        VALUE_KEY
+            .matchEntire(keys.substringAfterLast(','))
+            ?.groupValues
+            ?.get(2)
+            ?.length
+    val value =
+        top.valueKey()?.takeIf {
+            (atEnd == Region.STRING || atEnd == Region.TEMPLATE) && other == source.length - quote && '\\' !in typed && "\${" !in typed
         }
-    return ActionCall(call.action!!, call.argument, option)
+    return ActionCall(call.action!!, call.argument, null, value?.let { OptionValueAt(it, typed, quoted = true) })
 }
 
 private val CLOSERS = mapOf('(' to ')', '[' to ']', '{' to '}')
