@@ -36,6 +36,25 @@ class HoleJudgementTest {
         assertTrue("is not offered here" in issue.message, issue.message)
     }
 
+    @Test
+    fun `a value whose shape says it is a number or a boolean gets the rewrite and is never marked as markup`() {
+        // Trusted takes a String, so Trusted(n.dec()) does not compile for an Int; interpolate writes a number as it is.
+        val values =
+            listOf(
+                "n.dec()", "n.inc()", "xs.size", "s.length", "xs.count()", "xs.count { it.isEmpty() }", "n * 7 % 13", "a - b",
+                "-n", "!flag", "a == b", "a < b", "s.isEmpty()", "xs.indexOf(s)", "s in xs", "n.toInt() / 2",
+            )
+        for (value in values) {
+            val src = "fun f(n: Int, a: Int, b: Int, flag: Boolean, s: String, xs: List<String>) = \"<td>\${$value}</td>\""
+            val titles = analyzer.analyzeKotlin(src).single().fixes.map { it.title }
+            assertTrue(titles.any { it.startsWith("Build this string") }, "$value: $titles")
+            assertTrue(titles.none { it.startsWith("Mark") }, "$value: $titles")
+        }
+        // A generic call is no comparison, and a call of the author's may still give markup.
+        val generic = "fun <T> foo(a: T) = \"\$a\"\nfun f(a: String) = \"<td>\${foo<String>(a)}</td>\""
+        assertTrue(analyzer.analyzeKotlin(generic).single().fixes.any { it.title.startsWith("Mark") })
+    }
+
     /** The issues on [src] where the editor says the last [value] in it is [fact], as code and the text they cover. */
     private fun told(
         src: String,
