@@ -400,6 +400,7 @@ public final class io/github/markusaugust/streamlord/analysis/EditorHelpKt {
 	public static final fun complete (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;ILio/github/markusaugust/streamlord/analysis/Workspace;ZZ)Lio/github/markusaugust/streamlord/analysis/Completions;
 	public static synthetic fun complete$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;ILio/github/markusaugust/streamlord/analysis/Workspace;ZZILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Completions;
 	public static final fun hover (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;I)Lio/github/markusaugust/streamlord/analysis/Hover;
+	public static final fun offers (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;IZ)Z
 	public static final fun signatureHelp (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;I)Lio/github/markusaugust/streamlord/analysis/SignatureHelp;
 }
 
@@ -698,6 +699,10 @@ public final class io/github/markusaugust/streamlord/analysis/ModifierType : jav
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ModifierType;
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/ModifierType;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ModulesKt {
+	public static final fun foreignHelpers (Z)Ljava/util/Set;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/NamePart : java/lang/Enum {

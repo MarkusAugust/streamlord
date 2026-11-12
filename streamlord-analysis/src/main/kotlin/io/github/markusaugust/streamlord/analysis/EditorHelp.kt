@@ -93,6 +93,16 @@ public fun Analyzer.complete(
     domEvents: Boolean = true,
 ): Completions = Asked(this, source, offset).complete(workspace, attributeNames, domEvents)
 
+/**
+ * Whether [complete] has anything for [offset] of [source], found without making the items: what an
+ * editor asks as a character is typed. With [names] false, a name in a tag does not count.
+ */
+public fun Analyzer.offers(
+    source: Source,
+    offset: Int,
+    names: Boolean,
+): Boolean = Asked(this, source, offset).offers(names)
+
 /** The documentation of what stands at [offset] of [source]: an action, an option, an attribute or a helper of the DSL. */
 public fun Analyzer.hover(
     source: Source,
@@ -152,6 +162,28 @@ private class Asked(
         if (kotlin) attributesKey()?.let { return names.at(it, tag = null) }
         val name = if (kotlin) nameInKotlin() else nameAtCaret(text, offset, prefix)
         return name?.let { names.at(it.typed, it.tag) } ?: NOTHING
+    }
+
+    fun offers(names: Boolean): Boolean {
+        if (offset !in 0..text.length) return false
+        if (kotlin && analyzer.selectorBefore(text, offset, modules) != null) return true
+        expression(offset)?.let { e ->
+            val before = e.before
+            if (signalPrefixAt(before, before.length) != null) return true
+            if (!e.allowActions) return false
+            return actionCallAt(before, before.length)?.option != null || actionPrefixAt(before, before.length) != null ||
+                SCOPE_WORD
+                    .find(before)
+                    ?.groupValues
+                    ?.get(1)
+                    .orEmpty()
+                    .isNotEmpty()
+        }
+        if (!names) return false
+        val at = Names(attributeNames = true, domEvents = false)
+        if (kotlin) attributesKey()?.let { return at.at(it, tag = null).items.isNotEmpty() }
+        val name = (if (kotlin) nameInKotlin() else nameAtCaret(text, offset, prefix)) ?: return false
+        return at.at(name.typed, name.tag).items.isNotEmpty()
     }
 
     /** The Datastar expression at [at]: in a Kotlin file a DSL call's string only where the file can call the DSL. */
@@ -280,15 +312,19 @@ private class Asked(
         return ordered(names.map { Completion(it, CompletionKind.SCOPE, offset - word.length, detail = "Datastar scope") }, alone = false)
     }
 
-    /** The signals this file defines, read with the modules it can use: what makes a signal this file's. */
-    private fun definitions(): Set<String> {
-        val language = source.language
-        val short = analyzer.catalog.signalNameHelpers.keys
-        return collectSignalDefinitions(text, language, { name, at ->
-            (kotlin && !modules.htmlDsl && name in short) ||
-                source.foreign(name, at)
-        })
-    }
+    /**
+     * The signals this file defines, read with the modules it can use: what makes a signal this
+     * file's. The editor is asked about none of its calls, which there may be thousands of.
+     */
+    private fun definitions(): Set<String> =
+        collectSignalDefinitions(
+            text,
+            source.language,
+            foreignHelpers(
+                htmlDsl =
+                    !kotlin || modules.htmlDsl,
+            ),
+        )
 
     /** Attribute names, the events of `data-on:`, modifiers and their values, for a name typed in a tag or the key of the attributes form. */
     private inner class Names(

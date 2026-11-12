@@ -5,13 +5,14 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.util.ThreeState
-import io.github.markusaugust.streamlord.analysis.complete
+import io.github.markusaugust.streamlord.analysis.offers
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import org.jetbrains.kotlin.psi.KtFile
 
 /**
  * The platform holds the automatic completion popup back inside string literals. Where the
- * analysis has something to offer, a signal, an action, a selector or a name, the popup is let
- * through; everywhere else the usual rule stands.
+ * analysis has something to offer, a signal, an action or a selector, and in Kotlin an attribute
+ * name, the popup is let through; everywhere else the usual rule stands.
  */
 class DatastarCompletionConfidence : CompletionConfidence() {
     override fun shouldSkipAutopopup(
@@ -21,7 +22,8 @@ class DatastarCompletionConfidence : CompletionConfidence() {
         offset: Int,
     ): ThreeState {
         val asked = DatastarCaret.at(psiFile, offset) ?: return ThreeState.UNSURE
-        val found = StreamlordAnalysis.getInstance(psiFile.project).analyzer.complete(asked.source, asked.offset)
-        return if (found.alone || found.items.isNotEmpty()) ThreeState.NO else ThreeState.UNSURE
+        // In a markup file a name in a tag is the HTML plugin's, or the official Datastar plugin's, to pop up for.
+        val offered = StreamlordAnalysis.getInstance(psiFile.project).analyzer.offers(asked.source, asked.offset, names = psiFile is KtFile)
+        return if (offered) ThreeState.NO else ThreeState.UNSURE
     }
 }

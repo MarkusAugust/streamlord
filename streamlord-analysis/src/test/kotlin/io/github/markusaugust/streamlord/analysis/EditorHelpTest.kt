@@ -125,6 +125,18 @@ class EditorHelpTest {
         }
     }
 
+    @Test
+    fun `asks the editor about no more calls than the caret stands in, however many the file has`() {
+        val calls = (0 until 2000).joinToString("\n") { "fun f$it() = div { dataSignals(\"s$it\" to 0); dataText(\"\\\$s$it + 1\") }" }
+        val text = "import io.github.markusaugust.streamlord.html.*\n$calls\nfun g() = div { dataText(\"\\\$s1999\") }"
+        var asked = 0
+        val source = Source(text, SourceLanguage.KOTLIN, foreign = { _, _ -> asked++ < 0 })
+        val caret = text.lastIndexOf("\")")
+        assertTrue(analyzer.complete(source, caret).items.any { it.label == "\$s1999" })
+        assertTrue(analyzer.offers(source, caret, names = true))
+        assertTrue(asked <= 4, "asked $asked times")
+    }
+
     private companion object {
         const val CARET = '¦'
     }

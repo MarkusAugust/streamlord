@@ -34,6 +34,12 @@ internal fun Analyzer.modulesOf(source: Source): Modules {
     return Modules(core, core && (source.htmlDsl ?: importsDsl(text)), source.foreign)
 }
 
+/**
+ * The calls of a Kotlin file that are somebody else's and define no signal there: where the file
+ * cannot call the DSL, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too.
+ */
+public fun foreignHelpers(htmlDsl: Boolean): Set<String> = if (htmlDsl) emptySet() else Catalog.default.signalNameHelpers.keys
+
 /** Whether [src] imports the DSL, or is in its package, in its code: a line in a comment or a raw string imports nothing. */
 private fun Analyzer.importsDsl(src: String): Boolean {
     // A file read from disk may start with a byte order mark, which would hide an import on its first line.
