@@ -4,8 +4,7 @@ import io.github.markusaugust.streamlord.core.domain.Position
 
 /*
  * What a value's fact says of it, written into markup: the one place the analysis asks which fact
- * a value has, so a rule is given once and named. The twin of valueVerdict.ts; the table both
- * hold is in twins/value-verdict.json. A fact of null is a value of unknown type.
+ * a value has, so a rule is given once and named. The table is in cases/value-verdict.json. A fact of null is a value of unknown type.
  */
 
 /** What a fact alone says of a value a Kotlin template writes into a position. */

@@ -1,30 +1,31 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * What a Kotlin type or string literal, as the source writes it, tells of a value joined into
  * HTML. The analysis reads declarations with these, and the IntelliJ plugin reads with them the
- * types and literals it finds, so each rule is written once. The twin of valueTypes.ts; the cases both
- * hold are in twins/value-types.json.
+ * types and literals it finds, so each rule is written once. The cases are in cases/value-types.json.
  */
 
 /** Streamlord's own markup types, bare as an import gives them or written out in full. */
 private const val CORE_DOMAIN = """(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?"""
 
-private val NUMBER_TYPE = Regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
+private val NUMBER_TYPE = regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
 
 /** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
-private val UNSIGNED_TYPE = Regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
-private val BOOLEAN_TYPE = Regex("""(?:kotlin\.)?Boolean""")
-private val STRING_TYPE = Regex("""(?:kotlin\.)?(?:String|CharSequence)""")
-private val HTML_TYPE = Regex("${CORE_DOMAIN}Html")
-private val TRUSTED_TYPE = Regex("${CORE_DOMAIN}Trusted")
+private val UNSIGNED_TYPE = regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
+private val BOOLEAN_TYPE = regex("""(?:kotlin\.)?Boolean""")
+private val STRING_TYPE = regex("""(?:kotlin\.)?(?:String|CharSequence)""")
+private val HTML_TYPE = regex("${CORE_DOMAIN}Html")
+private val TRUSTED_TYPE = regex("${CORE_DOMAIN}Trusted")
 
 /**
  * A collection of markup: what `joinToString` over Html or Trusted is called on. An Html that may be
  * null is markup as it is on its own, and `out` changes nothing a read sees.
  */
 private val MARKUP_COLLECTION =
-    Regex(
+    regex(
         """(?:kotlin\.collections\.|kotlin\.sequences\.)?""" +
             """(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)""" +
             """<$CORE_DOMAIN(?:Html\??|Trusted)>\??""",
@@ -32,18 +33,18 @@ private val MARKUP_COLLECTION =
 
 /**
  * A tag, a comment or a doctype first, with what may stand for the tag name when a space, `>` or
- * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so the twins cannot fold or
- * space them apart.
+ * `/` follows it. Whitespace and letters as HTML has them, ASCII only, so
+ * that it means the same on the JVM and in JavaScript.
  */
 private fun tagStart(template: String): Regex =
-    Regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")
+    regex("""^[ \t\n\f\r]*<(?:[A-Za-z]|(?:$template)(?=[ \t\n\f\r>/])|!--|![Dd][Oo][Cc][Tt][Yy][Pp][Ee])""")
 
 /** In the source: `<$tag ` and `<${t} `, and `__kt__`, a `%s` of interpolate's format read as one. */
 private val TAG_START = tagStart("""__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_]*)""")
 
 /** In the text at runtime, where each template is `__kt__` and a `$` left is one the author wrote. */
 private val TEXT_TAG_START = tagStart("__kt__")
-private val MARGIN_START = Regex("""^\s*\|""")
+private val MARGIN_START = regex("""^\s*\|""")
 
 /**
  * The fact of a class the editor resolved, by its qualified name, where the text alone would read
@@ -72,19 +73,19 @@ public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     val bare = type.removeSuffix("?")
     val nullable = bare != type
     return when {
-        NUMBER_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.NUMBER
+        NUMBER_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.NUMBER
 
-        UNSIGNED_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.UNSIGNED
+        UNSIGNED_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.UNSIGNED
 
-        BOOLEAN_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE else ValueFact.BOOLEAN
+        BOOLEAN_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.BOOLEAN
 
-        STRING_TYPE.matches(bare) -> if (nullable) ValueFact.NULLABLE_STRING else ValueFact.STRING
+        STRING_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE_STRING else ValueFact.STRING
 
         // What interpolate returns: markup whose values have been through it.
-        HTML_TYPE.matches(bare) -> ValueFact.MARKUP
+        HTML_TYPE.matchEntire(bare) != null -> ValueFact.MARKUP
 
         // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
-        !nullable && TRUSTED_TYPE.matches(bare) -> ValueFact.MARKUP
+        !nullable && TRUSTED_TYPE.matchEntire(bare) != null -> ValueFact.MARKUP
 
         else -> null
     }
@@ -113,10 +114,10 @@ internal fun declaredFact(
 
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
 public fun isMarkupCollection(type: String): Boolean =
-    MARKUP_COLLECTION.matches(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() })
+    MARKUP_COLLECTION.matchEntire(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() }) != null
 
 // `out` as a keyword, so a type named `outHtml` is not read as `out Html`.
-private val OUT_PROJECTION = Regex("""<\s*out\s+""")
+private val OUT_PROJECTION = regex("""<\s*out\s+""")
 
 /**
  * Whether the content of a string literal, past its opening quotes, starts with a tag, a comment
@@ -131,4 +132,4 @@ public fun opensWithTag(
 internal fun textOpensWithTag(text: String): Boolean = TEXT_TAG_START.containsMatchIn(text)
 
 /** Whether [type] is Streamlord's `Trusted`, which cannot be null. */
-internal fun isTrustedType(type: String): Boolean = TRUSTED_TYPE.matches(type.filterNot { it.isWhitespace() })
+internal fun isTrustedType(type: String): Boolean = TRUSTED_TYPE.matchEntire(type.filterNot { it.isWhitespace() }) != null

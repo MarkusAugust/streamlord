@@ -1,0 +1,14 @@
+{
+  "$comment": "What a value's fact alone says of it where a Kotlin template writes it into markup, before the text around it is read: SAFE, nothing to say; ESCAPE, characters that need escaping (in a URL, the text before it decides the rest); UNSAFE, escaping does not help; DIGITS, an unsigned number, whose digits are safe but which interpolate refuses there. A fact of null is a value of unknown type. Read by ValueVerdictTest.kt.",
+  "cases": [
+    {"name":"a constant the author wrote","fact":"constant","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"SAFE","STRUCTURE":"SAFE"}},
+    {"name":"a number","fact":"number","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"a boolean","fact":"boolean","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"UNSAFE","DATASTAR":"SAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"an unsigned number","fact":"unsigned","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"DIGITS","DATASTAR":"DIGITS","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"a number or a boolean that may be null","fact":"nullable","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"a string","fact":"string","verdicts":{"TEXT":"ESCAPE","ATTRIBUTE":"ESCAPE","URL":"ESCAPE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"a string that may be null is judged as a string","fact":"nullable-string","verdicts":{"TEXT":"ESCAPE","ATTRIBUTE":"ESCAPE","URL":"ESCAPE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"markup is the author's own in element text only","fact":"markup","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"ESCAPE","URL":"ESCAPE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"a value of unknown type","fact":null,"verdicts":{"TEXT":"ESCAPE","ATTRIBUTE":"ESCAPE","URL":"ESCAPE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}}
+  ]
+}

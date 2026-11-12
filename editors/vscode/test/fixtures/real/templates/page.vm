@@ -1,0 +1,7 @@
+<section id="guild" data-signals:members="$members.size()">
+  #foreach($member in $members)
+    <p data-text="'$member.name'" data-on:click="@get('/members/$member.id')"></p>
+  #end
+  <p data-text="$members + 1"></p>
+  <button data-on:click="@put ('/guild')">Save</button>
+</section>

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
@@ -197,10 +198,10 @@ public object SseDecoder {
     // `<!-->`, `<!--->` and `--!>`. A `</body>`, `</head>` or `</html>`
     // anywhere outside an `<svg>` has the client read the text as a whole document and patch that
     // element of the page (patchElements.ts).
-    private val START_TAG = Regex("<[A-Za-z]")
-    private val COMMENT = Regex("<!--(?:-?>|.*?(?:--!?>|$))", RegexOption.DOT_MATCHES_ALL)
-    private val SVG = Regex("<svg(?:\\s[^>]*>|>).*?</svg>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-    private val DOCUMENT_END = Regex("</(?:body|head|html)>")
+    private val START_TAG = regex("<[A-Za-z]")
+    private val COMMENT = regex("(?s)<!--(?:-?>|.*?(?:--!?>|$))")
+    private val SVG = regex("(?s)<svg(?:\\s[^>]*>|>).*?</svg>", RegexOption.IGNORE_CASE)
+    private val DOCUMENT_END = regex("</(?:body|head|html)>")
 
     private fun holdsElement(elements: String): Boolean =
         DOCUMENT_END.containsMatchIn(elements.replace(SVG, "")) || START_TAG.containsMatchIn(elements.replace(COMMENT, ""))

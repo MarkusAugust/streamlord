@@ -2,17 +2,16 @@ package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import java.net.URLEncoder
 
 /**
  * The request Datastar 1.0.5's `@get` and its kin send with the default JSON content type
  * (fetch.ts): the client's headers, and the page's signals, in the body or, for a method without
  * one, in the `datastar` query parameter. The test client and the editors' request inspector send
- * it the same way; `editors/vscode/test/fixtures/twins/request-urls.json` holds the URL to it.
+ * it the same way; `editors/vscode/test/fixtures/cases/request-urls.json` holds the URL to it.
  */
 @InternalStreamlordApi
 public object ClientRequest {
-    private val PERCENT_BYTE = Regex("%([0-9A-Fa-f]{2})")
+    private val PERCENT_BYTE = regex("%([0-9A-Fa-f]{2})")
 
     /**
      * Whether [method] sends the signals in the query rather than in a body: `GET` and `DELETE`
@@ -54,7 +53,7 @@ public object ClientRequest {
                     .toString()
             } == DatastarProtocol.SIGNALS_PARAMETER
         val pairs = beforeFragment.substringAfter('?', "").split('&').filter { it.isNotEmpty() }
-        val param = DatastarProtocol.SIGNALS_PARAMETER + "=" + URLEncoder.encode(wellFormed(signalsJson), Charsets.UTF_8)
+        val param = DatastarProtocol.SIGNALS_PARAMETER + "=" + formEncoded(wellFormed(signalsJson))
         val first = pairs.indexOfFirst(::ours)
         val query =
             if (first < 0) {

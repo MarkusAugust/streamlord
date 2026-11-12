@@ -9,7 +9,7 @@ class KotlinStringsTest {
 
     @Test
     fun `the string literals and call sites of Kotlin source`() {
-        for (case in twinCases("kotlin-strings.json")) {
+        for (case in sharedCases("kotlin-strings.json")) {
             val name = case.string("name")
             val src = case.string("src")!!
             case.int("at")?.let { at ->

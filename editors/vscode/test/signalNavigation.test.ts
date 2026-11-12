@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { Position, workspace, type OpenDocument } from "./vscode-mock.ts";
 import { SignalNavigationProvider } from "../src/signalNavigation.ts";
 import { placesIn, type Places } from "../src/signalIndex.ts";
-import { collectSignalDefinitions } from "../src/signals.ts";
+import { signalsOf } from "../src/analysis.ts";
 
 const dsl = "import io.github.markusaugust.streamlord.html.*\n";
 
@@ -27,7 +27,7 @@ function workspaceOf(files: Record<string, string>) {
   workspace.textDocuments = docs as unknown as OpenDocument[];
   const language = (path: string) => (path.endsWith(".kt") ? "kotlin" : "html");
   const index = {
-    allDefinitions: () => new Set(docs.flatMap((d) => [...collectSignalDefinitions(d.text, language(d.uri.path))])),
+    allDefinitions: () => [...new Set(docs.flatMap((d) => signalsOf(d.text, language(d.uri.path) === "kotlin").definitions))],
     allPlaces: async () => new Map<string, Places>(docs.map((d) => [d.uri.toString(), placesIn(d.text, language(d.uri.path), "data-")])),
   };
   const provider = new SignalNavigationProvider(index as never, () => "data-");

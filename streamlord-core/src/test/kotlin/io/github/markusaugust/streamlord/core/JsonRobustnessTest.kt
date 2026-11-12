@@ -41,7 +41,7 @@ class JsonRobustnessTest {
                 chars[random.nextInt(chars.size)] = "{}[]\":,\\0e- \u0000".random(random)
             }
             try {
-                JsonParser.parse(String(chars))
+                JsonParser.parse(chars.concatToString())
             } catch (_: JsonParseException) {
                 // expected
             }
@@ -88,11 +88,16 @@ class JsonRobustnessTest {
         assertNull(obj.long("b"))
         assertEquals(0L, obj.long("c"))
         assertNull(obj.long("d"))
-        assertEquals(java.math.BigDecimal("123456789012345678901234567890"), obj.decimal("d"))
         assertEquals(Double.POSITIVE_INFINITY, obj.double("e"))
-        assertNull(JsonNumber("1e99999999999").toBigDecimalOrNull())
         assertNull(JsonNumber("1e99999999999").toLongOrNull())
-        assertFailsWith<ArithmeticException> { JsonNumber("1e99999999999").toBigDecimal() }
+        // An exponent no decimal can carry has no whole number, even under a zero.
+        assertNull(JsonNumber("0e99999999999").toLongOrNull())
+        assertNull(JsonNumber("0e-99999999999").toLongOrNull())
+        assertNull(JsonNumber("0.0e-2147483647").toLongOrNull())
+        assertEquals(0L, JsonNumber("0e2147483647").toLongOrNull())
+        assertEquals(0L, JsonNumber("0e2147483648").toLongOrNull())
+        assertEquals(0L, JsonNumber("0.00e-5").toLongOrNull())
+        assertEquals(100L, JsonNumber("1e2").toLongOrNull())
         obj.toKotlin()
     }
 

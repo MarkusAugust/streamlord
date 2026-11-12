@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.commentClose
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
 
 /**
@@ -128,7 +129,9 @@ public class TextPlace(
 )
 
 /** The characters that end a tag name, and so an end tag's name as well. */
-private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
+private fun Char?.endsName(): Boolean = this == null || this.endsName()
+
+private fun Char.endsName(): Boolean = isHtmlSpace() || this == '/' || this == '>'
 
 private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' || this in 'A'..'Z')
 
@@ -1149,7 +1152,7 @@ private fun templateTagAt(
         else -> null
     }
 
-private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
+private val TEMPLATE_CALL = regex("""^[@#][A-Za-z]+\s*\(""")
 
 /**
  * Where a template construct that starts at [at] inside a tag ends, or [at] when none starts

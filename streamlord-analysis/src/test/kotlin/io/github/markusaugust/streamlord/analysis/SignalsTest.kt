@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class SignalsTest {
     @Test
     fun `the signals a file declares and defines`() {
-        for (case in twinCases("signals.json")) {
+        for (case in sharedCases("signals.json")) {
             val name = case.string("name")
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())

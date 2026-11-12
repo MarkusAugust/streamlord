@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { Issue } from "./expression.ts";
+import type { Issue } from "./analysis.ts";
 
 /** The issues of the last lint per document, so quick fixes can find their edits. */
 export class IssueStore {

@@ -2,7 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -12,8 +12,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The scanner, the string reader and the collectors against `twins/analyze.json`, which
- * `analyze.test.ts` reads as well; what they report as issues is in the shared corpus.
+ * The scanner, the string reader and the collectors against `cases/analyze.json`; what they
+ * report as issues is in the shared corpus.
  */
 class AnalyzerTest {
     private val analyzer = Analyzer()
@@ -44,7 +44,7 @@ class AnalyzerTest {
             )
         }
 
-    /** What each kind of case expects, in the fields `twins/analyze.json` describes; `analyze.test.ts` projects the same. */
+    /** What each kind of case expects, in the fields `cases/analyze.json` describes. */
     private fun project(case: JsonObject): Map<String, Any?> {
         val source = case.string("source") ?: ""
         return when (val kind = case.string("kind")) {
@@ -86,7 +86,7 @@ class AnalyzerTest {
             }
 
             "fixture" -> {
-                val text = File("../editors/vscode/test/fixtures/${case.string("file")}").readText()
+                val text = fixtureText("editors/vscode/test/fixtures/${case.string("file")}")
                 mapOf("codes" to analyzer.analyzeHtml(text, opts).map { it.code })
             }
 
@@ -97,8 +97,8 @@ class AnalyzerTest {
     }
 
     @Test
-    fun `holds every twin case of the analysis`() {
-        val cases = twinCases("analyze.json")
+    fun `holds every shared case of the analysis`() {
+        val cases = sharedCases("analyze.json")
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val actual = project(case)
@@ -123,6 +123,21 @@ class AnalyzerTest {
                 .not(),
         )
         assertNotNull(analyzer.catalog.parseAttributeName("data-on:click__debounce.500ms", "data-"))
+    }
+
+    @Test
+    fun `an aliased attribute under the default prefix names the setting as the editor names it`() {
+        val said = "This is an aliased Datastar attribute, but the prefix is set to data-. Check"
+        val vscode = AnalyzeOptions(prefixSetting = "streamlord.attributePrefix")
+        val html = "<div data-star-on:click=\"x()\"></div>"
+        val kotlin = "fun f() = \"\"\"<p data-star-text=\"1\"></p>\"\"\""
+
+        fun message(issues: List<Issue>) = issues.single { it.code == "prefix-mismatch" }.message
+
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeHtml(html, AnalyzeOptions())))
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeKotlin(kotlin, AnalyzeOptions())))
+        assertEquals("$said streamlord.attributePrefix.", message(analyzer.analyzeHtml(html, vscode)))
+        assertEquals("$said streamlord.attributePrefix.", message(analyzer.analyzeKotlin(kotlin, vscode)))
     }
 }
 

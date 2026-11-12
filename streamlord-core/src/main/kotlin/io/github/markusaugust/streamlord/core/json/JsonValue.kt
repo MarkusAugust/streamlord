@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.json
 
+import io.github.markusaugust.streamlord.core.decimalOrNull
+import io.github.markusaugust.streamlord.core.exactLongOrNull
 import java.math.BigDecimal
 
 /**
@@ -135,11 +137,11 @@ public data class JsonNumber(
 
     public fun toIntOrNull(): Int? = toLongOrNull()?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
 
-    public fun toLongOrNull(): Long? = text.toLongOrNull() ?: runCatching { BigDecimal(text).longValueExact() }.getOrNull()
+    public fun toLongOrNull(): Long? = text.toLongOrNull() ?: exactLongOrNull(text)
 
     public fun toDouble(): Double = text.toDouble()
 
-    public fun toBigDecimalOrNull(): BigDecimal? = runCatching { BigDecimal(text) }.getOrNull()
+    public fun toBigDecimalOrNull(): BigDecimal? = decimalOrNull(text)
 
     public fun toBigDecimal(): BigDecimal = toBigDecimalOrNull() ?: throw ArithmeticException("Number '$text' is outside BigDecimal range")
 

@@ -6,13 +6,13 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /** The names generated from the catalog, held to the file as core's own JSON parser reads it. */
 class CatalogNamesTest {
-    private val catalog: JsonObject = JsonParser.parseObject(File("../catalog/datastar-${DatastarProtocol.VERSION}.json").readText())
+    private val catalog: JsonObject = JsonParser.parseObject(fixtureText("catalog/datastar-${DatastarProtocol.VERSION}.json"))
 
     private fun names(kind: String?): List<String> =
         catalog

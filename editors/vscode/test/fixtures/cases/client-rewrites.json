@@ -1,0 +1,29 @@
+{
+  "$comment": "What the client's rewrite of an expression gives: js (the text as the client writes it), runs (the start, end and opening quote of each stretch it stepped over and left as written) and rewrites (the kind, start, end and name of each reference it rewrote, in the order written); offsets count UTF-16 code units. Read by ClientRewriteCasesTest.kt.",
+  "cases": [
+    {"name":"signals in code","source":"$a + $b.c","js":"$['a'] + $['b']['c']","runs":[],"rewrites":[["signal",0,2,"a"],["signal",5,9,"b.c"]]},
+    {"name":"a numeric part and a bracketed one","source":"$foo.0.name + $['x']","js":"$['foo']['0']['name'] + $['x']","runs":[[16,19,16]],"rewrites":[["signal",0,11,"foo.0.name"]]},
+    {"name":"an action in code","source":"@get('/x')","js":"__action(\"get\",evt,'/x')","runs":[[5,9,5]],"rewrites":[["action",0,5,"get"]]},
+    {"name":"an action right after a signal","source":"$a@get('/x')","js":"$['a']__action(\"get\",evt,'/x')","runs":[[7,11,7]],"rewrites":[["signal",0,2,"a"],["action",2,7,"get"]]},
+    {"name":"quoted strings, stepped over","source":"\"$x\" + $y + 'it\\'s $z'","js":"\"$x\" + $['y'] + 'it\\'s $z'","runs":[[0,4,0],[12,22,12]],"rewrites":[["signal",7,9,"y"]]},
+    {"name":"a template literal with one interpolation","source":"'$a-b' + `$c-d ${$e-f}`","js":"'$a-b' + `$c-d ${$['e-f']}`","runs":[[0,6,0],[9,17,9],[21,23,9]],"rewrites":[["signal",17,21,"e-f"]]},
+    {"name":"three interpolations, a signal, an action and a path","source":"`${$a} and ${@post('/y')} ${$b.c}`","js":"`${$['a']} and ${__action(\"post\",evt,'/y')} ${$['b']['c']}`","runs":[[0,3,0],[5,13,0],[24,28,0],[32,34,0]],"rewrites":[["signal",3,5,"a"],["action",13,19,"post"],["signal",28,32,"b.c"]]},
+    {"name":"two interpolations with nothing between them","source":"`${$a}${$b}` + \"s\" + '${$c}'","js":"`${$['a']}${$['b']}` + \"s\" + '${$c}'","runs":[[0,3,0],[5,8,0],[10,12,0],[15,18,15],[21,28,21]],"rewrites":[["signal",3,5,"a"],["signal",8,10,"b"]]},
+    {"name":"an interpolation after a backslash","source":"`\\${$x}`","js":"`\\${$['x']}`","runs":[[0,4,0],[6,8,0]],"rewrites":[["signal",4,6,"x"]]},
+    {"name":"a dollar on each side of an interpolation","source":"`$${$a}$`","js":"`$${$['a']}$`","runs":[[0,4,0],[6,9,0]],"rewrites":[["signal",4,6,"a"]]},
+    {"name":"an action whose name the signal pass already rewrote","source":"`${@$a(1) + @b($c)}`","js":"`${@$['a'](1) + __action(\"b\",evt,$['c'])}`","runs":[[0,3,0],[18,20,0]],"rewrites":[["signal",4,6,"a"],["action",12,15,"b"],["signal",15,17,"c"]]},
+    {"name":"an interpolation holding a brace, which leaves the literal to be read as code","source":"`total: $total ${ {a: 1}.a }`","js":"`total: $['total'] ${ {a: 1}.a }`","runs":[],"rewrites":[["signal",8,14,"total"]]},
+    {"name":"a template literal inside an interpolation","source":"`${ `$x` }`","js":"`${ `$['x']` }`","runs":[[0,3,0],[9,11,0]],"rewrites":[["signal",5,7,"x"]]},
+    {"name":"a backslash before a line feed in a template literal","source":"`a \\\n $x`","js":"`a \\\n $['x']`","runs":[],"rewrites":[["signal",6,8,"x"]]},
+    {"name":"a backslash before a carriage return in a string","source":"'a\\\r$x' + $y","js":"'a\\\r$['x']' + $['y']","runs":[],"rewrites":[["signal",4,6,"x"],["signal",10,12,"y"]]},
+    {"name":"a line separator in a template literal the client matched","source":"`a\u2028${$x}`","js":"`a\u2028${$['x']}`","runs":[[0,5,0],[7,9,0]],"rewrites":[["signal",5,7,"x"]]},
+    {"name":"the two separators in a template literal, one after a backslash","source":"`a\u2028${$x}\\\u2029$y`","js":"`a\u2028${$['x']}\\\u2029$['y']`","runs":[],"rewrites":[["signal",5,7,"x"],["signal",10,12,"y"]]},
+    {"name":"a backtick in a comment, paired with the next","source":"$a // `\n + $b + `x ${$c} $d`","js":"$['a'] // `\n + $b + `x ${$['c']} $['d']`","runs":[[6,17,6]],"rewrites":[["signal",0,2,"a"],["signal",21,23,"c"],["signal",25,27,"d"]]},
+    {"name":"a brace in a comment inside an interpolation","source":"`${$a /* } */ + $b}`","js":"`${$['a'] /* } */ + $b}`","runs":[[0,3,0],[9,20,0]],"rewrites":[["signal",3,5,"a"]]},
+    {"name":"a brace in a string inside an interpolation","source":"`${'}' + $b}`","js":"`${'}' + $b}`","runs":[[0,3,0],[4,13,0]],"rewrites":[]},
+    {"name":"a quote in a comment, paired with a later one","source":"$a = 1 // don't\n$b = 'x'","js":"$['a'] = 1 // don't\n$b = 'x'","runs":[[13,22,13]],"rewrites":[["signal",0,2,"a"]]},
+    {"name":"a string that never closes","source":"\"unclosed $a","js":"\"unclosed $['a']","runs":[],"rewrites":[["signal",10,12,"a"]]},
+    {"name":"a template literal that never closes","source":"`a ${ $b } $c","js":"`a ${ $['b'] } $['c']","runs":[],"rewrites":[["signal",6,8,"b"],["signal",11,13,"c"]]},
+    {"name":"a letter beyond ASCII and a hyphenated path","source":"$år + $_x-1.y","js":"$år + $['_x-1']['y']","runs":[],"rewrites":[["signal",6,13,"_x-1.y"]]}
+  ]
+}

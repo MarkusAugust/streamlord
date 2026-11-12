@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
@@ -7,7 +8,7 @@ import io.github.markusaugust.streamlord.core.domain.SignalNames
  * A hyphen in a signal name written in a DSL call. The client reads one as a capital in an
  * attribute key and as a hyphen in an expression or a patch, so the SDK refuses such a name at
  * render or send time (`SignalNames.hyphenProblem` in streamlord-core); this says so in the editor,
- * with the name to write instead. `signalNameHyphens.ts` is the same check for VS Code.
+ * with the name to write instead.
  */
 
 /** The helpers whose first argument is the name of a signal the page declares. */
@@ -43,7 +44,7 @@ private val PAIR_NAMING =
 /** Every call this check reads. */
 internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
 
-private val OBJECT_START = Regex("""^\s*[{\[]""")
+private val OBJECT_START = regex("""^\s*[{\[]""")
 
 /** The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a hyphen. */
 internal fun signalNameHyphenIssues(
@@ -128,10 +129,10 @@ private fun hyphenIsTheReason(name: KotlinString): Boolean =
 internal enum class SecondArgument { EXPRESSION, IF_MISSING, UNKNOWN }
 
 /** An operator whose result is a Boolean, outside strings. ktlint spaces `<` and `>` when they compare, and not in a type argument. */
-private val BOOLEAN_OPERATOR = Regex("""==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s""")
+private val BOOLEAN_OPERATOR = regex("""==|!=|&&|\|\||\s[<>]=?\s|\s!?(?:in|is)\s""")
 
 /** A call of a helper that writes an expression, which is a String. */
-private val EXPRESSION_CALL = Regex("""^(?:${EXPRESSION_HELPERS.joinToString("|")})\s*\(""")
+private val EXPRESSION_CALL = regex("""^(?:${EXPRESSION_HELPERS.joinToString("|")})\s*\(""")
 
 /**
  * Whether [arg], the second argument of `dataSignals`, is the expression of the keyed form, a
@@ -146,7 +147,7 @@ internal fun secondArgument(
 ): SecondArgument {
     if (arg == null) return SecondArgument.UNKNOWN
     if (arg.string != null) return SecondArgument.EXPRESSION
-    val strings = lex.strings.filter { it.start >= arg.start && it.end <= arg.end }
+    val strings = lex.stringsIn(arg.start, arg.end)
     val code =
         arg.text
             .mapIndexed {

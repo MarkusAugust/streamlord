@@ -2,6 +2,12 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.client.ClientRequest
+import io.github.markusaugust.streamlord.core.client.charCount
+import io.github.markusaugust.streamlord.core.client.codePointFrom
+import io.github.markusaugust.streamlord.core.client.codePointString
+import io.github.markusaugust.streamlord.core.client.formEncoded
+import io.github.markusaugust.streamlord.core.client.hex
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -9,7 +15,6 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import java.net.URLEncoder
 
 /*
  * Saved requests for the Stream Inspector: the file format, variable substitution, the recent
@@ -88,11 +93,11 @@ public object Requests {
     /** The methods of the backend actions, in the catalog's order. */
     public val METHODS: List<String> = Catalog.default.backendActions.map { it.uppercase() }
 
-    private val VARIABLE = Regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
-    private val PATH_VARIABLE = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
-    private val OPTIONAL_SEGMENT = Regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
-    private val ABSOLUTE = Regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
-    private val PATH_PARAM_TEXT = Regex("""\{[^{}]*\}""")
+    private val VARIABLE = regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
+    private val PATH_VARIABLE = regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
+    private val OPTIONAL_SEGMENT = regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
+    private val ABSOLUTE = regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
+    private val PATH_PARAM_TEXT = regex("""\{[^{}]*\}""")
     private const val NOT_SENDABLE = "\"<>\\^`|"
 
     /**
@@ -152,10 +157,24 @@ public object Requests {
             list.mapIndexed { index, item ->
                 val missing =
                     when {
-                        item !is JsonObject -> "it is not an object"
-                        item.string("name") == null -> "it has no \"name\""
-                        item.string("url") == null -> "it has no \"url\""
-                        else -> named.putIfAbsent(nameKey(item.string("name")!!), index + 1)?.let { "request $it has its name" }
+                        item !is JsonObject -> {
+                            "it is not an object"
+                        }
+
+                        item.string("name") == null -> {
+                            "it has no \"name\""
+                        }
+
+                        item.string("url") == null -> {
+                            "it has no \"url\""
+                        }
+
+                        else -> {
+                            val key = nameKey(item.string("name")!!)
+                            val first = named[key]
+                            if (first == null) named[key] = index + 1
+                            first?.let { "request $it has its name" }
+                        }
                     }
                 if (missing != null) {
                     skipped += "Request ${index + 1} in $path is not read: $missing."
@@ -385,7 +404,12 @@ public object Requests {
      */
     private fun nameKey(name: String): String {
         val out = StringBuilder(name.length)
-        name.codePoints().forEach { out.append(Character.toString(it).lowercase()) }
+        var i = 0
+        while (i < name.length) {
+            val cp = name.codePointFrom(i)
+            out.append(codePointString(cp).lowercase())
+            i += charCount(cp)
+        }
         return out.toString()
     }
 
@@ -481,7 +505,7 @@ public object Requests {
                                     errors += "$INVALID: \"$name\" cannot be a param; {{$name}} is a variable of its own."
                                 }
 
-                                !PARAM_NAME.matches(name) -> {
+                                PARAM_NAME.matchEntire(name) == null -> {
                                     errors +=
                                         "$INVALID: \"$name\" cannot be a param name; {{$name}} would not be read."
                                 }
@@ -503,7 +527,7 @@ public object Requests {
         return Env(baseUrl, signals, headers, params, errors)
     }
 
-    private val PARAM_NAME = Regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
+    private val PARAM_NAME = regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
 
     /** Where [position] falls in [text], as an editor counts it: "at line 3, column 1". */
     public fun lineAndColumn(
@@ -514,7 +538,7 @@ public object Requests {
         return "at line $line, column $column"
     }
 
-    private val HTTP = Regex("""^https?://""", RegexOption.IGNORE_CASE)
+    private val HTTP = regex("""^https?://""", RegexOption.IGNORE_CASE)
 
     /** The text of each value of the top-level object, by key as written; [text] is known to parse. */
     private fun topLevelValues(text: String): Map<String, String> =
@@ -817,7 +841,7 @@ public object Requests {
         return before + added + text.substring(close)
     }
 
-    private val BASE_URL_VARIABLE = Regex("""\{\{\s*baseUrl\s*\}\}""")
+    private val BASE_URL_VARIABLE = regex("""\{\{\s*baseUrl\s*\}\}""")
 
     /**
      * Where the `{{baseUrl}}` of a URL came from, for a server that could not be reached: a value
@@ -883,7 +907,7 @@ public object Requests {
         val items: List<Variable>,
     )
 
-    private val OPEN_VARIABLE = Regex("""\{\{\s*([A-Za-z]*)$""")
+    private val OPEN_VARIABLE = regex("""\{\{\s*([A-Za-z]*)$""")
 
     /** The variables to offer after `{{` at [caret]: those the field takes and the file sets. */
     public fun variableCompletions(
@@ -1012,14 +1036,14 @@ public object Requests {
 
                 c.code > 0x7f -> {
                     val pair = c.isHighSurrogate() && i + 1 < target.length && target[i + 1].isLowSurrogate()
-                    val cp = if (pair) target.codePointAt(i) else c.code
+                    val cp = if (pair) target.codePointFrom(i) else c.code
                     // A surrogate without its partner goes out as U+FFFD, as TextEncoder sends it.
-                    val char = if (Character.isSurrogate(c) && !pair) "\uFFFD" else String(Character.toChars(cp))
+                    val char = if (c.isSurrogate() && !pair) "\uFFFD" else codePointString(cp)
                     if (i < authorityEnd) {
                         return refuse("The host holds $char, which cannot be sent as written. Write the host in its xn-- form.")
                     }
                     out.append(escape(char))
-                    i += Character.charCount(cp)
+                    i += charCount(cp)
                     continue
                 }
 
@@ -1047,9 +1071,9 @@ public object Requests {
             "The server sent no body with this $status, so the reason is in its log."
         }
 
-    private val PORT = Regex("""^:[0-9]*$""")
-    private val IPV4 = Regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
-    private val LABEL = Regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
+    private val PORT = regex("""^:[0-9]*$""")
+    private val IPV4 = regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
+    private val LABEL = regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
 
     /**
      * Why java.net.URI would read no host in [authority], or null when it reads one.
@@ -1064,12 +1088,12 @@ public object Requests {
         val hostEnd = if (bracketed) hostPort.indexOf(']') + 1 else hostPort.indexOf(':').let { if (it < 0) hostPort.length else it }
         val host = hostPort.substring(0, hostEnd)
         val port = hostPort.substring(hostEnd)
-        if (port.isNotEmpty() && !PORT.matches(port)) {
+        if (port.isNotEmpty() && PORT.matchEntire(port) == null) {
             return "The port in $hostPort is not a number. Is a / missing between the port and the path?"
         }
-        if (bracketed || IPV4.matches(host)) return null
+        if (bracketed || IPV4.matchEntire(host) != null) return null
         val labels = host.removeSuffix(".").split('.')
-        if (labels.all { LABEL.matches(it) } && (labels.size == 1 || labels.last()[0].isLetter())) return null
+        if (labels.all { LABEL.matchEntire(it) != null } && (labels.size == 1 || labels.last()[0].isLetter())) return null
         return "The host $host cannot be sent: " +
             "a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter."
     }
@@ -1077,7 +1101,7 @@ public object Requests {
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
     /** UTF-8 escapes in capitals. */
-    private fun escape(s: String): String = s.toByteArray(Charsets.UTF_8).joinToString("") { "%%%02X".format(it.toInt() and 0xff) }
+    private fun escape(s: String): String = s.encodeToByteArray().joinToString("") { "%" + hex(it.toInt() and 0xff, 2).uppercase() }
 
     /**
      * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.5), then the user's,
@@ -1114,34 +1138,49 @@ public object Requests {
      * What is wrong with a configured requests-file path, or null: it has to stay inside the
      * project, since the setting may come from a checked-in file.
      */
-    public fun requestsPathProblem(path: String): String? =
+    public fun requestsPathProblem(path: String): String? = requestsPathProblem(path, "project")
+
+    /** The same, with [folder] as what the editor calls the folder the path starts from: a project, a workspace. */
+    public fun requestsPathProblem(
+        path: String,
+        folder: String,
+    ): String? =
         when {
-            empty(path) -> null
+            empty(path) -> {
+                null
+            }
 
-            path.startsWith(
-                "/",
-            ) ||
-                path.startsWith(
-                    "\\",
-                ) || DRIVE.containsMatchIn(path) -> "The requests file $path is not inside the project: use a project-relative path."
+            path.startsWith("/") || path.startsWith("\\") || DRIVE.containsMatchIn(path) -> {
+                "The requests file $path is not inside the $folder: use a $folder-relative path."
+            }
 
-            path.split('/', '\\').any { it == ".." } -> "The requests file $path leaves the project: use a path without .. in it."
+            path.split('/', '\\').any { it == ".." } -> {
+                "The requests file $path leaves the $folder: use a path without .. in it."
+            }
 
-            '\\' in path -> "The requests file $path holds a backslash: write the path with /."
+            '\\' in path -> {
+                "The requests file $path holds a backslash: write the path with /."
+            }
 
-            path.endsWith("/") -> "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+            path.endsWith("/") -> {
+                "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+            }
 
             path
                 .trim(' ', '\t', '\r', '\n')
                 .split('/')
                 .filter { it.isNotEmpty() && it != "." }
                 .joinToString("/")
-                .lowercase() == ENV_FILE -> "The requests file cannot be $ENV_FILE: that file holds the variables."
+                .lowercase() == ENV_FILE -> {
+                "The requests file cannot be $ENV_FILE: that file holds the variables."
+            }
 
-            else -> null
+            else -> {
+                null
+            }
         }
 
-    private val DRIVE = Regex("""^[A-Za-z]:""")
+    private val DRIVE = regex("""^[A-Za-z]:""")
 
     /**
      * The source text of `requests[index].signals`, or null when the file is not shaped that way.
@@ -1311,14 +1350,14 @@ public object Requests {
         val path = PATH_VARIABLE.replace(OPTIONAL_SEGMENT.replace(route.path, "")) { "{{${it.groupValues[1]}}}" }
         val query =
             route.query
-                .filter { it.required && PARAM_NAME.matches(it.name) }
+                .filter { it.required && PARAM_NAME.matchEntire(it.name) != null }
                 .joinToString("&") { "${encodeSegment(it.name)}={{${it.name}}}" }
         return "{{baseUrl}}$path" + if (query.isEmpty()) "" else "?$query"
     }
 
     /** The headers field for [route]: one `Name: {{Name}}` line per header it requires. */
     public fun routeHeaders(route: Route): String =
-        route.headers.filter { it.required && PARAM_NAME.matches(it.name) }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
+        route.headers.filter { it.required && PARAM_NAME.matchEntire(it.name) != null }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
 
     /** What [routeUrl] and [routeHeaders] leave out because the route can do without it, by name. */
     public fun routeOptional(route: Route): List<String> =
@@ -1328,8 +1367,7 @@ public object Requests {
 
     /** `encodeURIComponent`: percent-encodes everything but the unreserved characters and `!'()*`. */
     private fun encodeSegment(s: String): String =
-        URLEncoder
-            .encode(ClientRequest.wellFormed(s), Charsets.UTF_8)
+        formEncoded(ClientRequest.wellFormed(s))
             .replace("+", "%20")
             .replace("%21", "!")
             .replace("%27", "'")

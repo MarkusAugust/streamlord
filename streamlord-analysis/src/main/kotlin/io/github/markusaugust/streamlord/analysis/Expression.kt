@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.client.Rewrite
 import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
@@ -15,13 +16,13 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
  * pattern does differently from JavaScript, it is told about.
  */
 
-private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
-private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
-private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
-private val WORD_CHAR = Regex("""\w""")
+private val SPACED_ACTION = regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
+private val SIGNAL_PREFIX = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
+private val ACTION_PREFIX = regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
+private val WORD_CHAR = regex("""\w""")
 
 /** A `${` with a brace inside before it closes: what keeps the client's pattern from taking a template literal whole. */
-private val BRACED_INTERPOLATION = Regex("""\$\{[^{}]*\{""")
+private val BRACED_INTERPOLATION = regex("""\$\{[^{}]*\{""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
 internal fun quoteAt(
@@ -116,10 +117,10 @@ private fun regexEnds(text: String): IntArray {
 }
 
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
-// on either side, any character beyond ASCII counted as one, as the editor's twin counts it.
+// on either side, any character beyond ASCII counted as one.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
 
-private val BINDS_NAMES = Regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
+private val BINDS_NAMES = regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
 
 /**
  * For each name a free attribute's expression is handed and the others are not, the attributes
@@ -136,7 +137,7 @@ private class HandedIn(
 
     val pattern: Regex? =
         attributes.keys.takeIf { it.isNotEmpty() }?.let { names ->
-            Regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+            regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
         }
 }
 
@@ -185,8 +186,7 @@ private fun scopeNameIssues(
 /**
  * What each character of an expression is to JavaScript: code, a string, the text of a template
  * literal, a regular expression or a comment. The code of a `${ }` is code. Whether a `/` divides
- * or opens a regular expression is told by what precedes it, as a tokenizer tells it. Shared with
- * the VS Code extension (`jsRegions` in expression.ts), which this follows step by step.
+ * or opens a regular expression is told by what precedes it, as a tokenizer tells it.
  */
 internal fun jsRegions(text: String): ByteArray {
     val kind = ByteArray(text.length)
@@ -357,7 +357,7 @@ private const val JS_SPACE = """[\t\n\u000B\u000C\r \u00A0\u1680\u2000-\u200A\u2
 
 /** The one IIFE shape `genRx` steps over whole: `(function() {...})()` or `(() => ...)()`, no arguments, no nesting. */
 private val IIFE =
-    Regex(
+    regex(
         """\($JS_SPACE*(?:(?:function)$JS_SPACE*\($JS_SPACE*\)|(?:\($JS_SPACE*\))$JS_SPACE*=>)$JS_SPACE*(?:\{[\s\S]*?\}|[^;){]*)$JS_SPACE*\)$JS_SPACE*\($JS_SPACE*\)""",
     )
 
@@ -542,13 +542,13 @@ private fun placeOf(region: Byte): String =
     }
 
 /** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
-private val STRING_PATTERN_HEAD = Regex("""(["']?)(include|exclude)\1\s*:\s*(["'`])/""")
+private val STRING_PATTERN_HEAD = regex("""(["']?)(include|exclude)\1\s*:\s*(["'`])/""")
 
 /**
  * The flags a filter's pattern may end with. `d` is left out: it changes nothing a filter does, so
  * nobody writes it there, and the tail of a path such as `'/users/id'` is then not read as flags.
  */
-private val REGEX_FLAGS = Regex("""[gimsuyv]+""")
+private val REGEX_FLAGS = regex("""[gimsuyv]+""")
 
 /** A pattern of a filter written as a string with flags after its last slash; see [stringPatterns]. */
 internal data class StringPattern(
@@ -581,8 +581,7 @@ private fun keyOpens(
  * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
  * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
  * template literal counts when it holds no `${`. A scan rather than one regular expression, which
- * backtracks without end on a run of escapes. Shared with the VS Code extension (`stringPatterns`
- * in expression.ts).
+ * backtracks without end on a run of escapes.
  */
 internal fun stringPatterns(
     text: String,
@@ -605,7 +604,7 @@ internal fun stringPatterns(
         // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
         val slash = content.lastIndexOf('/')
         val flags = content.substring(slash + 1)
-        if (slash <= 0 || !REGEX_FLAGS.matches(flags)) continue
+        if (slash <= 0 || REGEX_FLAGS.matchEntire(flags) == null) continue
         out += StringPattern(match.groupValues[2], start, j + 1, content.substring(1, slash), flags)
     }
     return out
@@ -632,12 +631,11 @@ private fun literalBody(pattern: String): String {
 }
 
 /** A character that would not stand in a literal as it stands in the string: an escape, a quote, a reference. */
-private val UNFIXABLE_IN_PATTERN = Regex("""[\\'"`&]""")
+private val UNFIXABLE_IN_PATTERN = regex("""[\\'"`&]""")
 
 /**
  * The `filter-pattern` warnings for the string patterns of the object between [from] and [to] in
- * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action. Shared
- * with the VS Code extension (`filterPatternIssues` in expression.ts).
+ * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action.
  */
 internal fun filterPatternIssues(
     text: String,
@@ -681,7 +679,7 @@ internal fun filterPatternIssues(
     }
 
 /** `filterSignals: {` in the options of an action, which the client reads with the same `toRegExp`. */
-private val FILTER_SIGNALS = Regex("""(["']?)filterSignals\1\s*:\s*\{""")
+private val FILTER_SIGNALS = regex("""(["']?)filterSignals\1\s*:\s*\{""")
 
 /** The `filter-pattern` warnings for the `filterSignals` of the actions in [text]. */
 private fun filterSignalsIssues(text: String): List<Issue> {
@@ -791,7 +789,12 @@ public class ExpressionValidator(
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
-            val message = "Datastar expression: ${err.message}"
+            // The `);` the client closes a value with stands at one place of the text and is no token of
+            // it: met there, the parser is asked what it says of the value without it.
+            val closed = js.endsWith(");") && fromScript(js.length - 1) == fromScript(js.length - 2)
+            val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
+            val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
+            val message = "Datastar expression: $said"
             if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
         }
 
@@ -827,7 +830,7 @@ public class ExpressionValidator(
             if (js[p] != '$' || regions[p] != Region.CODE || p in rewrittenAt || js.getOrNull(p - 1).isJsNamePart()) continue
             val next = js.getOrNull(p + 1) ?: continue
             if (next == '$') continue
-            if (WORD_CHAR.matches(next.toString())) {
+            if (WORD_CHAR.matchEntire(next.toString()) != null) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
                 val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =

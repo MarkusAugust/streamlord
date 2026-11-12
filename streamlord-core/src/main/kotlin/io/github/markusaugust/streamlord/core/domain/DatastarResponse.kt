@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import org.intellij.lang.annotations.Language
@@ -51,8 +52,9 @@ public data class ElementsResponse(
         // and others drop what Latin-1 lacks: only printable ASCII arrives as written.
         for (inHeader in listOfNotNull(selector, viewTransitionSelector)) {
             inHeader.firstOrNull { it !in ' '..'~' }?.let {
+                val code = hex(it.code, 4).uppercase()
                 throw DatastarEventValidationException(
-                    "A selector in a response header must be printable ASCII, not U+%04X; send it in a stream instead".format(it.code),
+                    "A selector in a response header must be printable ASCII, not U+$code; send it in a stream instead",
                 )
             }
         }
@@ -134,5 +136,5 @@ public data class ScriptResponse(
 /** JSON text with every character past printable ASCII written as a `\u` escape, which only a string can hold. */
 private fun asciiOnly(json: String): String =
     buildString(json.length) {
-        for (c in json) if (c in ' '..'~') append(c) else append("\\u%04x".format(c.code))
+        for (c in json) if (c in ' '..'~') append(c) else append("\\u").append(hex(c.code, 4))
     }

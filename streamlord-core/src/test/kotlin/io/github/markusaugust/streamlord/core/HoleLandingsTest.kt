@@ -11,7 +11,7 @@ import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,12 +20,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 
 /**
- * [holeLandings] and [urlSchemeFixedBy] against `editors/vscode/test/fixtures/twins/hole-landings.json`,
+ * [holeLandings] and [urlSchemeFixedBy] against `editors/vscode/test/fixtures/cases/hole-landings.json`,
  * which the VS Code analysis reads too, and each case against [interpolate] itself, so the editors
  * cannot be held to a position that run time does not act on.
  */
 class HoleLandingsTest {
-    private val fixture = JsonParser.parseObject(File("../editors/vscode/test/fixtures/twins/hole-landings.json").readText())
+    private val fixture = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/cases/hole-landings.json"))
 
     private fun holesOf(markup: String): List<IntRange> = Regex("%s").findAll(markup).map { it.range }.toList()
 
@@ -103,8 +103,11 @@ class HoleLandingsTest {
         val (name, url) = holeLandings("<a %s=\"x%s\">", listOf(3..4, 8..9), known = mapOf(0 to "href"))
         assertEquals(Position.TEXT, name.position)
         assertEquals(null, name.attribute)
+        assertEquals(listOf<Any>(-1, false, -1), listOf(name.valueStart, name.loadsCode, name.tagStart))
         assertEquals(Position.URL, url.position)
         assertEquals(7, url.valueStart)
+        // Known text with a quote in it ends the value, so what was a URL is text to the browser.
+        assertEquals(Position.TEXT, holeLandings("<a href=\"%s\">", listOf(9..10), known = mapOf(0 to "/x\" title=\"")).single().position)
     }
 
     @Test

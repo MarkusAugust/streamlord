@@ -113,21 +113,6 @@ public data class Issue(
     }
 }
 
-/** An [Issue] of a project's sources, as [Analyzer.analyzeProject] finds them: the [file], and the [line] and [column] where it starts. */
-public data class ProjectIssue(
-    val file: java.io.File,
-    val line: Int,
-    val column: Int,
-    val issue: Issue,
-) {
-    /** Whether the issue should fail a build: an error, or an `unsafe-interpolation` warning, which escaping cannot save. */
-    public val fails: Boolean
-        get() = issue.severity == Severity.ERROR || (issue.code == "unsafe-interpolation" && issue.severity == Severity.WARNING)
-
-    /** The issue as one line in the form compilers write, as [Issue.format] has it: `src/main/kotlin/Page.kt:12:5: error: ... [code]`. */
-    public fun format(): String = issue.format(file.path, SourcePosition(line, column))
-}
-
 /** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
 public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }
 

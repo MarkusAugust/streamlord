@@ -8,7 +8,7 @@ class SignalReferencesTest {
 
     @Test
     fun `where a file reads a signal, and which reads name none it defines`() {
-        for (case in twinCases("signal-references.json")) {
+        for (case in sharedCases("signal-references.json")) {
             val name = case.string("name")
             case.array("defined")?.let { array ->
                 val defined = array.strings().toSet()

@@ -1,0 +1,27 @@
+{"what":"file","language":"html"}
+{"what":"diagnostic","code":"signal-name-expected","message":"data-bind takes a signal name, not an expression.","range":"1:19-1:25","severity":"Warning","source":"streamlord"}
+{"what":"diagnostic","code":"signal-name-expected","message":"data-bind takes a signal name, not an expression.","range":"1:45-1:52","severity":"Warning","source":"streamlord"}
+{"what":"diagnostic","code":"signal-name-expected","message":"data-bind takes a signal name, not an expression.","range":"1:72-1:77","severity":"Warning","source":"streamlord"}
+{"what":"hover","at":"1:2-1:7","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:2-1:7"}]}
+{"what":"hover","at":"1:8-1:17","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:8-1:17"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:8-1:17"}]}
+{"what":"hover","at":"1:28-1:33","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:28-1:33"}]}
+{"what":"hover","at":"1:34-1:43","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:34-1:43"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:34-1:43"}]}
+{"what":"hover","at":"1:55-1:60","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:55-1:60"}]}
+{"what":"hover","at":"1:61-1:70","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:61-1:70"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:61-1:70"}]}
+{"what":"definition","at":"1:19-1:25","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:19-1:25"}]}
+{"what":"definition","at":"1:45-1:52","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:45-1:52"}]}
+{"what":"definition","at":"1:72-1:77","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:72-1:77"}]}
+{"what":"references","at":"1:19-1:25","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:19-1:25"}]}
+{"what":"references","at":"1:45-1:52","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:45-1:52"}]}
+{"what":"references","at":"1:72-1:77","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:72-1:77"}]}
+{"what":"rename","at":"1:1-1:18","error":"No signal here to rename."}
+{"what":"rename","at":"1:19-1:25","placeholder":"{name}","range":"1:19-1:25"}
+{"what":"rename","at":"1:26-1:44","error":"No signal here to rename."}
+{"what":"rename","at":"1:45-1:52","placeholder":"{$name}","range":"1:45-1:52"}
+{"what":"rename","at":"1:53-1:71","error":"No signal here to rename."}
+{"what":"rename","at":"1:72-1:77","placeholder":"@name","range":"1:72-1:77"}
+{"what":"rename","at":"1:78-2:1","error":"No signal here to rename."}
+{"what":"renamed","at":"1:19-1:25","edits":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:19-1:25","text":"renamedSignal"}],"to":"renamedSignal"}
+{"what":"renamed","at":"1:45-1:52","edits":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:45-1:52","text":"renamedSignal"}],"to":"renamedSignal"}
+{"what":"renamed","at":"1:72-1:77","edits":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:72-1:77","text":"renamedSignal"}],"to":"renamedSignal"}
+{"what":"scopes","line":1,"tokens":[["<","meta.tag.structure.input.void.html punctuation.definition.tag.begin.html"],["input","meta.tag.structure.input.void.html entity.name.tag.html"],[" ","meta.tag.structure.input.void.html"],["data-","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.prefix"],["bind","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.plugin"],["=","meta.tag.structure.input.void.html punctuation.separator.key-value.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.begin.html"],["{name}","meta.tag.structure.input.void.html string.quoted.double.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.end.html"],[">","meta.tag.structure.input.void.html punctuation.definition.tag.end.html"],["<","meta.tag.structure.input.void.html punctuation.definition.tag.begin.html"],["input","meta.tag.structure.input.void.html entity.name.tag.html"],[" ","meta.tag.structure.input.void.html"],["data-","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.prefix"],["bind","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.plugin"],["=","meta.tag.structure.input.void.html punctuation.separator.key-value.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.begin.html"],["{$name}","meta.tag.structure.input.void.html string.quoted.double.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.end.html"],[">","meta.tag.structure.input.void.html punctuation.definition.tag.end.html"],["<","meta.tag.structure.input.void.html punctuation.definition.tag.begin.html"],["input","meta.tag.structure.input.void.html entity.name.tag.html"],[" ","meta.tag.structure.input.void.html"],["data-","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.prefix"],["bind","meta.tag.structure.input.void.html entity.other.attribute-name.datastar.plugin"],["=","meta.tag.structure.input.void.html punctuation.separator.key-value.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.begin.html"],["@name","meta.tag.structure.input.void.html string.quoted.double.html"],["\"","meta.tag.structure.input.void.html punctuation.definition.string.end.html"],[">","meta.tag.structure.input.void.html punctuation.definition.tag.end.html"]]}

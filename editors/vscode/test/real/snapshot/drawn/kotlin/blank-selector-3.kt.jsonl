@@ -1,0 +1,4 @@
+{"what":"file","language":"kotlin"}
+{"what":"diagnostic","code":"blank-selector","message":"Selector must not be blank.","range":"1:27-1:29","severity":"Error","source":"streamlord"}
+{"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}
+{"what":"scopes","line":1,"tokens":[["removeElements","identifier.kotlin"],["(",""],["selector","identifier.kotlin"],[" = ",""],["\"","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"],[")",""]]}

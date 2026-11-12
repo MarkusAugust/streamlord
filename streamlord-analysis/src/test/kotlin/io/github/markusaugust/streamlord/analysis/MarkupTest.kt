@@ -2,10 +2,11 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.TimeSource
 
 /** How long the markup takes to read, and where a comment ends; what it reports is in the shared corpus. */
 class MarkupTest {
@@ -22,9 +23,9 @@ class MarkupTest {
     ) {
         // The first analysis loads the catalog, which is no part of what is timed.
         html("<div data-text=\"1\"></div>")
-        val start = System.nanoTime()
+        val start = TimeSource.Monotonic.markNow()
         block()
-        val took = (System.nanoTime() - start) / 1_000_000
+        val took = start.elapsedNow().inWholeMilliseconds
         assertTrue(took < ms, "took $took ms")
     }
 
@@ -53,7 +54,7 @@ class MarkupTest {
     /** `conformance/dom/comment-ends.json`: where a comment ends, as the browser's parser reads it. */
     @Test
     fun `a comment ends where the HTML tokenizer ends it`() {
-        val cases = (JsonParser.parse(File("../conformance/dom/comment-ends.json").readText()) as JsonArray).objects()
+        val cases = (JsonParser.parse(fixtureText("conformance/dom/comment-ends.json")) as JsonArray).objects()
         assertEquals(16, cases.size)
         for (case in cases) {
             val input = case.string("input")!!

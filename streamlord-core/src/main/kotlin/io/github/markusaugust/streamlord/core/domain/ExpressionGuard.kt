@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.StreamlordException
+import io.github.markusaugust.streamlord.core.client.regex
 
 /**
  * Raised when a Datastar expression bears the marks of a Kotlin string template that ate a
@@ -108,27 +109,27 @@ public object ExpressionGuard {
             "-",
         )
 
-    private val ONLY_OPERATORS = Regex("^[\\s=!<>&|?:.+\\-*/%,;()\\[\\]{}]*$")
+    private val ONLY_OPERATORS = regex("^[\\s=!<>&|?:.+\\-*/%,;()\\[\\]{}]*$")
 
     /** Keyword operators: what is left of `$a in $b`, `typeof $x` or `void $x` once the signals are eaten. */
-    private val ONLY_KEYWORDS = Regex("^(?:\\s*\\b(?:in|instanceof|typeof|void|delete|new|await)\\b)+\\s*$")
-    private val KEYWORD_NEEDS_LEFT = Regex("^(in|instanceof)\\b")
-    private val KEYWORD_NEEDS_RIGHT = Regex("(?<![.\\w$])(in|instanceof|typeof|void|delete|new|await)$")
+    private val ONLY_KEYWORDS = regex("^(?:\\s*\\b(?:in|instanceof|typeof|void|delete|new|await)\\b)+\\s*$")
+    private val KEYWORD_NEEDS_LEFT = regex("^(in|instanceof)\\b")
+    private val KEYWORD_NEEDS_RIGHT = regex("(?<![.\\w$])(in|instanceof|typeof|void|delete|new|await)$")
 
     /**
      * A binary `+` or `-` at the start, set apart from what follows: `$a + 1` without its `$a`, and
      * `$a - $b` without its `$a`, which leaves `- $b`. A sign is written against its operand, so
      * `-$x`, `-1` and `+$n` pass; `- $x` with a space is refused, since it is what `$a - $x` leaves.
      */
-    private val LEADING_BINARY = Regex("^[+\\-]\\s")
+    private val LEADING_BINARY = regex("^[+\\-]\\s")
 
     /** A template literal's `${}` with nothing in it, which is not JavaScript at all: `` `${$n}` `` without its `$n`. */
-    private val EMPTY_SUBSTITUTION = Regex("\\$\\{\\s*}")
+    private val EMPTY_SUBSTITUTION = regex("\\$\\{\\s*}")
 
     /** `[]`, `{}`, `[{}]`: empty literals are operands, the usual way to start a list or object signal. */
     private val CLOSERS = setOf(")", "]", "}")
 
-    private val ONLY_BRACKETS = Regex("^[\\s\\[\\]{}]+$")
+    private val ONLY_BRACKETS = regex("^[\\s\\[\\]{}]+$")
 
     /**
      * A statement that is nothing but `++` or `--` (`$count ++`, with its operand, is fine); an operator that needs a left operand right
@@ -142,7 +143,7 @@ public object ExpressionGuard {
      * never count.
      */
     private val ORPHANS =
-        Regex(
+        regex(
             "(?:^|[;(])\\s*(\\+\\+|--)(?=\\s*(?:;|$))" +
                 "|[(\\[{,](?:\\s*)(===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|[=?:*%<>,]|\\.(?![.\\d]))" +
                 "|(?<![+\\-])([:=*%<>&|?!@]|[+\\-](?![+\\-]))(?:\\s*)(?=[)\\]},])",
@@ -212,7 +213,7 @@ public object ExpressionGuard {
         return KEYWORD_BEFORE_REGEX.containsMatchIn(before)
     }
 
-    private val KEYWORD_BEFORE_REGEX = Regex("(?<![.\\w$])(?:return|typeof|case|void|delete|in|instanceof|new|await|throw|yield)\\s*$")
+    private val KEYWORD_BEFORE_REGEX = regex("(?<![.\\w$])(?:return|typeof|case|void|delete|in|instanceof|new|await|throw|yield)\\s*$")
 
     /** Whether a template literal holds a `${}` with nothing in it; in another string it is only text. */
     private fun emptySubstitution(t: String): Boolean {
@@ -286,8 +287,8 @@ public object ExpressionGuard {
         }
         val t = blankLiterals(expression.trim())
         if (t.isEmpty()) throw InterpolatedExpressionException(expression, "is empty", attribute)
-        if (ONLY_BRACKETS.matches(t)) return expression
-        if (ONLY_OPERATORS.matches(t) || ONLY_KEYWORDS.matches(t)) {
+        if (ONLY_BRACKETS.matchEntire(t) != null) return expression
+        if (ONLY_OPERATORS.matchEntire(t) != null || ONLY_KEYWORDS.matchEntire(t) != null) {
             throw InterpolatedExpressionException(expression, "contains no operands, only operators", attribute)
         }
         if (LEADING_BINARY.containsMatchIn(t)) {

@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * Signals a handler reads, against signals the pages declare.
  *
@@ -48,22 +50,24 @@ public data class SignalFacts(
     val encodedTypes: Set<String> = emptySet(),
 )
 
-private val SIGNAL_TYPE_PARAMETER = Regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
-private val SIGNAL_TYPE_DEFAULT = Regex("""\breadSignalsOr\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
+private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
+private val SIGNAL_TYPE_DEFAULT = regex("""\breadSignalsOr\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
 
 // Any modifier may stand between the annotation and `class`: an explicit-API module writes
 // `@Serializable public data class`.
 private val SERIALIZABLE_DECLARATION =
-    Regex(
+    regex(
         """@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
     )
 
 // `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
 // between it and the property.
 private val PROPERTY_NAME =
-    Regex(
+    regex(
         """(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""",
     )
+
+private val BLANK_LINE = regex("""\n[ \t\r]*\n""")
 
 /** The `Signals` accessors that take a signal name. `path` takes several; its first is the signal. */
 private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decimal", "obj", "array", "has", "path")
@@ -72,12 +76,12 @@ private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decim
 // not enough. A lookup counts when it is made on an untyped `readSignals()` call, on a name the
 // file binds to one or declares as `Signals`, or on a name that is plainly `signals`.
 private val SIGNALS_BINDING =
-    Regex(
+    regex(
         """\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*Signals\??\s*)?=[^\n;=]*\breadSignals\s*\([^()\n]*\)\s*$""",
         RegexOption.MULTILINE,
     )
-private val SIGNALS_TYPED = Regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
-private val READ_SIGNALS_BEFORE = Regex("""\breadSignals\s*$""")
+private val SIGNALS_TYPED = regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
+private val READ_SIGNALS_BEFORE = regex("""\breadSignals\s*$""")
 
 /**
  * Reads [src] for everything the drift check needs.
@@ -151,12 +155,13 @@ internal fun serializableProperties(src: String): Map<String, List<SignalPropert
         val name = declaration.groupValues[1]
         val open = src.indexOf('(', declaration.range.last)
         if (open < 0) continue
-        val close = matchingParen(src, open)
-        if (close < 0) continue
+        // Still being typed, the list is what stands before the first blank line: the signals stay known meanwhile.
+        val close = matchingParen(src, open).takeIf { it >= 0 } ?: BLANK_LINE.find(src, open)?.range?.first ?: src.length
 
         val properties = ArrayList<SignalProperty>()
-        for (property in PROPERTY_NAME.findAll(src.substring(open, close))) {
-            val group = property.groups[1] ?: property.groups[2] ?: continue
+        val list = src.substring(open, close)
+        for (property in PROPERTY_NAME.findAll(list)) {
+            val group = PROPERTY_NAME.groupAt(list, property, 1) ?: PROPERTY_NAME.groupAt(list, property, 2) ?: continue
             properties += SignalProperty(group.value, open + group.range.first, open + group.range.last + 1)
         }
         out[name] = properties

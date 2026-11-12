@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { catalog } from "../src/catalog.ts";
+import { catalog } from "../src/analysis.ts";
 import { domEventsFile, pinnedLibDom } from "../scripts/domEvents.mjs";
 
 describe("DOM events", () => {
@@ -11,11 +11,11 @@ describe("DOM events", () => {
   });
 
   it("the catalog offers the DOM events and Datastar's own", () => {
-    const click = catalog.domEvents.find((e) => e.name === "click");
+    const click = catalog().domEvents.find((e) => e.name === "click");
     assert.equal(click?.mdn, "https://developer.mozilla.org/docs/Web/API/Element/click_event");
-    assert.ok(catalog.domEvents.some((e) => e.name === "animationend"));
+    assert.ok(catalog().domEvents.some((e) => e.name === "animationend"));
     assert.deepEqual(
-      catalog.datastarEvents.map((e) => e.name),
+      catalog().datastarEvents.map((e) => e.name),
       ["datastar-fetch", "datastar-signal-patch"],
     );
   });

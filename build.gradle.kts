@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin
 
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
@@ -14,6 +15,18 @@ plugins {
     alias(libs.plugins.dokka) apply false
 }
 
+/*
+ * Kotlin/JS writes an npm workspace for `:analysis-js` and names it with this project's version as
+ * it stands when the plugin is applied. Nothing of it is published, so it is applied here under a
+ * fixed one, and kotlin-js-store/package-lock.json does not change with a release.
+ */
+run {
+    val released = version
+    version = "0.0.0"
+    apply<NodeJsRootPlugin>()
+    version = released
+}
+
 // The oldest Kotlin a consumer may compile with; see compilerOptions below.
 val kotlinFloor: String = libs.versions.kotlinFloor.get()
 
@@ -25,6 +38,9 @@ val kotlinFloor: String = libs.versions.kotlinFloor.get()
  * mode so that nothing leaves the walls of a module by accident.
  */
 subprojects {
+    // Kotlin/JS, configured in its own build file; nothing below applies to it.
+    if (name == "analysis-js") return@subprojects
+
     /*
      * Modules that exist for the build itself and never leave it. They are not
      * published, they are not held to explicit API mode, and an unused value in

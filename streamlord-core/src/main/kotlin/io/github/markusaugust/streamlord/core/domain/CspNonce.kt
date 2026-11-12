@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
-import java.security.SecureRandom
-import java.util.Base64
+import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.randomBase64
 
 /**
  * The nonce that turns Datastar's CSP mode on, and the header it has to agree with.
@@ -35,9 +35,7 @@ public object CspNonce {
     private const val BYTES = 16
 
     // Section 2.3.1 of CSP Level 3: a nonce-value is a base64-value, padding included.
-    private val BASE64 = Regex("[A-Za-z0-9+/\\-_]+={0,2}")
-
-    private val random = SecureRandom()
+    private val BASE64 = regex("[A-Za-z0-9+/\\-_]+={0,2}")
 
     /**
      * A fresh nonce: 16 random bytes from [SecureRandom], base64 encoded.
@@ -46,11 +44,7 @@ public object CspNonce {
      * responses turns it into a constant, and a constant an attacker can read out of one page
      * and paste into the next is not a nonce.
      */
-    public fun generate(): String {
-        val bytes = ByteArray(BYTES)
-        random.nextBytes(bytes)
-        return Base64.getEncoder().encodeToString(bytes)
-    }
+    public fun generate(): String = randomBase64(BYTES)
 
     /**
      * A policy to start from: same-origin everything, scripts from this origin or carrying
@@ -85,9 +79,9 @@ public object CspNonce {
         when {
             nonce.isEmpty() -> "The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start."
 
-            !BASE64.matches(
+            BASE64.matchEntire(
                 nonce,
-            ) -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
+            ) == null -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
 
             else -> null
         }

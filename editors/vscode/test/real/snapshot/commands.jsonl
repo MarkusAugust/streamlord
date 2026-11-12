@@ -1,0 +1,5 @@
+{"what":"command","command":"streamlord.colors.apply"}
+{"what":"command","command":"streamlord.colors.remove"}
+{"what":"command","command":"streamlord.inspector.open"}
+{"what":"command","command":"streamlord.inspector.openWith"}
+{"what":"command","command":"streamlord.reindexSignals"}

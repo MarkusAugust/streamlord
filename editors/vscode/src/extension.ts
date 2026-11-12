@@ -1,19 +1,15 @@
 import * as vscode from "vscode";
-import { analyzeHtml, analyzeKotlin } from "./analyze.ts";
-import { catalog } from "./catalog.ts";
+import { catalog, type Issue, type Route } from "./analysis.ts";
 import { IssueStore, StreamlordCodeActionProvider } from "./codeActions.ts";
 import { applyRecommendedColors, removeRecommendedColors } from "./colors.ts";
 import { StreamlordCompletionProvider } from "./completion.ts";
-import type { Issue } from "./expression.ts";
 import { StreamlordHoverProvider } from "./hover.ts";
 import { Inspector } from "./inspector.ts";
-import { kotlinModules } from "./modules.ts";
+import { Lint } from "./lint.ts";
 import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
-import type { Route } from "./routes.ts";
 import { RunningServers } from "./serverLog.ts";
 import { StreamlordSignatureHelpProvider } from "./signatureHelp.ts";
-import { signalReferencesInHtml, signalReferencesInKotlin, unknownSignalIssue, type SignalReference } from "./signalReferences.ts";
 import { SignalIndex } from "./signalIndex.ts";
 import { SignalNavigationProvider } from "./signalNavigation.ts";
 
@@ -24,12 +20,14 @@ function markupLanguages(): string[] {
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = () => vscode.workspace.getConfiguration("streamlord");
-  const prefix = () => config().get<string>("attributePrefix", catalog.prefix);
+  const prefix = () => config().get<string>("attributePrefix", catalog().prefix);
   const markup = new Set(markupLanguages());
   const selector: vscode.DocumentSelector = [{ language: "kotlin" }, ...[...markup].map((language) => ({ language }))];
   const issues = new IssueStore();
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
+  const log = vscode.window.createOutputChannel("Streamlord");
+  const checks = new Lint((line) => log.appendLine(line));
   const signals = new SignalIndex(markup, prefix);
   const navigation = new SignalNavigationProvider(signals, prefix);
   const running = new RunningServers();
@@ -53,42 +51,34 @@ export function activate(context: vscode.ExtensionContext): void {
       diagnostics.delete(document.uri);
       return;
     }
-    let found: Issue[];
-    const text = document.getText();
-    if (document.languageId === "kotlin") {
-      const sdk = kotlinModules(text);
-      found = analyzeKotlin(text, { prefix: prefix(), checkHtmlAttributes: true, constants: signals.allConstants(), ...sdk });
-      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInKotlin(text, prefix(), sdk)));
-    } else if (markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true)) {
-      found = analyzeHtml(text, { prefix: prefix(), checkHtmlAttributes: true });
-      if (checkSignals()) found.push(...unknownSignals(document, signalReferencesInHtml(text, prefix())));
-    } else {
+    const kotlin = document.languageId === "kotlin";
+    if (!kotlin && !(markup.has(document.languageId) && config().get<boolean>("diagnostics.html", true))) {
       diagnostics.delete(document.uri);
       issues.delete(document.uri);
       return;
     }
+    const found = checks.issues(document.uri.toString(), document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], defined(document));
     issues.set(document.uri, found);
     diagnostics.set(
       document.uri,
       found.map((i) => {
         const d = new vscode.Diagnostic(new vscode.Range(document.positionAt(i.start), document.positionAt(i.end)), i.message, severity(i.severity));
         d.source = "streamlord";
-        d.code = i.code && i.link ? { value: i.code, target: vscode.Uri.parse(i.link) } : i.code;
+        d.code = i.code && i.link ? { value: i.code, target: vscode.Uri.parse(i.link) } : (i.code ?? undefined);
         return d;
       }),
     );
   };
 
-  /** Is the unknown-signal check on? Not until the workspace has been read once, and not when turned off. */
-  const checkSignals = () => signals.ready && config().get<boolean>("diagnostics.unknownSignals", true);
-
-  /** A `$name` no file defines. */
-  const unknownSignals = (document: vscode.TextDocument, refs: SignalReference[]): Issue[] => {
-    if (refs.length === 0) return [];
+  /**
+   * The signals the workspace defines, which a `$name` is checked against, or null while the check
+   * is off: until the workspace has been read once, and when it is turned off.
+   */
+  const defined = (document: vscode.TextDocument): string[] | null => {
+    if (!signals.ready || !config().get<boolean>("diagnostics.unknownSignals", true)) return null;
     // The index reads this version of the document once; a lint right after an edit finds it read.
     signals.update(document);
-    const defined = signals.allDefinitions();
-    return refs.flatMap((r) => unknownSignalIssue(r, defined) ?? []);
+    return signals.allDefinitions();
   };
 
   const schedule = (document: vscode.TextDocument) => {
@@ -100,6 +90,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     diagnostics,
+    log,
     signals,
     store,
     vscode.languages.registerCodeLensProvider({ language: "kotlin" }, new RouteLensProvider()),

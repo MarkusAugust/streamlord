@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { NON_STREAM_CUT, parseHeaderLines, toCurl, type SavedRequest } from "../src/requests.ts";
+import { parseHeaderLines, responseReading, toCurl, type SavedRequest } from "../src/analysis.ts";
 import { openStream } from "../src/streamClient.ts";
 
 /** What a server receives: the request target as it stood on the wire, and the body. */
@@ -117,7 +117,7 @@ describe("stream client", () => {
   it("reads a response without a stream only up to its limit", async () => {
     let body = "";
     await openStream({ url: `${base}/html-big`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
-    assert.equal(body, "x".repeat(1024 * 1024) + NON_STREAM_CUT);
+    assert.equal(body, "x".repeat(1024 * 1024) + responseReading(200, "text/plain").cut);
     await openStream({ url: `${base}/html-exact`, method: "GET", signals: "", headers: {} }, { onNonSse: (r) => (body = r.body) }, new AbortController().signal);
     assert.equal(body, "x".repeat(1024 * 1024), "a body of exactly the limit is not cut");
   });

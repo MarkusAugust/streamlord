@@ -4,6 +4,8 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.radixDouble
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
@@ -14,6 +16,7 @@ import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import kotlin.math.abs
+import kotlin.math.floor
 
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -21,16 +24,16 @@ import kotlin.math.abs
  */
 
 /** An attribute name as a browser parses it, without template syntax or a spread in it. */
-private val PLAIN_ATTRIBUTE_NAME = Regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
+private val PLAIN_ATTRIBUTE_NAME = regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
 
 /** A modifier name with arguments run into it by underscores, and nothing else. */
-private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
+private val MODIFIER_WORD = regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-private val JS_DECIMAL = Regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+private val JS_DECIMAL = regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
 
-private val JS_RADIX = Regex("0([xob])([0-9a-f]+)")
+private val JS_RADIX = regex("0([xob])([0-9a-f]+)")
 
 /** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
 private val FIRST_TAG_READ = setOf(ModifierType.DURATION, ModifierType.INT, ModifierType.IDENT)
@@ -47,7 +50,7 @@ private const val JS_SPACE =
 private fun jsNumber(tag: String): Double? {
     val t = tag.trim { it in JS_SPACE }.asciiLowercase()
     if (t.isEmpty()) return 0.0
-    if (JS_DECIMAL.matches(t)) return t.toDouble()
+    if (JS_DECIMAL.matchEntire(t) != null) return t.toDouble()
     val m = JS_RADIX.matchEntire(t) ?: return null
     val radix =
         when (m.groupValues[1]) {
@@ -55,11 +58,11 @@ private fun jsNumber(tag: String): Double? {
             "o" -> 8
             else -> 2
         }
-    return m.groupValues[2].toBigIntegerOrNull(radix)?.toDouble()
+    return radixDouble(m.groupValues[2], radix)
 }
 
 /** What JavaScript's `parseFloat` reads from the start of a tag: digits, and an exponent if one follows. */
-private val JS_FLOAT_PREFIX = Regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+private val JS_FLOAT_PREFIX = regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
 
 /**
  * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
@@ -108,28 +111,28 @@ private val OPTIONAL_END: Map<String, Set<String>> =
  * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
  */
 public val TEMPLATE_SYNTAX: Regex =
-    Regex(
+    regex(
         """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
             """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
     )
 
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
-private val DURATION = Regex("""^\d+(ms|s)?$""")
-private val WHOLE_NUMBER = Regex("""^\d+$""")
+private val DURATION = regex("""^\d+(ms|s)?$""")
+private val WHOLE_NUMBER = regex("""^\d+$""")
 
 /** A value that looks like a name, so that its problems as a name are told rather than called an expression. */
-private val NAME_LIKE = Regex("""[\p{L}\p{Nd}_$.-]+""")
+private val NAME_LIKE = regex("""[\p{L}\p{Nd}_$.-]+""")
 
 /** A `$name` in a filter, which the client evaluates without rewriting signals. */
-private val FILTER_SIGNAL = Regex("""\$[A-Za-z_][\w$]*""")
-private val WORD_CHAR_CLASS = Regex("""\w""")
-private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
-private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
-private val HAS_CAPITAL = Regex("""[A-Z]""")
-private val HAS_LOWERCASE = Regex("""[a-z]""")
+private val FILTER_SIGNAL = regex("""\$[A-Za-z_][\w$]*""")
+private val WORD_CHAR_CLASS = regex("""\w""")
+private val IDENT = regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
+private val SIGNAL_NAME = regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
+private val HAS_CAPITAL = regex("""[A-Z]""")
+private val HAS_LOWERCASE = regex("""[a-z]""")
 
 /** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */
-private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
+private val KEY_ESCAPE = regex("""(?s)\\(.)""")
 
 /**
  * The path of a key of the object form, part by part as the keys are written and read as the
@@ -139,7 +142,7 @@ private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
 private fun keyParts(k: ObjectKey): List<String> = k.parts.map { p -> KEY_ESCAPE.replace(p) { it.groupValues[1] } }
 
 /** A number literal, whole. */
-private val NUMBER = Regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
+private val NUMBER = regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 private val NO_FUNCTION_WORDS = setOf("true", "false", "null", "undefined", "NaN", "Infinity")
 private val UNARY_WORDS = setOf("typeof", "void", "delete")
 private val BINARY_WORDS = setOf("in", "instanceof")
@@ -150,13 +153,12 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
  * string, a template, a regular expression, an array with such an item), a unary operation, or
  * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
  * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
- * judged. Shared with the VS Code extension (`certainlyNoFunction` in markup.ts), which this
- * follows step by step.
+ * judged.
  */
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
     if (v.isEmpty()) return false
-    if (NUMBER.matches(v) || v in NO_FUNCTION_WORDS) return true
+    if (NUMBER.matchEntire(v) != null || v in NO_FUNCTION_WORDS) return true
     val regions = jsRegions(v)
     var depth = 0
     var binary = false
@@ -307,7 +309,6 @@ private fun arrayItems(
  * value or stands where the value of a group, a conditional or a `||`, `&&`, `??` or `,` comes
  * from, as in `({x: 1})`, `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put
  * in an array or returned by a function does not count, and a value with `=>` in it is a function.
- * Shared with the VS Code extension (`mayGiveObject` in markup.ts).
  */
 internal fun mayGiveObject(value: String): Boolean {
     val regions = jsRegions(value)
@@ -383,7 +384,7 @@ private fun cutByTemplate(
 ): Boolean = tagSource.getOrNull(at) == '{' || (at < tagSource.length && templateConstructEnd(tagSource, at) > at)
 
 /** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
-private val KOTLIN_TEMPLATE = Regex("""\$[A-Za-z_{]""")
+private val KOTLIN_TEMPLATE = regex("""\$[A-Za-z_{]""")
 
 public data class Attribute(
     val name: String,
@@ -426,6 +427,8 @@ public data class MarkupOptions(
     val hyphenatedSignals: Set<String> = emptySet(),
     /** Whether the markup is a template's or an HTML file's, whose template comments and tags are skipped, rather than a Kotlin string's. */
     val templates: Boolean = true,
+    /** As [AnalyzeOptions.prefixSetting]. */
+    val prefixSetting: String = PREFIX_SETTING,
 )
 
 /**
@@ -496,7 +499,7 @@ public fun tokenize(
 }
 
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
-private val KOTLIN_TAG_NAME = Regex("""(</?)__kt__""")
+private val KOTLIN_TAG_NAME = regex("""(</?)__kt__""")
 
 /**
  * [html] with the placeholder of a Kotlin template as a tag's name, `<$tag>`, turned into a name of
@@ -639,7 +642,7 @@ public class MarkupValidator(
     private val backendActions = catalog.actions.filter { it.kind == "backend" }.map { it.name }
 
     /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
-    private val backendAction = Regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
+    private val backendAction = regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
 
     public fun validateMarkup(
         html: String,
@@ -668,7 +671,13 @@ public class MarkupValidator(
             if (!tag.selfClosing) stack += tag
             if (opts.checkAttributes) {
                 issues +=
-                    validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end), opts.hyphenatedSignals)
+                    validateAttributes(
+                        tag,
+                        opts.prefix,
+                        html.substring(tag.start, tag.end),
+                        opts.hyphenatedSignals,
+                        prefixSetting = opts.prefixSetting,
+                    )
             }
         }
         for (unclosed in stack) {
@@ -745,6 +754,7 @@ public class MarkupValidator(
         tagSource: String?,
         hyphenatedSignals: Set<String> = emptySet(),
         kotlin: Boolean = false,
+        prefixSetting: String = PREFIX_SETTING,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -754,7 +764,7 @@ public class MarkupValidator(
                     Issue(
                         attr.nameStart,
                         attr.nameEnd,
-                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check the Streamlord attribute prefix setting.",
+                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check $prefixSetting.",
                         Severity.WARNING,
                         "prefix-mismatch",
                     )
@@ -1023,7 +1033,7 @@ public class MarkupValidator(
                 issues += validateComputedObject(attr, prefix)
             }
             if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
-                named.none { it.start >= attr.valueStart } && !SIGNAL_NAME.matches(value.trim())
+                named.none { it.start >= attr.valueStart } && SIGNAL_NAME.matchEntire(value.trim()) == null
             ) {
                 issues +=
                     Issue(
@@ -1068,7 +1078,7 @@ public class MarkupValidator(
         // Template syntax in a value, or attributes spread into the tag by name, leave what it
         // sends unknown until rendered.
         if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
-            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || !PLAIN_ATTRIBUTE_NAME.matches(it.name) }
+            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || PLAIN_ATTRIBUTE_NAME.matchEntire(it.name) == null }
         ) {
             return emptyList()
         }
@@ -1173,7 +1183,7 @@ public class MarkupValidator(
             from: Int,
             to: Int,
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
-        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matches(decoded.text)) {
+        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matchEntire(decoded.text) != null) {
             val held = decoded.text
             val path = signalPathProblem(held)
             val reach = if (path == null) signalNameProblem(held) else null
@@ -1340,7 +1350,7 @@ public class MarkupValidator(
                 val at = m.range.first
                 val before = text.getOrNull(at - 1)
                 if (regions[at] != Region.CODE ||
-                    (before != null && (before == '$' || WORD_CHAR_CLASS.matches(before.toString())))
+                    (before != null && (before == '$' || WORD_CHAR_CLASS.matchEntire(before.toString()) != null))
                 ) {
                     continue
                 }
@@ -1491,7 +1501,7 @@ public class MarkupValidator(
         spec: AttributeSpec,
     ): String? {
         val underscore = name.indexOf('_')
-        if (underscore <= 0 || underscore == name.length - 1 || !MODIFIER_WORD.matches(name)) return null
+        if (underscore <= 0 || underscore == name.length - 1 || MODIFIER_WORD.matchEntire(name) == null) return null
         val head = name.substring(0, underscore)
         val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
         if (modifier.type == ModifierType.FLAG) return null
@@ -1576,9 +1586,9 @@ public class MarkupValidator(
             ModifierType.DURATION -> {
                 val d = args.firstOrNull()
                 val flags = args.drop(1)
-                val later = flags.indexOfFirst { DURATION.matches(it) }
+                val later = flags.indexOfFirst { DURATION.matchEntire(it) != null }
                 val at = start + spec.name.length
-                if (d != null && !DURATION.matches(d) && d in spec.flags && later >= 0) {
+                if (d != null && DURATION.matchEntire(d) == null && d in spec.flags && later >= 0) {
                     // __debounce.leading.500ms: the client reads the first argument as the duration.
                     val ordered = listOf(flags[later], d) + flags.filterIndexed { k, _ -> k != later }
                     val fixed = "__${spec.name}.${ordered.joinToString(".")}"
@@ -1592,16 +1602,16 @@ public class MarkupValidator(
                         if (unknown.isEmpty()) listOf(Fix("Change to $fixed", at, end, "." + ordered.joinToString("."))) else emptyList(),
                     )
                     for (f in unknown) {
-                        if (!DURATION.matches(f)) unknownFlag(f)
+                        if (DURATION.matchEntire(f) == null) unknownFlag(f)
                     }
                     return issues
                 }
                 val next = flags.firstOrNull()
-                if (d != null && WHOLE_NUMBER.matches(d) && next != null && DURATION.matches(next)) {
+                if (d != null && WHOLE_NUMBER.matchEntire(d) != null && next != null && DURATION.matchEntire(next) != null) {
                     // __debounce.1.5s: the dot ends the duration, which the client reads as 1 ms.
                     val seconds = next.endsWith("s") && !next.endsWith("ms")
                     val ms = "$d.${next.removeSuffix("ms").removeSuffix("s")}".toDouble() * if (seconds) 1000 else 1
-                    val whole = if (ms == Math.floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
+                    val whole = if (ms == floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
                     // With a flag it does not know after it, the whole duration would fail in turn, so it is no fix.
                     val fixable = whole != null && flags.drop(1).all { it in spec.flags }
                     fail(
@@ -1620,7 +1630,7 @@ public class MarkupValidator(
                     }
                     return issues
                 }
-                val read = d?.takeIf { it.isNotEmpty() && !DURATION.matches(it) }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
+                val read = d?.takeIf { it.isNotEmpty() && DURATION.matchEntire(it) == null }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
                 if (d != null && read != null) {
                     // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
                     val at = start + spec.name.length
@@ -1629,7 +1639,7 @@ public class MarkupValidator(
                         "Datastar reads __${spec.name}.$d as ${jsFormat(read)} ms." + (fix?.let { " Write __${spec.name}.$it." } ?: ""),
                         fix?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 1 + d.length, ".$it")) } ?: emptyList(),
                     )
-                } else if (d.isNullOrEmpty() || !DURATION.matches(d)) {
+                } else if (d.isNullOrEmpty() || DURATION.matchEntire(d) == null) {
                     val at = start + spec.name.length
                     // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
                     fail(
@@ -1690,12 +1700,12 @@ public class MarkupValidator(
 
             ModifierType.IDENT -> {
                 val v = args.firstOrNull()
-                if (v == null || !IDENT.matches(v)) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
+                if (v == null || IDENT.matchEntire(v) == null) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
                 if (args.size > 1) fail("__${spec.name} takes a single name.")
             }
 
             ModifierType.IDENTS -> {
-                if (args.isEmpty() || args.any { !IDENT.matches(it) }) {
+                if (args.isEmpty() || args.any { IDENT.matchEntire(it) == null }) {
                     fail("__${spec.name} needs one or more names, e.g. __${spec.name}.input.blur.")
                 }
             }

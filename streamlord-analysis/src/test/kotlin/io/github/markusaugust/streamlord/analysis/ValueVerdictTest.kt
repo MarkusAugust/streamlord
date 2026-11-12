@@ -5,9 +5,9 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** The cases of `twins/value-verdict.json`, which `valueVerdict.test.ts` reads too. */
+/** The cases of `cases/value-verdict.json`. */
 class ValueVerdictTest {
-    private val cases = twinCases("value-verdict.json")
+    private val cases = sharedCases("value-verdict.json")
 
     @Test
     fun `the verdict on a fact in each position`() {

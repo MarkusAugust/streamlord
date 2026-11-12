@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.json
 
-import java.math.BigInteger
+import io.github.markusaugust.streamlord.core.client.radixDouble
+import io.github.markusaugust.streamlord.core.client.regex
 
 /** Text read the way JavaScript reads it, where Kotlin's own functions differ. */
 internal object JsText {
@@ -10,13 +11,13 @@ internal object JsText {
      */
     fun isSpace(c: Char): Boolean =
         c == '\t' || c == '\n' || c == '\u000B' || c == '\u000C' || c == '\r' || c == '\uFEFF' ||
-            c == '\u2028' || c == '\u2029' || Character.getType(c) == Character.SPACE_SEPARATOR.toInt()
+            c == '\u2028' || c == '\u2029' || c.category == CharCategory.SPACE_SEPARATOR
 
     /** `String.prototype.trim()`. */
     fun trim(s: String): String = s.trim(::isSpace)
 
-    private val DECIMAL = Regex("[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?")
-    private val RADIX = Regex("0([xXoObB])([0-9a-fA-F]+)")
+    private val DECIMAL = regex("[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?")
+    private val RADIX = regex("0([xXoObB])([0-9a-fA-F]+)")
 
     /** `Number(s)` for a string: `NaN` for what JavaScript cannot read as a number, `0` for blank. */
     fun toNumber(s: String): Double {
@@ -26,7 +27,7 @@ internal object JsText {
             "Infinity", "+Infinity" -> return Double.POSITIVE_INFINITY
             "-Infinity" -> return Double.NEGATIVE_INFINITY
         }
-        if (DECIMAL.matches(t)) return t.toDouble()
+        if (DECIMAL.matchEntire(t) != null) return t.toDouble()
         val radix = RADIX.matchEntire(t) ?: return Double.NaN
         val base =
             when (radix.groupValues[1].lowercase()) {
@@ -34,6 +35,6 @@ internal object JsText {
                 "o" -> 8
                 else -> 2
             }
-        return runCatching { BigInteger(radix.groupValues[2], base).toDouble() }.getOrDefault(Double.NaN)
+        return radixDouble(radix.groupValues[2], base) ?: Double.NaN
     }
 }

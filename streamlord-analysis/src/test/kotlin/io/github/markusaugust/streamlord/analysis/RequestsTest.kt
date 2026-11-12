@@ -4,20 +4,16 @@ import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.mergePatch
-import org.junit.jupiter.api.DynamicTest
-import org.junit.jupiter.api.TestFactory
-import java.net.URI
-import java.net.http.HttpRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The cases of `twins/requests.json`, which the VS Code extension's `requests.test.ts` reads too. */
+/** The cases of `cases/requests.json`, which the extension's `inspectorPage.test.ts` reads for the inspector page's own `previewUrl`. */
 class RequestsTest {
-    // twins/request-urls.json, which requests.test.ts and core's ClientRequestTest read too.
+    // cases/request-urls.json, which the extension's `requestUrls.test.ts` and core's ClientRequestTest read too.
     @Test
     fun `opens the url the client opens`() {
-        val cases = twinCases("request-urls.json")
+        val cases = sharedCases("request-urls.json")
         for (c in cases) {
             assertEquals(
                 c.string("expected"),
@@ -55,7 +51,7 @@ class RequestsTest {
 
     private fun pairs(list: List<Pair<String, String>>?) = list?.map { listOf(it.first, it.second) }
 
-    // The projections of requests.test.ts, so that a case means the same in both twins.
+    // The projection of each call to the fields a case holds, so that a case means the same on the JVM and on Node.
     private val calls: Map<String, (JsonObject) -> Any?> =
         mapOf(
             "parseRequestsFile" to { c ->
@@ -179,30 +175,28 @@ class RequestsTest {
             },
         )
 
-    @TestFactory
-    fun `inspector requests`(): List<DynamicTest> =
-        twinCases("requests.json").map { c ->
+    @Test
+    fun `inspector requests`() =
+        eachCase(sharedCases("requests.json"), { it.string("name")!! }) { c ->
             val name = c.string("name")!!
-            DynamicTest.dynamicTest(name) {
-                val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
-                assertEquals(c["expected"]!!.toKotlin(), call(c), name)
-            }
+            val call = calls[c.string("call")] ?: error("$name: no call ${c.string("call")}")
+            assertEquals(c["expected"]!!.toKotlin(), call(c), name)
         }
 
-    // The rule is written out by hand so the VS Code extension can hold the same one; this holds
-    // the shared verdicts to the JDK, which is the client that has to accept what we let through.
     @Test
-    fun `refuses exactly the hosts and ports the HTTP client refuses`() {
-        val cases = twinCases("requests.json").filter { it.string("call") == "sends" }
-        assertTrue(cases.isNotEmpty())
-        for (c in cases) {
-            val url = c.string("url")!!
-            val jdk = runCatching { HttpRequest.newBuilder(URI(url)).build() }.isSuccess
-            assertEquals(jdk, c.boolean("expected"), "$url: the JDK ${if (jdk) "sends" else "refuses"} it")
-        }
+    fun `a path that leaves the folder is named by what the editor calls that folder`() {
+        assertEquals(
+            "The requests file ../r.json leaves the workspace: use a path without .. in it.",
+            Requests.requestsPathProblem("../r.json", "workspace"),
+        )
+        assertEquals(
+            "The requests file /r.json is not inside the workspace: use a workspace-relative path.",
+            Requests.requestsPathProblem("/r.json", "workspace"),
+        )
+        assertEquals(Requests.requestsPathProblem("../r.json"), Requests.requestsPathProblem("../r.json", "project"))
+        assertEquals(null, Requests.requestsPathProblem("a/r.json", "workspace"))
     }
 
-    // Where a JSON reader stops is its own, so requests.test.ts says less here.
     @Test
     fun `text that is not JSON is named with where it stops`() {
         assertEquals(

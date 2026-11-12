@@ -6,7 +6,9 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regex
 import org.intellij.lang.annotations.Language
+import kotlin.jvm.JvmInline
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -399,7 +401,7 @@ private fun Position.admits(value: Any?): Boolean =
         Position.STRUCTURE, Position.CODE -> false
     }
 
-private val SCHEME = Regex("^([A-Za-z][A-Za-z0-9+.-]*):")
+private val SCHEME = regex("^([A-Za-z][A-Za-z0-9+.-]*):")
 private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
 
 /**
@@ -662,7 +664,8 @@ private fun landscapes(
             listOf(NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
-    return readings.map { landscape(shadow, holes, prefixes, it) }
+    val holeEnds = holes.associate { it.first to it.last + 1 }
+    return readings.map { landscape(shadow, holes, prefixes, it, holeEnds) }
 }
 
 /** The [shadow] of a markup with [holes] in it, read the one way [reading] gives. */
@@ -671,10 +674,10 @@ private fun landscape(
     holes: List<IntRange>,
     prefixes: List<String>,
     reading: Reading,
+    holeEnds: Map<Int, Int> = holes.associate { it.first to it.last + 1 },
 ): Landscape {
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
-    val holeEnds = holes.associate { it.first to it.last + 1 }
     return Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) }
 }
 
@@ -711,7 +714,7 @@ private fun shadow(
     for (hole in holes) {
         for (i in hole) chars[i] = if (i == hole.first) 'd' else 's'
     }
-    return String(chars)
+    return chars.concatToString()
 }
 
 /** The offset of each `%s`, in order. `%%` is one escaped per cent and never a hole. */
@@ -784,7 +787,7 @@ private fun refreshUrls(content: String): List<String> {
     return listOf(rest, url).flatMap { listOf(it, it.trimStart('"', '\'')) }
 }
 
-private val REFRESH_URL_KEY = Regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
+private val REFRESH_URL_KEY = regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
 
 /** The span of [text] from [from] to [to] as it will be written, with the values of the holes [inside] it escaped. */
 private fun written(

@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
@@ -12,6 +13,8 @@ import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
+import java.io.File
+import kotlin.concurrent.Volatile
 
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
@@ -30,7 +33,12 @@ public data class AnalyzeOptions(
     val core: Boolean? = null,
     /** Where the name of each call starts ([CallSite.nameStart]) that the host knows is not Streamlord's. */
     val foreignCalls: Set<Int> = emptySet(),
+    /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
+    val prefixSetting: String = PREFIX_SETTING,
 )
+
+/** The setting as the IntelliJ plugin's settings page shows it. */
+internal const val PREFIX_SETTING: String = "the Streamlord attribute prefix setting"
 
 /** Which of Streamlord's modules the analysed file can use, as [AnalyzeOptions] says. */
 internal class Sdk private constructor(
@@ -80,28 +88,28 @@ public enum class ValueFact {
     public companion object
 }
 
-private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
-private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")
-private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
-private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
-private val OBJECT_FORM = Regex("""^\s*[{\[]""")
-private val HAS_CAPITAL = Regex("""[A-Z]""")
+private val MODE_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
+private val CASE_ARG = regex("""^\s*Case\.[A-Z]+\s*$""")
+private val CASE_VALUE = regex("""Case\.([A-Z]+)""")
+private val CASE_IN_LAMBDA = regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
+private val OBJECT_FORM = regex("""^\s*[{\[]""")
+private val HAS_CAPITAL = regex("""[A-Z]""")
 
 // A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
 // `val once = 1` a variable of the lambda's own.
-private val LAMBDA_ASSIGNMENT = Regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
-private val KOTLIN_STRING = Regex(""""(?:[^"\\]|\\.)*"""")
+private val LAMBDA_ASSIGNMENT = regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
+private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
 
 // The parameter a DSL helper takes its key by, when it is passed by name.
 private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
-private val DOLLAR_RUNS = Regex("""\$+""")
-private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
-private val BRACED_TEMPLATE = Regex("""\$\{""")
-private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
+private val DOLLAR_RUNS = regex("""\$+""")
+private val ASSIGN_BEFORE = regex("""\s*=\s*$""")
+private val BRACED_TEMPLATE = regex("""\$\{""")
+private val TRIM_AFTER = regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 // A name, a property chain or a number literal, which takes a call after it without brackets.
-private val SIMPLE_RECEIVER = Regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
-private val END_TAG_ATTRIBUTES = Regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
+private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
+private val END_TAG_ATTRIBUTES = regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
 
 /** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
 private const val UNQUOTED_STOP = " \t\n\u000C\r\u000B\"'=<>`"
@@ -127,22 +135,22 @@ private class HoleReading(
 
 private val INTERPOLATE = setOf("interpolate")
 
-private val FORMAT_SPECIFIER = Regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
+private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
-private val ATTRIBUTES_INDEX = Regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
+private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
 /** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
-private val STATEMENT_END = Regex("""[ \t]*(?:[;}\n\r]|$)""")
+private val STATEMENT_END = regex("""[ \t]*(?:[;}\n\r]|$)""")
 
 /** The DSL helper that says the same as a whole-string expression, when there is one, by its name. */
 private val HELPERS: List<Pair<Regex, String>> =
     listOf(
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "signal",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$""") to "increment",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)--$""") to "decrement",
-        Regex("""^!\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "not",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$""") to "toggle",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "signal",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$""") to "increment",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)--$""") to "decrement",
+        regex("""^!\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "not",
+        regex("""^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$""") to "toggle",
     )
 
 /**
@@ -227,25 +235,9 @@ public class Analyzer(
      * [failures] keeps those that should fail a build.
      */
     public fun analyzeProject(
-        root: java.io.File,
+        root: File,
         opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<ProjectIssue> {
-        val files =
-            root
-                .walkTopDown()
-                .onEnter { it == root || (it.name !in SKIPPED_FOLDERS && !it.name.startsWith(".")) }
-                .filter { it.isFile && it.extension == "kt" }
-                .sortedBy { it.invariantSeparatorsPath }
-                .map { it to it.readText() }
-                .toList()
-        val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
-        return files.flatMap { (file, source) ->
-            analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
-                val (line, column) = issue.position(source)
-                ProjectIssue(file, line, column, issue)
-            }
-        }
-    }
+    ): List<ProjectIssue> = issuesUnder(root, opts, SKIPPED_FOLDERS)
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(
@@ -257,7 +249,7 @@ public class Analyzer(
         val lex = lex(src)
         val facts = fileFacts(src, lex)
         val foreign = foreignCalls(opts)
-        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign)
+        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
         val dsl = Sdk.of(opts).htmlDsl
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
@@ -273,7 +265,7 @@ public class Analyzer(
             issues += checkKeyCaseSite(site, src)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src)) {
-                for (x in lex.strings) if (x.start >= judged.start && x.end <= judged.end) claimed += x.start
+                for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
             }
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
@@ -283,7 +275,7 @@ public class Analyzer(
         for (site in findCallSites(src, INTERPOLATE, lex)) {
             if (foreign(site.name, site.nameStart) || otherInterpolate) continue
             val format = interpolateFormat(site, src) ?: continue
-            for (x in lex.strings) if (x.start >= format.second.start && x.end <= format.second.end) claimed += x.start
+            for (x in lex.stringsIn(format.second.start, format.second.end)) claimed += x.start
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
@@ -305,11 +297,11 @@ public class Analyzer(
         }
         // A literal joined to values with `+` is read as one string with a hole for each value.
         val chained = HashSet<Int>()
-        val topLevel = lex.strings.toHashSet()
+        val topLevel = lex.strings.mapTo(HashSet()) { it.start }
         for (s in withNested(lex.strings)) {
             if (s.start in claimed || s.start in chained || s.unterminated) continue
             // A literal inside a template is joined to its neighbours in the template's code.
-            val chain = chainFrom(src, s, if (s in topLevel) lex.mask else facts.code)
+            val chain = chainFrom(src, s, if (s.start in topLevel) lex.mask else facts.code)
             val whole = chain ?: s
             if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
@@ -401,7 +393,8 @@ public class Analyzer(
         src: String,
         language: SourceLanguage,
         foreign: (String, Int) -> Boolean = { _, _ -> false },
-    ): Set<String> = collectSignalDefinitions(src, language, foreign).filterTo(HashSet()) { '-' in it }
+        lex: KotlinLex? = null,
+    ): Set<String> = collectSignalDefinitions(src, language, foreign, lex).filterTo(HashSet()) { '-' in it }
 
     /**
      * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
@@ -444,7 +437,7 @@ public class Analyzer(
             } else {
                 value!!.toSource(start - valueStart, end - valueStart)
             }
-        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true)) {
+        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true, prefixSetting = opts.prefixSetting)) {
             val inName = i.end <= name.length
             if (!inName && !judgeValue) continue
             val r = range(i.start, i.end)
@@ -576,7 +569,14 @@ public class Analyzer(
         val issues = ArrayList<Issue>()
         for (tag in tokenize(src, templates).tags) {
             if (tag.closing) continue
-            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated)
+            issues +=
+                markup.validateAttributes(
+                    tag,
+                    opts.prefix,
+                    src.substring(tag.start, tag.end),
+                    hyphenated,
+                    prefixSetting = opts.prefixSetting,
+                )
         }
         return issues
     }
@@ -902,7 +902,7 @@ public class Analyzer(
     /** The value converted to a Long, which is a `kotlin.Number`: `u.toLong()`, `(a + b).toLong()`. */
     private fun toLongFix(arg: Arg): Fix {
         val t = arg.text.trim()
-        val receiver = if (SIMPLE_RECEIVER.matches(t)) t else "($t)"
+        val receiver = if (SIMPLE_RECEIVER.matchEntire(t) != null) t else "($t)"
         return Fix("Convert ${shortened(t)} with toLong()", arg.start, arg.end, "$receiver.toLong()")
     }
 
@@ -923,7 +923,7 @@ public class Analyzer(
         at: Int,
     ): Boolean {
         val lt = if (at > 0) view.lastIndexOf('<', at - 1) else -1
-        return lt >= 0 && END_TAG_ATTRIBUTES.matches(view.substring(lt, at))
+        return lt >= 0 && END_TAG_ATTRIBUTES.matchEntire(view.substring(lt, at)) != null
     }
 
     /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
@@ -1094,10 +1094,11 @@ public class Analyzer(
         text.append(view, cut, view.length)
         val markup = text.toString()
         val open = holes.indices.filter { it !in known }
-        val written by lazy {
-            holeLandings(markup, open.map { starts[it] until starts[it] + holes[it].last + 1 - holes[it].first }, prefixes)
-        }
-        return HoleReading(landings) { j, to -> markup.substring(written[open.indexOf(j)].valueStart, starts[to]) }
+        val written =
+            lazy(LazyThreadSafetyMode.NONE) {
+                holeLandings(markup, open.map { starts[it] until starts[it] + holes[it].last + 1 - holes[it].first }, prefixes)
+            }
+        return HoleReading(landings) { j, to -> markup.substring(written.value[open.indexOf(j)].valueStart, starts[to]) }
     }
 
     private fun codeUrlMessage(
@@ -1796,7 +1797,14 @@ public class Analyzer(
                     src,
                     markup.validateMarkup(
                         view,
-                        MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated, templates = false),
+                        MarkupOptions(
+                            requireIds,
+                            opts.prefix,
+                            opts.checkHtmlAttributes,
+                            hyphenated,
+                            templates = false,
+                            prefixSetting = opts.prefixSetting,
+                        ),
                     ),
                 )
         }
@@ -1845,7 +1853,7 @@ public class Analyzer(
         // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
         if (signalKey && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
-        val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
+        val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matchEntire(it.text) != null) }?.text
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         val capital = HAS_CAPITAL.containsMatchIn(name)

@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * Finds HTTP routes in Kotlin source for the "Open in Stream Inspector" gutter entry.
  * Ktor: `route("/api") { get("/x") { } }`, verbs without a path inherit the enclosing route.
@@ -45,20 +47,20 @@ private val SPRING_MAPPINGS =
 // counts when it is not called on a receiver, and it either takes a lambda or its path starts with
 // a slash. The path may be followed by more arguments: `route("/v1", HttpMethod.Get) { }`.
 private val KTOR_CALL =
-    Regex(
+    regex(
         """\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*(?:,[^(){}\n]*)?\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"(/[^"\n]*)"\s*\)""",
     )
 private val SPRING_ANNOTATION =
-    Regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
+    regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
 
 private val MODIFIERS = setOf("public", "internal", "private", "protected", "open", "final", "abstract", "sealed", "data", "inner")
 private val DECLARATIONS = setOf("class", "interface", "object", "fun", "val", "var", "typealias")
-private val CLASS_KEYWORD = Regex("""\b(?:class|interface)\b""")
-private val WORD = Regex("""\w+""")
-private val NAMED_PATH = Regex("""(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"""")
-private val POSITIONAL_PATH = Regex("""^\s*(?:\[\s*)?"([^"]*)"""")
-private val REQUEST_METHOD = Regex("""RequestMethod\.([A-Z]+)""")
-private val SLASHES = Regex("""/{2,}""")
+private val CLASS_KEYWORD = regex("""\b(?:class|interface)\b""")
+private val WORD = regex("""\w+""")
+private val NAMED_PATH = regex("""(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"""")
+private val POSITIONAL_PATH = regex("""^\s*(?:\[\s*)?"([^"]*)"""")
+private val REQUEST_METHOD = regex("""RequestMethod\.([A-Z]+)""")
+private val SLASHES = regex("""/{2,}""")
 
 public fun findRoutes(src: String): List<Route> = (findKtorRoutes(src) + findSpringRoutes(src)).sortedBy { it.offset }
 
@@ -134,8 +136,8 @@ private fun findKtorRoutes(src: String): List<Route> {
     return routes
 }
 
-private val KTOR_QUERY = Regex("""\b(?:queryParameters|parameters)\s*(?:\[\s*"([^"\n]+)"\s*]|\.get\(\s*"([^"\n]+)"\s*\))""")
-private val PATH_NAME = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)""")
+private val KTOR_QUERY = regex("""\b(?:queryParameters|parameters)\s*(?:\[\s*"([^"\n]+)"\s*]|\.get\(\s*"([^"\n]+)"\s*\))""")
+private val PATH_NAME = regex("""\{([A-Za-z_][A-Za-z0-9_]*)""")
 
 /**
  * The query parameters read in the handler whose body opens at [open], in the order they are
@@ -367,14 +369,14 @@ private fun handlerParameters(
     return params.map { it.trim() }.filter { it.isNotEmpty() }
 }
 
-private val PARAM_ANNOTATION = Regex("""@(RequestParam|RequestHeader)\b\s*(?:\(([^)]*)\))?""")
-private val ANY_ANNOTATION = Regex("""@[\w.:]+(?:\s*\([^)]*\))?""")
-private val DECLARATION = Regex("""^(?:\w+\s+)*(\w+)\s*:\s*([^=]+?)\s*(?:=.*)?$""", RegexOption.DOT_MATCHES_ALL)
-private val NAMED_ARG = Regex("""(?:value|name)\s*=\s*"([^"]*)"""")
-private val NOT_REQUIRED = Regex("""required\s*=\s*false|defaultValue\s*=""")
+private val PARAM_ANNOTATION = regex("""@(RequestParam|RequestHeader)\b\s*(?:\(([^)]*)\))?""")
+private val ANY_ANNOTATION = regex("""@[\w.:]+(?:\s*\([^)]*\))?""")
+private val DECLARATION = regex("""(?s)^(?:\w+\s+)*(\w+)\s*:\s*([^=]+?)\s*(?:=.*)?$""")
+private val NAMED_ARG = regex("""(?:value|name)\s*=\s*"([^"]*)"""")
+private val NOT_REQUIRED = regex("""required\s*=\s*false|defaultValue\s*=""")
 
 /** Every parameter, in a type that takes them all. */
-private val ALL_OF_THEM = Regex("""^(?:[\w.]*\.)?(?:Map|MultiValueMap|HttpHeaders)\b""")
+private val ALL_OF_THEM = regex("""^(?:[\w.]*\.)?(?:Map|MultiValueMap|HttpHeaders)\b""")
 
 /** A `@RequestParam` or `@RequestHeader` parameter: which of the two, its name on the wire and whether it is required. */
 private fun springParam(text: String): Pair<String, RouteParam>? {

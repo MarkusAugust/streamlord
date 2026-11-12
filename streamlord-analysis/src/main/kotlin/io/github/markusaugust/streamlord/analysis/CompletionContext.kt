@@ -2,11 +2,12 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.landingAsParsed
 
 /*
- * Where a caret stands, for completion, hover and parameter info; shared with completionContext.ts.
+ * Where a caret stands, for completion, hover and parameter info.
  */
 
 /** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
@@ -45,7 +46,7 @@ public fun valueAtCaret(
 /**
  * The markup of the tag [offset] stands in, from its `<` up to [offset], read as [valueAtCaret]
  * reads it, or null in text, a comment, raw text or a quoted value. The tag may begin lines above,
- * with its attributes on lines of their own. tagBeforeCaret in completionContext.ts.
+ * with its attributes on lines of their own.
  */
 public fun tagBeforeCaret(
     markup: String,
@@ -150,9 +151,9 @@ public data class OptionKeyAt(
     val written: List<String>,
 )
 
-private val ACTION_OPEN = Regex("""@([A-Za-z_$][\w$]*)\s*\(""")
-private val WRITTEN_KEY = Regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
-private val TYPED_KEY = Regex("""\s*([A-Za-z_$][\w$]*)?""")
+private val ACTION_OPEN = regex("""@([A-Za-z_$][\w$]*)\s*\(""")
+private val WRITTEN_KEY = regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
+private val TYPED_KEY = regex("""\s*([A-Za-z_$][\w$]*)?""")
 private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
 
 /** A bracket open at the caret, with the action whose argument list it is and the key text of an options object. */

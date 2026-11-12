@@ -1,10 +1,5 @@
 import * as vscode from "vscode";
-import { collectSelectors, type Selectors } from "./selectors.ts";
-import { collectSignalDefinitions, collectSignals, signalDeclarations, type SignalDeclaration } from "./signals.ts";
-import { signalReferencesInHtml, signalReferencesInKotlin, type SignalReference } from "./signalReferences.ts";
-import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
-import { catalog } from "./catalog.ts";
-import { kotlinModules } from "./modules.ts";
+import { constantsAcross, signalPlaces, signalsOf, type FileSignals, type SignalPlaces } from "./analysis.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
 const MARKUP_EXTENSIONS = [
@@ -20,26 +15,26 @@ const FILE_CAP = 5000;
 /** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
 export const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
 
+/** The ids and classes markup declares, which a selector may name. */
+export interface Selectors {
+  ids: Set<string>;
+  classes: Set<string>;
+}
+
 interface FileEntry {
   version: number | null;
   language: "kotlin" | "html";
   /** Where the file defines and reads signals: worked out on the first search, which completion never asks for. */
   places?: Places;
-  signals: Set<string>;
-  definitions: Set<string>;
-  selectors: Selectors;
-  /** The `const val` names a Kotlin file lets other files see, which a hole in an HTML string may name. */
-  constants: Set<string>;
-  /** The other names a Kotlin file lets other files see, which keep a constant of the same name from counting. */
-  others: Set<string>;
+  /** What the file gives the workspace: its signals, its ids and classes, and the names its Kotlin lets other files see. */
+  found: FileSignals;
 }
 
 /** Where a file defines and reads signals, and where its lines start, so that an offset becomes a position without the text. */
 export interface Places {
   /** The attribute prefix the reads were found with. */
   prefix: string;
-  declarations: SignalDeclaration[];
-  reads: SignalReference[];
+  names: SignalPlaces;
   lineStarts: number[];
 }
 
@@ -51,8 +46,8 @@ export interface Places {
 export class SignalIndex implements vscode.Disposable {
   private byFile = new Map<string, FileEntry>();
   private built = false;
-  private definitionsUnion: Set<string> | null = null;
-  private constantsUnion: Set<string> | null = null;
+  private definitionsUnion: string[] | null = null;
+  private constantsUnion: string[] | null = null;
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -66,6 +61,8 @@ export class SignalIndex implements vscode.Disposable {
   ) {
     this.disposables.push(
       this.changed,
+      // A file no folder of the workspace holds is found only here, and it may define a signal as any other.
+      vscode.workspace.onDidOpenTextDocument((d) => this.update(d)),
       vscode.workspace.onDidSaveTextDocument((d) => this.update(d)),
       vscode.workspace.onDidChangeTextDocument((e) => this.update(e.document)),
       // A closed document's unsaved edits are gone; what counts is the disk again.
@@ -151,7 +148,9 @@ export class SignalIndex implements vscode.Disposable {
   private set(key: string, next: FileEntry): void {
     const previous = this.byFile.get(key);
     this.byFile.set(key, next);
-    if (!previous || !sameSet(previous.definitions, next.definitions) || !sameSet(previous.constants, next.constants) || !sameSet(previous.others, next.others)) {
+    const a = previous?.found;
+    const b = next.found;
+    if (!a || !sameNames(a.definitions, b.definitions) || !sameNames(a.constants, b.constants) || !sameNames(a.others, b.others)) {
       this.definitionsUnion = null;
       this.constantsUnion = null;
       this.changed.fire();
@@ -165,7 +164,7 @@ export class SignalIndex implements vscode.Disposable {
     for (const [k, e] of this.byFile) {
       if (k !== key && !k.startsWith(folder)) continue;
       this.byFile.delete(k);
-      defined ||= e.definitions.size > 0 || e.constants.size > 0 || e.others.size > 0;
+      defined ||= e.found.definitions.length > 0 || e.found.constants.length > 0 || e.found.others.length > 0;
     }
     if (defined) {
       this.definitionsUnion = null;
@@ -183,7 +182,8 @@ export class SignalIndex implements vscode.Disposable {
 
   /** Ids and classes declared in one file. */
   selectorsForFile(uri: string): Selectors {
-    return this.byFile.get(uri)?.selectors ?? { ids: new Set(), classes: new Set() };
+    const found = this.byFile.get(uri)?.found;
+    return { ids: new Set(found?.ids), classes: new Set(found?.classes) };
   }
 
   /** Ids and classes declared anywhere in the workspace. */
@@ -191,36 +191,39 @@ export class SignalIndex implements vscode.Disposable {
     const ids = new Set<string>();
     const classes = new Set<string>();
     for (const e of this.byFile.values()) {
-      for (const i of e.selectors.ids) ids.add(i);
-      for (const c of e.selectors.classes) classes.add(c);
+      for (const i of e.found.ids) ids.add(i);
+      for (const c of e.found.classes) classes.add(c);
     }
     return { ids, classes };
   }
 
   /** Signals declared in one file, or an empty set. */
   forFile(uri: string): Set<string> {
-    return this.byFile.get(uri)?.signals ?? new Set();
+    return new Set(this.byFile.get(uri)?.found.signals);
   }
 
   all(): Set<string> {
     const out = new Set<string>();
-    for (const e of this.byFile.values()) for (const n of e.signals) out.add(n);
+    for (const e of this.byFile.values()) for (const n of e.found.signals) out.add(n);
     return out;
   }
 
-  /** Every signal defined anywhere in the workspace, which a `$name` is checked against: no reads, as [all] has. Cached until one changes. */
-  allDefinitions(): ReadonlySet<string> {
+  /**
+   * Every signal defined anywhere in the workspace, which a `$name` is checked against: no reads, as [all] has.
+   * The same array until one changes, which is how the analysis knows it has read it before.
+   */
+  allDefinitions(): string[] {
     if (this.definitionsUnion) return this.definitionsUnion;
     const out = new Set<string>();
-    for (const e of this.byFile.values()) for (const n of e.definitions) out.add(n);
-    this.definitionsUnion = out;
-    return out;
+    for (const e of this.byFile.values()) for (const n of e.found.definitions) out.add(n);
+    this.definitionsUnion = [...out];
+    return this.definitionsUnion;
   }
 
   /** Every `const val` the workspace's Kotlin lets other files see and declares as nothing else. Cached until one changes. */
-  allConstants(): ReadonlySet<string> {
+  allConstants(): string[] {
     if (this.constantsUnion) return this.constantsUnion;
-    this.constantsUnion = constantsAcross(this.byFile.values());
+    this.constantsUnion = constantsAcross([...this.byFile.values()].map((e) => e.found));
     return this.constantsUnion;
   }
 
@@ -276,42 +279,20 @@ export async function textOf(uri: string): Promise<string | null> {
   }
 }
 
-/** Where `text` defines and reads signals, a Kotlin file's with the modules it can use (see `kotlinModules`). */
+/** Where `text` defines and reads signals. */
 export function placesIn(text: string, language: "kotlin" | "html", prefix: string): Places {
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
-  const reads = language === "kotlin" ? signalReferencesInKotlin(text, prefix, kotlinModules(text)) : signalReferencesInHtml(text, prefix);
-  return { prefix, declarations: signalDeclarations(text, language, foreignIn(text, language)), reads, lineStarts };
+  return { prefix, names: signalPlaces(text, language === "kotlin", prefix), lineStarts };
 }
-
-/**
- * The calls of `text` that are somebody else's and define no signal: in a Kotlin file without the
- * DSL's import, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too. A
- * `data*` helper names the attribute it writes, so a helper of the project's own still counts, and
- * so does a core call, since the official SDK's `patchSignals` defines signals too.
- */
-function foreignIn(text: string, language: "kotlin" | "html"): (name: string) => boolean {
-  if (language !== "kotlin" || kotlinModules(text).htmlDsl !== false) return () => false;
-  return (name) => SHORT_HELPERS.has(name);
-}
-
-const SHORT_HELPERS: ReadonlySet<string> = new Set(catalog.signalNameHelpers.keys());
 
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
-  const foreign = foreignIn(text, language);
-  return {
-    version,
-    language,
-    signals: collectSignals(text, language, foreign),
-    definitions: collectSignalDefinitions(text, language, foreign),
-    selectors: collectSelectors(text),
-    constants: language === "kotlin" ? constantNames(text) : new Set(),
-    others: language === "kotlin" ? otherDeclaredNames(text) : new Set(),
-  };
+  return { version, language, found: signalsOf(text, language === "kotlin") };
 }
 
-function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a.size !== b.size) return false;
-  for (const n of a) if (!b.has(n)) return false;
-  return true;
+/** Whether two lists of distinct names hold the same names. */
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const names = new Set(a);
+  return b.every((n) => names.has(n));
 }

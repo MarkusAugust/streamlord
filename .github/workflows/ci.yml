@@ -85,11 +85,14 @@ jobs:
               # The corpus both editors' checks are held to: CorpusTest in the SDK reads it too,
               # and the front page counts it, so it is site content as well.
               editors/vscode/test/fixtures/corpus/*) vscode=true; kotlin=true; intellij=true; docs=true ;;
-              # The other shared fixtures: the cases both analyses hold under twins/, which core
-              # reads some of too, the SSE corpus, and the templates IntelliJ reads.
+              # The other shared fixtures: the cases of the analysis under cases/, which core reads
+              # some of too, the SSE corpus, and the templates IntelliJ reads.
               editors/vscode/test/fixtures/*) vscode=true; kotlin=true; intellij=true ;;
               # The site highlights its code with the extension's grammars and palette, and shows its icon.
               editors/vscode/syntaxes/*|editors/vscode/media/*|editors/vscode/src/palette.ts) vscode=true; docs=true ;;
+              # The analysis compiled to JavaScript: a project of the Gradle build, which builds and tests
+              # it, and which the plugin's build and the image's configure with every other project.
+              editors/vscode/analysis-js/*) vscode=true; kotlin=true; intellij=true; image=true ;;
               editors/vscode/*)   vscode=true ;;
               editors/intellij/*) intellij=true ;;
               # The catalog feeds the analysis, which the image bundles for /judge, VS Code's generated
@@ -106,13 +109,14 @@ jobs:
               # Netlify's build of the site, which deploys from master with no other check.
               netlify.toml)       docs=true ;;
               demo/*)             kotlin=true; image=true ;;
-              # The fixtures are read by the Kotlin tests, the VS Code tests and the front page; the
-              # image and the IntelliJ plugin read none of them.
-              conformance/*)      kotlin=true; vscode=true; docs=true ;;
-              # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source.
-              streamlord-core/*)  kotlin=true; image=true; intellij=true ;;
+              # The fixtures are read by the Kotlin tests, on the JVM and on Node, and the front page;
+              # the image, the extension's own tests and the IntelliJ plugin read none of them.
+              conformance/*)      kotlin=true; docs=true ;;
+              # The IntelliJ plugin builds streamlord-analysis, and core beneath it, from source, and the
+              # VS Code extension compiles the same sources to JavaScript.
+              streamlord-core/*)  kotlin=true; image=true; intellij=true; vscode=true ;;
               # The image runs the analysis in /judge and streamlord-test in /assert.
-              streamlord-analysis/*) kotlin=true; image=true; intellij=true ;;
+              streamlord-analysis/*) kotlin=true; image=true; intellij=true; vscode=true ;;
               streamlord-test/*)  kotlin=true; image=true ;;
               streamlord-html/*|streamlord-ktor/*|streamlord-json-kotlinx/*)
                 kotlin=true; image=true ;;
@@ -122,11 +126,14 @@ jobs:
               README.md|LICENSE)  kotlin=true ;;
               # The version catalog and the settings scripts are the plugin's build too.
               # The site reads the catalog for the versions on the front page.
-              gradle/libs.versions.toml) kotlin=true; image=true; intellij=true; docs=true ;;
+              # The extension's analysis is built by the same Gradle build.
+              gradle/libs.versions.toml) kotlin=true; image=true; intellij=true; docs=true; vscode=true ;;
               # The site reads the version out of gradle.properties.
-              gradle.properties)  kotlin=true; image=true; intellij=true; docs=true ;;
+              gradle.properties)  kotlin=true; image=true; intellij=true; docs=true; vscode=true ;;
+              # What Kotlin/JS fetches from npm to run the analysis's tests on Node.
+              kotlin-js-store/*)  kotlin=true; vscode=true ;;
               gradle/*|gradlew*|*.gradle.kts)
-                kotlin=true; image=true; intellij=true ;;
+                kotlin=true; image=true; intellij=true; vscode=true ;;
             esac
           done <<< "$files"
 
@@ -154,6 +161,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
+      # :analysis-js runs the tests of core's client part and of the analysis on Node as well, on
+      # the Node that is installed: the one the extension is built with.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
@@ -222,6 +235,17 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
+
+      # The analysis the extension runs is Kotlin, compiled to JavaScript by Gradle: npm run
+      # build, test and typecheck each start with it.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       - run: npm ci
       - run: npm run typecheck
@@ -777,6 +801,17 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
+
+      # The analysis the extension runs is Kotlin, compiled to JavaScript by Gradle: npm run
+      # build, test and typecheck each start with it.
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-provider: basic
 
       - run: npm ci
 

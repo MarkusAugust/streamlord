@@ -1,0 +1,7 @@
+{"what":"file","language":"kotlin"}
+{"what":"diagnostic","code":"expression-syntax","link":"https://data-star.dev/guide/datastar_expressions","message":"Datastar expression: Unexpected end of input","range":"1:66-1:68","severity":"Error","source":"streamlord"}
+{"what":"hover","at":"1:40-1:53","answers":[{"contents":[{"value":"5204ed61fb46"}],"range":"1:40-1:53"}]}
+{"what":"hover","at":"1:56-1:61","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body."],"range":"1:56-1:61"}]}
+{"what":"signature","at":"1:62-1:67","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":"uri"},{"label":"options?"}]}]}
+{"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}
+{"what":"scopes","line":1,"tokens":[["val","keyword.kotlin"],[" ",""],["page","identifier.kotlin"],[" = ",""],["\"","string.quoted.double.kotlin"],["\\n","string.quoted.double.kotlin constant.character.escape.kotlin"],["\"","string.quoted.double.kotlin"],[" + ",""],["\"","string.quoted.double.kotlin"],["<!doctype html><div data-on:click=","string.quoted.double.kotlin"],["\\\"","string.quoted.double.kotlin constant.character.escape.kotlin"],["@post('/x'","string.quoted.double.kotlin"],["\\\"","string.quoted.double.kotlin constant.character.escape.kotlin"],["></div>","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"]]}

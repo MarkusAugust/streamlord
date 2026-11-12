@@ -3,7 +3,7 @@ package io.github.markusaugust.streamlord.core
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
  * case too.
  */
 class ScriptEscapesAsTheParserReadsTest {
-    private val cases = JsonParser.parse(File("../conformance/dom/script-escapes.json").readText()) as JsonArray
+    private val cases = JsonParser.parse(fixtureText("conformance/dom/script-escapes.json")) as JsonArray
     private val byInput = cases.objects().associateBy { it.string("input")!! }
 
     // What JavaScript reads from the escaped literal: `\/` is `/`, `\xHH` the character.

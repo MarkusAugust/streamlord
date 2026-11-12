@@ -9,7 +9,7 @@ const doc = (path: string, languageId: string, text: string, version = 1, scheme
   ({ uri: { ...Uri.file(path), scheme }, languageId, version, getText: () => text }) as unknown as vscode.TextDocument;
 
 /** Install a stand-in for a workspace event, and hand back what fires it. */
-function capture<T>(name: "onDidRenameFiles" | "onDidDeleteFiles"): { fire: (e: T) => void; restore: () => void } {
+function capture<T>(name: "onDidRenameFiles" | "onDidDeleteFiles" | "onDidOpenTextDocument"): { fire: (e: T) => void; restore: () => void } {
   const original = workspace[name];
   let listener: ((e: T) => void) | null = null;
   (workspace as Record<string, unknown>)[name] = (l: (e: T) => void) => {
@@ -146,6 +146,22 @@ describe("signal index", () => {
       workspace.findFiles = findFiles;
       workspace.workspaceFolders = undefined;
       files.clear();
+    }
+  });
+
+  it("reads a document when it is opened, whatever it holds and wherever it lies", async () => {
+    const opened = capture<vscode.TextDocument>("onDidOpenTextDocument");
+    try {
+      const index = new SignalIndex(new Set());
+      // No folder holds it, so no read of the workspace finds it; and it reads no signal.
+      const alone = doc("/elsewhere/alone.html", "html", `<div data-signals:alone="1"></div>`);
+      workspace.textDocuments = [alone as never];
+      opened.fire(alone);
+      assert.deepEqual([...index.allDefinitions()], ["alone"]);
+      assert.deepEqual([...(await index.allPlaces()).keys()], ["file:///elsewhere/alone.html"]);
+    } finally {
+      opened.restore();
+      workspace.textDocuments = [];
     }
   });
 

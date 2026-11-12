@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /** A server the editor saw start, by the line it logged: where it listens, and what the editor calls it. */
 public data class RunningServer(
     /** The base URL, as `{{baseUrl}}` would hold it: no trailing slash, the context path included. */
@@ -20,18 +22,18 @@ public object ServerLog {
      * One port reads "port 9102 (http)", Jetty's "(http/1.1)"; Boot 2 wrote "port(s): 9102 (http)".
      */
     private val SPRING =
-        Regex(
+        regex(
             """\b(?:Tomcat|Jetty|Undertow|Netty) started on port(?:s|\(s\))?:? (\d+)(?: \((\w+)[^)]*\))?(?:.*? with context path '([^']*)')?""",
         )
 
     // Ktor writes "Responding at " + the connector, such as http://0.0.0.0:8080.
-    private val KTOR = Regex("""\bResponding at (https?)://(\[[^\]]+]|[^\s/:]+):(\d+)""")
+    private val KTOR = regex("""\bResponding at (https?)://(\[[^\]]+]|[^\s/:]+):(\d+)""")
 
     private val ANY_HOST = setOf("0.0.0.0", "[::]", "::", "*")
-    private val PROBLEM = Regex("""\b(?:WARN|WARNING|ERROR|SEVERE|FATAL)\b""")
+    private val PROBLEM = regex("""\b(?:WARN|WARNING|ERROR|SEVERE|FATAL)\b""")
 
     // Spring Boot colours the level when the console takes it: ESC[31mERROR has no word boundary.
-    private val ANSI = Regex("""\u001B\[[0-9;]*[A-Za-z]""")
+    private val ANSI = regex("""\u001B\[[0-9;]*[A-Za-z]""")
 
     /** [line] without the escape sequences a coloured console log holds. */
     public fun plain(line: String): String = ANSI.replace(line, "")

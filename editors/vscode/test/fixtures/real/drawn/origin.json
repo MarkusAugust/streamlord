@@ -1,0 +1,386 @@
+{
+ "drawn/kotlin/blank-selector-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "raw strings, nested comments and char literals"
+ },
+ "drawn/kotlin/blank-selector-2.kt": {
+  "corpus": "kotlin.json",
+  "case": "html patches without ids, selectors or a script end"
+ },
+ "drawn/kotlin/blank-selector-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "a blank selector by name"
+ },
+ "drawn/kotlin/expression-syntax-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "a syntax error in a multi-dollar html string"
+ },
+ "drawn/kotlin/expression-syntax-2.kt": {
+  "corpus": "kotlin.json",
+  "case": "a chain that opens with a doctype is markup"
+ },
+ "drawn/kotlin/interpolate-placeholders-1.kt": {
+  "corpus": "kotlin-interpolate.json",
+  "case": "a hole and no value"
+ },
+ "drawn/kotlin/interpolate-placeholders-2.kt": {
+  "corpus": "kotlin-review.json",
+  "case": "a format specifier other than %s is not a hole"
+ },
+ "drawn/kotlin/interpolate-placeholders-3.kt": {
+  "corpus": "kotlin-interpolate.json",
+  "case": "%%s is a per cent sign and an s, not a hole"
+ },
+ "drawn/kotlin/interpolate-template-1.kt": {
+  "corpus": "kotlin-interpolate.json",
+  "case": "a template in the format is filled before interpolate sees it"
+ },
+ "drawn/kotlin/interpolate-template-2.kt": {
+  "corpus": "kotlin-round4.json",
+  "case": "a val set to elements { } is markup held as a String"
+ },
+ "drawn/kotlin/interpolate-template-3.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "with core the same call is interpolate's, whose format Kotlin fills in first"
+ },
+ "drawn/kotlin/kotlin-interpolation-1.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "peek in a file that imports it from the DSL offers the DSL's helper, with its import"
+ },
+ "drawn/kotlin/kotlin-interpolation-2.kt": {
+  "corpus": "kotlin.json",
+  "case": "free html strings"
+ },
+ "drawn/kotlin/kotlin-interpolation-3.kt": {
+  "corpus": "kotlin-interpolate.json",
+  "case": "a signal Kotlin fills in a Datastar expression of the format is the trap"
+ },
+ "drawn/kotlin/missing-id-1.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "the same literal handed to Streamlord's patchElements is a patch, which asks for an id"
+ },
+ "drawn/kotlin/missing-id-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "elements by name"
+ },
+ "drawn/kotlin/missing-nonce-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "an empty data-nonce in an HTML string"
+ },
+ "drawn/kotlin/mode-needs-selector-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "an imported mode constant"
+ },
+ "drawn/kotlin/mode-needs-selector-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "a mode by position without a selector"
+ },
+ "drawn/kotlin/prefix-mismatch-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "a template in an html string of the default prefix"
+ },
+ "drawn/kotlin/script-close-2.kt": {
+  "corpus": "kotlin.json",
+  "case": "a script by name"
+ },
+ "drawn/kotlin/script-close-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "the end of a script after a character whose lowercase form is longer"
+ },
+ "drawn/kotlin/signal-kebab-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "the kotlinx attributes form keeps the dollar escape in a fix"
+ },
+ "drawn/kotlin/signal-name-hyphen-1.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "a signal name with a hyphen in the DSL's helper"
+ },
+ "drawn/kotlin/signal-name-hyphen-2.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "the DSL's dataSignals declares the hyphenated signal, and is refused for it"
+ },
+ "drawn/kotlin/signal-name-hyphen-3.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "the DSL's helper inside a template is checked for a hyphen"
+ },
+ "drawn/kotlin/unescaped-interpolation-1.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "without that import the rewrite to interpolate is offered"
+ },
+ "drawn/kotlin/unescaped-interpolation-3.kt": {
+  "corpus": "kotlin-round3.json",
+  "case": "a value of a type parameter may be null: no rewrite to interpolate"
+ },
+ "drawn/kotlin/unknown-action-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "an action fix in markup inside a raw string"
+ },
+ "drawn/kotlin/unknown-action-2.kt": {
+  "corpus": "kotlin-interpolate.json",
+  "case": "<%s is a tag whose name is a hole, not a template tag"
+ },
+ "drawn/kotlin/unknown-action-3.kt": {
+  "corpus": "kotlin-interpolate.json",
+  "case": "the format's attributes are checked"
+ },
+ "drawn/kotlin/unknown-attribute-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "an annotation on a function with string parameters"
+ },
+ "drawn/kotlin/unknown-attribute-2.kt": {
+  "corpus": "kotlin-sdk.json",
+  "case": "the same template handed to Streamlord's patchElements is one patch, its inner literal a free string"
+ },
+ "drawn/kotlin/unknown-attribute-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "the kotlinx attributes form with a near-miss name"
+ },
+ "drawn/kotlin/unknown-modifier-2.kt": {
+  "corpus": "kotlin.json",
+  "case": "markup to fix inside a raw string"
+ },
+ "drawn/kotlin/unsafe-interpolation-1.kt": {
+  "corpus": "kotlin-positions.json",
+  "case": "a number in an unquoted value is a hint with the same fix"
+ },
+ "drawn/kotlin/unsafe-interpolation-2.kt": {
+  "corpus": "kotlin-round5b.json",
+  "case": "a val set to a literal Trusted is read with its text"
+ },
+ "drawn/kotlin/unsafe-interpolation-3.kt": {
+  "corpus": "kotlin-round3.json",
+  "case": "a template in an end tag's name is the structure"
+ },
+ "drawn/html/computed-value-1.html": {
+  "corpus": "html.json",
+  "case": "data-computed without a key or an object"
+ },
+ "drawn/html/computed-value-2.html": {
+  "corpus": "html.json",
+  "case": "data-computed values that give no function"
+ },
+ "drawn/html/expression-syntax-1.html": {
+  "corpus": "html.json",
+  "case": "a named reference that is no character of an expression"
+ },
+ "drawn/html/expression-syntax-2.html": {
+  "corpus": "kotlin-references.json",
+  "case": "an HTML argument a Streamlord call does not read is read as a free string"
+ },
+ "drawn/html/filter-pattern-1.html": {
+  "corpus": "html.json",
+  "case": "an empty pattern with a flag, which the literal writes as an empty group"
+ },
+ "drawn/html/filter-pattern-2.html": {
+  "corpus": "html.json",
+  "case": "a pattern in the filterSignals of an action"
+ },
+ "drawn/html/indicator-without-action-1.html": {
+  "corpus": "html.json",
+  "case": "an indicator on an element that sends nothing"
+ },
+ "drawn/html/indicator-without-action-2.html": {
+  "corpus": "html.json",
+  "case": "an indicator written in capitals"
+ },
+ "drawn/html/invalid-nonce-1.html": {
+  "corpus": "html.json",
+  "case": "a nonce that is no base64 value"
+ },
+ "drawn/html/invalid-nonce-2.html": {
+  "corpus": "html.json",
+  "case": "a nonce is judged as the browser decodes it"
+ },
+ "drawn/html/key-and-value-1.html": {
+  "corpus": "html.json",
+  "case": "an indicator with both key and value, which Datastar refuses before it tracks anything"
+ },
+ "drawn/html/key-and-value-2.html": {
+  "corpus": "html.json",
+  "case": "what datastar refuses to apply"
+ },
+ "drawn/html/key-case-1.html": {
+  "corpus": "html.json",
+  "case": "a camelCase event"
+ },
+ "drawn/html/key-case-2.html": {
+  "corpus": "references.json",
+  "case": "a capital in a key is lowercased by the browser"
+ },
+ "drawn/html/literal-rewritten-1.html": {
+  "corpus": "references.json",
+  "case": "a signal inside a regular expression is not read"
+ },
+ "drawn/html/missing-key-1.html": {
+  "corpus": "markup.json",
+  "case": "data attributes and modifiers"
+ },
+ "drawn/html/missing-key-or-value-1.html": {
+  "corpus": "html.json",
+  "case": "an indicator with neither key nor value, which Datastar refuses before it tracks anything"
+ },
+ "drawn/html/missing-nonce-1.html": {
+  "corpus": "html.json",
+  "case": "a data-nonce without a value is empty"
+ },
+ "drawn/html/missing-nonce-2.html": {
+  "corpus": "html.json",
+  "case": "an empty data-nonce stops Datastar"
+ },
+ "drawn/html/modifier-args-1.html": {
+  "corpus": "html.json",
+  "case": "a tag the client reads by its number, alone"
+ },
+ "drawn/html/prefix-mismatch-1.html": {
+  "corpus": "markup.json",
+  "case": "an attribute with another prefix than the configured one"
+ },
+ "drawn/html/pro-attribute-2.html": {
+  "corpus": "html.json",
+  "case": "patch bound by the expression itself, and in a Pro attribute"
+ },
+ "drawn/html/scope-name-1.html": {
+  "corpus": "html.json",
+  "case": "patch where only on-signal-patch hands it over, and evt anywhere"
+ },
+ "drawn/html/signal-kebab-1.html": {
+  "corpus": "references.json",
+  "case": "a digit after a dollar and a hyphenated signal are no reads to check"
+ },
+ "drawn/html/signal-kebab-2.html": {
+  "corpus": "html.json",
+  "case": "issues after character references"
+ },
+ "drawn/html/signal-name-1.html": {
+  "corpus": "html.json",
+  "case": "a dollar in the value of data-bind"
+ },
+ "drawn/html/signal-name-2.html": {
+  "corpus": "html.json",
+  "case": "an object under constructor through parentheses, a conditional or a logical operator"
+ },
+ "drawn/html/signal-name-expected-2.html": {
+  "corpus": "html.json",
+  "case": "foreign template tags where a signal name is taken"
+ },
+ "drawn/html/signal-not-read-1.html": {
+  "corpus": "html.json",
+  "case": "a key with a letter beyond ASCII"
+ },
+ "drawn/html/signal-not-read-2.html": {
+  "corpus": "html.json",
+  "case": "a signal in a filter, which the client does not rewrite"
+ },
+ "drawn/html/statement-split-1.html": {
+  "corpus": "html.json",
+  "case": "a semicolon inside a function with a parameter, called at once"
+ },
+ "drawn/html/unknown-action-2.html": {
+  "corpus": "html.json",
+  "case": "an action fix inside an attribute"
+ },
+ "drawn/html/unknown-attribute-1.html": {
+  "corpus": "html.json",
+  "case": "a velocity condition inside a tag"
+ },
+ "drawn/html/unknown-modifier-1.html": {
+  "corpus": "html.json",
+  "case": "two underscores in an event name"
+ },
+ "drawn/html/wrong-element-1.html": {
+  "corpus": "html.json",
+  "case": "a nonce a Velocity or Kotlin template fills in is judged once rendered"
+ },
+ "drawn/kotlin/silent-1.kt": {
+  "corpus": "kotlin.json",
+  "case": "camelCase keys in the dsl"
+ },
+ "drawn/kotlin/silent-2.kt": {
+  "corpus": "kotlin.json",
+  "case": "a val set to Streamlord's Trusted under another name is let into a script beside another package's"
+ },
+ "drawn/kotlin/silent-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "a val set to Streamlord's Trusted called in backticks is let into a script"
+ },
+ "drawn/kotlin/silent-4.kt": {
+  "corpus": "kotlin.json",
+  "case": "a val set to Streamlord's Trusted under another name is let into a script"
+ },
+ "drawn/kotlin/silent-5.kt": {
+  "corpus": "kotlin.json",
+  "case": "a Trusted with a comment before the next value is let into a script"
+ },
+ "drawn/kotlin/silent-6.kt": {
+  "corpus": "kotlin-review.json",
+  "case": "a Streamlord helper in a Datastar expression is the author's code"
+ },
+ "drawn/kotlin/silent-7.kt": {
+  "corpus": "kotlin.json",
+  "case": "a Trusted with a line comment after it is let into a script"
+ },
+ "drawn/kotlin/silent-8.kt": {
+  "corpus": "kotlin-round4.json",
+  "case": "a val set to elements { } is markup in a Kotlin template"
+ },
+ "drawn/kotlin/silent-9.kt": {
+  "corpus": "kotlin.json",
+  "case": "a Trusted with a comment after it is let into a script"
+ },
+ "drawn/kotlin/silent-10.kt": {
+  "corpus": "kotlin.json",
+  "case": "a call to Streamlord's Trusted under another name is let into a script"
+ },
+ "drawn/kotlin/silent-11.kt": {
+  "corpus": "kotlin.json",
+  "case": "a val set to Streamlord's interpolate under another name is markup beside another package's"
+ },
+ "drawn/kotlin/silent-12.kt": {
+  "corpus": "kotlin-round5.json",
+  "case": "a local val set to Trusted is Trusted"
+ },
+ "drawn/html/silent-2.html": {
+  "corpus": "html.json",
+  "case": "a value under constructor that gives no object"
+ },
+ "drawn/html/silent-3.html": {
+  "corpus": "html.json",
+  "case": "ordinary data attributes with values"
+ },
+ "drawn/html/silent-4.html": {
+  "corpus": "html.json",
+  "case": "ordinary data attributes"
+ },
+ "drawn/html/silent-5.html": {
+  "corpus": "html.json",
+  "case": "template syntax in the key of other attributes"
+ },
+ "drawn/html/silent-6.html": {
+  "corpus": "html.json",
+  "case": "inside the text elements of a math, and an HTML annotation-xml, a style is raw text again"
+ },
+ "drawn/html/silent-7.html": {
+  "corpus": "html.json",
+  "case": "data-computed values that may give a function"
+ },
+ "drawn/html/silent-8.html": {
+  "corpus": "html.json",
+  "case": "keys in kebab-case and names outside keys"
+ },
+ "aliased/aliased-1.html": {
+  "corpus": "html.json",
+  "case": "capitals in a key of an aliased prefix"
+ },
+ "aliased/aliased-2.html": {
+  "corpus": "html.json",
+  "case": "an empty data-star-nonce under the aliased prefix"
+ },
+ "aliased/Aliased-3.kt": {
+  "corpus": "kotlin.json",
+  "case": "a template in an html string of an aliased prefix"
+ },
+ "aliased/aliased-4.html": {
+  "corpus": "markup.json",
+  "case": "attributes of an aliased prefix and of the default one"
+ }
+}

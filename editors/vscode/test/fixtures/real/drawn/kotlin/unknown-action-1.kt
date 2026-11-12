@@ -1,0 +1,1 @@
+val x = """<button class="btn" data-on:click="@GET('/x')">go</button>"""

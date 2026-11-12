@@ -72,8 +72,9 @@ jobs:
       # point at code that read CI secrets, and a tag is only as fixed as whoever can push it.
       # Dependabot updates the commit and the comment together.
       #
-      # The lockfiles it reads are editors/vscode/package-lock.json and docs/bun.lock, and it
-      # looks for secrets committed anywhere in the tree.
+      # The lockfiles it reads are editors/vscode/package-lock.json, kotlin-js-store/package-lock.json
+      # (what Kotlin/JS fetches to test the analysis on Node), conformance/generate/package-lock.json
+      # and docs/bun.lock, and it looks for secrets committed anywhere in the tree.
       - name: Scan the repository
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

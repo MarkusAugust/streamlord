@@ -8,7 +8,6 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -98,13 +97,12 @@ class JsonTest {
                     "list" to listOf(1, "two"),
                     "arr" to intArrayOf(3),
                     "map" to mapOf("k" to "v"),
-                    "enum" to Thread.State.NEW,
-                    "dec" to BigDecimal("1.10"),
+                    "enum" to RegexOption.MULTILINE,
                     "c" to 'c',
                 ),
             )
         assertEquals(
-            """{"s":"x","i":1,"l":2,"d":1.5,"b":true,"n":null,"list":[1,"two"],"arr":[3],"map":{"k":"v"},"enum":"NEW","dec":1.10,"c":"c"}""",
+            """{"s":"x","i":1,"l":2,"d":1.5,"b":true,"n":null,"list":[1,"two"],"arr":[3],"map":{"k":"v"},"enum":"MULTILINE","c":"c"}""",
             json,
         )
     }

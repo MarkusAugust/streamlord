@@ -1,11 +1,8 @@
 package io.github.markusaugust.streamlord.core
 
-import io.github.markusaugust.streamlord.core.application.Streamlord
-import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException
 import io.github.markusaugust.streamlord.core.domain.MistypedAttributeException
-import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.interpolate
@@ -65,7 +62,7 @@ class MarkupAsTheBrowserReadsTest {
         // &nbsp; is a no-break space, as &#160; is, and an expression of white space alone is none.
         val numeric = runCatching { ElementsGuard.check("""<b data-text="&#160;"></b>""") }.exceptionOrNull()
         val named = runCatching { ElementsGuard.check("""<b data-text="&nbsp;"></b>""") }.exceptionOrNull()
-        assertEquals(numeric?.javaClass, named?.javaClass)
+        assertEquals(numeric?.let { it::class }, named?.let { it::class })
         assertTrue(named != null)
         // &#0; is U+FFFD to the browser, which no scheme starts with, so the link is a relative one.
         assertEquals("""<a href="&#0;javascript:alert(1)">x</a>""", render("""<a href="&#0;javascript:%s">x</a>""", "alert(1)"))
@@ -177,14 +174,6 @@ class MarkupAsTheBrowserReadsTest {
     @Test
     fun `Trusted waives the URL check too`() {
         assertEquals("""<a href="javascript:void(0)">x</a>""", render("""<a href="%s">x</a>""", Trusted("javascript:void(0)")))
-    }
-
-    @Test
-    fun `the guard reads a patch with an SVG namespace as svg`() {
-        val streamlord = Streamlord(guardElements = true)
-        assertFailsWith<InterpolatedExpressionException> {
-            streamlord.guard(PatchElements("""<title><b data-text="++"></b></title>""", namespace = ElementNamespace.SVG))
-        }
     }
 }
 

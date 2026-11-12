@@ -8,6 +8,7 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.
 - Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
   `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
   `DatastarProtocol.VERSION` is `1.0.5`. A page that still loads the 1.0.4 bundle works as before,
@@ -25,6 +26,10 @@ All notable changes to Streamlord are recorded here. The format follows
   transition, and `respondSignals` and `datastarSignals` take `onlyIfMissing`.
 - `ClientRewrite.runs` in streamlord-core (internal API) is a list of `Run`, each with where its
   string or template literal opens, where it was a list of ranges.
+- `AnalyzeOptions` and `MarkupOptions` in streamlord-analysis have one more value, `prefixSetting`:
+  how the editor names its attribute prefix setting, which the warning about an aliased attribute
+  points to. `Markup.validateAttributes` takes it last. Each has a default, the IntelliJ plugin's
+  words, but code compiled against the old constructors needs a rebuild.
 
 ### Added
 
@@ -48,6 +53,23 @@ All notable changes to Streamlord are recorded here. The format follows
   1.0.4 retried a request that failed on the network; `retryMaxCount` counts the retries of the
   whole action, where a 200 answer started the count again; and the wait goes back to
   `retryInterval` only after a stream that ended.
+- In VS Code, an expression that stops short, `$count +` or `@post('/x'`, is said to hold an
+  `Unexpected end of input`, as the IntelliJ plugin says, where the extension said
+  `Unexpected token` of a place that holds none.
+- In both editors, a value that stops short, `data-text="1 +"`, is said to hold an
+  `Unexpected end of input` as well, where the parenthesis Datastar closes a value with was called
+  an `Unexpected token`.
+- In both editors, the signals of a `@Serializable` class stay known while the class is being
+  typed and its parenthesis is still open.
+- In both editors, where two defined signals are as near a misspelt one, the one suggested is the
+  first by name, where it could change with the order the project's files were read in.
+- In VS Code, a file the analysis fails on, one with templates nested thousands deep say, gets no
+  diagnostics and a line in the Streamlord output channel, and no longer keeps the other open
+  files from being checked.
+- In VS Code, a file in no folder of the workspace, and any file in a window without a folder, is
+  read for its signals when it is opened. Go to definition and find references answered nothing
+  from a place such a file defines a signal, and a rename there was offered and wrote nothing,
+  unless the file also read a signal and the unknown-signal check was on.
 
 ## [0.21.0] - 2026-11-11
 

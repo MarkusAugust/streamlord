@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the
@@ -22,7 +23,7 @@ public data class SignalReference(
 
 /**
  * The signals an expression reads, with offsets relative to [text]: what the client rewrites as a
- * signal where JavaScript runs it (see [clientSignalReads]), shared with `signalReferences.ts`. A
+ * signal where JavaScript runs it (see [clientSignalReads]). A
  * `$foo-bar` is left to the `signal-kebab` check. A name opening with a digit, which the client
  * reads and `data-signals:123` declares, is left out too: no check of this module is written
  * for one.
@@ -43,22 +44,22 @@ internal val HELPER_READ_CALLS: Set<String> =
  * refuses (see [signalNameHyphenIssues]), or brackets, whose key a plain name would not replace
  * as written.
  */
-private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+private val PLAIN_HELPER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
  * `not("error")`, is somebody else's. A line starts after `\n` alone and is indented with spaces
- * and tabs, as `USES_HTML_DSL` in signalNameHyphens.ts reads it.
+ * and tabs.
  */
 internal val USES_HTML_DSL =
-    Regex(
+    regex(
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
 
 /** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. Lines as in [USES_HTML_DSL]. */
 private val FOREIGN_IMPORT =
-    Regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
+    regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
 
 /**
  * The helpers of [names] that [src] reads as the DSL's: those no import from elsewhere puts in their
@@ -94,7 +95,7 @@ internal fun unshadowed(
 
 /** The signal the literal first argument of a helper in [HELPER_READ_CALLS] reads, with offsets relative to its text. */
 internal fun helperSignalReference(text: String): SignalReference? =
-    if (PLAIN_HELPER_NAME.matches(text) && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
+    if (PLAIN_HELPER_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
 internal fun markupSignalReferences(
@@ -152,7 +153,8 @@ public fun nearestSignal(
         .filter { it != name && it != ANY_SIGNAL && ':' !in it }
         .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
-        .minByOrNull { it.second }
+        // By name where two are as near: the set comes in the order the project happened to be read in.
+        .minWithOrNull(compareBy({ it.second }, { it.first }))
         ?.first
 }
 
@@ -168,7 +170,7 @@ public fun unknownSignalIssue(
     val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
     // A helper writes its name as it stands, and only a plain name goes back into one.
-    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matches(it) }
+    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matchEntire(it) != null }
     val nameStart = ref.end - ref.name.length
     return Issue(
         start = ref.start,

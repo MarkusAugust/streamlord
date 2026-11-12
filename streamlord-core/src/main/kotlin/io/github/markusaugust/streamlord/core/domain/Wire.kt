@@ -1,7 +1,9 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.json.JsonShape
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -14,24 +16,24 @@ import kotlin.time.Duration.Companion.milliseconds
  * elements nobody asked for. Everything that becomes a single wire line passes through here.
  */
 public object Wire {
-    private val LINE_BREAKS = Regex("\r\n|\r|\n")
-    private val ATTRIBUTE_NAME = Regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
+    private val LINE_BREAKS = regex("\r\n|\r|\n")
+    private val ATTRIBUTE_NAME = regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
 
     // The end tag that closes the element early, in any case, and the three Datastar's client takes
     // for a whole document, which drops the script or appends a second html element: those it
     // tests in lower case only (patchElements.ts), so `</BODY>` is left as written.
-    private val END_TAGS = Regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
+    private val END_TAGS = regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
 
     // After <!--, a <script that a name boundary follows sends the tokenizer into a state where
     // </script> no longer ends the element.
-    private val OPEN_SCRIPT = Regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
+    private val OPEN_SCRIPT = regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
 
     /**
      * [json] with each surrogate that lacks its other half written as a `\uXXXX` escape, which is
      * how the built-in writer and `JSON.stringify` keep one: UTF-8 cannot carry it, and the bytes
      * would otherwise read `?`. In valid JSON such a surrogate can only stand inside a string.
      */
-    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u%04x".format(it.code) }
+    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u" + hex(it.code, 4) }
 
     /**
      * [html] with each surrogate that lacks its other half as U+FFFD, the replacement character the
@@ -136,7 +138,7 @@ public object Wire {
         if (value.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
         value.firstOrNull { it !in ' '..'~' }?.let {
             throw DatastarEventValidationException(
-                "eventId must be printable ASCII, not U+%04X: it goes back as the last-event-id header".format(it.code),
+                "eventId must be printable ASCII, not U+${hex(it.code, 4).uppercase()}: it goes back as the last-event-id header",
             )
         }
         if (value.first() == ' ' || value.last() == ' ') {
@@ -173,7 +175,7 @@ public object Wire {
 
     /** Reject anything that is not a syntactically sane HTML attribute name. */
     public fun attributeName(name: String): String {
-        if (!ATTRIBUTE_NAME.matches(name)) {
+        if (ATTRIBUTE_NAME.matchEntire(name) == null) {
             throw DatastarEventValidationException("'$name' is not a valid HTML attribute name")
         }
         return name
@@ -208,6 +210,6 @@ public object Wire {
         val comment = ended.indexOf("<!--")
         if (comment < 0) return ended
         return ended.substring(0, comment) +
-            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x%02x".format(it.groupValues[1][0].code) }
+            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x" + hex(it.groupValues[1][0].code, 2) }
     }
 }

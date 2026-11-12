@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
  * renders it. The table is the one the editor's test reads, so both analyses answer to this.
  */
 class DataSignalsSecondArgumentTest {
-    private val table = twinCases("data-signals-second-argument.json")
+    private val table = sharedCases("data-signals-second-argument.json")
 
     @Suppress("SimplifyBooleanWithConstants", "KotlinConstantConditions", "USELESS_IS_CHECK")
     private fun calls(

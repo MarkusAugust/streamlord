@@ -2,19 +2,20 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureNames
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The corpus in the VS Code extension's `test/fixtures/corpus` is read by this suite and by
- * `corpus.test.ts`, so the two editors are held to the same cases. The format is described in
- * each file.
+ * The corpus in the VS Code extension's `test/fixtures/corpus` is read by this suite and by the
+ * extension's `port.test.ts`, so the two editors are held to the same cases. The format is
+ * described in each file.
  */
 class CorpusTest {
     private val analyzer = Analyzer()
-    private val files = File("../editors/vscode/test/fixtures/corpus").listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
+    private val files = fixtureNames("editors/vscode/test/fixtures/corpus").filter { it.endsWith(".json") }
 
     private fun run(
         kind: String,
@@ -110,7 +111,7 @@ class CorpusTest {
     fun `judges every case of the shared corpus as written`() {
         assertTrue(files.isNotEmpty())
         for (file in files) {
-            val corpus = JsonParser.parseObject(file.readText())
+            val corpus = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
             for (case in corpus.array("cases")!!.objects()) {
                 val source = case.string("source")!!
                 val expected = case.array("issues")!!.objects()
@@ -138,7 +139,7 @@ class CorpusTest {
                             e.array("fixes")?.strings() ?: emptyList(),
                         )
                     }
-                assertEquals(wanted, seen, "${file.name}: ${case.string("name")}")
+                assertEquals(wanted, seen, "$file: ${case.string("name")}")
             }
         }
     }

@@ -156,11 +156,25 @@ public class io/github/markusaugust/streamlord/core/client/ClientScript {
 	public final fun toExpression (I)I
 }
 
+public final class io/github/markusaugust/streamlord/core/client/CodePointsKt {
+	public static final fun charCount (I)I
+	public static final fun codePointFrom (Ljava/lang/CharSequence;I)I
+	public static final fun codePointString (I)Ljava/lang/String;
+	public static final fun hex (II)Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/client/DecodedValue {
 	public fun <init> (Ljava/lang/String;[I)V
 	public final fun getMap ()[I
 	public final fun getText ()Ljava/lang/String;
 	public final fun toSource (I)I
+}
+
+public final class io/github/markusaugust/streamlord/core/client/PlatformJvmKt {
+	public static final fun formEncoded (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun groupRange (Lkotlin/text/Regex;Ljava/lang/CharSequence;Lkotlin/text/MatchResult;I)Lkotlin/ranges/IntRange;
+	public static final fun radixDouble (Ljava/lang/String;I)Ljava/lang/Double;
+	public static final fun regex (Ljava/lang/String;[Lkotlin/text/RegexOption;)Lkotlin/text/Regex;
 }
 
 public final class io/github/markusaugust/streamlord/core/client/Rewrite {

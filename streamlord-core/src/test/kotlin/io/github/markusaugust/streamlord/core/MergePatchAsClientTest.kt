@@ -7,7 +7,7 @@ import io.github.markusaugust.streamlord.core.json.PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.STORE_PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,7 +25,7 @@ import kotlin.test.assertTrue
 class MergePatchAsClientTest {
     @Test
     fun `holds what the client holds`() {
-        val cases = JsonParser.parse(File("../conformance/dom/store-cases.json").readText()) as JsonArray
+        val cases = JsonParser.parse(fixtureText("conformance/dom/store-cases.json")) as JsonArray
         assertEquals(27, cases.size)
         for (case in cases.filterIsInstance<JsonObject>()) {
             var store = JsonObject.EMPTY
@@ -53,7 +53,7 @@ class MergePatchAsClientTest {
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
-        val scenarios = JsonParser.parse(File("../conformance/dom/merge-differential.json").readText()) as JsonArray
+        val scenarios = JsonParser.parse(fixtureText("conformance/dom/merge-differential.json")) as JsonArray
         assertEquals(366, scenarios.size)
         for (scenario in scenarios.objects()) {
             var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY

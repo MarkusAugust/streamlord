@@ -14,9 +14,8 @@ import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
 import com.intellij.util.ProcessingContext
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
-import io.github.markusaugust.streamlord.analysis.signalReadRenameText
-import io.github.markusaugust.streamlord.analysis.signalRenameText
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import io.github.markusaugust.streamlord.analysis.SignalSite as AnalysedSite
 
 /**
  * A reference on each `$name` an expression reads and on each place a signal is defined, so that
@@ -73,15 +72,7 @@ class SignalPsiReference(
     fun renameText(
         old: String,
         newName: String,
-    ): String? {
-        val d = declaration ?: return signalReadRenameText(signal, newName)
-        val text = element.containingFile.text
-        if (d.name == old) return signalRenameText(text, d, newName)
-        // A key inside the object renamed is written without the object's name, and stays as it is.
-        if (d.kind == SignalDeclaration.Kind.OBJECT_KEY) return text.substring(d.start, d.end)
-        // Any other place that defines a signal under [old], `"user.name" to 1` when `user` is renamed, moves with it.
-        return signalRenameText(text, d, newName + d.name.removePrefix(old))
-    }
+    ): String? = AnalysedSite(start, end, signal, declaration).renameText(element.containingFile.text, old, newName)
 
     override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> =
         SignalTarget.of(element.containingFile, signal).map { PsiElementResolveResult(it) }.toTypedArray()

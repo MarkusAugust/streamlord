@@ -31,7 +31,7 @@ internal const val HTML_SPACE: String = "\t\n\u000C\r "
 
 /** Whether this is [HTML_SPACE]. */
 @InternalStreamlordApi
-public fun Char.isHtmlSpace(): Boolean = this in HTML_SPACE
+public fun Char.isHtmlSpace(): Boolean = this == ' ' || this == '\n' || this == '\t' || this == '\r' || this == '\u000C'
 
 /**
  * Where `</[name]` begins after [from] as a whole name, `</titlex>` not ending a `title`; -1 when
@@ -163,7 +163,7 @@ internal fun commentClose(
  * one, which the browser reads with or without its semicolon.
  */
 private val ENTITY =
-    Regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)""")
+    regex("""&(?:([A-Za-z][A-Za-z0-9]*);|(amp|AMP|lt|LT|gt|GT|quot|QUOT|nbsp)(?![=A-Za-z0-9])|#(\d+);?|#[xX]([0-9A-Fa-f]+);?)""")
 
 /** The named references that spell a character an expression may hold: the ASCII punctuation, and the whitespace. */
 private val NAMED_ENTITIES =
@@ -281,7 +281,7 @@ public fun decodeEntities(value: String): DecodedValue {
 
 /** The character a numeric reference names, as the browser reads it: NUL, a surrogate and past U+10FFFF are U+FFFD. */
 private fun codePoint(cp: Int): String =
-    if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else String(Character.toChars(WINDOWS_1252[cp] ?: cp))
+    if (cp == 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) "\uFFFD" else codePointString(WINDOWS_1252[cp] ?: cp)
 
 // The numeric references the HTML standard reads as windows-1252 rather than as C1 controls: `&#128;` is the euro sign.
 private val WINDOWS_1252 =

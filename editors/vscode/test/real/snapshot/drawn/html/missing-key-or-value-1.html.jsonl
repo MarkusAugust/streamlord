@@ -1,0 +1,7 @@
+{"what":"file","language":"html"}
+{"what":"diagnostic","code":"missing-key-or-value","link":"https://data-star.dev/reference/attributes#data-indicator","message":"data-indicator needs a signal, as a key or as a value; without one Datastar raises KeyOrValueRequired.","range":"1:6-1:20","severity":"Error","source":"streamlord"}
+{"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
+{"what":"hover","at":"1:6-1:20","answers":[{"contents":[{"value":"f14056469ba7"}],"range":"1:6-1:20"},{"contents":[{"value":"7878b8bc57c0"}],"range":"1:6-1:20"}]}
+{"what":"hover","at":"1:23-1:26","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:23-1:26"}]}
+{"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}
+{"what":"scopes","line":1,"tokens":[["<","meta.tag.structure.div.start.html punctuation.definition.tag.begin.html"],["div","meta.tag.structure.div.start.html entity.name.tag.html"],[" ","meta.tag.structure.div.start.html"],["data-","meta.tag.structure.div.start.html entity.other.attribute-name.datastar.prefix"],["indicator","meta.tag.structure.div.start.html entity.other.attribute-name.datastar.plugin"],[">","meta.tag.structure.div.start.html punctuation.definition.tag.end.html"],["</","meta.tag.structure.div.end.html punctuation.definition.tag.begin.html"],["div","meta.tag.structure.div.end.html entity.name.tag.html"],[">","meta.tag.structure.div.end.html punctuation.definition.tag.end.html"]]}

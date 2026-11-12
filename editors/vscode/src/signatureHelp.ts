@@ -1,8 +1,5 @@
 import * as vscode from "vscode";
-import { expressionAtCaret } from "./caret.ts";
-import { catalog } from "./catalog.ts";
-import { actionCallAt } from "./completionContext.ts";
-import { kotlinExpressionAtCaret, kotlinModules } from "./modules.ts";
+import { actionCallAt, catalog, expressionAtCaret } from "./analysis.ts";
 
 /** The parameters of a Datastar action while the caret is in its call, in markup and in Kotlin strings alike. */
 export class StreamlordSignatureHelpProvider implements vscode.SignatureHelpProvider {
@@ -11,13 +8,10 @@ export class StreamlordSignatureHelpProvider implements vscode.SignatureHelpProv
   provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position): vscode.SignatureHelp | null {
     const src = document.getText();
     const offset = document.offsetAt(position);
-    const expression =
-      document.languageId === "kotlin"
-        ? kotlinExpressionAtCaret(src, offset, this.prefix(), kotlinModules(src))
-        : expressionAtCaret(src, offset, false, this.prefix());
+    const expression = expressionAtCaret(src, offset, document.languageId === "kotlin", this.prefix());
     if (!expression?.allowActions) return null;
     const call = actionCallAt(expression.before, expression.before.length);
-    const action = call ? catalog.actionsByName.get(call.action) : undefined;
+    const action = call ? catalog().actions.find((a) => a.name === call.action) : undefined;
     if (!call || !action) return null;
     const signature = new vscode.SignatureInformation(action.signature, new vscode.MarkdownString(action.doc));
     signature.parameters = action.parameters.map((p) => new vscode.ParameterInformation(p));

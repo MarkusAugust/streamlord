@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * Syntax highlighting of what Datastar adds to JavaScript and HTML: signals, actions, the scope
  * variables, option keys, durations, and the parts of a `data-*` attribute name. Everything that
@@ -207,7 +209,7 @@ public fun tokenizeExpression(text: String): List<Token> {
                 var j = i + 1
                 while (j < text.length && (text[j].isLetterOrDigit() || text[j] == '.' || text[j] == '_')) j++
                 val word = text.substring(i, j)
-                out += Token(i, j, if (Regex("""\d+(ms|s)""").matches(word)) TokenKind.DURATION else TokenKind.NUMBER)
+                out += Token(i, j, if (regex("""\d+(ms|s)""").matchEntire(word) != null) TokenKind.DURATION else TokenKind.NUMBER)
                 lastSignificant = 'a'
                 i = j
             }

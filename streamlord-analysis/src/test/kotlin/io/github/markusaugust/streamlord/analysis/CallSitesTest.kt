@@ -9,7 +9,7 @@ class CallSitesTest {
 
     @Test
     fun `the issues and fixes at a call site`() {
-        for (case in twinCases("call-sites.json")) {
+        for (case in sharedCases("call-sites.json")) {
             val name = case.string("name")
             val src = case.string("src")!!
             val issues = analyzer.analyzeKotlin(src)

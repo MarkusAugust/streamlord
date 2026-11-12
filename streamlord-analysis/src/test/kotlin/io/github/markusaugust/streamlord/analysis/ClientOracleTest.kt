@@ -8,7 +8,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -28,7 +28,7 @@ import kotlin.test.fail
 class ClientOracleTest {
     private val analyzer = Analyzer()
 
-    private fun fixture(name: String): JsonObject = JsonParser.parseObject(File("../conformance/client/$name").readText())
+    private fun fixture(name: String): JsonObject = JsonParser.parseObject(fixtureText("conformance/client/$name"))
 
     private fun cases(name: String): List<JsonObject> = fixture(name).array("cases")!!.objects()
 
@@ -208,7 +208,7 @@ class ClientOracleTest {
 
     private val dslCases: Map<String, JsonObject> =
         JsonParser
-            .parseObject(File("../conformance/dsl/free.json").readText())
+            .parseObject(fixtureText("conformance/dsl/free.json"))
             .array("cases")!!
             .objects()
             .associateBy { it.string("name")!! }
@@ -281,7 +281,7 @@ class ClientOracleTest {
     @Test
     fun `carries the catalog of the client the fixtures were read from`() {
         val read = fixture("expressions.json").string("version")!!
-        assertEquals(read, JsonParser.parseObject(File("../conformance/dsl/free.json").readText()).string("version"))
+        assertEquals(read, JsonParser.parseObject(fixtureText("conformance/dsl/free.json")).string("version"))
         assertEquals(read, CatalogText.VERSION)
         val named = Regex("""\b\d+\.\d+\.\d+\b""").findAll(CatalogText.JSON).map { it.value }.toSet()
         assertEquals(setOf(read), named, "the Datastar versions the catalog's text names")
@@ -364,7 +364,7 @@ class ClientOracleTest {
             val ms = case["tagToMs"]
             val wait =
                 when (ms) {
-                    is JsonNumber -> ms.toBigDecimal().stripTrailingZeros().toPlainString()
+                    is JsonNumber -> (ms.toLongOrNull() ?: ms.toDouble()).toString()
                     else -> "NaN"
                 }
             val written = (listOf("debounce") + set).joinToString(".")
@@ -432,7 +432,7 @@ class ClientOracleTest {
     fun `the wire hint names the key the dsl writes and the name the client reads`() {
         var checked = 0
         for (file in listOf("free.json", "pro.json")) {
-            val cases = JsonParser.parseObject(File("../conformance/dsl/$file").readText()).array("cases")!!.objects()
+            val cases = JsonParser.parseObject(fixtureText("conformance/dsl/$file")).array("cases")!!.objects()
             for (case in cases) {
                 val call = case.obj("call")!!
                 // The hint is shown for a key with a capital, the one the DSL rewrites.

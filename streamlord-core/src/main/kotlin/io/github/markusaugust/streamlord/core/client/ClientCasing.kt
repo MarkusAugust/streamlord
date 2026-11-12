@@ -9,8 +9,8 @@ import io.github.markusaugust.streamlord.core.InternalStreamlordApi
  */
 @InternalStreamlordApi
 public object ClientCasing {
-    private val HYPHEN_LOWER = Regex("-[a-z]")
-    private val CAPITAL = Regex("[A-Z]")
+    private val HYPHEN_LOWER = regex("-[a-z]")
+    private val CAPITAL = regex("[A-Z]")
 
     /** The cases the client has a function for (`caseFns` in text.ts); any other leaves a key as it is. */
     public val CASES: List<String> = listOf("camel", "snake", "pascal")
@@ -28,12 +28,12 @@ public object ClientCasing {
     // `kebab` in text.ts, whose `\s` is JavaScript's: Java's and the spaces Unicode adds.
     private val TEXT_KEBAB =
         listOf(
-            Regex("([A-Z]+)([A-Z][a-z])"),
-            Regex("([a-z0-9])([A-Z])"),
-            Regex("([A-Za-z])([0-9]+)"),
-            Regex("([0-9]+)([A-Za-z])"),
+            regex("([A-Z]+)([A-Z][a-z])"),
+            regex("([a-z0-9])([A-Z])"),
+            regex("([A-Za-z])([0-9]+)"),
+            regex("([0-9]+)([A-Za-z])"),
         )
-    private val TEXT_SPACE = Regex("[\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff_]+")
+    private val TEXT_SPACE = regex("[\\s\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff_]+")
 
     /**
      * `camel` in text.ts, which bind.ts reads `__prop` with: its own `kebab`, which also splits

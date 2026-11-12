@@ -2,6 +2,8 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.groupRange
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 
 /*
@@ -16,21 +18,21 @@ public enum class SourceLanguage { KOTLIN, HTML }
 // assign the signal, which creates it.
 private val KOTLIN_PATTERNS =
     listOf(
-        Regex(
+        regex(
             """\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
         ),
-        Regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
+        regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
 private val KOTLIN_READS =
     listOf(
-        Regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
-        Regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
+        regex("""\$\{'\$'\}([A-Za-z_][A-Za-z0-9_.]*)"""),
+        regex("""\\\$([A-Za-z_][A-Za-z0-9_.]*)"""),
     )
 
 /** A helper that reads a signal by name: `signal("count")` is `$count`, which completion offers and a definition is not. */
-private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""")
+private val HELPER_READS = regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""")
 
 /*
  * Declarations in markup, read as the client stores them. These also run over Kotlin, where they
@@ -44,13 +46,13 @@ private val HELPER_READS = Regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})
  * `data-signals:{{ name }}`, `data-signals:th:text`) declares nothing.
  */
 private val KEYED_ATTRIBUTE =
-    Regex(
+    regex(
         """(?i)data-(?:star-)?(?:${Catalog.default.signalKeyAttributes.joinToString("|")}):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""",
     )
 
 /** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
 private val VALUE_ATTRIBUTE =
-    Regex(
+    regex(
         """(?i)data-(?:star-)?(?:${Catalog.default.attributes.filter { it.valueKind == ValueKind.SIGNAL }.joinToString(
             "|",
         ) { it.name }})""" +
@@ -60,13 +62,13 @@ private val VALUE_ATTRIBUTE =
 // The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
 // by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
 // data-computed="{total: () => ...}" declares its keys the same way.
-private val OBJECT_ATTRIBUTE = Regex("""(?i)data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
+private val OBJECT_ATTRIBUTE = regex("""(?i)data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
 
 /** `$name = ...` in an expression: Datastar creates a signal it is assigned to, so the assignment defines it. */
-private val ASSIGNED_SIGNAL = Regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
+private val ASSIGNED_SIGNAL = regex("""(?:\$|\$\{'\$'\})([A-Za-z_][A-Za-z0-9_.]*)\s*=(?![=>])""")
 
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
-private val BARE_SIGNAL = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
+private val BARE_SIGNAL = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
 private val PAIR_CALLS = Catalog.default.signalCalls.keys
 
@@ -96,7 +98,7 @@ private val JSON_CALLS =
     Catalog.default.signalCalls
         .filterValues { "json" in it }
         .keys
-private val JSON_OBJECT = Regex("""^\s*\{""")
+private val JSON_OBJECT = regex("""^\s*\{""")
 
 /**
  * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
@@ -104,14 +106,14 @@ private val JSON_OBJECT = Regex("""^\s*\{""")
  * or by a variable whose type the file writes down, `toJsonValue(form)` with `form: Form`.
  */
 private val TO_JSON =
-    Regex(
+    regex(
         """\btoJsonValue\s*(?:<\s*([A-Za-z_][A-Za-z0-9_.]*)\s*>)?\s*\(\s*(?:(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(|([a-z_][A-Za-z0-9_]*)\s*\))?""",
     )
 
 /** A pair whose key is not a literal, `key to value`: the fields under it are no top-level signals. */
-private val ANY_PAIR = Regex("""^[^(]*?\bto\s""")
-private val IDENTIFIER_ARG = Regex("""^\s*([a-z_][A-Za-z0-9_]*)\s*$""")
-private val BOOLEAN_ARG = Regex("""^\s*(?:true|false)\s*$""")
+private val ANY_PAIR = regex("""^[^(]*?\bto\s""")
+private val IDENTIFIER_ARG = regex("""^\s*([a-z_][A-Za-z0-9_]*)\s*$""")
+private val BOOLEAN_ARG = regex("""^\s*(?:true|false)\s*$""")
 
 /** Types that say nothing about the names in them. */
 private val UNNAMED_TYPES = setOf("JsonValue", "JsonObject", "Any", "Map", "MutableMap", "HashMap", "LinkedHashMap")
@@ -129,14 +131,18 @@ private val VALUE_TYPES =
 internal fun encodedSignalTypes(
     src: String,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+    lex: KotlinLex = lexKotlin(src),
 ): Set<String> {
     val out = LinkedHashSet<String>()
-    for (site in findCallSites(src, setOf("dataSignals"))) {
+    for (site in findCallSites(src, setOf("dataSignals"), lex)) {
         if (foreign(site.name, site.nameStart)) continue
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
         val a =
-            positional.firstOrNull()?.takeIf { positional.size == 1 || (positional.size == 2 && BOOLEAN_ARG.matches(positional[1].text)) }
+            positional.firstOrNull()?.takeIf {
+                positional.size == 1 ||
+                    (positional.size == 2 && BOOLEAN_ARG.matchEntire(positional[1].text) != null)
+            }
                 ?: site.named("signals")
                 ?: continue
         if (a.string != null || PAIR.containsMatchIn(a.text) || ANY_PAIR.containsMatchIn(a.text)) continue
@@ -165,7 +171,7 @@ private fun encodedType(
     if (depth > 0) return null
     val name = Regex.escape(id)
     val init =
-        Regex("""\b(?:val|var)\s+$name\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
+        regex("""\b(?:val|var)\s+$name\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
             .findAll(before)
             .lastOrNull()
             ?.groupValues
@@ -180,8 +186,8 @@ private fun variableType(
     before: String,
 ): String? {
     val name = Regex.escape(id)
-    val typed = Regex("""\b$name\s*:\s*([A-Z][A-Za-z0-9_]*)""").findAll(before).lastOrNull()
-    val built = Regex("""\b(?:val|var)\s+$name\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""").findAll(before).lastOrNull()
+    val typed = regex("""\b$name\s*:\s*([A-Z][A-Za-z0-9_]*)""").findAll(before).lastOrNull()
+    val built = regex("""\b(?:val|var)\s+$name\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""").findAll(before).lastOrNull()
     return listOfNotNull(typed, built).maxByOrNull { it.range.first }?.groupValues?.get(1)
 }
 
@@ -196,23 +202,35 @@ internal const val ENCODED_CLASS: String = "toJsonValue:"
 internal const val READABLE_CLASS: String = "class:"
 
 /** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
-private val PAIR = Regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
-private val NAME = Regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
+private val PAIR = regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
+private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 
 /** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
 private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
-private val MAP_CALL = Regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
+private val MAP_CALL = regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
 /** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
 private fun argumentKeys(text: String): List<SignalDeclaration> {
-    PAIR.find(text)?.let { return listOf(declarationAt(it.groups[1]!!, 0)) }
+    PAIR.find(text)?.let { return listOf(declarationAt(PAIR.groupAt(text, it, 1)!!, 0)) }
     if (!MAP_CALL.containsMatchIn(text)) return emptyList()
     val map = findCallSites(text, MAP_CALLS).firstOrNull() ?: return emptyList()
-    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(it.groups[1]!!, a.start) } }
+    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(PAIR.groupAt(a.text, it, 1)!!, a.start) } }
 }
 
+/** A group of a match with where it stands, which a `MatchGroup` says on the JVM alone. */
+internal class GroupAt(
+    val value: String,
+    val range: IntRange,
+)
+
+internal fun Regex.groupAt(
+    input: CharSequence,
+    match: MatchResult,
+    group: Int,
+): GroupAt? = match.groups[group]?.let { GroupAt(it.value, groupRange(input, match, group)!!) }
+
 private fun declarationAt(
-    group: MatchGroup,
+    group: GroupAt,
     offset: Int,
     name: String = group.value,
 ): SignalDeclaration = SignalDeclaration(offset + group.range.first, offset + group.range.last + 1, name)
@@ -306,7 +324,7 @@ public fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
     foreign: Set<String>,
-): Set<String> = collectSignalDefinitions(src, language) { name, _ -> name in foreign }
+): Set<String> = collectSignalDefinitions(src, language, { name, _ -> name in foreign })
 
 /** No call is somebody else's: what a definition is read with when the host says nothing. */
 private val NOT_FOREIGN: (String, Int) -> Boolean = { _, _ -> false }
@@ -319,16 +337,19 @@ internal fun collectSignalDefinitions(
     src: String,
     language: SourceLanguage,
     foreign: (name: String, nameStart: Int) -> Boolean,
+    given: KotlinLex? = null,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
-    for (d in definedAt(src, language, spread, foreign)) out += d.name
+    // One reading of a Kotlin file for every call looked for in it.
+    val lex = given ?: if (language == SourceLanguage.KOTLIN) lexKotlin(src) else null
+    for (d in definedAt(src, language, spread, foreign, lex)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
         // A page declared from a class defines what its codec writes: the properties for a
         // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
-        for (type in encodedSignalTypes(src, foreign)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+        for (type in encodedSignalTypes(src, foreign, lex!!)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
     }
     return out
 }
@@ -349,17 +370,17 @@ public fun signalDeclarations(
     language: SourceLanguage,
     foreign: Set<String>,
 ): List<SignalDeclaration> =
-    definedAt(src, language, Spread()) { name, _ -> name in foreign }.sortedWith(compareBy({ it.start }, { it.end }))
+    definedAt(src, language, Spread(), { name, _ -> name in foreign }).sortedWith(compareBy({ it.start }, { it.end }))
 
 /**
  * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
  * digit. What a `$name` reads and what a Kotlin string holds without a template or a name the DSL
  * refuses: a `$` would be a template in Kotlin and `-` throws in a DSL call.
  */
-private val RENAMABLE = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+private val RENAMABLE = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /** The characters of a key and its modifiers, as [KEYED_ATTRIBUTE] reads them. */
-private val KEY_TAIL = Regex("""[\p{L}\p{N}_.-]*""")
+private val KEY_TAIL = regex("""[\p{L}\p{N}_.-]*""")
 
 /**
  * What to write at [d] in [src] so that the place defines [newName], or null when nothing written
@@ -373,7 +394,7 @@ public fun signalRenameText(
     d: SignalDeclaration,
     newName: String,
 ): String? {
-    if (!RENAMABLE.matches(newName)) return null
+    if (RENAMABLE.matchEntire(newName) == null) return null
     return when (d.kind) {
         SignalDeclaration.Kind.NAME -> {
             newName
@@ -418,7 +439,7 @@ public fun signalReadRenameText(
     signal: String,
     newName: String,
 ): String? {
-    if (!RENAMABLE.matches(newName) || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
+    if (RENAMABLE.matchEntire(newName) == null || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
     return newName.substringAfterLast('.')
 }
 
@@ -427,8 +448,9 @@ private fun definedAt(
     language: SourceLanguage,
     spread: Spread,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+    lex: KotlinLex? = null,
 ): List<SignalDeclaration> {
-    val out = ArrayList(declared(src, language, spread, foreign))
+    val out = ArrayList(declared(src, language, spread, foreign, lex))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
@@ -438,7 +460,7 @@ private fun definedAt(
             }
         }
     }
-    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(m.groups[1]!!, 0)
+    for (m in ASSIGNED_SIGNAL.findAll(src)) out += declarationAt(ASSIGNED_SIGNAL.groupAt(src, m, 1)!!, 0)
     return out.filter { PLACEHOLDER !in it.name }.distinct()
 }
 
@@ -452,10 +474,12 @@ private fun declared(
     language: SourceLanguage,
     spread: Spread,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
+    given: KotlinLex? = null,
 ): List<SignalDeclaration> {
     val out = ArrayList<SignalDeclaration>()
     if (language == SourceLanguage.KOTLIN) {
-        for (site in findCallSites(src, PAIR_CALLS)) {
+        val lex = given ?: lexKotlin(src)
+        for (site in findCallSites(src, PAIR_CALLS, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
@@ -471,7 +495,7 @@ private fun declared(
                         }
                     }
                 }
-                val name = NAME.find(a.text)?.groups?.get(1) ?: return@forEachIndexed
+                val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (site.name == "removeSignals") out += declarationAt(name, a.start)
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) out += declarationAt(name, a.start)
@@ -484,14 +508,14 @@ private fun declared(
                 if (foreign(name, m.range.first)) continue
                 // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
                 if (name in SIGNAL_NAME_HELPERS && onReceiver(src, m.range.first)) continue
-                out += declarationAt(m.groups[1]!!, 0)
+                out += declarationAt(re.groupAt(src, m, 1)!!, 0)
             }
         }
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
     for (m in KEYED_ATTRIBUTE.findAll(src)) {
-        val written = m.groups[1]!!
+        val written = KEYED_ATTRIBUTE.groupAt(src, m, 1)!!
         val key = written.value.substringBefore("__")
         out +=
             SignalDeclaration(
@@ -501,9 +525,12 @@ private fun declared(
                 SignalDeclaration.Kind.KEY,
             )
     }
-    for (m in VALUE_ATTRIBUTE.findAll(src)) out += declarationAt(m.groups[1] ?: m.groups[2]!!, 0)
+    for (m in VALUE_ATTRIBUTE.findAll(src)) {
+        out +=
+            declarationAt(VALUE_ATTRIBUTE.groupAt(src, m, 1) ?: VALUE_ATTRIBUTE.groupAt(src, m, 2)!!, 0)
+    }
     for (m in OBJECT_ATTRIBUTE.findAll(src)) {
-        val body = m.groups[1] ?: m.groups[2]!!
+        val body = OBJECT_ATTRIBUTE.groupAt(src, m, 1) ?: OBJECT_ATTRIBUTE.groupAt(src, m, 2)!!
         for (k in objectKeys(body.value, spread)) {
             val start = body.range.first + k.nameStart
             out += SignalDeclaration(start, start + k.key.length, k.path, SignalDeclaration.Kind.OBJECT_KEY)
@@ -584,7 +611,7 @@ internal fun signalNameProblem(
     parts: List<String> = name.split('.'),
 ): String? {
     // What the client reads after a `$`: ASCII letters, digits and `_`, in parts joined by `.` or `-`.
-    if (CLIENT_SIGNAL.matches("$" + name)) return null
+    if (CLIENT_SIGNAL.matchEntire("$" + name) != null) return null
     if (name.startsWith("$")) return "holds the \$ itself, so \$${name.drop(1)} does not reach it: that reads the signal ${name.drop(1)}"
     val bracket = "only the bracket form ${bracketRead(parts)} reads it"
     return if (name.any { it > '\u007F' }) {
@@ -729,11 +756,11 @@ internal fun objectKeys(
     return out
 }
 
-private val BARE_KEY = Regex("""[A-Za-z0-9_$]+""")
+private val BARE_KEY = regex("""[A-Za-z0-9_$]+""")
 
-private val PAIR_KEY = Regex("""^[\s(]*"""")
-private val PAIR_AFTER = Regex("""\s+to\b""")
-private val TO_NULL = Regex("""\s+to\s+null\b""")
+private val PAIR_KEY = regex("""^[\s(]*"""")
+private val PAIR_AFTER = regex("""\s+to\b""")
+private val TO_NULL = regex("""\s+to\s+null\b""")
 
 /** The keys of the pairs among the positional arguments of [site], `"name" to value`, as string literals. */
 internal fun pairKeys(
