@@ -283,7 +283,7 @@ public class Analyzer(
     /** Names of all DSL functions the analysis recognises in Kotlin source. */
     public val callSiteNames: Set<String> get() = allSiteNames
 
-    private val lexCacheCap = 256 * 1024
+    private val lexCacheCap = 4 * 1024 * 1024
 
     @Volatile
     private var lastLex: Pair<String, KotlinLex>? = null
@@ -442,6 +442,15 @@ public class Analyzer(
      * the name, where it starts, and the literal that follows the `=`, unterminated while it is typed.
      */
     public fun attributesIndexes(src: String): List<AttributesIndex> {
+        lastIndexes?.takeIf { it.first == src }?.let { return it.second }
+        return readAttributesIndexes(src).also { lastIndexes = src to it }
+    }
+
+    // Completion and hover ask for the same file's several times in one question.
+    @Volatile
+    private var lastIndexes: Pair<String, List<AttributesIndex>>? = null
+
+    private fun readAttributesIndexes(src: String): List<AttributesIndex> {
         val lex = lex(src)
         val out = ArrayList<AttributesIndex>()
         for (m in ATTRIBUTES_KEY.findAll(src)) {

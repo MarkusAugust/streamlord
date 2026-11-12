@@ -151,6 +151,15 @@ class EditorHelpTest {
         assertTrue(asked <= 4, "asked $asked times")
     }
 
+    // Completion reads a file's literals several times over; a long file is read once, as a short one is.
+    @Test
+    fun `a Kotlin file of some hundred kilobytes is lexed, and its attributes form read, once for all the readings of one question`() {
+        val text = "fun f() = div { dataText(\"\\\$a\") }\n".repeat(9000)
+        assertTrue(text.length > 300_000)
+        assertTrue(analyzer.lex(text) === analyzer.lex(text))
+        assertTrue(analyzer.attributesIndexes(text) === analyzer.attributesIndexes(text))
+    }
+
     @Test
     fun `every action's parameters stand in its signature, in order`() {
         for (action in analyzer.catalog.actions) {

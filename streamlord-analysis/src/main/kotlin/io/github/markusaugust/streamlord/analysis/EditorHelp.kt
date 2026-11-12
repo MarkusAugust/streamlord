@@ -322,7 +322,7 @@ private class Asked(
      */
     private fun definitions(): Set<String> {
         val foreign = foreignHelpers(htmlDsl = !kotlin || modules.htmlDsl)
-        return collectSignalDefinitions(text, source.language, foreign)
+        return collectSignalDefinitions(text, source.language, { name, _ -> name in foreign }, if (kotlin) analyzer.lex(text) else null)
     }
 
     /** Attribute names, the events of `data-on:`, modifiers and their values, for a name typed in a tag or the key of the attributes form. */
