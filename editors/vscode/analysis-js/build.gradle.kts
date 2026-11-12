@@ -69,14 +69,16 @@ kotlin {
             }
         }
         // The two modules' own tests, as they are. A test whose subject or oracle is the JVM is named
-        // *JvmTest and stays there, and so do the two that need files or the Kotlin compiler and
-        // the tests of core's server side.
+        // *JvmTest and stays there, and so do the two named for why and the tests of core's server
+        // side: the stream, the encoder, the guards on what it sends and the reading of a request.
         getByName("jsTest") {
             kotlin.srcDir(analysis.layout.projectDirectory.dir("src/test/kotlin"))
             kotlin.srcDir(core.layout.projectDirectory.dir("src/test/kotlin"))
             kotlin.exclude(
                 "**/*JvmTest.kt",
+                // Reads a project's files.
                 "**/analysis/AnalyzeProjectTest.kt",
+                // Its oracle is the kotlinx.html DSL.
                 "**/analysis/DataSignalsSecondArgumentTest.kt",
                 "**/core/DatastarStreamTest.kt",
                 "**/core/ElementsGuardTest.kt",
@@ -84,17 +86,12 @@ kotlin {
                 "**/core/EncodeFlowTest.kt",
                 "**/core/GoldenConformanceTest.kt",
                 "**/core/HeartbeatTest.kt",
-                "**/core/JsonLimitsTest.kt",
-                "**/core/JsonRobustnessTest.kt",
-                "**/core/JsonTest.kt",
-                "**/core/MarkupAsTheBrowserReadsTest.kt",
                 "**/core/ProtocolAsTheClientTakesItTest.kt",
                 "**/core/ReadSignalsGuardTest.kt",
                 "**/core/ReadSignalsTest.kt",
                 "**/core/ResponseAsTheClientReadsTest.kt",
                 "**/core/ScriptAndSignalsContextTest.kt",
                 "**/core/SendLatestTest.kt",
-                "**/core/SseDecoderTest.kt",
                 "**/core/SseEncoderTest.kt",
                 "**/core/StreamAuthorisationTest.kt",
                 "**/core/ToJsonValueTest.kt",
