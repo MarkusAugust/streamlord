@@ -1333,24 +1333,26 @@ public class Analyzer(
             }
         // interpolate(...) can take the string only when every value is one it accepts where it lands.
         val fixable = canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched }
-        // The rewrite is made once for the string, and only when a fix is applied.
-        val rewrite = interpolateText(src, s, trim?.text.orEmpty(), vouched)
+        // The first values it does not take as they are: what the message of another value names.
+        val inTheWay = holes.filterNot { keeps[it] }.take(2)
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
         // value, where one may be null, which a template writes as `null` and interpolate as nothing, nor under
         // trimIndent, where a value with a line break changed what was trimmed.
-        val same =
+        val same by lazy(LazyThreadSafetyMode.NONE) {
             vouched.isEmpty() && (trim == null || trim.margin != null) &&
                 holes.none { told[it].isNullable() || told[it].isNullableString() || mayBeNull(src, s.interpolations[it].text, s.start) }
+        }
+        // The rewrite is made once for the string, and only where an issue offers it.
+        val rewrite by lazy(LazyThreadSafetyMode.NONE) { interpolateFix(src, s, trim?.text.orEmpty(), vouched) }
         var offered = false
 
-        fun rewriteFix(
-            title: String,
-            preferred: Boolean,
+        fun rewriteAs(
+            title: String = rewrite.title,
+            preferred: Boolean = false,
         ): Fix {
             offered = true
-            return interpolateFix(src, s, s.end + (trim?.text?.length ?: 0), rewrite, title, preferred && same, vouched.isNotEmpty())
+            return rewrite.copy(title = title, preferred = preferred && same)
         }
-        val vouchedTitle by lazy(LazyThreadSafetyMode.NONE) { trustedRewriteTitle(vouched.map { holeDisplay(s.interpolations[it]) }) }
         val issues = ArrayList<Issue>()
         for ((k, ip) in s.interpolations.withIndex()) {
             if (k in written) continue
@@ -1358,56 +1360,40 @@ public class Analyzer(
             val fact = told[k].plain()
             val shown = holeDisplay(ip)
             val factSays = verdict(fact, landing.position)
+            // In a Datastar expression `$name` may be meant as a signal, whatever the value is.
+            if (factSays == Verdict.SAFE && landing.position != Position.DATASTAR) continue
             val severity = if (fact.knownCharacters()) Severity.WARNING else Severity.HINT
 
             // The rewrite escapes nothing of a Trusted, so the issue of one does not offer it.
             fun rewritten(
                 title: String,
                 preferred: Boolean = true,
-            ): List<Fix> = if (fixable && !trusted[k]) listOf(rewriteFix(title, preferred)) else emptyList()
-
-            val link = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
+            ): List<Fix> = if (fixable && !trusted[k]) listOf(rewriteAs(title, preferred)) else emptyList()
 
             // What the rewrite does with another value, or why none is offered: the first value in the way.
-            val inTheWay =
-                run {
-                    if (!canInterpolate || trusted[k]) return@run ""
-                    val other = holes.firstOrNull { it != k && !keeps[it] }
-                    val named = other?.let { holeDisplay(s.interpolations[it]) }
-                    val place = other?.let { refusedPlace(view, landings[it], starts[it]) }
-                    when {
-                        fixable && other != null -> {
-                            " The fix passes $named, in $place, as Trusted(...)."
-                        }
-
-                        fixable -> {
-                            ""
-                        }
-
-                        !unfit.isNullOrEmpty() -> {
-                            " interpolate(...) is not offered here: $unfit."
-                        }
-
-                        other == null -> {
-                            ""
-                        }
-
-                        loose[other] || landings[other].position !in ESCAPED_POSITIONS -> {
-                            " interpolate(...) cannot take this string while $named stands in $place."
-                        }
-
-                        else -> {
-                            " interpolate(...) is not offered here: it would escape $named, which may be markup you built."
-                        }
-                    }
+            fun rewriteNote(): String {
+                if (!canInterpolate || trusted[k]) return ""
+                if (!unfit.isNullOrEmpty()) return " interpolate(...) is not offered here: $unfit."
+                val other = inTheWay.firstOrNull { it != k } ?: return ""
+                val named = holeDisplay(s.interpolations[other])
+                val place = refusedPlace(view, landings[other], starts[other])
+                val refused = loose[other] || landings[other].position !in ESCAPED_POSITIONS
+                return when {
+                    fixable -> " The fix passes $named, in $place, as Trusted(...)."
+                    refused -> " interpolate(...) cannot take this string while $named stands in $place."
+                    else -> " interpolate(...) is not offered here: it would escape $named, which may be markup you built."
                 }
+            }
 
             fun issue(
-                severity: Severity,
-                code: String,
                 message: String,
+                severity: Severity = Severity.WARNING,
+                code: String = "unsafe-interpolation",
                 fixes: List<Fix> = emptyList(),
-            ): Issue = Issue(ip.start, ip.end, message, severity, code, link, fixes)
+            ): Issue {
+                val link = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
+                return Issue(ip.start, ip.end, message, severity, code, link, fixes)
+            }
 
             fun unescaped(): Issue {
                 // A String in element text may be markup the author built, which only the author knows: then
@@ -1424,165 +1410,131 @@ public class Analyzer(
                                 )
                         ) &&
                         !mayBeNull(src, ip.text, s.start) && !visiblyList(src, ip.text, s.start)
-                if (!core) {
-                    // A call or a value of unknown type may be markup the author composed; a known String stays a warning.
-                    return issue(
-                        if (trust && fact == null) Severity.HINT else severity,
-                        "unescaped-interpolation",
-                        plainUnescapedMessage(shown, fact, text),
-                    )
-                }
                 // A Trusted that opens a `+` chain would be joined to nothing, since Kotlin has no plus for it: no such fix there.
                 val fixes =
                     rewritten(ESCAPES_TITLE, !trust) +
-                        if (trust && canTrust && ip.start != s.start) listOf(trustedFix(src, s, ip, shown)) else emptyList()
+                        if (trust && canTrust && ip.start != s.start) listOf(trustedFix(src, ip, shown)) else emptyList()
+                // Without core, plain Kotlin and kotlinx.html stand in for interpolate and Trusted, and a call or a
+                // value of unknown type may be markup the author composed; a known String stays a warning.
                 val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.coreHtml != false)
-                return issue(severity, "unescaped-interpolation", message + inTheWay, fixes)
+                val level = if (!core && trust && fact == null) Severity.HINT else severity
+                return issue(message + rewriteNote(), level, "unescaped-interpolation", fixes)
             }
 
             fun schemeIssue(attribute: String): Issue {
                 val fixes = rewritten(REFUSES_URL_TITLE)
                 return issue(
-                    Severity.WARNING,
-                    "unsafe-interpolation",
                     "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
                         "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
-                        (if (fixes.isNotEmpty()) ", or build the string with $REFUSES_SCHEME." else ".") + inTheWay,
-                    fixes,
+                        (if (fixes.isNotEmpty()) ", or build the string with $REFUSES_SCHEME." else ".") + rewriteNote(),
+                    fixes = fixes,
                 )
             }
-            when (landing.position) {
-                Position.TEXT, Position.ATTRIBUTE -> {
-                    if (factSays != Verdict.ESCAPE) continue
-                    // The content of a <meta> may be a refresh, whose URL interpolate judges as any URL.
-                    issues +=
-                        if (refreshUrlStart(view, landing) { reading.prefix(k, k) }) schemeIssue("the URL of content") else unescaped()
-                }
 
-                Position.URL -> {
-                    if (factSays == Verdict.SAFE) continue
-                    val attribute = landing.attribute ?: "the URL"
-                    val prefix = reading.prefix(k, k)
-                    val before = decodeEntities(prefix).text
-                    issues +=
-                        if (landing.loadsCode && !urlHostFixedBy(attribute, prefix)) {
-                            issue(Severity.WARNING, "unsafe-interpolation", codeUrlMessage(shown, attribute))
-                        } else if (urlSchemeFixedBy(attribute, before)) {
-                            unescaped()
-                        } else {
-                            schemeIssue(attribute)
-                        }
-                }
+            // Its digits are safe; only interpolate would refuse it, which a project without core has none of.
+            fun unsigned(where: String): Issue? = if (core) issue(unsignedWrittenMessage(shown, where), Severity.HINT) else null
 
-                Position.STYLE -> {
-                    if (factSays == Verdict.SAFE) continue
-                    if (factSays == Verdict.DIGITS) {
-                        // Its digits are safe; only interpolate would refuse it.
-                        if (core) {
-                            issues +=
-                                issue(Severity.HINT, "unsafe-interpolation", unsignedWrittenMessage(shown, landing.attribute ?: "style"))
+            issues +=
+                when (landing.position) {
+                    Position.TEXT, Position.ATTRIBUTE -> {
+                        // The content of a <meta> may be a refresh, whose URL interpolate judges as any URL.
+                        when {
+                            factSays != Verdict.ESCAPE -> null
+                            refreshUrlStart(view, landing) { reading.prefix(k, k) } -> schemeIssue("the URL of content")
+                            else -> unescaped()
                         }
-                        continue
                     }
-                    val css =
-                        "Kotlin writes $shown into ${landing.attribute ?: "style"}, where it is read as CSS, " +
-                            "so escaping does not help."
-                    issues +=
-                        issue(
-                            Severity.WARNING,
-                            "unsafe-interpolation",
+
+                    Position.URL -> {
+                        val attribute = landing.attribute ?: "the URL"
+                        val prefix = reading.prefix(k, k)
+                        when {
+                            landing.loadsCode && !urlHostFixedBy(attribute, prefix) -> issue(codeUrlMessage(shown, attribute))
+                            urlSchemeFixedBy(attribute, decodeEntities(prefix).text) -> unescaped()
+                            else -> schemeIssue(attribute)
+                        }
+                    }
+
+                    Position.STYLE -> {
+                        val where = landing.attribute ?: "style"
+                        val advice =
                             if (fact.isNullable()) {
-                                "$css It is a number that may be null, which Kotlin writes as null: give it a value with ?:, or choose between classes."
+                                "It is a number that may be null, which Kotlin writes as null: give it a value with ?:, or choose between classes."
                             } else {
-                                "$css Choose between classes, or write a number."
-                            },
-                        )
-                }
-
-                Position.DATASTAR -> {
-                    val trap = if (ip.kind == InterpolationKind.SIMPLE) trapOf(ip) else null
-                    val judged = trap?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
-                    if (judged != null) {
-                        issues += judged
-                    } else if (factSays == Verdict.DIGITS) {
-                        if (!core) continue
-                        issues +=
-                            issue(
-                                Severity.HINT,
-                                "unsafe-interpolation",
-                                unsignedWrittenMessage(
-                                    shown,
-                                    landing.attribute ?: "a Datastar attribute",
-                                ),
-                            )
-                    } else if (factSays == Verdict.UNSAFE) {
-                        val attribute = landing.attribute ?: "a Datastar attribute"
-                        issues += issue(Severity.WARNING, "unsafe-interpolation", datastarMessage(shown, attribute))
+                                "Choose between classes, or write a number."
+                            }
+                        if (factSays == Verdict.DIGITS) {
+                            unsigned(where)
+                        } else {
+                            issue("Kotlin writes $shown into $where, where it is read as CSS, so escaping does not help. $advice")
+                        }
                     }
-                }
 
-                Position.CODE -> {
-                    if (factSays == Verdict.SAFE) continue
-                    val vouch = fixable && k in vouched
-                    issues +=
+                    Position.DATASTAR -> {
+                        val attribute = landing.attribute ?: "a Datastar attribute"
+                        val trap = trapOf(ip)?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
+                        when {
+                            trap != null -> trap
+                            factSays == Verdict.DIGITS -> unsigned(attribute)
+                            factSays == Verdict.UNSAFE -> issue(datastarMessage(shown, attribute))
+                            else -> null
+                        }
+                    }
+
+                    Position.CODE -> {
+                        val vouch = fixable && k in vouched
                         issue(
-                            Severity.WARNING,
-                            "unsafe-interpolation",
                             "Kotlin writes $shown into ${landing.attribute ?: "a script or style element"}, which the browser runs, " +
                                 "so escaping does not help. Put the value in a data-* attribute and read it from there." +
                                 if (vouch) " CSS you wrote yourself can be passed to interpolate(...) as Trusted(...)." else "",
-                            if (vouch) listOf(rewriteFix(vouchedTitle, false)) else emptyList(),
+                            fixes = if (vouch) listOf(rewriteAs()) else emptyList(),
                         )
-                }
-
-                Position.STRUCTURE -> {
-                    if (factSays == Verdict.SAFE) continue
-                    // `</h$n>` names the element `<h$n` opened; the opening one is judged.
-                    val closing = closingTagBefore(view, ip.decodedStart)
-                    if (closing != null &&
-                        s.interpolations.take(k).any {
-                            it.text == ip.text && it.decodedStart > closing.length &&
-                                view.startsWith("<$closing", it.decodedStart - closing.length - 1)
-                        }
-                    ) {
-                        continue
                     }
-                    issues +=
+
+                    Position.STRUCTURE -> {
+                        // `</h$n>` names the element `<h$n` opened; the opening one is judged.
+                        val closing = closingTagBefore(view, ip.decodedStart)
+                        val closes =
+                            closing != null &&
+                                s.interpolations.take(k).any {
+                                    it.text == ip.text && it.decodedStart > closing.length &&
+                                        view.startsWith("<$closing", it.decodedStart - closing.length - 1)
+                                }
                         when {
+                            closes -> {
+                                null
+                            }
+
                             endTagAt(view, ip.decodedStart) -> {
                                 issue(
-                                    severity,
-                                    "unsafe-interpolation",
                                     "Kotlin writes $shown into an end tag, which takes no attributes: the browser drops them, " +
                                         "and a value from outside can still end the tag and write markup. Write the end tag from literals alone.",
+                                    severity,
                                 )
                             }
 
                             unquotedValueBefore(view, ip.decodedStart) -> {
                                 issue(
-                                    if (fact.scalar()) Severity.HINT else Severity.WARNING,
-                                    "unsafe-interpolation",
                                     "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
-                                    listOfNotNull(quoteFix(s, view, ip, s.rawAt(ip))),
+                                    if (fact.scalar()) Severity.HINT else Severity.WARNING,
+                                    fixes = listOfNotNull(quoteFix(s, view, ip, s.rawAt(ip))),
                                 )
                             }
 
                             else -> {
                                 issue(
-                                    severity,
-                                    "unsafe-interpolation",
                                     "Kotlin writes $shown into the markup's own structure: a tag name, an attribute name " +
                                         "or a list of attributes. Fine for one chosen in code; a value from outside decides " +
                                         "the markup itself, and escaping cannot prevent that.",
+                                    severity,
                                 )
                             }
                         }
-                }
-            }
+                    }
+                } ?: continue
         }
         // The context action is for a string some issue of which offers the rewrite: one with a value to escape.
-        val anywhere = if (offered) rewriteFix(if (vouched.isEmpty()) ESCAPES_TITLE else vouchedTitle, false) else null
-        return Judged(issues, anywhere)
+        return Judged(issues, if (offered) rewrite else null)
     }
 
     /** The `<style>` or `<script>` whose body the value at [at] of the markup lands in, as the markup scan reads it, or null. */

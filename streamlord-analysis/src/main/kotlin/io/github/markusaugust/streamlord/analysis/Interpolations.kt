@@ -1839,13 +1839,6 @@ private fun operandEndWordAt(
             WORD_CHAR.matchEntire(src.getOrNull(at + w.length)?.toString() ?: "") == null
     }
 
-/** One part of a `+` chain: a literal, or a value joined to the literals. */
-private class ChainPart(
-    val literal: KotlinString?,
-    val start: Int,
-    val end: Int,
-)
-
 /** What may stand before a value joined with `+` when the value is the whole of what is joined: plus binds tighter than each. */
 private val OPERAND_BOUNDARY = regex("""(?:^|[(\[{},;]|(?<![=!<>])=|->|\?:|&&|\|\||[=!<>]=|[<>]|\b(?:return|else|in|throw|to))\s*\z""")
 
@@ -1875,7 +1868,7 @@ private fun leadingValues(
             val c = src[k - 1]
             k =
                 when {
-                    c == ')' || c == ']' -> openingBefore(src, mask, k - 1).takeIf { it >= 0 } ?: break
+                    c == ')' || c == ']' -> matchingBracket(src, mask, k - 1).takeIf { it >= 0 } ?: break
                     c.isLetterOrDigit() || c == '_' || c == '`' || c == '.' -> k - 1
                     c == '?' && src.getOrNull(k) == '.' -> k - 1
                     c == '!' && src.getOrNull(k - 2) == '!' -> k - 2
@@ -1895,36 +1888,24 @@ private fun leadingValues(
     }
 }
 
-/** The bracket that opens the one closed at [close], strings and comments stepped over; -1 where none does. */
-private fun openingBefore(
+/** The bracket that matches the one at [at], after it or before it, strings and comments stepped over; -1 where none does. */
+private fun matchingBracket(
     src: String,
     mask: BooleanArray,
-    close: Int,
+    at: Int,
 ): Int {
+    val step = if (src[at] in "([{") 1 else -1
     var depth = 0
-    for (k in close downTo 0) {
-        if (!mask[k]) continue
-        when (src[k]) {
-            ')', ']', '}' -> depth++
-            '(', '[', '{' -> if (--depth == 0) return k
+    var k = at
+    while (k in src.indices) {
+        if (mask[k]) {
+            when (src[k]) {
+                '(', '[', '{' -> depth += step
+                ')', ']', '}' -> depth -= step
+            }
+            if (depth == 0) return k
         }
-    }
-    return -1
-}
-
-/** Just past the bracket that closes the one at [open], strings and comments stepped over; -1 where it never closes. */
-private fun closingAfter(
-    src: String,
-    mask: BooleanArray,
-    open: Int,
-): Int {
-    var depth = 0
-    for (k in open until src.length) {
-        if (!mask[k]) continue
-        when (src[k]) {
-            '(', '[', '{' -> depth++
-            ')', ']', '}' -> if (--depth == 0) return k + 1
-        }
+        k += step
     }
     return -1
 }
@@ -1941,9 +1922,36 @@ internal fun chainFrom(
     first: KotlinString,
     mask: BooleanArray,
 ): KotlinString? {
-    val parts = ArrayList<ChainPart>()
-    for (value in leadingValues(src, mask, first.start)) parts += ChainPart(null, value.first, value.last + 1)
-    parts += ChainPart(first, first.start, first.end)
+    val text = StringBuilder()
+    val map = ArrayList<Int>()
+    val interpolations = ArrayList<Interpolation>()
+    val literals = ArrayList<KotlinString>()
+    // Where the last part read ends, and where its text does: a literal's before its closing quotes.
+    var end = 0
+    var contentEnd = 0
+
+    fun value(
+        start: Int,
+        to: Int,
+    ) {
+        interpolations += Interpolation(start, to, InterpolationKind.OPERAND, src.substring(start, to), text.length)
+        repeat(PLACEHOLDER.length) { map += start }
+        text.append(PLACEHOLDER)
+        end = to
+        contentEnd = to
+    }
+
+    fun literal(lit: KotlinString) {
+        for (ip in lit.interpolations) interpolations += ip.copy(decodedStart = ip.decodedStart + text.length)
+        for (c in lit.text.indices) map += lit.map[c]
+        text.append(lit.text)
+        literals += lit
+        end = lit.end
+        contentEnd = lit.contentEnd
+    }
+    val leading = leadingValues(src, mask, first.start)
+    for (v in leading) value(v.first, v.last + 1)
+    literal(first)
 
     fun spaces(
         from: Int,
@@ -1972,36 +1980,22 @@ internal fun chainFrom(
             val j = spaces(k, true)
             val c = src.getOrNull(j)
             val dot =
-                if (c == '?' && src.getOrNull(j + 1) == '.') {
-                    j + 2
-                } else if (c == '.' && src.getOrNull(j + 1) != '.') {
-                    j + 1
-                } else {
-                    -1
+                when {
+                    src.startsWith("?.", j) -> j + 2
+                    c == '.' && src.getOrNull(j + 1) != '.' -> j + 1
+                    else -> -1
                 }
             k =
-                when {
-                    dot >= 0 -> {
-                        var e = spaces(dot, true)
-                        while (e < src.length && (src[e].isLetterOrDigit() || src[e] == '_' || src[e] == '`')) e++
-                        e
-                    }
-
-                    j == k && (c == '(' || c == '[') -> {
-                        closingAfter(src, mask, j).takeIf { it > 0 } ?: return k
-                    }
-
-                    k > from && j == spaces(k, false) && c == '{' -> {
-                        closingAfter(src, mask, j).takeIf { it > 0 } ?: return k
-                    }
-
-                    j == k && c == '!' && src.getOrNull(j + 1) == '!' -> {
-                        j + 2
-                    }
-
-                    else -> {
-                        return k
-                    }
+                if (dot >= 0) {
+                    var e = spaces(dot, true)
+                    while (e < src.length && (src[e].isLetterOrDigit() || src[e] == '_' || src[e] == '`')) e++
+                    e
+                } else if ((j == k && (c == '(' || c == '[')) || (k > from && j == spaces(k, false) && c == '{')) {
+                    matchingBracket(src, mask, j).takeIf { it >= 0 }?.plus(1) ?: return k
+                } else if (j == k && src.startsWith("!!", j)) {
+                    j + 2
+                } else {
+                    return k
                 }
         }
     }
@@ -2014,9 +2008,9 @@ internal fun chainFrom(
         if (k < src.length && (src[k] == '"' || src[k] == '$') && isStringStart(src, k)) {
             val lit = readKotlinStringAt(src, k)
             if (lit == null || lit.unterminated) break
-            parts += ChainPart(lit, lit.start, lit.end)
-            i = postfix(lit.end)
-            if (i != lit.end) called = true
+            literal(lit)
+            i = postfix(end)
+            if (i != end) called = true
             continue
         }
         val start = k
@@ -2041,36 +2035,16 @@ internal fun chainFrom(
             }
             k++
         }
-        var end = k
-        while (end > start && src[end - 1].isWhitespace()) end--
-        if (end <= start) break
-        parts += ChainPart(null, start, end)
-        i = end
+        while (k > start && src[k - 1].isWhitespace()) k--
+        if (k <= start) break
+        value(start, k)
+        i = k
     }
-    if (parts.size < 2) return null
-    val text = StringBuilder()
-    val map = ArrayList<Int>()
-    val interpolations = ArrayList<Interpolation>()
-    val nested = ArrayList<KotlinString>()
-    for (p in parts) {
-        val lit = p.literal
-        if (lit != null) {
-            for (ip in lit.interpolations) interpolations += ip.copy(decodedStart = ip.decodedStart + text.length)
-            nested += lit.nested
-            text.append(lit.text)
-            for (c in 0 until lit.text.length) map += lit.map[c]
-        } else {
-            interpolations += Interpolation(p.start, p.end, InterpolationKind.OPERAND, src.substring(p.start, p.end), text.length)
-            repeat(PLACEHOLDER.length) { map += p.start }
-            text.append(PLACEHOLDER)
-        }
-    }
-    val last = parts.last()
-    val contentEnd = last.literal?.contentEnd ?: last.end
+    if (leading.isEmpty() && end == first.end) return null
     map += contentEnd
     return KotlinString(
-        start = parts.first().start,
-        end = last.end,
+        start = leading.firstOrNull()?.first ?: first.start,
+        end = end,
         raw = first.raw,
         dollars = 1,
         contentStart = first.contentStart,
@@ -2079,8 +2053,8 @@ internal fun chainFrom(
         map = map.toIntArray(),
         interpolations = interpolations,
         unterminated = false,
-        nested = nested,
-        literals = parts.mapNotNull { it.literal },
+        nested = literals.flatMap { it.nested },
+        literals = literals,
         called = called,
     )
 }
@@ -2096,57 +2070,61 @@ internal const val ESCAPES_TITLE = "$REWRITE_TITLE, which escapes the values"
 /** Its title where the hole starts a URL, which escaping does not help but interpolate refuses when it would run. */
 internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that runs"
 
-/** The title of the rewrite that passes the values shown as [shown] as `Trusted(...)`: CSS in the body of a `<style>`, which the author vouches for. */
-internal fun trustedRewriteTitle(shown: List<String>): String = "$REWRITE_TITLE, with ${shown.joinToString(" and ")} as Trusted(...)"
-
 /**
- * The literal or `+` chain rewritten as a call to `interpolate`: each template becomes `%s` and
- * its value an argument, and each `%` a literal writes, as itself or as an escape, is written
- * twice, so `interpolate` prints it once. A multi-dollar literal keeps its prefix, so a `$name`
- * that was text stays text, and [trim], the trim call after a literal, stays on the format. A value
- * joined with `+` is a `%s` at the end of the literal before it, and literals written alike become
- * one. Each value of [trusted], by its place among the values, is passed as `Trusted(...)`; any
- * other is passed as it is written. Made the first time it is read, once for all the fixes that offer it.
+ * The rewrite of the literal or `+` chain to a call of `interpolate`, over it and [trim], the trim
+ * call after it, with the imports the file lacks. Each value of [trusted], by its place among the
+ * values, is passed as `Trusted(...)`, CSS in the body of a `<style>` that the author vouches for,
+ * and the title names them. The text is made the first time it is read, and a copy of the fix
+ * under another title shares it.
  */
-internal fun interpolateText(
+internal fun interpolateFix(
     src: String,
     s: KotlinString,
     trim: String,
     trusted: Set<Int>,
-): Lazy<String> =
-    lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val literals = s.literals.ifEmpty { listOf(s) }
-        val bodies = literals.map { StringBuilder(formatBody(src, it)) }
-        for (value in s.interpolations.filter { it.kind == InterpolationKind.OPERAND }) {
-            val before = literals.indexOfLast { it.end <= value.start }
-            if (before >= 0) bodies[before].append("%s") else bodies[0].insert(0, "%s")
-        }
-        val format = StringBuilder()
-        var open = ""
-        var close = ""
-        literals.forEachIndexed { k, literal ->
-            val opens = src.substring(literal.start, literal.contentStart)
-            val closes = src.substring(literal.contentEnd, literal.end)
-            if (k > 0 && opens == open &&
-                closes == close
-            ) {
-                format.setLength(format.length - close.length)
-            } else {
-                format.append(if (k > 0) " + " else "").append(opens)
-            }
-            format.append(bodies[k]).append(closes)
-            open = opens
-            close = closes
-        }
-        val values =
-            s.interpolations.mapIndexed { k, it ->
-                val value = if (it.kind == InterpolationKind.SIMPLE) it.text else it.text.trim()
-                if (k in trusted) "Trusted($value)" else value
-            }
-        // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
-        // would break whatever took the String.
-        "interpolate($format$trim, ${values.joinToString(", ")}).text"
+): Fix {
+    val named = trusted.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
+    val title = if (trusted.isEmpty()) ESCAPES_TITLE else "$REWRITE_TITLE, with $named as Trusted(...)"
+    val imports = coreImports(src, listOfNotNull("Trusted".takeIf { trusted.isNotEmpty() }, "interpolate"))
+    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted) }
+}
+
+/**
+ * The call of `interpolate` that writes what the string did: each template becomes `%s` and its
+ * value an argument, and each `%` a literal writes, as itself or as an escape, is written twice, so
+ * `interpolate` prints it once. A multi-dollar literal keeps its prefix, so a `$name` that was text
+ * stays text, and [trim] stays on the format. A value joined with `+` is a `%s` at the end of the
+ * literal before it, and literals written alike become one. A single literal is a chain of one.
+ */
+private fun interpolateText(
+    src: String,
+    s: KotlinString,
+    trim: String,
+    trusted: Set<Int>,
+): String {
+    val literals = s.literals.ifEmpty { listOf(s) }
+    val bodies = literals.map { StringBuilder(formatBody(src, it)) }
+    for (value in s.interpolations.filter { it.kind == InterpolationKind.OPERAND }) {
+        val before = literals.indexOfLast { it.end <= value.start }
+        if (before >= 0) bodies[before].append("%s") else bodies[0].insert(0, "%s")
     }
+    val format = StringBuilder()
+    var form = "" to ""
+    literals.forEachIndexed { k, literal ->
+        val written = src.substring(literal.start, literal.contentStart) to src.substring(literal.contentEnd, literal.end)
+        when {
+            k == 0 -> format.append(written.first)
+            written == form -> format.setLength(format.length - form.second.length)
+            else -> format.append(" + ").append(written.first)
+        }
+        format.append(bodies[k]).append(written.second)
+        form = written
+    }
+    val values = s.interpolations.mapIndexed { k, it -> if (k in trusted) "Trusted(${it.text.trim()})" else it.text.trim() }
+    // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
+    // would break whatever took the String.
+    return "interpolate($format$trim, ${values.joinToString(", ")}).text"
+}
 
 /** What the literal holds, as source, with each template a `%s` and each per cent sign it writes doubled. */
 private fun formatBody(
@@ -2399,29 +2377,6 @@ private fun usedInCode(
     return false
 }
 
-/**
- * The rewrite of the literal to `interpolate`, whose text [text] makes, over the literal and the
- * trim call after it, to [end]; with the import when the file has none, and that of `Trusted`
- * where the rewrite writes it ([trusted]).
- */
-internal fun interpolateFix(
-    src: String,
-    s: KotlinString,
-    end: Int,
-    text: Lazy<String>,
-    title: String,
-    preferred: Boolean,
-    trusted: Boolean,
-): Fix =
-    Fix.shared(
-        title,
-        s.start,
-        end,
-        coreImports(src, if (trusted) listOf("Trusted", "interpolate") else listOf("interpolate")),
-        preferred,
-        text,
-    )
-
 /** The imports of [names] of core's domain the file lacks, as one edit, so that two new ones stand on lines next to each other. */
 private fun coreImports(
     src: String,
@@ -2441,11 +2396,10 @@ private fun coreImports(
  */
 internal fun trustedFix(
     src: String,
-    s: KotlinString,
     ip: Interpolation,
     shown: String,
 ): Fix {
-    val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
+    val expr = ip.text.trim()
     // A value joined with `+` is wrapped where it stands; a template keeps the dollars its literal opens one with.
     val text = if (ip.kind == InterpolationKind.OPERAND) "Trusted($expr)" else "$".repeat(ip.dollars) + "{Trusted($expr)}"
     return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, DOMAIN, "Trusted"), preferred = false)
