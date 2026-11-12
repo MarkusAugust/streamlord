@@ -16,8 +16,11 @@ internal actual fun exactLongOrNull(text: String): Long? {
     val unsigned = if (negative) text.substring(1) else text
     val e = unsigned.indexOfFirst { it == 'e' || it == 'E' }
     val mantissa = if (e < 0) unsigned else unsigned.substring(0, e)
-    // BigDecimal, which the JVM asks, takes no exponent and no scale past an Int, whatever the digits.
-    val exponent = if (e < 0) 0 else unsigned.substring(e + 1).toIntOrNull() ?: return null
+    // BigDecimal, which the JVM asks, takes no exponent of more than ten digits and no scale past
+    // an Int, whatever the number.
+    val written = if (e < 0) "" else unsigned.substring(e + 1)
+    if (written.trimStart('+', '-').trimStart('0').length > 10) return null
+    val exponent = if (e < 0) 0 else written.toLong()
     val whole = mantissa.substringBefore('.')
     val fraction = mantissa.substringAfter('.', "")
     val digits = (whole + fraction).trimStart('0')
