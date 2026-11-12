@@ -14,11 +14,16 @@ public data class SignalSite(
     val signal: String,
     val declaration: SignalDeclaration? = null,
 ) {
-    /** Does the site name [name], or, with [under], define a signal under it, which a rename moves with it? */
+    /**
+     * Does the site name [name], or, with [under], define a signal under it, which a rename moves with it?
+     * A key inside an object is written without the object's name, so a rename of the object leaves it as it is.
+     */
     public fun names(
         name: String,
         under: Boolean = false,
-    ): Boolean = signal == name || (under && declaration != null && signal.startsWith("$name."))
+    ): Boolean =
+        signal == name ||
+            (under && declaration != null && declaration.kind != SignalDeclaration.Kind.OBJECT_KEY && signal.startsWith("$name."))
 
     /**
      * Why the signal cannot be renamed from here, or null. A read of a name with a hyphen is not
