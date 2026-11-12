@@ -1941,7 +1941,7 @@ internal fun chainFrom(
 private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 
 /** How every title of the rewrite to `interpolate` starts. */
-internal const val REWRITE_TITLE = "Build it with interpolate(...)"
+internal const val REWRITE_TITLE = "Build this string with interpolate(...)"
 
 /** The title of the rewrite to `interpolate` where the hole is a value it escapes. */
 internal const val ESCAPES_TITLE = "$REWRITE_TITLE, which escapes the values"

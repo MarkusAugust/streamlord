@@ -225,7 +225,7 @@ class HoleMatrixTest {
 
     private companion object {
         const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
-        const val REWRITE = "Build it with interpolate(...), which"
+        const val REWRITE = "Build this string with interpolate(...), which"
 
         /** The value as each form writes it, and as a rewrite passes it. */
         val WRITTEN = setOf("\${v}", "\$\${v}", "v")

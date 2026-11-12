@@ -441,7 +441,7 @@ describe("code action provider", () => {
   /** The literal of the case that found the defects, with each value written as given. */
   const widget = (root: string, css: string, content: string, body: string, events: string) =>
     `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
-  const ESCAPES = "Build it with interpolate(...), which escapes the values";
+  const ESCAPES = "Build this string with interpolate(...), which escapes the values";
 
   it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
     const css = "${customCss.orEmpty()}";
@@ -449,7 +449,7 @@ describe("code action provider", () => {
     const text = `${head}${widget(...values)}\n`;
     const rewritten = `${head}interpolate(${widget("%s", "%s", "%s", "%s", "%s")}, k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n`;
     for (const value of values) {
-      const title = value === css ? `Build it with interpolate(...), with ${css} as Trusted(...)` : ESCAPES;
+      const title = value === css ? `Build this string with interpolate(...), with ${css} as Trusted(...)` : ESCAPES;
       const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
       const action = actions.find((a) => a.title === title);
       assert.ok(action, `${value}: ${title} is not among ${JSON.stringify(actions.map((a) => a.title))}`);
@@ -460,7 +460,7 @@ describe("code action provider", () => {
   it("offers the rewrite as a context action away from the warning", () => {
     const text = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
     const { actions, applied } = actionsAt(text, text.indexOf("class"));
-    const action = actions.find((a) => a.title.startsWith("Build it with interpolate(...)"));
+    const action = actions.find((a) => a.title.startsWith("Build this string with interpolate(...)"));
     assert.ok(action, JSON.stringify(actions.map((a) => a.title)));
     assert.notEqual(action.kind?.value, "quickfix");
     assert.equal(applied(action), `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`);
@@ -469,7 +469,7 @@ describe("code action provider", () => {
   it("offers the rewrite as a context action where no value has a warning", () => {
     const text = 'fun total(count: Int): String = "<p>total $count</p>"';
     const { actions, applied } = actionsAt(text, text.indexOf("total $"));
-    const action = actions.find((a) => a.title.startsWith("Build it with interpolate(...)"));
+    const action = actions.find((a) => a.title.startsWith("Build this string with interpolate(...)"));
     assert.ok(action, JSON.stringify(actions.map((a) => a.title)));
     assert.equal(applied(action), `import ${DOMAIN}.interpolate\n\nfun total(count: Int): String = interpolate("<p>total %s</p>", count).text`);
   });

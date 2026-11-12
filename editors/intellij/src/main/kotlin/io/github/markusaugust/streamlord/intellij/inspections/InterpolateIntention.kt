@@ -53,6 +53,6 @@ class InterpolateIntention : IntentionAction {
     }
 
     private companion object {
-        const val FAMILY = "Build it with interpolate(...)"
+        const val FAMILY = "Build this string with interpolate(...)"
     }
 }

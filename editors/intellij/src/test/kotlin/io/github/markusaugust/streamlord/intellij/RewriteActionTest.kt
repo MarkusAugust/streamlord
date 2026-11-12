@@ -20,7 +20,7 @@ private fun widget(
     "$Q\n    <div id=\"$root\" data-theme=\"light\" data-lt-boundary=\"\">\n        <style>$css</style>\n" +
         "        <div id=\"$content\">\n            $body\n        </div>\n        <div id=\"$events\" hidden></div>\n    </div>\n    $Q.trimIndent()"
 
-private const val ESCAPES = "Build it with interpolate(...), which escapes the values"
+private const val ESCAPES = "Build this string with interpolate(...), which escapes the values"
 private const val CSS = "\${customCss.orEmpty()}"
 
 /**
@@ -41,7 +41,7 @@ class RewriteActionTest : StreamlordTestCase() {
             IMPORTS + SIGNATURE + "interpolate(" + widget("%s", "%s", "%s", "%s", "%s") +
                 ", k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n"
         for (value in values) {
-            val title = if (value == CSS) "Build it with interpolate(...), with $CSS as Trusted(...)" else ESCAPES
+            val title = if (value == CSS) "Build this string with interpolate(...), with $CSS as Trusted(...)" else ESCAPES
             // The caret one character into the value; a fresh file each time, since the last one was rewritten.
             val at = source.indexOf(value) + 1
             myFixture.configureByText("Widget${values.indexOf(value)}.kt", source.substring(0, at) + "<caret>" + source.substring(at))
@@ -49,7 +49,7 @@ class RewriteActionTest : StreamlordTestCase() {
             val action = offered.firstOrNull { it.text == title }
             assertNotNull("$value: $title is not among ${offered.map { it.text }}", action)
             // The warning's quick fix is the rewrite there, so the context action stands back.
-            assertEquals(value, 1, offered.count { it.text.startsWith("Build it with interpolate(...)") })
+            assertEquals(value, 1, offered.count { it.text.startsWith("Build this string with interpolate(...)") })
             myFixture.launchAction(action!!)
             myFixture.checkResult(rewritten)
         }
@@ -59,8 +59,8 @@ class RewriteActionTest : StreamlordTestCase() {
         val source = IMPORTS + SIGNATURE + widget("\${k.rootId}", CSS, "\${k.contentId}", "\$bodyHtml", "\${k.eventsId}") + "\n"
         val at = source.indexOf("data-theme") + 3
         myFixture.configureByText("Widget.kt", source.substring(0, at) + "<caret>" + source.substring(at))
-        val offered = myFixture.availableIntentions.filter { it.text.startsWith("Build it with interpolate(...)") }
-        assertEquals(listOf("Build it with interpolate(...), with $CSS as Trusted(...)"), offered.map { it.text })
+        val offered = myFixture.availableIntentions.filter { it.text.startsWith("Build this string with interpolate(...)") }
+        assertEquals(listOf("Build this string with interpolate(...), with $CSS as Trusted(...)"), offered.map { it.text })
         myFixture.launchAction(offered.single())
         myFixture.checkResult(
             IMPORTS + SIGNATURE + "interpolate(" + widget("%s", "%s", "%s", "%s", "%s") +
@@ -71,7 +71,7 @@ class RewriteActionTest : StreamlordTestCase() {
     fun `test the rewrite is a context action away from the warning`() {
         myFixture.configureByText("Card.kt", "fun card(name: String): String = \"<p cl<caret>ass=\\\"x\\\">\$name</p>\"")
         val offered = myFixture.availableIntentions
-        val action = offered.firstOrNull { it.text.startsWith("Build it with interpolate(...)") }
+        val action = offered.firstOrNull { it.text.startsWith("Build this string with interpolate(...)") }
         assertNotNull(offered.map { it.text }.toString(), action)
         myFixture.launchAction(action!!)
         myFixture.checkResult(
@@ -84,7 +84,7 @@ class RewriteActionTest : StreamlordTestCase() {
         myFixture.configureByText("Total.kt", "fun total(count: Int): String = \"<p>to<caret>tal \$count</p>\"")
         assertEmpty(myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" })
         val offered = myFixture.availableIntentions
-        val action = offered.firstOrNull { it.text.startsWith("Build it with interpolate(...)") }
+        val action = offered.firstOrNull { it.text.startsWith("Build this string with interpolate(...)") }
         assertNotNull(offered.map { it.text }.toString(), action)
         myFixture.launchAction(action!!)
         myFixture.checkResult(

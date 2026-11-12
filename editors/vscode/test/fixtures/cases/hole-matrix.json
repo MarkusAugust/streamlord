@@ -38,8 +38,8 @@
   ],
   "cells": {
     "element text": {
-      "a String": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":false},{"title":"Mark {shown} as markup","preferred":false}]},
-      "a String?": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which escapes the values"}]},
+      "a String": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":false},{"title":"Mark {shown} as markup","preferred":false}]},
+      "a String?": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which escapes the values"}]},
       "a number": null,
       "a boolean": null,
       "a nullable number": null,
@@ -47,34 +47,34 @@
       "core's Trusted": null,
       "a Trusted only the editor sees": null,
       "a constant": null,
-      "an Html of another package": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
-      "a value of unknown type": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]}
+      "an Html of another package": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":true}]},
+      "a value of unknown type": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":true}]}
     },
     "a quoted attribute": {
-      "a String": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
-      "a String?": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which escapes the values"}]},
+      "a String": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":true}]},
+      "a String?": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which escapes the values"}]},
       "a number": null,
       "a boolean": null,
       "a nullable number": null,
-      "core's Html": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
+      "core's Html": {"code":"unescaped-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":true}]},
       "core's Trusted": {"code":"unescaped-interpolation","severity":"warning"},
       "a Trusted only the editor sees": {"code":"unescaped-interpolation","severity":"warning"},
       "a constant": null,
-      "an Html of another package": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]},
-      "a value of unknown type": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build it with interpolate(...), which escapes the values","preferred":true}]}
+      "an Html of another package": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":true}]},
+      "a value of unknown type": {"code":"unescaped-interpolation","severity":"hint","fixes":[{"title":"Build this string with interpolate(...), which escapes the values","preferred":true}]}
     },
     "href": {
-      "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
-      "a String?": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs"}]},
+      "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which refuses a URL that runs","preferred":true}]},
+      "a String?": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which refuses a URL that runs"}]},
       "a number": null,
       "a boolean": null,
       "a nullable number": null,
-      "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
+      "core's Html": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which refuses a URL that runs","preferred":true}]},
       "core's Trusted": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
-      "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]},
-      "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), which refuses a URL that runs","preferred":true}]}
+      "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which refuses a URL that runs","preferred":true}]},
+      "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), which refuses a URL that runs","preferred":true}]}
     },
     "the src of a script": {
       "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
@@ -116,7 +116,7 @@
       "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
     },
     "the body of a style": {
-      "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build it with interpolate(...), with {shown} as Trusted(...)","preferred":false}]},
+      "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), with {shown} as Trusted(...)","preferred":false}]},
       "a String?": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a number": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a boolean": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},

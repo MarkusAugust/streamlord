@@ -31,7 +31,7 @@ class RewriteAtTest {
         val src = "fun total(count: Int) = \"<p>total \$count</p>\""
         val fix = analyzer.rewriteAt(src, src.indexOf("total \$"))!!
         assertEquals(import + "fun total(count: Int) = interpolate(\"<p>total %s</p>\", count).text", fix.apply(src))
-        assertEquals("Build it with interpolate(...), which escapes the values" to false, fix.title to fix.preferred)
+        assertEquals("Build this string with interpolate(...), which escapes the values" to false, fix.title to fix.preferred)
     }
 
     @Test
