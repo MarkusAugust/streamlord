@@ -8,6 +8,7 @@ import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
@@ -122,6 +123,17 @@ private fun highlightSeverity(severity: Severity): HighlightSeverity =
 private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
     fixes.mapIndexed { i, fix -> if (i == 0 && fix.preferred) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray()
 
+/**
+ * The fix and its further edits (an import) made in [document], from the end backwards so no offset
+ * moves; nothing is changed, and false is returned, where the text is no longer the one the fix was made for.
+ */
+internal fun Fix.applyTo(document: Document): Boolean {
+    val all = replacements
+    if (all.any { it.end > document.textLength }) return false
+    for (e in all) document.replaceString(e.start, e.end, e.text)
+    return true
+}
+
 /** A quick fix that replaces a range of the file with text, as the analysis spelled it out. */
 open class ReplaceTextFix(
     private val fix: Fix,
@@ -134,11 +146,7 @@ open class ReplaceTextFix(
     ) {
         val file = descriptor.psiElement?.containingFile ?: return
         val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: return
-        // The fix and its further edits (an import), from the end backwards so no offset moves.
-        val replacements = fix.replacements
-        if (replacements.any { it.end > document.textLength }) return
-        for (e in replacements) document.replaceString(e.start, e.end, e.text)
-        PsiDocumentManager.getInstance(project).commitDocument(document)
+        if (fix.applyTo(document)) PsiDocumentManager.getInstance(project).commitDocument(document)
     }
 }
 

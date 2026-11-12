@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.impl.source.tree.injected.InjectedLanguageEditorUtil
 import com.intellij.testFramework.PlatformTestUtil
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.completion.ExpressionHelp
@@ -64,7 +65,8 @@ class UiThreadTest : StreamlordTestCase() {
     fun `test the rewrite to interpolate applied after an edit analyses nothing on the UI thread`() {
         myFixture.configureByText("Applied.kt", "fun card(name: String): String = \"<p cl<caret>ass=\\\"x\\\">\$name</p>\"")
         val action = myFixture.availableIntentions.first { it.text.startsWith("Build this string with interpolate(...)") }
-        val document = myFixture.editor.document
+        // The caret stands in HTML injected into the string: the Kotlin file's own document is the one edited.
+        val document = InjectedLanguageEditorUtil.getTopLevelEditor(myFixture.editor).document
         WriteCommandAction.runWriteCommandAction(project) { document.insertString(document.textLength, "\n") }
         PsiDocumentManager.getInstance(project).commitAllDocuments()
         val before = UiThreadWork.count.get()
