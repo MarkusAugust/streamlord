@@ -106,8 +106,10 @@ export class StreamlordCompletionProvider implements vscode.CompletionItemProvid
     return items;
   }
 
-  /** Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup languages. */
-  /** In a Kotlin file the markup is that of the HTML string the caret is in, read decoded. */
+  /**
+   * Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup
+   * languages. In a Kotlin file the markup is that of the HTML string the caret is in, read decoded.
+   */
   private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const prefix = this.prefix();
     const kotlin = document.languageId === "kotlin";

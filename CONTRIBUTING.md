@@ -51,7 +51,9 @@ reads what the client reads. The IntelliJ plugin calls it on the JVM. The VS Cod
 the same sources compiled to JavaScript by `:analysis-js`, an unpublished Kotlin/JS project in
 `editors/vscode/analysis-js`, and reaches it through one driving port, `Port.kt` and
 `InspectorPort.kt` there: text and plain values in, plain objects out, with TypeScript types the
-compiler writes. A rule is written and tested once, in Kotlin.
+compiler writes. A check is written and tested once, in Kotlin. Completion and hover are not there
+yet: what to offer and what to say is decided in each editor's adapter, and `nameAtEnd` stands in
+both, in `completion.ts` and in `StreamlordCompletionContributor.kt`.
 
 - **Tests.** `./gradlew build` runs the tests of the analysis and of core's client part twice, on
   the JVM and on Node, so it needs Node 24 beside JDK 21. A test reads the catalog, `conformance/`
