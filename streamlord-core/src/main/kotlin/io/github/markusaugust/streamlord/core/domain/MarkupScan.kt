@@ -8,8 +8,8 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.commentClose
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
-import io.github.markusaugust.streamlord.core.regex
 
 /**
  * What a walk over HTML reports. Offsets are into the string that was walked, so a caller can

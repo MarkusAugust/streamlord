@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
@@ -12,7 +13,7 @@ import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
-import io.github.markusaugust.streamlord.core.regex
+import java.io.File
 import kotlin.concurrent.Volatile
 
 /*
@@ -234,18 +235,9 @@ public class Analyzer(
      * [failures] keeps those that should fail a build.
      */
     public fun analyzeProject(
-        root: SourceFolder,
+        root: File,
         opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<ProjectIssue> {
-        val files = sourcesUnder(root, SKIPPED_FOLDERS)
-        val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
-        return files.flatMap { (file, source) ->
-            analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
-                val (line, column) = issue.position(source)
-                projectIssue(file, line, column, issue)
-            }
-        }
-    }
+    ): List<ProjectIssue> = issuesUnder(root, opts, SKIPPED_FOLDERS)
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(

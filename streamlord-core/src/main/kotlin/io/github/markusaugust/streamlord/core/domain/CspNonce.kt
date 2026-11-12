@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.randomBase64
-import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The nonce that turns Datastar's CSP mode on, and the header it has to agree with.

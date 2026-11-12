@@ -2,9 +2,9 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.landingAsParsed
-import io.github.markusaugust.streamlord.core.regex
 
 /*
  * Where a caret stands, for completion, hover and parameter info.

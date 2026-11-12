@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a

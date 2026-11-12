@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * The documentation the editors show on hover and in completion, as Markdown. One wording for

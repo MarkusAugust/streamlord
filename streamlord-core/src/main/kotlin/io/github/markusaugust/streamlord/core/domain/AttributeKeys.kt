@@ -2,7 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.ClientCasing
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /**
  * What a key of a Datastar attribute may be, for the DSL that writes one and the analysis that

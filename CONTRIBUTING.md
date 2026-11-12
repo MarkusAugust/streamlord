@@ -62,9 +62,11 @@ both, in `completion.ts` and in `StreamlordCompletionContributor.kt`.
   `*JvmTest` and runs there alone. Node and npm are the ones installed; what Kotlin/JS fetches to
   run the tests is locked in `kotlin-js-store/package-lock.json`, which
   `./gradlew kotlinUpgradePackageLock` rewrites when a Kotlin upgrade changes it.
-- **What the JVM alone has.** The shared sources use the Kotlin standard library and nothing of
-  `java.*`. What a module asks of the JVM stands in its `PlatformJvm.kt`, and `:analysis-js` has
-  the same declarations for JavaScript; a new one is added to both.
+- **What the JVM alone has.** The shared sources use the Kotlin standard library, and of `java.*`
+  only two names their public signatures show, `BigDecimal` and `File`, which `:analysis-js`
+  declares as empty classes. What a module asks of the JVM stands in its `PlatformJvm.kt` (core has
+  a second in `client`, for what the analysis asks too), and `:analysis-js` has the same
+  declarations for JavaScript; a new one is added to both.
 - **Patterns.** Every regular expression is built with `regex(...)`, never `Regex(...)`. On the
   JVM the two are the same. For JavaScript, `regex` respells the pattern so that it means what
   java.util.regex means by it, since the engines read `\s`, `$`, `.` and `(?i)` differently, and

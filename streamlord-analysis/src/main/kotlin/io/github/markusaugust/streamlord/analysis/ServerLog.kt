@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /** A server the editor saw start, by the line it logged: where it listens, and what the editor calls it. */
 public data class RunningServer(

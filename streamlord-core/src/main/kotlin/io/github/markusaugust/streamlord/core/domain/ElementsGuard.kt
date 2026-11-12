@@ -5,8 +5,8 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
-import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The `$` trap, hunted in HTML written as a string.

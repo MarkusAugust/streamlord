@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
-import io.github.markusaugust.streamlord.core.regex
 
 /*
  * What the browser's HTML tokenizer decides before Datastar sees anything: which elements hold

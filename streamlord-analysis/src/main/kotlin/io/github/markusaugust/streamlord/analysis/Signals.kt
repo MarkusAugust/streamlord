@@ -2,9 +2,9 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.groupRange
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.SignalNames
-import io.github.markusaugust.streamlord.core.groupRange
-import io.github.markusaugust.streamlord.core.regex
 
 /*
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -139,7 +139,10 @@ internal fun encodedSignalTypes(
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
         val a =
-            positional.firstOrNull()?.takeIf { positional.size == 1 || (positional.size == 2 && BOOLEAN_ARG.matchEntire(positional[1].text) != null) }
+            positional.firstOrNull()?.takeIf {
+                positional.size == 1 ||
+                    (positional.size == 2 && BOOLEAN_ARG.matchEntire(positional[1].text) != null)
+            }
                 ?: site.named("signals")
                 ?: continue
         if (a.string != null || PAIR.containsMatchIn(a.text) || ANY_PAIR.containsMatchIn(a.text)) continue

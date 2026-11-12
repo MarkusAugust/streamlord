@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.core.json
 
-import io.github.markusaugust.streamlord.core.radixDouble
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.radixDouble
+import io.github.markusaugust.streamlord.core.client.regex
 
 /** Text read the way JavaScript reads it, where Kotlin's own functions differ. */
 internal object JsText {

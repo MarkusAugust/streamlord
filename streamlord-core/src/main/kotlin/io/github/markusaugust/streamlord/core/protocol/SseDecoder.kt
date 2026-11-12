@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
@@ -10,7 +11,6 @@ import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsText
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
-import io.github.markusaugust.streamlord.core.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 

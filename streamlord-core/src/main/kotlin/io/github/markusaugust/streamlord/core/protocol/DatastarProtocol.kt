@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 

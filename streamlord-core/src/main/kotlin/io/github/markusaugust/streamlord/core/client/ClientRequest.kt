@@ -1,9 +1,7 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
-import io.github.markusaugust.streamlord.core.formEncoded
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import io.github.markusaugust.streamlord.core.regex
 
 /**
  * The request Datastar 1.0.5's `@get` and its kin send with the default JSON content type

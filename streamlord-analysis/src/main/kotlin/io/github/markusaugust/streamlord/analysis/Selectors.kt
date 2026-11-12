@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Collects element ids and class names declared in a file, for selector completion.

@@ -14,8 +14,8 @@ import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
 import com.intellij.util.ProcessingContext
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
-import io.github.markusaugust.streamlord.analysis.SignalSite as AnalysedSite
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
+import io.github.markusaugust.streamlord.analysis.SignalSite as AnalysedSite
 
 /**
  * A reference on each `$name` an expression reads and on each place a signal is defined, so that

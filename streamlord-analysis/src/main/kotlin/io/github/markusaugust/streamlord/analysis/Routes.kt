@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Finds HTTP routes in Kotlin source for the "Open in Stream Inspector" gutter entry.

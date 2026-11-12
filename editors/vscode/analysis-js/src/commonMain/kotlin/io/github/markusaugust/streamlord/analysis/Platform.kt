@@ -1,24 +1,18 @@
 package io.github.markusaugust.streamlord.analysis
 
-// What the analysis asks of its platform. On the JVM these are the declarations of PlatformJvm.kt in streamlord-analysis.
+import java.io.File
 
-public expect class SourceFolder
+// What the analysis asks of its platform. On the JVM these are the declarations of PlatformJvm.kt in streamlord-analysis.
 
 public expect class ProjectIssue {
     public val fails: Boolean
 }
 
-internal expect fun sourcesUnder(
-    root: SourceFolder,
+internal expect fun Analyzer.issuesUnder(
+    root: File,
+    opts: AnalyzeOptions,
     skipped: Set<String>,
-): List<Pair<SourceFolder, String>>
-
-internal expect fun projectIssue(
-    file: SourceFolder,
-    line: Int,
-    column: Int,
-    issue: Issue,
-): ProjectIssue
+): List<ProjectIssue>
 
 internal expect fun <K : Any, V : Any> sharedMap(): MutableMap<K, V>
 

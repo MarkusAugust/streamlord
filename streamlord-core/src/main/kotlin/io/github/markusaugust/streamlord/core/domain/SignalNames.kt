@@ -3,7 +3,7 @@ package io.github.markusaugust.streamlord.core.domain
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.clientRewrite
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /**
  * The signal names Datastar's client cannot hold, measured against its 1.0.5 store.

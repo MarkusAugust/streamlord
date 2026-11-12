@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.decodeEntities
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the

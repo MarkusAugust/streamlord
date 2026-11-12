@@ -283,7 +283,14 @@ fun baseUrlSuggestion(
     runningName: String?,
 ): String? =
     // Offered only over a `baseUrl` the file is known to set.
-    if (vars.any { it.name == "baseUrl" && source(it) == null }) null else Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
+    if (vars.any {
+            it.name == "baseUrl" && source(it) == null
+        }
+    ) {
+        null
+    } else {
+        Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
+    }
 
 // ---- The request as the client sends it --------------------------------------------------------
 

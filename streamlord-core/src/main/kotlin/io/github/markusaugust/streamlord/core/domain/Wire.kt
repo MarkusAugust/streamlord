@@ -3,8 +3,8 @@ package io.github.markusaugust.streamlord.core.domain
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.json.JsonShape
-import io.github.markusaugust.streamlord.core.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 

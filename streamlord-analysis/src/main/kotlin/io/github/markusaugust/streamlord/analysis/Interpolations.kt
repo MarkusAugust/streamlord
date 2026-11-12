@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.groupRange
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.groupRange
+import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.concurrent.Volatile
 
 /*
@@ -1066,9 +1066,18 @@ internal fun mayBeNull(
     (branches(value) ?: listOf(value)).any { v ->
         val t = v.trim()
         when {
-            t == "null" -> true
-            IDENT.matchEntire(t) != null -> declarationOf(src, t, at)?.type?.let { it.endsWith("?") || nullableTypeParameter(src, it) } == true
-            else -> "?." in t && "?:" !in t
+            t == "null" -> {
+                true
+            }
+
+            IDENT.matchEntire(t) != null -> {
+                declarationOf(src, t, at)?.type?.let { it.endsWith("?") || nullableTypeParameter(src, it) } ==
+                    true
+            }
+
+            else -> {
+                "?." in t && "?:" !in t
+            }
         }
     }
 
@@ -1247,7 +1256,11 @@ internal fun valueKind(
     sdk: Sdk = Sdk.DEFAULT,
 ): ValueFact? {
     val t = value.trim()
-    if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null || CHAR_LITERAL.matchEntire(t) != null) return ValueFact.CONSTANT
+    if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null ||
+        CHAR_LITERAL.matchEntire(t) != null
+    ) {
+        return ValueFact.CONSTANT
+    }
     stringLiteral(t)?.let { literal ->
         return weakest(
             literal.interpolations.flatMap { ip ->

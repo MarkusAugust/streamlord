@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core
 
+import io.github.markusaugust.streamlord.core.client.JavaScriptPattern
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.fixtures.fixtureNames
 import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test

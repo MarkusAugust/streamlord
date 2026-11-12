@@ -5,8 +5,9 @@ import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.client.charCount
 import io.github.markusaugust.streamlord.core.client.codePointFrom
 import io.github.markusaugust.streamlord.core.client.codePointString
+import io.github.markusaugust.streamlord.core.client.formEncoded
 import io.github.markusaugust.streamlord.core.client.hex
-import io.github.markusaugust.streamlord.core.formEncoded
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -14,7 +15,6 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import io.github.markusaugust.streamlord.core.regex
 
 /*
  * Saved requests for the Stream Inspector: the file format, variable substitution, the recent

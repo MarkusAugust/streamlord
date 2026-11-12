@@ -1,27 +1,20 @@
 package io.github.markusaugust.streamlord.analysis
 
-// What the analysis asks of its platform, in JavaScript: the declarations of PlatformJvm.kt in streamlord-analysis.
+import java.io.File
 
-/** The editor hands the analysis text, never a folder. */
-public actual class SourceFolder private constructor()
+// What the analysis asks of its platform, in JavaScript: the declarations of PlatformJvm.kt in streamlord-analysis.
 
 public actual class ProjectIssue private constructor() {
     public actual val fails: Boolean get() = false
 }
 
-@Suppress("UNUSED_PARAMETER")
-internal actual fun sourcesUnder(
-    root: SourceFolder,
+/** The editor hands the analysis text, never a folder. */
+@Suppress("UNUSED_PARAMETER", "UnusedReceiverParameter")
+internal actual fun Analyzer.issuesUnder(
+    root: File,
+    opts: AnalyzeOptions,
     skipped: Set<String>,
-): List<Pair<SourceFolder, String>> = emptyList()
-
-@Suppress("UNUSED_PARAMETER")
-internal actual fun projectIssue(
-    file: SourceFolder,
-    line: Int,
-    column: Int,
-    issue: Issue,
-): ProjectIssue = throw UnsupportedOperationException()
+): List<ProjectIssue> = emptyList()
 
 internal actual fun <K : Any, V : Any> sharedMap(): MutableMap<K, V> = HashMap()
 

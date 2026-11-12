@@ -4,6 +4,8 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.radixDouble
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
@@ -13,8 +15,6 @@ import io.github.markusaugust.streamlord.core.domain.TextPlace
 import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import io.github.markusaugust.streamlord.core.radixDouble
-import io.github.markusaugust.streamlord.core.regex
 import kotlin.math.abs
 import kotlin.math.floor
 

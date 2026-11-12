@@ -1,11 +1,10 @@
 package io.github.markusaugust.streamlord.core
 
+import java.math.BigDecimal
+
 // What core asks of its platform, in JavaScript: the declarations of PlatformJvm.kt in streamlord-core.
 
-/** JavaScript has no arbitrary-precision decimal, so no number is ever read as one. */
-public actual class Decimal private constructor()
-
-internal actual fun decimalOrNull(text: String): Decimal? = null
+internal actual fun decimalOrNull(text: String): BigDecimal? = null
 
 /**
  * The whole number a JSON number is when it has one that fits a `Long`, whatever way it is written:
@@ -46,29 +45,7 @@ internal actual fun bigNumberText(
 
 internal actual fun typeName(value: Any): String? = value::class.simpleName
 
-@Suppress("UNUSED_PARAMETER")
-internal actual fun randomBase64(bytes: Int): String = throw UnsupportedOperationException("The editor writes no nonce")
-
-/** JavaScript's own reading of the digits, which is exact for a base that is a power of two. */
-@InternalStreamlordApi
-public actual fun radixDouble(
-    digits: String,
-    radix: Int,
-): Double? {
-    if (digits.isEmpty() || digits.any { it.digitToIntOrNull(radix) == null }) return null
-    val prefix =
-        when (radix) {
-            16 -> "0x"
-            8 -> "0o"
-            2 -> "0b"
-            else -> throw IllegalArgumentException("radix $radix")
-        }
-    return js("Number")(prefix + digits).unsafeCast<Double>()
-}
-
-@InternalStreamlordApi
-public actual fun formEncoded(s: String): String {
-    val params: dynamic = js("new URLSearchParams()")
-    params.append("", s)
-    return (params.toString() as String).substring(1)
+internal actual fun randomBase64(bytes: Int): String {
+    val out: dynamic = js("crypto").getRandomValues(js("new Uint8Array(bytes)"))
+    return js("btoa")(js("String.fromCharCode").apply(null, out)).unsafeCast<String>()
 }

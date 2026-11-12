@@ -1,4 +1,6 @@
-package io.github.markusaugust.streamlord.core
+package io.github.markusaugust.streamlord.core.client
+
+import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 
 /*
  * A pattern written for java.util.regex, respelled so that JavaScript's engine in its `u` mode gives

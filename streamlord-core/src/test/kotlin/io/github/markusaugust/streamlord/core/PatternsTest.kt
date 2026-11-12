@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core
 
+import io.github.markusaugust.streamlord.core.client.groupRange
+import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

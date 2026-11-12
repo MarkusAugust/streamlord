@@ -1,6 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Syntax highlighting of what Datastar adds to JavaScript and HTML: signals, actions, the scope

@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
-import io.github.markusaugust.streamlord.core.regex
 
 /**
  * How Datastar 1.0.5's client cases an attribute key, and which key gives a name back. The DSL

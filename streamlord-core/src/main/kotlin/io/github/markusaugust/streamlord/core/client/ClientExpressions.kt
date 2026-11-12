@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.core.client
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
-import io.github.markusaugust.streamlord.core.regex
 
 /*
  * How Datastar's client rewrites the `$` and `@` references in an expression before compiling it.

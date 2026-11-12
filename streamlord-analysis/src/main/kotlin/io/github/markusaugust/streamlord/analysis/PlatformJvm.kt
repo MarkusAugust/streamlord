@@ -8,9 +8,6 @@ import java.util.concurrent.ConcurrentHashMap
  * editors/vscode/analysis-js, with the same declarations.
  */
 
-/** A folder of sources on disk, where the platform has files. */
-public typealias SourceFolder = File
-
 /** An [Issue] of a project's sources, as [Analyzer.analyzeProject] finds them: the [file], and the [line] and [column] where it starts. */
 public data class ProjectIssue(
     val file: File,
@@ -26,25 +23,28 @@ public data class ProjectIssue(
     public fun format(): String = issue.format(file.path, SourcePosition(line, column))
 }
 
-/** The `.kt` files under [root] that VS Code indexes, each with its text, in path order. */
-internal fun sourcesUnder(
-    root: SourceFolder,
+/** What [Analyzer.analyzeProject] answers: the `.kt` files under [root], less the folders named in [skipped] and the hidden ones, in path order. */
+internal fun Analyzer.issuesUnder(
+    root: File,
+    opts: AnalyzeOptions,
     skipped: Set<String>,
-): List<Pair<File, String>> =
-    root
-        .walkTopDown()
-        .onEnter { it == root || (it.name !in skipped && !it.name.startsWith(".")) }
-        .filter { it.isFile && it.extension == "kt" }
-        .sortedBy { it.invariantSeparatorsPath }
-        .map { it to it.readText() }
-        .toList()
-
-internal fun projectIssue(
-    file: File,
-    line: Int,
-    column: Int,
-    issue: Issue,
-): ProjectIssue = ProjectIssue(file, line, column, issue)
+): List<ProjectIssue> {
+    val files =
+        root
+            .walkTopDown()
+            .onEnter { it == root || (it.name !in skipped && !it.name.startsWith(".")) }
+            .filter { it.isFile && it.extension == "kt" }
+            .sortedBy { it.invariantSeparatorsPath }
+            .map { it to it.readText() }
+            .toList()
+    val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
+    return files.flatMap { (file, source) ->
+        analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
+            val (line, column) = issue.position(source)
+            ProjectIssue(file, line, column, issue)
+        }
+    }
+}
 
 /** A map two threads may fill at once. */
 internal fun <K : Any, V : Any> sharedMap(): MutableMap<K, V> = ConcurrentHashMap()

@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.StreamlordException
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /**
  * Raised when a Datastar expression bears the marks of a Kotlin string template that ate a

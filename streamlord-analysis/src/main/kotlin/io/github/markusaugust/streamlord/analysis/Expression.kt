@@ -7,7 +7,7 @@ import io.github.markusaugust.streamlord.core.client.Rewrite
 import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a

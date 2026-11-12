@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.SignalNames
-import io.github.markusaugust.streamlord.core.regex
 
 /*
  * A hyphen in a signal name written in a DSL call. The client reads one as a capital in an

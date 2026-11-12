@@ -2,7 +2,6 @@ package io.github.markusaugust.streamlord.core
 
 import java.math.BigDecimal
 import java.math.BigInteger
-import java.net.URLEncoder
 import java.security.SecureRandom
 import java.util.Base64
 
@@ -11,10 +10,7 @@ import java.util.Base64
  * its own, editors/vscode/analysis-js, with the same declarations.
  */
 
-/** An arbitrary-precision decimal, where the platform has one. */
-public typealias Decimal = BigDecimal
-
-internal fun decimalOrNull(text: String): Decimal? = runCatching { BigDecimal(text) }.getOrNull()
+internal fun decimalOrNull(text: String): BigDecimal? = runCatching { BigDecimal(text) }.getOrNull()
 
 /** The whole number a JSON number is when it has one that fits a `Long`, however it is written: `1e3` is 1000, `1.5` has none. */
 internal fun exactLongOrNull(text: String): Long? = runCatching { BigDecimal(text).longValueExact() }.getOrNull()
@@ -43,33 +39,3 @@ internal fun randomBase64(bytes: Int): String {
     random.nextBytes(out)
     return Base64.getEncoder().encodeToString(out)
 }
-
-/** The digits of a whole number in base [radix] as the double JavaScript reads them as, or null when they are no such number. */
-@InternalStreamlordApi
-public fun radixDouble(
-    digits: String,
-    radix: Int,
-): Double? = digits.toBigIntegerOrNull(radix)?.toDouble()
-
-/** `application/x-www-form-urlencoded` in UTF-8, as `URLSearchParams` writes it. */
-@InternalStreamlordApi
-public fun formEncoded(s: String): String = URLEncoder.encode(s, Charsets.UTF_8)
-
-/**
- * A pattern with the meaning java.util.regex gives it. Every pattern of core and the analysis is
- * built here, so that a build for another regex engine can give each the same meaning.
- */
-@InternalStreamlordApi
-public fun regex(
-    pattern: String,
-    vararg options: RegexOption,
-): Regex = Regex(pattern, options.toSet())
-
-/** Where group [group] of [match], a match of this pattern in [input], stands; null when the group took no part. */
-@InternalStreamlordApi
-@Suppress("UnusedReceiverParameter", "UNUSED_PARAMETER")
-public fun Regex.groupRange(
-    input: CharSequence,
-    match: MatchResult,
-    group: Int,
-): IntRange? = match.groups[group]?.range

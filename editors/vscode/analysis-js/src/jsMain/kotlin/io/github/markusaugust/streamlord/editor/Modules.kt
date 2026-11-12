@@ -7,7 +7,7 @@ import io.github.markusaugust.streamlord.analysis.USES_HTML_DSL
 import io.github.markusaugust.streamlord.analysis.expressionAtCaret
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.isHtmlString
-import io.github.markusaugust.streamlord.core.regex
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * Which of Streamlord's modules a Kotlin file can use, as far as its imports prove it: what an
