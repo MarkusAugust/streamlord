@@ -1,9 +1,9 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.TimeSource
 
 /**
  * What the corpus cannot hold: the editor's own facts about a hole, and the time a large file
@@ -136,24 +136,21 @@ class HoleJudgementTest {
     }
 
     @Test
-    fun `a file of two thousand functions with HTML is analysed in a moment`() {
+    fun `a file of many functions with HTML is analysed in time that grows with it`() {
         val q = "\"\"\""
-        val src =
+        var copy = 0
+        // A package of its own each time, so nothing of an earlier pass is cached for it.
+        val file = { n: Int ->
             buildString {
-                append("package p\n")
-                for (i in 0 until 2000) {
+                append("package p${copy++}\n")
+                for (i in 0 until n) {
                     append("fun f$i(q: String, k: Int): String {\n    val x = 1\n    // language=HTML\n")
                     append("    return $q<div title=\"\$q\"><p>\${k}</p><a href=\"/x/\$q\">y</a></div>$q\n}\n")
                 }
             }
-        // Warm the JIT, then time one pass of a fresh copy, which nothing of the first is cached for.
-        analyzer.analyzeKotlin(src)
-        val copy = src.replace("package p", "package q")
-        val started = TimeSource.Monotonic.markNow()
-        val issues = analyzer.analyzeKotlin(copy)
-        val ms = started.elapsedNow().inWholeMilliseconds
-        assertEquals(4000, issues.count { it.code == "unescaped-interpolation" || it.code == "unsafe-interpolation" })
-        println("two thousand functions: $ms ms")
-        assertTrue(ms < 3000, "took $ms ms")
+        }
+        assertGrowsLinearly("functions with HTML", 200, file) { src ->
+            assertTrue(analyzer.analyzeKotlin(src).count { it.code == "unescaped-interpolation" || it.code == "unsafe-interpolation" } > 0)
+        }
     }
 }

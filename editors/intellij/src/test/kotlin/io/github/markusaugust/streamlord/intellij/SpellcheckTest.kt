@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.grazie.ide.inspection.grammar.GrazieInspection
 import com.intellij.grazie.spellcheck.GrazieSpellCheckingInspection
 import com.intellij.psi.util.PsiTreeUtil
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 
 /** In a Datastar expression only the text in quotes is prose: a signal or an action name is no word to spell. */
@@ -33,21 +34,23 @@ class SpellcheckTest : StreamlordTestCase() {
         assertTrue(found.toString(), found.any { "Lagree" in it })
     }
 
-    // The spell checker asks for every element of every pass, so the answer must not read the whole file each time.
+    // The spell checker asks for every element of every pass, so the answer must not read the whole
+    // file each time: eight seconds for 600 functions before the strings were cached.
     fun `test the strategy answers in time for a large kotlin file`() {
-        val src = (0 until 600).joinToString("\n") { "fun f$it() { val s = \"text $it\"; dataOnClick(\"\\\$n$it++\") }" }
-        myFixture.configureByText("Big.kt", src)
         val strategy = DatastarSpellcheckingStrategy()
-        val started = System.nanoTime()
-        var claimed = 0
-        PsiTreeUtil.processElements(myFixture.file) {
-            if (strategy.isMyContext(it)) claimed++
-            true
+        var copy = 0
+        val file = { n: Int ->
+            val src = (0 until n).joinToString("\n") { "fun f$it() { val s = \"text $it\"; dataOnClick(\"\\\$n$it++\") }" }
+            myFixture.addFileToProject("Big${copy++}.kt", src)
         }
-        val ms = (System.nanoTime() - started) / 1_000_000
-        assertTrue("claimed $claimed", claimed > 0)
-        // Eight seconds before the strings were cached, a fifth of one after.
-        assertTrue("took $ms ms", ms < 3000)
+        assertGrowsLinearly("the spelling strategy over a Kotlin file", 60, file) {
+            var claimed = 0
+            PsiTreeUtil.processElements(it) { element ->
+                if (strategy.isMyContext(element)) claimed++
+                true
+            }
+            assertTrue("claimed $claimed", claimed > 0)
+        }
     }
 
     // ${'$'} writes the dollar, so the browser gets $usrnm: a plain $usrnm here would be Kotlin's.

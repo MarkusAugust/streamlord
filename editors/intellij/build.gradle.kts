@@ -306,6 +306,11 @@ val generateHtmlLiveTemplates = tasks.register("generateHtmlLiveTemplates") {
     }
 }
 
+// assertGrowsLinearly, which the SDK's tests use too.
+sourceSets.test {
+    kotlin.srcDir(layout.projectDirectory.dir("../../streamlord-core/src/testCommon/kotlin"))
+}
+
 sourceSets.main {
     resources.srcDir(generatedResources)
     // The JSON schema of .streamlord/inspector.json is the VS Code extension's, so the file format has one definition.

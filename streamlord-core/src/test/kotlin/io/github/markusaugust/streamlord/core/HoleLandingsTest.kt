@@ -11,13 +11,12 @@ import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.measureTime
 
 /**
  * [holeLandings] and [urlSchemeFixedBy] against `editors/vscode/test/fixtures/cases/hole-landings.json`,
@@ -158,11 +157,10 @@ class HoleLandingsTest {
     // with the markup times the holes: 15000 holes took seconds when every span was tried.
     @Test
     fun `many holes are judged in time that grows with the markup`() {
-        val markup = "<li title=\"%s\"><a href=\"/x/%s\">%s</a></li>".repeat(5000)
-        val holes = holesOf(markup)
-        val values = List(holes.size) { "v" }
-        holeLandings(markup, holes)
-        val took = measureTime { holeLandings(markup, holes) } + measureTime { interpolate(markup, *values.toTypedArray()) }
-        assertTrue(took < 3.seconds, "15000 holes took $took")
+        assertGrowsLinearly("judging holes", 500, { n -> "<li title=\"%s\"><a href=\"/x/%s\">%s</a></li>".repeat(n) }) { markup ->
+            val holes = holesOf(markup)
+            holeLandings(markup, holes)
+            interpolate(markup, *Array(holes.size) { "v" })
+        }
     }
 }

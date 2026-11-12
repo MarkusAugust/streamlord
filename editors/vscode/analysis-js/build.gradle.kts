@@ -74,6 +74,7 @@ kotlin {
         getByName("jsTest") {
             kotlin.srcDir(analysis.layout.projectDirectory.dir("src/test/kotlin"))
             kotlin.srcDir(core.layout.projectDirectory.dir("src/test/kotlin"))
+            kotlin.srcDir(core.layout.projectDirectory.dir("src/testCommon/kotlin"))
             kotlin.exclude(
                 "**/*JvmTest.kt",
                 // Reads a project's files.

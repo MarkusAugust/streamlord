@@ -149,7 +149,8 @@ kotlin.sourceSets.main {
 }
 
 // How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript
-// build of the same tests, editors/vscode/analysis-js, brings its own.
+// build of the same tests, editors/vscode/analysis-js, brings its own. testCommon runs on both.
 kotlin.sourceSets.test {
     kotlin.srcDir(layout.projectDirectory.dir("src/testJvm/kotlin"))
+    kotlin.srcDir(layout.projectDirectory.dir("src/testCommon/kotlin"))
 }

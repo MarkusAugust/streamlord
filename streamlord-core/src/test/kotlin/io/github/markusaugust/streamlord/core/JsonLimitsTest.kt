@@ -4,22 +4,20 @@ import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
-import kotlin.time.measureTime
 
 class JsonLimitsTest {
     // A million digits fit inside the default signal size limit and took over twenty seconds
     // to turn into a number the first time an accessor was called.
     @Test
     fun `a number of a million digits is refused before anything reads it`() {
-        val body = """{"n":""" + "9".repeat(1_000_000) + "}"
-
-        val spent = measureTime { assertFailsWith<JsonParseException> { JsonParser.parseObject(body) } }
-
-        assertTrue(spent.inWholeMilliseconds < 2_000, "took $spent")
+        assertGrowsLinearly("refusing a long number", 100_000, { n -> """{"n":""" + "9".repeat(n) + "}" }) { body ->
+            assertFailsWith<JsonParseException> { JsonParser.parseObject(body) }
+        }
     }
 
     @Test
