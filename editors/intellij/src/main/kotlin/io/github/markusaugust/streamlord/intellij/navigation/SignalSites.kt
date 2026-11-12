@@ -14,6 +14,7 @@ import com.intellij.psi.util.parentOfType
 import com.intellij.psi.util.parentsOfType
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
+import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordResolve
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
@@ -96,22 +97,10 @@ object SignalSites {
         // link: a reference that resolves to nothing would say "Cannot find declaration".
         val targeted = HashMap<String, Boolean>()
 
-        fun linked(path: String) = path in defined && targeted.getOrPut(path) { SignalTarget.of(file, path).isNotEmpty() }
-        val out = ArrayList<SignalSite>()
-        for (read in reads) {
-            var at = read.end - read.name.length
-            // `$count = 1` assigns the signal, so it is the place that defines it and no read besides.
-            if (declarations.any { it.start <= at && read.end <= it.end }) continue
-            // `$user.name.length` reads `user` in its first part and `user.name` in its second, where the project defines them.
-            var path = ""
-            for (part in read.name.split('.')) {
-                path = if (path.isEmpty()) part else "$path.$part"
-                if (linked(path)) out += SignalSite(at, at + part.length, path, null, host(at))
-                at += part.length + 1
-            }
-        }
-        for (d in declarations) out += SignalSite(d.start, d.end, d.name, d, host(d.start))
-        return out
+        fun linked(path: String) = targeted.getOrPut(path) { SignalTarget.of(file, path).isNotEmpty() }
+        return signalSites(reads, declarations, defined)
+            .filter { it.declaration != null || linked(it.signal) }
+            .map { SignalSite(it.start, it.end, it.signal, it.declaration, host(it.start)) }
     }
 
     /**
