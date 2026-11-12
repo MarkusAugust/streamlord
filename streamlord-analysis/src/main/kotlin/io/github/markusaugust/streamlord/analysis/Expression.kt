@@ -531,6 +531,49 @@ private fun stringStarts(regions: ByteArray): IntArray {
     return out
 }
 
+/**
+ * Why the client rewrote a reference that JavaScript reads as the text of a template literal. Asked
+ * once for each such reference, so each answer is looked up rather than read from the text again.
+ */
+private class TemplateReasons(
+    private val js: String,
+    runs: List<Run>,
+) {
+    // Between two runs of one literal lies a ${...} of a literal the client took whole: the gaps
+    // sorted by start, each with the furthest end of any gap that starts no later.
+    private val gaps =
+        runs
+            .zipWithNext()
+            .filter { (a, b) -> a.quote == b.quote }
+            .map { (a, b) -> a.range.last to b.range.first }
+            .sortedBy { it.first }
+    private val furthest = gaps.map { it.second }.runningReduce(::maxOf)
+
+    // Where the template literal around each position opens, and whether a ${...} in it holds a brace.
+    private val lastTick = IntArray(js.length).also { for (k in js.indices) it[k] = if (js[k] == '`') k else it.getOrElse(k - 1) { -1 } }
+    private val braced = HashMap<Int, Boolean>()
+
+    fun why(at: Int): String {
+        val before = gaps.binarySearch { if (it.first < at) -1 else 1 }.let { -it - 2 }
+        if (before >= 0 && furthest[before] > at) {
+            return ", because it stands inside a \${...}, where Datastar rewrites the text of an inner template literal too, " +
+                "so the text holds that"
+        }
+        val open = lastTick.getOrElse(at) { -1 }
+        val held =
+            open >= 0 &&
+                braced.getOrPut(open) {
+                    val close = js.indexOf('`', at).let { if (it < 0) js.length else it }
+                    BRACED_INTERPOLATION.containsMatchIn(js.substring(open, close))
+                }
+        return if (held) {
+            ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
+        } else {
+            ", because Datastar does not take this template literal whole and reads its text as code, so the text holds that"
+        }
+    }
+}
+
 /** Where a character the client paired as a quote sits, for the message that names it. */
 private fun placeOf(region: Byte): String =
     when (region) {
@@ -799,6 +842,7 @@ public class ExpressionValidator(
         }
 
         val starts by lazy { stringStarts(regions) }
+        val templates by lazy { TemplateReasons(js, rewritten.runs) }
         for (r in rewritten.rewrites) {
             val region = regions[r.start]
             if (region == Region.COMMENT) continue
@@ -813,7 +857,7 @@ public class ExpressionValidator(
                         js.getOrNull(starts[r.start]),
                         start,
                         end,
-                        templateWhy(js, rewritten.runs, r.start),
+                        if (region == Region.TEMPLATE) templates.why(r.start) else "",
                     )
                 continue
             }
@@ -877,26 +921,6 @@ public class ExpressionValidator(
         if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
         issues += filterSignalsIssues(text)
         return issues
-    }
-
-    /** Why the client rewrote the reference at [at], which JavaScript reads as the text of a template literal. */
-    private fun templateWhy(
-        js: String,
-        runs: List<Run>,
-        at: Int,
-    ): String {
-        // Between two runs of one literal lies a ${...} of a literal the client took whole.
-        if (runs.zipWithNext().any { (a, b) -> a.quote == b.quote && at > a.range.last && at < b.range.first }) {
-            return ", because it stands inside a \${...}, where Datastar rewrites the text of an inner template literal too, " +
-                "so the text holds that"
-        }
-        val open = js.lastIndexOf('`', at)
-        val close = js.indexOf('`', at).let { if (it < 0) js.length else it }
-        return if (open >= 0 && BRACED_INTERPOLATION.containsMatchIn(js.substring(open, close))) {
-            ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
-        } else {
-            ", because Datastar does not take this template literal whole and reads its text as code, so the text holds that"
-        }
     }
 
     private fun literalRewritten(
