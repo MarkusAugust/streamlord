@@ -1,278 +1,42 @@
 import * as vscode from "vscode";
-import {
-  actionCallAt,
-  actionPrefixAt,
-  attributeDoc,
-  attributeNamed,
-  catalog,
-  expressionAtCaret,
-  fetchOptionDoc,
-  selectorBefore,
-  signalPrefixAt,
-  tagBeforeCaret,
-  type ExpressionAtCaret,
-} from "./analysis.ts";
+import { complete, defaultPrefix, type CompletionItem } from "./analysis.ts";
 import type { SignalIndex } from "./signalIndex.ts";
 
-/**
- * The attribute name `attributes`, the markup of a tag after its name, ends with, or null when it
- * ends in a value. Read by the browser's attribute states: white space, a `/` outside a value, and
- * the end of a quoted value each start a new name; a `/` in an unquoted value is the value's; an
- * `=` first in a name is part of it. White space after `=` ends the attribute, though the browser
- * waits there for the value. nameAtEnd in StreamlordCompletionContributor.kt.
- */
-function nameAtEnd(attributes: string): string | null {
-  let start = 0;
-  let state: "name" | "await" | "unquoted" | "quoted" = "name";
-  let quote = "";
-  for (let i = 0; i < attributes.length; i++) {
-    const c = attributes[i] ?? "";
-    const space = /\s/.test(c);
-    if (state === "quoted") {
-      if (c === quote) {
-        state = "name";
-        start = i + 1;
-      }
-    } else if (state === "await") {
-      if (c === '"' || c === "'") {
-        state = "quoted";
-        quote = c;
-      } else if (space) {
-        state = "name";
-        start = i + 1;
-      } else state = "unquoted";
-    } else if (state === "unquoted") {
-      if (space) {
-        state = "name";
-        start = i + 1;
-      }
-    } else if (space || c === "/") start = i + 1;
-    else if (c === "=" && i > start) state = "await";
-  }
-  return state === "name" ? attributes.slice(start) : null;
-}
+const KINDS: Record<string, vscode.CompletionItemKind> = {
+  signal: vscode.CompletionItemKind.Variable,
+  scope: vscode.CompletionItemKind.Variable,
+  action: vscode.CompletionItemKind.Function,
+  option: vscode.CompletionItemKind.Property,
+  attribute: vscode.CompletionItemKind.Property,
+  event: vscode.CompletionItemKind.Event,
+  modifier: vscode.CompletionItemKind.Keyword,
+  value: vscode.CompletionItemKind.EnumMember,
+  id: vscode.CompletionItemKind.Reference,
+  class: vscode.CompletionItemKind.Color,
+};
 
-/** Completions for Datastar expressions in Kotlin strings, and for data-* attributes in HTML. */
+/** Completions for Datastar in markup, in Kotlin strings, in the DSL and its attributes form: the analysis's items, as VS Code shows them. */
 export class StreamlordCompletionProvider implements vscode.CompletionItemProvider {
   constructor(private readonly signals: SignalIndex, private readonly prefix: () => string) {}
 
   provideCompletionItems(document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
-    const src = document.getText();
-    const offset = document.offsetAt(position);
-    if (document.languageId === "kotlin") return this.kotlin(src, offset, document, position);
-    return this.html(src, offset, document, position);
-  }
-
-  private kotlin(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
-    const selectorItems = this.selectorItems(src, offset, document, position);
-    if (selectorItems) return selectorItems;
-    const expression = expressionAtCaret(src, offset, true, this.prefix());
-    if (expression) return this.expressionItems(expression, src, offset, document, position);
-    // HTML in a string, handed to patchElements or free-standing: the HTML side applies.
-    return this.html(src, offset, document, position);
-  }
-
-  /** `selector = "#|"` on any DSL call, or the first argument of removeElements: ids and classes from the workspace. */
-  private selectorItems(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | null {
-    const typed = selectorBefore(src, offset);
-    if (typed === null || typed === undefined) return null;
-    const token = /[#.]?[\w-]*$/.exec(typed)?.[0] ?? "";
-    const local = this.signals.selectorsForFile(document.uri.toString());
-    const all = this.signals.allSelectors();
-    const range = new vscode.Range(position.translate(0, -token.length), position);
-    const items: vscode.CompletionItem[] = [];
-    const wantIds = !token.startsWith(".");
-    const wantClasses = !token.startsWith("#");
-    if (wantIds) {
-      for (const id of [...all.ids].sort()) {
-        const item = new vscode.CompletionItem("#" + id, vscode.CompletionItemKind.Reference);
-        const isLocal = local.ids.has(id);
-        item.detail = isLocal ? "id (this file)" : "id (workspace)";
-        item.sortText = (isLocal ? "0" : "1") + id;
-        item.range = range;
-        items.push(item);
-      }
-    }
-    if (wantClasses) {
-      for (const cls of [...all.classes].sort()) {
-        const item = new vscode.CompletionItem("." + cls, vscode.CompletionItemKind.Color);
-        const isLocal = local.classes.has(cls);
-        item.detail = isLocal ? "class (this file)" : "class (workspace)";
-        item.sortText = (isLocal ? "2" : "3") + cls;
-        item.range = range;
-        items.push(item);
-      }
-    }
-    return items;
-  }
-
-  /**
-   * Signals, actions, attribute names (outside plain HTML), modifiers and modifier values in markup
-   * languages. In a Kotlin file the markup is that of the HTML string the caret is in, read decoded.
-   */
-  private html(src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
     const prefix = this.prefix();
+    const selectors = this.signals.allSelectors();
+    // In plain HTML files VS Code's own HTML service offers the attribute names, from html-customdata.json, for the catalog's prefix.
+    const names = !(document.languageId === "html" && prefix === defaultPrefix());
     const kotlin = document.languageId === "kotlin";
-    // Inside an attribute value, read as the browser reads the markup: over several lines and in either quote.
-    if (!kotlin) {
-      const expression = expressionAtCaret(src, offset, false, prefix);
-      if (expression) return this.expressionItems(expression, src, offset, document, position);
-    }
-    // From the start of the tag the caret is in, which may be lines above, read as the browser reads the markup.
-    const before = tagBeforeCaret(src, offset, kotlin, prefix);
-    if (before === null || before === undefined) return [];
-    // On an attribute name inside a tag: <div data-on:cl|. The reading above has settled that the caret
-    // is in the tag and in no quoted value; the name at it is read by the browser's attribute states.
-    const head = /^<([A-Za-z][^\s/>]*)/.exec(before);
-    const partial = head ? nameAtEnd(before.slice(head[0].length)) : null;
-    if (!head || partial === null || before.length - partial.length <= head[0].length || /["'<>]/.test(partial)) return [];
-    const tagName = (head[1] ?? "").toLowerCase();
-    if (partial.includes("__")) return this.modifierItems(partial, prefix, document, position);
-    // The event of data-on, which VS Code's HTML service knows nothing of, in any file.
-    if (partial.toLowerCase().startsWith(`${prefix}on:`)) return this.eventItems(partial.slice(prefix.length + 3), src, offset, position);
-    if (!partial.startsWith(prefix.slice(0, Math.max(1, partial.length)))) return [];
-    // In plain HTML files the attribute names come from html-customdata.json through VS Code's own
-    // HTML service, with the same docs; offering them here as well would list them twice. Inside
-    // Kotlin strings and template languages that service is absent.
-    if (document.languageId === "html" && prefix === catalog().prefix) return [];
-    return catalog()
-      .attributes.filter((a) => !a.onlyOn || a.onlyOn.includes(tagName))
-      .map((a) => {
-        const item = new vscode.CompletionItem(prefix + a.name, vscode.CompletionItemKind.Property);
-        item.detail = (a.pro ? "Datastar Pro · " : "Datastar · ") + (a.forms[0] ?? "");
-        item.documentation = new vscode.MarkdownString(attributeDoc(a.name, prefix, true) ?? "");
-        item.range = new vscode.Range(position.translate(0, -partial.length), position);
-        const needsKey = a.keyRequired;
-        const needsValue = a.valueKind !== "none";
-        item.insertText = new vscode.SnippetString(prefix + a.name + (needsKey ? ":${1:key}" : "") + (needsValue ? '="${2}"' : ""));
-        item.sortText = (a.pro ? "1" : "0") + a.name;
-        return item;
-      });
-  }
-
-  private modifierItems(partial: string, prefix: string, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
-    const spec = attributeNamed(partial.toLowerCase(), prefix);
-    if (!spec) return [];
-    const lastSep = partial.lastIndexOf("__");
-    const current = partial.slice(lastSep + 2);
-    const dot = current.indexOf(".");
-    if (dot >= 0) {
-      const mod = spec.modifiers.find((m) => m.name === current.slice(0, dot));
-      if (!mod) return [];
-      const afterDot = current.slice(current.lastIndexOf(".") + 1);
-      const values = mod.type === "enum" ? (mod.values ?? []) : mod.type === "duration" ? (current.split(".").length > 2 ? (mod.flags ?? []) : ["500ms", "1s", "300ms", "100ms"]) : [];
-      return values.map((v) => {
-        const item = new vscode.CompletionItem(v, vscode.CompletionItemKind.EnumMember);
-        item.range = new vscode.Range(position.translate(0, -afterDot.length), position);
-        return item;
-      });
-    }
-    return [...spec.modifiers].sort((x, y) => byName(x.name, y.name)).map((m) => {
-      const item = new vscode.CompletionItem(m.name, vscode.CompletionItemKind.Keyword);
-      item.sortText = m.name;
-      item.detail = `__${m.name}` + (m.type === "flag" ? "" : m.type === "duration" ? ".<duration>" : m.type === "enum" ? `.<${(m.values ?? []).join("|")}>` : m.type === "int" ? ".<n>" : ".<name>");
-      item.range = new vscode.Range(position.translate(0, -current.length), position);
-      if (m.type === "duration") item.insertText = new vscode.SnippetString(`${m.name}.\${1:500ms}`);
-      if (m.type === "enum") item.insertText = new vscode.SnippetString(`${m.name}.\${1|${(m.values ?? []).join(",")}|}`);
-      if (m.type === "int") item.insertText = new vscode.SnippetString(`${m.name}.\${1:50}`);
-      if (m.type === "ident" || m.type === "idents") item.insertText = new vscode.SnippetString(`${m.name}.\${1:name}`);
-      return item;
-    });
-  }
-
-  /**
-   * Signals after `$`, actions after `@`, the options of a backend action on a key of its options
-   * object, the scope names after a bare lowercase word. `patch` is a name only in
-   * `data-on-signal-patch`, the one attribute the client hands it to. What is replaced is measured
-   * back from the caret in the source, where the text before it may be written with escapes.
-   */
-  private expressionItems(expression: ExpressionAtCaret, src: string, offset: number, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] {
-    const textBefore = expression.before;
-    const sig = signalPrefixAt(textBefore, textBefore.length);
-    if (sig !== null && sig !== undefined) {
-      const local = this.signals.forFile(document.uri.toString());
-      // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
-      const dollar = src[offset - sig.length - 1] === "$" ? "$" : "";
-      return [...this.signals.all()].sort().map((name) => {
-        const item = new vscode.CompletionItem("$" + name, vscode.CompletionItemKind.Variable);
-        const isLocal = local.has(name);
-        item.detail = isLocal ? "signal (this file)" : "signal (workspace)";
-        item.sortText = (isLocal ? "0" : "1") + name;
-        item.range = new vscode.Range(document.positionAt(offset - sig.length - dollar.length), position);
-        item.insertText = dollar + name;
-        item.filterText = dollar + name;
-        return item;
-      });
-    }
-    if (!expression.allowActions) return [];
-    const call = actionCallAt(textBefore, textBefore.length);
-    if (call?.option) {
-      const typed = call.option.typed;
-      // The colon is written only where none follows yet.
-      const colon = /^\s*:/.test(src.slice(offset)) ? "" : ": ";
-      return catalog()
-        .fetchOptions.filter((o) => !call.option?.written.includes(o.name))
-        .map((o) => {
-          const item = new vscode.CompletionItem(o.name, vscode.CompletionItemKind.Property);
-          item.detail = o.type;
-          item.documentation = new vscode.MarkdownString(fetchOptionDoc(o.name) ?? "");
-          item.range = new vscode.Range(document.positionAt(offset - typed.length), position);
-          item.insertText = o.name + colon;
-          item.sortText = o.name;
-          return item;
-        });
-    }
-    const act = actionPrefixAt(textBefore, textBefore.length);
-    if (act !== null && act !== undefined) {
-      return [...catalog().actions].sort((x, y) => Number(x.pro) - Number(y.pro) || byName(x.name, y.name)).map((a) => {
-        const item = new vscode.CompletionItem("@" + a.name, vscode.CompletionItemKind.Function);
-        item.detail = (a.pro ? "Pro · " : "") + a.signature;
-        item.documentation = a.doc;
-        item.range = new vscode.Range(document.positionAt(offset - act.length - 1), position);
-        item.insertText = new vscode.SnippetString("@" + a.name + (a.kind === "backend" ? "('${1:/path}')" : a.name === "peek" ? "(() => ${1})" : "(${1})"));
-        item.sortText = (a.pro ? "1" : "0") + a.name;
-        return item;
-      });
-    }
-    const scope = /(?:^|[^A-Za-z0-9_$])([a-z]*)$/.exec(textBefore);
-    if (scope && (scope[1] ?? "").length > 0) {
-      const compiled = catalog().compiledParameters.filter((n) => /^[a-z]/.test(n));
-      return [...compiled, ...(expression.patchInScope ? ["patch"] : [])].map((v) => new vscode.CompletionItem(v, vscode.CompletionItemKind.Variable));
-    }
-    return [];
-  }
-
-  /** The event of `data-on:`, Datastar's own first, then the DOM's; `typed` is what is written of it. */
-  private eventItems(typed: string, src: string, offset: number, position: vscode.Position): vscode.CompletionItem[] {
-    const range = new vscode.Range(position.translate(0, -typed.length), position);
-    // A value is opened only where none follows yet.
-    const value = /^\s*=/.test(src.slice(offset)) ? "" : '="${1}"';
-    const datastar = catalog().datastarEvents.map((e) => {
-      const item = new vscode.CompletionItem(e.name, vscode.CompletionItemKind.Event);
-      item.detail = "Datastar event";
-      item.documentation = new vscode.MarkdownString(e.doc);
-      item.sortText = "0" + e.name;
-      return item;
-    });
-    const dom = catalog().domEvents.map((e) => {
-      const item = new vscode.CompletionItem(e.name, vscode.CompletionItemKind.Event);
-      item.detail = "DOM event";
-      if (e.mdn) item.documentation = new vscode.MarkdownString(`[MDN](${e.mdn})`);
-      item.sortText = "1" + e.name;
-      return item;
-    });
-    return [...datastar, ...dom].map((item) => {
-      item.range = range;
-      item.insertText = new vscode.SnippetString(String(item.label) + value);
-      return item;
-    });
+    return complete(document.getText(), document.offsetAt(position), kotlin, prefix, this.signals.allDefinitions(), [...selectors.ids], [...selectors.classes], names).map((i) => item(i, document, position));
   }
 }
 
-/**
- * Actions and modifiers are offered by name, Pro after the rest, as the IntelliJ plugin orders
- * them; sortText carries the order, since VS Code sorts by it.
- */
-function byName(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+function item(i: CompletionItem, document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem {
+  const out = new vscode.CompletionItem(i.label, KINDS[i.kind]);
+  out.range = new vscode.Range(document.positionAt(i.replaceFrom), position);
+  if (i.snippet != null) out.insertText = new vscode.SnippetString(i.snippet);
+  else if (i.insert != null) out.insertText = i.insert;
+  out.detail = i.detail ?? undefined;
+  if (i.doc != null) out.documentation = new vscode.MarkdownString(i.doc);
+  out.filterText = i.filter ?? undefined;
+  out.sortText = i.sort ?? undefined;
+  return out;
 }

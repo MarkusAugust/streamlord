@@ -16,19 +16,10 @@ class FakeIndex {
     this.files.set(uri, { text, lang });
     return this;
   }
-  all() {
+  allDefinitions() {
     const out = new Set<string>();
-    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin").signals) out.add(s);
-    return out;
-  }
-  forFile(uri: string) {
-    const f = this.files.get(uri);
-    return new Set(f ? signalsOf(f.text, f.lang === "kotlin").signals : []);
-  }
-  selectorsForFile(uri: string) {
-    const f = this.files.get(uri);
-    const found = f && signalsOf(f.text, f.lang === "kotlin");
-    return { ids: new Set(found?.ids), classes: new Set(found?.classes) };
+    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin").definitions) out.add(s);
+    return [...out];
   }
   allSelectors() {
     const ids = new Set<string>();
@@ -143,10 +134,13 @@ describe("completion provider", () => {
       `<div id=x title="a b" data-x='c' hidden data-`,
       `<input {% if user.admin == true %}checked{% endif %} data-`,
       `<div {{ a == b ? 'x' : 'y' }} data-`,
-      "<a href=/x?a=b data-attr:title=`x` id= data-",
+      "<a href=/x?a=b data-attr:title=`x` id=y data-",
     ]) {
       assert.ok(complete(pdoc(tag), 0, tag.length, index).some((i) => i.label === "data-on"), tag);
     }
+    // After an equals sign and white space the browser reads a value, not a name.
+    const value = "<a href=/x id= data-";
+    assert.deepEqual(complete(pdoc(value), 0, value.length, index), [], value);
     const escaped = `val html = "<div class=\\"card\\" data-`;
     assert.ok(complete(new MockDocument(escaped, "kotlin"), 0, escaped.length, index).some((i) => i.label === "data-on"), escaped);
     // CodeQL's input, which never finished before. It ends on a name the caret completes, so the

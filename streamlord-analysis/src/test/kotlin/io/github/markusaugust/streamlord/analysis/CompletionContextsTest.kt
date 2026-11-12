@@ -19,36 +19,37 @@ class CompletionContextsTest {
     }
 
     @Test
-    fun `which tag a caret stands in`() {
-        val cases = sharedCases("completion-contexts.json").filter { it.containsKey("tag") }
+    fun `which attribute name a caret stands on`() {
+        val cases = sharedCases("completion-contexts.json").filter { it.containsKey("nameAt") }
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val before = case.string("before")!!
-            val tag =
-                tagBeforeCaret(
+            val name =
+                nameAtCaret(
                     before + case.string("after")!!,
                     before.length,
                     case.string("prefix") ?: "data-",
                     case.boolean("templates") ?: true,
                 )
-            assertEquals(case.string("tag"), tag, case.string("name"))
+            val expected = case.obj("nameAt")
+            assertEquals(expected?.let { it.string("tag") to it.string("typed") }, name?.let { it.tag to it.typed }, before)
         }
     }
 
     @Test
-    fun `the tag in a Kotlin string is read decoded, from its opening bracket`() {
+    fun `the name in a Kotlin string is read decoded, in its tag from its opening bracket`() {
         // The caret just after `data-on:click__` in the string of the source.
-        fun at(src: String): String? {
+        fun at(src: String): Pair<String, String>? {
             val offset = src.indexOf("data-on:click__") + "data-on:click__".length
-            return tagBeforeCaret(lexKotlin(src).stringAt(offset)!!, offset, "data-")
+            return nameAtCaret(lexKotlin(src).stringAt(offset)!!, offset, "data-")?.let { it.tag to it.typed }
         }
         assertEquals(
-            "<div data-show=\"\$a > 1\" data-on:click__",
+            "div" to "data-on:click__",
             at("val x = \"<div data-show=\\\"\\\$a > 1\\\" data-on:click__\""),
             "escaped quotes around a value holding >",
         )
         assertEquals(
-            "<div class=\"card\"\n     data-on:click__",
+            "div" to "data-on:click__",
             at("fun side() = \"\"\"\n<div class=\"card\"\n     data-on:click__\n\"\"\""),
             "a raw string over two lines",
         )

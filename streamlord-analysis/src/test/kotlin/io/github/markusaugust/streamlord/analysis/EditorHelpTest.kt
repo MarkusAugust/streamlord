@@ -63,7 +63,7 @@ class EditorHelpTest {
                         item.snippet,
                         item.detail,
                         item.tail,
-                        item.doc?.takeIf { doc != null && it.startsWith(doc) } ?: item.doc,
+                        if (doc != null && item.doc?.startsWith(doc) == true) doc else item.doc,
                         item.filter,
                         item.sort,
                     )
@@ -118,7 +118,7 @@ class EditorHelpTest {
             assertTrue(found.doc.startsWith(expected.string("doc")!!), found.doc)
             assertEquals(
                 expected.array("parameters")!!.strings(),
-                found.parameters.map { found.label.substring(it.start, it.end) },
+                found.parameters.map { found.label.substring(it) },
                 "parameters",
             )
             assertEquals(expected.int("active"), found.active, "active")

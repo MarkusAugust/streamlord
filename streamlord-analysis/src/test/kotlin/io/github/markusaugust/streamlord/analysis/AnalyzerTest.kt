@@ -116,6 +116,8 @@ class AnalyzerTest {
         assertContains(actionDoc(analyzer.catalog.actionsByName["post"]!!), "@post(uri, options?)")
         assertContains(markdownToHtml("**a** `b` _c_"), "<b>a</b> <code>b</code> <i>c</i>")
         assertEquals("<p><code>__once</code>, <code>__exit</code> <i>Pro</i></p>", markdownToHtml("`__once`, `__exit` _Pro_"))
+        // A DOM event's documentation is a link to MDN, whose underscores are the address's.
+        assertEquals("<p><a href=\"https://x.dev/click_event\">MDN</a></p>", markdownToHtml("[MDN](https://x.dev/click_event)"))
         assertFalse(
             analyzer.catalog.attributesByName["persist"]!!
                 .let { attributeDoc(it) }

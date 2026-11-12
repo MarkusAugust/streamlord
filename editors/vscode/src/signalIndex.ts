@@ -180,12 +180,6 @@ export class SignalIndex implements vscode.Disposable {
     return languageByExtension(document.uri);
   }
 
-  /** Ids and classes declared in one file. */
-  selectorsForFile(uri: string): Selectors {
-    const found = this.byFile.get(uri)?.found;
-    return { ids: new Set(found?.ids), classes: new Set(found?.classes) };
-  }
-
   /** Ids and classes declared anywhere in the workspace. */
   allSelectors(): Selectors {
     const ids = new Set<string>();
@@ -195,11 +189,6 @@ export class SignalIndex implements vscode.Disposable {
       for (const c of e.found.classes) classes.add(c);
     }
     return { ids, classes };
-  }
-
-  /** Signals declared in one file, or an empty set. */
-  forFile(uri: string): Set<string> {
-    return new Set(this.byFile.get(uri)?.found.signals);
   }
 
   all(): Set<string> {

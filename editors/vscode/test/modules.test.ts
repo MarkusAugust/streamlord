@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { MockDocument } from "./vscode-mock.ts";
-import { canCallDsl, diagnose, inHtmlString, signalsOf } from "../src/analysis.ts";
+import { complete, diagnose, hover, signalsOf } from "../src/analysis.ts";
 import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
 import { placesIn } from "../src/signalIndex.ts";
@@ -10,6 +10,9 @@ import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
 const DSL = "import io.github.markusaugust.streamlord.html.*\n";
 
 describe("which Streamlord modules a Kotlin file can use", () => {
+  // Whether the file can call the DSL, by whether the DSL's helper is documented there.
+  const canCallDsl = (imports: string) => hover(imports + "\nfun f() = dataText(x)", imports.length + 12, true, "data-") !== null;
+
   it("calls the DSL only through its import or from inside its package", () => {
     assert.equal(canCallDsl("fun f() = 1"), false);
     assert.equal(canCallDsl(DSL), true);
@@ -28,7 +31,7 @@ describe("which Streamlord modules a Kotlin file can use", () => {
     const streamlord = "import io.github.markusaugust.streamlord.ktor.respondDatastar\n";
     // The markup handed to patchElements is Streamlord's to read only where the file may have core.
     const handed = `fun f(sse: Any) = sse.patchElements("data-text")`;
-    const inMarkup = (imports: string) => inHtmlString(imports + handed, (imports + handed).indexOf("data-text") + 2);
+    const inMarkup = (imports: string) => hover(imports + handed, (imports + handed).indexOf("data-text") + 2, true, "data-") !== null;
     assert.equal(canCallDsl(official), false);
     assert.equal(inMarkup(official), false);
     assert.equal(inMarkup(official + streamlord), true);
@@ -50,7 +53,7 @@ describe("a DSL-named call in a file without the DSL", () => {
   });
 
   it("gets no completion, hover or signature help", () => {
-    const index = { all: () => new Set(signalsOf(`<div data-signals:count="0"></div>`, false).signals), forFile: () => new Set<string>() };
+    const index = { allDefinitions: () => signalsOf(`<div data-signals:count="0"></div>`, false).definitions, allSelectors: () => ({ ids: new Set(), classes: new Set() }) };
     const completion = new StreamlordCompletionProvider(index as never, () => "data-");
     assert.deepEqual(completion.provideCompletionItems(doc as never, doc.positionAt(src.indexOf("count")) as never), []);
     const hover = new StreamlordHoverProvider(() => "data-");
@@ -69,7 +72,7 @@ describe("a DSL-named call in a file without the DSL", () => {
 });
 
 describe("kotlinx.html's attributes form and HTML strings, whatever the file has", () => {
-  const index = { all: () => new Set(signalsOf(`<div data-signals:count="0"></div>`, false).signals), forFile: () => new Set<string>() };
+  const index = { allDefinitions: () => signalsOf(`<div data-signals:count="0"></div>`, false).definitions, allSelectors: () => ({ ids: new Set(), classes: new Set() }) };
   const completion = new StreamlordCompletionProvider(index as never, () => "data-");
   const labels = (src: string, at: number) => completion.provideCompletionItems(new MockDocument(src, "kotlin") as never, new MockDocument(src, "kotlin").positionAt(at) as never).map((i) => String(i.label));
 
@@ -87,7 +90,7 @@ describe("kotlinx.html's attributes form and HTML strings, whatever the file has
 
   it("offers no ids or classes in a call of the official SDK", () => {
     const src = `import dev.datastar.kotlin.sdk.blocking.ServerSentEventGenerator\nfun f(g: ServerSentEventGenerator) = g.removeElements("#")`;
-    const selectors = { selectorsForFile: () => ({ ids: new Set(["feed"]), classes: new Set<string>() }), allSelectors: () => ({ ids: new Set(["feed"]), classes: new Set<string>() }) };
+    const selectors = { allSelectors: () => ({ ids: new Set(["feed"]), classes: new Set<string>() }) };
     const provider = new StreamlordCompletionProvider({ ...index, ...selectors } as never, () => "data-");
     const at = (text: string) => provider.provideCompletionItems(new MockDocument(text, "kotlin") as never, new MockDocument(text, "kotlin").positionAt(text.indexOf('#"') + 1) as never).map((i) => String(i.label));
     assert.deepEqual(at(src), []);

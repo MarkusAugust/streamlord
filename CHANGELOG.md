@@ -37,6 +37,14 @@ All notable changes to Streamlord are recorded here. The format follows
   `KotlinString` has two more values, `literals` and `called`: the literals a `+` chain joins, and
   whether a call or an index follows one of them. Code compiled against the old constructors needs
   a rebuild.
+- Completion, hover and signature help in streamlord-analysis are three functions both editors
+  call, `complete`, `hover` and `signatureHelp`, over a `Source` (the text, its language, the
+  prefix and what the editor knows of the module) and, for completion, a `Workspace` (the signals,
+  ids and classes defined elsewhere). The caret readings they replace are internal now:
+  `expressionAtCaret`, `actionCallAt`, `signalPrefixAt`, `actionPrefixAt`, `tagBeforeCaret`,
+  `valueAtCaret`, `attributeDoc`, `actionDoc`, `fetchOptionDoc`, `modifierForm`, `casingNote` and
+  their result types. `HoleLanding` in streamlord-core has one more value, `nameStart`: where the
+  attribute name at a hole starts.
 - `ValueFact` in streamlord-analysis has one more value, `TRUSTED`: core's `Trusted`, which
   `ofTypeName` now gives for that type where it gave `MARKUP`. It is judged as `MARKUP` is, and
   `isMarkup()` holds for both. The IntelliJ plugin gives it from the resolved type, so also for a

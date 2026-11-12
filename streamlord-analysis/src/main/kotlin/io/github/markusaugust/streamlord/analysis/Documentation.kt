@@ -9,7 +9,7 @@ import io.github.markusaugust.streamlord.core.client.regex
  */
 
 /** The `__name.arg` form a modifier is written in, for documentation. */
-public fun modifierForm(m: Modifier): String =
+internal fun modifierForm(m: Modifier): String =
     "__" + m.name +
         when (m.type) {
             ModifierType.FLAG -> ""
@@ -20,7 +20,7 @@ public fun modifierForm(m: Modifier): String =
         }
 
 /** The browser lowercases attribute names; how Datastar reads the key differs per attribute. */
-public fun casingNote(a: AttributeSpec): String =
+internal fun casingNote(a: AttributeSpec): String =
     when (keyKind(a)) {
         KeyKind.SIGNAL -> {
             "the browser lowercases attribute names, and Datastar reads the key as camelCase: `foo-bar` is the signal `\$fooBar`. " +
@@ -45,7 +45,7 @@ public fun casingNote(a: AttributeSpec): String =
  * Markdown documentation of an attribute: forms, casing rule, modifiers, Kotlin helpers and the Pro
  * note. [withKotlin] leaves the helpers out, for a project without streamlord-html.
  */
-public fun attributeDoc(
+internal fun attributeDoc(
     a: AttributeSpec,
     prefix: String = CatalogNames.PREFIX,
     withKotlin: Boolean = true,
@@ -59,10 +59,10 @@ public fun attributeDoc(
 }
 
 /** Markdown documentation of an option of the backend actions: its type, its default and what it does. */
-public fun fetchOptionDoc(o: FetchOption): String = "**${o.name}**: `${o.type}`, default `${o.default}`\n\n${o.doc}"
+internal fun fetchOptionDoc(o: FetchOption): String = "**${o.name}**: `${o.type}`, default `${o.default}`\n\n${o.doc}"
 
 /** Markdown documentation of an action, with its signature and the Kotlin helper when asked for. */
-public fun actionDoc(
+internal fun actionDoc(
     a: ActionSpec,
     withKotlin: Boolean = true,
 ): String {
@@ -71,19 +71,27 @@ public fun actionDoc(
     return "**${a.signature}**\n\n${a.doc}$pro$kotlin"
 }
 
-/** The Markdown as plain HTML for editors that render HTML: bold, code, italics and paragraphs only, which is all the docs use. */
+/** The Markdown as plain HTML for editors that render HTML: bold, code, italics, links and paragraphs only, which is all the docs use. */
 public fun markdownToHtml(md: String): String {
     val escaped = md.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    // Code spans are set aside first, so the underscores and asterisks inside them stay literal.
+    // Code spans and links are set aside first, so the underscores and asterisks inside them stay literal.
     val codes = ArrayList<String>()
     val withoutCode =
-        regex("""`([^`]+)`""").replace(escaped) {
-            codes += it.groupValues[1]
+        regex("""`([^`]+)`|\[([^\]]+)]\(([^)\s]+)\)""").replace(escaped) {
+            codes +=
+                if (it.value.startsWith(
+                        "`",
+                    )
+                ) {
+                    "<code>${it.groupValues[1]}</code>"
+                } else {
+                    "<a href=\"${it.groupValues[3]}\">${it.groupValues[2]}</a>"
+                }
             "\u0000${codes.size - 1}\u0000"
         }
     val bold = regex("""\*\*(.+?)\*\*""").replace(withoutCode) { "<b>${it.groupValues[1]}</b>" }
     val italic = regex("""(?<![A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])""").replace(bold) { "<i>${it.groupValues[1]}</i>" }
-    val restored = regex("""\u0000(\d+)\u0000""").replace(italic) { "<code>${codes[it.groupValues[1].toInt()]}</code>" }
+    val restored = regex("""\u0000(\d+)\u0000""").replace(italic) { codes[it.groupValues[1].toInt()] }
     return restored
         .split("\n\n")
         .map { "<p>" + it.replace("  \n", "<br/>").replace("\n", " ") + "</p>" }
