@@ -71,6 +71,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - With `guardElements` on, a `data-*` name with a key or a modifier and two letters swapped,
   `data-no:click`, throws `MistypedAttributeException`, as one with a letter added, left out or
   changed already did. Both editors warn about it. A bare name is judged as before.
+- The IntelliJ plugin runs only with the Kotlin plugin in K2 mode, the default. K1 is gone from
+  IntelliJ 2026.2, and an IntelliJ 2026.1 with K1 turned on no longer loads the plugin.
 
 ### Added
 

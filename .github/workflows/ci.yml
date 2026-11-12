@@ -284,11 +284,6 @@ jobs:
       - name: Build, test and verify
         run: ./gradlew buildPlugin test verifyPlugin --no-daemon
 
-      # The tests that hold the Kotlin plugin's K1 mode, which reads types its own way, to K2's answers,
-      # or to its own where it infers less.
-      - name: Test in K1 mode
-        run: ./gradlew test -PkotlinK1 --tests '*DeclaredTypeTest' --tests '*HoleTypesTest' --no-daemon
-
       - name: Upload plugin archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
