@@ -2162,7 +2162,7 @@ internal fun trustedValue(
     src: String,
     value: String,
     at: Int,
-): Boolean = callsTrusted(src, value) || (IDENT.matches(value.trim()) && trustedName(src, value.trim(), at))
+): Boolean = callsTrusted(src, value) || (IDENT.matchEntire(value.trim()) != null && trustedName(src, value.trim(), at))
 
 /** Whether [text] calls core's `Trusted` anywhere, under that name or an alias. */
 private fun callsTrusted(
