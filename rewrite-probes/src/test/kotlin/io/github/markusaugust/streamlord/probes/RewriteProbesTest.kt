@@ -120,7 +120,8 @@ class RewriteProbesTest {
                     val at = "${probe.name}, ${variant.title}, ${vector.kind}$where:\n    ${variant.source.trim()}"
                     val failure = after.exceptionOrNull()
                     val wrote = after.getOrNull()
-                    val was = before.getOrThrow()
+                    // A template writes an array as its class and hash, which no page means; interpolate writes it as a list.
+                    val was = values.fold(before.getOrThrow()) { text, v -> if (v is Array<*>) text.replace(v.toString(), v.contentDeepToString()) else text }
                     val rewrite = variant.title.startsWith(REWRITE)
                     val same = wrote == was
                     when {
