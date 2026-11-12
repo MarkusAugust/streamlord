@@ -1,5 +1,5 @@
 {
-  "$comment": "What each action under plugins/actions of the Datastar 1.0.5 client declares, read from its TypeScript: the parameters of its apply after the context, each with its name (null where it is taken apart), its type and whether it has a default; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and signalFilter those of SignalFilterOptions in engine/types.ts, the filter of filterSignals, @setAll and @toggleAll.",
+  "$comment": "What each action under plugins/actions of the Datastar 1.0.5 client declares, read from its TypeScript: the parameters of its apply after the context, each with its name (null where it is taken apart), its type and whether it may be left out: it has a default, or it is a SignalFilterOptions and filtered() in engine/signals.ts, which it is handed to, gives one; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and signalFilter those of SignalFilterOptions in engine/types.ts, the filter of filterSignals, @setAll and @toggleAll.",
   "version": "1.0.5",
   "fetchArgs": {
     "selector": "string",
@@ -132,7 +132,7 @@
         {
           "name": "filter",
           "type": "SignalFilterOptions",
-          "optional": false
+          "optional": true
         }
       ]
     },
@@ -142,7 +142,7 @@
         {
           "name": "filter",
           "type": "SignalFilterOptions",
-          "optional": false
+          "optional": true
         }
       ]
     }

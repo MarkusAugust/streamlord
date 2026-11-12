@@ -564,16 +564,16 @@ const topLevel = (text, at) => {
   }
   return out.filter((p) => p.length > 0);
 };
-/** The parameters of the first apply in [text], the context left out. */
-const applyParameters = (text) => {
-  const open = text.indexOf("(", text.indexOf("apply"));
+/** The parameters of the first function after [head] in [text]. */
+const parametersAfter = (text, head) => {
+  const open = text.indexOf("(", text.indexOf(head));
   let depth = 0;
   let close = open;
   for (; close < text.length; close++) {
     if (text[close] === "(") depth++;
     else if (text[close] === ")" && --depth === 0) break;
   }
-  return topLevel(text.slice(open + 1, close), ",").slice(1).map((p) => {
+  return topLevel(text.slice(open + 1, close), ",").map((p) => {
     // A default is an = outside brackets that is no part of =>.
     let depth = 0;
     let equals = -1;
@@ -596,6 +596,11 @@ const typeFields = (text, name) => {
   }
   return fields;
 };
+// A filter an action hands to filtered() is optional where filtered gives it a default of its own.
+const filterDefault = parametersAfter(source("engine/signals.ts"), "export const filtered =").find((p) => p.type === "SignalFilterOptions").optional;
+/** The parameters of the first apply in [text], the context left out. */
+const applyParameters = (text) =>
+  parametersAfter(text, "apply").slice(1).map((p) => (p.type === "SignalFilterOptions" ? { ...p, optional: p.optional || filterDefault } : p));
 const fetchSource = source("plugins/actions/fetch.ts");
 const fetchArgs = typeFields(fetchSource, "FetchArgs");
 const signalFilter = typeFields(source("engine/types.ts"), "SignalFilterOptions");
@@ -672,7 +677,8 @@ const files = {
     $comment:
       "What each action under plugins/actions of the Datastar " + version + " client declares, read from its TypeScript: the " +
       "parameters of its apply after the context, each with its name (null where it is taken apart), its type and whether it " +
-      "has a default; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and " +
+      "may be left out: it has a default, or it is a SignalFilterOptions and filtered() in engine/signals.ts, which it is handed to, " +
+      "gives one; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and " +
       "signalFilter those of SignalFilterOptions in engine/types.ts, the filter of filterSignals, @setAll and @toggleAll.",
     fetchArgs,
     signalFilter,
