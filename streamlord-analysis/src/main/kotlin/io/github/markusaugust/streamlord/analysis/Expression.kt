@@ -647,13 +647,15 @@ internal fun stringPatterns(
     to: Int = text.length,
 ): List<StringPattern> {
     val out = ArrayList<StringPattern>()
-    var m = STRING_PATTERN_HEAD.find(text, from)
-    while (m != null && m.range.first < to) {
+    // Searched within the object alone: a search of the text after it would read the rest of the text for each object.
+    var m = STRING_PATTERN_HEAD.find(text.substring(from, to))
+    while (m != null) {
         val match = m
         m = m.next()
-        if (!keyOpens(text, regions, match.range.first, match.groupValues[1].isNotEmpty())) continue
+        val at = from + match.range.first
+        if (!keyOpens(text, regions, at, match.groupValues[1].isNotEmpty())) continue
         val quote = match.groupValues[3][0]
-        val start = match.range.last - 1
+        val start = from + match.range.last - 1
         var j = start + 1
         while (j < to && text[j] != quote && !(quote == '`' && text.startsWith("\${", j))) j += if (text[j] == '\\') 2 else 1
         if (j >= to || text[j] != quote) continue
