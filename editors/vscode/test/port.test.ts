@@ -179,6 +179,7 @@ describe("what crosses the port", () => {
       label: "debounce",
       kind: "modifier",
       replaceFrom: 20,
+      replaceTo: 23,
       snippet: { text: "debounce.500ms", places: [{ start: 9, end: 14, choices: [] }] },
       detail: "__debounce.<duration>",
     });

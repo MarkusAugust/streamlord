@@ -8,6 +8,7 @@ import com.intellij.codeInsight.completion.CompletionType
 import com.intellij.codeInsight.completion.InsertionContext
 import com.intellij.codeInsight.completion.PlainPrefixMatcher
 import com.intellij.codeInsight.completion.ml.MLRankingIgnorable
+import com.intellij.codeInsight.lookup.Lookup
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.codeInsight.lookup.LookupElementDecorator
@@ -63,7 +64,11 @@ class StreamlordCompletionContributor : CompletionContributor() {
         for ((from, items) in found.items.withIndex().groupBy { it.value.replaceFrom }) {
             val typed = asked.source.text.substring(from, asked.offset)
             val set = result.withPrefixMatcher(PlainPrefixMatcher(typed)).withRelevanceSorter(sorter)
-            for ((rank, item) in items) set.addElement(Fixed(element(item, rank)))
+            for ((rank, item) in items) {
+                set.addElement(
+                    Fixed(element(item, rank, asked.source.text.substring(asked.offset, item.replaceTo))),
+                )
+            }
         }
     }
 
@@ -90,9 +95,11 @@ private val ICONS =
         CompletionKind.CLASS to AllIcons.Xml.Css_class,
     )
 
+/** An item as a lookup element; [rest] is what of the word at the caret goes on after it, which Tab replaces too. */
 private fun element(
     item: Completion,
     rank: Int,
+    rest: String,
 ): LookupElement {
     val lookup = item.filter ?: item.label
     val builder =
@@ -104,11 +111,27 @@ private fun element(
             .withIcon(ICONS[item.kind])
     val snippet = item.snippet
     val insert = item.insert
-    return when {
-        snippet != null && snippet.places.isNotEmpty() -> builder.withInsertHandler { context, _ -> write(context, snippet) }
-        snippet != null && snippet.text != lookup -> builder.withInsertHandler { context, _ -> write(context, snippet.text) }
-        insert != null && insert != lookup -> builder.withInsertHandler { context, _ -> write(context, insert) }
-        else -> builder
+    return builder.withInsertHandler { context, _ ->
+        if (context.completionChar == Lookup.REPLACE_SELECT_CHAR) replaceRest(context, rest)
+        when {
+            snippet != null && snippet.places.isNotEmpty() -> write(context, snippet)
+            snippet != null && snippet.text != lookup -> write(context, snippet.text)
+            insert != null && insert != lookup -> write(context, insert)
+        }
+    }
+}
+
+/**
+ * With Tab the platform has replaced the identifier after the caret, as Java reads one; what the
+ * analysis counts in the word beyond it, the rest of a signal's path or of a hyphenated name, goes too.
+ */
+private fun replaceRest(
+    context: InsertionContext,
+    rest: String,
+) {
+    val left = rest.dropWhile { Character.isJavaIdentifierPart(it) }
+    if (left.isNotEmpty() && context.document.charsSequence.startsWith(left, context.tailOffset)) {
+        context.document.deleteString(context.tailOffset, context.tailOffset + left.length)
     }
 }
 

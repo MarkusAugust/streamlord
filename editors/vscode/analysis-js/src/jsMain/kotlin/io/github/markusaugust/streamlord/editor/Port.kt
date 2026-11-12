@@ -461,8 +461,11 @@ interface CompletionItem {
     /** `signal`, `action`, `option`, `scope`, `attribute`, `event`, `modifier`, `value`, `id` or `class`. */
     val kind: String
 
-    /** Where the text the item replaces starts; it ends at the caret. */
+    /** Where the text the item replaces starts; it ends at the caret, or, where the editor replaces, at [replaceTo]. */
     val replaceFrom: Int
+
+    /** Where the word the caret stands in ends: what the item replaces when the editor replaces rather than inserts. */
+    val replaceTo: Int
     val insert: String?
     val snippet: SnippetText?
     val detail: String?
@@ -533,6 +536,7 @@ private fun plain(item: Completion): CompletionItem {
         "label" to item.label,
         "kind" to item.kind.name.lowercase(),
         "replaceFrom" to item.replaceFrom,
+        "replaceTo" to item.replaceTo,
         "insert" to item.insert,
         "snippet" to snippet,
         "detail" to item.detail,

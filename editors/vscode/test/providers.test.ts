@@ -188,7 +188,7 @@ const name = (i: { label: unknown }) => (typeof i.label === "string" ? i.label :
 describe("help inside an expression", () => {
   const index = new FakeIndex().add("file:///other.html", other, "html");
   /** Where an item's range starts; the provider sets a plain range. */
-  const startOf = (item: { range?: unknown }) => (item.range as { start: Position }).start;
+  const startOf = (item: { range?: unknown }) => (item.range as { inserting: { start: Position } }).inserting.start;
   /** The items at the end of `src`, in a document of `language`. */
   const at = (src: string, language = "html") => {
     const doc = new MockDocument(src, language);
