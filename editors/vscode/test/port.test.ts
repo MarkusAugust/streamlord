@@ -1,7 +1,25 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { applySignalPatch, catalog, diagnose, findRoutes, signalPlaces, signalSiteAt, signalsOf, StreamReader, type Fix, type Issue } from "../src/analysis.ts";
+import {
+  applySignalPatch,
+  baseUrlSuggestion,
+  catalog,
+  diagnose,
+  environment,
+  findRoutes,
+  parseHeaderLines,
+  signalPlaces,
+  signalSiteAt,
+  signalsOf,
+  StreamReader,
+  streamRequest,
+  unreachableHint,
+  variableCompletions,
+  type Fix,
+  type Issue,
+  type Variable,
+} from "../src/analysis.ts";
 
 /**
  * The port as the adapters meet it: the Kotlin analysis compiled to JavaScript, handing plain
@@ -158,5 +176,23 @@ describe("what crosses the port", () => {
     assert.deepEqual({ ...patched, store: JSON.parse(patched.store) }, { store: { b: 2, a: 1 }, refused: false });
     const refused = applySignalPatch(`{"b":2}`, `{"a":1,"__proto__":{"x":1}}`, false);
     assert.deepEqual([JSON.parse(refused.store), refused.refused, typeof refused.error], [{ b: 2, a: 1 }, true, "string"]);
+  });
+  it("keeps a header whatever it is named", () => {
+    const headers = parseHeaderLines("__proto__: a\nconstructor: b\ntoString: c\nX-Token: d");
+    assert.deepEqual(Object.entries(headers), [["__proto__", "a"], ["constructor", "b"], ["toString", "c"], ["X-Token", "d"]]);
+    const sent = streamRequest("http://localhost:8080/x", "GET", "{}", headers).headers as Record<string, string>;
+    assert.deepEqual([sent["__proto__"], sent["constructor"], sent["toString"], sent["X-Token"]], ["a", "b", "c", "d"]);
+  });
+
+  it("answers for a variable source and a field it does not know, as for none of those it knows", () => {
+    const vars = environment(`{"baseUrl":"http://localhost:1","params":{"token":"t"}}`, "http://localhost:8080", undefined, undefined).vars;
+    const odd: Variable[] = vars.map((v) => ({ ...v, source: "elsewhere" }) as unknown as Variable);
+    // A field that is none of the three takes the params, and none of the variables with a field of their own.
+    assert.deepEqual(variableCompletions("{{", 2, "nowhere", vars)?.items.map((v) => v.name), ["token"]);
+    assert.equal(variableCompletions("{{b", 3, "nowhere", vars), null);
+    // A source that is none of the three is no default and no running server, and not the file's either.
+    assert.equal(unreachableHint("{{baseUrl}}/x", odd, undefined, undefined), unreachableHint("{{baseUrl}}/x", vars, undefined, undefined));
+    assert.equal(baseUrlSuggestion(vars, "http://localhost:2", "demo"), "http://localhost:2");
+    assert.equal(baseUrlSuggestion(odd, "http://localhost:2", "demo"), null);
   });
 });

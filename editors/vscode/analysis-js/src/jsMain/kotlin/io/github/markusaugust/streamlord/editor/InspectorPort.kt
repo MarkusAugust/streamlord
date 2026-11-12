@@ -398,10 +398,7 @@ class StreamReader {
     private val parser = SseParser()
 
     private fun shown(message: SseMessage): StreamEvent {
-        val comment =
-            message.comments.isNotEmpty() && message.data.isEmpty() && message.event == "message" && message.id == null &&
-                message.retry == null
-        if (comment) return plain("comment" to message.comments.joinToString("\n"))
+        if (message.isComment) return plain("comment" to message.comments.joinToString("\n"))
         val frame = decodeDatastar(message, 0)
         return plain(
             "frame" to
