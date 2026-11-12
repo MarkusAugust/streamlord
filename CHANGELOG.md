@@ -110,9 +110,11 @@ All notable changes to Streamlord are recorded here. The format follows
 - The project `rewrite-probes` compiles HTML strings as they are written and as each fix of the
   analysis leaves them, against core, and runs both: every cell of the editors' matrix of values,
   and the cases in `rewrite-probes.json`.
-- VS Code warns on a signal the server reads, through a `Signals` lookup or a `@Serializable`
-  class, that no page in the workspace declares: the `signal-never-declared` warning, which
-  `signalDrift` gives in your own tests.
+- VS Code and IntelliJ warn on a signal the server reads, through a `Signals` lookup or a
+  `@Serializable` class, that no page in the project declares: the `signal-never-declared`
+  warning, which `signalDrift` gives in your own tests. It goes with the unknown-signal check, the
+  setting `streamlord.diagnostics.unknownSignals` in VS Code and the inspection Signal no file
+  defines in IntelliJ.
 
 ### Fixed
 
