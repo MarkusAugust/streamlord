@@ -132,6 +132,26 @@ class HoleLandingsTest {
     }
 
     @Test
+    fun `gives the start of the attribute name a hole lands on, as the browser reads names, or -1`() {
+        fun nameStart(markup: String): Int = landingAsParsed(markup, holesOf(markup).single()).nameStart
+        for ((markup, name) in listOf(
+            "<div data-on:click__%s" to "data-on:click__",
+            "<div id=x title=\"a b\" data-x='c' hidden data-%s" to "data-",
+            "<div a=\"x\"data-%s" to "data-",
+            "<div/data-%s" to "data-",
+            "<div a = \"x\" data-%s" to "data-",
+            "<div\n  id=\"a\"\n  data-on:%s>" to "data-on:",
+            "<div =data-%s" to "=data-",
+        )) {
+            assertEquals(markup.lastIndexOf(name), nameStart(markup), markup)
+        }
+        // A value after the equals sign and white space, the tag's name, its text: no name.
+        for (markup in listOf("<div a= data-%s", "<div a = data-%s", "<div data-%s", "<div title=\"data-%s\">", "<p>data-%s</p>")) {
+            assertEquals(-1, nameStart(markup), markup)
+        }
+    }
+
+    @Test
     fun `knows when the start of a URL settles its scheme`() {
         val urls = fixture.array("urls")!!.objects()
         assertTrue(urls.isNotEmpty())
