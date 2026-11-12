@@ -291,6 +291,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsGuard {
 	public final fun getEvaluatedAttributes ()Ljava/util/Set;
 	public final fun getExpressionAttributes ()Ljava/util/Set;
 	public final fun nearAttribute (Ljava/lang/String;Z)Ljava/lang/String;
+	public final fun oneEditAway (Ljava/lang/String;Ljava/lang/String;Z)Z
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ElementsResponse : io/github/markusaugust/streamlord/core/domain/DatastarResponse {

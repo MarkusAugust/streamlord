@@ -384,6 +384,9 @@ private fun cutByTemplate(
     at: Int,
 ): Boolean = tagSource.getOrNull(at) == '{' || (at < tagSource.length && templateConstructEnd(tagSource, at) > at)
 
+/** What a signal's read follows where an expression starts: nothing, an operator or an opening bracket. */
+private const val EXPRESSION_STARTS = "(!&|=+-*/%<>?:,[{;"
+
 /** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
 private val KOTLIN_TEMPLATE = regex("""\$[A-Za-z_{]""")
 
@@ -745,40 +748,34 @@ public class MarkupValidator(
     ): List<Issue> = validateAttributes(tag, prefix, null)
 
     /**
-     * The one Datastar attribute the name of [attr] is one edit from, where something says the author
-     * meant Datastar: a key or a modifier, a signal or an action in the value as the client reads
-     * them, or no value where that attribute is written without one. `data-test`, `data-kind` and
-     * `data-unit` are honest names one edit from Datastar's, so the name alone says nothing.
+     * The one Datastar attribute the bare name of [attr] is one edit from, two letters swapped
+     * among them, where something says the author meant Datastar. `data-test`, `data-kind` and
+     * `data-unit` are honest names one edit from Datastar's, so the name alone says nothing. The
+     * value says it where it reads a signal or calls an action of the catalog, as the client
+     * finds them, at a place an expression could start, and holds no template of its own: `$5`,
+     * `costs $five`, `{{ $foo }}` and `@if($x)` are money and another language. No value says it
+     * where that attribute is written without one. An attribute that needs a key is never meant by
+     * a name without one.
      */
     private fun meantAttribute(
-        parsed: ParsedAttribute,
+        base: String,
         attr: Attribute,
     ): AttributeSpec? {
-        val near = catalog.attributes.filter { oneEdit(parsed.base, it.name) }.singleOrNull() ?: return null
-        val value = attr.value.orEmpty()
+        val near = catalog.attributes.filter { ElementsGuard.oneEditAway(base, it.name, swaps = true) }.singleOrNull() ?: return null
+        if (near.keyRequired) return null
+        val value = decodeEntities(attr.value.orEmpty()).text
+        if (value.isEmpty()) return near.takeIf { it.valueKind == ValueKind.NONE || it.valueKind == ValueKind.FILTER }
+        val read = clientRewrite(value).rewrites
         val meant =
-            when {
-                parsed.key != null || parsed.modifiers.isNotEmpty() -> true
-                value.isEmpty() -> near.valueKind == ValueKind.NONE || near.valueKind == ValueKind.FILTER
-                else -> clientRewrite(decodeEntities(value).text).rewrites.isNotEmpty()
-            }
+            !hasTemplateSyntax(value) && "<?" !in value && "<%" !in value && read.all { it.signal || it.name in catalog.actionsByName } &&
+                read.any { r ->
+                    !r.signal ||
+                        (
+                            r.name.first().let { it.isLetter() || it == '_' } &&
+                                value.lastNonSpaceBefore(r.start).let { it == null || it in EXPRESSION_STARTS }
+                        )
+                }
         return near.takeIf { meant }
-    }
-
-    /** Whether [a] becomes [b] by one character added, removed or changed, or two neighbours swapped. */
-    private fun oneEdit(
-        a: String,
-        b: String,
-    ): Boolean {
-        if (a == b || a.length - b.length !in -1..1) return false
-        var start = 0
-        while (start < a.length && start < b.length && a[start] == b[start]) start++
-        var end = 0
-        while (end < a.length - start && end < b.length - start && a[a.length - 1 - end] == b[b.length - 1 - end]) end++
-        val left = a.length - start - end
-        val right = b.length - start - end
-        return left + right == 1 || (left == 1 && right == 1) ||
-            (left == 2 && right == 2 && a[start] == b[start + 1] && a[start + 1] == b[start])
     }
 
     /**
@@ -825,17 +822,26 @@ public class MarkupValidator(
                         .nearAttribute(parsed.base, qualified = parsed.key != null || parsed.modifiers.isNotEmpty())
                         ?.let { catalog.attributesByName.getValue(it) }
                 val baseEnd = attr.nameStart + prefix.length + parsed.base.length
+
+                // A name the guard refuses is a mistake for certain; one it lets pass may be the author's own.
+                fun nearName(
+                    meant: AttributeSpec,
+                    sure: Boolean,
+                ): Issue {
+                    val written = "$prefix${parsed.base}"
+                    val message = if (sure) "Unknown Datastar attribute $written." else "$written is not a Datastar attribute."
+                    return Issue(
+                        start = attr.nameStart,
+                        end = nameEnd,
+                        message = "$message Did you mean $prefix${meant.name}?",
+                        severity = if (sure) Severity.WARNING else Severity.HINT,
+                        code = "unknown-attribute",
+                        link = Docs.attribute(meant.name),
+                        fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
+                    )
+                }
                 if (near != null) {
-                    issues +=
-                        Issue(
-                            start = attr.nameStart,
-                            end = nameEnd,
-                            message = "Unknown Datastar attribute $prefix${parsed.base}. Did you mean $prefix${near.name}?",
-                            severity = Severity.WARNING,
-                            code = "unknown-attribute",
-                            link = Docs.attribute(near.name),
-                            fixes = listOf(Fix("Change to $prefix${near.name}", attr.nameStart, baseEnd, "$prefix${near.name}")),
-                        )
+                    issues += nearName(near, sure = true)
                     continue
                 }
                 // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
@@ -870,17 +876,10 @@ public class MarkupValidator(
                         )
                     continue
                 }
-                meantAttribute(parsed, attr)?.let { meant ->
-                    issues +=
-                        Issue(
-                            start = attr.nameStart,
-                            end = nameEnd,
-                            message = "$prefix${parsed.base} is not a Datastar attribute. Did you mean $prefix${meant.name}?",
-                            severity = Severity.HINT,
-                            code = "unknown-attribute",
-                            link = Docs.attribute(meant.name),
-                            fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
-                        )
+                if (parsed.key == null &&
+                    parsed.modifiers.isEmpty()
+                ) {
+                    meantAttribute(parsed.base, attr)?.let { issues += nearName(it, sure = false) }
                 }
                 continue
             }

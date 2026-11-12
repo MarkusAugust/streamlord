@@ -135,8 +135,8 @@ public object ElementsGuard {
         val plugin = rest.substringBefore(':').substringBefore("__")
         if (plugin !in attributes) {
             // A key or modifier (data-onn:click, data-signal__ifmissing) makes a custom attribute implausible,
-            // so any one-letter neighbour is a typo. A bare name is a different matter: data-test, data-kind,
-            // data-animated and data-effects are honest words a letter away from Datastar's. Only a swapped
+            // so any one-letter neighbour is a typo, two letters swapped too. A bare name is a different matter: data-test, data-kind,
+            // data-animated and data-effects are honest words a letter away from Datastar's. Only a changed
             // letter in a long name (data-indicater, data-computer) is judged there; plurals and past tenses,
             // which add a letter, are left alone.
             nearAttribute(plugin, qualified = rest.length > plugin.length)
@@ -154,41 +154,42 @@ public object ElementsGuard {
     /**
      * The Datastar attribute [plugin], a name after the prefix that is none, is taken for a typo of,
      * or null. [qualified] says whether a key or a modifier follows it, which makes a custom
-     * attribute implausible, so any name one letter away counts. A bare name (data-test, data-kind,
-     * data-effects) is an honest word more often than not: only a swapped letter in a long name counts.
+     * attribute implausible, so any name one letter away counts, two letters swapped too. A bare name (data-test, data-kind,
+     * data-effects) is an honest word more often than not: only a changed letter in a long name counts.
      * The analysis reports the same names.
      */
     @InternalStreamlordApi
     public fun nearAttribute(
         plugin: String,
         qualified: Boolean,
-    ): String? = attributes.firstOrNull { oneEditAway(plugin, it) && (qualified || (it.length >= LONG_NAME && it.length == plugin.length)) }
+    ): String? =
+        attributes.firstOrNull {
+            oneEditAway(plugin, it, swaps = qualified) &&
+                (qualified || (it.length >= LONG_NAME && it.length == plugin.length))
+        }
 
     /** Below this length a Datastar name has too many honest neighbours (test, kind, once, unit) to judge a bare `data-*` at all. */
     private const val LONG_NAME = 6
 
-    /** One insertion, deletion or substitution apart; no allocation. */
-    private fun oneEditAway(
+    /**
+     * Whether [a] becomes [b] by one character added, removed or changed, and with [swaps] by two
+     * neighbours changing places; no allocation. The analysis judges names by the same.
+     */
+    @InternalStreamlordApi
+    public fun oneEditAway(
         a: String,
         b: String,
+        swaps: Boolean,
     ): Boolean {
-        if (a == b) return false
-        val (short, long) = if (a.length <= b.length) a to b else b to a
-        if (long.length - short.length > 1) return false
-        var i = 0
-        var j = 0
-        var edits = 0
-        while (i < short.length && j < long.length) {
-            if (short[i] == long[j]) {
-                i++
-                j++
-                continue
-            }
-            if (++edits > 1) return false
-            if (short.length == long.length) i++
-            j++
-        }
-        return edits + (long.length - j) <= 1
+        if (a == b || a.length - b.length !in -1..1) return false
+        var start = 0
+        while (start < a.length && start < b.length && a[start] == b[start]) start++
+        var end = 0
+        while (end < a.length - start && end < b.length - start && a[a.length - 1 - end] == b[b.length - 1 - end]) end++
+        val left = a.length - start - end
+        val right = b.length - start - end
+        return left + right == 1 || (left == 1 && right == 1) ||
+            (swaps && left == 2 && right == 2 && a[start] == b[start + 1] && a[start + 1] == b[start])
     }
 }
 
