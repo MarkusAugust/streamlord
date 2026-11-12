@@ -583,19 +583,11 @@ private fun splitTopLevel(text: String): List<String> {
     var depth = 0
     var from = 0
     for ((k, c) in text.withIndex()) {
-        when {
-            c == '(' || c == '<' -> {
-                depth++
-            }
-
-            c == ')' || c == '>' -> {
-                depth--
-            }
-
-            c == ',' && depth == 0 -> {
-                out += text.substring(from, k)
-                from = k + 1
-            }
+        if (c == '(' || c == '<') depth++
+        if (c == ')' || c == '>') depth--
+        if (c == ',' && depth == 0) {
+            out += text.substring(from, k)
+            from = k + 1
         }
     }
     out += text.substring(from)
@@ -1395,7 +1387,6 @@ private val USES_ELEMENTS =
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)[ \t\r]*(?=\n|(?![\s\S]))|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
-private val QUOTE_START = regex("""^\$*"""")
 private val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*text$""")
 private val CREATE_HTML = regex("""^createHTML\s*\(""")
 private val APPEND_HTML = regex("""\bappendHTML\s*\(""")
@@ -1412,7 +1403,7 @@ private val MARKUP_CHARS = regex("""[<&]""")
 
 /** Whether [t] is one string literal of HTML, or one with a trim call after it. */
 private fun htmlLiteral(t: String): Boolean {
-    val quote = QUOTE_START.find(t) ?: return false
+    val quote = QUOTE_OPENING.find(t) ?: return false
     val at = quote.value.length - 1
     val end = literalEnd(t, at)
     val rest = t.substring(end)
@@ -1828,17 +1819,6 @@ internal fun quoteFix(
     return Fix("Quote the value", start, start, quote, listOf(Edit(end, end, quote)))
 }
 
-/** Whether `to` or `else` stands at [at] as a word of its own. */
-private fun operandEndWordAt(
-    src: String,
-    at: Int,
-): Boolean =
-    OPERAND_END_WORDS.any { w ->
-        src.startsWith(w, at) &&
-            WORD_CHAR.matchEntire(src.getOrNull(at - 1)?.toString() ?: "") == null &&
-            WORD_CHAR.matchEntire(src.getOrNull(at + w.length)?.toString() ?: "") == null
-    }
-
 /** What may stand before a value joined with `+` when the value is the whole of what is joined: plus binds tighter than each. */
 private val OPERAND_BOUNDARY = regex("""(?:^|[(\[{},;]|(?<![=!<>])=|->|\?:|&&|\|\||[=!<>]=|[<>]|\b(?:return|else|in|throw|to))\s*\z""")
 
@@ -1879,13 +1859,8 @@ private fun leadingValues(
         out.add(0, k until stop)
         end = k
     }
-    return if (out.isNotEmpty() &&
-        OPERAND_BOUNDARY.containsMatchIn(src.substring(maxOf(0, out[0].first - 40), out[0].first))
-    ) {
-        out
-    } else {
-        emptyList()
-    }
+    val whole = out.isNotEmpty() && OPERAND_BOUNDARY.containsMatchIn(src.substring(maxOf(0, out[0].first - 40), out[0].first))
+    return if (whole) out else emptyList()
 }
 
 /** The bracket that matches the one at [at], after it or before it, strings and comments stepped over; -1 where none does. */
@@ -2031,7 +2006,8 @@ internal fun chainFrom(
             } else if (depth == 0) {
                 if (c == '\n' || c == '\r') break
                 if (c == '+' && src.getOrNull(k + 1) != '+' && src.getOrNull(k + 1) != '=') break
-                if (OPERAND_END.containsMatchIn(src.substring(k, minOf(src.length, k + 4))) || operandEndWordAt(src, k)) break
+                if (OPERAND_END.containsMatchIn(src.substring(k, minOf(src.length, k + 4)))) break
+                if (OPERAND_END_WORDS.any { wordAt(src, k, it) }) break
             }
             k++
         }
@@ -2682,7 +2658,6 @@ internal enum class ArgKind { STRING, NUMBER, UNSIGNED, BOOLEAN, NULL, CHAR, TRU
 private val NUMBER_LITERAL = regex("""-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*""")
 private val CHAR_LITERAL = regex("""'(?:[^'\\]|\\.[^']*)'""")
 private val IF_START = regex("""^if\s*\(""")
-private val TEXT_OF = regex("""^([\s\S]*?)\s*\.\s*text$""")
 
 /** Whether [text] is one call to [name] whose argument list closes at its end: `Trusted(x)`, not `Trusted(x).html`. */
 private fun wholeCall(
@@ -2725,7 +2700,7 @@ internal fun valueKind(
     if (coreCall(src, t, "Trusted") || (IDENT.matchEntire(t) != null && trustedName(src, t, at))) return ArgKind.TRUSTED
     if (coreCall(src, t, "interpolate")) return ArgKind.MARKUP
     // The String of the Html: interpolate(...).text.
-    val html = TEXT_OF.find(t)?.groupValues?.get(1)
+    val html = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     if (html != null && coreCall(src, html, "interpolate")) return ArgKind.STRING
     callKind(src, t, at, emptySet())?.argKind()?.let { return it }
     if (IDENT.matchEntire(t) == null) return null

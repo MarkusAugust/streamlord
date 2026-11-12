@@ -499,15 +499,7 @@ public class Analyzer(
                     )
                 continue
             }
-            out +=
-                Issue(
-                    start = ip.start,
-                    end = ip.end,
-                    message = datastarMessage(holeDisplay(ip), attribute),
-                    severity = Severity.WARNING,
-                    code = "unsafe-interpolation",
-                    link = Docs.EXPRESSIONS,
-                )
+            out += datastarIssue(ip, attribute)
         }
         return out
     }
@@ -692,19 +684,12 @@ public class Analyzer(
         site: CallSite,
         src: String,
     ): Pair<Arg, KotlinString>? {
-        // The prefixes of an aliased bundle may come first, as a list; the format is the first string.
-        val arg =
-            site.named("format") ?: site.positional.firstOrNull()?.let { first ->
-                if (first.string == null &&
-                    lex(src).strings.none { it.start == first.start }
-                ) {
-                    site.positional.getOrNull(1) ?: first
-                } else {
-                    first
-                }
-            } ?: return null
-        arg.string?.let { return if (it.unterminated) null else arg to it }
         val lex = lex(src)
+        // The prefixes of an aliased bundle may come first, as a list; the format is the first string.
+        val leading = site.positional.firstOrNull()
+        val prefixed = leading != null && leading.string == null && lex.strings.none { it.start == leading.start }
+        val arg = site.named("format") ?: (if (prefixed) site.positional.getOrNull(1) else null) ?: leading ?: return null
+        arg.string?.let { return if (it.unterminated) null else arg to it }
         val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
         // A trim call leaves each placeholder where it stood.
         if (!first.unterminated && trimAfter(src, first)?.text?.let { first.end + it.length } == arg.end) return arg to first
@@ -838,6 +823,17 @@ public class Analyzer(
             val r = format.toSource(d, d + PLACEHOLDER.length)
             val base = format.interpolations.size
             val uncertain = d > uncertainFrom
+            val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
+
+            // An error only where interpolate throws for certain.
+            fun refused(
+                message: String,
+                certain: Boolean,
+                fixes: List<Fix> = emptyList(),
+            ): Issue {
+                val severity = if (certain) Severity.ERROR else Severity.WARNING
+                return Issue(r.first, r.last + 1, message, severity, "unsafe-interpolation", Docs.EXPRESSIONS, fixes)
+            }
             // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
             // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
             // in place. It names that value, and a URL of Trusted values alone goes unjudged.
@@ -854,16 +850,7 @@ public class Analyzer(
                     // A template before the hole is filled in first, so what the literal fixes is known only without one.
                     val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
                     val certain = !templated && vouched == null && !uncertain && kind != null
-                    val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
-                    issues +=
-                        Issue(
-                            r.first,
-                            r.last + 1,
-                            refusedCodeUrlMessage(shown, attribute, certain, vouched != null || uncertain),
-                            if (certain) Severity.ERROR else Severity.WARNING,
-                            "unsafe-interpolation",
-                            Docs.EXPRESSIONS,
-                        )
+                    issues += refused(refusedCodeUrlMessage(shown, attribute, certain, vouched != null || uncertain), certain)
                     continue
                 }
             }
@@ -884,33 +871,23 @@ public class Analyzer(
                     else -> emptySet<ArgKind>()
                 }
             if (kind == ArgKind.TRUSTED || kind in allowed) continue
-            val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
-            if (kind == ArgKind.UNSIGNED && arg != null && (landing.position == Position.DATASTAR || landing.position == Position.STYLE)) {
-                issues +=
-                    Issue(
-                        r.first,
-                        r.last + 1,
-                        if (uncertain) uncertainMessage(shown, landing, false) else unsignedRefusedMessage(shown, landing),
-                        if (uncertain) Severity.WARNING else Severity.ERROR,
-                        "unsafe-interpolation",
-                        Docs.EXPRESSIONS,
-                        listOf(toLongFix(arg)),
-                    )
-                continue
-            }
+            val endTag = endTagAt(view, d)
+            val numbersOnly = landing.position == Position.DATASTAR || landing.position == Position.STYLE
             issues +=
-                Issue(
-                    r.first,
-                    r.last + 1,
-                    if (uncertain && kind != null) {
-                        uncertainMessage(shown, landing, endTagAt(view, d))
-                    } else {
-                        refusedMessage(shown, landing, kind != null, endTagAt(view, d))
-                    },
-                    if (kind == null || uncertain) Severity.WARNING else Severity.ERROR,
-                    "unsafe-interpolation",
-                    Docs.EXPRESSIONS,
-                )
+                when {
+                    kind == ArgKind.UNSIGNED && arg != null && numbersOnly -> {
+                        val message = if (uncertain) uncertainMessage(shown, landing, false) else unsignedRefusedMessage(shown, landing)
+                        refused(message, !uncertain, listOf(toLongFix(arg)))
+                    }
+
+                    uncertain && kind != null -> {
+                        refused(uncertainMessage(shown, landing, endTag), false)
+                    }
+
+                    else -> {
+                        refused(refusedMessage(shown, landing, kind != null, endTag), kind != null && !uncertain)
+                    }
+                }
         }
         if (opts.checkHtmlAttributes) issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
         return issues
@@ -1009,14 +986,21 @@ public class Analyzer(
         return "$base It lands in $where. $instead"
     }
 
+    /** What interpolate lets in where escaping is not enough. */
+    private fun letIn(position: Position): String =
+        when (position) {
+            Position.DATASTAR -> "a number or a boolean"
+            Position.STYLE -> "a number"
+            else -> "Trusted(...)"
+        }
+
     private fun unsignedRefusedMessage(
         shown: String,
         landing: HoleLanding,
     ): String {
         val (where, _) = landingWords(landing, false)
-        val allowed = if (landing.position == Position.DATASTAR) "a number or a boolean" else "a number"
         return "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in $where, " +
-            "where only $allowed is let in. Convert it with toLong() first."
+            "where only ${letIn(landing.position)} is let in. Convert it with toLong() first."
     }
 
     /** An unsigned number a Kotlin template writes where interpolate would refuse it: its digits are safe as they are. */
@@ -1033,12 +1017,7 @@ public class Analyzer(
         certain: Boolean,
         endTag: Boolean,
     ): String {
-        val allowed =
-            when (landing.position) {
-                Position.DATASTAR -> "a number or a boolean"
-                Position.STYLE -> "a number"
-                else -> "Trusted(...)"
-            }
+        val allowed = letIn(landing.position)
         val (where, instead) = landingWords(landing, endTag)
         return if (certain) {
             "interpolate always throws here: $shown lands in $where, and only $allowed is let in there. $instead"
@@ -1053,12 +1032,7 @@ public class Analyzer(
         landing: HoleLanding,
         endTag: Boolean,
     ): String {
-        val allowed =
-            when (landing.position) {
-                Position.DATASTAR -> "a number or a boolean"
-                Position.STYLE -> "a number"
-                else -> "Trusted(...)"
-            }
+        val allowed = letIn(landing.position)
         val (where, instead) = landingWords(landing, endTag)
         return "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
             "where only $allowed is let in. $instead"
@@ -1196,16 +1170,9 @@ public class Analyzer(
         }
     }
 
-    /** What every trap of a literal shares: the dollars a `$$` rewrite needs, the helper that says the whole literal, and whether it is one literal. */
-    private class TrapShared(
-        val dollars: Int,
-        val helpers: List<Fix>,
-        val whole: Boolean,
-    )
-
     /**
      * The trap of each `$name` in a literal, `kotlin-interpolation`, made when a hole asks for it:
-     * what is shared by every hole of the literal is read once. [available] names the DSL helpers
+     * what every hole of the literal shares is read once, when the first asks. [available] names the DSL helpers
      * a fix may write, each with its import; null where the literal is handed to a DSL call.
      */
     private fun traps(
@@ -1213,14 +1180,14 @@ public class Analyzer(
         src: String,
         available: Set<String>? = null,
     ): (Interpolation) -> Issue? {
-        val shared by lazy(LazyThreadSafetyMode.NONE) {
-            // Literals joined with `+` are one string to the judgement, but a prefix makes only the first a `$$` literal.
-            val whole = s.literals.isEmpty()
-            val content = src.substring(s.contentStart, s.contentEnd)
-            // Enough dollars that no run already in the text opens a template: one more than the longest run.
-            val longestRun = DOLLAR_RUNS.findAll(content).maxOfOrNull { it.value.length } ?: 0
+        // Literals joined with `+` are one string to the judgement, but a prefix makes only the first a `$$` literal.
+        val whole = s.literals.isEmpty()
+        val content by lazy(LazyThreadSafetyMode.NONE) { src.substring(s.contentStart, s.contentEnd) }
+        // Enough dollars that no run already in the text opens a template: one more than the longest run.
+        val dollars by lazy(LazyThreadSafetyMode.NONE) { maxOf(2, (DOLLAR_RUNS.findAll(content).maxOfOrNull { it.value.length } ?: 0) + 1) }
+        // The literal as the author meant it, with every template read as a signal.
+        val helpers by lazy(LazyThreadSafetyMode.NONE) {
             val found = ArrayList<Fix>()
-            // The literal as the author meant it, with every template read as a signal.
             if (whole && !BRACED_TEMPLATE.containsMatchIn(content)) {
                 // A helper is not a string: it replaces the literal together with the trim call after it.
                 val end = s.end + (trimAfter(src, s)?.text?.length ?: 0)
@@ -1232,15 +1199,15 @@ public class Analyzer(
                     found.add(0, Fix("Use $call", s.start, end, call, importEdits(src, HTML_PACKAGE, helper)))
                 }
             }
-            TrapShared(maxOf(2, longestRun + 1), found, whole)
+            found
         }
         // Where the DSL may be missing, signal(...) is advised only where it can be called.
         val advisesSignal = available == null || "signal" in available
         return trap@{ ip ->
             // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
             if (ip.kind != InterpolationKind.SIMPLE || ip.dollars > 1) return@trap null
-            val fixes = ArrayList<Fix>(shared.helpers)
-            if (shared.whole) fixes += multiDollarFix(s, src, ip, shared.dollars)
+            val fixes = ArrayList<Fix>(helpers)
+            if (whole) fixes += multiDollarFix(s, src, ip, dollars)
             fixes += Fix("Escape as \${'$'}${ip.text}", ip.start, ip.start + 1, "\${'$'}")
             if (!s.rawAt(ip)) fixes += Fix("Escape as \\$${ip.text}", ip.start, ip.start, "\\")
             Issue(
@@ -1476,7 +1443,7 @@ public class Analyzer(
                         when {
                             trap != null -> trap
                             factSays == Verdict.DIGITS -> unsigned(attribute)
-                            factSays == Verdict.UNSAFE -> issue(datastarMessage(shown, attribute))
+                            factSays == Verdict.UNSAFE -> datastarIssue(ip, attribute)
                             else -> null
                         }
                     }
@@ -1577,27 +1544,11 @@ public class Analyzer(
         // The bracket the literal is an argument in, and what it belongs to.
         var depth = 0
         for (k in before.indices.reversed()) {
-            when (before[k]) {
-                ')', ']' -> {
-                    depth++
-                }
-
-                '(', '[' -> {
-                    if (depth-- == 0) return ANNOTATION_BEFORE.containsMatchIn(before.substring(0, k))
-                }
-
-                '\n' -> {
-                    if (depth == 0 &&
-                        before
-                            .substring(0, k)
-                            .trimEnd()
-                            .lastOrNull()
-                            ?.let { it == ',' || it == '(' || it == '[' } != true
-                    ) {
-                        return false
-                    }
-                }
-            }
+            val c = before[k]
+            if (c == ')' || c == ']') depth++
+            if ((c == '(' || c == '[') && depth-- == 0) return ANNOTATION_BEFORE.containsMatchIn(before.substring(0, k))
+            // A line that goes on from no argument list is where the statement starts.
+            if (c == '\n' && depth == 0 && before.lastNonSpaceBefore(k).let { it != ',' && it != '(' && it != '[' }) return false
         }
         return false
     }
@@ -1696,7 +1647,7 @@ public class Analyzer(
         text: Boolean,
         interpolate: Boolean,
         trusted: Boolean,
-        html: Boolean = true,
+        html: Boolean,
     ): String {
         // Markup an attribute holds is only characters, whose quotes end the value: that it is markup is the problem.
         if (markup) {
@@ -1716,21 +1667,22 @@ public class Analyzer(
         return "$base; if it is markup you built, $built."
     }
 
-    /** [unescapedMessage] for a project without core: what the browser does, and what plain Kotlin or kotlinx.html can do. */
-    private fun plainUnescapedMessage(
-        shown: String,
-        fact: ValueFact?,
-        text: Boolean,
-    ): String = unescapedMessage(shown, fact.isMarkup(), text, interpolate = false, trusted = false)
-
-    private fun datastarMessage(
-        shown: String,
+    /** A Kotlin value written into [attribute], which Datastar runs: an attribute of the markup, or the one a DSL call writes. */
+    private fun datastarIssue(
+        ip: Interpolation,
         attribute: String,
-    ): String =
-        "Kotlin writes $shown into $attribute, which Datastar runs as an expression or follows as a signal path. " +
-            "Text from outside becomes code there, even inside quotes. " +
-            "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; " +
-            "only a number or a boolean is safe to write in."
+    ): Issue =
+        Issue(
+            ip.start,
+            ip.end,
+            "Kotlin writes ${holeDisplay(ip)} into $attribute, which Datastar runs as an expression or follows as a signal path. " +
+                "Text from outside becomes code there, even inside quotes. " +
+                "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; " +
+                "only a number or a boolean is safe to write in.",
+            Severity.WARNING,
+            "unsafe-interpolation",
+            Docs.EXPRESSIONS,
+        )
 
     /**
      * `$name` where a signal could stand: the Kotlin value or the signal of that name, which only the
@@ -1873,15 +1825,7 @@ public class Analyzer(
             val fact = holeFact(s, src, opts, ip).plain()
             // Kotlin writes the digits of an unsigned number; it is interpolate that would refuse it.
             if (fact.writesItself()) continue
-            out +=
-                Issue(
-                    start = ip.start,
-                    end = ip.end,
-                    message = datastarMessage(holeDisplay(ip), attribute),
-                    severity = Severity.WARNING,
-                    code = "unsafe-interpolation",
-                    link = Docs.EXPRESSIONS,
-                )
+            out += datastarIssue(ip, attribute)
         }
         return out
     }
@@ -2234,11 +2178,9 @@ public fun rewriteAt(
 ): Fix? {
     // The innermost: a literal inside a template of another has a rewrite of its own.
     val site =
-        sites.filter { it.rewrite != null && start >= it.rewrite.start && end <= it.rewrite.end }.minByOrNull {
-            it.rewrite!!.end -
-                it.rewrite.start
-        }
-            ?: return null
+        sites
+            .filter { it.rewrite != null && start >= it.rewrite.start && end <= it.rewrite.end }
+            .minByOrNull { it.rewrite!!.end - it.rewrite.start } ?: return null
     val rewrite = site.rewrite!!
     val offered = site.issues.any { i -> i.start <= end && start <= i.end && i.fixes.any { it.sharesTextWith(rewrite) } }
     return rewrite.takeUnless { offered }
