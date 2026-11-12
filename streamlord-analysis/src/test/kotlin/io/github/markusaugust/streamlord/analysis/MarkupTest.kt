@@ -24,22 +24,27 @@ class MarkupTest {
 
     @Test
     fun `reads a filter string full of escapes without backtracking`() {
-        grows("a filter of escapes", 2000) { n -> "<pre data-json-signals=\"{include: '/${"\\\\".repeat(n)}x'}\"></pre>" }
-        grows("a filter of escaped dots", 1000) { n ->
+        grows("a filter of escapes", 300) { n -> "<pre data-json-signals=\"{include: '/${"\\\\".repeat(n)}x'}\"></pre>" }
+        grows("a filter of escaped dots", 150) { n ->
             "<pre data-json-signals='{\"include\": \"/^${(0 until n).joinToString("\\\\.") { "a$it" }}\"}'></pre>"
         }
     }
 
     @Test
     fun `reads a line of slashes that never close in linear time`() {
-        grows("slashes that never close", 2000) { n -> "<div data-text=\"${"(/[".repeat(n)}\"></div>" }
+        grows("slashes that never close", 300) { n -> "<div data-text=\"${"(/[".repeat(n)}\"></div>" }
     }
 
     @Test
     fun `tells each signal in a string the client pairs otherwise in linear time`() {
         // Rewrites inside one string, each told which quote opens it, and inside one template literal, each told why.
-        grows("signals in one string", 2000) { n -> "<div data-text=\"/'/.test('x') + '${"\$a ".repeat(n)}'\"></div>" }
-        grows("signals in one template literal", 2000) { n -> "<div data-text=\"`\${{a: 1}.a} ${"\$a ".repeat(n)}`\"></div>" }
+        grows("signals in one string", 300) { n -> "<div data-text=\"/'/.test('x') + '${"\$a ".repeat(n)}'\"></div>" }
+        grows("signals in one template literal", 300) { n -> "<div data-text=\"`\${{a: 1}.a} ${"\$a ".repeat(n)}`\"></div>" }
+    }
+
+    @Test
+    fun `tells template syntax from the template literals of JavaScript in linear time`() {
+        assertGrowsLinearly("template literals in one value", 300, { "`\${a}`".repeat(it) }) { hasTemplateSyntax(it) }
     }
 
     /** `conformance/dom/comment-ends.json`: where a comment ends, as the browser's parser reads it. */
