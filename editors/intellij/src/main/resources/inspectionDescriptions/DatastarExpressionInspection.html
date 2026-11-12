@@ -13,6 +13,12 @@ Datastar compiles an expression with the names its attribute hands it, and only 
 <code>patch</code>. Elsewhere the name throws a ReferenceError, so <code>data-text="patch.a"</code> is flagged. An expression that
 declares a function or a variable of its own, which may bind the name, is left alone.
 </p>
+<p>
+Each action is held to the arguments it takes, and a backend action's options and a signal filter to the keys and values the
+client reads: <code>@post('/x', {contentTyp: 'form'})</code> names no option, with <code>contentType</code> as a quick fix, and
+<code>retry: 'sometimes'</code>, <code>openWhenHidden: 'yes'</code> or <code>@setAll(true, 'user')</code> are values Datastar
+does not read as meant. Only a literal is judged; a value an expression computes is left alone.
+</p>
 <!-- tooltip end -->
 </body>
 </html>

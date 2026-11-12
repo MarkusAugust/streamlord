@@ -166,9 +166,9 @@ private val INTERPOLATION_CODES =
     setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
 
 /**
- * Datastar expression syntax, unknown actions, Pro actions, kebab-case signals, what the client's
- * own rewrite of an expression does that JavaScript would not, and `patch` where the attribute
- * does not hand it over.
+ * Datastar expression syntax, unknown actions, Pro actions, the arguments and options an action is
+ * given, kebab-case signals, what the client's own rewrite of an expression does that JavaScript
+ * would not, and `patch` where the attribute does not hand it over.
  */
 class DatastarExpressionInspection :
     StreamlordInspection(
@@ -183,6 +183,10 @@ class DatastarExpressionInspection :
             "signal-not-read",
             "statement-split",
             "scope-name",
+            "unknown-option",
+            "option-value",
+            "action-arity",
+            "action-argument",
         ),
     )
 
@@ -285,6 +289,10 @@ object InspectionCodes {
                 "signal-not-read",
                 "statement-split",
                 "scope-name",
+                "unknown-option",
+                "option-value",
+                "action-arity",
+                "action-argument",
             ) +
             setOf(
                 "unknown-attribute",
