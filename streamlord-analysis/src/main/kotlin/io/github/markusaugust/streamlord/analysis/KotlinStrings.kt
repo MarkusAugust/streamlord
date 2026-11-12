@@ -26,6 +26,8 @@ public data class Interpolation(
     val text: String,
     /** Offset in the decoded text where the placeholder starts. */
     val decodedStart: Int,
+    /** For an [InterpolationKind.OPERAND] that could not be read as a whole: it then covers only what is certainly the value's. */
+    val unread: Boolean = false,
 )
 
 public data class KotlinString(

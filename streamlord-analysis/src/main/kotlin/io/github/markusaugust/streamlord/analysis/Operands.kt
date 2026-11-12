@@ -104,6 +104,21 @@ internal class Operands(
 
     fun word(from: Int): String = if (from >= src.length) "" else src.substring(from, wordEnd(from))
 
+    /** Just past what is certainly part of a value that starts at [from] and could not be read: its first word or bracket. */
+    fun certainEnd(from: Int): Int =
+        when {
+            ch(from).let { it == '(' || it == '[' || it == '{' } -> closed(from).takeIf { it > 0 } ?: (from + 1)
+            else -> maxOf(wordEnd(from), from + 1)
+        }
+
+    /** Where what is certainly part of a value that ends at [to] and could not be read starts: its last bracket and the name before it, or its last word. */
+    fun certainStart(to: Int): Int {
+        var k = to
+        if (src[k - 1] in ")]}" && mask[k - 1]) k = matching(k - 1).takeIf { it >= 0 } ?: return to - 1
+        while (k > 0 && (src[k - 1].isLetterOrDigit() || src[k - 1] == '_')) k--
+        return if (k == to) to - 1 else k
+    }
+
     /**
      * Just past the `<...>` at [open] where it holds types alone, and with [call] a bracket follows,
      * as the type arguments of a call have it: `foo<String>(a)`. -1 where `<` compares.

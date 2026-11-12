@@ -1391,7 +1391,7 @@ public class Analyzer(
                 // A Trusted that opens a `+` chain would be joined to nothing, since Kotlin has no plus for it: no such fix there.
                 val fixes =
                     rewritten(ESCAPES_TITLE, !trust) +
-                        if (trust && canTrust && ip.start != s.start) listOf(trustedFix(src, ip, shown)) else emptyList()
+                        if (trust && canTrust && ip.start != s.start && !ip.unread) listOf(trustedFix(src, ip, shown)) else emptyList()
                 // Without core, plain Kotlin and kotlinx.html stand in for interpolate and Trusted, and a call or a
                 // value of unknown type may be markup the author composed; a known String stays a warning.
                 val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.coreHtml != false)

@@ -45,6 +45,7 @@ internal val Interpolation.dollars: Int
 /** How a hole is named in a message, as it is written: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
 internal fun holeDisplay(ip: Interpolation): String {
     if (ip.kind == InterpolationKind.SIMPLE) return "$".repeat(ip.dollars) + ip.text
+    if (ip.unread) return "a value joined with + that cannot be read as a whole"
     if (ip.kind == InterpolationKind.OPERAND) return "the value `${shortened(ip.text)}`"
     return "$".repeat(ip.dollars) + "{" + shortened(ip.text) + "}"
 }
@@ -1889,8 +1890,9 @@ internal fun chainFrom(
     fun value(
         start: Int,
         to: Int,
+        whole: Boolean = true,
     ) {
-        interpolations += Interpolation(start, to, InterpolationKind.OPERAND, src.substring(start, to), text.length)
+        interpolations += Interpolation(start, to, InterpolationKind.OPERAND, src.substring(start, to), text.length, !whole)
         repeat(PLACEHOLDER.length) { map += start }
         text.append(PLACEHOLDER)
         end = to
@@ -1940,8 +1942,13 @@ internal fun chainFrom(
                 if (term < 0) {
                     // An `if` goes on to the end of the expression; so does what could not be read, which is warned of whole.
                     val rest = read.expressionEnd(k, newlines())
-                    if (rest > k) value(k, rest)
-                    if (rest > k && read.word(k) != "if") unread = true
+                    val known = rest <= k || read.word(k) == "if"
+                    if (rest > k) value(k, if (known) rest else minOf(rest, read.certainEnd(k)), known)
+                    if (!known) {
+                        unread = true
+                        end = rest
+                        contentEnd = rest
+                    }
                     return
                 }
                 value(k, term)
@@ -1950,14 +1957,16 @@ internal fun chainFrom(
         }
     }
     val leading = read.leading(first.start)
-    if (leading != null && leading.end > leading.start) value(leading.start, leading.end)
+    // What could not be read is marked where it is certainly the value's: where it ends.
+    val from = leading?.let { if (it.read || it.end <= it.start) it.start else maxOf(it.start, read.certainStart(it.end)) }
+    if (leading != null && leading.end > leading.start) value(from!!, leading.end, leading.read)
     if (leading != null && !leading.read) unread = true
     val inBrackets by lazy(LazyThreadSafetyMode.NONE) { read.inBrackets(first.start) }
     parts(first) { inBrackets }
     if (leading == null && end == first.end) return null
     map += contentEnd
     return KotlinString(
-        start = leading?.takeIf { it.end > it.start }?.start ?: first.start,
+        start = if (leading != null && leading.end > leading.start) from!! else first.start,
         end = end,
         raw = first.raw,
         dollars = 1,
