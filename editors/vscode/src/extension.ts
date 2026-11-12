@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
-import { catalog, diagnose, type Issue, type Route } from "./analysis.ts";
+import { catalog, type Issue, type Route } from "./analysis.ts";
 import { IssueStore, StreamlordCodeActionProvider } from "./codeActions.ts";
 import { applyRecommendedColors, removeRecommendedColors } from "./colors.ts";
 import { StreamlordCompletionProvider } from "./completion.ts";
 import { StreamlordHoverProvider } from "./hover.ts";
 import { Inspector } from "./inspector.ts";
+import { Lint } from "./lint.ts";
 import { RequestStore } from "./requestStore.ts";
 import { RouteLensProvider } from "./routeLens.ts";
 import { RunningServers } from "./serverLog.ts";
@@ -25,6 +26,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const issues = new IssueStore();
 
   const diagnostics = vscode.languages.createDiagnosticCollection("streamlord");
+  const log = vscode.window.createOutputChannel("Streamlord");
+  const checks = new Lint((line) => log.appendLine(line));
   const signals = new SignalIndex(markup, prefix);
   const navigation = new SignalNavigationProvider(signals, prefix);
   const running = new RunningServers();
@@ -54,7 +57,7 @@ export function activate(context: vscode.ExtensionContext): void {
       issues.delete(document.uri);
       return;
     }
-    const found = diagnose(document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], defined(document));
+    const found = checks.issues(document.uri.toString(), document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], defined(document));
     issues.set(document.uri, found);
     diagnostics.set(
       document.uri,
@@ -87,6 +90,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     diagnostics,
+    log,
     signals,
     store,
     vscode.languages.registerCodeLensProvider({ language: "kotlin" }, new RouteLensProvider()),
