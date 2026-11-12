@@ -1265,28 +1265,32 @@ public class Analyzer(
         val told = s.interpolations.map { holeFact(s, src, opts, it) }
         val starts = s.interpolations.map { it.decodedStart }
         val holes = s.interpolations.indices
+        // What the rewrite can do is asked only by a value that has something to say of it: read when the first asks.
         // interpolate takes a Trusted wherever it lands and writes it as it is, as a template does.
-        val trusted =
+        val trusted by lazy(LazyThreadSafetyMode.NONE) {
             holes.map { k ->
                 told[k] == ValueFact.TRUSTED ||
                     (!told[k].isOther() && trustedValue(src, s.interpolations[k].text, s.start))
             }
+        }
         // It refuses every other value in a URL that loads code unless the literal fixes its host.
-        val loose = holes.map { k -> hostUnfixed(reading, starts, k) { true } }
-        val keeps =
+        val loose by lazy(LazyThreadSafetyMode.NONE) { holes.map { k -> hostUnfixed(reading, starts, k) { true } } }
+        val keeps by lazy(LazyThreadSafetyMode.NONE) {
             holes.map { k ->
                 trusted[k] || (!loose[k] && interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts))
             }
+        }
         // CSS in the body of a <style> is the author's to vouch for: the rewrite passes it as Trusted(...), which takes
         // a String. An editor that types the values says which are; the text alone leaves most unknown.
-        val vouched =
+        val vouched by lazy(LazyThreadSafetyMode.NONE) {
             holes.filterTo(LinkedHashSet()) { k ->
                 canTrust && !keeps[k] && (told[k].isString() || (told[k] == null && opts.valueFact == null)) &&
                     rawElement(view, landings[k], starts[k]) == "style" && !mayBeNull(src, s.interpolations[k].text, s.start)
             }
+        }
         val trim = trimAfter(src, s)
         // Why the string cannot be rewritten whatever its values are, in a few words, or null where it can.
-        val unfit =
+        val unfit by lazy(LazyThreadSafetyMode.NONE) {
             when {
                 s.called -> "a call after one literal of the + chain applies to that literal alone"
 
@@ -1298,10 +1302,11 @@ public class Analyzer(
 
                 else -> null
             }
+        }
         // interpolate(...) can take the string only when every value is one it accepts where it lands.
-        val fixable = canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched }
+        val fixable by lazy(LazyThreadSafetyMode.NONE) { canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched } }
         // The first values it does not take as they are: what the message of another value names.
-        val inTheWay = holes.filterNot { keeps[it] }.take(2)
+        val inTheWay by lazy(LazyThreadSafetyMode.NONE) { holes.filterNot { keeps[it] }.take(2) }
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
         // value, where one may be null, which a template writes as `null` and interpolate as nothing, nor under
         // trimIndent, where a value with a line break changed what was trimmed.
