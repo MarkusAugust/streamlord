@@ -1348,7 +1348,11 @@ public class Analyzer(
             fun rewriteNote(): String {
                 if (!canInterpolate || trusted[k]) return ""
                 if (!unfit.isNullOrEmpty()) return " interpolate(...) is not offered here: $unfit."
-                val other = inTheWay.firstOrNull { it != k } ?: return ""
+                // This value alone in the way, for the reason interpolateKeeps gives in element text.
+                val own = !keeps[k] && landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants)
+                val other =
+                    inTheWay.firstOrNull { it != k }
+                        ?: return if (own) " interpolate(...) is not offered here: it would escape this value, which may be markup you built." else ""
                 val named = holeDisplay(s.interpolations[other])
                 val place = refusedPlace(view, landings[other], starts[other])
                 val refused = loose[other] || landings[other].position !in ESCAPED_POSITIONS
