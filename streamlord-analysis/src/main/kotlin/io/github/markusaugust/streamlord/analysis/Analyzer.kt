@@ -2057,13 +2057,10 @@ public class Analyzer(
         src: String,
     ): List<Issue> {
         // The key form takes the name and an expression; one positional string is the object form.
-        val key =
-            (site.named("name") ?: site.named("attribute"))?.string
-                ?: site.positional
-                    .takeIf { it.size >= 2 || site.named("expression") != null }
-                    ?.first()
-                    ?.string
-                ?: return emptyList()
+        // A name given by name is the name, literal or not: no positional argument stands in for it.
+        val named = site.named("name") ?: site.named("attribute")
+        val first = site.positional.takeIf { it.size >= 2 || site.named("expression") != null }?.firstOrNull()
+        val key = (named ?: first)?.string ?: return emptyList()
         val name = key.text
         if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
         AttributeKeys.nameProblem(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
