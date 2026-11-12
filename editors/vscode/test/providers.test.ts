@@ -423,7 +423,7 @@ describe("code action provider", () => {
   function actionsAt(text: string, offset: number, end = offset) {
     const doc = new MockDocument(text, "kotlin");
     const issues = new IssueStore();
-    issues.set(doc.uri as never, diagnose(text, true, "data-", [], null));
+    issues.set(doc.uri as never, diagnose(text, true, "data-", [], null, null));
     const range = new Range(doc.positionAt(offset), doc.positionAt(end));
     const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, range as never, { diagnostics: [] } as never) as unknown as CodeAction[];
     const applied = (action: CodeAction) =>
@@ -476,7 +476,7 @@ describe("code action provider", () => {
   it("offers every fix of every diagnostic over the whole file, each tied to its own diagnostic", () => {
     const text = readFileSync(new URL("./fixtures/real/kotlin/ViewMistakes.kt", import.meta.url), "utf8");
     const doc = new MockDocument(text, "kotlin");
-    const found = diagnose(text, true, "data-", [], null);
+    const found = diagnose(text, true, "data-", [], null, null);
     const issues = new IssueStore();
     issues.set(doc.uri as never, found);
     // What VS Code hands the provider: every diagnostic the range touches, as the extension made them.
@@ -504,7 +504,7 @@ describe("code action provider", () => {
 describe("playground html template", () => {
   it("matches the expectations written in the file", () => {
     const html = readFileSync(new URL("./fixtures/template.html", import.meta.url), "utf8");
-    const codes = diagnose(html, false, "data-", [], null).map((i) => i.code);
+    const codes = diagnose(html, false, "data-", [], null, null).map((i) => i.code);
     assert.deepEqual(codes, ["unknown-modifier", "modifier-args", "missing-key", "unknown-attribute", "expression-syntax", "pro-attribute", "pro-attribute", "prefix-mismatch"]);
   });
 });

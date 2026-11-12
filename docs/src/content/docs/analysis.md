@@ -140,7 +140,8 @@ page must hold a value.
 It reports one direction only. A signal the pages declare and nobody reads is harmless by
 construction, since it sits in the browser's store and comes back untouched. A signal a handler
 reads that nothing declares is always a mistake, and that is the `signal-never-declared` warning,
-pointing at the property or the lookup that will never see a value.
+pointing at the property or the lookup that will never see a value. The VS Code extension shows
+the same warning as you type, judged against the files of the workspace.
 
 Only classes something actually reads signals into are examined, so the rest of your
 `@Serializable` classes are left alone.

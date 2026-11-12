@@ -45,7 +45,7 @@ describe("a DSL-named call in a file without the DSL", () => {
   const doc = new MockDocument(src, "kotlin");
 
   it("gets no trap and reads no signal", () => {
-    const issues = (text: string) => diagnose(text, true, "data-", [], null);
+    const issues = (text: string) => diagnose(text, true, "data-", [], null, null);
     assert.deepEqual(issues(src), []);
     assert.ok(issues(DSL + src).some((i) => i.message.includes("Kotlin")), issues(DSL + src).map((i) => i.message).join());
     assert.deepEqual(placesIn(src, "kotlin", "data-").names.reads, []);

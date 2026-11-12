@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { constantsAcross, signalPlaces, signalsOf, type FileSignals, type SignalPlaces } from "./analysis.ts";
+import { constantsAcross, signalPlaces, signalsOf, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
 
 /** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
 const MARKUP_EXTENSIONS = [
@@ -150,7 +150,7 @@ export class SignalIndex implements vscode.Disposable {
     this.byFile.set(key, next);
     const a = previous?.found;
     const b = next.found;
-    if (!a || !sameNames(a.definitions, b.definitions) || !sameNames(a.constants, b.constants) || !sameNames(a.others, b.others)) {
+    if (!a || !sameNames(a.definitions, b.definitions) || !sameNames(a.constants, b.constants) || !sameNames(a.others, b.others) || !sameDrift(a.drift, b.drift)) {
       this.definitionsUnion = null;
       this.constantsUnion = null;
       this.changed.fire();
@@ -164,7 +164,7 @@ export class SignalIndex implements vscode.Disposable {
     for (const [k, e] of this.byFile) {
       if (k !== key && !k.startsWith(folder)) continue;
       this.byFile.delete(k);
-      defined ||= e.found.definitions.length > 0 || e.found.constants.length > 0 || e.found.others.length > 0;
+      defined ||= e.found.definitions.length > 0 || e.found.constants.length > 0 || e.found.others.length > 0 || !sameDrift(e.found.drift, NO_DRIFT);
     }
     if (defined) {
       this.definitionsUnion = null;
@@ -214,6 +214,12 @@ export class SignalIndex implements vscode.Disposable {
     if (this.constantsUnion) return this.constantsUnion;
     this.constantsUnion = constantsAcross([...this.byFile.values()].map((e) => e.found));
     return this.constantsUnion;
+  }
+
+  /** What every file but `uri` tells it about the signals the server reads. */
+  driftExcept(uri: vscode.Uri): DriftFacts[] {
+    const key = uri.toString();
+    return [...this.byFile].filter(([k]) => k !== key).map(([, e]) => e.found.drift);
   }
 
   /** Where every indexed file defines and reads signals, by uri; a file is read again only the first time. */
@@ -277,6 +283,13 @@ export function placesIn(text: string, language: "kotlin" | "html", prefix: stri
 
 function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
   return { version, language, found: signalsOf(text, language === "kotlin") };
+}
+
+const NO_DRIFT: DriftFacts = { declared: [], readInto: [], encoded: [], classes: [] };
+
+/** Whether two files tell the others the same about the signals the server reads. */
+function sameDrift(a: DriftFacts, b: DriftFacts): boolean {
+  return sameNames(a.declared, b.declared) && sameNames(a.readInto, b.readInto) && sameNames(a.encoded, b.encoded) && JSON.stringify(a.classes) === JSON.stringify(b.classes);
 }
 
 /** Whether two lists of distinct names hold the same names. */

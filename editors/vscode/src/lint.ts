@@ -1,4 +1,4 @@
-import { diagnose, type Issue } from "./analysis.ts";
+import { diagnose, type DriftFacts, type Issue } from "./analysis.ts";
 
 /**
  * What the analysis finds in the documents the editor has open, each known by `key`. One the
@@ -10,9 +10,9 @@ export class Lint {
 
   constructor(private readonly log: (line: string) => void) {}
 
-  issues(key: string, text: string, kotlin: boolean, prefix: string, constants: string[], defined: string[] | null): Issue[] {
+  issues(key: string, text: string, kotlin: boolean, prefix: string, constants: string[], defined: string[] | null, others: DriftFacts[] | null): Issue[] {
     try {
-      const found = diagnose(text, kotlin, prefix, constants, defined);
+      const found = diagnose(text, kotlin, prefix, constants, defined, others);
       this.failing.delete(key);
       return found;
     } catch (e) {
