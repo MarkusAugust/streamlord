@@ -562,6 +562,16 @@ private fun collect(
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
+        // In a `$$"..."` literal a shorter run of dollars is text, as an escaped one is elsewhere: `$count` reads a signal.
+        if (reads) {
+            for (s in withNested(lexKotlin(src).strings)) {
+                if (s.dollars < 2) continue
+                for (m in BARE_SIGNAL.findAll(src.substring(s.contentStart, s.contentEnd))) {
+                    val at = s.contentStart + m.range.first
+                    if (s.interpolations.none { at >= it.start && at < it.end }) out += m.groupValues[1]
+                }
+            }
+        }
         if (reads) {
             for (m in HELPER_READS.findAll(src)) {
                 if (foreign(m.value.substringBefore('('), m.range.first) || onReceiver(src, m.range.first)) continue
