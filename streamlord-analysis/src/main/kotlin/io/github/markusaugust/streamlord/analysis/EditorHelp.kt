@@ -574,7 +574,12 @@ private class Asked(
         val inBefore = e.before.length - (offset - range.first)
         if (inBefore < 0 || jsRegions(e.before)[inBefore] != Region.CODE || e.before.getOrNull(inBefore - 1) == '.') return null
         val word = text.substring(range.first, range.last + 1)
-        if (word.startsWith("$")) return Hover(range, "**$word**\n\nThe signal ${word.substring(1)}, read from Datastar's store.")
+        // A `$` the client reads no name after, as in `$år`, is no signal.
+        if (word.startsWith("$")) {
+            val name = word.substring(1)
+            if (name.isEmpty() || name.first() == '$') return null
+            return Hover(range, "**$word**\n\nThe signal $name, read from Datastar's store.")
+        }
         val doc =
             when (word) {
                 "el" -> {
