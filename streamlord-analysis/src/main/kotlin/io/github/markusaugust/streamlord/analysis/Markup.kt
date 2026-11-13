@@ -129,6 +129,9 @@ private val FILTER_SIGNAL = regex("""\$[A-Za-z_][\w$]*""")
 private val WORD_CHAR_CLASS = regex("""\w""")
 private val IDENT = regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
+
+// A signal's name as the client reads one after `$`, without the `$`.
+private val BARE_SIGNAL = regex("""[A-Za-z_]\w*(?:[.-]\w+)*""")
 private val HAS_CAPITAL = regex("""[A-Z]""")
 private val HAS_LOWERCASE = regex("""[a-z]""")
 
@@ -683,6 +686,7 @@ public class MarkupValidator(
                         html.substring(tag.start, tag.end),
                         opts.hyphenatedSignals,
                         prefixSetting = opts.prefixSetting,
+                        movable = opts.templates,
                     )
             }
         }
@@ -763,21 +767,67 @@ public class MarkupValidator(
         base: String,
         attr: Attribute,
     ): AttributeSpec? {
-        val near = catalog.attributes.filter { ElementsGuard.oneEditAway(base, it.name, swaps = true) }.singleOrNull() ?: return null
-        if (near.keyRequired) return null
         val value = decodeEntities(attr.value.orEmpty()).text
+        val near =
+            catalog.attributes.filter { ElementsGuard.oneEditAway(base, it.name, swaps = true) }.singleOrNull()
+                // data-text-foo: a key after a hyphen on an attribute that takes none, which the client looks up as text-foo.
+                ?: catalog.attributes
+                    .filter { !it.keyed && base.startsWith(it.name + "-") }
+                    .maxByOrNull { it.name.length }
+                    ?.takeIf { value.isNotEmpty() }
+                ?: return null
+        if (near.keyRequired) return null
         if (value.isEmpty()) return near.takeIf { it.valueKind == ValueKind.NONE || it.valueKind == ValueKind.FILTER }
+        return near.takeIf { readsAsDatastar(value) }
+    }
+
+    /**
+     * Whether [value] reads a signal or calls an action of the catalog, as the client finds them, at
+     * a place an expression could start, with no template of its own: `$5`, `costs $five`,
+     * `{{ $foo }}` and `@if($x)` are money and another language.
+     */
+    private fun readsAsDatastar(value: String): Boolean {
         val read = clientRewrite(value).rewrites
-        val meant =
-            !hasTemplateSyntax(value) && "<?" !in value && "<%" !in value && read.all { it.signal || it.name in catalog.actionsByName } &&
-                read.any { r ->
-                    !r.signal ||
-                        (
-                            r.name.first().let { it.isLetter() || it == '_' } &&
-                                value.lastNonSpaceBefore(r.start).let { it == null || it in EXPRESSION_STARTS }
-                        )
-                }
-        return near.takeIf { meant }
+        return !hasTemplateSyntax(
+            value,
+        ) && "<?" !in value && "<%" !in value && read.all { it.signal || it.name in catalog.actionsByName } &&
+            read.any { r ->
+                !r.signal ||
+                    (
+                        r.name.first().let { it.isLetter() || it == '_' } &&
+                            value.lastNonSpaceBefore(r.start).let { it == null || it in EXPRESSION_STARTS }
+                    )
+            }
+    }
+
+    /**
+     * A plain `data-*` Datastar attribute where the prefix is an alias: the aliased client reads
+     * only names with the alias and ignores this one. Another library may use the same plain names,
+     * which is why one aliases, so only a key, a modifier or a value that reads as Datastar's says
+     * the author meant Datastar.
+     */
+    private fun plainUnderAlias(
+        attr: Attribute,
+        lower: String,
+        prefix: String,
+        prefixSetting: String,
+    ): Issue? {
+        if (prefix == CatalogNames.PREFIX || !lower.startsWith(CatalogNames.PREFIX)) return null
+        val parsed = catalog.parseAttributeName(lower, CatalogNames.PREFIX)?.takeIf { it.spec != null } ?: return null
+        val value = attr.value?.let { decodeEntities(it).text }.orEmpty()
+        // A value the client reads as a signal's name says Datastar only where it is one: Knockout's data-bind="text: name" is not.
+        val datastar =
+            if (parsed.spec!!.valueKind == ValueKind.SIGNAL) BARE_SIGNAL.matchEntire(value.trim()) != null else readsAsDatastar(value)
+        if (parsed.key == null && parsed.modifiers.isEmpty() && !datastar) return null
+        val aliased = prefix + attr.name.substring(CatalogNames.PREFIX.length)
+        return Issue(
+            attr.nameStart,
+            attr.nameEnd,
+            "The prefix is set to $prefix, so Datastar ignores ${attr.name}. Check $prefixSetting.",
+            Severity.WARNING,
+            "prefix-mismatch",
+            fixes = listOf(Fix("Change to $aliased", attr.nameStart, attr.nameStart + CatalogNames.PREFIX.length, prefix)),
+        )
     }
 
     /**
@@ -792,6 +842,7 @@ public class MarkupValidator(
         hyphenatedSignals: Set<String> = emptySet(),
         kotlin: Boolean = false,
         prefixSetting: String = PREFIX_SETTING,
+        movable: Boolean = true,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -807,7 +858,10 @@ public class MarkupValidator(
                     )
                 continue
             }
-            if (!lower.startsWith(prefix)) continue
+            if (!lower.startsWith(prefix)) {
+                plainUnderAlias(attr, lower, prefix, prefixSetting)?.let { issues += it }
+                continue
+            }
             val parsed = catalog.parseAttributeName(lower, prefix) ?: continue
             val nameEnd = attr.nameEnd
             val spec = parsed.spec
@@ -1106,7 +1160,73 @@ public class MarkupValidator(
             }
         }
         issues += indicatorWithoutAction(tag, prefix, tagSource)
+        issues += indicatorAfterInit(tag, prefix, tagSource, movable)
         return issues
+    }
+
+    /**
+     * Whether expression [js] calls a backend action as it runs: in its code, not in a string, nor
+     * in a function it hands on, `setTimeout(() => @get('/x'))`, which sends later.
+     */
+    private fun sendsAtOnce(js: String): Boolean {
+        val regions = jsRegions(js)
+        val inFunctions by lazy(LazyThreadSafetyMode.NONE) { functionDepths(js, regions) }
+        return backendAction.findAll(js).any { regions[it.range.first] == Region.CODE && inFunctions[it.range.first] == 0 }
+    }
+
+    /**
+     * `data-init` that sends a request, before `data-indicator` on the same element: the client
+     * applies an element's attributes in their order, and `data-init` runs at once, so the request
+     * has started before the indicator listens for it, and the signal stays false. With a modifier
+     * the init waits, a delay or a view transition, and the indicator is there in time. The fix moves
+     * the indicator before the init; where the text is not [movable], a Kotlin string that may write a
+     * quote, a backslash or a dollar escaped, only when it holds none.
+     */
+    private fun indicatorAfterInit(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
+        movable: Boolean,
+    ): List<Issue> {
+        val attrs = tag.attributes
+        val at =
+            attrs.indexOfFirst {
+                val lower = it.name.asciiLowercase()
+                lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
+            }
+        if (at < 0) return emptyList()
+        val init =
+            attrs.subList(0, at).firstOrNull {
+                it.name.asciiLowercase() == "${prefix}init" && it.value != null && sendsAtOnce(decodeEntities(it.value).text)
+            } ?: return emptyList()
+        if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
+        val indicator = attrs[at]
+        val fix =
+            tagSource?.let { source ->
+                fun local(offset: Int) = offset - tag.start
+                val end = indicator.value?.let { indicator.valueEnd + if (indicator.quoted) 1 else 0 } ?: indicator.nameEnd
+                val moved = source.substring(local(indicator.nameStart), local(end))
+                var space = local(indicator.nameStart)
+                while (space > local(init.nameStart) && source[space - 1].isWhitespace()) space--
+                val replaced = source.substring(local(init.nameStart), local(end))
+                val text = moved + source.substring(space, local(indicator.nameStart)) + source.substring(local(init.nameStart), space)
+                // In a Kotlin string a quote, a backslash or a dollar may be written escaped, which this text does not know.
+                Fix("Move ${prefix}indicator before ${prefix}init", init.nameStart, end, text).takeIf {
+                    movable || replaced.none { c -> c == '"' || c == '\\' || c == '$' || c == '\n' }
+                }
+            }
+        return listOf(
+            Issue(
+                indicator.nameStart,
+                indicator.nameEnd,
+                "${prefix}indicator comes after ${prefix}init, which starts its request as Datastar applies it, " +
+                    "before the indicator exists, so the signal stays false. Put ${prefix}indicator first.",
+                Severity.WARNING,
+                "indicator-order",
+                Docs.attribute("indicator"),
+                listOfNotNull(fix),
+            ),
+        )
     }
 
     /**
@@ -1436,6 +1556,11 @@ public class MarkupValidator(
                         link,
                     )
             }
+        }
+        // The free plugins hand the value to filtered, as a backend action its filterSignals; Pro's are not read here.
+        if (!spec.pro) {
+            out +=
+                filterValueIssues(catalog, text, jsRegions(text), ::source, name, link)
         }
         for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
             val (start, end) = source(issue.start, issue.end)

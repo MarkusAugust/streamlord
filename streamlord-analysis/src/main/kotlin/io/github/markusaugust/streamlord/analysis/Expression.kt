@@ -793,7 +793,53 @@ public class ExpressionValidator(
         attribute: AttributeSpec? = null,
     ): List<Issue> =
         validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
-            (attribute?.let { scopeNameIssues(text, it, handed) } ?: emptyList())
+            (attribute?.let { scopeNameIssues(text, it, handed) + computedSideEffects(text, it) } ?: emptyList())
+
+    /**
+     * A signal changed or an action with a side effect called in `data-computed`, which the
+     * reference says must do neither: the client runs the expression again each time a signal it
+     * reads changes. `@peek` and the Pro formatters only compute a value.
+     */
+    private fun computedSideEffects(
+        text: String,
+        spec: AttributeSpec,
+    ): List<Issue> {
+        if (spec.name != "computed") return emptyList()
+        val regions = jsRegions(text)
+        val inFunctions = functionDepths(text, regions)
+        // The keyed form stores what the expression gives, a function too, which nothing calls; the
+        // object form calls each function it holds, and a function those return is never called.
+        val runs = if (text.trimStart().startsWith("{")) 1 else 0
+        val out = ArrayList<Issue>()
+        for (r in clientRewrite(text).rewrites) {
+            if (regions[r.start] != Region.CODE || inFunctions[r.start] > runs) continue
+            val written = if (r.signal) text.substring(r.start, r.end) else "@${r.name}"
+            val message =
+                when {
+                    r.signal && (ASSIGNS_AFTER.matchAt(text, r.end) != null || updatedBefore(text, r.start)) -> {
+                        "data-computed must not change signals, and this changes $written"
+                    }
+
+                    !r.signal && catalog.actionsByName[r.name]?.let { it.kind == "backend" || it.name in SIDE_EFFECT_ACTIONS } == true -> {
+                        "data-computed must not call actions, and this calls $written"
+                    }
+
+                    else -> {
+                        continue
+                    }
+                }
+            out +=
+                Issue(
+                    r.start,
+                    r.start + written.length,
+                    "$message: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.",
+                    Severity.WARNING,
+                    "computed-value",
+                    Docs.attribute("computed"),
+                )
+        }
+        return out
+    }
 
     private fun validateText(
         text: String,
@@ -1107,6 +1153,108 @@ public class ExpressionValidator(
         }
         return emptyList()
     }
+}
+
+/**
+ * How many function bodies each character of [text], whose characters are [regions], stands in:
+ * after an `=>` until the `,` or `;` that ends it or the bracket that closes around it, and in the
+ * braces of a `function`. Read in one pass, each body ending as the brackets say.
+ */
+internal fun functionDepths(
+    text: String,
+    regions: ByteArray,
+): IntArray {
+    val change = IntArray(text.length + 1)
+    // The bodies open: where each starts, the bracket depth it lies at, and whether a `,` or `;` there ends it.
+    val starts = ArrayList<Int>()
+    val levels = ArrayList<Int>()
+    val arrows = ArrayList<Boolean>()
+    var depth = 0
+    var function = false
+
+    fun close(at: Int) {
+        change[starts.removeAt(starts.size - 1)]++
+        change[at]--
+        levels.removeAt(levels.size - 1)
+        arrows.removeAt(arrows.size - 1)
+    }
+
+    fun open(
+        at: Int,
+        level: Int,
+        arrow: Boolean,
+    ) {
+        starts += at
+        levels += level
+        arrows += arrow
+    }
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        if (regions[i] != Region.CODE) {
+            i++
+            continue
+        }
+        when {
+            c == '=' && text.getOrNull(i + 1) == '>' -> {
+                open(i + 2, depth, arrow = true)
+                i++
+            }
+
+            c == 'f' &&
+                text.startsWith(
+                    "function",
+                    i,
+                ) && !text.getOrNull(i - 1).isJsNamePart() && !text.getOrNull(i + 8).isJsNamePart() -> {
+                function = true
+                i += 7
+            }
+
+            c == '(' || c == '[' || c == '{' -> {
+                depth++
+                if (c == '{' && function) {
+                    function = false
+                    open(i + 1, depth, arrow = false)
+                }
+            }
+
+            c == ')' || c == ']' || c == '}' -> {
+                depth--
+                while (levels.isNotEmpty() && levels.last() > depth) close(i)
+            }
+
+            c == ',' || c == ';' -> {
+                while (levels.isNotEmpty() && arrows.last() && levels.last() == depth) close(i)
+            }
+        }
+        i++
+    }
+    while (starts.isNotEmpty()) close(text.length)
+    var running = 0
+    return IntArray(text.length) { k ->
+        running += change[k]
+        running
+    }
+}
+
+/** An assignment after a signal, `= 1`, `+= 1`, or its update, `++`: not `==` or `=>`. */
+private val ASSIGNS_AFTER = regex("""\s*(?:(?:[-+*/%&|^]|\*\*|<<|>>>?|&&|\|\||\?\?)?=(?![=>])|\+\+|--)""")
+
+/** The actions besides the backend ones that change something: signals, the clipboard. */
+private val SIDE_EFFECT_ACTIONS = setOf("setAll", "toggleAll", "clipboard")
+
+/** Whether `++` or `--` stands before [at] in [text] as a prefix update, not as the postfix one of what precedes it. */
+private fun updatedBefore(
+    text: String,
+    at: Int,
+): Boolean {
+    var k = at
+    while (k > 0 && text[k - 1].isJsWhitespace()) k--
+    if (k < 2 || !(text.startsWith("++", k - 2) || text.startsWith("--", k - 2))) return false
+    var b = k - 2
+    while (b > 0 && text[b - 1].isJsWhitespace()) b--
+    val before = text.getOrNull(b - 1)
+    return !(before.isJsNamePart() || before == ')' || before == ']')
 }
 
 /**

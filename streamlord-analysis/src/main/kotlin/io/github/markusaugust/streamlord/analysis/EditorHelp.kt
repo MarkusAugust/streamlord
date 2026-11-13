@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.regex
 
 /*
@@ -163,6 +164,8 @@ private fun Char.continues(kind: CompletionKind): Boolean =
         }
 
 private val DURATIONS = listOf("500ms", "1s", "300ms", "100ms")
+private val SIGNAL_NAME_TYPED = regex("""\s*([\w.]*)""")
+private val SIGNAL_NAME = regex("""\w+(?:[.-]\w+)*""")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
 private val SELECTOR_TOKEN = regex("""[#.]?[\w-]*$""")
 private val ACTION_WORD = regex("""@[A-Za-z_][A-Za-z0-9_]*""")
@@ -288,26 +291,37 @@ private class Asked(
         workspace: Workspace,
     ): Completions {
         val before = expression.before
-        signalPrefixAt(before, before.length)?.let { typed ->
-            // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
-            val dollar = if (text.getOrNull(offset - typed.length - 1) == '$') "$" else ""
-            val own = definitions()
+
+        /** The signals defined, for the [typed] name before the caret; with [dollar], read in an expression after `$`. */
+        fun signals(
+            typed: String,
+            dollar: String?,
+        ): Completions {
+            // A name written as a value defines the signal it names, which is what is being typed.
+            val own = if (dollar == null) definitions() - typed else definitions()
+            // Written bare, a name is offered only as the client reads one after a `$`.
+            val names = (workspace.signals + own).filter { ':' !in it && (dollar != null || SIGNAL_NAME.matchEntire(it) != null) }
             val items =
-                (workspace.signals + own).filter { ':' !in it }.toSet().map { name ->
+                names.toSet().map { name ->
                     val here = name in own
                     Completion(
-                        "$$name",
+                        if (dollar == null) name else "$$name",
                         CompletionKind.SIGNAL,
-                        offset - typed.length - dollar.length,
-                        insert = dollar + name,
+                        offset - typed.length - (dollar?.length ?: 0),
+                        insert = dollar?.let { it + name },
                         detail = "signal (${if (here) "this file" else workspace.called})",
-                        filter = dollar + name,
+                        filter = dollar?.let { it + name },
                         key = (if (here) "0" else "1") + name,
                     )
                 }
             return ordered(items, alone = true)
         }
-        if (!expression.allowActions) return NOTHING
+        signalPrefixAt(before, before.length)?.let { typed ->
+            // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
+            return signals(typed, if (text.getOrNull(offset - typed.length - 1) == '$') "$" else "")
+        }
+        // A value that is a signal's name, data-bind="query": the name as written, without a dollar.
+        if (!expression.allowActions) return SIGNAL_NAME_TYPED.matchEntire(before)?.let { signals(it.groupValues[1], null) } ?: NOTHING
         // A string is quoted with the quote the attribute around it leaves free, escaped where the Kotlin string needs it.
         val q = if (expression.escaped) "\\${expression.quote}" else expression.quote.toString()
         val call = actionCallAt(before, before.length)
@@ -422,17 +436,20 @@ private class Asked(
             val dot = current.indexOf('.')
             if (dot >= 0) {
                 val modifier = spec.modifiers.firstOrNull { it.name == current.substring(0, dot) } ?: return NOTHING
+                // The tags written already, and the one at the caret.
+                val tags = current.split('.').drop(1)
                 val values =
                     when (modifier.type) {
                         ModifierType.ENUM -> modifier.values
-                        ModifierType.DURATION -> if (current.split('.').size > 2) modifier.flags else DURATIONS
-                        else -> emptyList()
-                    }
+                        ModifierType.DURATION -> if (tags.size > 1) modifier.flags else DURATIONS
+                        ModifierType.IDENTS -> modifier.suggest
+                        else -> if (tags.size > 1) emptyList() else modifier.suggest
+                    }.filter { it !in tags.dropLast(1) }
                 val from = offset - (current.length - current.lastIndexOf('.') - 1)
                 return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = false)
             }
             val items =
-                spec.modifiers.map {
+                spec.modifiers.filter { it.listed }.map {
                     val snippet =
                         when (it.type) {
                             ModifierType.FLAG -> null
@@ -524,9 +541,18 @@ private class Asked(
             val typed = expression?.let { actionCallAt(it.before, it.before.length)?.option?.typed }
             if (option != null && typed == word) return Hover(range, fetchOptionDoc(option))
         }
+        expression(offset)?.let { e -> codeWord(e)?.let { return it } }
         if (!kotlin || analyzer.htmlStringAt(text, offset, modules) != null || inAttributesKey()) {
             val range = wordAt(ATTRIBUTE_WORD) ?: return null
-            val spec = catalog.parseAttributeName(text.substring(range.first, range.last + 1).lowercase(), prefix)?.spec ?: return null
+            val parsed = catalog.parseAttributeName(text.substring(range.first, range.last + 1).lowercase(), prefix) ?: return null
+            val spec = parsed.spec ?: return null
+            // A modifier and its tags have documentation of their own; `__` starts one.
+            val at = offset - range.first
+            for (m in parsed.modifiers) {
+                if (at !in m.offset - 2..m.offset + m.text.length) continue
+                val modifier = spec.modifiers.firstOrNull { it.name == m.name && it.listed } ?: break
+                return Hover(range.first + m.offset - 2, range.first + m.offset + m.text.length, modifierDoc(modifier, prefix + spec.name))
+            }
             return Hover(range, attributeDoc(spec, prefix, withKotlin))
         }
         // The DSL's functions are documented where the file can call them, and a name in a string is none.
@@ -537,6 +563,56 @@ private class Asked(
         val action = catalog.actions.firstOrNull { it.kotlin == word } ?: return null
         val called = '(' in text.substring(range.last + 1, minOf(text.length, range.last + 3)).substringBefore('\n')
         return if (called) Hover(range, actionDoc(action, withKotlin = false)) else null
+    }
+
+    /**
+     * A signal, or a name the client hands every expression, where the caret stands on it in the
+     * code of expression [e]: not in a string, nor a member of something else.
+     */
+    private fun codeWord(e: ExpressionAtCaret): Hover? {
+        val range = wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
+        val inBefore = e.before.length - (offset - range.first)
+        if (inBefore < 0 || jsRegions(e.before)[inBefore] != Region.CODE || e.before.getOrNull(inBefore - 1) == '.') return null
+        val word = text.substring(range.first, range.last + 1)
+        // A `$` the client reads no name after, as in `$år`, is no signal.
+        if (word.startsWith("$")) {
+            val name = word.substring(1)
+            if (name.isEmpty() || name.first() == '$') return null
+            // As the client's signalPath reads it: each part after a dot is a key of the one before.
+            val parts = name.split('.')
+            val path = "$" + parts.joinToString("") { "['$it']" }
+            val owner = parts.dropLast(1).joinToString(".")
+            val length =
+                if (parts.size > 1 &&
+                    parts.last() == "length"
+                ) {
+                    " Where $owner is an array or a string, `length` is its length."
+                } else {
+                    ""
+                }
+            return Hover(range, "**$word**\n\nDatastar reads it as `$path`, the signal path $name in its store.$length")
+        }
+        val doc =
+            when (word) {
+                "el" -> {
+                    "The element the attribute is on."
+                }
+
+                "evt" -> {
+                    "The event that ran the expression of ${prefix}on; undefined in the others."
+                }
+
+                "patch" -> {
+                    "The signals that changed, with their new values: ${prefix}on-signal-patch hands it to its expression.".takeIf {
+                        e.patchInScope
+                    }
+                }
+
+                else -> {
+                    null
+                }
+            } ?: return null
+        return Hover(range, "**$word**\n\n$doc")
     }
 
     private fun inAttributesKey(): Boolean = analyzer.attributesIndexes(text).any { offset in it.nameStart..it.nameStart + it.name.length }

@@ -15,15 +15,20 @@
 {"what":"action","at":"2:125-2:130","n":0,"after":{"value":"06d324a2cbbc"},"edits":[{"file":"drawn/html/missing-key-1.html","range":"2:130-2:130","text":".500ms"}],"kind":"quickfix","preferred":true,"title":"Add .500ms"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:8","answers":[{"contents":[{"value":"d7ab264a6570"}],"range":"1:6-1:8"}]}
-{"what":"hover","at":"1:13-1:59","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:13-1:59"}]}
+{"what":"hover","at":"1:13-1:25","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:13-1:59"}]}
+{"what":"hover","at":"1:26-1:50","answers":[{"contents":[{"value":"8c3dd820520a"}],"range":"1:26-1:50"}]}
+{"what":"hover","at":"1:51-1:59","answers":[{"contents":["**__prevent** on data-on\n\nCalls preventDefault on the event listener."],"range":"1:50-1:59"}]}
 {"what":"hover","at":"1:61-1:66","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"1:61-1:66"}]}
-{"what":"hover","at":"1:74-1:106","answers":[{"contents":[{"value":"6ac264db37cf"}],"range":"1:74-1:106"}]}
+{"what":"hover","at":"1:74-1:90","answers":[{"contents":[{"value":"6ac264db37cf"}],"range":"1:74-1:106"}]}
+{"what":"hover","at":"1:91-1:106","answers":[{"contents":["**__threshold** on data-on-intersect\n\nTriggers when the element is visible by a certain percentage.\n\n**Tags:**  \n`.25`: a whole number from 0 to 100."],"range":"1:91-1:106"}]}
 {"what":"hover","at":"2:7-2:29","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"2:7-2:29"}]}
 {"what":"hover","at":"2:34-2:41","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"2:34-2:41"},{"contents":[{"value":"f97215e583ff"}],"range":"2:34-2:41"}]}
 {"what":"hover","at":"2:46-2:57","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"2:46-2:57"}]}
 {"what":"hover","at":"2:82-2:91","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"2:82-2:91"},{"contents":[{"value":"dc28109c20fa"}],"range":"2:82-2:91"}]}
+{"what":"hover","at":"2:94-2:95","answers":[{"contents":["**$a**\n\nDatastar reads it as `$['a']`, the signal path a in its store."],"range":"2:93-2:95"}]}
 {"what":"hover","at":"2:101-2:113","answers":[{"contents":[{"value":"bc9746efa356"}],"range":"2:101-2:113"},{"contents":[{"value":"a70c1cb749a3"}],"range":"2:101-2:113"}]}
-{"what":"hover","at":"2:114-2:130","answers":[{"contents":["**data-init**\n\nRuns an expression once when the element enters the DOM.\n\n`data-init=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__viewtransition`\n\n**Kotlin:** `dataInit()`"],"range":"2:114-2:130"}]}
+{"what":"hover","at":"2:114-2:122","answers":[{"contents":["**data-init**\n\nRuns an expression once when the element enters the DOM.\n\n`data-init=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__viewtransition`\n\n**Kotlin:** `dataInit()`"],"range":"2:114-2:130"}]}
+{"what":"hover","at":"2:123-2:130","answers":[{"contents":["**__delay** on data-init\n\nDelay the expression.\n\n**Tags:**  \n`.500ms`: the duration, in milliseconds, or `.1s` in seconds."],"range":"2:123-2:130"}]}
 {"what":"hover","at":"2:137-2:140","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"2:137-2:140"}]}
 {"what":"signature","at":"1:67-1:71","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"rename","at":"1:1-3:1","error":"No signal here to rename."}

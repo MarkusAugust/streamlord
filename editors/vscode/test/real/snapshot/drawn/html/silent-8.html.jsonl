@@ -1,10 +1,12 @@
 {"what":"file","language":"html"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:26","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"1:6-1:26"}]}
-{"what":"hover","at":"1:31-1:64","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:31-1:64"}]}
+{"what":"hover","at":"1:31-1:51","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:31-1:64"}]}
+{"what":"hover","at":"1:52-1:64","answers":[{"contents":["**__case** on data-on\n\nConverts the casing of the key.\n\n**Tags:**  \none of `.camel`, `.kebab`, `.snake`, `.pascal`."],"range":"1:52-1:64"}]}
 {"what":"hover","at":"1:71-1:80","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:71-1:80"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:71-1:80"}]}
 {"what":"hover","at":"1:90-1:102","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"1:90-1:102"},{"contents":[{"value":"f3206c0b6e6e"}],"range":"1:90-1:102"}]}
 {"what":"hover","at":"1:117-1:144","answers":[{"contents":[{"value":"36efd861cf5a"}],"range":"1:117-1:144"}]}
+{"what":"hover","at":"1:147-1:148","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:146-1:148"}]}
 {"what":"hover","at":"1:152-1:155","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:152-1:155"}]}
 {"what":"definition","at":"1:19-1:26","answers":[{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"},{"file":"drawn/kotlin/silent-1.kt","range":"2:16-2:22"},{"file":"drawn/kotlin/silent-1.kt","range":"8:17-8:23"},{"file":"drawn/kotlin/silent-1.kt","range":"9:13-9:19"},{"file":"drawn/kotlin/silent-1.kt","range":"14:17-14:23"},{"file":"kotlin/ViewMistakes.kt","range":"20:22-20:28"}]}
 {"what":"definition","at":"1:82-1:88","answers":[{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"},{"file":"drawn/kotlin/silent-1.kt","range":"2:16-2:22"},{"file":"drawn/kotlin/silent-1.kt","range":"8:17-8:23"},{"file":"drawn/kotlin/silent-1.kt","range":"9:13-9:19"},{"file":"drawn/kotlin/silent-1.kt","range":"14:17-14:23"},{"file":"kotlin/ViewMistakes.kt","range":"20:22-20:28"}]}

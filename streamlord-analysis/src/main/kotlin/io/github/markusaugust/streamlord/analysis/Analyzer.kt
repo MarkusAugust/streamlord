@@ -10,12 +10,14 @@ import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
+import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import java.io.File
 import kotlin.concurrent.Volatile
+import kotlin.time.Duration
 
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
@@ -105,6 +107,10 @@ private val HAS_CAPITAL = regex("""[A-Z]""")
 // `val once = 1` a variable of the lambda's own.
 private val LAMBDA_ASSIGNMENT = regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
 private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
+
+// No time at all, `0.seconds` or `Duration.ZERO`, which an interval refuses.
+private val ZERO_DURATION =
+    regex("""(?:0+(?:\.0+)?\.(?:nanoseconds|microseconds|milliseconds|seconds|minutes|hours|days)|(?:Duration\.)?ZERO)""")
 
 // The parameter a DSL helper takes its key by, when it is passed by name.
 private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
@@ -339,6 +345,7 @@ public class Analyzer(
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
+            issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src, lex)) {
                 for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
@@ -665,6 +672,7 @@ public class Analyzer(
                     src.substring(tag.start, tag.end),
                     hyphenated,
                     prefixSetting = opts.prefixSetting,
+                    movable = templates,
                 )
         }
         return issues
@@ -2171,10 +2179,65 @@ public class Analyzer(
     private fun modifiersLambda(
         site: CallSite,
         src: String,
-    ): String =
-        trailingLambdaText(site, src).ifEmpty {
-            (site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") })?.text ?: ""
+    ): String = modifiersLambdaAt(site, src).second
+
+    /** [modifiersLambda] and where it starts in [src]. */
+    private fun modifiersLambdaAt(
+        site: CallSite,
+        src: String,
+    ): Pair<Int, String> {
+        val trailing = trailingLambdaText(site, src)
+        if (trailing.isNotEmpty()) return src.indexOf('{', site.closeParen + 1) to trailing
+        val arg = site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") } ?: return 0 to ""
+        return arg.start to arg.text
+    }
+
+    /**
+     * What the DSL refuses as it renders, from the literals the lambda of modifiers of [site] sets:
+     * a flag of a duration that is not set, `half`, `full` and `threshold` together, a threshold
+     * out of 0 to 100, an interval of no time. A value the code computes is not judged.
+     */
+    private fun modifierLambdaIssues(
+        site: CallSite,
+        src: String,
+        lex: KotlinLex,
+    ): List<Issue> {
+        if (site.name !in catalog.attributesByKotlin) return emptyList()
+        val (start, lambda) = modifiersLambdaAt(site, src)
+        if (lambda.isEmpty()) return emptyList()
+        // Strings and comments blanked where they stand, so an offset in the lambda is one in the source.
+        val code = CharArray(lambda.length) { i -> if (lex.mask[start + i] || lambda[i] == '\n') lambda[i] else ' ' }.concatToString()
+        // The value of each property set to a literal, by its name, and where it is set.
+        val set = LAMBDA_ASSIGNMENT.findAll(code).associateBy({ it.groupValues[1] }, { it })
+
+        fun value(name: String) = set[name]?.groupValues?.get(2)?.trim()
+
+        val out = ArrayList<Issue>()
+
+        fun refuse(
+            m: MatchResult,
+            why: String,
+        ) {
+            val end = m.range.first + m.value.trimEnd().length
+            out += Issue(start + m.range.first, start + end, "Streamlord throws at render: $why.", Severity.ERROR, "modifier-args")
         }
+
+        fun on(name: String) = set[name]?.takeIf { value(name) == "true" }
+        for ((duration, flags) in ModifierRules.durationFlags) {
+            if (value(duration) != null && value(duration) != "null") continue
+            flags.firstNotNullOfOrNull(::on)?.let { refuse(it, ModifierRules.flagWithoutDuration(it.groupValues[1], duration)) }
+        }
+        val threshold = set["threshold"]?.takeIf { value("threshold") != "null" }
+        val alternatives = listOfNotNull(on("half"), on("full"), threshold).sortedBy { it.range.first }
+        if (alternatives.size > 1) refuse(alternatives[1], ModifierRules.ALTERNATIVES)
+        val percent = value("threshold")?.toIntOrNull()
+        if (threshold != null && percent != null && percent !in ModifierRules.thresholds) refuse(threshold, ModifierRules.THRESHOLD_RANGE)
+        val interval = set["duration"]
+        if (site.name == "dataOnInterval" && interval != null && ZERO_DURATION.matchEntire(value("duration")!!) != null) {
+            refuse(interval, ModifierRules.intervalNotPositive(Duration.ZERO.toString()))
+        }
+        return out
+    }
 
     /** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key ([signalNameRefusal]). */
     private fun valueNameIssues(

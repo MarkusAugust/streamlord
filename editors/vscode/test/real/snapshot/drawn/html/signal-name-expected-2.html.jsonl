@@ -6,6 +6,7 @@
 {"what":"hover","at":"1:8-1:17","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:8-1:17"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:8-1:17"}]}
 {"what":"hover","at":"1:28-1:33","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:28-1:33"}]}
 {"what":"hover","at":"1:34-1:43","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:34-1:43"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:34-1:43"}]}
+{"what":"hover","at":"1:47-1:51","answers":[{"contents":["**$name**\n\nDatastar reads it as `$['name']`, the signal path name in its store."],"range":"1:46-1:51"}]}
 {"what":"hover","at":"1:55-1:60","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:55-1:60"}]}
 {"what":"hover","at":"1:61-1:70","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:61-1:70"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:61-1:70"}]}
 {"what":"definition","at":"1:19-1:25","answers":[{"file":"drawn/html/signal-name-expected-2.html","range":"1:19-1:25"}]}

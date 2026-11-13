@@ -2,6 +2,7 @@
 
 package io.github.markusaugust.streamlord.html.pro
 
+import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
@@ -39,7 +40,7 @@ private fun requireDuration(
     name: String,
 ) {
     if (duration != null) return
-    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException("${it.first} needs $name, which is not set") }
+    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException(ModifierRules.flagWithoutDuration(it.first, name)) }
 }
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
@@ -73,13 +74,28 @@ private fun StringBuilder.appendTiming(
 
 /** Modifiers for `data-on-resize`: the timing of `data-on` and `__viewtransition`. */
 public class ResizeModifiers {
+    /** Waits this long before the expression runs: `__delay`. */
     public var delay: Duration? = null
+
+    /** Runs the expression once this long has passed without another trigger: `__debounce`. */
     public var debounce: Duration? = null
+
+    /** Runs on the first trigger as well, not only after the wait: `.leading`. Needs [debounce], and the DSL refuses it without one. */
     public var debounceLeading: Boolean = false
+
+    /** Does not run at the end of the wait: `.notrailing`. Needs [debounce], and the DSL refuses it without one. */
     public var debounceNoTrailing: Boolean = false
+
+    /** Runs the expression at most once in this long: `__throttle`. */
     public var throttle: Duration? = null
+
+    /** Does not run on the first trigger: `.noleading`. Needs [throttle], and the DSL refuses it without one. */
     public var throttleNoLeading: Boolean = false
+
+    /** Runs once more at the end of the wait: `.trailing`. Needs [throttle], and the DSL refuses it without one. */
     public var throttleTrailing: Boolean = false
+
+    /** Wraps the expression in `document.startViewTransition()` where the browser has the View Transition API: `__viewtransition`. */
     public var viewTransition: Boolean = false
 
     internal fun build(): String =
@@ -91,13 +107,28 @@ public class ResizeModifiers {
 
 /** Modifiers for `data-on-raf`: the timing of `data-on` and `__viewtransition`. */
 public class RafModifiers {
+    /** Waits this long before the expression runs: `__delay`. */
     public var delay: Duration? = null
+
+    /** Runs the expression once this long has passed without another trigger: `__debounce`. */
     public var debounce: Duration? = null
+
+    /** Runs on the first trigger as well, not only after the wait: `.leading`. Needs [debounce], and the DSL refuses it without one. */
     public var debounceLeading: Boolean = false
+
+    /** Does not run at the end of the wait: `.notrailing`. Needs [debounce], and the DSL refuses it without one. */
     public var debounceNoTrailing: Boolean = false
+
+    /** Runs the expression at most once in this long: `__throttle`. */
     public var throttle: Duration? = null
+
+    /** Does not run on the first trigger: `.noleading`. Needs [throttle], and the DSL refuses it without one. */
     public var throttleNoLeading: Boolean = false
+
+    /** Runs once more at the end of the wait: `.trailing`. Needs [throttle], and the DSL refuses it without one. */
     public var throttleTrailing: Boolean = false
+
+    /** Wraps the expression in `document.startViewTransition()` where the browser has the View Transition API: `__viewtransition`. */
     public var viewTransition: Boolean = false
 
     internal fun build(): String =

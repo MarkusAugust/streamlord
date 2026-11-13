@@ -4,6 +4,7 @@
 {"what":"action","at":"4:19-4:25","n":0,"after":"import io.github.markusaugust.streamlord.html.*\n\nfun f() {\n    x.dataSignals(\"myX\" to 1)\n    dataText(\"\\$my-x\")\n}\n","edits":[{"file":"drawn/kotlin/signal-name-hyphen-2.kt","range":"4:20-4:24","text":"myX"}],"kind":"quickfix","preferred":true,"title":"Change to myX"}
 {"what":"hover","at":"4:7-4:18","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"4:7-4:18"}]}
 {"what":"hover","at":"5:5-5:13","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"5:5-5:13"}]}
+{"what":"hover","at":"5:17-5:21","answers":[{"contents":["**$my-x**\n\nDatastar reads it as `$['my-x']`, the signal path my-x in its store."],"range":"5:16-5:21"}]}
 {"what":"definition","at":"4:20-4:24","answers":[{"file":"drawn/kotlin/signal-name-hyphen-2.kt","range":"4:20-4:24"}]}
 {"what":"references","at":"4:20-4:24","answers":[{"file":"drawn/kotlin/signal-name-hyphen-2.kt","range":"4:20-4:24"}]}
 {"what":"rename","at":"1:1-4:19","error":"No signal here to rename."}

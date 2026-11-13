@@ -192,7 +192,7 @@ class DatastarExpressionInspection :
 
 /**
  * `data-*` attribute names, keys, modifiers and their arguments, values, an indicator with nothing
- * to show, signal names the client cannot hold, and the values it evaluates as filters or computeds.
+ * to show or set up too late, signal names the client cannot hold, and the values it evaluates as filters or computeds.
  */
 class DatastarAttributeInspection :
     StreamlordInspection(
@@ -211,6 +211,7 @@ class DatastarAttributeInspection :
             "pro-attribute",
             "prefix-mismatch",
             "indicator-without-action",
+            "indicator-order",
             "signal-name",
             "computed-value",
             "filter-pattern",
@@ -309,6 +310,7 @@ object InspectionCodes {
                 "pro-attribute",
                 "prefix-mismatch",
                 "indicator-without-action",
+                "indicator-order",
                 "signal-name",
                 "computed-value",
                 "filter-pattern",
