@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
-import com.intellij.openapi.editor.XmlHighlighterColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
@@ -50,11 +49,11 @@ class HighlightingTest : StreamlordTestCase() {
                 DatastarColors.KEYWORD to DefaultLanguageHighlighterColors.KEYWORD,
                 DatastarColors.NUMBER to DefaultLanguageHighlighterColors.NUMBER,
                 DatastarColors.KOTLIN_DOLLAR_ESCAPE to DefaultLanguageHighlighterColors.VALID_STRING_ESCAPE,
-                DatastarColors.ATTRIBUTE_PREFIX to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
-                DatastarColors.ATTRIBUTE_PLUGIN to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
-                DatastarColors.ATTRIBUTE_KEY to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
+                DatastarColors.ATTRIBUTE_PREFIX to DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE,
+                DatastarColors.ATTRIBUTE_PLUGIN to DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE,
+                DatastarColors.ATTRIBUTE_KEY to DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE,
                 DatastarColors.MODIFIER to DefaultLanguageHighlighterColors.KEYWORD,
-                DatastarColors.MODIFIER_SIGIL to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
+                DatastarColors.MODIFIER_SIGIL to DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE,
                 DatastarColors.MODIFIER_ARG to DefaultLanguageHighlighterColors.CONSTANT,
             )
         for ((key, fallback) in expected) assertEquals(key.externalName, fallback, key.fallbackAttributeKey)

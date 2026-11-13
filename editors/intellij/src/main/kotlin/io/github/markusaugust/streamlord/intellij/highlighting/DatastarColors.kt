@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.intellij.highlighting
 
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
-import com.intellij.openapi.editor.XmlHighlighterColors
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import io.github.markusaugust.streamlord.analysis.NamePart
 import io.github.markusaugust.streamlord.analysis.TokenKind
@@ -10,8 +9,8 @@ import io.github.markusaugust.streamlord.analysis.TokenKind
  * The colours of Datastar. Every key falls back to the standard key of the same kind of thing, the
  * one the VS Code grammar's scope names: a signal is coloured as a static field, an action as a
  * function declaration, a modifier as a keyword, a modifier's argument as a constant, and each part
- * of an attribute's name as an HTML attribute name. The plugin ships no colours of its own, so a
- * token takes whatever the theme gives that standard key; a colour set for Default or Darcula would
+ * of an attribute's name as a markup attribute, which HTML's attribute names fall back to. The
+ * plugin ships no colours of its own, so a token takes whatever the theme gives that standard key; a colour set for Default or Darcula would
  * win over the theme in every scheme built on them, which is how themes are built. Default and
  * Darcula colour every key but an identifier, a call and an operator, which they leave plain in
  * JavaScript too. The colour settings page lets the user give a token a face of its own.
@@ -43,11 +42,11 @@ object DatastarColors {
     val NUMBER: TextAttributesKey = key("NUMBER", DefaultLanguageHighlighterColors.NUMBER)
     val KOTLIN_DOLLAR_ESCAPE: TextAttributesKey = key("KOTLIN_DOLLAR_ESCAPE", DefaultLanguageHighlighterColors.VALID_STRING_ESCAPE)
 
-    val ATTRIBUTE_PREFIX: TextAttributesKey = key("ATTRIBUTE_PREFIX", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
-    val ATTRIBUTE_PLUGIN: TextAttributesKey = key("ATTRIBUTE_PLUGIN", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
-    val ATTRIBUTE_KEY: TextAttributesKey = key("ATTRIBUTE_KEY", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
+    val ATTRIBUTE_PREFIX: TextAttributesKey = key("ATTRIBUTE_PREFIX", DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE)
+    val ATTRIBUTE_PLUGIN: TextAttributesKey = key("ATTRIBUTE_PLUGIN", DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE)
+    val ATTRIBUTE_KEY: TextAttributesKey = key("ATTRIBUTE_KEY", DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE)
     val MODIFIER: TextAttributesKey = key("MODIFIER", DefaultLanguageHighlighterColors.KEYWORD)
-    val MODIFIER_SIGIL: TextAttributesKey = key("MODIFIER_SIGIL", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
+    val MODIFIER_SIGIL: TextAttributesKey = key("MODIFIER_SIGIL", DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE)
     val MODIFIER_ARG: TextAttributesKey = key("MODIFIER_ARG", DefaultLanguageHighlighterColors.CONSTANT)
 
     val ALL: List<TextAttributesKey> =
