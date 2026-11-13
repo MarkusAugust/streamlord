@@ -6,7 +6,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -47,16 +47,23 @@ class ElementsResponseViewTransitionSelectorTest {
         assertEquals(headers(case), response.headers)
     }
 
-    /** Without a view transition the client reads the selector and starts none, so the header is left out as the data line is. */
+    /**
+     * Without a view transition the client starts none and never uses the selector, so a selector
+     * given alone is a mistake, refused here as in a stream; a decoded frame that carries one alone
+     * comes back without it, as the client leaves it.
+     */
     @Test
-    fun `sends the selector only with a view transition, as a stream does`() {
+    fun `refuses the selector without a view transition, as a stream does`() {
         val case = cases.single { it.obj("argsRaw")!!.string("useViewTransition") == null }
         assertEquals(0, case.int("viewTransitions"))
         val args = case.obj("argsRaw")!!
         val selector = args.string("viewTransitionSelector")
-        assertEquals(emptyMap(), ElementsResponse(args.string("elements")!!, viewTransitionSelector = selector).headers)
-        val streamed = SseEncoder.encode(PatchElements(args.string("elements"), viewTransitionSelector = selector))
-        assertTrue("viewTransitionSelector" !in streamed, streamed)
+        val failure =
+            assertFailsWith<DatastarEventValidationException> { ElementsResponse(args.string("elements")!!, viewTransitionSelector = selector) }
+        assertTrue("useViewTransition" in failure.message.orEmpty(), failure.message)
+        assertFailsWith<DatastarEventValidationException> { PatchElements(args.string("elements"), viewTransitionSelector = selector) }
+        val frame = "event: datastar-patch-elements\ndata: viewTransitionSelector $selector\ndata: elements ${args.string("elements")}\n\n"
+        assertEquals(PatchElements(args.string("elements")), SseDecoder.decodeOne(frame))
     }
 
     /** A header arrives as written only in printable ASCII, the rule the answer's `selector` is held to. */

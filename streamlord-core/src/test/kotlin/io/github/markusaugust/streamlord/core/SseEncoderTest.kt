@@ -13,6 +13,7 @@ import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -80,6 +81,28 @@ class SseEncoderTest {
     fun `remove needs no elements`() {
         val out = SseEncoder.encode(PatchElements.remove("#a, #b"))
         assertEquals("event: datastar-patch-elements\ndata: selector #a, #b\ndata: mode remove\n\n", out)
+    }
+
+    /** The client reads useViewTransition and viewTransitionSelector for every mode, remove too (patchElements.ts). */
+    @Test
+    fun `a remove can run in a view transition on the element it names`() {
+        val out = SseEncoder.encode(PatchElements.remove("#a", useViewTransition = true, viewTransitionSelector = "#list"))
+        assertEquals(
+            "event: datastar-patch-elements\ndata: selector #a\ndata: mode remove\n" +
+                "data: useViewTransition true\ndata: viewTransitionSelector #list\n\n",
+            out,
+        )
+    }
+
+    /** Without useViewTransition the client never reads the selector, so asking for one is a mistake. */
+    @Test
+    fun `a view transition selector without a view transition is refused`() {
+        val failure =
+            assertFailsWith<DatastarEventValidationException> {
+                PatchElements("<p id=\"a\">x</p>", viewTransitionSelector = "#list")
+            }
+        assertTrue("useViewTransition" in failure.message.orEmpty(), failure.message)
+        assertFailsWith<DatastarEventValidationException> { PatchElements.remove("#a", viewTransitionSelector = "#list") }
     }
 
     @Test
