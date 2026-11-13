@@ -10,34 +10,8 @@ public object ProjectFiles {
 
     /** The template files read as markup by default, whatever language an editor gives them, lowercased and without dots. */
     public val TEMPLATE_EXTENSIONS: List<String> =
-        listOf(
-            "jte",
-            "kte",
-            "ftl",
-            "ftlh",
-            "vm",
-            "mustache",
-            "hbs",
-            "handlebars",
-            "peb",
-            "pebble",
-            "twig",
-            "jinja",
-            "jinja2",
-            "j2",
-            "cshtml",
-            "razor",
-            "php",
-            "erb",
-            "ejs",
-            "liquid",
-            "njk",
-            "edge",
-            "astro",
-            "svelte",
-            "vue",
-            "tmpl",
-            "gotmpl",
-            "gohtml",
-        )
+        (
+            "jte kte ftl ftlh vm mustache hbs handlebars peb pebble twig jinja jinja2 j2 cshtml razor php erb ejs liquid njk edge " +
+                "astro svelte vue tmpl gotmpl gohtml"
+        ).split(' ')
 }
