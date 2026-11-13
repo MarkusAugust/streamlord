@@ -116,7 +116,7 @@ private fun importsDsl(
     lex: (String) -> KotlinLex,
 ): Boolean {
     // A file read from disk may start with a byte order mark, which would hide an import on its first line.
-    val text = src.removePrefix("")
+    val text = src.removePrefix("\uFEFF")
     if (!USES_HTML_DSL.containsMatchIn(text)) return false
     val mask = lex(text).mask
     return USES_HTML_DSL.findAll(text).any { m -> mask[m.range.first + IMPORT_OR_PACKAGE.find(m.value)!!.range.first] }
