@@ -216,7 +216,9 @@ class TokensTest {
         // The signal and its path together cover what the client rewrites.
         for (text in listOf("\$123 + \$foo-bar.baz-qux.0 - \$a-b-1; \$foo. + \$x-", "\$a.b-c.d + \$_1-2_")) {
             val covered =
-                tokenizeExpression(text).fold(ArrayList<IntRange>()) { acc, t ->
+                tokenizeExpression(
+                    text,
+                ).filter { it.kind == TokenKind.SIGNAL || it.kind == TokenKind.SIGNAL_PATH }.fold(ArrayList<IntRange>()) { acc, t ->
                     if (t.kind == TokenKind.SIGNAL_PATH) acc[acc.lastIndex] = acc.last().first until t.end else acc += t.start until t.end
                     acc
                 }

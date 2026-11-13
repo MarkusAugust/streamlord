@@ -150,8 +150,24 @@ class ExpressionKindsTest {
 
     @Test
     fun `a signal name is a signal and its path`() {
-        assertEquals(listOf("user" to TokenKind.SIGNAL, ".name" to TokenKind.SIGNAL_PATH), "user.name".let { t -> tokenizeSignalName(t).map { t.substring(it.start, it.end) to it.kind } })
-        assertEquals(listOf("is-open" to TokenKind.SIGNAL), "is-open".let { t -> tokenizeSignalName(t).map { t.substring(it.start, it.end) to it.kind } })
+        assertEquals(
+            listOf("user" to TokenKind.SIGNAL, ".name" to TokenKind.SIGNAL_PATH),
+            "user.name".let { t ->
+                tokenizeSignalName(t).map {
+                    t.substring(it.start, it.end) to
+                        it.kind
+                }
+            },
+        )
+        assertEquals(
+            listOf("is-open" to TokenKind.SIGNAL),
+            "is-open".let { t ->
+                tokenizeSignalName(t).map {
+                    t.substring(it.start, it.end) to
+                        it.kind
+                }
+            },
+        )
         assertEquals(emptyList(), tokenizeSignalName("not a name"))
     }
 
