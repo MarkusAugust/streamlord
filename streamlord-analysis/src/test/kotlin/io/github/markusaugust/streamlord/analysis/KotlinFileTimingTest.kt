@@ -73,4 +73,32 @@ class KotlinFileTimingTest {
     fun `each value without quotes is offered its quotes without reading the markup before it again`() {
         grows("unquoted values", 1000) { n -> "package p${copy++}\nfun f(a: String) = \"<p>" + "<b title=\$a>x</b>".repeat(n) + "</p>\"" }
     }
+
+    // A function of the DSL with the calls a page has: actions, one with options, a template, an assignment and an HTML string.
+    private fun page(i: Int) =
+        """
+        fun FlowContent.f$i(id: String) {
+            div {
+                dataSignals("{count$i: 0}")
+                button { dataOnClick("@get('/x', {retry: 'error'})") }
+                button { dataOnClick("@post('/x/${'$'}{id}')") }
+                span { dataText("\${'$'}count$i + 1") }
+                input { attributes["data-bind:name$i"] = "" }
+                unsafe { +"<p data-on:click=\"@delete('/y')\">${'$'}id</p>" }
+            }
+        }
+        """.trimIndent()
+
+    @Test
+    fun `a file of functions with DSL calls is read in a time that grows with the file`() {
+        grows("functions with DSL calls", 20, file(::page))
+    }
+
+    @Test
+    fun `each template inside a call's arguments is placed without reading the call from its start again`() {
+        grows("DSL calls inside the arguments of one call", 100) { n ->
+            "package p${copy++}\nsuspend fun f(sse: S, id: String) = sse.patchElements(createHTML().div {\n" +
+                (0 until n).joinToString("\n") { "    button { dataOnClick(\"@get('/x/\${id}', {retry: 'error'})\") }" } + "\n})\n"
+        }
+    }
 }
