@@ -95,7 +95,7 @@ public data class Issue(
     val fixes: List<Fix> = emptyList(),
 ) {
     /** Where [start] falls in [source], the text the issue was found in. */
-    public fun position(source: String): SourcePosition = sourcePosition(source, start)
+    internal fun position(source: String): SourcePosition = sourcePosition(source, start)
 
     /**
      * The issue as one line in the form compilers write and IDEs and CI make clickable:
@@ -124,13 +124,13 @@ public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails
  * UTF-16 characters, as the offsets of an [Issue] do. Only `\n` breaks a line: `\r\n` counts as one
  * break, and a lone `\r` as none.
  */
-public data class SourcePosition(
+internal data class SourcePosition(
     val line: Int,
     val column: Int,
 )
 
 /** Where [offset] falls in [source]. An offset outside the text is held to its ends. */
-public fun sourcePosition(
+internal fun sourcePosition(
     source: String,
     offset: Int,
 ): SourcePosition {
@@ -147,7 +147,7 @@ public fun sourcePosition(
 }
 
 /** Where the diagnostics point: in the Datastar reference, and for a Kotlin value in an HTML string in Streamlord's own documentation. */
-public object Docs {
+internal object Docs {
     /** Streamlord's page on HTML strings and `interpolate`. */
     public const val STRINGS: String = "https://streamlord-docs.netlify.app/strings/"
     public const val ATTRIBUTES: String = "https://data-star.dev/reference/attributes"

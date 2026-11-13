@@ -111,7 +111,7 @@ private val OPTIONAL_END: Map<String, Set<String>> =
  * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
  * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
  */
-public val TEMPLATE_SYNTAX: Regex =
+internal val TEMPLATE_SYNTAX: Regex =
     regex(
         """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
             """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
@@ -378,7 +378,7 @@ private fun valueEnd(
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
  * inside a JavaScript template literal is JavaScript's own and does not count.
  */
-public fun hasTemplateSyntax(value: String): Boolean {
+internal fun hasTemplateSyntax(value: String): Boolean {
     val quotes = QuoteScan(value)
     return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
 }
@@ -530,7 +530,7 @@ internal fun withTemplateTagNames(html: String): String =
  * text.ts) and no key gives it back; [ClientCasing.readsAs] says what it would read. Shared by the HTML
  * warning and the Kotlin wire hint.
  */
-public fun wireKey(
+internal fun wireKey(
     key: String,
     keyCase: KeyCase?,
     explicitCase: String?,
@@ -607,9 +607,9 @@ internal fun dslEvent(site: CallSite): String? =
 internal const val DATASTAR_FETCH = "datastar-fetch"
 
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
-public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
+internal enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
 
-public fun keyKind(spec: AttributeSpec): KeyKind =
+internal fun keyKind(spec: AttributeSpec): KeyKind =
     when (spec.keyCase) {
         KeyCase.CAMEL -> KeyKind.SIGNAL
         KeyCase.KEBAB -> if (spec.name == "on") KeyKind.EVENT else KeyKind.CLASS
@@ -621,7 +621,7 @@ public fun keyKind(spec: AttributeSpec): KeyKind =
  * "the class isOpen", or, for a raw key, the key itself. One wording for the HTML warning, the
  * Kotlin wire hint and the hover note.
  */
-public fun keyReading(
+internal fun keyReading(
     spec: AttributeSpec,
     name: String,
     wire: String,
@@ -638,7 +638,7 @@ public fun keyReading(
  * the object form (attr.ts sets the key as written); a style property has no form that keeps one,
  * since the object form writes the key kebab-case (style.ts:50 in 1.0.5).
  */
-public fun rawKeyNote(
+internal fun rawKeyNote(
     spec: AttributeSpec,
     prefix: String,
     key: String,

@@ -25,6 +25,13 @@ All notable changes to Streamlord are recorded here. The format follows
   and `Requests.environment` are new, the request and the variables both editors send, and
   `Requests.parseRequestsFile` takes null for a file that is not there. The folders a project walk
   leaves out and the extensions read as markup are `ProjectFiles`.
+- streamlord-analysis shows less: what neither editor calls is internal. Among it are `JsParser`,
+  `Docs`, `lexKotlin`, `findKotlinStrings`, the markup key helpers (`keyKind`, `keyReading`,
+  `rawKeyNote`, `wireKey`, `hasTemplateSyntax`), `collectDeclaredSignals`, `isKnownSignal`,
+  `nearestSignal`, `Issue.position`, `Requests.parseEnv`, `mergeVariables`, `substitute`,
+  `sendableUrl`, `requestUrl` and `serializeRequestsFile`, and most of `Catalog`'s lookup tables.
+  Call `Requests.environment` and `Requests.streamRequest` for what the inspector sends, and
+  `Issue.format` for an issue's place.
 - The VS Code extension finds the signals of `.tmpl`, `.gotmpl` and `.gohtml` files too, which the
   IntelliJ plugin reads as markup by default: both editors read one list.
 - `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a

@@ -127,7 +127,7 @@ internal fun markupSignalReferences(
  * `{...init}`, may declare any signal, written `*`, and so may a page declared from a class only
  * its codec can name.
  */
-public fun isKnownSignal(
+internal fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
@@ -143,7 +143,7 @@ public fun isKnownSignal(
 }
 
 /** The defined signal [name] most likely misspells, or null when none is close. */
-public fun nearestSignal(
+internal fun nearestSignal(
     name: String,
     defined: Set<String>,
 ): String? {

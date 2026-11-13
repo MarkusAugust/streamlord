@@ -219,7 +219,7 @@ public object Requests {
         return ReadRequests(RequestsFile(entries.filterNotNull(), skipped = skipped), entries, raw)
     }
 
-    public fun serializeRequestsFile(file: RequestsFile): String {
+    internal fun serializeRequestsFile(file: RequestsFile): String {
         val sb = StringBuilder("{\n  \"version\": 1,\n  \"requests\": [")
         file.requests.forEachIndexed { i, r ->
             sb.append(if (i == 0) "\n" else ",\n")
@@ -423,7 +423,7 @@ public object Requests {
     }
 
     /** The variables with a field of their own, in the order the inspector lists them. Every other name is a param. */
-    public val ENV_KEYS: List<String> = listOf("baseUrl", "signals", "headers")
+    internal val ENV_KEYS: List<String> = listOf("baseUrl", "signals", "headers")
 
     /** The key in `.streamlord/env.json` that holds the values of the parameters a route reads. */
     public const val PARAMS: String = "params"
@@ -431,7 +431,7 @@ public object Requests {
     private const val INVALID = "$ENV_FILE is not valid"
 
     /** `.streamlord/env.json` as read: each key that is set and valid, and what is wrong with the rest. */
-    public data class Env(
+    internal data class Env(
         val baseUrl: String?,
         /** Compact JSON, spelled as in the file. */
         val signals: String?,
@@ -446,7 +446,7 @@ public object Requests {
      * `params` (objects of texts) are allowed, and anything else is reported rather than ignored, so
      * a typo does not quietly leave a value unset.
      */
-    public fun parseEnv(rawText: String): Env {
+    internal fun parseEnv(rawText: String): Env {
         val errors = ArrayList<String>()
         val text = rawText.removePrefix("\uFEFF")
         if (empty(text)) return Env(null, null, null, null, emptyList())
@@ -530,7 +530,7 @@ public object Requests {
     private val PARAM_NAME = regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
 
     /** Where [position] falls in [text], as an editor counts it: "at line 3, column 1". */
-    public fun lineAndColumn(
+    internal fun lineAndColumn(
         text: String,
         position: Int,
     ): String {
@@ -622,7 +622,7 @@ public object Requests {
      * then `signals`, `headers` and each param when the file sets them. The file comes first
      * because it is what the user wrote down; a server's log only fills in what they did not.
      */
-    public fun mergeVariables(
+    internal fun mergeVariables(
         defaultUrl: String,
         env: Env,
         running: RunningServer? = null,
@@ -675,13 +675,13 @@ public object Requests {
                 }
         }
 
-    public data class Substituted(
+    internal data class Substituted(
         val text: String,
         val missing: List<String>,
     )
 
     /** Replace `{{name}}` with values; unknown names are left in place and reported. */
-    public fun substitute(
+    internal fun substitute(
         text: String,
         vars: Map<String, String>,
     ): Substituted {
@@ -944,7 +944,7 @@ public object Requests {
     }
 
     /** The request as the Datastar client would send it, one identity for the recent list. */
-    public fun requestKey(r: SavedRequest): String = "${r.method} ${r.url}\n${r.signals.trim()}\n${r.headers.trim()}"
+    internal fun requestKey(r: SavedRequest): String = "${r.method} ${r.url}\n${r.signals.trim()}\n${r.headers.trim()}"
 
     public fun pushRecent(
         recent: List<SavedRequest>,
@@ -1037,7 +1037,7 @@ public object Requests {
     }
 
     /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
-    public fun requestUrl(
+    internal fun requestUrl(
         url: String,
         method: String,
         signalsJson: String,
@@ -1046,7 +1046,7 @@ public object Requests {
     private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
     /** The URL to send, or why it cannot be sent; exactly one of the two is set. */
-    public data class SendableUrl(
+    internal data class SendableUrl(
         val url: String?,
         val error: String?,
     )
@@ -1057,7 +1057,7 @@ public object Requests {
      * and a character beyond ASCII is sent as UTF-8 escapes. Anything curl refuses, globs away or
      * java.net.URI rejects is refused here, and the VS Code extension refuses the same URLs.
      */
-    public fun sendableUrl(url: String): SendableUrl {
+    internal fun sendableUrl(url: String): SendableUrl {
         fun refuse(message: String) = SendableUrl(null, message)
         val scheme =
             ABSOLUTE.find(url)?.groupValues?.get(1)

@@ -234,7 +234,7 @@ public class Analyzer(
      * The calls streamlord-html alone defines, which are somebody else's in a project without it:
      * the attributes' helpers, the expression call sites and the expression helpers.
      */
-    public val dslNames: Set<String> =
+    internal val dslNames: Set<String> =
         catalog.attributes.flatMap { it.kotlin }.toSet() + catalog.expressionCallSites.keys + catalog.signalNameHelpers.keys +
             "statements"
 
@@ -246,7 +246,7 @@ public class Analyzer(
     }
 
     /** Names of all DSL functions the analysis recognises in Kotlin source. */
-    public val callSiteNames: Set<String> get() = allSiteNames
+    internal val callSiteNames: Set<String> get() = allSiteNames
 
     private val lexCacheCap = 4 * 1024 * 1024
 
@@ -716,7 +716,7 @@ public class Analyzer(
         opts: MarkupOptions,
     ): List<Issue> = markup.validateMarkup(html, opts)
 
-    public fun validateExpression(text: String): List<Issue> = expressions.validate(text)
+    internal fun validateExpression(text: String): List<Issue> = expressions.validate(text)
 
     /**
      * A string that holds HTML but is not handed straight to a Streamlord call: a function that

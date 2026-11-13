@@ -98,7 +98,7 @@ internal fun charLiteralEnd(
 }
 
 /** Does a string literal start at [at]: a quote, or a run of dollars followed by a quote? */
-public fun isStringStart(
+internal fun isStringStart(
     src: String,
     at: Int,
 ): Boolean {
@@ -134,7 +134,7 @@ private class Decoder {
  * Read the string literal that starts at [at]: at its opening quote, or at the first `$` of a
  * multi-dollar prefix. Returns null if no literal starts there.
  */
-public fun readKotlinStringAt(
+internal fun readKotlinStringAt(
     src: String,
     at: Int,
 ): KotlinString? {

@@ -370,7 +370,7 @@ private fun collectSignals(
  * [collectSignals]: a signals class names what a handler reads, and a handler reading a name is
  * not a page declaring it. The drift check in [signalDrift] turns on exactly that difference.
  */
-public fun collectDeclaredSignals(
+internal fun collectDeclaredSignals(
     src: String,
     language: SourceLanguage,
 ): Set<String> = collect(src, language, reads = true, NOT_FOREIGN)
