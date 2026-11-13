@@ -793,7 +793,49 @@ public class ExpressionValidator(
         attribute: AttributeSpec? = null,
     ): List<Issue> =
         validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
-            (attribute?.let { scopeNameIssues(text, it, handed) } ?: emptyList())
+            (attribute?.let { scopeNameIssues(text, it, handed) + computedSideEffects(text, it) } ?: emptyList())
+
+    /**
+     * A signal changed or an action with a side effect called in `data-computed`, which the
+     * reference says must do neither: the client runs the expression again each time a signal it
+     * reads changes. `@peek` and the Pro formatters only compute a value.
+     */
+    private fun computedSideEffects(
+        text: String,
+        spec: AttributeSpec,
+    ): List<Issue> {
+        if (spec.name != "computed") return emptyList()
+        val regions = jsRegions(text)
+        val out = ArrayList<Issue>()
+        for (r in clientRewrite(text).rewrites) {
+            if (regions[r.start] != Region.CODE) continue
+            val written = if (r.signal) text.substring(r.start, r.end) else "@${r.name}"
+            val message =
+                when {
+                    r.signal && (ASSIGNS_AFTER.matchAt(text, r.end) != null || updatedBefore(text, r.start)) -> {
+                        "data-computed must not change signals, and this changes $written"
+                    }
+
+                    !r.signal && catalog.actionsByName[r.name]?.let { it.kind == "backend" || it.name in SIDE_EFFECT_ACTIONS } == true -> {
+                        "data-computed must not call actions, and this calls $written"
+                    }
+
+                    else -> {
+                        continue
+                    }
+                }
+            out +=
+                Issue(
+                    r.start,
+                    r.start + written.length,
+                    "$message: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.",
+                    Severity.WARNING,
+                    "computed-value",
+                    Docs.attribute("computed"),
+                )
+        }
+        return out
+    }
 
     private fun validateText(
         text: String,
@@ -1107,6 +1149,26 @@ public class ExpressionValidator(
         }
         return emptyList()
     }
+}
+
+/** An assignment after a signal, `= 1`, `+= 1`, or its update, `++`: not `==` or `=>`. */
+private val ASSIGNS_AFTER = regex("""\s*(?:(?:[-+*/%&|^]|\*\*|<<|>>>?|&&|\|\||\?\?)?=(?![=>])|\+\+|--)""")
+
+/** The actions besides the backend ones that change something: signals, the clipboard. */
+private val SIDE_EFFECT_ACTIONS = setOf("setAll", "toggleAll", "clipboard")
+
+/** Whether `++` or `--` stands before [at] in [text] as a prefix update, not as the postfix one of what precedes it. */
+private fun updatedBefore(
+    text: String,
+    at: Int,
+): Boolean {
+    var k = at
+    while (k > 0 && text[k - 1].isJsWhitespace()) k--
+    if (k < 2 || !(text.startsWith("++", k - 2) || text.startsWith("--", k - 2))) return false
+    var b = k - 2
+    while (b > 0 && text[b - 1].isJsWhitespace()) b--
+    val before = text.getOrNull(b - 1)
+    return !(before.isJsNamePart() || before == ')' || before == ']')
 }
 
 /**

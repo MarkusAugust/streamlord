@@ -13,15 +13,27 @@
   },
   "modifierGroups": {
     "timing": [
-      { "name": "delay", "type": "duration" },
-      { "name": "debounce", "type": "duration", "flags": ["leading", "notrailing"] },
-      { "name": "throttle", "type": "duration", "flags": ["noleading", "trailing"] }
+      { "name": "delay", "type": "duration", "doc": "Delay the event listener." },
+      {
+        "name": "debounce",
+        "type": "duration",
+        "flags": ["leading", "notrailing"],
+        "flagDocs": { "leading": "Debounce with leading edge.", "notrailing": "Debounce without trailing edge." },
+        "doc": "Debounce the event listener."
+      },
+      {
+        "name": "throttle",
+        "type": "duration",
+        "flags": ["noleading", "trailing"],
+        "flagDocs": { "noleading": "Throttle without leading edge.", "trailing": "Throttle with trailing edge." },
+        "doc": "Throttle the event listener."
+      }
     ],
     "case": [
-      { "name": "case", "type": "enum", "values": ["camel", "kebab", "snake", "pascal"] }
+      { "name": "case", "type": "enum", "values": ["camel", "kebab", "snake", "pascal"], "doc": "Converts the casing of the key." }
     ],
     "viewtransition": [
-      { "name": "viewtransition", "type": "flag" }
+      { "name": "viewtransition", "type": "flag", "doc": "Wraps the expression in document.startViewTransition() when the View Transition API is available." }
     ]
   },
   "attributes": [
@@ -48,8 +60,18 @@
       "kotlin": ["dataBind"],
       "modifiers": [
         { "$ref": "case" },
-        { "name": "prop", "type": "ident" },
-        { "name": "event", "type": "idents" }
+        {
+          "name": "prop",
+          "type": "ident",
+          "suggest": ["checked", "value"],
+          "doc": "Binds to a specific property instead of the default binding. Must not be a read-only property."
+        },
+        {
+          "name": "event",
+          "type": "idents",
+          "suggest": ["blur", "change", "input"],
+          "doc": "Defines which events sync the element property back to the signal."
+        }
       ],
       "doc": "Two-way binding between an input element and a signal."
     },
@@ -93,7 +115,7 @@
       "keyed": false,
       "valueKind": "none",
       "kotlin": ["dataIgnore"],
-      "modifiers": [{ "name": "self", "type": "flag" }],
+      "modifiers": [{ "name": "self", "type": "flag", "doc": "Only ignore the element itself, not its descendants." }],
       "doc": "Datastar leaves this element (and its subtree, unless __self) alone."
     },
     {
@@ -123,7 +145,7 @@
       "valueKind": "expression",
       "requires": "value",
       "kotlin": ["dataInit"],
-      "modifiers": [{ "name": "delay", "type": "duration" }, { "$ref": "viewtransition" }],
+      "modifiers": [{ "name": "delay", "type": "duration", "doc": "Delay the expression." }, { "$ref": "viewtransition" }],
       "doc": "Runs an expression once when the element enters the DOM."
     },
     {
@@ -132,7 +154,7 @@
       "keyed": false,
       "valueKind": "filter",
       "kotlin": ["dataJsonSignals"],
-      "modifiers": [{ "name": "terse", "type": "flag" }],
+      "modifiers": [{ "name": "terse", "type": "flag", "doc": "Outputs a more compact JSON format without extra whitespace." }],
       "doc": "Renders the signal store as JSON into the element. Debugging aid."
     },
     {
@@ -146,17 +168,17 @@
       "argNames": ["evt"],
       "kotlin": ["dataOn", "dataOnClick", "dataOnSubmit", "dataOnChange", "dataOnInput", "dataOnKeydown", "dataOnFetch"],
       "modifiers": [
-        { "name": "once", "type": "flag" },
-        { "name": "passive", "type": "flag" },
-        { "name": "capture", "type": "flag" },
+        { "name": "once", "type": "flag", "doc": "Only trigger the event listener once." },
+        { "name": "passive", "type": "flag", "doc": "Do not call preventDefault on the event listener." },
+        { "name": "capture", "type": "flag", "doc": "Use a capture event listener." },
         { "$ref": "case" },
         { "$ref": "timing" },
         { "$ref": "viewtransition" },
-        { "name": "window", "type": "flag" },
-        { "name": "document", "type": "flag" },
-        { "name": "outside", "type": "flag" },
-        { "name": "prevent", "type": "flag" },
-        { "name": "stop", "type": "flag" }
+        { "name": "window", "type": "flag", "doc": "Attaches the event listener to the window element." },
+        { "name": "document", "type": "flag", "doc": "Attaches the event listener to the document element." },
+        { "name": "outside", "type": "flag", "doc": "Triggers when the event is outside the element." },
+        { "name": "prevent", "type": "flag", "doc": "Calls preventDefault on the event listener." },
+        { "name": "stop", "type": "flag", "doc": "Calls stopPropagation on the event listener." }
       ],
       "doc": "Attaches an event listener. `evt` is the event; `el` the element."
     },
@@ -168,11 +190,19 @@
       "requires": "value",
       "kotlin": ["dataOnIntersect"],
       "modifiers": [
-        { "name": "once", "type": "flag" },
-        { "name": "exit", "type": "flag" },
-        { "name": "half", "type": "flag" },
-        { "name": "full", "type": "flag" },
-        { "name": "threshold", "type": "int", "min": 0, "max": 100, "ignoredWith": ["full", "half"] },
+        { "name": "once", "type": "flag", "doc": "Only triggers the event once." },
+        { "name": "exit", "type": "flag", "doc": "Only triggers the event when the element exits the viewport." },
+        { "name": "half", "type": "flag", "doc": "Triggers when half of the element is visible." },
+        { "name": "full", "type": "flag", "doc": "Triggers when the full element is visible." },
+        {
+          "name": "threshold",
+          "type": "int",
+          "min": 0,
+          "max": 100,
+          "ignoredWith": ["full", "half"],
+          "suggest": ["25", "50", "75", "100"],
+          "doc": "Triggers when the element is visible by a certain percentage."
+        },
         { "$ref": "timing" },
         { "$ref": "viewtransition" }
       ],
@@ -186,7 +216,13 @@
       "requires": "value",
       "kotlin": ["dataOnInterval"],
       "modifiers": [
-        { "name": "duration", "type": "duration", "flags": ["leading"] },
+        {
+          "name": "duration",
+          "type": "duration",
+          "flags": ["leading"],
+          "flagDocs": { "leading": "Execute the first interval immediately." },
+          "doc": "Sets the interval duration."
+        },
         { "$ref": "viewtransition" }
       ],
       "doc": "Runs an expression on an interval (default 1s)."
@@ -252,7 +288,7 @@
       "valueKind": "expression",
       "returnsValue": true,
       "kotlin": ["dataSignals"],
-      "modifiers": [{ "$ref": "case" }, { "name": "ifmissing", "type": "flag" }],
+      "modifiers": [{ "$ref": "case" }, { "name": "ifmissing", "type": "flag", "doc": "Only patches signals if their keys do not already exist." }],
       "doc": "Declares signals. Dotted names create nested signals."
     },
     {
@@ -365,7 +401,7 @@
       "keyed": true,
       "keyCase": "camel",
       "keyRequired": true,
-      "valueKind": "expression",
+      "valueKind": "text",
       "kotlin": ["dataMatchMedia"],
       "modifiers": [{ "$ref": "case" }],
       "doc": "Pro. A boolean signal that follows a media query."
@@ -398,7 +434,7 @@
       "keyCase": "raw",
       "valueKind": "filter",
       "kotlin": ["dataPersist"],
-      "modifiers": [{ "name": "session", "type": "flag" }],
+      "modifiers": [{ "name": "session", "type": "flag", "doc": "Persists signals in session storage instead of local storage." }],
       "doc": "Pro. Persists signals in local or session storage."
     },
     {
@@ -408,7 +444,10 @@
       "keyed": false,
       "valueKind": "filter",
       "kotlin": ["dataQueryString"],
-      "modifiers": [{ "name": "filter", "type": "flag" }, { "name": "history", "type": "flag" }],
+      "modifiers": [
+        { "name": "filter", "type": "flag", "doc": "Filters out empty values when syncing signal values to query string params." },
+        { "name": "history", "type": "flag", "doc": "Enables history support." }
+      ],
       "doc": "Pro. Two-way sync between signals and the URL query string."
     },
     {
@@ -429,10 +468,18 @@
       "valueKind": "none",
       "kotlin": ["dataScrollIntoView"],
       "modifiers": [
-        { "name": "smooth", "type": "flag" }, { "name": "instant", "type": "flag" }, { "name": "auto", "type": "flag" },
-        { "name": "hstart", "type": "flag" }, { "name": "hcenter", "type": "flag" }, { "name": "hend", "type": "flag" }, { "name": "hnearest", "type": "flag" },
-        { "name": "vstart", "type": "flag" }, { "name": "vcenter", "type": "flag" }, { "name": "vend", "type": "flag" }, { "name": "vnearest", "type": "flag" },
-        { "name": "focus", "type": "flag" }
+        { "name": "smooth", "type": "flag", "doc": "Scrolling is animated smoothly." },
+        { "name": "instant", "type": "flag", "doc": "Scrolling is instant." },
+        { "name": "auto", "type": "flag", "doc": "Scrolling is determined by the computed scroll-behavior CSS property." },
+        { "name": "hstart", "type": "flag", "doc": "Scrolls to the left of the element." },
+        { "name": "hcenter", "type": "flag", "doc": "Scrolls to the horizontal center of the element." },
+        { "name": "hend", "type": "flag", "doc": "Scrolls to the right of the element." },
+        { "name": "hnearest", "type": "flag", "doc": "Scrolls to the nearest horizontal edge of the element." },
+        { "name": "vstart", "type": "flag", "doc": "Scrolls to the top of the element." },
+        { "name": "vcenter", "type": "flag", "doc": "Scrolls to the vertical center of the element." },
+        { "name": "vend", "type": "flag", "doc": "Scrolls to the bottom of the element." },
+        { "name": "vnearest", "type": "flag", "doc": "Scrolls to the nearest vertical edge of the element." },
+        { "name": "focus", "type": "flag", "doc": "Focuses the element after scrolling." }
       ],
       "doc": "Pro. Scrolls the element into view."
     },

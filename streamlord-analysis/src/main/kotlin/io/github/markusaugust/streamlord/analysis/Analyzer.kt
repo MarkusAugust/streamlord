@@ -106,6 +106,18 @@ private val HAS_CAPITAL = regex("""[A-Z]""")
 private val LAMBDA_ASSIGNMENT = regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
 private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
 
+// The flags of the DSL's modifiers that it writes only after their duration, and refuses without it.
+private val DURATION_FLAGS =
+    mapOf(
+        "duration" to listOf("leading"),
+        "debounce" to listOf("debounceLeading", "debounceNoTrailing"),
+        "throttle" to listOf("throttleNoLeading", "throttleTrailing"),
+    )
+
+// No time at all, `0.seconds` or `Duration.ZERO`, which an interval refuses.
+private val ZERO_DURATION =
+    regex("""(?:0+(?:\.0+)?\.(?:nanoseconds|microseconds|milliseconds|seconds|minutes|hours|days)|(?:Duration\.)?ZERO)""")
+
 // The parameter a DSL helper takes its key by, when it is passed by name.
 private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
 private val DOLLAR_RUNS = regex("""\$+""")
@@ -339,6 +351,7 @@ public class Analyzer(
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
+            issues += modifierLambdaIssues(site, src)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src, lex)) {
                 for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
@@ -665,6 +678,7 @@ public class Analyzer(
                     src.substring(tag.start, tag.end),
                     hyphenated,
                     prefixSetting = opts.prefixSetting,
+                    movable = templates,
                 )
         }
         return issues
@@ -2171,10 +2185,72 @@ public class Analyzer(
     private fun modifiersLambda(
         site: CallSite,
         src: String,
-    ): String =
-        trailingLambdaText(site, src).ifEmpty {
-            (site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") })?.text ?: ""
+    ): String = modifiersLambdaAt(site, src).second
+
+    /** [modifiersLambda] and where it starts in [src]. */
+    private fun modifiersLambdaAt(
+        site: CallSite,
+        src: String,
+    ): Pair<Int, String> {
+        val trailing = trailingLambdaText(site, src)
+        if (trailing.isNotEmpty()) return src.indexOf('{', site.closeParen + 1) to trailing
+        val arg = site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") } ?: return 0 to ""
+        return arg.start to arg.text
+    }
+
+    /**
+     * What the DSL refuses as it renders, from the literals the lambda of modifiers of [site] sets:
+     * a flag of a duration that is not set, `half`, `full` and `threshold` together, a threshold
+     * out of 0 to 100, an interval of no time. A value the code computes is not judged.
+     */
+    private fun modifierLambdaIssues(
+        site: CallSite,
+        src: String,
+    ): List<Issue> {
+        if (site.name !in catalog.attributesByKotlin) return emptyList()
+        val (start, lambda) = modifiersLambdaAt(site, src)
+        if (lambda.isEmpty()) return emptyList()
+        // The strings blanked where they stand, so an offset in the lambda is one in the source.
+        val code = KOTLIN_STRING.replace(lambda) { m -> "\"" + " ".repeat(m.value.length - 2) + "\"" }
+        val set = LAMBDA_ASSIGNMENT.findAll(code).associateBy({ it.groupValues[1] }, { it })
+        val out = ArrayList<Issue>()
+
+        fun refuse(
+            m: MatchResult,
+            why: String,
+        ) {
+            val end = m.range.first + m.value.trimEnd().length
+            out += Issue(start + m.range.first, start + end, "Streamlord throws at render: $why.", Severity.ERROR, "modifier-args")
         }
+
+        fun on(name: String) = set[name]?.takeIf { it.groupValues[2].trim() == "true" }
+        for ((duration, flags) in DURATION_FLAGS) {
+            if (set[duration]
+                    ?.groupValues
+                    ?.get(2)
+                    ?.trim()
+                    .let { it == null || it == "null" }
+            ) {
+                flags.firstNotNullOfOrNull(::on)?.let { refuse(it, "${it.groupValues[1]} needs $duration, which is not set") }
+            }
+        }
+        val threshold = set["threshold"]?.takeIf { it.groupValues[2].trim() != "null" }
+        val alternatives = listOfNotNull(on("half"), on("full"), threshold).sortedBy { it.range.first }
+        if (alternatives.size > 1) refuse(alternatives[1], "half, full and threshold are alternatives; set one")
+        threshold?.groupValues?.get(2)?.trim()?.toIntOrNull()?.let {
+            if (it !in
+                0..100
+            ) {
+                refuse(threshold, "threshold must be between 0 and 100")
+            }
+        }
+        if (site.name == "dataOnInterval") {
+            set["duration"]?.let { m ->
+                if (ZERO_DURATION.matchEntire(m.groupValues[2].trim()) != null) refuse(m, "duration must be positive, not 0s")
+            }
+        }
+        return out
+    }
 
     /** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key ([signalNameRefusal]). */
     private fun valueNameIssues(

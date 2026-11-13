@@ -218,7 +218,11 @@ private class Brackets(
     }
 }
 
-/** The warnings for the arguments of every action called in [js], whose characters are [regions]; [span] maps a stretch of it back to the text. */
+/**
+ * The warnings for the arguments of every action called in [js], whose characters are [regions]; [span] maps a stretch of it back
+ * to the text. With [filterOf], the name of an attribute whose value the client hands to `filtered`, [js] is that value, judged
+ * whole as a signal filter, [filterLink] its documentation.
+ */
 @OptIn(InternalStreamlordApi::class)
 internal fun actionArgumentIssues(
     catalog: Catalog,
@@ -226,9 +230,11 @@ internal fun actionArgumentIssues(
     regions: ByteArray,
     rewrites: List<Rewrite>,
     span: (Int, Int) -> Pair<Int, Int>,
+    filterOf: String? = null,
+    filterLink: String = "",
 ): List<Issue> {
     val calls = rewrites.filter { !it.signal && regions[it.start] == Region.CODE && catalog.actionKinds[it.name]?.isNotEmpty() == true }
-    if (calls.isEmpty()) return emptyList()
+    if (calls.isEmpty() && filterOf == null) return emptyList()
     val brackets = Brackets(js, regions)
     val out = ArrayList<Issue>()
     val filterKey = { key: String ->
@@ -396,6 +402,16 @@ internal fun actionArgumentIssues(
         }
     }
 
+    if (filterOf != null) {
+        val v = brackets.value(brackets.trim(0, js.length))
+        if (!ArgumentKind.FILTER.takes(v) || v.written == Written.NULL) {
+            wrong(ArgumentKind.FILTER, v, "", filterChanges = false, url = false)?.let {
+                issue(v.start, v.end, "$filterOf takes ${ArgumentKind.FILTER.phrase()}, and $it", "option-value", filterLink)
+            }
+        } else if (v.written == Written.OBJECT) {
+            judgeObject(v.start, catalog.filterFields, filterKey, filterLink)
+        }
+    }
     for (r in calls) {
         val spec = catalog.actionsByName.getValue(r.name)
         val kinds = catalog.actionKinds.getValue(r.name)

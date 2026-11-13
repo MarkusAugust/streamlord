@@ -131,9 +131,41 @@ All notable changes to Streamlord are recorded here. The format follows
 - The catalog gives each action the kinds of its arguments and each option its kind and the values
   it takes, and `conformance/client/actions.json` records what the client declares, which the
   tests hold the catalog to.
+- In both editors, `data-indicator` after a `data-init` that sends a request on the same element
+  is a warning, with a fix that moves it first: the client applies an element's attributes in
+  their order and the init's request starts before the indicator exists, so the signal stays
+  false. An init with a modifier waits and is left alone.
+- In both editors, with the aliased prefix set, a plain `data-*` Datastar attribute with a key, a
+  modifier or a value that reads a signal or calls an action is a warning, with a fix that writes
+  the alias: the aliased client ignores it. A plain name another library uses, such as
+  `data-bind="text: name"`, says nothing.
+- In both editors, `data-text-foo`, `data-show-more` and the like, a key after a hyphen on an
+  attribute that takes none, get the hint and fix a near name gets, where the value reads as
+  Datastar's.
+- In both editors, `data-computed` that changes a signal or calls an action other than `@peek`
+  and the Pro formatters is a warning, as the reference says a computed must do neither.
+- In both editors, the value of `data-json-signals` and `data-on-signal-patch-filter` is held to
+  what `filtered` reads, as `filterSignals` is: a key other than `include` and `exclude`, a value
+  of either that is no pattern, and a value that is no object.
+- In both editors, the lambda of modifiers of a DSL call is read for what the DSL refuses as it
+  renders: a flag of a duration that is not set, `half`, `full` and `threshold` together, a
+  threshold outside 0 to 100, and an interval of no time.
+- Hover on a modifier or one of its tags shows the modifier's own documentation, its tags and
+  that a duration's flags come after it, where it showed the whole attribute's. Hover on `el`,
+  `evt`, `patch` and a signal in an expression says what each is.
+- Completion offers the values after `__threshold.`, `__prop.` and `__event.`, offers a flag of a
+  duration once, and offers the defined signals in the value of `data-bind`, `data-indicator` and
+  `data-ref`.
+- The catalog gives each modifier its documentation from the reference, the documentation of
+  each flag of a duration, and the values completion offers. `Modifier` in streamlord-analysis
+  has three more values, `doc`, `flagDocs` and `suggest`, last, each with a default; code compiled
+  against the old constructor needs a rebuild.
+- Every modifier property of the DSL has KDoc.
 
 ### Fixed
 
+- `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
+  the reference allows, and no longer an expression with a syntax error.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

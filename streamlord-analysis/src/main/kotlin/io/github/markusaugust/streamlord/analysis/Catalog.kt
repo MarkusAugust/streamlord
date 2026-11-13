@@ -17,6 +17,12 @@ public data class Modifier(
     val max: Int? = null,
     /** Modifiers with which the client never reads this one: `__full` and `__half` set the threshold themselves. */
     val ignoredWith: List<String> = emptyList(),
+    /** What the modifier does, in the reference's words. */
+    val doc: String = "",
+    /** What each of [flags] does. */
+    val flagDocs: Map<String, String> = emptyMap(),
+    /** The values completion offers after the modifier's dot, where the type does not list them. */
+    val suggest: List<String> = emptyList(),
 )
 
 /**
@@ -323,6 +329,9 @@ public class Catalog private constructor(
             min = m.int("min"),
             max = m.int("max"),
             ignoredWith = m.array("ignoredWith")?.strings() ?: emptyList(),
+            doc = m.string("doc") ?: "",
+            flagDocs = m.obj("flagDocs")?.let { docs -> docs.keys.associateWith { docs.string(it) ?: "" } } ?: emptyMap(),
+            suggest = m.array("suggest")?.strings() ?: emptyList(),
         )
 
     private fun flagged(obj: JsonObject): Map<String, Set<String>> =
