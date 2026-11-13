@@ -8,6 +8,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a
+  `data-on` listens for, after `attribute`. Source that names its arguments, or passes four or fewer,
+  compiles as before; code compiled against the old signature needs a rebuild.
 - The editors say a mode that needs a selector, and a blank or multi-line selector of
   `removeElements`, in core's words, `patchElements throws: Patch mode 'inner' requires a selector.`,
   where they had words of their own.
