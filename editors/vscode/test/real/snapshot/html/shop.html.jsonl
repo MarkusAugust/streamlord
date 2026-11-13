@@ -183,8 +183,8 @@
 {"what":"hover","at":"56:46-56:53","answers":[{"contents":[{"value":"21f7fac27093"}],"range":"56:46-56:53"}]}
 {"what":"hover","at":"57:6-57:12","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"57:6-57:12"}]}
 {"what":"hover","at":"57:13-57:26","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"57:13-57:26"}]}
-{"what":"hover","at":"57:28-57:35","answers":[{"contents":[{"value":"238379b8ca4d"}],"range":"57:28-57:35"}]}
-{"what":"hover","at":"57:69-57:79","answers":[{"contents":[{"value":"269fdbf30018"}],"range":"57:69-57:79"}]}
+{"what":"hover","at":"57:28-57:35","answers":[{"contents":[{"value":"2a6cfcd57841"}],"range":"57:28-57:35"}]}
+{"what":"hover","at":"57:69-57:79","answers":[{"contents":[{"value":"d092a6e60c22"}],"range":"57:69-57:79"}]}
 {"what":"hover","at":"57:105-57:111","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"57:105-57:111"}]}
 {"what":"hover","at":"58:6-58:10","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"58:6-58:10"}]}
 {"what":"hover","at":"58:11-58:20","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"58:11-58:20"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"58:11-58:20"}]}
