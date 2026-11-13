@@ -251,8 +251,8 @@
       ]
     },
     "regex": {
-      "comment": "A slash opens a regex where a value cannot stand before it: at the start of the value, after its opening quote, or after an operator, a bracket, a comma or a keyword. After a value it divides. Its body stops at a quote, which may close the value, and no pattern here uses \\G, which would cost the engine its cache on a long line.",
-      "match": "(?:^|(?<=[\"'(,=:!&|?{};\\[+\\-*%<>~^]|\\breturn|\\btypeof|\\bin|\\bof))(\\s*)(/(?![/*])(?:\\\\.|\\[(?:\\\\.|[^\\]\\\\])*\\]|[^/\\\\\\[\\n\"'])+/[dgimsuy]*)",
+      "comment": "A slash opens a regex where a value cannot stand before it: at the start of the value, after its opening quote, or after an operator other than ++ and --, a bracket, a comma or a keyword. After a value it divides. No pattern here uses \\G, which would cost the engine its cache of matches on a long line.",
+      "match": "(?:^|(?<=[\"'(,=:!&|?{};\\[*%<>~^]|[^+]\\+|[^-]-|\\breturn|\\btypeof|\\bin|\\bof))(\\s*)(/(?![/*])(?:\\\\.|\\[(?:\\\\.|[^\\]\\\\])*\\]|[^/\\\\\\[\\n])+/[dgimsuy]*)",
       "captures": {
         "2": {
           "name": "string.regexp.datastar"

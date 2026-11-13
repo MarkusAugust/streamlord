@@ -551,6 +551,9 @@ describe("datastar colours, every token exactly", () => {
       ["// $d", "comment.line.double-slash.datastar"],
     ]);
     assert.equal(t[t.length - 2]![1], S.stringEnd, "the comment ends where the value does");
+    const after = await kinds("text.html.basic", `<div data-text="$a++ / $b / 2" data-show="/'/.test($c)">`);
+    assert.ok(!after.some(([, s]) => s === "string.regexp.datastar" && after.find(([x]) => x === "/ $b /")), "a slash after ++ divides");
+    assert.deepEqual(between(after, "/'/"), [["/'/", "string.regexp.datastar"], [".", S.accessor], ["test", S.method], ["(", S.punctuation], ["$", S.dollar], ["c", S.signal], [")", S.punctuation], ['"', S.stringEnd], [">", "punctuation.definition.tag.end.html"]]);
   });
 
   it("reads an HTML entity quote as a string, an unquoted value as an expression", async () => {
