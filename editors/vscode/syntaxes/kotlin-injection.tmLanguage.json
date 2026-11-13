@@ -69,6 +69,20 @@
           },
           "patterns": [
             {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.inline.datastar",
+              "patterns": [
+                {
+                  "include": "source.datastar"
+                },
+                {
+                  "include": "#kotlin-escapes"
+                }
+              ]
+            },
+            {
               "begin": "\\G(?<=\\$\\$\")",
               "end": "(?=\")",
               "name": "meta.kotlin-template.two.streamlord",
@@ -189,6 +203,17 @@
           },
           "patterns": [
             {
+              "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
               "begin": "\\G(?<=\\$\\$\"\"\")",
               "end": "(?=\"\"\")",
               "name": "meta.kotlin-template.two.streamlord",
@@ -231,6 +256,20 @@
           },
           "patterns": [
             {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
               "begin": "\\G(?<=\\$\\$\")",
               "end": "(?=\")",
               "name": "meta.kotlin-template.two.streamlord",
@@ -268,6 +307,40 @@
       "patterns": [
         {
           "begin": "(\\$\\$\"\"\")[ \\t]*$",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "name": "meta.kotlin-string.streamlord",
+          "patterns": [
+            {
+              "begin": "^(?=[ \\t]*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "^(?=[ \\t]*\\S)",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord string.quoted.triple.kotlin",
+              "patterns": []
+            }
+          ]
+        },
+        {
+          "begin": "(\\$\"\"\")[ \\t]*$",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -358,6 +431,17 @@
       },
       "patterns": [
         {
+          "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+          "end": "(?=\"\"\")",
+          "name": "meta.kotlin-template.three.streamlord",
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        },
+        {
           "begin": "\\G(?<=\\$\\$\"\"\")",
           "end": "(?=\"\"\")",
           "name": "meta.kotlin-template.two.streamlord",
@@ -400,6 +484,20 @@
         }
       },
       "patterns": [
+        {
+          "begin": "\\G(?<=\\$\\$\\$\")",
+          "end": "(?=\")",
+          "name": "meta.kotlin-template.three.streamlord",
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "include": "#kotlin-escapes"
+            },
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        },
         {
           "begin": "\\G(?<=\\$\\$\")",
           "end": "(?=\")",
@@ -472,6 +570,17 @@
       "comment": "The body of a string that holds an expression. Whether one dollar or two open a Kotlin template is read from the text that opened the string, which a lookbehind at the body's start sees; streamlord.kotlin.template.injection colours the templates.",
       "patterns": [
         {
+          "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+          "end": "(?=\"\"\")",
+          "name": "meta.kotlin-template.three.streamlord",
+          "contentName": "meta.embedded.inline.datastar",
+          "patterns": [
+            {
+              "include": "source.datastar"
+            }
+          ]
+        },
+        {
           "begin": "\\G(?<=\\$\\$\"\"\")",
           "end": "(?=\"\"\")",
           "name": "meta.kotlin-template.two.streamlord",
@@ -490,6 +599,20 @@
           "patterns": [
             {
               "include": "source.datastar"
+            }
+          ]
+        },
+        {
+          "begin": "\\G(?<=\\$\\$\\$\")",
+          "end": "(?=\")",
+          "name": "meta.kotlin-template.three.streamlord",
+          "contentName": "meta.embedded.inline.datastar",
+          "patterns": [
+            {
+              "include": "source.datastar"
+            },
+            {
+              "include": "#kotlin-escapes"
             }
           ]
         },
@@ -1023,6 +1146,17 @@
           },
           "patterns": [
             {
+              "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
               "begin": "\\G(?<=\\$\\$\"\"\")",
               "end": "(?=\"\"\")",
               "name": "meta.kotlin-template.two.streamlord",
@@ -1067,6 +1201,20 @@
             }
           },
           "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
             {
               "begin": "\\G(?<=\\$\\$\")",
               "end": "(?=\")",
@@ -1121,6 +1269,17 @@
           },
           "patterns": [
             {
+              "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.javascript",
+              "patterns": [
+                {
+                  "include": "source.js"
+                }
+              ]
+            },
+            {
               "begin": "\\G(?<=\\$\\$\"\"\")",
               "end": "(?=\"\"\")",
               "name": "meta.kotlin-template.two.streamlord",
@@ -1165,6 +1324,20 @@
             }
           },
           "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.javascript",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "source.js"
+                }
+              ]
+            },
             {
               "begin": "\\G(?<=\\$\\$\")",
               "end": "(?=\")",

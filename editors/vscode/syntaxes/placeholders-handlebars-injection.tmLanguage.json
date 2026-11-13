@@ -1,4 +1,42 @@
 {
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "streamlord.placeholders.handlebars.injection",
-  "patterns": []
+  "comment": "Handlebars's placeholders in a Datastar attribute's value are the engine's, written before the browser reads the value, as the analysis leaves them out: they get the scopes VS Code's Handlebars grammar gives them, and no Datastar scope.",
+  "injectionSelector": "L:text.html.handlebars meta.value.datastar",
+  "patterns": [
+    {
+      "begin": "\\{\\{~?!--",
+      "end": "--~?\\}\\}",
+      "name": "comment.block.handlebars"
+    },
+    {
+      "begin": "\\{\\{~?!",
+      "end": "~?\\}\\}",
+      "name": "comment.block.handlebars"
+    },
+    {
+      "begin": "(\\{\\{~?\\{*[#/^>&]?)\\s*(@?[-\\p{L}\\p{N}$_./]+)?",
+      "end": "(~?\\}\\}\\}*)",
+      "name": "meta.function.inline.other.handlebars",
+      "beginCaptures": {
+        "1": {
+          "name": "support.constant.handlebars"
+        },
+        "2": {
+          "name": "variable.parameter.handlebars"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "support.constant.handlebars"
+        }
+      },
+      "patterns": [
+        {
+          "match": "'[^']*'",
+          "name": "string.quoted.single.handlebars"
+        }
+      ]
+    }
+  ]
 }

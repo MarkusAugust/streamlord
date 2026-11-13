@@ -12,8 +12,11 @@ const RAW_END = "punctuation.definition.string.end.kotlin string.quoted.triple.k
 const DQ_START = "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin";
 const DQ_END = "punctuation.definition.string.end.kotlin string.quoted.double.kotlin";
 const FN = { name: "entity.name.function.kotlin" };
-const ONE = "meta.kotlin-template.one.streamlord";
-const TWO = "meta.kotlin-template.two.streamlord";
+/** How many dollars open a template in a string, as its prefix says: the marker the template injections read. Kotlin has no use for more than three. */
+const MARKERS = { 3: "meta.kotlin-template.three.streamlord", 2: "meta.kotlin-template.two.streamlord", 1: "meta.kotlin-template.one.streamlord" };
+const ONE = MARKERS[1];
+/** The text before a string's body that says it opens with [n] dollars: a lookbehind at the body's start. */
+const opened = (n, quote) => (n === 1 ? "" : r`(?<=` + "\\$".repeat(n) + quote + ")");
 const EMB = "meta.embedded.inline.datastar";
 /** Every string this grammar opens has it, so no injected rule starts at its closing quote: an injection wins over a rule's end at the same place. */
 const STRING = "meta.kotlin-string.streamlord";
@@ -34,10 +37,13 @@ const alternation = (names) => [...new Set(names)].sort((a, b) => b.length - a.l
 /** The body of a string whose dollars decide what opens a Kotlin template, read from the text that opened it. */
 function marked(quote, raw, content, inner, single = []) {
   const escapes = raw ? [] : [{ include: "#kotlin-escapes" }];
-  return [
-    { begin: r`\G(?<=\$\$` + quote + ")", end: "(?=" + quote + ")", name: TWO, contentName: content, patterns: [...escapes, ...inner] },
-    { begin: r`\G`, end: "(?=" + quote + ")", name: ONE, contentName: content, patterns: [...escapes, ...single, ...inner] },
-  ];
+  return [3, 2, 1].map((n) => ({
+    begin: r`\G` + opened(n, quote),
+    end: "(?=" + quote + ")",
+    name: MARKERS[n],
+    contentName: content,
+    patterns: [...escapes, ...(n === 1 ? single : []), ...inner],
+  }));
 }
 
 /** A string that holds HTML or JavaScript: raw or plain, its templates marked. */
@@ -166,8 +172,8 @@ export function kotlinInjectionGrammar(catalog) {
     "html-string-next-line": {
       comment:
         "A raw string that ends its first line: HTML when its next line opens with a tag, as `val h = \"\"\"` and `\"\"\".trimIndent()` write it, else a string. Its first line cannot tell which, so it is read here either way, with the templates its dollars open.",
-      patterns: [true, false].map((two) => ({
-        begin: (two ? r`(\$\$""")` : r`(""")`) + r`[ \t]*$`,
+      patterns: [3, 2, 1].map((n) => ({
+        begin: "(" + "\\$".repeat(n - 1) + '""")' + r`[ \t]*$`,
         beginCaptures: { 1: { name: RAW_START } },
         end: '(""")',
         endCaptures: { 1: { name: RAW_END } },
@@ -176,11 +182,11 @@ export function kotlinInjectionGrammar(catalog) {
           {
             begin: r`^(?=[ \t]*<(?:[A-Za-z]|!--|!(?i:doctype)))`,
             end: '(?=""")',
-            name: two ? TWO : ONE,
+            name: MARKERS[n],
             contentName: "meta.embedded.block.html",
-            patterns: [...(two ? [] : [{ include: "#dollar-escape" }]), { include: "text.html.basic" }],
+            patterns: [...(n === 1 ? [{ include: "#dollar-escape" }] : []), { include: "text.html.basic" }],
           },
-          { begin: r`^(?=[ \t]*\S)`, end: '(?=""")', name: (two ? TWO : ONE) + " string.quoted.triple.kotlin", patterns: two ? [] : [{ include: "#dollar-escape" }] },
+          { begin: r`^(?=[ \t]*\S)`, end: '(?=""")', name: MARKERS[n] + " string.quoted.triple.kotlin", patterns: n === 1 ? [{ include: "#dollar-escape" }] : [] },
         ],
       })),
     },
@@ -209,12 +215,15 @@ export function kotlinInjectionGrammar(catalog) {
     "expression-string-body": {
       comment:
         "The body of a string that holds an expression. Whether one dollar or two open a Kotlin template is read from the text that opened the string, which a lookbehind at the body's start sees; streamlord.kotlin.template.injection colours the templates.",
-      patterns: [
-        { begin: r`\G(?<=\$\$""")`, end: '(?=""")', name: TWO, contentName: EMB, patterns: [{ include: "source.datastar" }] },
-        { begin: r`\G(?<=""")`, end: '(?=""")', name: ONE, contentName: EMB, patterns: [{ include: "source.datastar" }] },
-        { begin: r`\G(?<=\$\$")`, end: '(?=")', name: TWO, contentName: EMB, patterns: [{ include: "source.datastar" }, { include: "#kotlin-escapes" }] },
-        { begin: r`\G(?<=")`, end: '(?=")', name: ONE, contentName: EMB, patterns: [{ include: "source.datastar" }, { include: "#kotlin-escapes" }] },
-      ],
+      patterns: ['"""', '"'].flatMap((quote) =>
+        [3, 2, 1].map((n) => ({
+          begin: r`\G` + (n === 1 ? r`(?<=` + quote + ")" : opened(n, quote)),
+          end: "(?=" + quote + ")",
+          name: MARKERS[n],
+          contentName: EMB,
+          patterns: [{ include: "source.datastar" }, ...(quote === '"' ? [{ include: "#kotlin-escapes" }] : [])],
+        })),
+      ),
     },
     "expression-call-first-arg": expressionCall(
       "dataOnClick(\"...\"), dataText(\"...\") and friends: the first argument is the expression, in any kind of string, or passed by name. After a receiver too, where a grammar may colour the call from its dot.",
@@ -334,6 +343,35 @@ export function kotlinDslInjectionGrammar() {
       "html-string",
       "html-string-next-line",
     ].map((k) => ({ include: "streamlord.kotlin.injection#" + k })),
+  };
+}
+
+/** The Kotlin templates of a string that [n] dollars open a template in; a shorter run of dollars is text, a signal's `$` among it. */
+export function kotlinTemplateInjectionGrammar(n) {
+  const dollars = "\\$".repeat(n);
+  // One dollar after a backslash is an escaped one; more are matched from the first, so a longer run leaves its first dollars as text.
+  const before = n === 1 ? r`(?<!\\)` : "";
+  return {
+    $schema: "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    comment: `Generated by scripts/kotlinGrammar.mjs (npm run generate). Kotlin's templates in a string streamlord.kotlin.injection reads that ${n} dollar${n === 1 ? "" : "s"} open${n === 1 ? "s" : ""} a template in: what a template inserts is Kotlin's, never a signal.`,
+    scopeName: `streamlord.kotlin.template${n === 1 ? "" : n}.injection`,
+    injectionSelector: `L:${MARKERS[n]} -meta.template.expression.kotlin`,
+    patterns: [
+      {
+        match: before + "(" + dollars + r`)([A-Za-z_][A-Za-z0-9_]*)`,
+        name: "meta.template.expression.kotlin",
+        captures: { 1: { name: "punctuation.definition.template-expression.begin.kotlin" }, 2: { name: "variable.other.readwrite.kotlin" } },
+      },
+      {
+        begin: before + dollars + r`\{` + (n === 1 ? r`(?!'\$'\})` : ""),
+        end: r`\}`,
+        name: "meta.template.expression.kotlin",
+        beginCaptures: { 0: { name: "punctuation.definition.template-expression.begin.kotlin" } },
+        endCaptures: { 0: { name: "punctuation.definition.template-expression.end.kotlin" } },
+        patterns: [{ include: "#braces" }, { include: "source.kotlin" }],
+      },
+    ],
+    repository: { braces: { begin: r`\{`, end: r`\}`, patterns: [{ include: "#braces" }, { include: "source.kotlin" }] } },
   };
 }
 

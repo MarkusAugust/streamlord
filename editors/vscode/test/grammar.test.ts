@@ -29,6 +29,8 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "text.html.handlebars": read("test/fixtures/host-handlebars.json"),
   // The grammars of maj2c.jte-template-syntax-highlight (.jte and .kte) and dawhite.mustache, as they ship; see host-grammars-LICENSES.txt.
   "text.html.jte": read("test/fixtures/host-jte.json"),
+  // VS Code's own Java grammar, which the jte grammar's placeholders hold; an empty stand-in here.
+  "source.java": { scopeName: "source.java", patterns: [] } as unknown as textmate.IRawGrammar,
   "source.mustache": tm.parseRawGrammar(readFileSync(new URL("test/fixtures/host-mustache.tmLanguage", root), "utf8"), "host-mustache.tmLanguage"),
   "streamlord.placeholders.jte.injection": read("syntaxes/placeholders-jte-injection.tmLanguage.json"),
   "streamlord.placeholders.handlebars.injection": read("syntaxes/placeholders-handlebars-injection.tmLanguage.json"),
@@ -458,7 +460,7 @@ describe("datastar colours, every token exactly", () => {
       ["=", S.assignment],
       ["{", S.punctuation],
       ["a", S.objectKey],
-      [":", S.arithmetic],
+      [":", "punctuation.separator.key-value.datastar"],
       ["Math", S.global],
       [".", S.accessor],
       ["max", S.method],
@@ -469,7 +471,7 @@ describe("datastar colours, every token exactly", () => {
       [")", S.punctuation],
       [",", S.punctuation],
       ["b", S.objectKey],
-      [":", S.arithmetic],
+      [":", "punctuation.separator.key-value.datastar"],
       ["go", S.call],
       ["(", S.punctuation],
       ["(", S.punctuation],
@@ -574,7 +576,7 @@ describe("datastar colours, every token exactly", () => {
     assert.deepEqual(between(t, "{", "}"), [
       ["{", S.punctuation],
       ["include", S.option],
-      [":", S.arithmetic],
+      [":", "punctuation.separator.key-value.datastar"],
       ["/^a/", "string.regexp.datastar"],
       ["}", S.punctuation],
     ]);
@@ -704,11 +706,13 @@ describe("what is not Datastar's", () => {
       ["source.mustache", "{{", "mustache"],
     ] as const) {
       const close = open === "${" ? "}" : "}}";
-      const t = await tokens(scope, `<div data-on:click="$sel = '${open}item.id${close}'; $n = ${open}count${close}" data-nonce="${open}nonce${close}" data-show="$a">`);
-      for (const name of ["item", "count", "nonce"]) {
+      const t = await tokens(scope, `<div data-on:click="$sel = '${open}item.id${close}'; $n = ${open}count${close}" data-nonce="${open}token${close}" data-show="$a">`);
+      for (const name of ["item", "count", "token"]) {
         const tok = t.find((x) => x.text.includes(name))!;
-        assert.ok(tok.scopes.some((s) => s.includes(engine)), `${scope} ${name}: ${tok.scopes.join(" ")}`);
-        assert.ok(!own(tok).includes("datastar"), `${scope} ${name}: ${own(tok)}`);
+        // Inside a JavaScript string the engine's scope stands within the string's; nothing of Datastar's is inside it.
+        const at = tok.scopes.findIndex((s, i) => i > 0 && s.includes(engine));
+        assert.ok(at >= 0, `${scope} ${name}: ${tok.scopes.join(" ")}`);
+        assert.ok(!tok.scopes.slice(at).some((s) => s.includes("datastar")), `${scope} ${name}: ${tok.scopes.join(" ")}`);
       }
       assert.ok(t.some((x) => x.text === "sel" && x.scopes.includes(S.signal)), `${scope}: the signal`);
       assert.ok(t.some((x) => x.text === "a" && x.scopes.includes(S.signal)), `${scope}: the next attribute`);
@@ -734,7 +738,7 @@ describe("what is not Datastar's", () => {
   it("gives an object key's colon a punctuation scope, and a signal attribute only a name", async () => {
     const t = await kinds("text.html.basic", `<div data-signals="{slots: 8}" data-on:click="@post('/x', {retry: 'never'})" data-indicator="a b">`);
     assert.deepEqual(between(t, "slots", "8"), [["slots", S.objectKey], [":", "punctuation.separator.key-value.datastar"], ["8", S.number]]);
-    assert.deepEqual(between(t, "retry", "'never'"), [["retry", S.option], [":", "punctuation.separator.key-value.datastar"], ["'never'", "string.quoted.single.datastar"]]);
+    assert.deepEqual(between(t, "retry", ":"), [["retry", S.option], [":", "punctuation.separator.key-value.datastar"]]);
     assert.ok(!t.some(([text, s]) => (text === "a" || text === "b") && s.includes("signal")), JSON.stringify(t));
     const ternary = await kinds("text.html.basic", `<div data-text="$a ? 1 : 2">`);
     assert.deepEqual(between(ternary, "?", "2"), [["?", S.arithmetic], ["1", S.number], [":", S.arithmetic], ["2", S.number]]);

@@ -9,7 +9,8 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { domEventsFile, pinnedLibDom } from "./domEvents.mjs";
-import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar } from "./kotlinGrammar.mjs";
+import { htmlElementInjectionGrammar } from "./htmlGrammar.mjs";
+import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar, kotlinTemplateInjectionGrammar } from "./kotlinGrammar.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -78,5 +79,12 @@ writeFileSync(join(root, "../../catalog/dom-events.json"), domEventsFile(pinnedL
 // ---- The Kotlin injection grammars, whose lists are the catalog's ---------------------------
 writeFileSync(join(root, "syntaxes/kotlin-injection.tmLanguage.json"), grammarText(kotlinInjectionGrammar(catalog)));
 writeFileSync(join(root, "syntaxes/kotlin-dsl-injection.tmLanguage.json"), grammarText(kotlinDslInjectionGrammar()));
+writeFileSync(
+  join(root, "syntaxes/html-element-injection.tmLanguage.json"),
+  grammarText(htmlElementInjectionGrammar(JSON.parse(readFileSync(join(root, "syntaxes/html-injection.tmLanguage.json"), "utf8")))),
+);
+for (const n of [1, 2, 3]) {
+  writeFileSync(join(root, `syntaxes/kotlin-template${n === 1 ? "" : n}-injection.tmLanguage.json`), grammarText(kotlinTemplateInjectionGrammar(n)));
+}
 
 console.log(`generated the Kotlin injection grammars, catalog/dom-events.json, html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);

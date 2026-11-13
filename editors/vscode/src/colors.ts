@@ -53,14 +53,73 @@ export function withRecommendedColors(current: TokenColors, theme: Theme): Token
 
 const hasOwned = (colors: unknown) => ((colors as TokenColors | undefined)?.textMateRules ?? []).some(owned);
 
-/** The theme in use: the one auto-detection picked for the system's kind, or the one chosen. */
+/** The settings that name the theme in use. */
+export interface ThemeSettings {
+  colorTheme?: string;
+  preferredDarkColorTheme?: string;
+  preferredLightColorTheme?: string;
+  preferredHighContrastColorTheme?: string;
+  preferredHighContrastLightColorTheme?: string;
+  autoDetectColorScheme?: boolean;
+  autoDetectHighContrast?: boolean;
+}
+
+export type ThemeKind = "dark" | "light" | "highContrast" | "highContrastLight";
+
+/**
+ * The theme in use, from its kind and the settings: a high contrast theme is the one auto-detection
+ * picked when it is on, as it is by default; a dark or light one the one it picked for the system's
+ * scheme when that is on; else the chosen one.
+ */
+export function themeInUse(kind: ThemeKind, settings: ThemeSettings): Theme {
+  const dark = kind === "dark" || kind === "highContrast";
+  const picked =
+    kind === "highContrast" || kind === "highContrastLight"
+      ? (settings.autoDetectHighContrast ?? true)
+        ? kind === "highContrast"
+          ? settings.preferredHighContrastColorTheme
+          : settings.preferredHighContrastLightColorTheme
+        : undefined
+      : settings.autoDetectColorScheme
+        ? dark
+          ? settings.preferredDarkColorTheme
+          : settings.preferredLightColorTheme
+        : undefined;
+  return { name: picked ?? settings.colorTheme ?? (dark ? "Default Dark Modern" : "Default Light Modern"), dark };
+}
+
+/** The palettes already written, each rewritten as this version has it: a scope renamed since is followed. */
+export function refreshedRecommendedColors(current: TokenColors): TokenColors {
+  let next = current;
+  for (const [key, value] of Object.entries(current)) {
+    const rules = (value as TokenColors | undefined)?.textMateRules;
+    if (!key.startsWith("[") || !rules?.some(owned)) continue;
+    // A palette is the light one when its signal has the light colour.
+    const signal = (palette: Rule[]) => palette.find((r) => r.name === "Streamlord: signal")?.settings.foreground;
+    const light = rules.some((r) => r.name === "Streamlord: signal" && r.settings.foreground === signal(LIGHT_RULES));
+    next = withRecommendedColors(next, { name: key.slice(1, -1), dark: !light });
+  }
+  return next;
+}
+
 function activeTheme(): Theme {
-  const kind = vscode.window.activeColorTheme.kind;
-  const dark = kind === vscode.ColorThemeKind.Dark || kind === vscode.ColorThemeKind.HighContrast;
+  const kinds: Record<number, ThemeKind> = {
+    [vscode.ColorThemeKind.Dark]: "dark",
+    [vscode.ColorThemeKind.Light]: "light",
+    [vscode.ColorThemeKind.HighContrast]: "highContrast",
+    [vscode.ColorThemeKind.HighContrastLight]: "highContrastLight",
+  };
   const workbench = vscode.workspace.getConfiguration("workbench");
-  const auto = vscode.workspace.getConfiguration("window").get<boolean>("autoDetectColorScheme") ?? false;
-  const name = workbench.get<string>(auto ? (dark ? "preferredDarkColorTheme" : "preferredLightColorTheme") : "colorTheme");
-  return { name: name ?? (dark ? "Default Dark Modern" : "Default Light Modern"), dark };
+  const window = vscode.workspace.getConfiguration("window");
+  return themeInUse(kinds[vscode.window.activeColorTheme.kind] ?? "dark", {
+    colorTheme: workbench.get<string>("colorTheme"),
+    preferredDarkColorTheme: workbench.get<string>("preferredDarkColorTheme"),
+    preferredLightColorTheme: workbench.get<string>("preferredLightColorTheme"),
+    preferredHighContrastColorTheme: workbench.get<string>("preferredHighContrastColorTheme"),
+    preferredHighContrastLightColorTheme: workbench.get<string>("preferredHighContrastLightColorTheme"),
+    autoDetectColorScheme: window.get<boolean>("autoDetectColorScheme"),
+    autoDetectHighContrast: window.get<boolean>("autoDetectHighContrast"),
+  });
 }
 
 /** The user's own setting, not the value merged across scopes: a workspace's rules must not be copied into user settings. */
@@ -75,7 +134,7 @@ async function write(next: TokenColors): Promise<void> {
 
 export async function applyRecommendedColors(): Promise<void> {
   const theme = activeTheme();
-  await write(withRecommendedColors(userTokenColors(), theme));
+  await write(withRecommendedColors(refreshedRecommendedColors(userTokenColors()), theme));
   void vscode.window.showInformationMessage(
     `Streamlord: recommended colors written to your user settings for ${theme.name}, and for each theme you switch to. Run “Streamlord: Remove recommended colors” to undo.`,
   );

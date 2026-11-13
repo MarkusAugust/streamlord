@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "streamlord.html.injection",
-  "injectionSelector": "L:meta.tag -comment -meta.embedded.inline.datastar, L:meta.element -comment -meta.embedded.inline.datastar -meta.tag",
+  "injectionSelector": "L:meta.tag -comment -meta.embedded.inline.datastar -meta.value.datastar",
   "patterns": [
     {
       "include": "#datastar-attribute-with-value-escaped"
@@ -120,7 +120,7 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "meta.embedded.inline.datastar",
+      "contentName": "meta.value.datastar meta.embedded.inline.datastar",
       "patterns": [
         {
           "match": "&amp;|&lt;|&gt;|&#(?!3[49];)\\d+;",
@@ -174,7 +174,7 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "meta.embedded.inline.datastar",
+      "contentName": "meta.value.datastar meta.embedded.inline.datastar",
       "patterns": [
         {
           "match": "&amp;|&lt;|&gt;|&#(?!3[49];)\\d+;",
@@ -221,7 +221,7 @@
           "name": "punctuation.separator.key-value.html"
         },
         "3": {
-          "name": "meta.embedded.inline.datastar",
+          "name": "meta.value.datastar meta.embedded.inline.datastar",
           "patterns": [
             {
               "include": "source.datastar"
@@ -231,7 +231,7 @@
       }
     },
     "datastar-attribute-with-signal-value": {
-      "comment": "An attribute whose value names a signal, data-bind=\"user.name\": the name as the client reads it, in quotes, single quotes, or escaped quotes in a plain Kotlin string.",
+      "comment": "An attribute whose value names a signal, data-bind=\"user.name\": the name as the client reads it, when the value is one name, in quotes, single quotes, or escaped quotes in a plain Kotlin string.",
       "begin": "\\b((?i:data-(?:star-)?(?:indicator|bind|ref))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\\\\\"|\"|')",
       "beginCaptures": {
         "1": {
@@ -256,7 +256,7 @@
       },
       "patterns": [
         {
-          "match": "([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)",
+          "match": "(?<=[\"'])\\s*([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)\\s*(?=\\\\?[\"'])",
           "captures": {
             "1": {
               "name": "variable.other.constant.signal.datastar"
@@ -266,7 +266,8 @@
             }
           }
         }
-      ]
+      ],
+      "contentName": "meta.value.datastar"
     },
     "datastar-attribute-with-plain-value": {
       "comment": "A Datastar attribute whose value is a name, a selector or text, not an expression: its name is Datastar's, its value a string as HTML has it.",
@@ -292,7 +293,7 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "string.quoted.double.html",
+      "contentName": "meta.value.datastar string.quoted.double.html",
       "patterns": [
         {
           "match": "\\\\(?=\\$)",
@@ -327,7 +328,7 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "string.quoted.double.html",
+      "contentName": "meta.value.datastar string.quoted.double.html",
       "patterns": [
         {
           "match": "\\\\(?=\\$)",

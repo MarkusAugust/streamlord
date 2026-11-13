@@ -138,18 +138,24 @@
     },
     "option-keys": {
       "comment": "Keys of the fetch-action options object and signal filters, where an object's key stands: after { or a comma.",
-      "match": "(?:(?<=[{,])|^)(\\s*)\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude)\\b(?=\\s*:(?!:))",
+      "match": "(?:(?<=[{,])|^)(\\s*)\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude)\\b(\\s*)(:)(?!:)",
       "captures": {
         "2": {
           "name": "support.type.property-name.option.datastar"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.datastar"
         }
       }
     },
     "object-key": {
-      "match": "(?:(?<=[{,])|^)(\\s*)([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*:(?!:))",
+      "match": "(?:(?<=[{,])|^)(\\s*)([A-Za-z_$][A-Za-z0-9_$]*)(\\s*)(:)(?!:)",
       "captures": {
         "2": {
           "name": "variable.other.property.key.datastar"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.datastar"
         }
       }
     },
