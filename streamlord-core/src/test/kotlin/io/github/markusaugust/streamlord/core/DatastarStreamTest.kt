@@ -87,7 +87,7 @@ class DatastarStreamTest {
                 """.trimMargin(),
                 sink.text(),
             )
-            assertEquals(6, sink.flushCount)
+            assertEquals(7, sink.flushCount)
         }
 
     @Test

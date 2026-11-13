@@ -90,6 +90,17 @@ All notable changes to Streamlord are recorded here. The format follows
   changed already did. Both editors warn about it. A bare name is judged as before.
 - The IntelliJ plugin runs only with the Kotlin plugin in K2 mode, the default. K1 is gone from
   IntelliJ 2026.2, and an IntelliJ 2026.1 with K1 turned on no longer loads the plugin.
+- `PatchElements`, `ElementsResponse` and everything built on them (`patchElements`,
+  `respondElements`, `datastarElements`, `elementsResponse`) throw
+  `DatastarEventValidationException` for a `viewTransitionSelector` given without
+  `useViewTransition = true`, where they left it out of the wire without a word. The client reads
+  the selector only when it starts a view transition. Pass `useViewTransition = true`, or drop the
+  selector. `SseDecoder` reads a frame that carries the selector alone as one without it, as the
+  client does.
+- `PatchElements.remove` and `removeElements` take `viewTransitionSelector` after
+  `useViewTransition`, as `patchElements` does, so a removal can run its view transition on one
+  element. A call that passes `eventId` or `retry` by position needs them named, and code compiled
+  against the old signatures needs a rebuild.
 
 ### Added
 

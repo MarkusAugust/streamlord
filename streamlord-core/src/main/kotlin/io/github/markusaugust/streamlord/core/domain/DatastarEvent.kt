@@ -51,8 +51,8 @@ public sealed interface DatastarEvent {
  * @property mode How the elements are driven into the DOM. Defaults to OUTER (morph).
  * @property namespace The namespace of the new elements. Defaults to HTML.
  * @property useViewTransition Wrap the patch in the View Transitions API.
- * @property viewTransitionSelector CSS selector of the element to run the view transition on.
- *   Only sent when [useViewTransition] is `true`.
+ * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
+ *   document when `null`. Only with [useViewTransition]: the client reads it for nothing else.
  */
 public data class PatchElements(
     @Language("HTML") val elements: String? = null,
@@ -67,7 +67,7 @@ public data class PatchElements(
     init {
         validateCommon(eventId, retry)
         selector?.let { Wire.selector(it) }
-        viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
+        Wire.viewTransitionSelector(viewTransitionSelector, useViewTransition)
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
@@ -89,6 +89,7 @@ public data class PatchElements(
         public fun remove(
             selector: String,
             useViewTransition: Boolean = false,
+            viewTransitionSelector: String? = null,
             eventId: String? = null,
             retry: Duration? = null,
         ): PatchElements =
@@ -96,6 +97,7 @@ public data class PatchElements(
                 selector = selector,
                 mode = ElementPatchMode.REMOVE,
                 useViewTransition = useViewTransition,
+                viewTransitionSelector = viewTransitionSelector,
                 eventId = eventId,
                 retry = retry,
             )

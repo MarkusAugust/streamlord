@@ -142,7 +142,8 @@ public object SseDecoder {
                 // The client checks the namespace whatever the elements.
                 val namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT
                 val useViewTransition = isTrue(args[DataLines.USE_VIEW_TRANSITION])
-                val viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR]?.takeIf { it.isNotEmpty() }
+                // Read only for a view transition (patchElements.ts:78), so without one it is none.
+                val viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR]?.takeIf { it.isNotEmpty() && useViewTransition }
                 // The client patches in nothing where the elements are missing or only white space:
                 // that empties the target of an inner patch, and removes that of an outer or replace one.
                 // Without a selector, those two take only elements, so text or a comment alone is nothing too.

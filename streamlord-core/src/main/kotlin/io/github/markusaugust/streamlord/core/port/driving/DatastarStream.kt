@@ -188,14 +188,18 @@ public interface DatastarStream {
         patchElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
     }
 
-    /** Remove every element matching [selector]. */
+    /**
+     * Remove every element matching [selector], in a view transition with [useViewTransition], run
+     * on the element [viewTransitionSelector] names or on the document.
+     */
     public suspend fun removeElements(
         selector: String,
         useViewTransition: Boolean = false,
+        viewTransitionSelector: String? = null,
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchElements.remove(selector, useViewTransition, eventId, retry))
+        send(PatchElements.remove(selector, useViewTransition, viewTransitionSelector, eventId, retry))
     }
 
     /** Patch signals from a JSON object text. */

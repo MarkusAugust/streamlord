@@ -66,12 +66,6 @@ class SseEncoderTest {
     }
 
     @Test
-    fun `viewTransitionSelector is ignored without useViewTransition`() {
-        val out = SseEncoder.encode(PatchElements("<div id=\"a\"></div>", viewTransitionSelector = "#x"))
-        assertEquals("event: datastar-patch-elements\ndata: elements <div id=\"a\"></div>\n\n", out)
-    }
-
-    @Test
     fun `windows line endings become separate data lines`() {
         val out = SseEncoder.encode(PatchElements("<div>\r\n</div>"))
         assertEquals("event: datastar-patch-elements\ndata: elements <div>\ndata: elements </div>\n\n", out)
