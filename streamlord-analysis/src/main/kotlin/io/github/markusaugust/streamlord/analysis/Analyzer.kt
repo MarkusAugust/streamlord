@@ -27,6 +27,17 @@ import kotlin.time.Duration
 /** The setting as the IntelliJ plugin's settings page shows it. */
 internal const val PREFIX_SETTING: String = "the Streamlord attribute prefix setting"
 
+/** A file as the rules read it: its [source], and its [modules] settled once for all of them. */
+internal class Reading(
+    val source: Source,
+    val modules: FileModules,
+) {
+    val prefix: String get() = source.prefix
+    val prefixSetting: String get() = source.prefixSetting
+    val constants: Set<String> get() = source.constants
+    val valueFact: ((start: Int, end: Int) -> ValueFact?)? get() = source.valueFact
+}
+
 /**
  * What the editor knows of a value: its type, or that it is a constant or markup. [NULLABLE] is a
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
@@ -239,8 +250,8 @@ public class Analyzer(
             "statements"
 
     /** Whether the call named [name] at [nameStart] is not Streamlord's, as [opts] says: then its strings are free strings. */
-    private fun foreignCalls(opts: Source): (name: String, nameStart: Int) -> Boolean {
-        val modules = Modules.of(opts)
+    private fun foreignCalls(opts: Reading): (name: String, nameStart: Int) -> Boolean {
+        val modules = opts.modules
         // Every call the analysis looks for is core's or the DSL's, so without core none is Streamlord's.
         return { name, at -> !modules.core || modules.foreign(name, at) || (modules.htmlDsl == false && name in dslNames) }
     }
@@ -283,14 +294,14 @@ public class Analyzer(
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(source: Source): List<SiteIssues> {
         val src = source.text
-        val opts = source
+        val opts = Reading(source, settle(source))
         val out = ArrayList<SiteIssues>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
         val facts = fileFacts(src, lex)
         val foreign = foreignCalls(opts)
         val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
-        val dsl = Modules.of(opts).htmlDsl
+        val dsl = opts.modules.htmlDsl
         val eventCalls = EventCalls(src)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
@@ -470,7 +481,7 @@ public class Analyzer(
     private fun checkAttributesIndex(
         m: MatchResult,
         value: KotlinString?,
-        opts: Source,
+        opts: Reading,
         src: String,
         hyphenated: Set<String>,
         helpers: Set<String>,
@@ -532,7 +543,7 @@ public class Analyzer(
     private fun signalNameHoles(
         s: KotlinString,
         src: String,
-        opts: Source,
+        opts: Reading,
         attribute: String,
     ): List<Issue> {
         val out = ArrayList<Issue>()
@@ -619,11 +630,11 @@ public class Analyzer(
 
     /** As [analyzeHtml], for markup the host knows more of: its prefix, and how it names the prefix setting. */
     public fun analyzeHtml(source: Source): List<Issue> =
-        analyzeHtml(source.text, source, hyphenatedSignals(source.text, SourceLanguage.HTML))
+        analyzeHtml(source.text, Reading(source, settle(source)), hyphenatedSignals(source.text, SourceLanguage.HTML))
 
     private fun analyzeHtml(
         src: String,
-        opts: Source,
+        opts: Reading,
         hyphenated: Set<String>,
         templates: Boolean = true,
     ): List<Issue> {
@@ -652,11 +663,11 @@ public class Analyzer(
      */
     public fun signalReferences(source: Source): List<SignalReference> {
         val src = source.text
-        val opts = source
         if (source.language != SourceLanguage.KOTLIN) return markupSignalReferences(src, catalog, source.prefix)
         val out = ArrayList<SignalReference>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
+        val opts = Reading(source, settle(source))
         val foreign = foreignCalls(opts)
 
         fun add(
@@ -686,7 +697,7 @@ public class Analyzer(
             }
         }
         val helpers =
-            dslHelpers(src, HELPER_READ_CALLS, Modules.of(opts).htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
+            dslHelpers(src, HELPER_READ_CALLS, opts.modules.htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
                 ?: emptyList()
         for (site in helpers) {
             // A call on a receiver, `filter.not("x")`, is not the top-level helper.
@@ -725,7 +736,7 @@ public class Analyzer(
      */
     private fun checkFreeHtmlString(
         s: KotlinString,
-        opts: Source,
+        opts: Reading,
         src: String,
         hyphenated: Set<String>,
     ): Judged {
@@ -777,7 +788,7 @@ public class Analyzer(
         formatArg: Arg,
         s: KotlinString,
         src: String,
-        opts: Source,
+        opts: Reading,
         hyphenated: Set<String>,
     ): List<Issue> {
         val holes = percentHoles(s.text)
@@ -1348,13 +1359,13 @@ public class Analyzer(
     private fun judgeHoles(
         s: KotlinString,
         src: String,
-        opts: Source,
+        opts: Reading,
         view: String,
     ): Judged {
         if (s.interpolations.isEmpty()) return Judged()
         val trapOf = traps(s, src)
         // Without core there is no interpolate to build the string with, and Trusted is not Streamlord's.
-        val sdk = Modules.of(opts)
+        val sdk = opts.modules
         val core = sdk.core
         // A fix writes interpolate or Trusted only where the name is core's: not somebody else's call or import.
         val canInterpolate = coreNameUsable(src, "interpolate", sdk)
@@ -1507,7 +1518,7 @@ public class Analyzer(
                         if (trust && canTrust && ip.start != s.start && !ip.unread) listOf(trustedFix(src, ip, shown)) else emptyList()
                 // Without core, plain Kotlin and kotlinx.html stand in for interpolate and Trusted, and a call or a
                 // value of unknown type may be markup the author composed; a known String stays a warning.
-                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.coreHtml != false)
+                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.modules.coreHtml)
                 val level = if (!core && trust && fact == null) Severity.HINT else severity
                 return issue(message + rewriteNote(), level, "unescaped-interpolation", fixes)
             }
@@ -1723,7 +1734,7 @@ public class Analyzer(
         ip: Interpolation,
         told: ValueFact?,
         position: Position,
-        opts: Source,
+        opts: Reading,
     ): Boolean {
         val fact = told.plain()
         if (position == Position.DATASTAR || position == Position.STYLE) return fact.interpolateTakesIn(position)
@@ -1747,11 +1758,11 @@ public class Analyzer(
     private fun holeFact(
         s: KotlinString,
         src: String,
-        opts: Source,
+        opts: Reading,
         ip: Interpolation,
     ): ValueFact? {
         opts.valueFact?.invoke(ip.start, ip.end)?.let { return it }
-        val sdk = Modules.of(opts)
+        val sdk = opts.modules
         val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
         val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }
         if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
@@ -1906,7 +1917,7 @@ public class Analyzer(
         src: String,
         lex: KotlinLex,
         hyphenated: Set<String>,
-        opts: Source,
+        opts: Reading,
         helpers: Set<String>,
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
@@ -1934,7 +1945,7 @@ public class Analyzer(
     private fun expressionHoles(
         s: KotlinString,
         src: String,
-        opts: Source,
+        opts: Reading,
         attribute: String,
         helpers: Set<String>? = null,
     ): List<Issue> {
@@ -1958,7 +1969,7 @@ public class Analyzer(
     private fun checkHtmlSite(
         site: CallSite,
         spec: CallSiteSpec,
-        opts: Source,
+        opts: Reading,
         src: String,
         lex: KotlinLex,
         hyphenated: Set<String>,

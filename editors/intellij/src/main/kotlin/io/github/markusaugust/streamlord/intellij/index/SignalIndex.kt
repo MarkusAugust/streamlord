@@ -19,6 +19,7 @@ import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
+import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
@@ -209,7 +210,7 @@ class SignalIndex(
             if (language == SourceLanguage.KOTLIN &&
                 callsAny(current, helpers)
             ) {
-                signalDeclarations(Source(current, language, htmlDsl = false))
+                signalDeclarations(Source(current, language, modules = WITHOUT_DSL))
             } else {
                 null
             }
@@ -395,7 +396,7 @@ class SignalIndex(
         val helpers = shortHelpers()
         val withoutDsl =
             if (language == SourceLanguage.KOTLIN && callsAny(text, helpers)) {
-                Source(text, language, htmlDsl = false).let { Names(collectSignals(it), collectSignalDefinitions(it)) }
+                Source(text, language, modules = WITHOUT_DSL).let { Names(collectSignals(it), collectSignalDefinitions(it)) }
             } else {
                 null
             }
@@ -519,6 +520,7 @@ class SignalIndex(
     companion object {
         /** The key of the file [driftIn] judges, which no path is. */
         private const val THIS_FILE = ""
+        private val WITHOUT_DSL = Modules.known(core = true, htmlDsl = false)
         private val CALL = Pattern.compile("""\b([A-Za-z_]\w*)\s*\(""")
         private const val FILE_CAP = 5000
         private const val SIZE_CAP = 1_000_000L

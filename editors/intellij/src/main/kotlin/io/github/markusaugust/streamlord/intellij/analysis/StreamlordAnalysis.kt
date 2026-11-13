@@ -17,6 +17,7 @@ import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
+import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
@@ -44,23 +45,20 @@ class StreamlordAnalysis(
 
     val prefix: String get() = settings.attributePrefix
 
-    /**
-     * [text] as the analysis reads it, with the prefix and which of Streamlord's modules the module of [file] has: what the
-     * platform cannot tell while the IDE indexes, and with no file, is left to the analysis.
-     */
+    /** [text] as the analysis reads it, with the prefix and which of Streamlord's modules the module of [file] has. */
     fun source(
         text: String,
         language: SourceLanguage,
         file: PsiFile? = null,
-    ): Source =
-        Source(
-            text,
-            language,
-            prefix,
-            core = file?.let { ProjectLibraries.known(it, StreamlordLibrary.CORE) },
-            htmlDsl = file?.let { ProjectLibraries.known(it, StreamlordLibrary.HTML) },
-            coreHtml = file?.let { ProjectLibraries.coreHtml(it) },
-        )
+    ): Source = Source(text, language, prefix, modules(file))
+
+    /** Which of Streamlord's modules the module of [file] has: unknown while the IDE indexes, and with no file. */
+    fun modules(file: PsiFile?): Modules {
+        if (file == null) return Modules.UNKNOWN
+        val core = ProjectLibraries.known(file, StreamlordLibrary.CORE) ?: return Modules.UNKNOWN
+        val html = ProjectLibraries.known(file, StreamlordLibrary.HTML) ?: return Modules.UNKNOWN
+        return Modules.known(core, html, ProjectLibraries.coreHtml(file) != false)
+    }
 
     /**
      * The issues of a Kotlin file, by call site or HTML string, each value joined into an HTML string judged by what the Kotlin

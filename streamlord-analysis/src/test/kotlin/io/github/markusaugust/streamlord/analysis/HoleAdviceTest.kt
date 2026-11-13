@@ -23,7 +23,12 @@ class HoleAdviceTest {
             val issues =
                 analyzer
                     .analyzeKotlin(
-                        Source(source, SourceLanguage.KOTLIN, coreHtml = case.boolean("coreHtml")),
+                        Source(
+                            source,
+                            SourceLanguage.KOTLIN,
+                            modules =
+                                case.boolean("coreHtml")?.let { Modules.known(true, true, it) } ?: Modules.UNKNOWN,
+                        ),
                     ).sortedWith(
                         compareBy({
                             it.start

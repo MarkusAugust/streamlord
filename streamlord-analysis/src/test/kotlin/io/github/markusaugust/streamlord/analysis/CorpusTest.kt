@@ -33,8 +33,7 @@ class CorpusTest {
                 source,
                 language,
                 prefix,
-                core = case.boolean("core"),
-                htmlDsl = case.boolean("htmlDsl"),
+                case.modules(Modules.UNKNOWN),
                 constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
                 foreign = { _, at -> at in starts },
             )
@@ -187,4 +186,11 @@ class CorpusTest {
             }
         }
     }
+}
+
+/** What a case says of the modules: [otherwise] where it names neither, and both as known where it names one. */
+internal fun JsonObject.modules(otherwise: Modules): Modules {
+    val core = boolean("core")
+    val dsl = boolean("htmlDsl")
+    return if (core == null && dsl == null) otherwise else Modules.known(core ?: true, dsl ?: true)
 }

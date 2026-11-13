@@ -5,6 +5,7 @@ package io.github.markusaugust.streamlord.editor
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.DeclaredNames
+import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalProperty
@@ -20,7 +21,6 @@ import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
-import io.github.markusaugust.streamlord.analysis.modulesFromImports
 import io.github.markusaugust.streamlord.analysis.projectConstants
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.analysis.signalDrift
@@ -125,14 +125,13 @@ private fun source(
     prefix: String = CatalogNames.PREFIX,
     constants: Array<String> = emptyArray(),
 ): Source =
-    analyzer.modulesFromImports(
-        Source(
-            src,
-            if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML,
-            prefix,
-            constants = constants.toHashSet(),
-            prefixSetting = PREFIX_SETTING,
-        ),
+    Source(
+        src,
+        if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML,
+        prefix,
+        Modules.FROM_IMPORTS,
+        constants.toHashSet(),
+        prefixSetting = PREFIX_SETTING,
     )
 
 /** The prefix setting by the id VS Code's settings are searched by. */

@@ -1205,7 +1205,7 @@ private val HOLE_HELPERS: Set<String> =
 private fun helperArguments(
     src: String,
     t: String,
-    sdk: Modules,
+    sdk: FileModules,
 ): List<String>? {
     val m = CALL_START.find(t) ?: return null
     val name = m.groupValues[1]
@@ -1230,7 +1230,7 @@ private fun ownArgument(
     arg: String,
     at: Int,
     constants: Set<String>,
-    sdk: Modules,
+    sdk: FileModules,
 ): Boolean {
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
@@ -1276,7 +1276,7 @@ internal fun valueKind(
     at: Int,
     constants: Set<String>,
     nonNull: Boolean = false,
-    sdk: Modules = Modules.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): ValueFact? {
     val t = value.trim()
     if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null ||
@@ -1347,7 +1347,7 @@ private fun callKind(
     t: String,
     at: Int,
     constants: Set<String>,
-    sdk: Modules = Modules.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): ValueFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
@@ -1503,7 +1503,7 @@ internal fun markupValue(
     value: String,
     at: Int,
     depth: Int = 0,
-    sdk: Modules = Modules.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): Boolean {
     val values = holeValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
@@ -1561,7 +1561,7 @@ private fun markupElements(
     receiver: String,
     at: Int,
     depth: Int,
-    sdk: Modules,
+    sdk: FileModules,
 ): Boolean {
     val t = receiver.trim()
     if (IDENT.matchEntire(t) != null) {
@@ -1626,7 +1626,7 @@ internal fun isMarkup(
     src: String,
     s: KotlinString,
     ip: Interpolation,
-    sdk: Modules = Modules.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): Boolean = markupValue(src, ip.text, s.start, sdk = sdk)
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
@@ -2101,7 +2101,7 @@ private fun formatBody(
 internal fun coreNameUsable(
     src: String,
     name: String,
-    sdk: Modules,
+    sdk: FileModules,
 ): Boolean {
     if (!sdk.core) return false
     val facts = fileFacts(src)

@@ -11,7 +11,19 @@ class SignalsTest {
             val name = case.string("name")
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
-            val source = Source(src, language, htmlDsl = if (case.boolean("withoutDsl") == true) false else null)
+            val source =
+                Source(
+                    src,
+                    language,
+                    modules =
+                        if (case.boolean("withoutDsl") ==
+                            true
+                        ) {
+                            Modules.known(true, false)
+                        } else {
+                            Modules.UNKNOWN
+                        },
+                )
             val definitions = collectSignalDefinitions(source)
             case.array("signals")?.let { assertEquals(it.strings(), collectSignals(source).sorted(), name) }
             case.array("definitions")?.let { assertEquals(it.strings(), definitions.sorted(), name) }

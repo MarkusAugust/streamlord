@@ -20,16 +20,8 @@ public data class Source(
     val text: String,
     val language: SourceLanguage,
     val prefix: String = CatalogNames.PREFIX,
-    /** Whether the module has streamlord-core; null where the host cannot tell, which counts as having it. */
-    val core: Boolean? = null,
-    /**
-     * Whether the module has streamlord-html; null where the host cannot tell: the DSL's calls are read as the DSL's, and its
-     * short helpers only where the file names the DSL. An editor that sees no classpath reads it from the imports with
-     * [modulesFromImports].
-     */
-    val htmlDsl: Boolean? = null,
-    /** Whether the project's core has `Html`, which came in 0.16.0 and a message may send the author to; null counts as having it. */
-    val coreHtml: Boolean? = null,
+    /** Which of Streamlord's modules the file's module has, as the host knows it. */
+    val modules: Modules = Modules.UNKNOWN,
     /** The `const val` names the workspace declares: a value the author wrote, silent wherever it lands. */
     val constants: Set<String> = emptySet(),
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
@@ -203,7 +195,7 @@ private class Asked(
     val prefix = source.prefix
     val catalog = analyzer.catalog
     val kotlin = source.language == SourceLanguage.KOTLIN
-    val modules = Modules.of(source)
+    val modules = analyzer.settle(source)
 
     fun complete(
         workspace: Workspace,
