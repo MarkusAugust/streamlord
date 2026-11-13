@@ -99,11 +99,11 @@ fun `every signal a handler reads is declared by a page`() {
     val facts = buildMap {
         files("src/main/kotlin", "kt").forEach {
             val source = it.readText()
-            put(it.path, collectSignalFacts(source, SourceLanguage.KOTLIN))
+            put(it.path, collectSignalFacts(Source(source, SourceLanguage.KOTLIN)))
         }
         files("src/main/resources/templates", "html").forEach {
             val source = it.readText()
-            put(it.path, collectSignalFacts(source, SourceLanguage.HTML))
+            put(it.path, collectSignalFacts(Source(source, SourceLanguage.HTML)))
         }
     }
 
