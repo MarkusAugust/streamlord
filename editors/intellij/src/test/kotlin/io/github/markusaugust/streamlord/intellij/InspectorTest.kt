@@ -1657,7 +1657,7 @@ class InspectorTest : BasePlatformTestCase() {
 
     // The stream is open and silent when its scope ends: the read under way is interrupted, which is no failure.
     fun `test an open stream ends quietly when its scope does`() {
-        val server = java.net.ServerSocket(0)
+        val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())
         val serving =
             Thread {
                 runCatching {
@@ -1714,7 +1714,7 @@ class InspectorTest : BasePlatformTestCase() {
 
     // The server takes the connection and never answers, so the request is waiting when its scope ends.
     fun `test a request waiting for the server ends quietly when its scope does`() {
-        val server = java.net.ServerSocket(0)
+        val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())
         try {
             val connecting = CountDownLatch(1)
             val closed = CountDownLatch(1)
@@ -1971,7 +1971,7 @@ class InspectorTest : BasePlatformTestCase() {
 
     /** A server that opens a stream on each request and holds it until the client closes it. */
     private class Streaming : AutoCloseable {
-        private val server = java.net.ServerSocket(0)
+        private val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())
         private val sockets = CopyOnWriteArrayList<java.net.Socket>()
         private val byPath = java.util.concurrent.ConcurrentHashMap<String, java.net.Socket>()
         val port = server.localPort
@@ -2259,7 +2259,8 @@ class InspectorTest : BasePlatformTestCase() {
 
     fun `test an error that keeps a request from being sent or ends it says error, with the URL of that request`() {
         toolWindowRuns()
-        val port = java.net.ServerSocket(0).use { it.localPort }
+        // A port no test server can take, which refuses every connection: a free one found and let go may be another's by then.
+        val port = 1
 
         // [sent] is the URL as filled in, or as written when filling it in is what failed.
         class Case(
