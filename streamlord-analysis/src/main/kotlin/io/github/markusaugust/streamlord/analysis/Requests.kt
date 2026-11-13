@@ -998,8 +998,19 @@ public object Requests {
         return out.toString()
     }
 
-    /** Why [signals] cannot be sent, judged on the compacted text that goes out, by the reader the server's answer meets; null when they can. */
-    public fun signalsProblem(signals: String): String? = jsonProblem(compactSignals(signals))?.let { "Signals are not valid JSON: $it" }
+    /**
+     * Why [signals] cannot be sent, judged on the compacted text that goes out by the reader the SDK
+     * reads them with; null when they can. The client's signals are an object.
+     */
+    public fun signalsProblem(signals: String): String? {
+        val read =
+            try {
+                JsonParser.parse(compactSignals(signals))
+            } catch (e: Exception) {
+                return "Signals are not valid JSON: ${e.message}"
+            }
+        return if (read is JsonObject) null else "Signals are a JSON object, as Datastar's client sends them."
+    }
 
     /** What to send: the request Datastar's client would send, or the [error] that keeps it from being sent. */
     public data class StreamRequest(

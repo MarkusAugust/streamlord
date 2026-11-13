@@ -14,8 +14,6 @@ internal expect fun Analyzer.issuesUnder(
     skipped: Set<String>,
 ): List<ProjectIssue>
 
-internal expect fun jsonProblem(text: String): String?
-
 internal expect fun <K : Any, V : Any> sharedMap(): MutableMap<K, V>
 
 internal expect class StackExhausted : Throwable

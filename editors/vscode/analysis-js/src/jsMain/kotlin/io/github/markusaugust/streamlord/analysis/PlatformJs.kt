@@ -16,15 +16,6 @@ internal actual fun Analyzer.issuesUnder(
     skipped: Set<String>,
 ): List<ProjectIssue> = emptyList()
 
-/** What JavaScript's own reader says, which is the one the server's answer meets in VS Code. */
-internal actual fun jsonProblem(text: String): String? =
-    try {
-        js("JSON").parse(text)
-        null
-    } catch (e: Throwable) {
-        "${e.message}"
-    }
-
 internal actual fun <K : Any, V : Any> sharedMap(): MutableMap<K, V> = HashMap()
 
 /** What V8 throws when the stack is spent. */

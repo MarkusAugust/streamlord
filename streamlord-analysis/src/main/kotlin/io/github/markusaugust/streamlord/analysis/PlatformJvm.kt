@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,15 +47,6 @@ internal fun Analyzer.issuesUnder(
         }
     }
 }
-
-/** What a JSON reader says is wrong with [text], or null when it reads it. */
-internal fun jsonProblem(text: String): String? =
-    try {
-        JsonParser.parse(text)
-        null
-    } catch (e: Exception) {
-        "${e.message}"
-    }
 
 /** A map two threads may fill at once. */
 internal fun <K : Any, V : Any> sharedMap(): MutableMap<K, V> = ConcurrentHashMap()
