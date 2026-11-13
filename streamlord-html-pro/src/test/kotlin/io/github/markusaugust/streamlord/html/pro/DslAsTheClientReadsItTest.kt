@@ -1156,7 +1156,7 @@ class DslAsTheClientReadsItTest {
             dslCase("post to an address and with a header the page computes", "postExpr", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 store = """{"id":3}"""
-                request("POST", "http://localhost/items/3", """{"id":3}""", JSON_BODY + ("X-Id" to "3"))
+                request("POST", "http://localhost/items/3", """{"id":3}""", JSON_BODY + ("X-Id" to 3))
                 heard("button", "click", 0)
                 listensPlain("AbortSignal", "abort")
             }) {

@@ -41,8 +41,11 @@ public fun fitExpr(
     shouldClamp: Boolean = false,
     shouldRound: Boolean = false,
 ): String {
-    for (end in listOf(oldMin, oldMax, newMin, newMax)) require(end.isNotBlank()) { "an end of a range of fit must not be blank" }
-    return fitCall(value, oldMin, oldMax, newMin, newMax, shouldClamp, shouldRound)
+    val ends = listOf(oldMin, oldMax, newMin, newMax)
+    for (end in ends) require(end.isNotBlank()) { "an end of a range of fit must not be blank" }
+    // In parentheses, each end is one argument, whatever it holds.
+    val (a, b, c, d) = ends.map { "($it)" }
+    return fitCall(value, a, b, c, d, shouldClamp, shouldRound)
 }
 
 private fun fitCall(

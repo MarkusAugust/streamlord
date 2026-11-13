@@ -26,7 +26,7 @@ public class FetchOptions {
 
     /**
      * Extra request headers whose values are raw JavaScript expressions, e.g. `"'Bearer ' + ${'$'}token"`,
-     * written after [headers] in one object. A name is written as a literal, and one in both is refused.
+     * written after [headers] in one object. A name is written as a literal, and one in both, in any case, is refused.
      */
     public var headerExprs: Map<String, String> = emptyMap()
 
@@ -54,7 +54,7 @@ public class FetchOptions {
 
     /**
      * A raw JavaScript expression for requestCancellation, e.g. `${'$'}controller`: the client takes an
-     * `AbortController` there, and aborts the request when it is aborted. Overrides [requestCancellation].
+     * `AbortController` there, and aborts the request when it is aborted. Set with [requestCancellation], it is refused.
      */
     public var requestCancellationExpr: String? = null
 
@@ -118,6 +118,9 @@ public class FetchOptions {
                     require(it >= 0) { "retryMaxCount must be 0 or more, not $it" }
                     add("retryMaxCount: $it")
                 }
+                require(requestCancellationExpr == null || requestCancellation == null) {
+                    "requestCancellation and requestCancellationExpr are one option; set one"
+                }
                 (requestCancellationExpr?.let(::expression) ?: requestCancellation?.let { js(it.wire) })?.let {
                     add("requestCancellation: $it")
                 }
@@ -127,18 +130,22 @@ public class FetchOptions {
     }
 
     private fun headersJs(): String {
-        val both = headerExprs.keys.firstOrNull { it in headers }
-        require(both == null) { "header $both is set in both headers and headerExprs" }
+        // HTTP names a header in any case, and the browser's Headers joins the values of one name.
+        val names = (headers.keys.toList() + headerExprs.keys).groupBy { it.lowercase() }.values.firstOrNull { it.size > 1 }
+        require(names == null) { "headers ${names?.joinToString(" and ")} are one header: HTTP names a header in any case" }
         val written = headers.map { (k, v) -> "${JsLiteral.key(k)}: ${js(v)}" }
         val computed = headerExprs.map { (k, v) -> "${JsLiteral.key(k)}: ${expression(v)}" }
         return (written + computed).joinToString(", ", "{", "}")
     }
 }
 
-/** [text] as a raw JavaScript expression, refused when there is none. */
+/**
+ * [text], a raw JavaScript expression, in parentheses: one value where it is written, which cannot
+ * close the argument or the object around it and open one of its own. Refused when there is none.
+ */
 private fun expression(text: String): String {
     require(text.isNotBlank()) { "an expression must not be blank" }
-    return text
+    return "($text)"
 }
 
 /**
@@ -165,9 +172,9 @@ public fun get(
 
 /** `@get(expression)`: [get] with the address a raw JavaScript expression, e.g. `"'/items/' + ${'$'}id"`. */
 public fun getExpr(
-    uri: String,
+    expression: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("get", expression(uri), options)
+): String = backend("get", expression(expression), options)
 
 /** `@post('/uri')`: signals in the body. */
 public fun post(
@@ -177,9 +184,9 @@ public fun post(
 
 /** `@post(expression)`: [post] with the address an expression, as in [getExpr]. */
 public fun postExpr(
-    uri: String,
+    expression: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("post", expression(uri), options)
+): String = backend("post", expression(expression), options)
 
 /** `@put('/uri')`. */
 public fun put(
@@ -189,9 +196,9 @@ public fun put(
 
 /** `@put(expression)`: [put] with the address an expression, as in [getExpr]. */
 public fun putExpr(
-    uri: String,
+    expression: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("put", expression(uri), options)
+): String = backend("put", expression(expression), options)
 
 /** `@patch('/uri')`. */
 public fun patch(
@@ -201,9 +208,9 @@ public fun patch(
 
 /** `@patch(expression)`: [patch] with the address an expression, as in [getExpr]. */
 public fun patchExpr(
-    uri: String,
+    expression: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("patch", expression(uri), options)
+): String = backend("patch", expression(expression), options)
 
 /** `@delete('/uri')`: signals in the query string. */
 public fun delete(
@@ -213,9 +220,9 @@ public fun delete(
 
 /** `@delete(expression)`: [delete] with the address an expression, as in [getExpr]. */
 public fun deleteExpr(
-    uri: String,
+    expression: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("delete", expression(uri), options)
+): String = backend("delete", expression(expression), options)
 
 /** `@query('/uri')`: the HTTP QUERY method, signals in the body, read-only semantics. */
 public fun query(
@@ -225,9 +232,9 @@ public fun query(
 
 /** `@query(expression)`: [query] with the address an expression, as in [getExpr]. */
 public fun queryExpr(
-    uri: String,
+    expression: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("query", expression(uri), options)
+): String = backend("query", expression(expression), options)
 
 /**
  * `@setAll(value, filter)`: set every matching signal. The filter of these two actions is
