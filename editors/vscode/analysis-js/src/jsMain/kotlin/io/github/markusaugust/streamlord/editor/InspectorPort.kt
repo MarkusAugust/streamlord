@@ -294,8 +294,8 @@ interface StreamRequest {
     val url: String?
     val method: String?
 
-    /** A header's value by its name. */
-    val headers: dynamic
+    /** A header's value by its name; none on a request that is refused. */
+    val headers: Any?
     val body: String?
     val error: String?
 }
