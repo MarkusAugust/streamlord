@@ -491,12 +491,25 @@ internal fun requireDuration(
  * The `__delay`, `__debounce` and `__throttle` modifiers shared by several attributes.
  */
 public open class TimingModifiers {
+    /** Waits this long before the expression runs: `__delay`. */
     public var delay: Duration? = null
+
+    /** Runs the expression once this long has passed without another trigger: `__debounce`. */
     public var debounce: Duration? = null
+
+    /** Runs on the first trigger as well, not only after the wait: `.leading`. Needs [debounce], and the DSL refuses it without one. */
     public var debounceLeading: Boolean = false
+
+    /** Does not run at the end of the wait: `.notrailing`. Needs [debounce], and the DSL refuses it without one. */
     public var debounceNoTrailing: Boolean = false
+
+    /** Runs the expression at most once in this long: `__throttle`. */
     public var throttle: Duration? = null
+
+    /** Does not run on the first trigger: `.noleading`. Needs [throttle], and the DSL refuses it without one. */
     public var throttleNoLeading: Boolean = false
+
+    /** Runs once more at the end of the wait: `.trailing`. Needs [throttle], and the DSL refuses it without one. */
     public var throttleTrailing: Boolean = false
 
     internal fun appendTiming(sb: StringBuilder) {
@@ -520,15 +533,34 @@ public open class TimingModifiers {
 
 /** Modifiers for `data-on:*`. */
 public class OnModifiers : TimingModifiers() {
+    /** Listens for the first event only: `__once`. */
     public var once: Boolean = false
+
+    /** Adds a passive listener, which never calls `preventDefault`: `__passive`. */
     public var passive: Boolean = false
+
+    /** Listens in the capture phase: `__capture`. */
     public var capture: Boolean = false
+
+    /** How Datastar converts the casing of the event name: `__case`. Kebab case when not set. */
     public var case: Case? = null
+
+    /** Wraps the expression in `document.startViewTransition()` where the browser has the View Transition API: `__viewtransition`. */
     public var viewTransition: Boolean = false
+
+    /** Listens on the window: `__window`. */
     public var window: Boolean = false
+
+    /** Listens on the document, for events that do not bubble there from the element: `__document`. */
     public var document: Boolean = false
+
+    /** Runs for events outside the element only: `__outside`. */
     public var outside: Boolean = false
+
+    /** Calls `preventDefault` on the event: `__prevent`. */
     public var prevent: Boolean = false
+
+    /** Calls `stopPropagation` on the event: `__stop`. */
     public var stop: Boolean = false
 
     override fun build(): String =
@@ -549,13 +581,22 @@ public class OnModifiers : TimingModifiers() {
 
 /** Modifiers for `data-on-intersect`. */
 public class IntersectModifiers : TimingModifiers() {
+    /** Runs the first time the element intersects only: `__once`. */
     public var once: Boolean = false
+
+    /** Runs when the element leaves the viewport instead: `__exit`. */
     public var exit: Boolean = false
+
+    /** Runs when half of the element is visible: `__half`. One of [half], [full] and [threshold]. */
     public var half: Boolean = false
+
+    /** Runs when the whole element is visible: `__full`. One of [half], [full] and [threshold]. */
     public var full: Boolean = false
 
     /** Percentage (0-100) of the element that must be visible. Datastar reads one of [half], [full] and this. */
     public var threshold: Int? = null
+
+    /** Wraps the expression in `document.startViewTransition()` where the browser has the View Transition API: `__viewtransition`. */
     public var viewTransition: Boolean = false
 
     override fun build(): String =
@@ -577,10 +618,13 @@ public class IntersectModifiers : TimingModifiers() {
 
 /** Modifiers for `data-on-interval`. */
 public class IntervalModifiers {
+    /** The time between runs: `__duration`. One second when not set. */
     public var duration: Duration? = null
 
     /** Fire immediately as well as on every interval. Requires [duration]. */
     public var leading: Boolean = false
+
+    /** Wraps the expression in `document.startViewTransition()` where the browser has the View Transition API: `__viewtransition`. */
     public var viewTransition: Boolean = false
 
     internal fun build(): String =
@@ -623,7 +667,10 @@ public class BindModifiers {
 
 /** Modifiers for `data-init`. */
 public class InitModifiers {
+    /** Waits this long before the expression runs: `__delay`. */
     public var delay: Duration? = null
+
+    /** Wraps the expression in `document.startViewTransition()` where the browser has the View Transition API: `__viewtransition`. */
     public var viewTransition: Boolean = false
 
     internal fun build(): String =
