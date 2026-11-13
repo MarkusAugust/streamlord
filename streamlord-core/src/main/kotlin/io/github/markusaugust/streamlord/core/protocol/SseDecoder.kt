@@ -9,7 +9,10 @@ import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.Wire
+import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.json.JsText
+import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.JsonShape
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -37,7 +40,9 @@ public object SseDecoder {
      * It reads a stream the way Datastar's client does, so that a test cannot pass on a response
      * the client would not act on. A last message with no blank line after it is not an event,
      * mode and namespace tokens are matched exactly as written, and a signal patch needs its
-     * signals. A flag is `true` when it reads `true` once JavaScript's `trim()` is done with it,
+     * signals. Signals written as a JavaScript object literal of plain values, `{foo: 1, bar: 2}` as
+     * the reference writes them, come back as the JSON they stand for, since the client runs what
+     * `JSON.parse` refuses; signals that would be computed, `{a: 1 + 1}`, are refused. A flag is `true` when it reads `true` once JavaScript's `trim()` is done with it,
      * and an empty selector or `viewTransitionSelector` is none. An element patch with no
      * elements, or only white space as HTML counts it (tab, line feed, form feed, carriage return
      * and space), in a mode that needs them is what the client makes of it. `outer` or `replace`
@@ -54,7 +59,8 @@ public object SseDecoder {
      * one that removes the target carries the transition.
      *
      * @throws DatastarEventValidationException if a Datastar frame names a mode or namespace that
-     *   does not exist, has no `signals` where it needs them, or has a data line with no space
+     *   does not exist, has no `signals` where it needs them or `signals` that are code rather than
+     *   values, or has a data line with no space
      *   after its key; or if any message, Datastar's or not, finished or not, carries a `retry`
      *   that is not a whole number of milliseconds or an `id` the client could not send back as
      *   `last-event-id`: the client takes both from every message. A malformed frame is a bug in
@@ -179,7 +185,7 @@ public object SseDecoder {
             DatastarProtocol.Events.PATCH_SIGNALS -> {
                 PatchSignals(
                     signals =
-                        args[DataLines.SIGNALS]
+                        args[DataLines.SIGNALS]?.let(::signals)
                             ?: throw DatastarEventValidationException("A signal patch carried no signals line; the client rejects it"),
                     onlyIfMissing = isTrue(args[DataLines.ONLY_IF_MISSING]),
                     eventId = id,
@@ -205,6 +211,19 @@ public object SseDecoder {
 
     private fun holdsElement(elements: String): Boolean =
         DOCUMENT_END.containsMatchIn(elements.replace(SVG, "")) || START_TAG.containsMatchIn(elements.replace(COMMENT, ""))
+
+    // The client runs what JSON.parse refuses as JavaScript (jsStrToObject in utils/text.ts), and the
+    // reference writes signals as a data-signals value; an object literal of plain values is that JSON.
+    private fun signals(text: String): String {
+        if (JsonShape.isObject(text)) return text
+        return try {
+            JsonParser.parseObjectLiteral(text).toJson()
+        } catch (_: JsonParseException) {
+            throw DatastarEventValidationException(
+                "Signals that are neither JSON nor an object literal of plain values, which Datastar's client runs as JavaScript: $text",
+            )
+        }
+    }
 
     // isStringTrue in the client's utils/text.ts, with JavaScript's trim().
     private fun isTrue(value: String?): Boolean = value != null && JsText.trim(value) == "true"

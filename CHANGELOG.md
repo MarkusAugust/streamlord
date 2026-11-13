@@ -290,6 +290,11 @@ All notable changes to Streamlord are recorded here. The format follows
   gets its lens and gutter marker.
 - IntelliJ no longer offers to import `CatalogNames.attributes` or the other attribute sets of
   streamlord-core's catalog for a name it cannot resolve: they are internal now.
+- `SseDecoder`, and with it `datastarEvents` and `LiveDatastarStream` in streamlord-test, read
+  signals written as a JavaScript object literal of plain values, `{foo: 1, bar: 2}` as Datastar's
+  reference writes them, as the JSON they stand for, where they threw. The client runs signals
+  that `JSON.parse` refuses as JavaScript, so it takes them. Signals that would be computed,
+  `{a: 1 + 1}`, still throw `DatastarEventValidationException`. Sending signals still takes JSON.
 
 ## [0.21.0] - 2026-11-11
 
