@@ -2,6 +2,7 @@
 
 package io.github.markusaugust.streamlord.html.pro
 
+import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.html.Case
 import io.github.markusaugust.streamlord.html.Casing
 import io.github.markusaugust.streamlord.html.DatastarAttributes
@@ -39,7 +40,7 @@ private fun requireDuration(
     name: String,
 ) {
     if (duration != null) return
-    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException("${it.first} needs $name, which is not set") }
+    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException(ModifierRules.flagWithoutDuration(it.first, name)) }
 }
 
 private fun ds(suffix: String): String = DatastarAttributes.name(suffix)

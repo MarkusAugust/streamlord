@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.html
 
+import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -484,7 +485,7 @@ internal fun requireDuration(
     name: String,
 ) {
     if (duration != null) return
-    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException("${it.first} needs $name, which is not set") }
+    flags.firstOrNull { it.second }?.let { throw IllegalArgumentException(ModifierRules.flagWithoutDuration(it.first, name)) }
 }
 
 /**
@@ -551,7 +552,7 @@ public class OnModifiers : TimingModifiers() {
     /** Listens on the window: `__window`. */
     public var window: Boolean = false
 
-    /** Listens on the document, for events that do not bubble there from the element: `__document`. */
+    /** Attaches the listener to the document: `__document`. */
     public var document: Boolean = false
 
     /** Runs for events outside the element only: `__outside`. */
@@ -602,13 +603,13 @@ public class IntersectModifiers : TimingModifiers() {
     override fun build(): String =
         buildString {
             // Datastar's client takes full over half over threshold, so a second one would be dropped.
-            require(listOf(half, full, threshold != null).count { it } <= 1) { "half, full and threshold are alternatives; set one" }
+            require(listOf(half, full, threshold != null).count { it } <= 1) { ModifierRules.ALTERNATIVES }
             if (once) append("__once")
             if (exit) append("__exit")
             if (half) append("__half")
             if (full) append("__full")
             threshold?.let {
-                require(it in 0..100) { "threshold must be between 0 and 100" }
+                require(it in ModifierRules.thresholds) { ModifierRules.THRESHOLD_RANGE }
                 append("__threshold.").append(it)
             }
             appendTiming(this)
@@ -632,7 +633,7 @@ public class IntervalModifiers {
             requireDuration(duration, "leading" to leading, name = "duration")
             duration?.let {
                 // A zero interval runs the expression as often as the browser's timers allow.
-                require(it.isPositive()) { "duration must be positive, not $it" }
+                require(it.isPositive()) { ModifierRules.intervalNotPositive(it.toString()) }
                 append("__duration.").append(it.toModifier())
                 if (leading) append(".leading")
             }

@@ -10,12 +10,14 @@ import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
+import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import java.io.File
 import kotlin.concurrent.Volatile
+import kotlin.time.Duration
 
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
@@ -105,14 +107,6 @@ private val HAS_CAPITAL = regex("""[A-Z]""")
 // `val once = 1` a variable of the lambda's own.
 private val LAMBDA_ASSIGNMENT = regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
 private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
-
-// The flags of the DSL's modifiers that it writes only after their duration, and refuses without it.
-private val DURATION_FLAGS =
-    mapOf(
-        "duration" to listOf("leading"),
-        "debounce" to listOf("debounceLeading", "debounceNoTrailing"),
-        "throttle" to listOf("throttleNoLeading", "throttleTrailing"),
-    )
 
 // No time at all, `0.seconds` or `Duration.ZERO`, which an interval refuses.
 private val ZERO_DURATION =
@@ -351,7 +345,7 @@ public class Analyzer(
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
             issues += checkKeyCaseSite(site, src)
-            issues += modifierLambdaIssues(site, src)
+            issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src, lex)) {
                 for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
@@ -2206,13 +2200,18 @@ public class Analyzer(
     private fun modifierLambdaIssues(
         site: CallSite,
         src: String,
+        lex: KotlinLex,
     ): List<Issue> {
         if (site.name !in catalog.attributesByKotlin) return emptyList()
         val (start, lambda) = modifiersLambdaAt(site, src)
         if (lambda.isEmpty()) return emptyList()
-        // The strings blanked where they stand, so an offset in the lambda is one in the source.
-        val code = KOTLIN_STRING.replace(lambda) { m -> "\"" + " ".repeat(m.value.length - 2) + "\"" }
+        // Strings and comments blanked where they stand, so an offset in the lambda is one in the source.
+        val code = String(CharArray(lambda.length) { i -> if (lex.mask[start + i] || lambda[i] == '\n') lambda[i] else ' ' })
+        // The value of each property set to a literal, by its name, and where it is set.
         val set = LAMBDA_ASSIGNMENT.findAll(code).associateBy({ it.groupValues[1] }, { it })
+
+        fun value(name: String) = set[name]?.groupValues?.get(2)?.trim()
+
         val out = ArrayList<Issue>()
 
         fun refuse(
@@ -2223,31 +2222,19 @@ public class Analyzer(
             out += Issue(start + m.range.first, start + end, "Streamlord throws at render: $why.", Severity.ERROR, "modifier-args")
         }
 
-        fun on(name: String) = set[name]?.takeIf { it.groupValues[2].trim() == "true" }
-        for ((duration, flags) in DURATION_FLAGS) {
-            if (set[duration]
-                    ?.groupValues
-                    ?.get(2)
-                    ?.trim()
-                    .let { it == null || it == "null" }
-            ) {
-                flags.firstNotNullOfOrNull(::on)?.let { refuse(it, "${it.groupValues[1]} needs $duration, which is not set") }
-            }
+        fun on(name: String) = set[name]?.takeIf { value(name) == "true" }
+        for ((duration, flags) in ModifierRules.durationFlags) {
+            if (value(duration) != null && value(duration) != "null") continue
+            flags.firstNotNullOfOrNull(::on)?.let { refuse(it, ModifierRules.flagWithoutDuration(it.groupValues[1], duration)) }
         }
-        val threshold = set["threshold"]?.takeIf { it.groupValues[2].trim() != "null" }
+        val threshold = set["threshold"]?.takeIf { value("threshold") != "null" }
         val alternatives = listOfNotNull(on("half"), on("full"), threshold).sortedBy { it.range.first }
-        if (alternatives.size > 1) refuse(alternatives[1], "half, full and threshold are alternatives; set one")
-        threshold?.groupValues?.get(2)?.trim()?.toIntOrNull()?.let {
-            if (it !in
-                0..100
-            ) {
-                refuse(threshold, "threshold must be between 0 and 100")
-            }
-        }
-        if (site.name == "dataOnInterval") {
-            set["duration"]?.let { m ->
-                if (ZERO_DURATION.matchEntire(m.groupValues[2].trim()) != null) refuse(m, "duration must be positive, not 0s")
-            }
+        if (alternatives.size > 1) refuse(alternatives[1], ModifierRules.ALTERNATIVES)
+        val percent = value("threshold")?.toIntOrNull()
+        if (threshold != null && percent != null && percent !in ModifierRules.thresholds) refuse(threshold, ModifierRules.THRESHOLD_RANGE)
+        val interval = set["duration"]
+        if (site.name == "dataOnInterval" && interval != null && ZERO_DURATION.matchEntire(value("duration")!!) != null) {
+            refuse(interval, ModifierRules.intervalNotPositive(Duration.ZERO.toString()))
         }
         return out
     }

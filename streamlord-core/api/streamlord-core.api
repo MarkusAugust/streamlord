@@ -420,6 +420,16 @@ public final class io/github/markusaugust/streamlord/core/domain/MistypedAttribu
 	public final fun getSuggestion ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/ModifierRules {
+	public static final field ALTERNATIVES Ljava/lang/String;
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/ModifierRules;
+	public static final field THRESHOLD_RANGE Ljava/lang/String;
+	public final fun flagWithoutDuration (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public final fun getDurationFlags ()Ljava/util/Map;
+	public final fun getThresholds ()Lkotlin/ranges/IntRange;
+	public final fun intervalNotPositive (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/PatchElements : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
 	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/PatchElements$Companion;
 	public fun <init> ()V
