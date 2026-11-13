@@ -55,7 +55,11 @@ class PatternsInMainTest {
         assertEquals(emptyList(), refused)
     }
 
-    /** PatternsTest has why: after an empty match the JVM looks again inside an astral character, and JavaScript past it. */
+    /**
+     * PatternsTest has why: after an empty match the JVM looks again inside an astral character, and
+     * JavaScript past it. A pattern may match an empty string only next to some text, `\b` or a look
+     * around, so each is tried on texts of the kinds the analysis reads.
+     */
     @Test
     fun `no pattern that matches an empty string is iterated with findAll`() {
         val iterated = ArrayList<String>()
@@ -67,7 +71,8 @@ class PatternsInMainTest {
                 val declared = Regex("""\bval $name\s*=\s*regex\(""").find(src) ?: continue
                 val literal = patternLiterals(src.substring(declared.range.first)).firstOrNull() ?: continue
                 seen++
-                if (regex(literal).find("") != null) iterated += "$file: $name"
+                val pattern = regex(literal)
+                if (PROBES.any { probe -> pattern.findAll(probe).any { it.range.isEmpty() } }) iterated += "$file: $name"
             }
         }
         assertTrue(seen > 30, "found $seen iterated patterns")
@@ -178,6 +183,19 @@ class PatternsInMainTest {
         }
 
     private companion object {
+        val PROBES =
+            listOf(
+                "",
+                "a",
+                " ",
+                "\n",
+                "a b",
+                "x.y-z",
+                "\$a = 1; @get('/x')",
+                "<div data-on:click__once=\"\$a++\">x</div>",
+                "fun f() = div { dataText(\"\$\\{x}\") }",
+                "a\uD83D\uDE00b",
+            )
         const val RAW = "\"\"\""
         const val ESCAPED_DOLLAR = '\uE000'
     }
