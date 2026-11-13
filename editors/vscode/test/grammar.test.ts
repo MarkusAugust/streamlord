@@ -27,7 +27,9 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.kotlin.template2.injection": read("syntaxes/kotlin-template2-injection.tmLanguage.json"),
   // VS Code's own Handlebars grammar, which brings its own tags; a template language that wraps HTML as jte's does.
   "text.html.handlebars": read("test/fixtures/host-handlebars.json"),
+  // maj2c.jte-template-syntax-highlight (.jte and .kte) and dawhite.mustache declare these, and both include text.html.basic.
   "text.html.jte": { scopeName: "text.html.jte", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
+  "source.mustache": { scopeName: "source.mustache", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
   "text.html.derivative": { scopeName: "text.html.derivative", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
 };
 
@@ -595,14 +597,14 @@ describe("datastar colours, every token exactly", () => {
     }
   });
 
-  it("colours a template language's HTML: Handlebars and jte", async () => {
-    for (const scope of ["text.html.handlebars", "text.html.jte"]) {
+  it("colours a template language's HTML: Handlebars, jte and Mustache", async () => {
+    for (const scope of ["text.html.handlebars", "text.html.jte", "source.mustache"]) {
       const t = await kinds(scope, `<div data-on:click="$a++" data-color="x">{{name}}</div>`);
       assert.deepEqual(between(t, "data-", "a"), [["data-", S.prefix], ["on", S.plugin], [":", S.colon], ["click", S.key], ["=", "punctuation.separator.key-value.html"], ['"', S.stringStart], ["$", S.dollar], ["a", S.signal]], scope);
       assert.ok(!t.some(([text, s]) => text.includes("color") && s.includes("datastar")), scope);
     }
     const injected = contributed.find((g) => g.scopeName === "streamlord.html.injection")!.injectTo!;
-    for (const scope of ["text.html.basic", "text.html.derivative", "text.html.handlebars", "text.html.mustache", "text.html.jte", "text.html.kte", "source.kotlin"]) assert.ok(injected.includes(scope), scope);
+    for (const scope of ["text.html.basic", "text.html.derivative", "text.html.handlebars", "text.html.jte", "source.mustache", "source.kotlin"]) assert.ok(injected.includes(scope), scope);
   });
 });
 

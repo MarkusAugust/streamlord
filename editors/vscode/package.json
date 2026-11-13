@@ -182,9 +182,8 @@
           "text.html.basic",
           "text.html.derivative",
           "text.html.handlebars",
-          "text.html.mustache",
           "text.html.jte",
-          "text.html.kte",
+          "source.mustache",
           "source.kotlin"
         ],
         "embeddedLanguages": {

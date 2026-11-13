@@ -262,7 +262,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - The value of `data-bind`, `data-indicator` and `data-ref`, and the name `dataBind`,
   `dataSignals("name", ...)` and friends take, is coloured as a signal; a filter's
   `{include: /x/}` as an object.
-- VS Code colours Datastar in Handlebars and jte, on SVG and MathML elements, in an unquoted value,
+- VS Code colours Datastar in Handlebars, jte and Mustache, on SVG and MathML elements, in an unquoted value,
   after a modifier with an argument, in a DSL expression on the next line, in a raw string, passed
   by name or as a lone object, after a receiver, and in a raw string whose HTML starts on the next
   line. The recommended colours, which stay opt in, now follow the theme's kind.
