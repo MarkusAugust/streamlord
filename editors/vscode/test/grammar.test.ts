@@ -27,9 +27,14 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.kotlin.template2.injection": read("syntaxes/kotlin-template2-injection.tmLanguage.json"),
   // VS Code's own Handlebars grammar, which brings its own tags; a template language that wraps HTML as jte's does.
   "text.html.handlebars": read("test/fixtures/host-handlebars.json"),
-  // maj2c.jte-template-syntax-highlight (.jte and .kte) and dawhite.mustache declare these, and both include text.html.basic.
-  "text.html.jte": { scopeName: "text.html.jte", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
-  "source.mustache": { scopeName: "source.mustache", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
+  // The grammars of maj2c.jte-template-syntax-highlight (.jte and .kte) and dawhite.mustache, as they ship; see host-grammars-LICENSES.txt.
+  "text.html.jte": read("test/fixtures/host-jte.json"),
+  "source.mustache": tm.parseRawGrammar(readFileSync(new URL("test/fixtures/host-mustache.tmLanguage", root), "utf8"), "host-mustache.tmLanguage"),
+  "streamlord.placeholders.jte.injection": read("syntaxes/placeholders-jte-injection.tmLanguage.json"),
+  "streamlord.placeholders.handlebars.injection": read("syntaxes/placeholders-handlebars-injection.tmLanguage.json"),
+  "streamlord.placeholders.mustache.injection": read("syntaxes/placeholders-mustache-injection.tmLanguage.json"),
+  "streamlord.html.element.injection": read("syntaxes/html-element-injection.tmLanguage.json"),
+  "streamlord.kotlin.template3.injection": read("syntaxes/kotlin-template3-injection.tmLanguage.json"),
   "text.html.derivative": { scopeName: "text.html.derivative", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
 };
 
@@ -687,5 +692,58 @@ describe("the lists both editors share", () => {
     assert.deepEqual(words(expr.repository.globals.match).sort(), set("JS_GLOBALS"));
     const keywords = (expr.repository.keywords.patterns as { match: string }[]).flatMap((p) => words(p.match));
     assert.deepEqual([...keywords, ...words(expr.repository.constants.match)].sort(), set("JS_KEYWORDS"));
+  });
+});
+
+describe("what is not Datastar's", () => {
+  // Each engine writes its placeholders before the browser reads the value, as the analysis and IntelliJ have it.
+  it("leaves a template engine's placeholder in a Datastar value to the engine's grammar", async () => {
+    for (const [scope, open, engine] of [
+      ["text.html.jte", "${", "statement.jte"],
+      ["text.html.handlebars", "{{", "handlebars"],
+      ["source.mustache", "{{", "mustache"],
+    ] as const) {
+      const close = open === "${" ? "}" : "}}";
+      const t = await tokens(scope, `<div data-on:click="$sel = '${open}item.id${close}'; $n = ${open}count${close}" data-nonce="${open}nonce${close}" data-show="$a">`);
+      for (const name of ["item", "count", "nonce"]) {
+        const tok = t.find((x) => x.text.includes(name))!;
+        assert.ok(tok.scopes.some((s) => s.includes(engine)), `${scope} ${name}: ${tok.scopes.join(" ")}`);
+        assert.ok(!own(tok).includes("datastar"), `${scope} ${name}: ${own(tok)}`);
+      }
+      assert.ok(t.some((x) => x.text === "sel" && x.scopes.includes(S.signal)), `${scope}: the signal`);
+      assert.ok(t.some((x) => x.text === "a" && x.scopes.includes(S.signal)), `${scope}: the next attribute`);
+    }
+  });
+
+  it("colours an attribute of SVG and MathML in the tag, never the element's text", async () => {
+    const t = await tokens("text.html.basic", `<svg data-show="$a"><circle data-attr:r="$r"/><text>Use data-show="$x" here</text></svg>`);
+    assert.ok(t.some((x) => x.text === "a" && x.scopes.includes(S.signal)));
+    assert.ok(t.some((x) => x.text === "r" && x.scopes.includes(S.signal)));
+    assert.ok(!t.some((x) => x.text === "x" && x.scopes.some((s) => s.includes("datastar"))), "the text of <text>");
+    const m = await tokens("text.html.basic", `<math><mi>data-text="$z"</mi></math>`);
+    assert.ok(!m.some((x) => x.scopes.some((s) => s.includes("datastar"))), "the text of <mi>");
+  });
+
+  it("counts the dollars of a $$$ string", async () => {
+    const t = await kinds("source.kotlin", `val h = $$$"""<p data-text="$\${x} + $$\${y}"></p>"""`, false);
+    const template = (name: string) => t.some(([text, s], i) => text === name && t[i - 1]?.[1] === S.templateBegin && s.includes("kotlin"));
+    assert.ok(template("y"), `three dollars open a template: ${JSON.stringify(t)}`);
+    assert.ok(!template("x"), "two are text");
+  });
+
+  it("gives an object key's colon a punctuation scope, and a signal attribute only a name", async () => {
+    const t = await kinds("text.html.basic", `<div data-signals="{slots: 8}" data-on:click="@post('/x', {retry: 'never'})" data-indicator="a b">`);
+    assert.deepEqual(between(t, "slots", "8"), [["slots", S.objectKey], [":", "punctuation.separator.key-value.datastar"], ["8", S.number]]);
+    assert.deepEqual(between(t, "retry", "'never'"), [["retry", S.option], [":", "punctuation.separator.key-value.datastar"], ["'never'", "string.quoted.single.datastar"]]);
+    assert.ok(!t.some(([text, s]) => (text === "a" || text === "b") && s.includes("signal")), JSON.stringify(t));
+    const ternary = await kinds("text.html.basic", `<div data-text="$a ? 1 : 2">`);
+    assert.deepEqual(between(ternary, "?", "2"), [["?", S.arithmetic], ["1", S.number], [":", S.arithmetic], ["2", S.number]]);
+  });
+
+  it("reads a long line of DSL calls in time", async () => {
+    const line = Array.from({ length: 1200 }, (_, i) => `dataOn("click", "\\$c${i}++; @post('/x')"); `).join("");
+    const started = performance.now();
+    await tokens("source.kotlin", line);
+    assert.ok(performance.now() - started < 1000, `took ${performance.now() - started} ms`);
   });
 });

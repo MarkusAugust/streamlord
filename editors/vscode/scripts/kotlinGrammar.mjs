@@ -223,21 +223,16 @@ export function kotlinInjectionGrammar(catalog) {
       4,
     ),
     "expression-call-second-arg": expressionCall(
-      "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression. The first is a plain string, or the signal dataSignals and dataComputed name.",
+      "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression, the first a plain string. No capture of a rule that may run many times on a line has patterns of its own: the engine copies the line up to each such capture, which a long line pays for on every call.",
       RECV + r`\b((?:` + second + r`))(\s*\(\s*)(\$*"[^"\n]*")(\s*,\s*` + NAMED + ")",
-      {
-        2: FN,
-        4: {
-          patterns: [
-            {
-              match: r`(?<=dataSignals\(|dataComputed\()(\$*")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\.[A-Za-z0-9_]+)*)(")`,
-              captures: { 1: { name: DQ_START }, 2: { name: SIGNAL }, 3: { name: PATH }, 4: { name: DQ_END } },
-            },
-            { match: ".+", name: "string.quoted.double.kotlin" },
-          ],
-        },
-      },
+      { 2: FN, 4: { name: "string.quoted.double.kotlin" } },
       6,
+    ),
+    "expression-call-signal-pair": expressionCall(
+      "dataSignals(\"name\", \"...\"), dataComputed(\"name\", \"...\"): the first argument names a signal, the second is the expression.",
+      RECV + r`\b(dataSignals|dataComputed)(\s*\(\s*)(\$*")` + SIGNAL_NAME + r`(")(\s*,\s*` + NAMED + ")",
+      { 2: FN, 4: { name: DQ_START }, 5: { name: SIGNAL }, 6: { name: PATH }, 7: { name: DQ_END } },
+      9,
     ),
     "expression-call-lone-object": expressionCall(
       "dataClass(\"{hidden: $a}\"), dataSignals(\"{...}\"): a lone object is the expression of a call whose expression is its last argument.",
@@ -327,6 +322,7 @@ export function kotlinDslInjectionGrammar() {
     scopeName: "streamlord.kotlin.dsl.injection",
     injectionSelector: `L:meta.dsl-file.streamlord -comment -string -${STRING} -${MARKER}`,
     patterns: [
+      "expression-call-signal-pair",
       "expression-call-second-arg",
       "expression-call-lone-object",
       "expression-call-first-arg",

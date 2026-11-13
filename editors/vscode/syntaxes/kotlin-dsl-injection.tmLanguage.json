@@ -5,6 +5,9 @@
   "injectionSelector": "L:meta.dsl-file.streamlord -comment -string -meta.kotlin-string.streamlord -meta.language-marker.streamlord",
   "patterns": [
     {
+      "include": "streamlord.kotlin.injection#expression-call-signal-pair"
+    },
+    {
       "include": "streamlord.kotlin.injection#expression-call-second-arg"
     },
     {

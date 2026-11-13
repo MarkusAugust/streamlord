@@ -19,13 +19,11 @@ class ExpressionKindsTest {
                 "foo" to TokenKind.IDENTIFIER,
                 "=" to TokenKind.OPERATOR,
                 "a" to TokenKind.OBJECT_KEY,
-                ":" to TokenKind.OPERATOR,
                 "Math" to TokenKind.GLOBAL,
                 "max" to TokenKind.METHOD,
                 "x" to TokenKind.IDENTIFIER,
                 "length" to TokenKind.PROPERTY,
                 "b" to TokenKind.OBJECT_KEY,
-                ":" to TokenKind.OPERATOR,
                 "go" to TokenKind.METHOD,
                 "=>" to TokenKind.KEYWORD,
                 "typeof" to TokenKind.KEYWORD,
@@ -101,7 +99,6 @@ class ExpressionKindsTest {
                 "\${" to TokenKind.TEMPLATE_PUNCTUATION,
                 "f" to TokenKind.METHOD,
                 "a" to TokenKind.OBJECT_KEY,
-                ":" to TokenKind.OPERATOR,
                 "1" to TokenKind.NUMBER,
                 "}" to TokenKind.TEMPLATE_PUNCTUATION,
                 "`" to TokenKind.STRING,
@@ -146,6 +143,24 @@ class ExpressionKindsTest {
         )
         // JavaScript's own template literal holds no placeholder.
         assertEquals(emptyList(), templatePlaceholders("`a\${b}`"))
+    }
+
+    // An object's colon is punctuation, as the VS Code grammar scopes it; a ternary's is an operator.
+    @Test
+    fun `the colon after a key is no operator`() {
+        assertEquals(
+            listOf(
+                "a" to TokenKind.OBJECT_KEY,
+                "1" to TokenKind.NUMBER,
+                "'b'" to TokenKind.STRING,
+                "\$c" to TokenKind.SIGNAL,
+                "?" to TokenKind.OPERATOR,
+                "2" to TokenKind.NUMBER,
+                ":" to TokenKind.OPERATOR,
+                "3" to TokenKind.NUMBER,
+            ),
+            tokens("{a: 1, 'b': \$c ? 2 : 3}"),
+        )
     }
 
     @Test

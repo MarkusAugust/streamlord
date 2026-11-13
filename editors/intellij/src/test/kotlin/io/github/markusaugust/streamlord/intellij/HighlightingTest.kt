@@ -94,7 +94,6 @@ class HighlightingTest : StreamlordTestCase() {
                 "foo" to DatastarColors.IDENTIFIER,
                 "=" to DatastarColors.OPERATOR,
                 "a" to DatastarColors.OBJECT_KEY,
-                ":" to DatastarColors.OPERATOR,
                 "Math" to DatastarColors.GLOBAL,
                 "max" to DatastarColors.METHOD,
                 "x" to DatastarColors.IDENTIFIER,
@@ -148,7 +147,6 @@ class HighlightingTest : StreamlordTestCase() {
                 "data-" to DatastarColors.ATTRIBUTE_PREFIX,
                 "persist" to DatastarColors.ATTRIBUTE_PLUGIN,
                 "include" to DatastarColors.OPTION_KEY,
-                ":" to DatastarColors.OPERATOR,
                 "/^a/" to DatastarColors.REGEX,
             ),
             painted(
@@ -203,7 +201,6 @@ class HighlightingTest : StreamlordTestCase() {
                 "count" to DatastarColors.SIGNAL,
                 "0" to DatastarColors.NUMBER,
                 "hidden" to DatastarColors.OBJECT_KEY,
-                ":" to DatastarColors.OPERATOR,
                 "\$a" to DatastarColors.SIGNAL,
                 "\$b" to DatastarColors.SIGNAL,
                 "++" to DatastarColors.OPERATOR,
@@ -234,5 +231,20 @@ class HighlightingTest : StreamlordTestCase() {
             ),
             painted("page.html", "<div data-text=\"\${user.name} + \$count\"></div>"),
         )
+    }
+}
+
+class ColorSettingsDemoTest : com.intellij.testFramework.fixtures.BasePlatformTestCase() {
+    // The page's preview is where a user picks a face: each key the plugin paints is shown there once at least.
+    fun `test the demo shows every key`() {
+        val page =
+            io.github.markusaugust.streamlord.intellij.highlighting
+                .DatastarColorSettingsPage()
+        val tags = page.additionalHighlightingTagToDescriptorMap!!
+        val used = Regex("<([a-z]+)>").findAll(page.demoText).map { it.groupValues[1] }.toSet()
+        assertEquals("tags the demo never uses", emptySet<String>(), tags.keys - used)
+        assertEquals("tags the page does not know", emptySet<String>(), used - tags.keys)
+        assertEquals(DatastarColors.ALL.toSet(), tags.values.toSet())
+        assertEquals(DatastarColors.ALL.toSet(), page.attributeDescriptors.map { it.key }.toSet())
     }
 }

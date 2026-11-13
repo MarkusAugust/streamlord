@@ -575,7 +575,7 @@
       ]
     },
     "expression-call-second-arg": {
-      "comment": "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression. The first is a plain string, or the signal dataSignals and dataComputed name.",
+      "comment": "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression, the first a plain string. No capture of a rule that may run many times on a line has patterns of its own: the engine copies the line up to each such capture, which a long line pays for on every call.",
       "patterns": [
         {
           "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
@@ -584,29 +584,7 @@
               "name": "entity.name.function.kotlin"
             },
             "4": {
-              "patterns": [
-                {
-                  "match": "(?<=dataSignals\\(|dataComputed\\()(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+)*)(\")",
-                  "captures": {
-                    "1": {
-                      "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
-                    },
-                    "2": {
-                      "name": "variable.other.constant.signal.datastar"
-                    },
-                    "3": {
-                      "name": "variable.other.property.signal-path.datastar"
-                    },
-                    "4": {
-                      "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
-                    }
-                  }
-                },
-                {
-                  "match": ".+",
-                  "name": "string.quoted.double.kotlin"
-                }
-              ]
+              "name": "string.quoted.double.kotlin"
             },
             "6": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -632,31 +610,84 @@
               "name": "entity.name.function.kotlin"
             },
             "4": {
-              "patterns": [
-                {
-                  "match": "(?<=dataSignals\\(|dataComputed\\()(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+)*)(\")",
-                  "captures": {
-                    "1": {
-                      "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
-                    },
-                    "2": {
-                      "name": "variable.other.constant.signal.datastar"
-                    },
-                    "3": {
-                      "name": "variable.other.property.signal-path.datastar"
-                    },
-                    "4": {
-                      "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
-                    }
-                  }
-                },
-                {
-                  "match": ".+",
-                  "name": "string.quoted.double.kotlin"
-                }
-              ]
+              "name": "string.quoted.double.kotlin"
             },
             "6": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-string-body"
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        }
+      ]
+    },
+    "expression-call-signal-pair": {
+      "comment": "dataSignals(\"name\", \"...\"), dataComputed(\"name\", \"...\"): the first argument names a signal, the second is the expression.",
+      "patterns": [
+        {
+          "begin": "(?:(\\??\\.)\\s*)?\\b(dataSignals|dataComputed)(\\s*\\(\\s*)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
+          "beginCaptures": {
+            "2": {
+              "name": "entity.name.function.kotlin"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            },
+            "5": {
+              "name": "variable.other.constant.signal.datastar"
+            },
+            "6": {
+              "name": "variable.other.property.signal-path.datastar"
+            },
+            "7": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            },
+            "9": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-string-body"
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "(?:(\\??\\.)\\s*)?\\b(dataSignals|dataComputed)(\\s*\\(\\s*)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
+          "beginCaptures": {
+            "2": {
+              "name": "entity.name.function.kotlin"
+            },
+            "4": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            },
+            "5": {
+              "name": "variable.other.constant.signal.datastar"
+            },
+            "6": {
+              "name": "variable.other.property.signal-path.datastar"
+            },
+            "7": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            },
+            "9": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
             }
           },

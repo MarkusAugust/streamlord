@@ -37,3 +37,22 @@ describe("recommended colours", () => {
     assert.deepEqual(LIGHT_RULES.map((r) => r.scope), DARK_RULES.map((r) => r.scope));
   });
 });
+
+describe("the recommended colours, applied again", () => {
+  it("rewrites a palette written before, by the kind it was written for", async () => {
+    const { refreshedRecommendedColors } = await import("../src/colors.ts");
+    const stale = (rules: typeof DARK_RULES) => rules.map((r) => (r.name === "Streamlord: modifier argument" ? { ...r, scope: ["constant.other.modifier-arg.datastar"] } : r));
+    const current = { "[Monokai]": { textMateRules: stale(DARK_RULES) }, "[Quiet Light]": { textMateRules: stale(LIGHT_RULES) } };
+    assert.deepEqual(refreshedRecommendedColors(current), { "[Monokai]": { textMateRules: DARK_RULES }, "[Quiet Light]": { textMateRules: LIGHT_RULES } });
+  });
+
+  it("names the theme in use, a high contrast one auto-detection picked among them", async () => {
+    const { themeInUse } = await import("../src/colors.ts");
+    const settings = { colorTheme: "Monokai", preferredDarkColorTheme: "Dark+", preferredLightColorTheme: "Light+", preferredHighContrastColorTheme: "HC Black", preferredHighContrastLightColorTheme: "HC Light", autoDetectColorScheme: false, autoDetectHighContrast: true };
+    assert.deepEqual(themeInUse("dark", settings), { name: "Monokai", dark: true });
+    assert.deepEqual(themeInUse("highContrast", settings), { name: "HC Black", dark: true });
+    assert.deepEqual(themeInUse("highContrastLight", settings), { name: "HC Light", dark: false });
+    assert.deepEqual(themeInUse("highContrast", { ...settings, autoDetectHighContrast: false }), { name: "Monokai", dark: true });
+    assert.deepEqual(themeInUse("light", { ...settings, autoDetectColorScheme: true }), { name: "Light+", dark: false });
+  });
+});
