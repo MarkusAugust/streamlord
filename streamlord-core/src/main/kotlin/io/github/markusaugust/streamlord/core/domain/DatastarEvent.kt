@@ -58,7 +58,8 @@ public sealed interface DatastarEvent {
  *   browser would make it an HTML element that draws nothing.
  * @property useViewTransition Wrap the patch in the View Transitions API.
  * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
- *   document when `null`. Only with [useViewTransition]: the client reads it for nothing else.
+ *   document when `null`. Sent only with [useViewTransition], since the client reads it for nothing
+ *   else, so `useViewTransition = animate` can name the element whatever `animate` is.
  */
 public data class PatchElements(
     @Language("HTML") val elements: String? = null,
@@ -73,7 +74,7 @@ public data class PatchElements(
     init {
         validateCommon(eventId, retry)
         selector?.let { Wire.selector(it) }
-        Wire.viewTransitionSelector(viewTransitionSelector, useViewTransition)
+        viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }

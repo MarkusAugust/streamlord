@@ -31,7 +31,7 @@ public sealed interface DatastarResponse {
  * A `text/html` body patched as elements. Mirrors [PatchElements].
  *
  * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
- *   document when `null`. Only with [useViewTransition], as in [PatchElements].
+ *   document when `null`. Sent only with [useViewTransition], as in [PatchElements].
  */
 public data class ElementsResponse(
     @Language("HTML") val elements: String,
@@ -47,7 +47,7 @@ public data class ElementsResponse(
             throw DatastarEventValidationException("elements must not be blank")
         }
         selector?.let { Wire.selector(it) }
-        Wire.viewTransitionSelector(viewTransitionSelector, useViewTransition)
+        viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
         // A header travels as Latin-1 to the client, which reads it so, and some servers send UTF-8
         // and others drop what Latin-1 lacks: only printable ASCII arrives as written.
         for (inHeader in listOfNotNull(selector, viewTransitionSelector)) {

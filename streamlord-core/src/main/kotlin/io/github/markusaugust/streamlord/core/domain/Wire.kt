@@ -173,23 +173,6 @@ public object Wire {
         return singleLine(value, field)
     }
 
-    /**
-     * Reject a view transition selector that is blank, holds a line break, or comes without
-     * [useViewTransition]: the client reads the selector only when it starts a view transition.
-     */
-    internal fun viewTransitionSelector(
-        value: String?,
-        useViewTransition: Boolean,
-    ) {
-        if (value == null) return
-        selector(value, "viewTransitionSelector")
-        if (!useViewTransition) {
-            throw DatastarEventValidationException(
-                "viewTransitionSelector '$value' needs useViewTransition = true: without it the client starts no view transition and never reads the selector",
-            )
-        }
-    }
-
     /** Reject anything that is not a syntactically sane HTML attribute name. */
     public fun attributeName(name: String): String {
         if (ATTRIBUTE_NAME.matchEntire(name) == null) {

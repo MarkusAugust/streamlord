@@ -110,8 +110,9 @@ data: viewTransitionSelector #board
 data: elements <ul id="quests"><li>Ashfall</li></ul>
 ```
 
-The client reads `viewTransitionSelector` only when it starts a view transition, so a selector
-without `useViewTransition = true` is refused rather than sent for nothing.
+The client reads `viewTransitionSelector` only when it starts a view transition, so without
+`useViewTransition = true` the selector is left off the wire, and
+`useViewTransition = animate` can name the element whatever `animate` is.
 
 ## SVG and MathML
 
