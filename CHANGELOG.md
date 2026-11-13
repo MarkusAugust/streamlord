@@ -8,6 +8,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- The editors say a mode that needs a selector, and a blank or multi-line selector of
+  `removeElements`, in core's words, `patchElements throws: Patch mode 'inner' requires a selector.`,
+  where they had words of their own.
 - An action's hover in the editors names each parameter with what it takes and what it is, as the
   reference has it, and links the action's place in the reference, where it gave the signature and a line.
 - `fit` in streamlord-html-pro names its flags `shouldClamp` and `shouldRound`, as the reference
@@ -125,6 +128,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- The editors flag a literal argument of an SSE call or an answer that core refuses as it runs, in
+  core's own words: an empty or non-ASCII `eventId`, a `retry` of no time, less or a fraction of a
+  millisecond, a blank or multi-line selector or `viewTransitionSelector`, signals that are not one
+  JSON object, a blank script, a `javascript:` redirect, elements that are only white space, and a
+  selector a response header cannot carry. The rules live once, in core's `EventRules`.
 - The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
   dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
   there that the client never dispatches, `'start'` for `'started'`, is warned of, with the fix.

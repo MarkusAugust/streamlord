@@ -173,6 +173,23 @@ public object Wire {
         return singleLine(value, field)
     }
 
+    /**
+     * Reject a selector an answer that is no stream sends as a header. A header travels as Latin-1 to
+     * the client, which reads it so, and some servers send UTF-8 and others drop what Latin-1 lacks:
+     * only printable ASCII arrives as written.
+     */
+    internal fun headerSelector(value: String): String {
+        value.firstOrNull { it !in ' '..'~' }?.let {
+            throw DatastarEventValidationException(
+                "A selector in a response header must be printable ASCII, not U+${hex(
+                    it.code,
+                    4,
+                ).uppercase()}; send it in a stream instead",
+            )
+        }
+        return value
+    }
+
     /** Reject anything that is not a syntactically sane HTML attribute name. */
     public fun attributeName(name: String): String {
         if (ATTRIBUTE_NAME.matchEntire(name) == null) {

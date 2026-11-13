@@ -261,7 +261,7 @@ private val UNKNOWN_SIGNAL_CODES = setOf("unknown-signal", "signal-never-declare
 class DatastarKeyCaseInspection :
     StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))
 
-/** The markup of a patch: complete elements, ids, selectors and modes, scripts. */
+/** The markup of a patch: complete elements, ids, selectors and modes, scripts, and the arguments core refuses as it runs. */
 class StreamlordMarkupInspection :
     StreamlordInspection(
         setOf(
@@ -273,6 +273,7 @@ class StreamlordMarkupInspection :
             "blank-selector",
             "selector-newline",
             "script-close",
+            "event-refused",
         ),
     )
 
@@ -331,5 +332,6 @@ object InspectionCodes {
                 "blank-selector",
                 "selector-newline",
                 "script-close",
+                "event-refused",
             )
 }

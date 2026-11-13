@@ -43,24 +43,15 @@ public data class ElementsResponse(
 ) : DatastarResponse {
     init {
         // An inner patch of nothing empties its target, and a remove needs no elements at all.
-        if (Wire.noElements(elements, mode, selector) && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
-            throw DatastarEventValidationException("elements must not be blank")
+        if (Wire.noElements(elements, mode, selector)) {
+            EventRules.blankElements(mode, response = true)?.let {
+                throw DatastarEventValidationException(it)
+            }
         }
         selector?.let { Wire.selector(it) }
         viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
-        // A header travels as Latin-1 to the client, which reads it so, and some servers send UTF-8
-        // and others drop what Latin-1 lacks: only printable ASCII arrives as written.
-        for (inHeader in listOfNotNull(selector, viewTransitionSelector)) {
-            inHeader.firstOrNull { it !in ' '..'~' }?.let {
-                val code = hex(it.code, 4).uppercase()
-                throw DatastarEventValidationException(
-                    "A selector in a response header must be printable ASCII, not U+$code; send it in a stream instead",
-                )
-            }
-        }
-        if (mode.requiresSelector && selector == null) {
-            throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
-        }
+        listOfNotNull(selector, viewTransitionSelector).forEach(Wire::headerSelector)
+        if (selector == null) EventRules.modeWithoutSelector(mode)?.let { throw DatastarEventValidationException(it) }
         PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
     }
 

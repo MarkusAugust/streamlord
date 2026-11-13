@@ -315,6 +315,20 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsRespons
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/EventRules {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/EventRules;
+	public final fun elements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Z)Ljava/lang/String;
+	public final fun eventId (Ljava/lang/String;)Ljava/lang/String;
+	public final fun headerSelector (Ljava/lang/String;)Ljava/lang/String;
+	public final fun modeWithoutSelector (Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;)Ljava/lang/String;
+	public final fun redirect (Ljava/lang/String;)Ljava/lang/String;
+	public final fun retry-LRDsOJo (J)Ljava/lang/String;
+	public final fun script (Ljava/lang/String;)Ljava/lang/String;
+	public final fun selector (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun selector$default (Lio/github/markusaugust/streamlord/core/domain/EventRules;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+	public final fun signals (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/ExecuteScript : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
 	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/ExecuteScript$Companion;
 	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
