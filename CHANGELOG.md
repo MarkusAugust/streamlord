@@ -449,6 +449,9 @@ All notable changes to Streamlord are recorded here. The format follows
   follows on the line, is read as the whole of what follows says, where the blanks made it markup.
 - The `SignalsCodecException` for a value JSON cannot hold names its class by its simple name,
   `JSON cannot hold Sorcerer.`, where it gave the qualified name, and `null` for a local class.
+- The editors judge the arguments of the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds
+  the reference declares, as they judge the free ones, `@fit('a', 0, 1, 0, 10)` among them, and
+  their hover says what each parameter takes; they judged the number of arguments alone.
 
 ## [0.21.0] - 2026-11-11
 
