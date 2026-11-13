@@ -61,6 +61,7 @@ public data class ElementsResponse(
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
+        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_HTML

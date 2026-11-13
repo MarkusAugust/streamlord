@@ -131,8 +131,8 @@ class ElementsGuardTest {
         val aliased = listOf("data-ds-") + ElementsGuard.defaultPrefixes
         assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-ds-text=""></div>""", aliased) }
         val guarded = Streamlord(guardElements = true, attributePrefixes = aliased)
-        assertFailsWith<InterpolatedExpressionException> { guarded.guard(PatchElements("""<div data-ds-text=""></div>""")) }
-        Streamlord(guardElements = true).guard(PatchElements("""<div data-ds-text=""></div>"""))
+        assertFailsWith<InterpolatedExpressionException> { guarded.guard(PatchElements("""<div id="a" data-ds-text=""></div>""")) }
+        Streamlord(guardElements = true).guard(PatchElements("""<div id="a" data-ds-text=""></div>"""))
     }
 
     @Test

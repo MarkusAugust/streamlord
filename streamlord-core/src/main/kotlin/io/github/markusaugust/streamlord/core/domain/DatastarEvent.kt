@@ -39,7 +39,8 @@ public sealed interface DatastarEvent {
  *
  * Datastar demands *elements*, not fragments: each top-level node must be a complete element,
  * and when no [selector] is given each of them must carry an `id` so the client can find its
- * counterpart.
+ * counterpart: one without it skips, with only a console warning. `Streamlord(guardElements = true)`
+ * refuses such a patch; the event itself takes it, since the SDK specification's own tests send one.
  *
  * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE],
  *   and only white space as HTML counts it (tab, line feed, form feed, carriage return, space)
@@ -49,7 +50,11 @@ public sealed interface DatastarEvent {
  *   other modes, the client inserts those as text, and they are taken.
  * @property selector CSS selector for the target. Required for every mode except OUTER and REPLACE.
  * @property mode How the elements are driven into the DOM. Defaults to OUTER (morph).
- * @property namespace The namespace of the new elements. Defaults to HTML.
+ * @property namespace The namespace of the new elements. Defaults to HTML. In [ElementNamespace.SVG]
+ *   and [ElementNamespace.MATHML] the client parses the markup inside an `<svg>` or a `<math>`, so an
+ *   HTML element there, which closes it, is refused, outside a `<foreignObject>` or the like; in HTML
+ *   an SVG or MathML element outside its own root, such as a bare `<circle>`, is refused, since the
+ *   browser would make it an HTML element that draws nothing.
  * @property useViewTransition Wrap the patch in the View Transitions API.
  * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
  *   document when `null`. Only with [useViewTransition]: the client reads it for nothing else.
@@ -71,6 +76,7 @@ public data class PatchElements(
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
+        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
         // An inner patch of nothing empties its target, the one way to clear a container.
         val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
         if (mode != ElementPatchMode.REMOVE && empty) {

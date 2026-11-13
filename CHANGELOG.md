@@ -101,6 +101,17 @@ All notable changes to Streamlord are recorded here. The format follows
   `useViewTransition`, as `patchElements` does, so a removal can run its view transition on one
   element. A call that passes `eventId` or `retry` by position needs them named, and code compiled
   against the old signatures needs a rebuild.
+- `PatchElements` and `ElementsResponse` throw `DatastarEventValidationException` for markup in the
+  wrong namespace, which the client never patches as written: an HTML element such as `<div>` in
+  the `svg` or `mathml` namespace, where the client parses the patch inside an `<svg>` or a
+  `<math>` that the HTML element closes, so it and all after it are dropped; and an SVG or MathML
+  element such as `<circle>` in the `html` namespace outside its own root, which the browser makes
+  an HTML element that draws nothing. Put HTML in a `<foreignObject>`, or send shapes with
+  `namespace = ElementNamespace.SVG` or inside an `<svg>`.
+- With `guardElements` on, a patch without a selector in `outer` or `replace` mode whose top-level
+  element has no id throws `DatastarEventValidationException`: the client looks each one up by its
+  id and skips one without, with only a console warning. Without the guard such a patch is sent as
+  before, since the SDK specification's own tests send `<div>Merge</div>` that way.
 
 ### Added
 

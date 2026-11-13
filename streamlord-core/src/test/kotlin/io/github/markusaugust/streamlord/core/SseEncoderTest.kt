@@ -29,7 +29,7 @@ class SseEncoderTest {
         val out =
             SseEncoder.encode(
                 PatchElements(
-                    elements = "<div>\n  <span>1</span>\n</div>",
+                    elements = "<g>\n  <text>1</text>\n</g>",
                     selector = "#feed",
                     mode = ElementPatchMode.INNER,
                     namespace = ElementNamespace.SVG,
@@ -49,9 +49,9 @@ class SseEncoderTest {
             |data: useViewTransition true
             |data: viewTransitionSelector #main
             |data: namespace svg
-            |data: elements <div>
-            |data: elements   <span>1</span>
-            |data: elements </div>
+            |data: elements <g>
+            |data: elements   <text>1</text>
+            |data: elements </g>
             |
             |
             """.trimMargin(),

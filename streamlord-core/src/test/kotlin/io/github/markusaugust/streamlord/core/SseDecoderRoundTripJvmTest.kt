@@ -51,7 +51,7 @@ class SseDecoderRoundTripJvmTest {
     fun `an element patch comes back whole`() {
         val sent =
             PatchElements(
-                elements = "<li>one</li>\n<li>two</li>",
+                elements = "<circle r=\"1\"/>\n<circle r=\"2\"/>",
                 selector = "#feed",
                 mode = ElementPatchMode.APPEND,
                 namespace = ElementNamespace.SVG,
