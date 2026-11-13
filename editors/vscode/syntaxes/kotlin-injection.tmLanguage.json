@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "streamlord.kotlin.injection",
-  "injectionSelector": "L:source.kotlin -comment -string -meta.dsl-file.streamlord -meta.kotlin-raw.streamlord -meta.language-marker.streamlord",
+  "injectionSelector": "L:source.kotlin -comment -string -meta.dsl-file.streamlord -meta.kotlin-string.streamlord -meta.language-marker.streamlord",
   "patterns": [
     {
       "include": "#dsl-file"
@@ -95,7 +95,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "match": "\\b(attributes)(\\s*\\[\\s*)(\")(data-(?:star-)?(?:on-signal-patch-filter|scroll-into-view|custom-validity|on-signal-patch|view-transition|preserve-attr|ignore-morph|json-signals|on-intersect|query-string|match-media|on-interval|replace-url|indicator|on-resize|computed|animate|persist|signals|effect|ignore|on-raf|class|nonce|style|attr|bind|init|show|text|ref|on)(?=[:\"]|__)[A-Za-z0-9_:.-]*)(\")(\\s*\\])",
@@ -211,7 +212,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--))",
@@ -255,7 +257,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         }
       ]
     },
@@ -275,7 +278,7 @@
               "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
             }
           },
-          "name": "meta.kotlin-raw.streamlord",
+          "name": "meta.kotlin-string.streamlord",
           "patterns": [
             {
               "begin": "^(?=[ \\t]*<(?:[A-Za-z]|!--|!(?i:doctype)))",
@@ -309,7 +312,7 @@
               "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
             }
           },
-          "name": "meta.kotlin-raw.streamlord",
+          "name": "meta.kotlin-string.streamlord",
           "patterns": [
             {
               "begin": "^(?=[ \\t]*<(?:[A-Za-z]|!--|!(?i:doctype)))",
@@ -378,7 +381,8 @@
             }
           ]
         }
-      ]
+      ],
+      "name": "meta.kotlin-string.streamlord"
     },
     "html-double-string": {
       "comment": "A double-quoted literal that opens with a tag, under an HTML marker: HTML.",
@@ -423,7 +427,8 @@
             }
           ]
         }
-      ]
+      ],
+      "name": "meta.kotlin-string.streamlord"
     },
     "plain-double-string": {
       "comment": "Any other double-quoted literal under an HTML marker, such as a parameter default: a string, nothing more. Listed after html-double-string, which wins at the same quote.",
@@ -540,7 +545,8 @@
             {
               "include": "#expression-string-body"
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|dataOnRaf|dataInit|dataShow|dataText|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
@@ -562,7 +568,8 @@
             {
               "include": "#expression-string-body"
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         }
       ]
     },
@@ -614,7 +621,8 @@
             {
               "include": "#expression-string-body"
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
@@ -661,7 +669,8 @@
             {
               "include": "#expression-string-body"
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         }
       ]
     },
@@ -688,7 +697,8 @@
             {
               "include": "#expression-string-body"
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))(?=\\s*\\{)",
@@ -710,7 +720,8 @@
             {
               "include": "#expression-string-body"
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         }
       ]
     },
@@ -764,7 +775,8 @@
                 {
                   "include": "#expression-string-body"
                 }
-              ]
+              ],
+              "name": "meta.kotlin-string.streamlord"
             },
             {
               "begin": "^\\s*(?:expression\\s*=\\s*)?(\\$*\"(?!\"\"))",
@@ -783,7 +795,8 @@
                 {
                   "include": "#expression-string-body"
                 }
-              ]
+              ],
+              "name": "meta.kotlin-string.streamlord"
             },
             {
               "include": "source.kotlin"
@@ -819,7 +832,8 @@
                 {
                   "include": "#expression-string-body"
                 }
-              ]
+              ],
+              "name": "meta.kotlin-string.streamlord"
             },
             {
               "begin": "^\\s*(?:expression\\s*=\\s*)?(\\$*\"(?!\"\"))",
@@ -838,7 +852,8 @@
                 {
                   "include": "#expression-string-body"
                 }
-              ]
+              ],
+              "name": "meta.kotlin-string.streamlord"
             },
             {
               "include": "source.kotlin"
@@ -880,7 +895,8 @@
                     {
                       "include": "#expression-string-body"
                     }
-                  ]
+                  ],
+                  "name": "meta.kotlin-string.streamlord"
                 },
                 {
                   "begin": "\\G\\s*(?:expression\\s*=\\s*)?(\\$*\"(?!\"\"))",
@@ -899,7 +915,8 @@
                     {
                       "include": "#expression-string-body"
                     }
-                  ]
+                  ],
+                  "name": "meta.kotlin-string.streamlord"
                 },
                 {
                   "begin": "^\\s*(?:expression\\s*=\\s*)?(\\$*\"\"\")",
@@ -918,7 +935,8 @@
                     {
                       "include": "#expression-string-body"
                     }
-                  ]
+                  ],
+                  "name": "meta.kotlin-string.streamlord"
                 },
                 {
                   "begin": "^\\s*(?:expression\\s*=\\s*)?(\\$*\"(?!\"\"))",
@@ -937,7 +955,8 @@
                     {
                       "include": "#expression-string-body"
                     }
-                  ]
+                  ],
+                  "name": "meta.kotlin-string.streamlord"
                 },
                 {
                   "include": "source.kotlin"
@@ -996,7 +1015,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "begin": "(?:(\\??\\.)\\s*)?\\b(patchElements|respondElements|datastarElements|PatchElements|ElementsResponse)(\\s*\\(\\s*(?:elements\\s*=\\s*)?\\$*)(\")",
@@ -1043,7 +1063,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         }
       ]
     },
@@ -1092,7 +1113,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         },
         {
           "begin": "(?:(\\??\\.)\\s*)?\\b(executeScript|respondScript|datastarScript|ExecuteScript)(\\s*\\(\\s*(?:script\\s*=\\s*)?\\$*)(\")",
@@ -1139,7 +1161,8 @@
                 }
               ]
             }
-          ]
+          ],
+          "name": "meta.kotlin-string.streamlord"
         }
       ]
     }

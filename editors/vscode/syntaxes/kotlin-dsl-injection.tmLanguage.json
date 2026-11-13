@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "streamlord.kotlin.dsl.injection",
   "comment": "Inside a file that imports the DSL (meta.dsl-file.streamlord, opened by streamlord.kotlin.injection): its calls, and everything else that grammar colours, from that grammar's own rules.",
-  "injectionSelector": "L:meta.dsl-file.streamlord -comment -string -meta.kotlin-raw.streamlord -meta.language-marker.streamlord",
+  "injectionSelector": "L:meta.dsl-file.streamlord -comment -string -meta.kotlin-string.streamlord -meta.language-marker.streamlord",
   "patterns": [
     {
       "include": "streamlord.kotlin.injection#expression-call-second-arg"
