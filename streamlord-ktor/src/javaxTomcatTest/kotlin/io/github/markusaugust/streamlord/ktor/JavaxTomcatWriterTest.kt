@@ -13,7 +13,6 @@ import io.ktor.server.tomcat.Tomcat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import org.apache.catalina.connector.CoyoteOutputStream
@@ -147,19 +146,18 @@ class JavaxTomcatWriterTest {
                 }
             }
         }
-        val server = embeddedServer(Tomcat, port = 0, module = module).start(wait = false)
+        val server = embeddedServer(Tomcat, port = 0, module = module)
+        // On the loopback address, as TomcatWriterTest says why; set before the start, as Ktor gives its connectors no address.
+        val engine = server.engine.javaClass.getDeclaredField("server")
+        engine.isAccessible = true
+        val connectors = (engine.get(server.engine) as TomcatServer).service.findConnectors()
+        connectors.forEach {
+            it.setProperty("address", "127.0.0.1")
+            it.discardFacades = discardFacades
+        }
         try {
-            val engine = server.engine.javaClass.getDeclaredField("server")
-            engine.isAccessible = true
-            (engine.get(server.engine) as TomcatServer).service.findConnectors().forEach { it.discardFacades = discardFacades }
-            val port =
-                runBlocking {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
-                }
-            val seen = read(port)
+            server.start(wait = false)
+            val seen = read(connectors.first().localPort)
             completed.get(20, TimeUnit.SECONDS)
             assertTrue(released.await(20, TimeUnit.SECONDS), "Ktor's writer never let go of the failing frame")
             assertTrue(late.isEmpty(), "Ktor's writer went on after Tomcat completed the request: $late")
@@ -170,7 +168,7 @@ class JavaxTomcatWriterTest {
     }
 
     private fun read(port: Int): String =
-        Socket("localhost", port).use { socket ->
+        Socket("127.0.0.1", port).use { socket ->
             socket.soTimeout = 20_000
             socket.getOutputStream().write("GET /after HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
             val seen = StringBuilder()

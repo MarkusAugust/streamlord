@@ -6,7 +6,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.tomcat.jakarta.Tomcat
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import java.io.ByteArrayOutputStream
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -50,19 +49,19 @@ class TomcatFacadeTest {
                         }
                     }
                 }
-            }.start(wait = false)
+            }
+        // Ktor sets up its connectors after configureTomcat runs and gives them no address, so both go on before the start:
+        // on the loopback address, as TomcatWriterTest says why.
+        val field = server.engine.javaClass.getDeclaredField("server")
+        field.isAccessible = true
+        val connectors = (field.get(server.engine) as TomcatServer).service.findConnectors()
+        connectors.forEach {
+            it.setProperty("address", "127.0.0.1")
+            it.discardFacades = discardFacades
+        }
         try {
-            // Ktor sets up its connectors after configureTomcat runs, so the setting goes on afterwards.
-            val field = server.engine.javaClass.getDeclaredField("server")
-            field.isAccessible = true
-            (field.get(server.engine) as TomcatServer).service.findConnectors().forEach { it.discardFacades = discardFacades }
-            val port =
-                runBlocking {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
-                }
+            server.start(wait = false)
+            val port = connectors.first().localPort
             val pool = Executors.newFixedThreadPool(32)
             val found =
                 (0 until 400)
@@ -109,7 +108,7 @@ class TomcatFacadeTest {
         port: Int,
         paths: List<String>,
     ): List<String> =
-        Socket("localhost", port).use { socket ->
+        Socket("127.0.0.1", port).use { socket ->
             socket.soTimeout = 20_000
             paths.map { path ->
                 socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())

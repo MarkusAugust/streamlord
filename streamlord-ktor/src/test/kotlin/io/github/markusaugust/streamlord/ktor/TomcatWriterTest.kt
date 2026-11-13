@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -269,7 +268,7 @@ class TomcatWriterTest {
             }
         }
         tomcat(discardFacades = true, module) { port ->
-            Socket("localhost", port).use { socket ->
+            Socket(LOOPBACK, port).use { socket ->
                 socket.getOutputStream().write("GET /stall HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 val after = thrown.get(60, TimeUnit.SECONDS) - started.get(60, TimeUnit.SECONDS)
                 // Two seconds of writing and one for the frames, with room for a busy machine.
@@ -304,27 +303,25 @@ class TomcatWriterTest {
     private fun Throwable?.isOrRecovers(failure: Throwable) =
         this === failure || (this != null && this.javaClass == failure.javaClass && cause === failure)
 
-    /** [test] against a Ktor Tomcat with [module], its connectors set to [discardFacades], on its port. */
+    /** [test] against a Ktor Tomcat with [module] on the loopback address, its connectors set to [discardFacades], on its port. */
     private fun tomcat(
         discardFacades: Boolean,
         module: Application.() -> Unit,
         port: Int = 0,
         test: (Int) -> Unit,
     ) {
-        val server = embeddedServer(Tomcat, port = port, module = module).start(wait = false)
+        val server = embeddedServer(Tomcat, port = port, module = module)
+        // Ktor sets up its connectors after configureTomcat runs, and gives them no address, so both go on before the start.
+        val field = server.engine.javaClass.getDeclaredField("server")
+        field.isAccessible = true
+        val connectors = (field.get(server.engine) as TomcatServer).service.findConnectors()
+        connectors.forEach {
+            it.setProperty("address", LOOPBACK)
+            it.discardFacades = discardFacades
+        }
         try {
-            // Ktor sets up its connectors after configureTomcat runs, so the setting goes on afterwards.
-            val field = server.engine.javaClass.getDeclaredField("server")
-            field.isAccessible = true
-            (field.get(server.engine) as TomcatServer).service.findConnectors().forEach { it.discardFacades = discardFacades }
-            test(
-                runBlocking {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
-                },
-            )
+            server.start(wait = false)
+            test(connectors.first().localPort)
         } finally {
             server.stop(100, 500)
         }
@@ -335,7 +332,7 @@ class TomcatWriterTest {
         port: Int,
         path: String,
     ): String =
-        Socket("localhost", port).use { socket ->
+        Socket(LOOPBACK, port).use { socket ->
             socket.soTimeout = 20_000
             socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
             val seen = StringBuilder()
@@ -351,3 +348,6 @@ class TomcatWriterTest {
             seen.toString()
         }
 }
+
+/** The address the tests serve on and read from: the server a test starts is the only one there on its port. */
+private const val LOOPBACK = "127.0.0.1"
