@@ -20,26 +20,45 @@ public fun clipboardExpr(
     isBase64: Boolean = false,
 ): String = if (isBase64) "@clipboard($expression, true)" else "@clipboard($expression)"
 
-/** `@fit(v, oldMin, oldMax, newMin, newMax, clamp, round)` (Pro): linear interpolation between ranges. */
+/** `@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp, shouldRound)` (Pro): linear interpolation between ranges. */
 public fun fit(
     value: String,
     oldMin: Number,
     oldMax: Number,
     newMin: Number,
     newMax: Number,
-    clamp: Boolean = false,
-    round: Boolean = false,
+    shouldClamp: Boolean = false,
+    shouldRound: Boolean = false,
+): String = fitCall(value, "$oldMin", "$oldMax", "$newMin", "$newMax", shouldClamp, shouldRound)
+
+/** [fit] with each end of the ranges a raw JavaScript expression, e.g. a signal: `fitExpr(signal("x"), "0", signal("max"), "0", "1")`. */
+public fun fitExpr(
+    value: String,
+    oldMin: String,
+    oldMax: String,
+    newMin: String,
+    newMax: String,
+    shouldClamp: Boolean = false,
+    shouldRound: Boolean = false,
+): String {
+    for (end in listOf(oldMin, oldMax, newMin, newMax)) require(end.isNotBlank()) { "an end of a range of fit must not be blank" }
+    return fitCall(value, oldMin, oldMax, newMin, newMax, shouldClamp, shouldRound)
+}
+
+private fun fitCall(
+    value: String,
+    oldMin: String,
+    oldMax: String,
+    newMin: String,
+    newMax: String,
+    shouldClamp: Boolean,
+    shouldRound: Boolean,
 ): String =
     buildString {
-        append("@fit(")
-            .append(value)
-            .append(", ")
-            .append(oldMin)
-            .append(", ")
-            .append(oldMax)
-        append(", ").append(newMin).append(", ").append(newMax)
-        if (clamp || round) append(", ").append(clamp)
-        if (round) append(", true")
+        append("@fit(").append(value)
+        for (end in listOf(oldMin, oldMax, newMin, newMax)) append(", ").append(end)
+        if (shouldClamp || shouldRound) append(", ").append(shouldClamp)
+        if (shouldRound) append(", true")
         append(')')
     }
 

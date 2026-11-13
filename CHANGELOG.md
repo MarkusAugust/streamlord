@@ -8,6 +8,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `fit` in streamlord-html-pro names its flags `shouldClamp` and `shouldRound`, as the reference
+  does, where it named them `clamp` and `round`. A call that names them needs the new names.
 - The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.
 - Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
   `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
@@ -121,6 +123,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- The backend actions of streamlord-html take expressions where the client does: `getExpr`,
+  `postExpr`, `putExpr`, `patchExpr`, `deleteExpr` and `queryExpr` take the address as an
+  expression, `headerExprs` takes header values as expressions, `requestCancellationExpr` takes an
+  `AbortController`, and `setAllExpr` takes the value of `@setAll` as an expression. In
+  streamlord-html-pro, `fitExpr` takes the ends of the ranges as expressions.
 - An answer of elements that is not a stream can name the element its view transition runs on:
   `viewTransitionSelector`, sent as the header `datastar-view-transition-selector`, which
   Datastar 1.0.5 reads. It is sent only with `useViewTransition`, as in a stream.
@@ -213,6 +220,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `payload = null` in the options of a backend action is written as `payload: null`, and the client
+  sends `null`, where it wrote nothing and the signals went.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in

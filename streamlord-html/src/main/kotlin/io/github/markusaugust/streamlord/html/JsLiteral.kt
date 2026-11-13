@@ -118,6 +118,9 @@ public object JsLiteral {
             append('\'')
         }
 
+    /** [key] as an object literal writes it: bare where it is a name, quoted otherwise, computed for `__proto__`. */
+    internal fun key(key: String): String = StringBuilder().also { Style.appendKey(it, key) }.toString()
+
     /** [value] as a JavaScript literal: `{id: 7, tags: ['a', 'b'], 'x-y': null}`. */
     public fun write(value: Any?): String = JsonWriter.write(value, Style)
 
