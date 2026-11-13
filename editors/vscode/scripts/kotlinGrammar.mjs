@@ -267,9 +267,9 @@ export function kotlinInjectionGrammar(catalog) {
       comment:
         "payloadExpr = \"...\" and the other options of FetchOptions whose value is an expression, and each value of headerExprs = mapOf(\"X-Id\" to \"...\"), whose name is a plain string.",
       patterns: [
-        expressionCall("An option set to an expression.", r`\b(` + plainOptions + r`)(\s*)(=)(\s*)`, { 3: { name: "keyword.operator.assignment.kotlin" } }, 5),
+        expressionCall("An option set to an expression, on no receiver.", r`(?<!\.)\b(` + plainOptions + r`)(\s*)(=)(\s*)`, { 3: { name: "keyword.operator.assignment.kotlin" } }, 5),
         {
-          begin: r`\b(` + mapOptions + r`)(\s*)(=)(\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\s*\()`,
+          begin: r`(?<!\.)\b(` + mapOptions + r`)(\s*)(=)(\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\s*\()`,
           beginCaptures: { 3: { name: "keyword.operator.assignment.kotlin" }, 5: FN },
           end: r`\)`,
           patterns: [

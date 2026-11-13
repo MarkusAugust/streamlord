@@ -659,6 +659,8 @@ describe("datastar colours in Kotlin strings", () => {
       const t = (await tokenLines("source.kotlin", [DSL_IMPORT, pro, `div { ${call} }`]))[2]!;
       assert.ok(t.some((x) => x.text === "b" && x.scopes.includes(S.signal)), call);
     }
+    const receiver = await kinds("source.kotlin", `fun f(form: Form) { form.payloadExpr = "\\$b" }`);
+    assert.ok(receiver.every(([, s]) => s !== S.signal), "an option set on a receiver is another's");
     // A header's name, and what follows the call, are no expression.
     const t = await kinds("source.kotlin", `div { dataOnClick(get("/x") { headerExprs = mapOf("X-b" to "1") }); val s = "\\$b" }`);
     assert.ok(t.every(([, s]) => s !== S.signal), JSON.stringify(t));

@@ -459,7 +459,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - The expressions handed to the DSL's expression helpers, `getExpr`, `postExpr`, `putExpr`,
   `patchExpr`, `deleteExpr`, `queryExpr`, `setAllExpr`, `clipboardExpr` and every argument of
   `fitExpr`, and the options `payloadExpr`, `requestCancellationExpr` and the values of
-  `headerExprs`, are checked, completed, hovered and coloured in both editors, as the expression of
+  `headerExprs` in the options of a backend action, are checked, completed, hovered and coloured in
+  both editors, as the expression of
   `dataText` is. A helper handed to another call, `dataOnClick(getExpr("..."))`, is read as its own.
   In the catalog, an expression call site may name the parameters after it that take an expression
   too, `more`, and `expressionOptions` lists the options; `CallSiteSpec` has one more value, `more`,

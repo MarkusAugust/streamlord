@@ -942,10 +942,10 @@
       "comment": "payloadExpr = \"...\" and the other options of FetchOptions whose value is an expression, and each value of headerExprs = mapOf(\"X-Id\" to \"...\"), whose name is a plain string.",
       "patterns": [
         {
-          "comment": "An option set to an expression.",
+          "comment": "An option set to an expression, on no receiver.",
           "patterns": [
             {
-              "begin": "\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"\"\")",
+              "begin": "(?<!\\.)\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"\"\")",
               "beginCaptures": {
                 "3": {
                   "name": "keyword.operator.assignment.kotlin"
@@ -968,7 +968,7 @@
               "name": "meta.kotlin-string.streamlord"
             },
             {
-              "begin": "\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"(?!\"\"))",
+              "begin": "(?<!\\.)\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"(?!\"\"))",
               "beginCaptures": {
                 "3": {
                   "name": "keyword.operator.assignment.kotlin"
@@ -993,7 +993,7 @@
           ]
         },
         {
-          "begin": "\\b(headerExprs)(\\s*)(=)(\\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\\s*\\()",
+          "begin": "(?<!\\.)\\b(headerExprs)(\\s*)(=)(\\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\\s*\\()",
           "beginCaptures": {
             "3": {
               "name": "keyword.operator.assignment.kotlin"

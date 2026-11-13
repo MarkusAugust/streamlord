@@ -483,9 +483,12 @@ public class Analyzer(
         val assigned = optionAssigned ?: return emptyList()
         val out = ArrayList<ExpressionOption>()
         val maps by lazy(LazyThreadSafetyMode.NONE) { findCallSites(src, MAP_CALLS, lex) }
+        val lambdas by lazy(LazyThreadSafetyMode.NONE) { optionLambdas(src, lex) }
         for (m in assigned.findAll(src)) {
             val at = m.range.first
             if (!lex.mask[at] || DECLARED_BEFORE.containsMatchIn(src.substring(maxOf(0, at - 16), at))) continue
+            // Set in the lambda of a backend action's options, and on nothing else: `form.payloadExpr` is another's.
+            if (src.lastNonSpaceBefore(at) == '.' || lambdas.none { at in it }) continue
             val name = m.groupValues[1]
             val after = m.range.last + 1
             if ("map" !in catalog.expressionOptions.getValue(name)) {
@@ -503,6 +506,47 @@ public class Analyzer(
         }
         return out
     }
+
+    /**
+     * The braces of each lambda that sets a backend action's options: the one after `post("/x")`, or
+     * the one passed as an argument, `options = { ... }`, of the DSL's backend helpers.
+     */
+    private fun optionLambdas(
+        src: String,
+        lex: KotlinLex,
+    ): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        for (site in findCallSites(src, backendHelpers, lex)) {
+            for (arg in site.args) if (src.getOrNull(arg.start) == '{') out += arg.start until arg.end
+            if (!site.trailingLambda) continue
+            val open = src.indexOf('{', site.closeParen + 1)
+            closingBrace(src, lex, open)?.let { out += open..it }
+        }
+        return out
+    }
+
+    /** Where the brace that opens at [open] closes, counting the braces of code alone; null when it never does. */
+    private fun closingBrace(
+        src: String,
+        lex: KotlinLex,
+        open: Int,
+    ): Int? {
+        if (open < 0) return null
+        var depth = 0
+        for (k in open until src.length) {
+            if (!lex.mask[k]) continue
+            if (src[k] == '{') depth++
+            if (src[k] == '}' && --depth == 0) return k
+        }
+        return null
+    }
+
+    /** The DSL's backend helpers, `get` and `getExpr` and the rest, which take a lambda of FetchOptions. */
+    private val backendHelpers: Set<String> =
+        catalog.actions
+            .filter { it.kind == "backend" && it.kotlin.isNotEmpty() }
+            .flatMap { listOf(it.kotlin, it.kotlin + "Expr") }
+            .toSet()
 
     /** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */
     private fun attributesIndexValue(
