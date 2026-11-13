@@ -1199,7 +1199,7 @@ class DslAsTheClientReadsItTest {
                 listensPlain("AbortSignal", "abort")
             }) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.NEVER }) } },
             dslCase(
-                "get never retried gives up on a request that fails, which 1.0.4 retried",
+                "get never retried gives up on a request that fails",
                 "get",
                 probe =
                     mapOf(
@@ -1209,7 +1209,7 @@ class DslAsTheClientReadsItTest {
                 expect = {
                     listens("button", "click")
                     listensPlain("document", "visibilitychange")
-                    // One request and no wait: 1.0.4 retried a request that never reached the server whatever retry said.
+                    // One request and no wait: a request that never reached the server is not retried.
                     request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                     errors += "FetchFailed"
                     heard("button", "click", 0)
@@ -1504,11 +1504,11 @@ class DslAsTheClientReadsItTest {
             ) { svg { dataClass("isOn", "true") } },
         )
 
-    /** What Datastar 1.0.5 does and 1.0.4 did not, each as a page or a server sees it; a case's name says what 1.0.4 did. */
+    /** What Datastar 1.0.5 does that an older client did otherwise, each as a page or a server sees it. */
     private val since105 =
         listOf(
             dslCase(
-                "on debounce does not run once the element is removed, where 1.0.4 ran it",
+                "on debounce does not run once the element is removed",
                 "dataOnClick",
                 probe = mapOf("rounds" to 1, "between" to "document.querySelector('button').remove()"),
                 expect = {
@@ -1519,7 +1519,7 @@ class DslAsTheClientReadsItTest {
                 },
             ) { button { dataOnClick("probe(evt)") { debounce = 500.milliseconds } } },
             dslCase(
-                "on signal patch debounce is not restarted by a patch the filter drops, which in 1.0.4 left it never run",
+                "on signal patch debounce is not restarted by a patch the filter drops",
                 "dataOnSignalPatch",
                 probe = mapOf("eval" to "Datastar.mergePatch({a: 2}); Datastar.mergePatch({b: 3})"),
                 expect = {
@@ -1536,7 +1536,7 @@ class DslAsTheClientReadsItTest {
                 }
             },
             dslCase(
-                "a computed replaced by another wakes what read it, which in 1.0.4 kept the old one",
+                "a computed replaced by another wakes what read it",
                 "dataComputed",
                 key = "x",
                 probe = mapOf("rounds" to 1),
@@ -1566,7 +1566,7 @@ class DslAsTheClientReadsItTest {
                 button { dataOnClick("${'$'}b = 5") }
             },
             dslCase(
-                "an attribute the client refuses does not stop the ones after it, as it did in 1.0.4",
+                "an attribute the client refuses does not stop the ones after it",
                 "dataText",
                 expect = {
                     errors += "KeyOrValueRequired"
@@ -1578,7 +1578,7 @@ class DslAsTheClientReadsItTest {
                 span { dataText("'shown'") }
             },
             dslCase(
-                "init runs once more for an element a patch moves, where 1.0.4 ran it twice more",
+                "init runs once more for an element a patch moves, not twice",
                 "dataInit",
                 patch = {
                     div {
@@ -1602,7 +1602,7 @@ class DslAsTheClientReadsItTest {
                 }
             },
             dslCase(
-                "bind keeps the signal while the input holds what it cannot read, where 1.0.4 stored 0",
+                "bind keeps the signal while the input holds what it cannot read",
                 "dataBind",
                 key = "n",
                 probe =
@@ -1626,7 +1626,7 @@ class DslAsTheClientReadsItTest {
                 }
             },
             dslCase(
-                "get retried always stops at retryMaxCount over the whole action, where 1.0.4 counted from each answer",
+                "get retried always stops at retryMaxCount over the whole action",
                 "get",
                 probe =
                     mapOf(
@@ -1658,7 +1658,7 @@ class DslAsTheClientReadsItTest {
                 }
             },
             dslCase(
-                "get whose stream breaks counts every retry and waits longer each time, where 1.0.4 began again at each 200",
+                "get whose stream breaks counts every retry and waits longer each time",
                 "get",
                 probe =
                     mapOf(
@@ -1687,7 +1687,7 @@ class DslAsTheClientReadsItTest {
                 }
             },
             dslCase(
-                "get never retried gives up on a stream that breaks, which 1.0.4 retried without end",
+                "get never retried gives up on a stream that breaks",
                 "get",
                 probe =
                     mapOf(
@@ -1704,7 +1704,7 @@ class DslAsTheClientReadsItTest {
                 },
             ) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.NEVER }) } },
             dslCase(
-                "get waiting to retry sends nothing once the page is hidden, where 1.0.4 sent the retry",
+                "get waiting to retry sends nothing once the page is hidden",
                 "get",
                 probe =
                     mapOf(
@@ -1724,7 +1724,7 @@ class DslAsTheClientReadsItTest {
                 },
             ) { button { dataOnClick(get("/x") { retry = FetchOptions.Retry.ERROR }) } },
             dslCase(
-                "get answered with html reads the header datastar-view-transition-selector, which 1.0.4 ignored",
+                "get answered with html reads the header datastar-view-transition-selector",
                 "get",
                 probe =
                     mapOf(
@@ -1747,8 +1747,7 @@ class DslAsTheClientReadsItTest {
                     request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
                     heard("button", "click", 0)
                     text("t", "new")
-                    // The transition is the element's own, which happy-dom has none of, so the document starts none:
-                    // 1.0.4 never read the header and started the document's.
+                    // The transition is the element's own, which happy-dom has none of, so the document starts none.
                     viewTransitions = 0
                     listensPlain("AbortSignal", "abort")
                 },

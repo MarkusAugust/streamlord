@@ -28,8 +28,9 @@ class ProtocolAsTheClientTakesItTest {
         assertEquals("event: x\nid: \n\n", SseFrame("x", id = "").render())
     }
 
-    // Chrome on the 1.0.4 bundle: an outer or replace without a selector takes only elements, so a
-    // no-break space there leaves the page as it was; with a selector, or appended, it is text.
+    // Measured in headless Chrome 153 on the 1.0.5 bundle: an outer or replace without a selector
+    // takes only elements, so a no-break space there leaves the page as it was; with a selector, or
+    // appended, it is text.
     @Test
     fun `elements that show as blank are refused where the client takes only elements`() {
         for (blank in listOf("\u00a0", "\u3000", "\u001c", " \u00a0\n")) {
