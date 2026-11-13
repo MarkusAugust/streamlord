@@ -41,6 +41,11 @@ public data class SignalProperty(
  * @property lookups Names read by a `Signals` accessor, such as `signals.string("query")`.
  * @property encodedTypes Classes a page declares its signals from, `dataSignals(codec.toJsonValue(Form()))`,
  *   by simple name, with `*` for a value whose class the file does not name.
+ * @property patchedTypes Classes a server patch sets the signals of, `patchSignals(Form())`, by simple
+ *   name. Unlike a page's, a patch of a class the check cannot read declares nothing: the server
+ *   sends what it sends, and a read only it could set is still worth a look.
+ * @property packageName The file's package, and [imports] what it imports, `app.forms.Form` or
+ *   `app.forms.*`: a simple name above is the class they make it, as Kotlin resolves it.
  */
 public data class SignalFacts(
     val declared: Set<String>,
@@ -48,6 +53,9 @@ public data class SignalFacts(
     val classes: Map<String, List<SignalProperty>>,
     val lookups: List<SignalRead>,
     val encodedTypes: Set<String> = emptySet(),
+    val patchedTypes: Set<String> = emptySet(),
+    val packageName: String = "",
+    val imports: Set<String> = emptySet(),
 )
 
 private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
@@ -99,9 +107,11 @@ public fun collectSignalFacts(
 
     val lex = lexKotlin(src)
 
+    // A read written in a comment or a string is none.
     val types = LinkedHashSet<String>()
-    for (m in SIGNAL_TYPE_PARAMETER.findAll(src)) types += m.groupValues[1]
-    for (m in SIGNAL_TYPE_DEFAULT.findAll(src)) types += m.groupValues[1]
+    for (re in listOf(SIGNAL_TYPE_PARAMETER, SIGNAL_TYPE_DEFAULT)) {
+        for (m in re.findAll(src)) if (lex.mask[m.range.first]) types += m.groupValues[1]
+    }
 
     val bound = hashSetOf("signals")
     for (re in listOf(SIGNALS_BINDING, SIGNALS_TYPED)) {
@@ -115,7 +125,53 @@ public fun collectSignalFacts(
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
 
-    return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups, encodedSignalTypes(src))
+    val packageName =
+        PACKAGE
+            .findAll(src)
+            .firstOrNull { lex.mask[it.range.first] }
+            ?.groupValues
+            ?.get(1)
+            .orEmpty()
+    val imports = IMPORT.findAll(src).filter { lex.mask[it.range.first] }.mapTo(LinkedHashSet()) { it.groupValues[1] }
+    return SignalFacts(
+        collectDeclaredSignals(src, language),
+        types,
+        serializableProperties(src),
+        lookups,
+        encodedSignalTypes(src, lex = lex),
+        patchedSignalTypes(src, lex),
+        packageName,
+        imports,
+    )
+}
+
+private val PACKAGE = regex("""^[ \t]*package\s+([A-Za-z_][A-Za-z0-9_.]*)""", RegexOption.MULTILINE)
+
+// An import under another name, `import a.Form as F`, is left out: the class is then read by no name the check knows.
+private val IMPORT = regex("""^[ \t]*import\s+([A-Za-z_][A-Za-z0-9_.]*(?:\.\*)?)[ \t]*(?:;|//|/\*|$)""", RegexOption.MULTILINE)
+
+/** A class of the project, by the file that declares it and its package. */
+private class DeclaredClass(
+    val file: String,
+    val packageName: String,
+    val properties: List<SignalProperty>,
+)
+
+/**
+ * The classes of [byName] that the simple name [type] means in [reader], as Kotlin looks it up: an
+ * explicit import first, then the reader's own package, then a star import. More than one is a
+ * name the check cannot settle.
+ */
+private fun resolve(
+    reader: SignalFacts,
+    type: String,
+    byName: Map<String, List<DeclaredClass>>,
+): List<DeclaredClass> {
+    val all = byName[type].orEmpty()
+    // An explicit import of the name decides, even of a class outside the project.
+    if (reader.imports.any { it == type || it.endsWith(".$type") }) return all.filter { "${it.packageName}.$type" in reader.imports }
+    all.filter { it.packageName == reader.packageName }.let { if (it.isNotEmpty()) return it }
+    return all.filter { it.packageName.isNotEmpty() && "${it.packageName}.*" in reader.imports }
 }
 
 /** Whether the accessor whose name starts at [nameStart] is called on something that holds signals. */
@@ -224,15 +280,27 @@ public data class SignalDriftReport(
  */
 public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val declared = facts.values.flatMapTo(LinkedHashSet()) { it.declared }
-    val signalTypes = facts.values.flatMapTo(LinkedHashSet()) { it.signalTypes }
     val read = LinkedHashSet<String>()
 
+    val byName = HashMap<String, MutableList<DeclaredClass>>()
+    for ((file, one) in facts) {
+        for ((type, properties) in one.classes) byName.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
+    }
+
+    // A class is judged where one class alone is what a read names: two the read may mean are left alone.
+    val judged = HashSet<Pair<String, String>>()
     // A page that declares its signals from an encoded class declares that class's properties. A
     // class this check cannot read, a Jackson one or none named, may declare any name.
-    val classes = facts.values.flatMap { it.classes.entries }.associate { it.key to it.value }
-    val encoded = facts.values.flatMapTo(LinkedHashSet()) { it.encodedTypes }
-    for (type in encoded) classes[type]?.forEach { declared += it.name }
-    val byCodec = encoded.filterTo(LinkedHashSet()) { it !in classes }
+    val byCodec = LinkedHashSet<String>()
+    for (one in facts.values) {
+        for (type in one.signalTypes) resolve(one, type, byName).singleOrNull()?.let { judged += it.file to type }
+        for (type in one.encodedTypes) {
+            val found = if (type == ANY_SIGNAL) emptyList() else resolve(one, type, byName)
+            if (found.isEmpty()) byCodec += type
+            for (c in found) c.properties.forEach { declared += it.name }
+        }
+        for (type in one.patchedTypes) for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+    }
     val anyDeclared = byCodec.isNotEmpty()
 
     val out = LinkedHashMap<String, List<Issue>>()
@@ -240,7 +308,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         val issues = ArrayList<Issue>()
 
         for ((type, properties) in one.classes) {
-            if (type !in signalTypes) continue
+            if (file to type !in judged) continue
             for (property in properties) {
                 read += property.name
                 if (property.name in declared || anyDeclared) continue

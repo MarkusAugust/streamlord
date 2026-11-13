@@ -32,7 +32,6 @@ public data class RouteParam(
     val required: Boolean,
 )
 
-private val KTOR_VERBS = setOf("get", "post", "put", "patch", "delete")
 private val SPRING_MAPPINGS =
     mapOf(
         "GetMapping" to "GET",
@@ -43,13 +42,12 @@ private val SPRING_MAPPINGS =
         "RequestMapping" to null,
     )
 
-// `map.get("key")` and `client.post("https://...")` have the shape of a route and are none. A verb
-// counts when it is not called on a receiver, and it either takes a lambda or its path starts with
-// a slash. The path may be followed by more arguments: `route("/v1", HttpMethod.Get) { }`.
-private val KTOR_CALL =
-    regex(
-        """\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*(?:,[^(){}\n]*)?\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"(/[^"\n]*)"\s*\)""",
-    )
+// `map.get("key")` and `client.post("https://...")` have the shape of a route and are none, and
+// neither is the DSL's `post("/x")`, an action handed to an attribute. A verb counts when it is
+// not called on a receiver, stands in no argument list, and takes its handler as a lambda. The
+// path may be followed by more arguments, a lambda among them: `sse("/t", serialize = { }) { }`.
+private val KTOR_VERB = regex("""\b(route|get|post|put|patch|delete|sse)\s*""")
+private val KTOR_PATH = regex("""\(\s*"([^"\n]*)"""")
 private val SPRING_ANNOTATION =
     regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
 
@@ -83,6 +81,8 @@ private fun findKtorRoutes(src: String): List<Route> {
     val routes = ArrayList<Route>()
     val mask = lexKotlin(src).mask
     val stack = ArrayList<Frame>()
+    // The parentheses open in each block: a call inside one is an argument, not a statement.
+    val parens = arrayListOf(0)
     var depth = 0
     var i = 0
     while (i < src.length) {
@@ -91,13 +91,20 @@ private fun findKtorRoutes(src: String): List<Route> {
             i++
             continue
         }
+        if (c == '(' || c == ')') {
+            parens[parens.size - 1] = maxOf(0, parens.last() + if (c == '(') 1 else -1)
+            i++
+            continue
+        }
         if (c == '{') {
             depth++
+            parens += 0
             i++
             continue
         }
         if (c == '}') {
             depth--
+            if (parens.size > 1) parens.removeAt(parens.size - 1)
             while (stack.isNotEmpty() && stack.last().depth > depth) stack.removeAt(stack.size - 1)
             i++
             continue
@@ -106,34 +113,53 @@ private fun findKtorRoutes(src: String): List<Route> {
             i++
             continue
         }
-        val m = KTOR_CALL.matchAt(src, i)
-        if (m == null || hasReceiver(src, i)) {
+        val call = if (parens.last() == 0) ktorCall(src, mask, i) else null
+        if (call == null || hasReceiver(src, i)) {
             i++
             continue
         }
         val prefix = stack.lastOrNull()?.prefix ?: ""
-        if (m.groups[1] != null) {
-            val name = m.groupValues[1]
-            val path = m.groupValues[2]
-            if (name == "route") {
-                stack += Frame(joinPath(prefix, path), depth + 1)
-            } else if (name in KTOR_VERBS && (path.isNotEmpty() || stack.isNotEmpty())) {
-                val full = joinPath(prefix, path)
-                val query = ktorQuery(src, mask, m.range.last, full)
-                routes += Route(name.uppercase(), full, m.range.first, Framework.KTOR, query = query)
-            }
-            depth++
-            i = m.range.last + 1
-            continue
+        val (name, path, open) = call
+        if (name == "route") {
+            stack += Frame(joinPath(prefix, path), depth + 1)
+        } else if (path.isNotEmpty() || stack.isNotEmpty()) {
+            val full = joinPath(prefix, path)
+            val query = ktorQuery(src, mask, open, full)
+            // An SSE route answers a GET.
+            val method = if (name == "sse") "GET" else name.uppercase()
+            routes += Route(method, full, i, Framework.KTOR, query = query)
         }
-        if (m.groups[3] != null) {
-            routes += Route(m.groupValues[3].uppercase(), joinPath(prefix, m.groupValues[4]), m.range.first, Framework.KTOR)
-            i = m.range.last + 1
-            continue
-        }
-        i++
+        depth++
+        parens += 0
+        i = open + 1
     }
     return routes
+}
+
+/**
+ * The verb at [at] when it takes a handler: its name, its path, empty when it has none, and where
+ * the handler's `{` stands. The arguments after the path are skipped whole, whatever they hold.
+ */
+private fun ktorCall(
+    src: String,
+    mask: BooleanArray,
+    at: Int,
+): Triple<String, String, Int>? {
+    val verb = KTOR_VERB.matchAt(src, at) ?: return null
+    var k = verb.range.last + 1
+    var path = ""
+    if (k < src.length && src[k] == '(') {
+        path = KTOR_PATH.matchAt(src, k)?.groupValues?.get(1) ?: return null
+        var depth = 0
+        while (k < src.length) {
+            if (mask[k] && src[k] == '(') depth++
+            if (mask[k] && src[k] == ')' && --depth == 0) break
+            k++
+        }
+        k++
+        while (k < src.length && src[k].isWhitespace()) k++
+    }
+    return if (k < src.length && mask[k] && src[k] == '{') Triple(verb.groupValues[1], path, k) else null
 }
 
 private val KTOR_QUERY = regex("""\b(?:queryParameters|parameters)\s*(?:\[\s*"([^"\n]+)"\s*]|\.get\(\s*"([^"\n]+)"\s*\))""")

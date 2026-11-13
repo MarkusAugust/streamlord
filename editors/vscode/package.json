@@ -84,7 +84,7 @@
         "streamlord.diagnostics.unknownSignals": {
           "type": "boolean",
           "default": true,
-          "description": "Warn on a $name that no Kotlin or HTML file in the workspace defines, such as a misspelt signal. A signal set only from a script is reported too."
+          "description": "Warn on a $name that no Kotlin or HTML file in the workspace defines, such as a misspelt signal, and on a signal the server reads, through a Signals lookup or a @Serializable class, that no page declares. A signal set only from a script, by a server patch whose class or keys the file does not write down, or by pages outside the workspace is reported too."
         },
         "streamlord.attributePrefix": {
           "type": "string",
@@ -189,6 +189,18 @@
       }
     ],
     "languages": [
+      {
+        "id": "kotlin",
+        "aliases": [
+          "Kotlin",
+          "kotlin"
+        ],
+        "extensions": [
+          ".kt",
+          ".kts"
+        ],
+        "configuration": "./kotlin-language-configuration.json"
+      },
       {
         "id": "datastar-expression",
         "aliases": [

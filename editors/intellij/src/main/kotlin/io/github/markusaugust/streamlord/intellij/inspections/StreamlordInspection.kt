@@ -221,21 +221,31 @@ class DatastarAttributeInspection :
  * The analysis finds what each expression reads; the project index says what is defined, from
  * every Kotlin and markup file. Not run while the IDE indexes, when the index is not complete. An
  * expression handed to a call that resolves to something other than Streamlord is not read.
+ *
+ * The other direction goes with it, as VS Code's `diagnostics.unknownSignals` turns both on: a
+ * signal a Kotlin file reads through a `@Serializable` class or a `Signals` lookup that no page
+ * declares, `signal-never-declared`. A local inspection, though it reads the other files, since
+ * it reports in this one only ("operate on one file at a time",
+ * https://plugins.jetbrains.com/docs/intellij/code-inspections.html); the index holds the rest.
  */
-class UnknownSignalInspection : StreamlordInspection(setOf("unknown-signal")) {
+class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
     override fun issues(file: PsiFile): List<Issue>? {
         val analysis = StreamlordAnalysis.getInstance(file.project)
+        val index = SignalIndex.getInstance(file.project)
         val refs =
             when {
                 file is KtFile -> analysis.streamlordSignalReferences(file)
                 StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlSignalReferences(file)
                 else -> return null
             }
-        if (refs.isEmpty()) return emptyList()
-        val defined = SignalIndex.getInstance(file.project).definitionsSeenFrom(file)
-        return refs.mapNotNull { unknownSignalIssue(it, defined) }
+        val drift = if (file is KtFile) index.driftIn(file) else emptyList()
+        if (refs.isEmpty()) return drift
+        val defined = index.definitionsSeenFrom(file)
+        return refs.mapNotNull { unknownSignalIssue(it, defined) } + drift
     }
 }
+
+private val UNKNOWN_SIGNAL_CODES = setOf("unknown-signal", "signal-never-declared")
 
 /**
  * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
@@ -263,7 +273,7 @@ class StreamlordMarkupInspection :
 object InspectionCodes {
     val all: Set<String> =
         INTERPOLATION_CODES +
-            setOf("unknown-signal") +
+            UNKNOWN_SIGNAL_CODES +
             setOf(
                 "expression-syntax",
                 "empty-expression",

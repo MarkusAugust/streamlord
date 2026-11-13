@@ -57,6 +57,61 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()], ["total"]);
   });
 
+  it("re-lints the other files for what the server reads only when their verdict can change", () => {
+    const index = new SignalIndex(new Set());
+    let fired = 0;
+    index.onDidChangeDefinitions(() => fired++);
+    // What the extension does for a document: read it on each change, and once more when it is linted.
+    const edit = (d: vscode.TextDocument) => {
+      index.update(d);
+      index.readDrift(d);
+    };
+    edit(doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("query") }\n}`, 1));
+    edit(doc("/t/a.html", "html", `<p data-text="$co"></p>`, 1));
+    fired = 0;
+    // A read typed in a page names nothing the server reads.
+    edit(doc("/t/a.html", "html", `<p data-text="$cou"></p>`, 2));
+    edit(doc("/t/a.html", "html", `<p data-text="$quer"></p>`, 3));
+    assert.equal(fired, 0);
+    // Now it names what the handler reads, whose warning goes.
+    edit(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 4));
+    assert.equal(fired, 1);
+    // A handler that reads another name changes only its own verdict.
+    edit(doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("page") }\n}`, 2));
+    assert.equal(fired, 1);
+  });
+
+  it("re-lints the other files when a class or a package changes which class a read names", () => {
+    const index = new SignalIndex(new Set());
+    let fired = 0;
+    index.onDidChangeDefinitions(() => fired++);
+    const edit = (d: vscode.TextDocument) => {
+      index.update(d);
+      index.readDrift(d);
+    };
+    edit(doc("/t/Form.kt", "kotlin", `package app\n@Serializable\ndata class Form(val query: String = "")`, 1));
+    edit(doc("/t/Read.kt", "kotlin", `package app\nfun r() = call.readSignals<Form>()`, 1));
+    edit(doc("/t/Twin.kt", "kotlin", `package app\nfun t() = 1`, 1));
+    fired = 0;
+    // A second class of the name leaves the read naming two, and the first class's warning goes.
+    edit(doc("/t/Twin.kt", "kotlin", `package app\n@Serializable\ndata class Form(val mail: String = "")`, 2));
+    assert.ok(fired > 0);
+    fired = 0;
+    // The reader moved to another package names neither.
+    edit(doc("/t/Read.kt", "kotlin", `package other\nfun r() = call.readSignals<Form>()`, 2));
+    assert.ok(fired > 0);
+  });
+
+  it("reads what a document tells the others about server reads when it is linted, not on each change", () => {
+    const index = new SignalIndex(new Set());
+    const handler = doc("/t/Search.kt", "kotlin", `fun Route.s() {\n    get("/s") { call.readSignals().string("query") }\n}`, 1);
+    index.update(handler);
+    index.update(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 1));
+    assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [[]]);
+    index.readDrift(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 1));
+    assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [["query"]]);
+  });
+
   it("rebuilds aside, reads templates from disk and keeps an open document's edits", async () => {
     files.set("/w/page.peb", new TextEncoder().encode(`<div data-signals:fromDisk="1"></div>`));
     files.set("/w/open.html", new TextEncoder().encode(`<div data-signals:stale="1"></div>`));

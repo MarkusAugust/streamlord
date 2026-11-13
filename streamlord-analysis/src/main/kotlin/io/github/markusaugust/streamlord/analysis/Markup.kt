@@ -1058,7 +1058,12 @@ public class MarkupValidator(
                 issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present, listensFor).map { it.copy(link = link) }
             }
             val value = attr.value
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            // An empty value is no value to the client, which raises ValueRequired where one is
+            // needed and otherwise runs nothing: an empty expression, as a blank one is.
+            if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
+                issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
+            }
+            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasTemplateSyntax(value)) {
                 val decoded = decodeEntities(value)
 
                 fun source(
@@ -1228,6 +1233,20 @@ public class MarkupValidator(
             }
         }
         val value = attr.value
+        if (value != null && value.isNotEmpty() && value.isBlank() && spec.valueKind == ValueKind.SIGNAL && parsed.key.isNullOrEmpty() &&
+            !cut
+        ) {
+            // The client takes a blank value for one, and reads a signal by that name.
+            out +=
+                Issue(
+                    attr.valueStart,
+                    attr.valueStart + value.length,
+                    "$name declares a signal named by spaces alone, which no expression can read.",
+                    Severity.ERROR,
+                    "signal-name",
+                    link,
+                )
+        }
         if (value == null || value.isBlank() || hasTemplateSyntax(value)) return out
         val decoded = decodeEntities(value)
 

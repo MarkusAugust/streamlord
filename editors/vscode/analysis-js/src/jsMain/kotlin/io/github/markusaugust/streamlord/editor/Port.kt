@@ -5,6 +5,8 @@ package io.github.markusaugust.streamlord.editor
 import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Completion
+import io.github.markusaugust.streamlord.analysis.SignalFacts
+import io.github.markusaugust.streamlord.analysis.SignalProperty
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
@@ -13,6 +15,7 @@ import io.github.markusaugust.streamlord.analysis.Workspace
 import io.github.markusaugust.streamlord.analysis.analyzeOptions
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
+import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.constantNames
@@ -21,6 +24,7 @@ import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.modulesOf
 import io.github.markusaugust.streamlord.analysis.otherDeclaredNames
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
+import io.github.markusaugust.streamlord.analysis.signalDrift
 import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
@@ -150,7 +154,8 @@ private fun setOf(names: Array<String>): Set<String> {
 /**
  * What is wrong in [src], a Kotlin file when [kotlin] and markup otherwise. [constants] are the
  * `const val` names of the workspace. With [defined], the signals the workspace defines, a read of
- * a signal that is none of them is reported too.
+ * a signal that is none of them is reported too; with [others], what the workspace's other files
+ * say about signals, so is a signal the server reads that no page declares.
  */
 @JsExport
 fun diagnose(
@@ -159,12 +164,45 @@ fun diagnose(
     prefix: String,
     constants: Array<String>,
     defined: Array<String>?,
+    others: Array<DriftFacts>?,
 ): Array<Issue> {
     val opts = options(src, kotlin, prefix).copy(constants = constants.toHashSet())
     val found = if (kotlin) sites(src, opts).flatMap { it.issues } else analyzer.analyzeHtml(src, opts)
     val unknown = if (defined == null) emptyList() else reads(src, kotlin, opts).mapNotNull { unknownSignalIssue(it, setOf(defined)) }
-    return (found + unknown).map(::plain).toTypedArray()
+    val drift = if (others == null || !kotlin) emptyList() else drift(src, others)
+    return (found + unknown + drift).map(::plain).toTypedArray()
 }
+
+/** The reads of signals in the Kotlin file [src] that neither it nor [others] declares. */
+private fun drift(
+    src: String,
+    others: Array<DriftFacts>,
+): List<AnalysedIssue> {
+    // A file with no signals class and no lookup can report nothing, whatever the others say.
+    val own = collectSignalFacts(src, SourceLanguage.KOTLIN)
+    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
+    // Only this file's issues are asked for, so another file's reads and offsets play no part.
+    val facts = HashMap<String, SignalFacts>()
+    others.forEachIndexed { i, o ->
+        val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
+        facts["$i"] =
+            SignalFacts(
+                o.declared.toSet(),
+                o.readInto.toSet(),
+                classes,
+                emptyList(),
+                o.encoded.toSet(),
+                o.patched.toSet(),
+                o.packageName,
+                o.imports.toSet(),
+            )
+    }
+    facts[THIS_FILE] = own
+    return signalDrift(facts).issues[THIS_FILE].orEmpty()
+}
+
+/** The key of the file being diagnosed among the others, which are keyed by their index. */
+private const val THIS_FILE = "this"
 
 // The Kotlin file analysed last: the lightbulb asks about the text the diagnostics were just made for.
 private var lastSites: Triple<String, AnalyzeOptions, List<SiteIssues>>? = null
@@ -203,6 +241,60 @@ interface FileSignals {
     val constants: Array<String>
     val others: Array<String>
 }
+
+/** A `@Serializable` class of a file and the names of its properties, which are signals once something reads signals into it. */
+@JsExport
+interface SignalClass {
+    val name: String
+    val properties: Array<String>
+}
+
+/**
+ * What one file tells another about the signals the server reads: the signals it declares, the
+ * classes it reads signals into ([readInto]), declares a page from ([encoded]) and patches
+ * ([patched]), and its own `@Serializable` classes. [reads] are the names it may read, its lookups and every property of
+ * its classes: a name declared elsewhere or no more changes its verdict only when it is one. Its
+ * [packageName] and [imports] say which class a name in [readInto] or [encoded] is.
+ */
+@JsExport
+interface DriftFacts {
+    val declared: Array<String>
+    val readInto: Array<String>
+    val encoded: Array<String>
+    val patched: Array<String>
+    val classes: Array<SignalClass>
+    val reads: Array<String>
+    val packageName: String
+    val imports: Array<String>
+}
+
+/** What [src] tells the other files about the signals the server reads. */
+@JsExport
+fun driftFactsOf(
+    src: String,
+    kotlin: Boolean,
+): DriftFacts = plain(collectSignalFacts(src, language(kotlin)))
+
+private fun plain(facts: SignalFacts): DriftFacts =
+    plain(
+        "reads" to
+            (
+                facts.lookups.map { it.name } +
+                    facts.classes.values
+                        .flatten()
+                        .map { it.name }
+            ).toSet().plain(),
+        "declared" to facts.declared.plain(),
+        "readInto" to facts.signalTypes.plain(),
+        "encoded" to facts.encodedTypes.plain(),
+        "patched" to facts.patchedTypes.plain(),
+        "classes" to
+            facts.classes
+                .map { (name, properties) -> plain<SignalClass>("name" to name, "properties" to properties.map { it.name }.plain()) }
+                .toTypedArray(),
+        "packageName" to facts.packageName,
+        "imports" to facts.imports.plain(),
+    )
 
 /** The calls of [src] that are somebody else's and define no signal, by the modules its imports show. */
 private fun foreignHelpers(

@@ -99,11 +99,15 @@ abstract class GenerateCatalogNames : DefaultTask() {
             |
             |import io.github.markusaugust.streamlord.core.InternalStreamlordApi
             |
-            |/** The names in catalog/${file.name} that core reads, in the catalog's order. */
+            |/**
+            | * The names in catalog/${file.name} that core reads, in the catalog's order. Only the two
+            | * prefixes, which the analysis and the editors read, are public; the rest is internal, so
+            | * that an IDE never offers to import a name such as `attributes` into an application.
+            | */
             |@InternalStreamlordApi
             |public object CatalogNames {
             |    /** The Datastar version the catalog describes. */
-            |    public const val VERSION: String = ${literal(version)}
+            |    internal const val VERSION: String = ${literal(version)}
             |
             |    /** The prefix of the standard bundle. */
             |    public const val PREFIX: String = ${literal(json["prefix"] as String)}
@@ -112,16 +116,16 @@ abstract class GenerateCatalogNames : DefaultTask() {
             |    public const val ALIASED_PREFIX: String = ${literal(json["aliasedPrefix"] as String)}
             |
             |    /** Every attribute, free and Pro. */
-            |    public val attributes: Set<String> =${set(names)}
+            |    internal val attributes: Set<String> =${set(names)}
             |
             |    /** The attributes whose value is an expression, `valueKind: "expression"`. */
-            |    public val expressionAttributes: Set<String> =${set(kind("expression"))}
+            |    internal val expressionAttributes: Set<String> =${set(kind("expression"))}
             |
             |    /** The attributes whose value is a signal filter, `valueKind: "filter"`. */
-            |    public val filterAttributes: Set<String> =${set(kind("filter"))}
+            |    internal val filterAttributes: Set<String> =${set(kind("filter"))}
             |
             |    /** The attributes whose value is a signal path, `valueKind: "signal"`. */
-            |    public val signalAttributes: Set<String> =${set(kind("signal"))}
+            |    internal val signalAttributes: Set<String> =${set(kind("signal"))}
             |}
             |
             """.trimMargin()

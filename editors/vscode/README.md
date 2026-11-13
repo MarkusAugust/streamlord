@@ -123,7 +123,9 @@ and for the DSL functions, in HTML files, templates and HTML strings in Kotlin a
 **Syntax highlighting** of Datastar expressions and HTML inside the DSL strings and in
 free-standing HTML strings, and of Datastar's attributes in HTML, the catalog's and no other
 `data-*` (plugin, key, modifiers and modifier arguments each get their own scope, and the value
-of an attribute that takes an expression is highlighted as a Datastar expression). Most themes color only
+of an attribute that takes an expression is highlighted as a Datastar expression). In Kotlin
+this needs a Kotlin grammar, which a Kotlin extension brings; with Streamlord alone a `.kt` file
+gets every other feature here, uncoloured. Most themes color only
 a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
 into your user settings; `Streamlord: Remove recommended colors` takes it out again.
 
@@ -225,7 +227,7 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 |---|---|---|
 | `streamlord.diagnostics.enabled` | `true` | Validate Kotlin strings and HTML. |
 | `streamlord.diagnostics.html` | `true` | Also validate markup files. |
-| `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines. |
+| `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines, and on a signal the server reads that no page declares. |
 | `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
@@ -292,9 +294,9 @@ the request it fills the inspector with.
 The workspace holds the three ways of writing markup: HTML and template files, HTML in Kotlin
 strings, and the kotlinx.html DSL. The files under `drawn` are cases of `test/fixtures/corpus`,
 each as a file of its own (`drawn/origin.json` says which), and those under `aliased` are read with
-the prefix `data-star-`. `test/real/languages` declares Kotlin and the template languages, which
-other extensions bring: without one that declares `kotlin` the extension does nothing in a `.kt`
-file. VS Code hands no extension the TextMate scopes it colours by, so the scopes in the snapshot
+the prefix `data-star-`. `test/real/languages` declares the template languages, which other
+extensions bring. It leaves Kotlin out: the extension declares `kotlin` itself, since VS Code
+has no Kotlin of its own, and the run shows that a `.kt` file works with Streamlord alone. VS Code hands no extension the TextMate scopes it colours by, so the scopes in the snapshot
 are read with the same engine (`vscode-textmate`), VS Code's own HTML grammar and the extension's
 grammars; Kotlin, which VS Code ships no grammar for, is read with `test/fixtures/host-kotlin.json`.
 

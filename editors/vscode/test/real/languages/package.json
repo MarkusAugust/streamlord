@@ -1,14 +1,13 @@
 {
   "name": "streamlord-real-languages",
   "displayName": "Languages for the real-editor run",
-  "description": "Declares the languages other extensions bring, and nothing else: Streamlord does nothing in a .kt file until some extension declares kotlin.",
+  "description": "Declares the template languages other extensions bring, and nothing else. Kotlin is left out, since Streamlord declares it itself.",
   "publisher": "streamlord-test",
   "version": "0.0.0",
   "private": true,
   "engines": { "vscode": "^1.105.0" },
   "contributes": {
     "languages": [
-      { "id": "kotlin", "aliases": ["Kotlin"], "extensions": [".kt", ".kts"] },
       { "id": "jte", "extensions": [".jte"] },
       { "id": "kte", "extensions": [".kte"] },
       { "id": "ftl", "extensions": [".ftl"] },

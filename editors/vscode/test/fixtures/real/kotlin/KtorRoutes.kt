@@ -24,3 +24,11 @@ fun Application.forge() {
         get("/search/{query...}") { }
     }
 }
+
+fun Route.questSearch() {
+    post("/quests/search") {
+        val signals = call.readSignals()
+        signals.string("heroName")
+        signals.string("questQuery")
+    }
+}

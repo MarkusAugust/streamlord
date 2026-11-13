@@ -6,6 +6,7 @@ import {
   baseUrlSuggestion,
   complete,
   diagnose,
+  driftFactsOf,
   environment,
   findRoutes,
   parseHeaderLines,
@@ -17,6 +18,7 @@ import {
   streamRequest,
   unreachableHint,
   variableCompletions,
+  type DriftFacts,
   type Fix,
   type Issue,
   type Variable,
@@ -75,7 +77,7 @@ describe("the corpus through the port", () => {
       for (const c of corpus.cases) {
         // What a host knows beyond the text it cannot tell the port.
         if (c.htmlDsl !== undefined || c.core !== undefined || c.foreign !== undefined) continue;
-        const found = diagnose(c.source, corpus.kind === "kotlin", c.prefix ?? "data-", c.constants ?? [], null);
+        const found = diagnose(c.source, corpus.kind === "kotlin", c.prefix ?? "data-", c.constants ?? [], null, null);
         const actual = [...found].sort((a, b) => a.start - b.start || a.end - b.end || byCode(a, b));
         const seen = actual.map((i, n) => {
           const o: Expected = { code: i.code ?? "" };
@@ -98,7 +100,7 @@ describe("what crosses the port", () => {
   const html = `<div data-signals:count="0" data-text="$cuont" data-on:click="@gett('/x')"></div>`;
 
   it("is plain: own properties, arrays and strings that survive JSON", () => {
-    const issues = diagnose(html, false, "data-", [], ["count"]);
+    const issues = diagnose(html, false, "data-", [], ["count"], null);
     assert.ok(Array.isArray(issues));
     const unknown = issues.find((i) => i.code === "unknown-signal");
     assert.ok(unknown, JSON.stringify(issues));
@@ -109,14 +111,14 @@ describe("what crosses the port", () => {
   });
 
   it("leaves an optional property out where there is nothing to say", () => {
-    const [issue] = diagnose(`<div data-text="1 +"></div>`, false, "data-", [], null);
+    const [issue] = diagnose(`<div data-text="1 +"></div>`, false, "data-", [], null, null);
     assert.ok(issue);
     assert.equal("fixes" in issue, false);
     assert.equal(issue.fixes ?? null, null);
   });
 
   it("makes a fix's text when it is read, and the same each time", () => {
-    const fixes = diagnose(html, false, "data-", [], ["count"]).flatMap((i) => i.fixes ?? []);
+    const fixes = diagnose(html, false, "data-", [], ["count"], null).flatMap((i) => i.fixes ?? []);
     assert.ok(fixes.length > 0);
     for (const fix of fixes) {
       assert.equal(typeof fix.text, "string");
@@ -126,14 +128,32 @@ describe("what crosses the port", () => {
   });
 
   it("reports a signal no file defines only when told what the workspace defines", () => {
-    const codes = (defined: string[] | null) => diagnose(html, false, "data-", [], defined).map((i) => i.code);
+    const codes = (defined: string[] | null) => diagnose(html, false, "data-", [], defined, null).map((i) => i.code);
     assert.equal(codes(null).includes("unknown-signal"), false);
     assert.equal(codes(["count"]).includes("unknown-signal"), true);
     assert.equal(codes(["count", "cuont"]).includes("unknown-signal"), false);
   });
 
+  it("reports a signal a handler reads that no page declares, only when told what the other files declare", () => {
+    const handler = `fun Route.search() {\n    get("/s") { val q = call.readSignals().string("query") }\n}`;
+    const codes = (others: DriftFacts[] | null) => diagnose(handler, true, "data-", [], [], others).map((i) => i.code);
+    assert.deepEqual(codes(null), []);
+    assert.deepEqual(codes([]), ["signal-never-declared"]);
+    assert.deepEqual(codes([driftFactsOf(`<input data-bind:query>`, false)]), []);
+  });
+
+  it("reports a property of a class another file reads signals into, which no page declares", () => {
+    const form = `import kotlinx.serialization.Serializable\n\n@Serializable\ndata class Form(val query: String, val page: Int)`;
+    const reads = driftFactsOf(`fun Route.search() {\n    post("/s") { val form = call.readSignals<Form>() }\n}`, true);
+    const page = driftFactsOf(`<input data-bind:query>`, false);
+    const [issue, ...rest] = diagnose(form, true, "data-", [], [], [reads, page]);
+    assert.deepEqual(rest, []);
+    assert.deepEqual(issue && [issue.code, form.slice(issue.start, issue.end)], ["signal-never-declared", "page"]);
+    assert.deepEqual(diagnose(form, true, "data-", [], [], [page]), []);
+  });
+
   it("names the prefix setting as VS Code names it", () => {
-    const [issue] = diagnose(`<div data-star-on:click="x()"></div>`, false, "data-", [], null);
+    const [issue] = diagnose(`<div data-star-on:click="x()"></div>`, false, "data-", [], null, null);
     assert.equal(issue?.code, "prefix-mismatch");
     assert.equal(issue?.message, "This is an aliased Datastar attribute, but the prefix is set to data-. Check streamlord.attributePrefix.");
   });
@@ -141,8 +161,8 @@ describe("what crosses the port", () => {
   it("reads a Kotlin file with the modules its imports show", () => {
     const call = `fun page() = div { dataText("1 +") }`;
     const withDsl = `import io.github.markusaugust.streamlord.html.dataText\n${call}`;
-    assert.deepEqual(diagnose(call, true, "data-", [], null), []);
-    assert.equal(diagnose(withDsl, true, "data-", [], null).length, 1);
+    assert.deepEqual(diagnose(call, true, "data-", [], null, null), []);
+    assert.equal(diagnose(withDsl, true, "data-", [], null, null).length, 1);
   });
 
   it("takes back what it handed out", () => {

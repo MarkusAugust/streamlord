@@ -110,9 +110,19 @@ All notable changes to Streamlord are recorded here. The format follows
 - The project `rewrite-probes` compiles HTML strings as they are written and as each fix of the
   analysis leaves them, against core, and runs both: every cell of the editors' matrix of values,
   and the cases in `rewrite-probes.json`.
+- VS Code and IntelliJ warn on a signal the server reads, through a `Signals` lookup or a
+  `@Serializable` class, that no page in the project declares: the `signal-never-declared`
+  warning, which `signalDrift` gives in your own tests. It goes with the unknown-signal check, the
+  setting `streamlord.diagnostics.unknownSignals` in VS Code and the inspection Signal no file
+  defines in IntelliJ.
 
 ### Fixed
 
+- `signalDrift` counts a class a handler patches, `patchSignals(Form(...))`,
+  `call.respondSignals(form)` or `datastarSignals(Form())`, as declaring its properties; reads a
+  `readSignals<Form>()` written in a comment or a string as no read; and judges the class a read
+  names by the reading file's imports and package, so another `Form` elsewhere in the project is
+  not warned on, and a name that could mean two classes is not judged.
 - The keys of an object a signal is given are signals, as the client merges them in:
   `data-signals:hero="{strength: 1}"`, `dataSignals("hero", "{strength: 1}")` and
   `dataSignals("{quests: {urgent: 0}}")` define `hero.strength` and `quests.urgent`. Both editors
@@ -204,6 +214,18 @@ All notable changes to Streamlord are recorded here. The format follows
   read for its signals when it is opened. Go to definition and find references answered nothing
   from a place such a file defines a signal, and a rename there was offered and wrote nothing,
   unless the file also read a signal and the unknown-signal check was on.
+- VS Code works in a `.kt` file with Streamlord alone: the extension declares the Kotlin language
+  itself, where it did nothing until some other extension declared it.
+- The Open in Stream Inspector lens and IntelliJ's route marker no longer stand on a DSL action
+  handed to an attribute, `dataInit(get("/quests"))`, and a Ktor `sse("/feed") { }` route gets one.
+- An attribute value of nothing but spaces, `data-on:click="  "`, is reported as an empty
+  expression in HTML and in a Kotlin HTML string, as it is in the DSL, and an empty value gets the
+  same verdict as a blank one: `data-signals=""` is an empty expression, and `data-bind="  "`
+  names a signal no expression can read.
+- A Ktor route whose arguments hold a lambda or a call, `sse("/t", serialize = { ... }) { }`,
+  gets its lens and gutter marker.
+- IntelliJ no longer offers to import `CatalogNames.attributes` or the other attribute sets of
+  streamlord-core's catalog for a name it cannot resolve: they are internal now.
 
 ## [0.21.0] - 2026-11-11
 

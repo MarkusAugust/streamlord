@@ -57,7 +57,9 @@ export function activate(context: vscode.ExtensionContext): void {
       issues.delete(document.uri);
       return;
     }
-    const found = checks.issues(document.uri.toString(), document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], defined(document));
+    const signalsDefined = defined(document);
+    const others = signalsDefined && kotlin ? signals.driftExcept(document.uri) : null;
+    const found = checks.issues(document.uri.toString(), document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], signalsDefined, others);
     issues.set(document.uri, found);
     diagnostics.set(
       document.uri,
@@ -72,12 +74,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
   /**
    * The signals the workspace defines, which a `$name` is checked against, or null while the check
-   * is off: until the workspace has been read once, and when it is turned off.
+   * is off: until the workspace has been read once, and when it is turned off. The check of what
+   * the server reads against what the pages declare goes with it.
    */
   const defined = (document: vscode.TextDocument): string[] | null => {
     if (!signals.ready || !config().get<boolean>("diagnostics.unknownSignals", true)) return null;
     // The index reads this version of the document once; a lint right after an edit finds it read.
     signals.update(document);
+    signals.readDrift(document);
     return signals.allDefinitions();
   };
 

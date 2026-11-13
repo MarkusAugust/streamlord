@@ -163,6 +163,40 @@ internal fun encodedSignalTypes(
     return out
 }
 
+/** The calls that patch signals from a value the codec encodes, on a stream and in one response. */
+private val PATCH_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals", "SignalsResponse")
+private val CONSTRUCTED = regex("""^\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(""")
+
+/**
+ * The classes a server patch in [src] sets the signals of, by simple name, as [encodedSignalTypes]
+ * gives them for a page: `patchSignals(Form(...))`, `respondSignals(form)` with `form: Form`,
+ * `datastarSignals(codec.toJsonValue(...))`. A string, a pair or a map is read for its keys
+ * elsewhere, and a variable whose class the file does not write down declares nothing.
+ */
+internal fun patchedSignalTypes(
+    src: String,
+    lex: KotlinLex,
+): Set<String> {
+    val out = LinkedHashSet<String>()
+    val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
+    for (site in findCallSites(src, PATCH_CALLS, lex)) {
+        val a = site.named("value") ?: site.positional.firstOrNull() ?: continue
+        if (a.string != null || PAIR.containsMatchIn(a.text) || MAP_CALL.containsMatchIn(a.text)) continue
+        val type =
+            encodedType(a.text, declarations, site.nameStart, depth = 0)
+                ?: CONSTRUCTED
+                    .find(a.text)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.let { if (it in VALUE_TYPES) null else named(it) }
+                ?: IDENTIFIER_ARG.find(a.text)?.let { m ->
+                    declarations.typeOf(m.groupValues[1], site.nameStart)?.let { if (it in VALUE_TYPES) null else named(it) }
+                }
+        type?.let { out += it }
+    }
+    return out
+}
+
 /** What [text] declares, read with the source before [at], or null when it is no JSON value. */
 private fun encodedType(
     text: String,

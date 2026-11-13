@@ -258,6 +258,9 @@ The inspections are under Settings | Editor | Inspections | Streamlord, one per 
 with its own severity. A severity you set there applies to the issues at the family's own level
 or above, and never raises one below it: setting the interpolation inspection to a warning makes its errors
 warnings and leaves its weak warnings weak.
+The signal inspection also warns in a Kotlin file on a signal the server reads, through a
+`@Serializable` class or a `Signals` lookup, that no page in the project declares, as VS Code
+does: `signal-never-declared`.
 
 ## Datastar Pro
 
