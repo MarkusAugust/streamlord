@@ -270,6 +270,7 @@ public final class io/github/markusaugust/streamlord/analysis/Completion {
 	public final fun getKind ()Lio/github/markusaugust/streamlord/analysis/CompletionKind;
 	public final fun getLabel ()Ljava/lang/String;
 	public final fun getReplaceFrom ()I
+	public final fun getReplaceTo ()I
 	public final fun getSnippet ()Lio/github/markusaugust/streamlord/analysis/Snippet;
 	public final fun getTail ()Ljava/lang/String;
 }

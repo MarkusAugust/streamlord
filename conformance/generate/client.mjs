@@ -5,7 +5,7 @@
 // The reference is the free client under datastar-reference/datastar-<version>/library/src and nothing
 // else: the bundler refuses to read a file outside that directory.
 import { build } from "esbuild";
-import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ascii, conformance, release, version } from "./common.mjs";
 
@@ -538,6 +538,83 @@ if (fetchOptions.length === 0 || fetchOptions.some((a) => a.options.length === 0
   throw new Error(`fetch.ts registered ${fetchOptions.length} actions, or one that read no option`);
 }
 
+// ---------------------------------------------------------------- actions.json
+
+// What each action's source declares: the parameters of its apply after the context, with the
+// type and whether it has a default, and the fields of the FetchArgs and SignalFilterOptions types
+// its options are read as. Read from the TypeScript text, which esbuild drops.
+const source = (file) => {
+  const full = path.join(reference, file);
+  if (!permitted(full)) throw new Error(`Refusing to read ${full}`);
+  return readFileSync(full, "utf8");
+};
+/** [text] split at its commas outside brackets, each piece trimmed, the empty ones left out. */
+const topLevel = (text, at) => {
+  const out = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i <= text.length; i++) {
+    const c = text[i];
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth--;
+    else if ((c === at && depth === 0) || i === text.length) {
+      out.push(text.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  return out.filter((p) => p.length > 0);
+};
+/** The parameters of the first function after [head] in [text]. */
+const parametersAfter = (text, head) => {
+  const open = text.indexOf("(", text.indexOf(head));
+  let depth = 0;
+  let close = open;
+  for (; close < text.length; close++) {
+    if (text[close] === "(") depth++;
+    else if (text[close] === ")" && --depth === 0) break;
+  }
+  return topLevel(text.slice(open + 1, close), ",").map((p) => {
+    // A default is an = outside brackets that is no part of =>.
+    let depth = 0;
+    let equals = -1;
+    for (let i = 0; i < p.length && equals < 0; i++) {
+      if ("([{".includes(p[i])) depth++;
+      else if (")]}".includes(p[i])) depth--;
+      else if (p[i] === "=" && depth === 0 && p[i + 1] !== ">") equals = i;
+    }
+    const [name, ...type] = topLevel(equals < 0 ? p : p.slice(0, equals), ":");
+    return { name: name.startsWith("{") ? null : name, type: type.join(":").trim(), optional: equals >= 0 };
+  });
+};
+const typeFields = (text, name) => {
+  const body = text.match(new RegExp(`export type ${name} = \\{([\\s\\S]*?)\\n\\}`))?.[1];
+  if (!body) throw new Error(`no type ${name}`);
+  const fields = {};
+  for (const line of body.split("\n")) {
+    const m = line.match(/^  (\w+)\?: (.+)$/);
+    if (m) fields[m[1]] = m[2].trim();
+  }
+  return fields;
+};
+// A filter an action hands to filtered() is optional where filtered gives it a default of its own.
+const filterDefault = parametersAfter(source("engine/signals.ts"), "export const filtered =").find((p) => p.type === "SignalFilterOptions").optional;
+/** The parameters of the first apply in [text], the context left out. */
+const applyParameters = (text) =>
+  parametersAfter(text, "apply").slice(1).map((p) => (p.type === "SignalFilterOptions" ? { ...p, optional: p.optional || filterDefault } : p));
+const fetchSource = source("plugins/actions/fetch.ts");
+const fetchArgs = typeFields(fetchSource, "FetchArgs");
+const signalFilter = typeFields(source("engine/types.ts"), "SignalFilterOptions");
+const actionCases = [];
+for (const file of readdirSync(actionDir).filter((f) => f.endsWith(".ts")).sort()) {
+  const text = source(path.join("plugins", "actions", file));
+  const names = file === "fetch.ts" ? fetchOptions.map((a) => a.action) : [text.match(/name: '(\w+)'/)[1]];
+  for (const action of names) actionCases.push({ action, parameters: applyParameters(text) });
+}
+actionCases.sort((a, b) => a.action.localeCompare(b.action));
+if (actionCases.some((a) => a.parameters.length === 0) || Object.keys(fetchArgs).length === 0) {
+  throw new Error("an action declared no parameter, or FetchArgs no field");
+}
+
 // ------------------------------------------------------------------- writing
 
 const files = {
@@ -595,6 +672,17 @@ const files = {
       "inside an option, such as filterSignals.include, is not listed. A name in the client's FetchArgs type that is not here " +
       "is one the action never reads.",
     cases: fetchOptions,
+  },
+  "actions.json": {
+    $comment:
+      "What each action under plugins/actions of the Datastar " + version + " client declares, read from its TypeScript: the " +
+      "parameters of its apply after the context, each with its name (null where it is taken apart), its type and whether it " +
+      "may be left out: it has a default, or it is a SignalFilterOptions and filtered() in engine/signals.ts, which it is handed to, " +
+      "gives one; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and " +
+      "signalFilter those of SignalFilterOptions in engine/types.ts, the filter of filterSignals, @setAll and @toggleAll.",
+    fetchArgs,
+    signalFilter,
+    cases: actionCases,
   },
 };
 

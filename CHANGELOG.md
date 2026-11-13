@@ -115,8 +115,31 @@ All notable changes to Streamlord are recorded here. The format follows
   warning, which `signalDrift` gives in your own tests. It goes with the unknown-signal check, the
   setting `streamlord.diagnostics.unknownSignals` in VS Code and the inspection Signal no file
   defines in IntelliJ.
+- In both editors, the options of a backend action are judged as the client reads them: an option
+  it has none of, such as `contentTyp`, is a warning with the near name as a fix where there is
+  one, and so is a value of the wrong kind or one it does not know, such as `retry: 'sometimes'`,
+  `contentType: 'xml'`, `openWhenHidden: 'yes'`, `retryInterval: '1s'` or `filterSignals: null`.
+  Only a value written as a literal is judged; one an expression or a Kotlin template computes is
+  left alone.
+- In both editors, every action is given the arguments it takes: too few or too many is a warning,
+  and so is a literal of the wrong kind, such as a string or null where `@get` takes its options or
+  `@setAll` its filter. A signal filter, in `filterSignals`, `@setAll` or `@toggleAll`, is held to
+  `include` and `exclude`. A Pro action is judged by the number of its arguments alone.
+- Completion offers the values an option takes after `retry:`, `contentType:` and
+  `requestCancellation:`, and `include` and `exclude` in a signal filter. A string it writes takes
+  the quote the attribute around it leaves free.
+- The catalog gives each action the kinds of its arguments and each option its kind and the values
+  it takes, and `conformance/client/actions.json` records what the client declares, which the
+  tests hold the catalog to.
 
 ### Fixed
+
+- A completion replaces the rest of the word the caret stands in, where the editor replaces: in
+  VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
+  `'¦form'` gave `'jsonform'` even then.
+- An action whose name holds a Kotlin template, `@${name}('/x')`, is no longer an unknown action.
+- An expression with many signal filters is judged in time that grows with its length, where it
+  grew with its square.
 
 - `signalDrift` counts a class a handler patches, `patchSignals(Form(...))`,
   `call.respondSignals(form)` or `datastarSignals(Form())`, as declaring its properties; reads a

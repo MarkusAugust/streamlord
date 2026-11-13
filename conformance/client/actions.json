@@ -1,0 +1,150 @@
+{
+  "$comment": "What each action under plugins/actions of the Datastar 1.0.5 client declares, read from its TypeScript: the parameters of its apply after the context, each with its name (null where it is taken apart), its type and whether it may be left out: it has a default, or it is a SignalFilterOptions and filtered() in engine/signals.ts, which it is handed to, gives one; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and signalFilter those of SignalFilterOptions in engine/types.ts, the filter of filterSignals, @setAll and @toggleAll.",
+  "version": "1.0.5",
+  "fetchArgs": {
+    "selector": "string",
+    "headers": "Record<string, string>",
+    "contentType": "'json' | 'form'",
+    "filterSignals": "SignalFilterOptions",
+    "openWhenHidden": "boolean",
+    "payload": "any",
+    "requestCancellation": "'auto' | 'cleanup' | 'disabled' | AbortController",
+    "responseOverrides": "ResponseOverrides",
+    "retry": "'auto' | 'error' | 'always' | 'never'",
+    "retryInterval": "number",
+    "retryScaler": "number",
+    "retryMaxWait": "number",
+    "retryMaxCount": "number"
+  },
+  "signalFilter": {
+    "include": "RegExp | string",
+    "exclude": "RegExp | string"
+  },
+  "cases": [
+    {
+      "action": "delete",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": null,
+          "type": "FetchArgs",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": null,
+          "type": "FetchArgs",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "patch",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": null,
+          "type": "FetchArgs",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "peek",
+      "parameters": [
+        {
+          "name": "fn",
+          "type": "() => any",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": null,
+          "type": "FetchArgs",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "put",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": null,
+          "type": "FetchArgs",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "query",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        },
+        {
+          "name": null,
+          "type": "FetchArgs",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "setAll",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "any",
+          "optional": false
+        },
+        {
+          "name": "filter",
+          "type": "SignalFilterOptions",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "action": "toggleAll",
+      "parameters": [
+        {
+          "name": "filter",
+          "type": "SignalFilterOptions",
+          "optional": true
+        }
+      ]
+    }
+  ]
+}

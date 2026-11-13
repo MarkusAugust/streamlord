@@ -69,7 +69,12 @@ public class Completion internal constructor(
     public val filter: String? = null,
     /** What the list is ordered by, where it is not the label. */
     internal val key: String? = null,
-)
+    /** Where the replaced text ends: the end of the word the caret stands in, which is the caret itself at the end of one. */
+    public val replaceTo: Int = replaceFrom,
+) {
+    internal fun replacingTo(end: Int): Completion =
+        Completion(label, kind, replaceFrom, insert, snippet, detail, tail, doc, filter, key, end)
+}
 
 /** The items at a caret, in the order shown, and whether nothing else belongs there: a signal, an action, an option or a selector is being named. */
 public class Completions internal constructor(
@@ -144,6 +149,19 @@ public fun Analyzer.signatureHelp(
 }
 
 private val NOTHING = Completions(emptyList(), alone = false)
+
+/** Whether a word of [kind] goes on with this character: an attribute's name up to its modifiers, a signal's path, a name. */
+private fun Char.continues(kind: CompletionKind): Boolean =
+    this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9' ||
+        when (kind) {
+            CompletionKind.ATTRIBUTE -> this == '-' || this == ':'
+            CompletionKind.EVENT, CompletionKind.ID, CompletionKind.CLASS -> this == '-' || (kind != CompletionKind.EVENT && this == '_')
+            CompletionKind.MODIFIER -> false
+            CompletionKind.SIGNAL -> this == '_' || this == '.'
+            CompletionKind.VALUE -> this == '_' || this == '-'
+            CompletionKind.ACTION, CompletionKind.OPTION, CompletionKind.SCOPE -> this == '_' || this == '$'
+        }
+
 private val DURATIONS = listOf("500ms", "1s", "300ms", "100ms")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
 private val SELECTOR_TOKEN = regex("""[#.]?[\w-]*$""")
@@ -170,6 +188,22 @@ private class Asked(
         domEvents: Boolean,
     ): Completions {
         if (offset !in 0..text.length) return NOTHING
+        val found = items(workspace, attributeNames, domEvents)
+        return Completions(found.items.map { it.replacingTo(wordEnd(it.kind)) }, found.alone)
+    }
+
+    /** The end of the word of [kind] that goes on after the caret: what an item of that kind replaces with what is typed before it. */
+    fun wordEnd(kind: CompletionKind): Int {
+        var end = offset
+        while (end < text.length && text[end].continues(kind)) end++
+        return end
+    }
+
+    private fun items(
+        workspace: Workspace,
+        attributeNames: Boolean,
+        domEvents: Boolean,
+    ): Completions {
         if (kotlin) analyzer.selectorBefore(text, offset, modules)?.let { return selectors(it, workspace) }
         expression(offset)?.let { return expressionItems(it, workspace) }
         val names = Names(attributeNames, domEvents)
@@ -185,8 +219,13 @@ private class Asked(
             val before = e.before
             if (signalPrefixAt(before, before.length) != null) return true
             if (!e.allowActions) return false
-            val option = actionCallAt(before, before.length)?.option
-            return option != null || actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
+            val call = actionCallAt(before, before.length)
+            return call?.option != null || call
+                ?.value
+                ?.field
+                ?.values
+                ?.isNotEmpty() == true ||
+                actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
         }
         if (!names) return false
         val at = Names(attributeNames = true, domEvents = false)
@@ -269,29 +308,42 @@ private class Asked(
             return ordered(items, alone = true)
         }
         if (!expression.allowActions) return NOTHING
-        actionCallAt(before, before.length)?.option?.let { option ->
-            // The colon is written only where none follows yet.
-            val colon = if (text.substring(offset).trimStart().startsWith(":")) "" else ": "
+        // A string is quoted with the quote the attribute around it leaves free, escaped where the Kotlin string needs it.
+        val q = if (expression.escaped) "\\${expression.quote}" else expression.quote.toString()
+        val call = actionCallAt(before, before.length)
+        call?.option?.let { option ->
+            // The colon is written only where none follows yet, after the rest of the name, which the item replaces.
+            val colon = if (text.substring(wordEnd(CompletionKind.OPTION)).trimStart().startsWith(":")) "" else ": "
             val items =
-                catalog.fetchOptions.filter { it.name !in option.written }.map {
+                option.fields.map { it.option }.filter { it.name !in option.written }.map {
                     Completion(
                         it.name,
                         CompletionKind.OPTION,
                         offset - option.typed.length,
                         insert = it.name + colon,
                         detail = it.type,
-                        tail = " = ${it.default}",
-                        doc = fetchOptionDoc(it),
+                        tail = it.default.takeIf { d -> d.isNotEmpty() }?.let { d -> " = $d" },
+                        doc = if (it.doc.isEmpty()) null else fetchOptionDoc(it),
                     )
                 }
             return ordered(items, alone = true)
+        }
+        call?.value?.let { value ->
+            // In a string already opened the value is written bare, and quoted otherwise, as an action's path is.
+            val items =
+                value.field.values.mapIndexed { n, v ->
+                    val label = if (value.quoted) v else "${expression.quote}$v${expression.quote}"
+                    val insert = if (value.quoted) null else "$q$v$q".takeIf { it != label }
+                    Completion(label, CompletionKind.VALUE, offset - value.typed.length, insert, key = n.toString().padStart(3, '0'))
+                }
+            if (items.isNotEmpty() || value.quoted) return ordered(items, alone = items.isNotEmpty())
         }
         actionPrefixAt(before, before.length)?.let { typed ->
             val items =
                 catalog.actions.map {
                     val call = Snip().text("@${it.name}")
                     when {
-                        it.kind == "backend" -> call.text("('").place("/path").text("')")
+                        it.kind == "backend" -> call.text("($q").place("/path").text("$q)")
                         it.name == "peek" -> call.text("(() => ").place().text(")")
                         else -> call.text("(").place().text(")")
                     }

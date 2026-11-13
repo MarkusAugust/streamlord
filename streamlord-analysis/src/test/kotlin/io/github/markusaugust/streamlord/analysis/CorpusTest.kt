@@ -127,6 +127,27 @@ class CorpusTest {
         assertEquals(emptyList(), failures, failures.joinToString("\n"))
     }
 
+    /** What the analysis reads in place of a Kotlin template is its own, and no message shows it. */
+    @Test
+    fun `no message of the corpus shows the text read in place of a Kotlin template`() {
+        val shown = ArrayList<String>()
+        for (file in files) {
+            val corpus = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
+            for (case in corpus.array("cases")!!.objects()) {
+                val issues = run(corpus.string("kind")!!, case)
+                shown +=
+                    issues
+                        .filter {
+                            PLACEHOLDER in it.message ||
+                                it.fixes.any { f ->
+                                    PLACEHOLDER in f.title
+                                }
+                        }.map { "$file: ${case.string("name")}: ${it.message}" }
+            }
+        }
+        assertEquals(emptyList(), shown)
+    }
+
     @Test
     fun `judges every case of the shared corpus as written`() {
         assertTrue(files.isNotEmpty())
