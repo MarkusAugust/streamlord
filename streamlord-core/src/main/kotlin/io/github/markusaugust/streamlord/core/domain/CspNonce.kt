@@ -67,6 +67,8 @@ public object CspNonce {
      * you know what the page actually loads.
      */
     public fun starterPolicy(nonce: String): String =
+        // No 'allow-duplicates': Datastar creates its policy once, and with it any later script could
+        // create a `datastar` policy of its own that passes every string through.
         "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'; " +
             "require-trusted-types-for 'script'; trusted-types $TRUSTED_TYPES_POLICY"
 

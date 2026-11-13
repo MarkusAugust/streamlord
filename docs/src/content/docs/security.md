@@ -270,9 +270,32 @@ script injection lands. Two things a patch can carry are refused as well, becaus
 copies them with `setAttribute`, which takes no Trusted Types value: an inline `on*` attribute,
 which the nonce policy blocks anyway, and a `<script src>`; load such a script from the page
 instead. A library of your own that creates a policy needs its name added after `datastar`. A
-browser without Trusted Types ignores both directives. It is somewhere to start, not an answer, and the first thing it
-does in a real application is break something you then have to name. Replace it as soon as you
-know what your page loads:
+browser without Trusted Types ignores both directives.
+
+The policy name is allowed once, and Datastar creates it once: a second copy of the bundle on the
+page, from another URL, finds the `data-nonce` the first removed, so it never enters CSP mode or
+creates the policy, and its expressions are blocked by the nonce policy instead (measured in
+headless Chrome 153 on the 1.0.5 bundle). Load one copy. The starter policy does not add
+`'allow-duplicates'`, which would let any script that runs after Datastar create a `datastar`
+policy of its own that passes every string through.
+
+To go back to the policy without Trusted Types, name it yourself:
+
+```kotlin sample=ktor-application
+install(CspNoncePlugin) {
+    policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" }
+}
+```
+
+```kotlin sample=spring
+@Bean
+fun cspNonceFilter(): CspNonceFilter =
+    CspNonceFilter(policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" })
+```
+
+The starter policy is somewhere to start, not an answer, and the first thing it does in a real
+application is break something you then have to name. Replace it as soon as you know what your
+page loads:
 
 ```kotlin sample=ktor-application
 install(CspNoncePlugin) {

@@ -109,8 +109,15 @@ All notable changes to Streamlord are recorded here. The format follows
   Types: it ends in `require-trusted-types-for 'script'; trusted-types datastar`, allowing the one
   policy Datastar's client creates in CSP mode, now named by `CspNonce.TRUSTED_TYPES_POLICY`. Any
   other code that writes a string into the DOM as markup or a script is refused by the browser, and
-  so is a patch that morphs in an inline `on*` attribute or a `<script src>`. A page that needs
-  either, or a library that creates a policy of its own, sets its own policy.
+  so is a patch that morphs in an inline `on*` attribute or a `<script src>`. A page that needs either, or a
+  library that creates a policy of its own, sets its own policy; the one before is
+  `install(CspNoncePlugin) { policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" } }`,
+  or the same lambda as `CspNonceFilter(policy = ...)` on Spring.
+- `assertPatchElements` and `assertNoPatchElements` in streamlord-test match `namespace`,
+  `useViewTransition`, `viewTransitionSelector`, `eventId` and `retry` too, after `containing`, and
+  `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`, which breaks a call
+  that passes `timeout` by position: name it, `timeout = 5.seconds`. Code compiled against the old
+  signatures needs a rebuild.
 
 ### Added
 
@@ -199,11 +206,6 @@ All notable changes to Streamlord are recorded here. The format follows
 - `ExecuteScript.redirect`, `ExecuteScript.replaceUrl`, `ExecuteScript.pushUrl` and
   `PatchSignals.remove` build the events `redirect`, `replaceUrl`, `pushUrl` and `removeSignals`
   send on a stream, for a `Flow` of events on WebFlux or `respondDatastar(flow)` on Ktor.
-- `assertPatchElements` and `assertNoPatchElements` in streamlord-test match `namespace`,
-  `useViewTransition`, `viewTransitionSelector`, `eventId` and `retry` too, after `containing`, and
-  `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`. A call that passes
-  `timeout` by position needs it named, and code compiled against the old signatures needs a
-  rebuild.
 - [Security](https://streamlord-docs.netlify.app/security/) says that CSP mode does not make an
   expression safe, that a page without it needs `'unsafe-eval'`, that the aliased bundle reads
   `data-star-nonce`, and that signals are the reader's to read and change, so they hold nothing
@@ -332,7 +334,8 @@ All notable changes to Streamlord are recorded here. The format follows
   signals written as a JavaScript object literal of plain values, `{foo: 1, bar: 2}` as Datastar's
   reference writes them, as the JSON they stand for, where they threw. The client runs signals
   that `JSON.parse` refuses as JavaScript, so it takes them. Signals that would be computed,
-  `{a: 1 + 1}`, still throw `DatastarEventValidationException`. Sending signals still takes JSON.
+  `{a: 1 + 1}`, still throw `DatastarEventValidationException`, and so do signals that are no
+  object, a top-level `[1,2]` or `null`, as before. Sending signals still takes JSON.
 - The `415` that `readSignals` answers a form with says what to do: Datastar's
   `contentType: 'form'` sends the form's fields and no signals, so read them as form parameters.
   [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
