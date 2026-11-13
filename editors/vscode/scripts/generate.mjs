@@ -2,13 +2,15 @@
 /**
  * Generates what VS Code can serve on its own from the catalog: HTML custom data for the
  * built-in HTML language service (attribute completion and hover in .html files) and snippets
- * for Kotlin and HTML. Run by `npm run build`; the outputs are committed so the vsix is
+ * for Kotlin and HTML, and the Kotlin injection grammars. Run by `npm run build`; the outputs are committed so the vsix is
  * reproducible without this step.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { domEventsFile, pinnedLibDom } from "./domEvents.mjs";
+import { htmlElementInjectionGrammar } from "./htmlGrammar.mjs";
+import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar, kotlinTemplateInjectionGrammar } from "./kotlinGrammar.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -74,4 +76,15 @@ writeFileSync(join(root, "snippets/html.json"), JSON.stringify(htmlSnippets, nul
 // ---- DOM events, which both editors offer after data-on: -----------------------------------
 writeFileSync(join(root, "../../catalog/dom-events.json"), domEventsFile(pinnedLibDom()));
 
-console.log(`generated catalog/dom-events.json, html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);
+// ---- The Kotlin injection grammars, whose lists are the catalog's ---------------------------
+writeFileSync(join(root, "syntaxes/kotlin-injection.tmLanguage.json"), grammarText(kotlinInjectionGrammar(catalog)));
+writeFileSync(join(root, "syntaxes/kotlin-dsl-injection.tmLanguage.json"), grammarText(kotlinDslInjectionGrammar()));
+writeFileSync(
+  join(root, "syntaxes/html-element-injection.tmLanguage.json"),
+  grammarText(htmlElementInjectionGrammar(JSON.parse(readFileSync(join(root, "syntaxes/html-injection.tmLanguage.json"), "utf8")))),
+);
+for (const n of [1, 2, 3]) {
+  writeFileSync(join(root, `syntaxes/kotlin-template${n === 1 ? "" : n}-injection.tmLanguage.json`), grammarText(kotlinTemplateInjectionGrammar(n)));
+}
+
+console.log(`generated the Kotlin injection grammars, catalog/dom-events.json, html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);

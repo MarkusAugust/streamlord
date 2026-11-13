@@ -9,14 +9,19 @@ import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
+import io.github.markusaugust.streamlord.analysis.AttributeSpec
 import io.github.markusaugust.streamlord.analysis.AttributesIndex
 import io.github.markusaugust.streamlord.analysis.KotlinString
+import io.github.markusaugust.streamlord.analysis.NameToken
+import io.github.markusaugust.streamlord.analysis.PLACEHOLDER
+import io.github.markusaugust.streamlord.analysis.Token
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
-import io.github.markusaugust.streamlord.analysis.hasTemplateSyntax
+import io.github.markusaugust.streamlord.analysis.templatePlaceholders
 import io.github.markusaugust.streamlord.analysis.tokenize
 import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
 import io.github.markusaugust.streamlord.analysis.tokenizeExpression
+import io.github.markusaugust.streamlord.analysis.tokenizeSignalName
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
@@ -36,22 +41,12 @@ class HtmlDatastarAnnotator : Annotator {
         val file = element.containingFile ?: return
         if (!StreamlordAnalysis.isHtmlSide(file)) return
         val analysis = StreamlordAnalysis.getInstance(file.project)
-        val prefix = analysis.prefix
-        val name = element.name
-        val spec = analysis.catalog.parseAttributeName(name.lowercase(), prefix)?.spec ?: return
-        val parts = tokenizeAttributeName(name, prefix) ?: return
+        val (spec, parts) = datastarName(analysis, element.name) ?: return
         val nameStart = element.nameElement.textRange.startOffset
         for (p in parts) paint(holder, TextRange(nameStart + p.start, nameStart + p.end), DatastarColors.of(p.part))
-        if (spec.valueKind != ValueKind.EXPRESSION) return
         val valueElement: XmlAttributeValue = element.valueElement ?: return
-        val range = valueElement.valueTextRange
-        val value = valueElement.value
-        if (value.isBlank() || hasTemplateSyntax(value)) return
-        for (t in tokenizeExpression(
-            value,
-        )) {
-            paint(holder, TextRange(range.startOffset + t.start, range.startOffset + t.end), DatastarColors.of(t.kind))
-        }
+        val start = valueElement.valueTextRange.startOffset
+        for (t in valueTokens(spec, valueElement.value)) paint(holder, TextRange(start + t.start, start + t.end), DatastarColors.of(t.kind))
     }
 }
 
@@ -78,13 +73,12 @@ class KotlinDatastarAnnotator : Annotator {
         for (at in attributesIndexes(file, analysis)) {
             if (s.start == at.value?.start) {
                 if (!at.whole) return
-                val spec = analysis.catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec ?: return
+                val (spec, _) = datastarName(analysis, at.name) ?: return
                 if (spec.valueKind == ValueKind.EXPRESSION && s.text.isNotBlank()) paintExpression(holder, src, s, 0, s.text.length)
                 return
             }
             if (s.contentStart == at.nameStart) {
-                analysis.catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec ?: return
-                val parts = tokenizeAttributeName(at.name, analysis.prefix) ?: return
+                val (_, parts) = datastarName(analysis, at.name) ?: return
                 for (p in parts) paint(holder, TextRange(at.nameStart + p.start, at.nameStart + p.end), DatastarColors.of(p.part))
                 return
             }
@@ -97,6 +91,19 @@ class KotlinDatastarAnnotator : Annotator {
         }
         // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
         if (!calls.dsl) return
+        val named =
+            findCallSites(src, SIGNAL_NAME_CALLS, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen }
+        if (named != null && named.positional
+                .firstOrNull()
+                ?.string
+                ?.start == s.start
+        ) {
+            val pair = named.name in PAIR_CALLS
+            if ((!pair || named.positional.getOrNull(1)?.string != null) && analysis.foreignAmong(file, listOf(named)).isEmpty()) {
+                if (PLACEHOLDER !in s.text) paintDecoded(holder, s, 0, tokenizeSignalName(s.text))
+                return
+            }
+        }
         val site =
             findCallSites(src, analyzer.catalog.expressionCallSites.keys, lex).firstOrNull {
                 it.openParen < s.start &&
@@ -124,19 +131,46 @@ class KotlinDatastarAnnotator : Annotator {
         s: KotlinString,
         analysis: StreamlordAnalysis,
     ) {
-        val prefix = analysis.prefix
         for (tag in tokenize(s.text, templates = false).tags) {
             for (attr in tag.attributes) {
-                val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
-                val parts = tokenizeAttributeName(attr.name, prefix) ?: continue
+                val (spec, parts) = datastarName(analysis, attr.name) ?: continue
                 for (p in parts) {
                     val r = s.toSource(attr.nameStart + p.start, attr.nameStart + p.end)
                     paint(holder, TextRange(r.first, r.last + 1), DatastarColors.of(p.part))
                 }
                 val value = attr.value ?: continue
-                if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
-                paintExpression(holder, src, s, attr.valueStart, attr.valueStart + value.length)
+                if (value.isBlank()) continue
+                when (spec.valueKind) {
+                    ValueKind.EXPRESSION, ValueKind.FILTER -> {
+                        paintExpression(
+                            holder,
+                            src,
+                            s,
+                            attr.valueStart,
+                            attr.valueStart + value.length,
+                        )
+                    }
+
+                    ValueKind.SIGNAL -> {
+                        if (PLACEHOLDER !in value) paintDecoded(holder, s, attr.valueStart, tokenizeSignalName(value))
+                    }
+
+                    else -> {}
+                }
             }
+        }
+    }
+
+    /** Paint [tokens] of the decoded text that starts at [from], mapping each back to the source. */
+    private fun paintDecoded(
+        holder: AnnotationHolder,
+        s: KotlinString,
+        from: Int,
+        tokens: List<Token>,
+    ) {
+        for (t in tokens) {
+            val r = s.toSource(from + t.start, from + t.end)
+            paint(holder, TextRange(r.first, r.last + 1), DatastarColors.of(t.kind))
         }
     }
 
@@ -154,12 +188,20 @@ class KotlinDatastarAnnotator : Annotator {
         val sourceEnd = if (to >= s.text.length) s.contentEnd else srcRange.last + 1
         if (sourceEnd <= sourceStart) return
         val text = src.substring(sourceStart, sourceEnd)
-        for (t in tokenizeExpression(text)) paint(holder, TextRange(sourceStart + t.start, sourceStart + t.end), DatastarColors.of(t.kind))
+        // A Kotlin template is Kotlin's: its own highlighter colours it, and Datastar never sees it as written.
+        val templates =
+            s.interpolations
+                .filter { it.start < sourceEnd && sourceStart < it.end }
+                .map { (it.start - sourceStart) until (it.end - sourceStart) }
+        for (t in tokenizeExpression(text, templates)) {
+            paint(holder, TextRange(sourceStart + t.start, sourceStart + t.end), DatastarColors.of(t.kind))
+        }
     }
 }
 
 /**
- * Colours for Datastar in a template file read as text (see [StreamlordAnalysis.isTemplateText]): the same parts of a
+ * Colours for Datastar in a template file read as text (see [StreamlordAnalysis.isTemplateText]), or coloured by a
+ * TextMate bundle and no more, as `.hbs` is: the same parts of a
  * `data-*` attribute and the same expression tokens, found by the analysis's own tokenizer.
  */
 class TemplateTextAnnotator : Annotator {
@@ -167,31 +209,60 @@ class TemplateTextAnnotator : Annotator {
         element: PsiElement,
         holder: AnnotationHolder,
     ) {
-        if (element !is com.intellij.psi.PsiPlainText) return
+        // A plain text file is read at its one PsiPlainText; a file a bundled TextMate grammar colours (Handlebars' .hbs) is
+        // visited as the file alone.
         val file = element.containingFile ?: return
+        if (element !is com.intellij.psi.PsiPlainText && !(element === file && file.language.id == "textmate")) return
         if (!StreamlordAnalysis.isTemplateText(file)) return
         val analysis = StreamlordAnalysis.getInstance(file.project)
-        val prefix = analysis.prefix
         val text = element.text
         val base = element.textRange.startOffset
         for (tag in tokenize(text).tags) {
             for (attr in tag.attributes) {
-                val parts = tokenizeAttributeName(attr.name, prefix) ?: continue
+                // The page's own data-color, or a typo, is left alone, as in HTML.
+                val (spec, parts) = datastarName(analysis, attr.name) ?: continue
                 for (p in parts) {
-                    paint(
-                        holder,
-                        TextRange(base + attr.nameStart + p.start, base + attr.nameStart + p.end),
-                        DatastarColors.of(p.part),
-                    )
+                    paint(holder, TextRange(base + attr.nameStart + p.start, base + attr.nameStart + p.end), DatastarColors.of(p.part))
                 }
-                val spec = analysis.catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
                 val value = attr.value ?: continue
-                if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank() || hasTemplateSyntax(value)) continue
-                for (t in tokenizeExpression(value)) {
+                for (t in valueTokens(spec, value)) {
                     paint(holder, TextRange(base + attr.valueStart + t.start, base + attr.valueStart + t.end), DatastarColors.of(t.kind))
                 }
             }
         }
+    }
+}
+
+/** The DSL's calls whose first argument names a signal: alone, or as the key of a pair with an expression. */
+private val SIGNAL_NAME_CALLS = setOf("dataBind", "dataRef", "dataIndicator", "dataSignals", "dataComputed")
+private val PAIR_CALLS = setOf("dataSignals", "dataComputed")
+
+/**
+ * The spec and the coloured parts of [name] when it is one of the catalog's attributes, under the
+ * project's prefix or the other bundle's: the VS Code grammar knows both, and so the colours do.
+ */
+private fun datastarName(
+    analysis: StreamlordAnalysis,
+    name: String,
+): Pair<AttributeSpec, List<NameToken>>? {
+    for (prefix in listOf(analysis.prefix, "data-", "data-star-").distinct()) {
+        val spec = analysis.catalog.parseAttributeName(name.lowercase(), prefix)?.spec ?: continue
+        val parts = tokenizeAttributeName(name, prefix) ?: continue
+        return spec to parts
+    }
+    return null
+}
+
+/** The tokens of a value as written in markup, around a template engine's placeholders. */
+private fun valueTokens(
+    spec: AttributeSpec,
+    value: String,
+): List<Token> {
+    if (value.isBlank()) return emptyList()
+    return when (spec.valueKind) {
+        ValueKind.EXPRESSION, ValueKind.FILTER -> tokenizeExpression(value, templatePlaceholders(value))
+        ValueKind.SIGNAL -> tokenizeSignalName(value)
+        else -> emptyList()
     }
 }
 

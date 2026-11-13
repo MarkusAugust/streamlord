@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.placeholders.jte.injection",
+  "comment": "jte's placeholders in a Datastar attribute's value are the engine's, written before the browser reads the value, as the analysis leaves them out: they get the scopes the jte extension (maj2c.jte-template-syntax-highlight) gives them, and no Datastar scope.",
+  "injectionSelector": "L:text.html.jte meta.value.datastar",
+  "patterns": [
+    {
+      "begin": "<%--",
+      "end": "--%>",
+      "name": "comment.jte"
+    },
+    {
+      "begin": "\\$(?:unsafe)?\\{",
+      "end": "\\}",
+      "name": "statement.jte",
+      "contentName": "source.java",
+      "patterns": [
+        {
+          "include": "source.java"
+        }
+      ]
+    }
+  ]
+}

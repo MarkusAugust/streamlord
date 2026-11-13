@@ -1,13 +1,19 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "scopeName": "streamlord.html.injection",
-  "injectionSelector": "L:meta.tag -comment -meta.embedded.inline.datastar",
+  "injectionSelector": "L:meta.tag -comment -meta.embedded.inline.datastar -meta.value.datastar",
   "patterns": [
     {
       "include": "#datastar-attribute-with-value-escaped"
     },
     {
       "include": "#datastar-attribute-with-value"
+    },
+    {
+      "include": "#datastar-attribute-with-unquoted-value"
+    },
+    {
+      "include": "#datastar-attribute-with-signal-value"
     },
     {
       "include": "#datastar-attribute-with-plain-value-escaped"
@@ -21,8 +27,8 @@
   ],
   "repository": {
     "attribute-name": {
-      "comment": "data-on:click__debounce.500ms.leading -> prefix | plugin | :key | __modifier.args. Not anchored: capture sub-patterns run mid-line, where ^ never matches.",
-      "match": "((?i:data-(?:star-)?))([A-Za-z][A-Za-z-]*)(?:(:)((?:[A-Za-z0-9.-]|_(?!_))+))?((?:__[A-Za-z0-9_.-]+)*)",
+      "comment": "data-on:click__debounce.500ms.leading -> prefix | plugin | :key | __modifier.argument. Not anchored: capture sub-patterns run mid-line, where ^ never matches. The sigils are part of the name, and colour as it does; a modifier ends where the next __ starts.",
+      "match": "((?i:data-(?:star-)?))([A-Za-z][A-Za-z-]*)(?:(:)((?:[A-Za-z0-9.-]|_(?!_))+))?((?:__(?:[A-Za-z0-9.-]|_(?!_))+)*)",
       "captures": {
         "1": {
           "name": "entity.other.attribute-name.datastar.prefix"
@@ -31,7 +37,7 @@
           "name": "entity.other.attribute-name.datastar.plugin"
         },
         "3": {
-          "name": "punctuation.separator.key.datastar"
+          "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
         },
         "4": {
           "name": "entity.other.attribute-name.datastar.key"
@@ -39,10 +45,10 @@
         "5": {
           "patterns": [
             {
-              "match": "(__)([A-Za-z]+)((?:\\.[A-Za-z0-9_-]+)*)",
+              "match": "(__)([A-Za-z][A-Za-z0-9-]*)?((?:\\.(?:[A-Za-z0-9-]|_(?!_))*)*)",
               "captures": {
                 "1": {
-                  "name": "punctuation.definition.modifier.datastar"
+                  "name": "entity.other.attribute-name.datastar punctuation.definition.modifier.datastar"
                 },
                 "2": {
                   "name": "keyword.other.modifier.datastar"
@@ -50,16 +56,37 @@
                 "3": {
                   "patterns": [
                     {
-                      "match": "\\.\\d+(?:ms|s)",
-                      "name": "constant.numeric.duration.datastar"
+                      "match": "(\\.)(\\d+(?:ms|s))(?![\\w-])",
+                      "captures": {
+                        "1": {
+                          "name": "entity.other.attribute-name.datastar punctuation.separator.argument.datastar"
+                        },
+                        "2": {
+                          "name": "constant.numeric.duration.datastar"
+                        }
+                      }
                     },
                     {
-                      "match": "\\.\\d+",
-                      "name": "constant.numeric.datastar"
+                      "match": "(\\.)(\\d+)(?![\\w-])",
+                      "captures": {
+                        "1": {
+                          "name": "entity.other.attribute-name.datastar punctuation.separator.argument.datastar"
+                        },
+                        "2": {
+                          "name": "constant.numeric.datastar"
+                        }
+                      }
                     },
                     {
-                      "match": "\\.[A-Za-z0-9_-]+",
-                      "name": "constant.other.modifier-arg.datastar"
+                      "match": "(\\.)((?:[A-Za-z0-9-]|_(?!_))*)",
+                      "captures": {
+                        "1": {
+                          "name": "entity.other.attribute-name.datastar punctuation.separator.argument.datastar"
+                        },
+                        "2": {
+                          "name": "variable.other.enummember.modifier-arg.datastar"
+                        }
+                      }
                     }
                   ]
                 }
@@ -70,8 +97,8 @@
       }
     },
     "datastar-attribute-with-value": {
-      "comment": "The catalog's attributes only: the page's own data-color, or a typo such as data-onn, is left to HTML. The check after the name keeps data-on-intersects and data-ignored out. In any case, as the browser lowercases a name. Only an attribute that takes an expression has its value read as one; the others are datastar-attribute-with-plain-value. grammar.test.ts holds the lists to the catalog. A value may sit in double or single quotes and ends at the quote it opened with; one in escaped quotes is datastar-attribute-with-value-escaped. A Kotlin `\\$` there is an escape before the signal.",
-      "begin": "\\b((?i:data-(?:star-)?(?:custom-validity|on-signal-patch|view-transition|on-intersect|on-interval|replace-url|on-resize|computed|animate|signals|effect|on-raf|class|style|attr|init|show|text|on))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\"|')",
+      "comment": "The catalog's attributes only: the page's own data-color, or a typo such as data-onn, is left to HTML. The check after the name keeps data-on-intersects and data-ignored out. In any case, as the browser lowercases a name. An attribute that takes an expression or a filter has its value read as one; a signal attribute's is datastar-attribute-with-signal-value, the others datastar-attribute-with-plain-value. grammar.test.ts holds the lists to the catalog. A value may sit in double or single quotes and ends at the quote it opened with; one in escaped quotes is datastar-attribute-with-value-escaped. A Kotlin `\\$` there is an escape before the signal.",
+      "begin": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|custom-validity|on-signal-patch|view-transition|json-signals|on-intersect|query-string|on-interval|replace-url|on-resize|computed|animate|persist|signals|effect|on-raf|class|style|attr|init|show|text|on))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\"|')",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -93,18 +120,10 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "meta.embedded.inline.datastar",
+      "contentName": "meta.value.datastar meta.embedded.inline.datastar",
       "patterns": [
         {
-          "match": "\\\\(?=\\$)",
-          "name": "constant.character.escape.kotlin"
-        },
-        {
-          "match": "\\$\\{'\\$'\\}",
-          "name": "constant.character.escape.dollar.kotlin"
-        },
-        {
-          "match": "&quot;|&amp;|&lt;|&gt;|&#\\d+;",
+          "match": "&amp;|&lt;|&gt;|&#(?!3[49];)\\d+;",
           "name": "constant.character.entity.html"
         },
         {
@@ -121,11 +140,19 @@
         },
         {
           "include": "source.datastar"
+        },
+        {
+          "match": "\\\\(?=\\$)",
+          "name": "constant.character.escape.kotlin"
+        },
+        {
+          "match": "\\$\\{'\\$'\\}",
+          "name": "constant.character.escape.dollar.kotlin"
         }
       ]
     },
     "datastar-attribute-with-value-escaped": {
-      "begin": "\\b((?i:data-(?:star-)?(?:custom-validity|on-signal-patch|view-transition|on-intersect|on-interval|replace-url|on-resize|computed|animate|signals|effect|on-raf|class|style|attr|init|show|text|on))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\\\\\")",
+      "begin": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|custom-validity|on-signal-patch|view-transition|json-signals|on-intersect|query-string|on-interval|replace-url|on-resize|computed|animate|persist|signals|effect|on-raf|class|style|attr|init|show|text|on))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\\\\\")",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -147,18 +174,10 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "meta.embedded.inline.datastar",
+      "contentName": "meta.value.datastar meta.embedded.inline.datastar",
       "patterns": [
         {
-          "match": "\\\\(?=\\$)",
-          "name": "constant.character.escape.kotlin"
-        },
-        {
-          "match": "\\$\\{'\\$'\\}",
-          "name": "constant.character.escape.dollar.kotlin"
-        },
-        {
-          "match": "&quot;|&amp;|&lt;|&gt;|&#\\d+;",
+          "match": "&amp;|&lt;|&gt;|&#(?!3[49];)\\d+;",
           "name": "constant.character.entity.html"
         },
         {
@@ -175,13 +194,84 @@
         },
         {
           "include": "source.datastar"
+        },
+        {
+          "match": "\\\\(?=\\$)",
+          "name": "constant.character.escape.kotlin"
+        },
+        {
+          "match": "\\$\\{'\\$'\\}",
+          "name": "constant.character.escape.dollar.kotlin"
         }
       ],
       "comment": "The same value in escaped quotes, as it is written in a plain Kotlin string: it ends at the escaped quote, or at a bare one, where the Kotlin string ends."
     },
+    "datastar-attribute-with-unquoted-value": {
+      "comment": "A value without quotes, data-show=$open, as HTML allows: up to white space or the end of the tag.",
+      "match": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|custom-validity|on-signal-patch|view-transition|json-signals|on-intersect|query-string|on-interval|replace-url|on-resize|computed|animate|persist|signals|effect|on-raf|class|style|attr|init|show|text|on))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)([^\\s\"'=<>`\\\\]+)",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#attribute-name"
+            }
+          ]
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.html"
+        },
+        "3": {
+          "name": "meta.value.datastar meta.embedded.inline.datastar",
+          "patterns": [
+            {
+              "include": "source.datastar"
+            }
+          ]
+        }
+      }
+    },
+    "datastar-attribute-with-signal-value": {
+      "comment": "An attribute whose value names a signal, data-bind=\"user.name\": the name as the client reads it, when the value is one name, in quotes, single quotes, or escaped quotes in a plain Kotlin string.",
+      "begin": "\\b((?i:data-(?:star-)?(?:indicator|bind|ref))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\\\\\"|\"|')",
+      "beginCaptures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#attribute-name"
+            }
+          ]
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.html"
+        },
+        "3": {
+          "name": "punctuation.definition.string.begin.html"
+        }
+      },
+      "end": "(\\3)|(?<!\\\\)(?=\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.html"
+        }
+      },
+      "patterns": [
+        {
+          "match": "(?<=[\"'])\\s*([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)\\s*(?=\\\\?[\"'])",
+          "captures": {
+            "1": {
+              "name": "variable.other.constant.signal.datastar"
+            },
+            "2": {
+              "name": "variable.other.property.signal-path.datastar"
+            }
+          }
+        }
+      ],
+      "contentName": "meta.value.datastar"
+    },
     "datastar-attribute-with-plain-value": {
       "comment": "A Datastar attribute whose value is a name, a selector or text, not an expression: its name is Datastar's, its value a string as HTML has it.",
-      "begin": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|scroll-into-view|preserve-attr|ignore-morph|json-signals|query-string|match-media|indicator|persist|ignore|nonce|bind|ref))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\"|')",
+      "begin": "\\b((?i:data-(?:star-)?(?:scroll-into-view|preserve-attr|ignore-morph|match-media|ignore|nonce))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\"|')",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -203,7 +293,7 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "string.quoted.double.html",
+      "contentName": "meta.value.datastar string.quoted.double.html",
       "patterns": [
         {
           "match": "\\\\(?=\\$)",
@@ -216,7 +306,7 @@
       ]
     },
     "datastar-attribute-with-plain-value-escaped": {
-      "begin": "\\b((?i:data-(?:star-)?(?:on-signal-patch-filter|scroll-into-view|preserve-attr|ignore-morph|json-signals|query-string|match-media|indicator|persist|ignore|nonce|bind|ref))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\\\\\")",
+      "begin": "\\b((?i:data-(?:star-)?(?:scroll-into-view|preserve-attr|ignore-morph|match-media|ignore|nonce))(?=[:=\\s]|__)[A-Za-z0-9_:.-]*)(\\s*=\\s*)(\\\\\")",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -238,7 +328,7 @@
           "name": "punctuation.definition.string.end.html"
         }
       },
-      "contentName": "string.quoted.double.html",
+      "contentName": "meta.value.datastar string.quoted.double.html",
       "patterns": [
         {
           "match": "\\\\(?=\\$)",

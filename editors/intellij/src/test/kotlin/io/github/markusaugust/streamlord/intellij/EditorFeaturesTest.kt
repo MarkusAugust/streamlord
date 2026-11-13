@@ -53,7 +53,7 @@ class EditorFeaturesTest : StreamlordTestCase() {
         assertEquals(DatastarColors.ACTION_BACKEND, keys["@post"])
         assertEquals(DatastarColors.ATTRIBUTE_KEY, keys["click"])
         assertEquals(DatastarColors.MODIFIER, keys["debounce"])
-        assertEquals(DatastarColors.MODIFIER_ARG, keys["500ms"])
+        assertEquals(DatastarColors.DURATION, keys["500ms"])
         myFixture.configureByText(
             "View.kt",
             "fun f() { dataText(\"\${'\$'}count + \$\") }\nfun g() = \"\"\"<p data-text=\"\${'\$'}n\"></p>\"\"\"",

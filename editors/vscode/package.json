@@ -181,11 +181,71 @@
         "injectTo": [
           "text.html.basic",
           "text.html.derivative",
+          "text.html.handlebars",
+          "text.html.jte",
+          "source.mustache",
           "source.kotlin"
         ],
         "embeddedLanguages": {
           "meta.embedded.inline.datastar": "datastar-expression"
         }
+      },
+      {
+        "scopeName": "streamlord.kotlin.template3.injection",
+        "path": "./syntaxes/kotlin-template3-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.mustache.injection",
+        "path": "./syntaxes/placeholders-mustache-injection.tmLanguage.json",
+        "injectTo": [
+          "source.mustache"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.handlebars.injection",
+        "path": "./syntaxes/placeholders-handlebars-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.handlebars"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.jte.injection",
+        "path": "./syntaxes/placeholders-jte-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.jte"
+        ]
+      },
+      {
+        "scopeName": "streamlord.html.element.injection",
+        "path": "./syntaxes/html-element-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.basic",
+          "text.html.derivative",
+          "text.html.handlebars",
+          "text.html.jte",
+          "source.mustache",
+          "source.kotlin"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.inline.datastar": "datastar-expression"
+        }
+      },
+      {
+        "scopeName": "streamlord.kotlin.template2.injection",
+        "path": "./syntaxes/kotlin-template2-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
+      },
+      {
+        "scopeName": "streamlord.kotlin.template.injection",
+        "path": "./syntaxes/kotlin-template-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
       }
     ],
     "languages": [

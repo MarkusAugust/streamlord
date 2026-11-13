@@ -151,14 +151,19 @@ class TokensTest {
         assertEquals(
             listOf(
                 "\$count" to TokenKind.SIGNAL,
+                "++" to TokenKind.OPERATOR,
                 "@post" to TokenKind.ACTION_BACKEND,
                 "'/x'" to TokenKind.STRING,
                 "headers" to TokenKind.OPTION_KEY,
                 "'X-A'" to TokenKind.STRING,
                 "\$token" to TokenKind.SIGNAL,
                 "el" to TokenKind.SCOPE_VARIABLE,
+                "value" to TokenKind.PROPERTY,
                 "/a\\/b/g" to TokenKind.REGEX,
+                "test" to TokenKind.METHOD,
                 "evt" to TokenKind.SCOPE_VARIABLE,
+                "key" to TokenKind.PROPERTY,
+                "&&" to TokenKind.OPERATOR,
                 "\${'\$'}" to TokenKind.KOTLIN_DOLLAR_ESCAPE,
                 "open" to TokenKind.SIGNAL,
             ),
@@ -168,7 +173,9 @@ class TokensTest {
             listOf(
                 "\$user" to TokenKind.SIGNAL,
                 ".name.first" to TokenKind.SIGNAL_PATH,
+                "+" to TokenKind.OPERATOR,
                 "500ms" to TokenKind.DURATION,
+                "+" to TokenKind.OPERATOR,
                 "3" to TokenKind.NUMBER,
             ),
             tokenizeExpression("\$user.name.first + 500ms + 3").let { t ->
@@ -178,7 +185,19 @@ class TokensTest {
                 }
             },
         )
-        assertEquals(listOf(TokenKind.NUMBER, TokenKind.KEYWORD), tokenizeExpression("x = a ? 1 : typeof b").map { it.kind })
+        assertEquals(
+            listOf(
+                TokenKind.IDENTIFIER,
+                TokenKind.OPERATOR,
+                TokenKind.IDENTIFIER,
+                TokenKind.OPERATOR,
+                TokenKind.NUMBER,
+                TokenKind.OPERATOR,
+                TokenKind.KEYWORD,
+                TokenKind.IDENTIFIER,
+            ),
+            tokenizeExpression("x = a ? 1 : typeof b").map { it.kind },
+        )
     }
 
     @Test
@@ -195,7 +214,9 @@ class TokensTest {
         // The signal and its path together cover what the client rewrites.
         for (text in listOf("\$123 + \$foo-bar.baz-qux.0 - \$a-b-1; \$foo. + \$x-", "\$a.b-c.d + \$_1-2_")) {
             val covered =
-                tokenizeExpression(text).fold(ArrayList<IntRange>()) { acc, t ->
+                tokenizeExpression(
+                    text,
+                ).filter { it.kind == TokenKind.SIGNAL || it.kind == TokenKind.SIGNAL_PATH }.fold(ArrayList<IntRange>()) { acc, t ->
                     if (t.kind == TokenKind.SIGNAL_PATH) acc[acc.lastIndex] = acc.last().first until t.end else acc += t.start until t.end
                     acc
                 }
@@ -216,7 +237,7 @@ class TokensTest {
                 "__" to NamePart.MODIFIER_SIGIL,
                 "debounce" to NamePart.MODIFIER,
                 "." to NamePart.MODIFIER_ARG_DOT,
-                "500ms" to NamePart.MODIFIER_ARG,
+                "500ms" to NamePart.MODIFIER_ARG_DURATION,
                 "." to NamePart.MODIFIER_ARG_DOT,
                 "leading" to NamePart.MODIFIER_ARG,
                 "__" to NamePart.MODIFIER_SIGIL,

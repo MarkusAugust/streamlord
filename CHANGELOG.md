@@ -18,6 +18,10 @@ All notable changes to Streamlord are recorded here. The format follows
   reference has it, and links the action's place in the reference, where it gave the signature and a line.
 - `fit` in streamlord-html-pro names its flags `shouldClamp` and `shouldRound`, as the reference
   does, where it named them `clamp` and `round`. A call that names them needs the new names.
+- `TokenKind` and `NamePart` in streamlord-analysis have more values, `tokenizeExpression` takes
+  the ranges a template owns, and `tokenizeSignalName` and `templatePlaceholders` are new. A
+  `when` over either enum needs the new branches. In the catalog, a DSL expression may be passed
+  by its parameter's name, and `dataAnimate`'s is its last argument.
 - The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.
 - Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
   `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
@@ -249,6 +253,27 @@ All notable changes to Streamlord are recorded here. The format follows
   body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the
   empty object, `readSignalsJson()` and a typed `readSignals<T>()` give `null`, and
   `readSignalsOr(default)` the default, in core, Ktor, Spring WebMvc and WebFlux alike, where it threw.
+- Both editors colour every part of a Datastar expression and attribute name as the same kind of
+  thing, with keys and scopes the user's theme colours: object keys, properties, calls, globals,
+  operators, comments, every keyword, numbers such as `.5`, `10n` and `1_000`, and the parts of a
+  template literal. A slash after a value divides, and `&quot;x&quot;` is a string.
+- A `$name` in an ordinary Kotlin string, and a `$${id}` in a `$$` string, is Kotlin's template and
+  no longer coloured as a signal; `\$name` and `${'$'}name` still are.
+- The value of `data-bind`, `data-indicator` and `data-ref`, and the name `dataBind`,
+  `dataSignals("name", ...)` and friends take, is coloured as a signal; a filter's
+  `{include: /x/}` as an object.
+- VS Code colours Datastar in Handlebars, jte and Mustache, on SVG and MathML elements, in an unquoted value,
+  after a modifier with an argument, in a DSL expression on the next line, in a raw string, passed
+  by name or as a lone object, after a receiver, and in a raw string whose HTML starts on the next
+  line. The recommended colours, which stay opt in, now follow the theme's kind.
+- IntelliJ's Datastar colours fall back to other standard keys of your scheme, so they look
+  different in Default and Darcula: an attribute's plugin name (`on`), its prefix, the `:` and `__`
+  and its key now take the HTML attribute colour (they were a keyword, a line comment and a class
+  name); actions take the function declaration colour (they were a keyword and a function call); a
+  modifier's argument takes the constant colour (it was a class name). The colour settings page
+  shows every key in its preview.
+- IntelliJ colours the `data-star-` prefix, a name in capitals, a value around a template
+  placeholder and `.hbs` files, and no longer colours a name that is not Datastar's in a template.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in

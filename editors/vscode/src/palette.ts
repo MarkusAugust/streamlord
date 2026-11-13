@@ -42,8 +42,8 @@ const rules = (c: {
   { name: "Streamlord: attribute plugin", scope: ["entity.other.attribute-name.datastar.plugin"], settings: { foreground: c.action, fontStyle: "bold" } },
   { name: "Streamlord: attribute key", scope: ["entity.other.attribute-name.datastar.key"], settings: { foreground: c.type } },
   { name: "Streamlord: modifier", scope: ["keyword.other.modifier.datastar"], settings: { foreground: c.keyword } },
-  { name: "Streamlord: modifier sigils", scope: ["punctuation.definition.modifier.datastar", "punctuation.separator.key.datastar"], settings: { foreground: c.muted } },
-  { name: "Streamlord: modifier argument", scope: ["constant.other.modifier-arg.datastar"], settings: { foreground: c.type } },
+  { name: "Streamlord: modifier sigils", scope: ["punctuation.definition.modifier.datastar", "punctuation.separator.key.datastar", "punctuation.separator.argument.datastar"], settings: { foreground: c.muted } },
+  { name: "Streamlord: modifier argument", scope: ["variable.other.enummember.modifier-arg.datastar"], settings: { foreground: c.type } },
 ];
 
 /** Dark+ / Dark Modern. */

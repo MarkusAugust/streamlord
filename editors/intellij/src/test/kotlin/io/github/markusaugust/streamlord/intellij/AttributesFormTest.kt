@@ -25,7 +25,7 @@ abstract class AttributesFormTestCase : BasePlatformTestCase() {
         val keys = colours()
         assertEquals(DatastarColors.ATTRIBUTE_KEY, keys["click"])
         assertEquals(DatastarColors.MODIFIER, keys["debounce"])
-        assertEquals(DatastarColors.MODIFIER_ARG, keys["500ms"])
+        assertEquals(DatastarColors.DURATION, keys["500ms"])
         assertEquals(DatastarColors.KOTLIN_DOLLAR_ESCAPE, keys["\${'\$'}"])
         assertEquals(DatastarColors.SIGNAL, keys["count"])
         assertEquals(DatastarColors.ACTION_BACKEND, keys["@post"])

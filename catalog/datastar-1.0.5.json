@@ -542,17 +542,17 @@
     "dataLines": ["selector", "mode", "namespace", "useViewTransition", "viewTransitionSelector", "elements", "signals", "onlyIfMissing"]
   },
   "kotlinCallSites": {
-    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument. Used by the editor to know where to validate and complete.",
+    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. Used by the editor to know where to validate and complete.",
     "expression": {
-      "dataOn": { "arg": 1 }, "dataOnClick": { "arg": 0 }, "dataOnSubmit": { "arg": 0 }, "dataOnChange": { "arg": 0 },
-      "dataOnInput": { "arg": 0 }, "dataOnKeydown": { "arg": 0 }, "dataOnFetch": { "arg": 0 },
-      "dataOnIntersect": { "arg": 0 }, "dataOnInterval": { "arg": 0 }, "dataOnSignalPatch": { "arg": 0 },
-      "dataInit": { "arg": 0 }, "dataEffect": { "arg": 0 }, "dataText": { "arg": 0 }, "dataShow": { "arg": 0 },
-      "dataComputed": { "arg": "last" }, "dataClass": { "arg": "last" }, "dataStyle": { "arg": "last" }, "dataAttr": { "arg": "last" },
-      "dataSignals": { "arg": "last", "onlyIfStringArgs": true },
-      "dataOnRaf": { "arg": 0 }, "dataOnResize": { "arg": 0 }, "dataCustomValidity": { "arg": 0 },
-      "dataReplaceUrl": { "arg": 0 }, "dataViewTransition": { "arg": 0 }, "dataAnimate": { "arg": 1 },
-      "setExpr": { "arg": 1 }, "peek": { "arg": 0 }, "clipboardExpr": { "arg": 0 }
+      "dataOn": { "arg": 1, "named": "expression" }, "dataOnClick": { "arg": 0, "named": "expression" }, "dataOnSubmit": { "arg": 0, "named": "expression" }, "dataOnChange": { "arg": 0, "named": "expression" },
+      "dataOnInput": { "arg": 0, "named": "expression" }, "dataOnKeydown": { "arg": 0, "named": "expression" }, "dataOnFetch": { "arg": 0, "named": "expression" },
+      "dataOnIntersect": { "arg": 0, "named": "expression" }, "dataOnInterval": { "arg": 0, "named": "expression" }, "dataOnSignalPatch": { "arg": 0, "named": "expression" },
+      "dataInit": { "arg": 0, "named": "expression" }, "dataEffect": { "arg": 0, "named": "expression" }, "dataText": { "arg": 0, "named": "expression" }, "dataShow": { "arg": 0, "named": "expression" },
+      "dataComputed": { "arg": "last", "named": "expression" }, "dataClass": { "arg": "last", "named": "expression" }, "dataStyle": { "arg": "last", "named": "expression" }, "dataAttr": { "arg": "last", "named": "expression" },
+      "dataSignals": { "arg": "last", "named": "expression", "onlyIfStringArgs": true },
+      "dataOnRaf": { "arg": 0, "named": "expression" }, "dataOnResize": { "arg": 0, "named": "expression" }, "dataCustomValidity": { "arg": 0, "named": "expression" },
+      "dataReplaceUrl": { "arg": 0, "named": "expression" }, "dataViewTransition": { "arg": 0, "named": "expression" }, "dataAnimate": { "arg": "last", "named": "expression" },
+      "setExpr": { "arg": 1, "named": "expression" }, "peek": { "arg": 0, "named": "expression" }, "clipboardExpr": { "arg": 0, "named": "expression" }
     },
     "html": {
       "patchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
