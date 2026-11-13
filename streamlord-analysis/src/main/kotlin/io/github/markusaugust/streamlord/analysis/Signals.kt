@@ -1,10 +1,12 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.groupRange
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.SignalNames
+import kotlin.concurrent.Volatile
 
 /*
  * Collects signal names declared anywhere in a source file, for completion. Heuristic and
@@ -40,32 +42,57 @@ private val HELPER_READS = regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})
  * matched in any case and its key is lowercased: `data-signals:fooBar` declares `foobar`.
  */
 
-/**
- * The key with its modifiers, which may name the casing: `data-signals:my-value__case.snake`. A key
- * the client could hold and nothing else, so that template syntax (`data-signals:${key}`,
- * `data-signals:{{ name }}`, `data-signals:th:text`) declares nothing.
- */
-private val KEYED_ATTRIBUTE =
-    regex(
-        """(?i)data-(?:star-)?(?:${Catalog.default.signalKeyAttributes.joinToString("|")}):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""",
-    )
-
 /** The object value of a keyed attribute, after its key: `="{...}"`, `='{...}'`, its quotes escaped in a Kotlin string. */
 private val KEYED_OBJECT = regex("""\s*=\s*(?:\\?"\{([^"]*)\}\\?"|'\{([^']*)\}')""")
 
-/** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
-private val VALUE_ATTRIBUTE =
-    regex(
-        """(?i)data-(?:star-)?(?:${Catalog.default.attributes.filter { it.valueKind == ValueKind.SIGNAL }.joinToString(
-            "|",
-        ) { it.name }})""" +
-            """(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')""",
-    )
+/** The attributes that declare signals under [prefix], the bundle's; the default one is read with `data-star-` as well. */
+private class DeclaringAttributes(
+    val prefix: String,
+) {
+    private val written =
+        if (prefix ==
+            CatalogNames.PREFIX
+        ) {
+            "data-(?:star-)?"
+        } else {
+            prefix.map { if (it.isLetterOrDigit()) "$it" else "[\\$it]" }.joinToString("")
+        }
 
-// The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
-// by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
-// data-computed="{total: () => ...}" declares its keys the same way.
-private val OBJECT_ATTRIBUTE = regex("""(?i)data-(?:star-)?(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
+    /**
+     * The key with its modifiers, which may name the casing: `data-signals:my-value__case.snake`. A key
+     * the client could hold and nothing else, so that template syntax (`data-signals:${key}`,
+     * `data-signals:{{ name }}`, `data-signals:th:text`) declares nothing.
+     */
+    val keyed =
+        regex(
+            """(?i)$written(?:${Catalog.default.signalKeyAttributes.joinToString("|")}):([\p{L}\p{N}_.-]+)(?=[\s=>"'/\\]|$)""",
+        )
+
+    /** The value form names the signal as written: `data-bind="user-name"` is the signal `user-name`. */
+    val value =
+        regex(
+            """(?i)$written(?:${Catalog.default.attributes.filter { it.valueKind == ValueKind.SIGNAL }.joinToString("|") { it.name }})""" +
+                """(?:__[^=\s>]*)?=(?:\\?"([^"\\\s]+)\\?"|'([^'\s]+)')""",
+        )
+
+    // The object form may sit in either kind of quote, and its keys may be bare or quoted: JSON written
+    // by hand is `data-signals='{"query": ""}'`. Inside a Kotlin string the key's quotes are escaped.
+    // data-computed="{total: () => ...}" declares its keys the same way.
+    val objectForm = regex("""(?i)$written(?:signals|computed)(?:__[^=\s>]*)?=(?:"\{([^"]*)\}"|'\{([^']*)\}')""")
+
+    /** Whether the keyed attribute [matched] is `data-signals`, whose object value declares signals under its key. */
+    fun signals(matched: String): Boolean {
+        if (prefix != CatalogNames.PREFIX) return matched.substring(prefix.length).startsWith("signals", true)
+        val after = matched.substringAfter('-')
+        return after.startsWith("signals", true) || after.startsWith("star-signals", true)
+    }
+}
+
+@Volatile
+private var lastDeclaring = DeclaringAttributes(CatalogNames.PREFIX)
+
+private fun declaring(prefix: String): DeclaringAttributes =
+    lastDeclaring.takeIf { it.prefix == prefix } ?: DeclaringAttributes(prefix).also { lastDeclaring = it }
 
 /**
  * `$name = ...`, `$name += 1`, `$name++` or `--$name` in an expression: the client's store creates a
@@ -346,15 +373,9 @@ public data class SignalDeclaration(
  */
 public fun collectSignals(source: Source): Set<String> {
     val foreign = foreignHelpers(source)
-    return collectSignals(source.text, source.language) { name, _ -> name in foreign }
-}
-
-private fun collectSignals(
-    src: String,
-    language: SourceLanguage,
-    foreign: (String, Int) -> Boolean,
-): Set<String> {
-    val out = LinkedHashSet(collect(src, language, reads = true, foreign))
+    val src = source.text
+    val language = source.language
+    val out = LinkedHashSet(collect(src, language, reads = true, { name, _ -> name in foreign }, source.prefix))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) for (property in properties) out += property.name
     }
@@ -373,7 +394,8 @@ private fun collectSignals(
 internal fun collectDeclaredSignals(
     src: String,
     language: SourceLanguage,
-): Set<String> = collect(src, language, reads = true, NOT_FOREIGN)
+    prefix: String,
+): Set<String> = collect(src, language, reads = true, NOT_FOREIGN, prefix)
 
 /**
  * The signals this source defines, which a `$name` in an expression is checked against: what
@@ -387,7 +409,7 @@ internal fun collectDeclaredSignals(
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
     val foreign = foreignHelpers(source)
-    return collectSignalDefinitions(source.text, source.language, { name, _ -> name in foreign })
+    return collectSignalDefinitions(source.text, source.language, { name, _ -> name in foreign }, prefix = source.prefix)
 }
 
 /**
@@ -399,12 +421,13 @@ internal fun collectSignalDefinitions(
     language: SourceLanguage,
     foreign: (name: String, nameStart: Int) -> Boolean,
     given: KotlinLex? = null,
+    prefix: String = CatalogNames.PREFIX,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
     // One reading of a Kotlin file for every call looked for in it.
     val lex = given ?: if (language == SourceLanguage.KOTLIN) lexKotlin(src) else null
-    for (d in definedAt(src, language, spread, foreign, lex)) out += d.name
+    for (d in definedAt(src, language, spread, foreign, lex, prefix)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
@@ -422,7 +445,11 @@ internal fun collectSignalDefinitions(
  */
 public fun signalDeclarations(source: Source): List<SignalDeclaration> {
     val foreign = foreignHelpers(source)
-    return definedAt(source.text, source.language, Spread(), { name, _ -> name in foreign }).sortedWith(compareBy({ it.start }, { it.end }))
+    return definedAt(source.text, source.language, Spread(), { name, _ -> name in foreign }, prefix = source.prefix).sortedWith(
+        compareBy({
+            it.start
+        }, { it.end }),
+    )
 }
 
 /**
@@ -502,8 +529,9 @@ private fun definedAt(
     spread: Spread,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
     lex: KotlinLex? = null,
+    prefix: String = CatalogNames.PREFIX,
 ): List<SignalDeclaration> {
-    val out = ArrayList(declared(src, language, spread, foreign, lex))
+    val out = ArrayList(declared(src, language, spread, foreign, lex, prefix))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
@@ -540,7 +568,9 @@ private fun declared(
     spread: Spread,
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
     given: KotlinLex? = null,
+    prefix: String = CatalogNames.PREFIX,
 ): List<SignalDeclaration> {
+    val attributes = declaring(prefix)
     val out = ArrayList<SignalDeclaration>()
     if (language == SourceLanguage.KOTLIN) {
         val lex = given ?: lexKotlin(src)
@@ -589,26 +619,25 @@ private fun declared(
     }
     // A keyed attribute may carry modifiers after the key: data-signals:foo-bar__ifmissing, and
     // `__case` names the signal: data-signals:my-value__case.snake is `$my_value`.
-    for (m in KEYED_ATTRIBUTE.findAll(src)) {
-        val written = KEYED_ATTRIBUTE.groupAt(src, m, 1)!!
+    for (m in attributes.keyed.findAll(src)) {
+        val written = attributes.keyed.groupAt(src, m, 1)!!
         val key = written.value.substringBefore("__")
         val name = ClientCasing.readKey(written.value)
         out += SignalDeclaration(written.range.first, written.range.first + key.length, name, SignalDeclaration.Kind.KEY)
         // An object as the value is merged in under the key, its own keys as written: data-signals:hero="{strength: 1}".
         val body = KEYED_OBJECT.matchAt(src, m.range.last + 1)?.let { KEYED_OBJECT.groupAt(src, it, 1) ?: KEYED_OBJECT.groupAt(src, it, 2) }
-        if (body != null && m.value.substringAfter('-').let { it.startsWith("signals", true) || it.startsWith("star-signals", true) }) {
+        if (body != null && attributes.signals(m.value)) {
             for (k in objectKeys(body.value)) {
                 val start = body.range.first + k.nameStart
                 out += SignalDeclaration(start, start + k.key.length, "$name.${k.path}", SignalDeclaration.Kind.OBJECT_KEY)
             }
         }
     }
-    for (m in VALUE_ATTRIBUTE.findAll(src)) {
-        out +=
-            declarationAt(VALUE_ATTRIBUTE.groupAt(src, m, 1) ?: VALUE_ATTRIBUTE.groupAt(src, m, 2)!!, 0)
+    for (m in attributes.value.findAll(src)) {
+        out += declarationAt(attributes.value.groupAt(src, m, 1) ?: attributes.value.groupAt(src, m, 2)!!, 0)
     }
-    for (m in OBJECT_ATTRIBUTE.findAll(src)) {
-        val body = OBJECT_ATTRIBUTE.groupAt(src, m, 1) ?: OBJECT_ATTRIBUTE.groupAt(src, m, 2)!!
+    for (m in attributes.objectForm.findAll(src)) {
+        val body = attributes.objectForm.groupAt(src, m, 1) ?: attributes.objectForm.groupAt(src, m, 2)!!
         for (k in objectKeys(body.value, spread)) {
             val start = body.range.first + k.nameStart
             out += SignalDeclaration(start, start + k.key.length, k.path, SignalDeclaration.Kind.OBJECT_KEY)
@@ -635,10 +664,11 @@ private fun collect(
     language: SourceLanguage,
     reads: Boolean,
     foreign: (String, Int) -> Boolean,
+    prefix: String,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
-    for (d in declared(src, language, spread, foreign)) out += d.name
+    for (d in declared(src, language, spread, foreign, prefix = prefix)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]

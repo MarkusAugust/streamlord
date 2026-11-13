@@ -210,11 +210,11 @@ class SignalIndex(
             if (language == SourceLanguage.KOTLIN &&
                 callsAny(current, helpers)
             ) {
-                signalDeclarations(Source(current, language, modules = WITHOUT_DSL))
+                signalDeclarations(Source(current, language, prefix(), WITHOUT_DSL))
             } else {
                 null
             }
-        val declared = Declared(signalDeclarations(Source(current, language)), withoutDsl)
+        val declared = Declared(signalDeclarations(Source(current, language, prefix())), withoutDsl)
         if (keep) e.declared = declared
         return declared
     }
@@ -248,7 +248,7 @@ class SignalIndex(
         val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
         if (language != SourceLanguage.KOTLIN) return emptyList()
         val own = entryFor(file) ?: return emptyList()
-        val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language))
+        val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language, prefix()))
         // A file with no signals class and no lookup can report nothing, whatever the others say.
         if (ownFacts.classes.isEmpty() && ownFacts.lookups.isEmpty()) return emptyList()
         refresh()
@@ -270,7 +270,7 @@ class SignalIndex(
         e.facts?.let { return it }
         val language = e.file?.let(::languageOf) ?: return null
         val (current, keep) = textOf(e, text) ?: return null
-        return collectSignalFacts(Source(current, language)).also { if (keep) e.facts = it }
+        return collectSignalFacts(Source(current, language, prefix())).also { if (keep) e.facts = it }
     }
 
     private fun places(of: (Entry) -> List<Triple<Int, Int, String>>?): List<Place> {
@@ -396,7 +396,7 @@ class SignalIndex(
         val helpers = shortHelpers()
         val withoutDsl =
             if (language == SourceLanguage.KOTLIN && callsAny(text, helpers)) {
-                Source(text, language, modules = WITHOUT_DSL).let { Names(collectSignals(it), collectSignalDefinitions(it)) }
+                Source(text, language, prefix(), WITHOUT_DSL).let { Names(collectSignals(it), collectSignalDefinitions(it)) }
             } else {
                 null
             }
@@ -406,8 +406,8 @@ class SignalIndex(
                 stamp,
                 text.length,
                 prefix(),
-                collectSignals(Source(text, language)),
-                collectSignalDefinitions(Source(text, language)),
+                collectSignals(Source(text, language, prefix())),
+                collectSignalDefinitions(Source(text, language, prefix())),
                 withoutDsl,
                 collectSelectors(text),
             )

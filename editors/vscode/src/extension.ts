@@ -109,7 +109,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("streamlord.languages")) void vscode.window.showInformationMessage("Streamlord: reload the window for the new language list to take effect.");
-      else if (e.affectsConfiguration("streamlord")) vscode.workspace.textDocuments.forEach(lint);
+      else if (e.affectsConfiguration("streamlord")) {
+        // The signals a file declares are read under the prefix, so a new one reads the workspace again.
+        if (e.affectsConfiguration("streamlord.attributePrefix")) void signals.rebuild();
+        vscode.workspace.textDocuments.forEach(lint);
+      }
     }),
     vscode.languages.registerCompletionItemProvider(selector, new StreamlordCompletionProvider(signals, prefix), "$", "@", "#", "_", ".", "-", ":"),
     vscode.languages.registerHoverProvider(selector, new StreamlordHoverProvider(prefix)),

@@ -104,7 +104,7 @@ export class SignalIndex implements vscode.Disposable {
       files.map(async (uri) => {
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          next.set(uri.toString(), entry(Buffer.from(bytes).toString("utf8"), uri.path.endsWith(".kt") ? "kotlin" : "html", null, null));
+          next.set(uri.toString(), entry(Buffer.from(bytes).toString("utf8"), uri.path.endsWith(".kt") ? "kotlin" : "html", null, null, this.prefix()));
         } catch {
           // unreadable file: skip
         }
@@ -138,7 +138,7 @@ export class SignalIndex implements vscode.Disposable {
       this.remove(uri.toString());
       return;
     }
-    this.set(uri.toString(), entry(text, language, null, null));
+    this.set(uri.toString(), entry(text, language, null, null, this.prefix()));
   }
 
   /** Read a document again, unless this version of it is already read. */
@@ -148,7 +148,7 @@ export class SignalIndex implements vscode.Disposable {
     const key = document.uri.toString();
     const previous = this.byFile.get(key);
     if (previous?.version === document.version) return;
-    this.set(key, entry(document.getText(), language, document.version, previous?.drift ?? NO_DRIFT));
+    this.set(key, entry(document.getText(), language, document.version, previous?.drift ?? NO_DRIFT, this.prefix()));
   }
 
   /** Read what a document tells the others about the signals the server reads, when its text has changed since. */
@@ -157,7 +157,7 @@ export class SignalIndex implements vscode.Disposable {
     const e = this.byFile.get(key);
     if (!e?.driftStale || e.version !== document.version) return;
     const before = e.drift;
-    e.drift = driftFactsOf(document.getText(), e.language === "kotlin");
+    e.drift = driftFactsOf(document.getText(), e.language === "kotlin", this.prefix());
     e.driftStale = false;
     if (this.driftMatters(key, before, e.drift)) this.changed.fire();
   }
@@ -323,10 +323,10 @@ export function placesIn(text: string, language: "kotlin" | "html", prefix: stri
  * A file's entry. Read from disk (`drift` null), it is read whole; an open document's change
  * keeps what it said about server reads before, `drift`, until the document is linted.
  */
-function entry(text: string, language: "kotlin" | "html", version: number | null, drift: DriftFacts | null): FileEntry {
-  const found = signalsOf(text, language === "kotlin");
+function entry(text: string, language: "kotlin" | "html", version: number | null, drift: DriftFacts | null, prefix: string): FileEntry {
+  const found = signalsOf(text, language === "kotlin", prefix);
   if (drift) return { version, language, found, drift, driftStale: true };
-  return { version, language, found, drift: driftFactsOf(text, language === "kotlin"), driftStale: false };
+  return { version, language, found, drift: driftFactsOf(text, language === "kotlin", prefix), driftStale: false };
 }
 
 

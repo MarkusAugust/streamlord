@@ -101,7 +101,7 @@ public fun collectSignalFacts(source: Source): SignalFacts {
     val src = source.text
     val language = source.language
     if (language == SourceLanguage.HTML) {
-        return SignalFacts(collectDeclaredSignals(src, language), emptySet(), emptyMap(), emptyList())
+        return SignalFacts(collectDeclaredSignals(src, language, source.prefix), emptySet(), emptyMap(), emptyList())
     }
 
     val lex = lexKotlin(src)
@@ -133,7 +133,7 @@ public fun collectSignalFacts(source: Source): SignalFacts {
             .orEmpty()
     val imports = IMPORT.findAll(src).filter { lex.mask[it.range.first] }.mapTo(LinkedHashSet()) { it.groupValues[1] }
     return SignalFacts(
-        collectDeclaredSignals(src, language),
+        collectDeclaredSignals(src, language, source.prefix),
         types,
         serializableProperties(src),
         lookups,

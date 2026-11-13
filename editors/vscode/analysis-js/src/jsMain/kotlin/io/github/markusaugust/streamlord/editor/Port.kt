@@ -292,7 +292,8 @@ interface DriftFacts {
 fun driftFactsOf(
     src: String,
     kotlin: Boolean,
-): DriftFacts = plain(collectSignalFacts(source(src, kotlin)))
+    prefix: String,
+): DriftFacts = plain(collectSignalFacts(source(src, kotlin, prefix)))
 
 private fun plain(facts: SignalFacts): DriftFacts =
     plain(
@@ -319,8 +320,9 @@ private fun plain(facts: SignalFacts): DriftFacts =
 fun signalsOf(
     src: String,
     kotlin: Boolean,
+    prefix: String,
 ): FileSignals {
-    val file = source(src, kotlin)
+    val file = source(src, kotlin, prefix)
     val selectors = collectSelectors(src)
     val names = if (kotlin) declaredNames(src) else null
     return plain(
