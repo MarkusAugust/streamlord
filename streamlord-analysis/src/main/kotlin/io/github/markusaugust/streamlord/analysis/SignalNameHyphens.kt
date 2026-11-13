@@ -255,10 +255,8 @@ private fun collectHyphenSites(
 ) {
     val calls = findCallSites(text, dslCalls, lex).filterNot { foreign(it.name, it.nameStart + shift) }
     // Inside the arguments of a DSL call, and not in a lambda there: `buildMap { set("first-name", "") }` is a map's.
-    val inside = { at: Int ->
-        calls.any { at > it.openParen && at < it.closeParen && !openBraceBetween(text, lex, it.openParen, at) } ||
-            (enclosed && !openBraceBetween(text, lex, 0, at))
-    }
+    val inArguments by lazy(LazyThreadSafetyMode.NONE) { inArguments(text, lex, calls, enclosed) }
+    val inside = { at: Int -> at in 0..text.length && inArguments[at] }
     for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
         if (foreign(site.name, site.nameStart + shift)) continue
         // A string template holds DSL calls too, so the pairs of one are read here as well.
@@ -276,23 +274,38 @@ private fun collectHyphenSites(
     }
 }
 
-/** Whether a `{` of code between [from] and [to] is still open at [to]. */
-private fun openBraceBetween(
+/**
+ * For each offset of [text], whether it stands in the arguments of one of [calls], or anywhere in
+ * [text] when it is [enclosed], with no `{` of code opened since and still open there. The calls nest,
+ * so only the innermost around an offset can open after its innermost open `{`; one pass finds both.
+ */
+private fun inArguments(
     text: String,
     lex: KotlinLex,
-    from: Int,
-    to: Int,
-): Boolean {
-    var depth = 0
-    for (i in from until minOf(to, text.length)) {
-        if (!lex.mask[i]) continue
-        if (text[i] == '{') {
-            depth++
-        } else if (text[i] == '}') {
-            depth = maxOf(0, depth - 1)
+    calls: List<CallSite>,
+    enclosed: Boolean,
+): BooleanArray {
+    val out = BooleanArray(text.length + 1)
+    val sorted = calls.sortedBy { it.openParen }
+    val open = ArrayList<CallSite>()
+    val braces = ArrayList<Int>()
+    var next = 0
+    for (at in 0..text.length) {
+        while (open.isNotEmpty() && open.last().closeParen <= at) open.removeAt(open.lastIndex)
+        while (next < sorted.size && sorted[next].openParen < at) {
+            if (sorted[next].closeParen > at) open += sorted[next]
+            next++
+        }
+        val brace = braces.lastOrNull() ?: -1
+        out[at] = (open.isNotEmpty() && open.last().openParen > brace) || (enclosed && brace < 0)
+        if (at == text.length || !lex.mask[at]) continue
+        if (text[at] == '{') {
+            braces += at
+        } else if (text[at] == '}' && braces.isNotEmpty()) {
+            braces.removeAt(braces.lastIndex)
         }
     }
-    return depth > 0
+    return out
 }
 
 private fun Issue.shifted(by: Int): Issue =

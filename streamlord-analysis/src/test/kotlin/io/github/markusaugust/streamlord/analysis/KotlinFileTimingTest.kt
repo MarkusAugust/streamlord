@@ -6,7 +6,8 @@ import kotlin.test.Test
 /**
  * Each of these read the source before a call or a value again for every one there is, and took
  * seconds on a file or a string of a few thousand: the declarations before each `dataSignals`, the
- * file lexed again for each call handed a variable, the expression before each value.
+ * file lexed again for each call handed a variable, the expression before each value, the arguments
+ * of a call from its start for each template in them.
  */
 class KotlinFileTimingTest {
     private val analyzer = Analyzer()
