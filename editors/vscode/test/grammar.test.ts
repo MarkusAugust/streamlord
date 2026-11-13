@@ -645,6 +645,25 @@ describe("datastar colours in Kotlin strings", () => {
     assert.ok(receiver.some((x) => x.scopes.includes("meta.embedded.block.javascript")), "a call after a receiver");
   });
 
+  it("colours the expression of each DSL expression helper, and of each option of FetchOptions that takes one", async () => {
+    const pro = "import io.github.markusaugust.streamlord.html.pro.*";
+    for (const call of [
+      ...["getExpr", "postExpr", "putExpr", "patchExpr", "deleteExpr", "queryExpr", "setAllExpr"].map((fn) => `dataOnClick(${fn}("\\$b"))`),
+      `dataText(fitExpr("\\$b", "0", "1", "0", "1"))`,
+      `dataText(fitExpr("1", signal("m"), "\\$b", "0", "1"))`,
+      `dataOnClick(clipboardExpr("\\$b"))`,
+      `dataOnClick(post("/x") { payloadExpr = "{id: \\$b}" })`,
+      `dataOnClick(get("/x") { requestCancellationExpr = "\\$b" })`,
+      `dataOnClick(get("/x") { headerExprs = mapOf("X-Id" to "\\$b") })`,
+    ]) {
+      const t = (await tokenLines("source.kotlin", [DSL_IMPORT, pro, `div { ${call} }`]))[2]!;
+      assert.ok(t.some((x) => x.text === "b" && x.scopes.includes(S.signal)), call);
+    }
+    // A header's name, and what follows the call, are no expression.
+    const t = await kinds("source.kotlin", `div { dataOnClick(get("/x") { headerExprs = mapOf("X-b" to "1") }); val s = "\\$b" }`);
+    assert.ok(t.every(([, s]) => s !== S.signal), JSON.stringify(t));
+  });
+
   it("colours the DSL's signal names", async () => {
     for (const [call, name] of [[`dataBind("user.name")`, "user"], [`dataRef("box")`, "box"], [`dataIndicator("busy")`, "busy"], [`dataSignals("count", "0")`, "count"], [`dataComputed("total", "\\$a")`, "total"]] as const) {
       const t = await kinds("source.kotlin", `div { ${call} }`);

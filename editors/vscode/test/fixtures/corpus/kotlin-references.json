@@ -14,6 +14,10 @@
     {"name":"an HTML argument a Streamlord call does not read is read as a free string","source":"fun f(gen: ServerSentEventGenerator, header: String) = gen.patchElements(header, \"<b data-text=\\\"\\$missing\\\"></b>\")","issues":[{"code":"unknown-signal","start":97,"end":106,"severity":"warning"}]},
     {"name":"a script is no HTML string, whatever it holds, so nothing is read","source":"fun f(gen: ServerSentEventGenerator) = gen.executeScript(\"<div data-show=\\\"\\$open\\\"></div>\")","issues":[]},
     {"name":"a helper reads its signal when the host knows the DSL is there","source":"val e = signal(\"missing\")","htmlDsl":true,"issues":[{"code":"unknown-signal","start":16,"end":23,"severity":"warning"}]},
-    {"name":"a helper in a file that imports nothing of the DSL is somebody else's","source":"val e = signal(\"missing\")","issues":[]}
+    {"name":"a helper in a file that imports nothing of the DSL is somebody else's","source":"val e = signal(\"missing\")","issues":[]},
+    {"name":"the address getExpr is handed reads its signals","source":"import io.github.markusaugust.streamlord.html.*\nfun f() = elements { div { dataOnClick(getExpr(\"'/items/' + \\$missing\")) } }","issues":[{"code":"unknown-signal","start":108,"end":117}]},
+    {"name":"an end of a range fitExpr is handed reads its signals","source":"import io.github.markusaugust.streamlord.html.*\nimport io.github.markusaugust.streamlord.html.pro.*\nfun f() = elements { div { dataText(fitExpr(\"1\", \"0\", \"\\$missing\", \"0\", \"1\")) } }","issues":[{"code":"unknown-signal","start":155,"end":164}]},
+    {"name":"a payloadExpr reads its signals","source":"import io.github.markusaugust.streamlord.html.*\nfun f() = elements { div { dataOnClick(post(\"/x\") { payloadExpr = \"{id: \\$missing}\" }) } }","issues":[{"code":"unknown-signal","start":120,"end":129}]},
+    {"name":"a value of headerExprs reads its signals","source":"import io.github.markusaugust.streamlord.html.*\nfun f() = elements { div { dataOnClick(get(\"/x\") { headerExprs = mapOf(\"X-Id\" to \"\\$missing\") }) } }","issues":[{"code":"unknown-signal","start":130,"end":139}]}
   ]
 }
