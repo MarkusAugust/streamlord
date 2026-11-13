@@ -165,6 +165,7 @@ private fun Char.continues(kind: CompletionKind): Boolean =
 
 private val DURATIONS = listOf("500ms", "1s", "300ms", "100ms")
 private val SIGNAL_NAME_TYPED = regex("""\s*([\w.]*)""")
+private val SIGNAL_NAME = regex("""\w+(?:[.-]\w+)*""")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
 private val SELECTOR_TOKEN = regex("""[#.]?[\w-]*$""")
 private val ACTION_WORD = regex("""@[A-Za-z_][A-Za-z0-9_]*""")
@@ -298,8 +299,10 @@ private class Asked(
         ): Completions {
             // A name written as a value defines the signal it names, which is what is being typed.
             val own = if (dollar == null) definitions() - typed else definitions()
+            // Written bare, a name is offered only as the client reads one after a `$`.
+            val names = (workspace.signals + own).filter { ':' !in it && (dollar != null || SIGNAL_NAME.matchEntire(it) != null) }
             val items =
-                (workspace.signals + own).filter { ':' !in it }.toSet().map { name ->
+                names.toSet().map { name ->
                     val here = name in own
                     Completion(
                         if (dollar == null) name else "$$name",
