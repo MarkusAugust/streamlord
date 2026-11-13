@@ -31,6 +31,8 @@ class RealTomcat(
     init {
         tomcat.setBaseDir(baseDir.toString())
         tomcat.setPort(listenOn)
+        // On the loopback address alone, which the tests read from; RawHttp.kt has why.
+        tomcat.connector.setProperty("address", LOOPBACK)
         // HTTP/2 over plain HTTP, reached by an upgrade from HTTP/1.1, as Java's client asks for it.
         if (http2) tomcat.connector.addUpgradeProtocol(Http2Protocol())
         val context = tomcat.addContext("", null)
@@ -67,7 +69,7 @@ class RealTomcat(
     fun get(path: String): HttpResponse<java.util.stream.Stream<String>> =
         HttpClient
             .newHttpClient()
-            .send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
+            .send(HttpRequest.newBuilder(URI("http://$LOOPBACK:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
 
     /**
      * The lines of the body of [path] until it ends. A stream that Spring's timeout cuts can end

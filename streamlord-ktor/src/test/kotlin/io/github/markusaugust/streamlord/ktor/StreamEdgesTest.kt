@@ -35,27 +35,7 @@ class StreamEdgesTest {
     private fun <T> serving(
         module: Application.() -> Unit,
         test: (port: Int) -> T,
-    ): T = serving(CIO, module, test)
-
-    private fun <T, E : ApplicationEngine, C : ApplicationEngine.Configuration> serving(
-        engine: ApplicationEngineFactory<E, C>,
-        module: Application.() -> Unit,
-        test: (port: Int) -> T,
-    ): T {
-        val server = embeddedServer(engine, port = 0, module = module).start(wait = false)
-        try {
-            return test(
-                runBlocking {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
-                },
-            )
-        } finally {
-            server.stop(100, 500)
-        }
-    }
+    ): T = serving(CIO, module, test = test)
 
     /** How a raw answer ended. */
     private enum class End { LAST_CHUNK, CLOSED, LEFT_OPEN }
@@ -70,7 +50,7 @@ class StreamEdgesTest {
         path: String,
         headers: String = "",
     ): Pair<String, End> =
-        Socket("localhost", port).use { socket ->
+        Socket(LOOPBACK, port).use { socket ->
             socket.soTimeout = QUIET_MILLIS
             socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n$headers\r\n".toByteArray())
             val out = ByteArrayOutputStream()
@@ -167,7 +147,7 @@ class StreamEdgesTest {
                 }
             }
         }) { port ->
-            Socket("localhost", port).use { socket ->
+            Socket(LOOPBACK, port).use { socket ->
                 socket.getOutputStream().write("GET /twice HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 val thrown = failure.get(30, TimeUnit.SECONDS)
                 assertTrue(thrown is IllegalStateException && thrown !is CancellationException, "$thrown")

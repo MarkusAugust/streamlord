@@ -170,6 +170,8 @@ class SpringWebFluxWireTranscriptTest {
     fun start() {
         tomcat.setBaseDir(baseDir.toString())
         tomcat.setPort(0)
+        // On the loopback address, which the transcripts read from; RawHttp.kt has why.
+        tomcat.connector.setProperty("address", LOOPBACK)
         val context = tomcat.addContext("", null)
         val handler = WebHttpHandlerBuilder.applicationContext(AnnotationConfigApplicationContext(Flux::class.java)).build()
         Tomcat.addServlet(context, "reactive", TomcatHttpHandlerAdapter(handler)).apply {

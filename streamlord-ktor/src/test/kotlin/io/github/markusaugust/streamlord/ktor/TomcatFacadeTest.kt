@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
-import io.ktor.server.engine.embeddedServer
+import io.ktor.server.application.Application
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.tomcat.jakarta.Tomcat
@@ -14,7 +14,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertTrue
-import org.apache.catalina.startup.Tomcat as TomcatServer
 
 /*
  * Tomcat hands a request's facade on to the next request unless it discards them, which it does by
@@ -31,37 +30,25 @@ class TomcatFacadeTest {
     fun `on Tomcat that keeps its facades nothing is cut and other requests stay whole`() = crossTalk(discardFacades = false)
 
     private fun crossTalk(discardFacades: Boolean) {
-        val server =
-            embeddedServer(Tomcat, port = 0) {
-                routing {
-                    get("/after") {
-                        call.respondDatastar(heartbeat = null) {
-                            patchSignals("failing" to 1)
-                            error("after the first frame")
-                        }
+        val module: Application.() -> Unit = {
+            routing {
+                get("/after") {
+                    call.respondDatastar(heartbeat = null) {
+                        patchSignals("failing" to 1)
+                        error("after the first frame")
                     }
-                    get("/ok") {
-                        val id = call.request.queryParameters["id"]
-                        call.respondDatastar(heartbeat = null) {
-                            patchSignals("ok" to id, "step" to 1)
-                            delay(5)
-                            patchSignals("ok" to id, "step" to 2)
-                        }
+                }
+                get("/ok") {
+                    val id = call.request.queryParameters["id"]
+                    call.respondDatastar(heartbeat = null) {
+                        patchSignals("ok" to id, "step" to 1)
+                        delay(5)
+                        patchSignals("ok" to id, "step" to 2)
                     }
                 }
             }
-        // Ktor sets up its connectors after configureTomcat runs and gives them no address, so both go on before the start:
-        // on the loopback address, as TomcatWriterTest says why.
-        val field = server.engine.javaClass.getDeclaredField("server")
-        field.isAccessible = true
-        val connectors = (field.get(server.engine) as TomcatServer).service.findConnectors()
-        connectors.forEach {
-            it.setProperty("address", "127.0.0.1")
-            it.discardFacades = discardFacades
         }
-        try {
-            server.start(wait = false)
-            val port = connectors.first().localPort
+        serving(Tomcat, module, tomcat = { it.discardFacades = discardFacades }) { port ->
             val pool = Executors.newFixedThreadPool(32)
             val found =
                 (0 until 400)
@@ -94,8 +81,6 @@ class TomcatFacadeTest {
                     }.mapNotNull { it.get(120, TimeUnit.SECONDS) }
             pool.shutdown()
             assertTrue(found.isEmpty(), "${found.size} of 400 connections went wrong, the first: ${found.firstOrNull()}")
-        } finally {
-            server.stop(100, 500)
         }
     }
 
@@ -108,7 +93,7 @@ class TomcatFacadeTest {
         port: Int,
         paths: List<String>,
     ): List<String> =
-        Socket("127.0.0.1", port).use { socket ->
+        Socket(LOOPBACK, port).use { socket ->
             socket.soTimeout = 20_000
             paths.map { path ->
                 socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())

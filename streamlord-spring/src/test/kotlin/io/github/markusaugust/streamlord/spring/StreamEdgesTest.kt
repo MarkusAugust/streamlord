@@ -177,7 +177,7 @@ class StreamEdgesTest {
     }
 
     private fun readGated(port: Int) {
-        Socket("localhost", port).use { socket ->
+        Socket(LOOPBACK, port).use { socket ->
             socket.soTimeout = 30_000
             socket.getOutputStream().write("GET /gated HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
             val seen = StringBuilder()

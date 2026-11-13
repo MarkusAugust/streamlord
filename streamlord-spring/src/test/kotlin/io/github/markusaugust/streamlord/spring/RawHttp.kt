@@ -16,7 +16,7 @@ fun rawGet(
     headers: String = "",
     limitMillis: Int = 30_000,
 ): String =
-    Socket("localhost", port).use { socket ->
+    Socket(LOOPBACK, port).use { socket ->
         socket.soTimeout = limitMillis
         socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n$headers\r\n".toByteArray())
         val out = ByteArrayOutputStream()
@@ -51,5 +51,10 @@ private fun whole(answer: String): Boolean {
     }
 }
 
-/** The address the tests serve on and read from. */
+/**
+ * The address the tests serve on and read from. On macOS a server on every address may share its port
+ * with one another process binds to the loopback address, whose client then reaches that one and
+ * waits out its timeout (LoopbackTest). On the loopback address alone, a server on a port taken
+ * there fails to start instead.
+ */
 internal const val LOOPBACK = "127.0.0.1"

@@ -4,7 +4,6 @@ import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.engine.BaseApplicationResponse
-import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.ApplicationSendPipeline
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
@@ -25,8 +24,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import org.apache.catalina.connector.CoyoteOutputStream
 import org.apache.catalina.connector.OutputBuffer
-import java.net.InetAddress
-import java.net.ServerSocket
 import java.net.Socket
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
@@ -38,7 +35,6 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
-import org.apache.catalina.startup.Tomcat as TomcatServer
 
 /*
  * Ktor's servlet engine writes a response on a coroutine of its own. A failing stream must let that
@@ -277,20 +273,6 @@ class TomcatWriterTest {
         }
     }
 
-    // On macOS a socket bound to every address may share its port with one another process binds
-    // to the loopback address, and a client of localhost then reaches that one and waits out its
-    // timeout. The server a test starts is the only one at the address the test reads from.
-    @Test
-    fun `a test reads from its own Tomcat though another server holds the port on the loopback address`() {
-        val module: Application.() -> Unit = { routing { get("/") { call.respondDatastar(heartbeat = null) {} } } }
-        ServerSocket(0, 50, InetAddress.getLoopbackAddress()).use { other ->
-            other.soTimeout = 200
-            runCatching { tomcat(discardFacades = true, module, other.localPort) { port -> read(port, "/") } }
-            val reached = runCatching { other.accept().close() }.isSuccess
-            assertTrue(!reached, "the test's client reached the other server on port ${other.localPort}")
-        }
-    }
-
     /** The value within twenty seconds, or a failure that says which of the waits ran out. */
     private fun <T> CompletableFuture<T>.within(never: String): T =
         try {
@@ -303,29 +285,13 @@ class TomcatWriterTest {
     private fun Throwable?.isOrRecovers(failure: Throwable) =
         this === failure || (this != null && this.javaClass == failure.javaClass && cause === failure)
 
-    /** [test] against a Ktor Tomcat with [module] on the loopback address, its connectors set to [discardFacades], on its port. */
+    /** [test] against a Ktor Tomcat with [module], its connectors set to [discardFacades], on its port. */
     private fun tomcat(
         discardFacades: Boolean,
         module: Application.() -> Unit,
         port: Int = 0,
         test: (Int) -> Unit,
-    ) {
-        val server = embeddedServer(Tomcat, port = port, module = module)
-        // Ktor sets up its connectors after configureTomcat runs, and gives them no address, so both go on before the start.
-        val field = server.engine.javaClass.getDeclaredField("server")
-        field.isAccessible = true
-        val connectors = (field.get(server.engine) as TomcatServer).service.findConnectors()
-        connectors.forEach {
-            it.setProperty("address", LOOPBACK)
-            it.discardFacades = discardFacades
-        }
-        try {
-            server.start(wait = false)
-            test(connectors.first().localPort)
-        } finally {
-            server.stop(100, 500)
-        }
-    }
+    ) = serving(Tomcat, module, port, tomcat = { it.discardFacades = discardFacades }, test = test)
 
     /** One GET, read to its last chunk or until the connection is cut. */
     private fun read(

@@ -84,7 +84,7 @@ class WebMvcFlowResponseTest {
             HttpClient
                 .newHttpClient()
                 .send(
-                    HttpRequest.newBuilder(URI("http://localhost:${tomcat.port}/flow")).header("Accept-Encoding", "gzip").build(),
+                    HttpRequest.newBuilder(URI("http://$LOOPBACK:${tomcat.port}/flow")).header("Accept-Encoding", "gzip").build(),
                     HttpResponse.BodyHandlers.ofString(),
                 )
         val body = response.body()

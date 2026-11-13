@@ -75,7 +75,7 @@ class StartedResponseTest {
                 .newHttpClient()
                 .send(
                     java.net.http.HttpRequest
-                        .newBuilder(java.net.URI("http://localhost:${tomcat.port}/started"))
+                        .newBuilder(java.net.URI("http://$LOOPBACK:${tomcat.port}/started"))
                         .header("Accept-Encoding", "gzip")
                         .build(),
                     java.net.http.HttpResponse.BodyHandlers

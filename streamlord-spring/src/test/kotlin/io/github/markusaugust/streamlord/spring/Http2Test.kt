@@ -52,7 +52,7 @@ class Http2Test {
 
     private fun get(version: HttpClient.Version): HttpResponse<String> {
         val client = HttpClient.newBuilder().version(version).build()
-        val request = HttpRequest.newBuilder(URI("http://localhost:${tomcat.port}/stream")).build()
+        val request = HttpRequest.newBuilder(URI("http://$LOOPBACK:${tomcat.port}/stream")).build()
         // The first request on a connection is HTTP/1.1 with an Upgrade; the second one is HTTP/2.
         if (version == HttpClient.Version.HTTP_2) client.send(request, HttpResponse.BodyHandlers.discarding())
         return client.send(request, HttpResponse.BodyHandlers.ofString())
@@ -77,7 +77,7 @@ class Http2Test {
 
     // The Connection headers of a raw HTTP/1.1 request that sends [connection], read off the socket.
     private fun connectionHeaders(connection: String?): List<String> =
-        Socket("localhost", tomcat.port).use { socket ->
+        Socket(LOOPBACK, tomcat.port).use { socket ->
             socket.soTimeout = 5_000
             val asked = connection?.let { "Connection: $it\r\n" } ?: ""
             socket.getOutputStream().write("GET /stream HTTP/1.1\r\nHost: localhost\r\n$asked\r\n".toByteArray())

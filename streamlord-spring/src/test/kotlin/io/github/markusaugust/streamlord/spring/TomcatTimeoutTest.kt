@@ -206,7 +206,7 @@ class TomcatTimeoutTest {
         val response =
             HttpClient
                 .newHttpClient()
-                .send(HttpRequest.newBuilder(URI("http://localhost:$port/too-large")).build(), HttpResponse.BodyHandlers.ofString())
+                .send(HttpRequest.newBuilder(URI("http://$LOOPBACK:$port/too-large")).build(), HttpResponse.BodyHandlers.ofString())
 
         assertEquals(413, response.statusCode(), response.body())
     }

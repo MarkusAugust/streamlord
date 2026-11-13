@@ -29,22 +29,6 @@ import kotlin.time.TimeSource
 
 /** Streams that write nothing for a while, on real engines over real sockets. */
 class IdleStreamTest {
-    private fun <E : ApplicationEngine, C : ApplicationEngine.Configuration> serve(
-        engine: ApplicationEngineFactory<E, C>,
-        configure: C.() -> Unit = {},
-        module: Application.() -> Unit,
-    ): EmbeddedServer<E, C> =
-        embeddedServer(
-            engine,
-            configure = {
-                connector { port = 0 }
-                configure()
-            },
-            module = module,
-        ).start(wait = false)
-
-    private val EmbeddedServer<*, *>.port: Int get() = runBlocking { engine.resolvedConnectors().first().port }
-
     /** What a socket read, and when, from its connect, the first byte came and the server closed it. */
     private class Heard(
         val text: String,
@@ -65,7 +49,7 @@ class IdleStreamTest {
         val text = StringBuilder()
         var firstByte: Duration? = null
         try {
-            Socket("localhost", port).use { socket ->
+            Socket(LOOPBACK, port).use { socket ->
                 socket.getOutputStream().write("GET /idle HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 socket.soTimeout = 250
                 val buffer = ByteArray(4096)
@@ -97,17 +81,15 @@ class IdleStreamTest {
     // With four seconds lost in all the test cannot judge the margin, and says so rather than fail.
     @Test
     fun `an idle stream on Netty outlives the engine's write timeout`() {
-        val server =
-            serve(Netty, { responseWriteTimeoutSeconds = 10 }) {
-                routing { get("/idle") { call.respondDatastar { awaitCancellation() } } }
-            }
-        try {
+        serving(Netty, { routing { get("/idle") { call.respondDatastar { awaitCancellation() } } } }, configure = {
+            responseWriteTimeoutSeconds = 10
+        }) { port ->
             val tries = mutableListOf<Heard>()
             val stall = StallWatch()
             stall.use {
                 do {
                     val lostBefore = stall.lost
-                    tries += listen(server.port, 12.seconds)
+                    tries += listen(port, 12.seconds)
                     val lostDuring = stall.lost - lostBefore
                     println("Idle stream on Netty, try ${tries.size}: ${tries.last()}, $lostDuring lost to stops during it")
                 } while (tries.size < 2 && tries.last().closed && lostDuring >= 1.seconds)
@@ -119,8 +101,6 @@ class IdleStreamTest {
             val how = if (tries.size == 1) "with no stop to explain it" else "on both tries"
             assertEquals(false, heard.closed, "Netty closed the stream $how, ${stall.lost} lost to stops in all\n$report")
             assertTrue(": keep-alive" in heard.text, "no keep-alive comment, with ${stall.lost} lost to stops\n$report")
-        } finally {
-            server.stop(100, 500)
         }
     }
 
