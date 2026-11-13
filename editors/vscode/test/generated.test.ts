@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar } from "../scripts/kotlinGrammar.mjs";
 
 /** What `npm run build` writes from the catalog for VS Code's own HTML service and its snippets. */
 describe("generated files", () => {
@@ -17,5 +18,12 @@ describe("generated files", () => {
     assert.equal(snippets["data-preserve-attr"].body, 'data-preserve-attr="${2:value}"');
     const kotlin = JSON.parse(readFileSync(new URL("../snippets/kotlin.json", import.meta.url), "utf8"));
     assert.ok(Object.keys(kotlin).length >= 10);
+  });
+
+  // A hand edit to a generated grammar is lost at the next build: the generator is what to change.
+  it("the Kotlin injection grammars are what scripts/kotlinGrammar.mjs writes from the catalog", () => {
+    const catalog = JSON.parse(readFileSync(new URL("../../../catalog/datastar-1.0.5.json", import.meta.url), "utf8"));
+    assert.equal(readFileSync(new URL("../syntaxes/kotlin-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(kotlinInjectionGrammar(catalog)));
+    assert.equal(readFileSync(new URL("../syntaxes/kotlin-dsl-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(kotlinDslInjectionGrammar()));
   });
 });
