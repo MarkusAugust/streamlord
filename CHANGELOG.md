@@ -234,7 +234,10 @@ All notable changes to Streamlord are recorded here. The format follows
 ### Fixed
 
 - `payload = null` in the options of a backend action is written as `payload: null`, and the client
-  sends `null`, where it wrote nothing and the signals went.
+  sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the
+  body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the
+  empty object, `readSignalsJson()` and a typed `readSignals<T>()` give `null`, and
+  `readSignalsOr(default)` the default, in core, Ktor, Spring WebMvc and WebFlux alike, where it threw.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
