@@ -445,8 +445,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - The `415` that `readSignals` answers a form with says what to do: Datastar's
   `contentType: 'form'` sends the form's fields and no signals, so read them as form parameters.
   [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
-- A `val` set to `interpolate(...)`, or to its `.text`, with eight blanks or more before what
-  follows on the line, is read as the whole of what follows says, where the blanks made it markup.
+- A `val` set to `interpolate(...)`, or to its `.text`, is read as the whole of what follows on the
+  line says, however many blanks come before it, where eight or more made it markup or a String.
 - The `SignalsCodecException` for a value JSON cannot hold names its class by its simple name,
   `JSON cannot hold Sorcerer.`, where it gave the qualified name, and `null` for a local class.
 - The editors judge the arguments of the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds
