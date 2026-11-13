@@ -24,6 +24,7 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.kotlin.dsl.injection": read("syntaxes/kotlin-dsl-injection.tmLanguage.json"),
   "streamlord.html.injection": read("syntaxes/html-injection.tmLanguage.json"),
   "streamlord.kotlin.template.injection": read("syntaxes/kotlin-template-injection.tmLanguage.json"),
+  "streamlord.kotlin.template2.injection": read("syntaxes/kotlin-template2-injection.tmLanguage.json"),
   // VS Code's own Handlebars grammar, which brings its own tags; a template language that wraps HTML as jte's does.
   "text.html.handlebars": read("test/fixtures/host-handlebars.json"),
   "text.html.jte": { scopeName: "text.html.jte", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
@@ -127,10 +128,10 @@ describe("kotlin injection grammar", () => {
     const assigned = await tokens("source.kotlin", `span { attributes["data-text"] = "\\$a" }`, false);
     assert.match(scopeOf(assigned, "="), /keyword\.operator\.assignment\.kotlin/, "the assignment keeps its colour");
     assert.ok(!(await tokens("source.kotlin", `div { attributes["data-text_x"] = "y" }`, false)).some((x) => x.scopes.some((s) => s.includes("datastar"))), "one underscore is no modifier");
-    // A raw string is Kotlin's to colour, in a DSL call too: taking its first quote for a literal's mispaired the rest.
-    for (const source of [`dataText("""\\$x""")`, `dataOn("click", """\\$x""")`]) {
+    // A raw string in a DSL call is the expression too, and closes where it does: taking its first quote for a literal's mispaired the rest.
+    for (const source of [`dataText($$"""$x""")`, `dataOn("click", $$"""$x""")`]) {
       const t = await tokenLines("source.kotlin", [DSL_IMPORT, source, "val y = 2"]);
-      assert.ok(!embedded(t[1]!), source);
+      assert.ok(embedded(t[1]!), source);
       assert.ok(t[2]!.every((x) => !x.scopes.some((s) => s.startsWith("string"))), `${source}: the next line is code`);
     }
     const named = await tokens("source.kotlin", `div { attributes["data-text"] = handler }`, false);
@@ -236,7 +237,8 @@ describe("kotlin injection grammar", () => {
 
   it("follows the injection marker across lines", async () => {
     for (const marker of [`@Language("HTML")`, `// language=HTML`]) {
-      const lines = await tokenLines("source.kotlin", [marker, `fun page(): String = """`, `  <div data-text="$count" class="x">`, `"""`, `val after = """`, `  <p>not marked, not on the first line</p>`, `"""`]);
+      // The second string's first line opens no tag, so it is no HTML: only the marker could make it one.
+      const lines = await tokenLines("source.kotlin", [marker, `fun page(): String = """`, `  <div data-text="$count" class="x">`, `"""`, `val after = """`, `  not marked, <p>not at the start</p>`, `"""`]);
       assert.match(scopeOf(lines[2]!, "div"), /entity\.name\.tag\.html/, marker);
       assert.match(scopeOf(lines[2]!, "text"), /entity\.other\.attribute-name\.datastar\.plugin/, marker);
       assert.match(scopeOf(lines[2]!, "class"), /entity\.other\.attribute-name\.html/, marker);
@@ -349,7 +351,7 @@ describe("html injection grammar", () => {
   it("knows exactly the catalog's fetch options, and filterSignals' two keys", () => {
     const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { fetchOptions: { name: string }[] };
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
-    const keys = /^\\b\(([A-Za-z|]+)\)/.exec(grammar.repository["option-keys"].match)?.[1]?.split("|").sort();
+    const keys = /\\b\(([A-Za-z|]+)\)/.exec(grammar.repository["option-keys"].match)?.[1]?.split("|").sort();
     assert.deepEqual(keys, [...catalog.fetchOptions.map((o) => o.name), "include", "exclude"].sort());
   });
 });
@@ -367,7 +369,7 @@ function between(all: [string, string][], from: string, to?: string): [string, s
   const start = all.findIndex(([text]) => text === from);
   assert.ok(start >= 0, `no token '${from}' in ${JSON.stringify(all)}`);
   const rest = all.slice(start);
-  const end = to === undefined ? rest.length : rest.findIndex(([text]) => text === to) + 1;
+  const end = to === undefined ? rest.length : rest.findIndex(([text], i) => i > 0 && text === to) + 1;
   assert.ok(end > 0, `no token '${to}'`);
   return rest.slice(0, end);
 }
@@ -664,15 +666,15 @@ describe("the lists both editors share", () => {
       kotlinCallSites: { expression: Record<string, { arg: number | string }> };
     };
     const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
-    const backend = /\(\?:?((?:[a-z]+\|)*[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
+    const backend = /\(((?:[a-z]+\|)+[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
     assert.deepEqual(backend, catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name).sort());
     const kt = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\\b\(?:?\(\?:((?:[A-Za-z]+\|)*[A-Za-z]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const sites = Object.entries(catalog.kotlinCallSites.expression).filter(([n]) => !n.startsWith("$"));
     const at = (arg: (a: number | string) => boolean) => sites.filter(([, s]) => arg(s.arg)).map(([n]) => n).sort();
-    assert.deepEqual(names(kt.repository["expression-call-first-arg"].begin), at((a) => a === 0));
-    assert.deepEqual(names(kt.repository["expression-call-second-arg"].begin), at((a) => a === 1 || a === "last"));
-    assert.deepEqual(names(kt.repository["expression-call-lone-object"].begin), at((a) => a === "last"));
+    assert.deepEqual(names(kt.repository["expression-call-first-arg"].patterns[0].begin), at((a) => a === 0));
+    assert.deepEqual(names(kt.repository["expression-call-second-arg"].patterns[0].begin), at((a) => a === 1 || a === "last"));
+    assert.deepEqual(names(kt.repository["expression-call-lone-object"].patterns[0].begin), at((a) => a === "last"));
   });
 
   it("knows the same globals and keywords as the analysis", () => {

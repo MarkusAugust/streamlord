@@ -181,11 +181,29 @@
         "injectTo": [
           "text.html.basic",
           "text.html.derivative",
+          "text.html.handlebars",
+          "text.html.mustache",
+          "text.html.jte",
+          "text.html.kte",
           "source.kotlin"
         ],
         "embeddedLanguages": {
           "meta.embedded.inline.datastar": "datastar-expression"
         }
+      },
+      {
+        "scopeName": "streamlord.kotlin.template2.injection",
+        "path": "./syntaxes/kotlin-template2-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
+      },
+      {
+        "scopeName": "streamlord.kotlin.template.injection",
+        "path": "./syntaxes/kotlin-template-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
       }
     ],
     "languages": [

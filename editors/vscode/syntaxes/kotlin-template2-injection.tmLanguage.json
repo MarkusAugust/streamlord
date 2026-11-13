@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.kotlin.template2.injection",
+  "comment": "Kotlin's templates in a $$ literal, which two dollars open; a single dollar is the browser's, a signal.",
+  "injectionSelector": "L:meta.kotlin-template.two.streamlord -meta.template.expression.kotlin",
+  "patterns": [
+    {
+      "include": "#two"
+    }
+  ],
+  "repository": {
+    "braces": {
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "#braces"
+        },
+        {
+          "include": "source.kotlin"
+        }
+      ]
+    },
+    "two": {
+      "patterns": [
+        {
+          "match": "(?<!\\$)(\\$\\$)([A-Za-z_][A-Za-z0-9_]*)",
+          "name": "meta.template.expression.kotlin",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.template-expression.begin.kotlin"
+            },
+            "2": {
+              "name": "variable.other.readwrite.kotlin"
+            }
+          }
+        },
+        {
+          "begin": "(?<!\\$)\\$\\$\\{",
+          "end": "\\}",
+          "name": "meta.template.expression.kotlin",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.template-expression.begin.kotlin"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.template-expression.end.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#braces"
+            },
+            {
+              "include": "source.kotlin"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

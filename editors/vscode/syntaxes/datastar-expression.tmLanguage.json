@@ -11,6 +11,12 @@
     "expression": {
       "patterns": [
         {
+          "include": "#comments"
+        },
+        {
+          "include": "#entity-strings"
+        },
+        {
           "include": "#strings"
         },
         {
@@ -35,7 +41,7 @@
           "include": "#constants"
         },
         {
-          "include": "#control"
+          "include": "#keywords"
         },
         {
           "include": "#option-keys"
@@ -44,10 +50,16 @@
           "include": "#object-key"
         },
         {
+          "include": "#spread"
+        },
+        {
           "include": "#method-call"
         },
         {
           "include": "#property"
+        },
+        {
+          "include": "#function-call"
         },
         {
           "include": "#duration"
@@ -70,15 +82,22 @@
       ]
     },
     "signal": {
-      "match": "(\\$)(\\w+(?:-\\w+)*)((?:\\.\\w+(?:-\\w+)*)*)",
+      "comment": "The client's signal, $(\\w+(?:[.-]\\w+)*). In a Kotlin string the dollar may be written \\$ or ${'$'}.",
+      "match": "(?:(\\\\)(?=\\$)|(\\$\\{'\\$'\\}))?(\\$)?(?<=\\$|\\$'\\})(\\w+(?:-\\w+)*)((?:\\.\\w+(?:-\\w+)*)*)",
       "captures": {
         "1": {
-          "name": "punctuation.definition.signal.datastar"
+          "name": "constant.character.escape.kotlin"
         },
         "2": {
-          "name": "variable.other.constant.signal.datastar"
+          "name": "constant.character.escape.dollar.kotlin"
         },
         "3": {
+          "name": "variable.other.constant.signal.datastar punctuation.definition.signal.datastar"
+        },
+        "4": {
+          "name": "variable.other.constant.signal.datastar"
+        },
+        "5": {
           "name": "variable.other.property.signal-path.datastar"
         }
       }
@@ -87,7 +106,7 @@
       "match": "(@)(get|post|put|patch|delete|query)(?=\\s*\\()",
       "captures": {
         "1": {
-          "name": "punctuation.definition.action.datastar"
+          "name": "entity.name.function.action.backend.datastar punctuation.definition.action.datastar"
         },
         "2": {
           "name": "entity.name.function.action.backend.datastar"
@@ -98,7 +117,7 @@
       "match": "(@)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
       "captures": {
         "1": {
-          "name": "punctuation.definition.action.datastar"
+          "name": "entity.name.function.action.datastar punctuation.definition.action.datastar"
         },
         "2": {
           "name": "entity.name.function.action.datastar"
@@ -106,29 +125,33 @@
       }
     },
     "scope-vars": {
-      "match": "\\b(el|evt|patch)\\b",
+      "match": "(?<![.$])\\b(el|evt|patch)\\b(?!\\s*:(?!:))",
       "name": "variable.language.scope.datastar"
     },
     "globals": {
-      "match": "\\b(window|document|console|Math|JSON|Date|Intl|navigator|location|history|localStorage|sessionStorage|fetch|setTimeout|setInterval|clearTimeout|clearInterval|Promise|Array|Object|String|Number|Boolean)\\b",
+      "match": "(?<![.$])\\b(window|document|console|Math|JSON|Date|Intl|navigator|location|history|localStorage|sessionStorage|fetch|setTimeout|setInterval|clearTimeout|clearInterval|Promise|Array|Object|String|Number|Boolean)\\b",
       "name": "support.class.global.datastar"
     },
     "constants": {
-      "match": "\\b(true|false|null|undefined|NaN|Infinity)\\b",
+      "match": "(?<![.$])\\b(true|false|null|undefined|NaN|Infinity)\\b",
       "name": "constant.language.datastar"
     },
-    "control": {
-      "match": "\\b(if|else|return|await|async|new|typeof|instanceof|in|of|for|while|do|switch|case|break|continue|throw|try|catch|finally|void|delete|function|let|const|var|this|yield|class)\\b",
-      "name": "keyword.control.datastar"
-    },
     "option-keys": {
-      "comment": "Keys of the fetch-action options object and signal filters, when used as object keys.",
-      "match": "\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude)\\b(?=\\s*:)",
-      "name": "support.type.property-name.option.datastar"
+      "comment": "Keys of the fetch-action options object and signal filters, where an object's key stands: after { or a comma.",
+      "match": "(?:(?<=[{,])|^)(\\s*)\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude)\\b(?=\\s*:(?!:))",
+      "captures": {
+        "2": {
+          "name": "support.type.property-name.option.datastar"
+        }
+      }
     },
     "object-key": {
-      "match": "\\b([A-Za-z_$][A-Za-z0-9_$]*)\\b(?=\\s*:(?!:))",
-      "name": "variable.other.property.key.datastar"
+      "match": "(?:(?<=[{,])|^)(\\s*)([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*:(?!:))",
+      "captures": {
+        "2": {
+          "name": "variable.other.property.key.datastar"
+        }
+      }
     },
     "method-call": {
       "match": "(\\.)([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*\\()",
@@ -153,11 +176,11 @@
       }
     },
     "duration": {
-      "match": "\\b\\d+(?:ms|s)\\b",
+      "match": "(?<![\\w$.])\\d+(?:ms|s)\\b",
       "name": "constant.numeric.duration.datastar"
     },
     "numbers": {
-      "match": "\\b(?:0[xX][0-9a-fA-F]+|\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b",
+      "match": "(?<![\\w$.])(?:0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*n?|0[bB][01](?:_?[01])*n?|0[oO][0-7](?:_?[0-7])*n?|(?:\\d(?:_?\\d)*(?:\\.(?:\\d(?:_?\\d)*)?)?|\\.\\d(?:_?\\d)*)(?:[eE][+-]?\\d(?:_?\\d)*)?n?)(?![\\w$])",
       "name": "constant.numeric.datastar"
     },
     "arrow": {
@@ -222,13 +245,22 @@
       ]
     },
     "regex": {
-      "match": "(?<=[(,:=\\s{\\[])/(?![/*])(?:\\\\.|\\[[^\\]]*\\]|[^/\\\\\\n])+/[gimsuy]*",
-      "name": "string.regexp.datastar"
+      "comment": "A slash opens a regex where a value cannot stand before it: at the start, or after an operator, a bracket, a comma or a keyword. After a value it divides.",
+      "match": "(?:\\G|^|(?<=[(,=:!&|?{};\\[+\\-*%<>~^]|\\breturn|\\btypeof|\\bin|\\bof))(\\s*)(/(?![/*])(?:\\\\.|\\[(?:\\\\.|[^\\]\\\\])*\\]|[^/\\\\\\[\\n])+/[dgimsuy]*)",
+      "captures": {
+        "2": {
+          "name": "string.regexp.datastar"
+        }
+      }
     },
     "operators": {
       "patterns": [
         {
-          "match": "===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|\\?\\.",
+          "match": "===|!==|==|!=|<=|>=",
+          "name": "keyword.operator.comparison.datastar"
+        },
+        {
+          "match": "&&=|\\|\\|=|\\?\\?=|&&|\\|\\||\\?\\?|\\?\\.",
           "name": "keyword.operator.comparison.datastar"
         },
         {
@@ -236,11 +268,15 @@
           "name": "keyword.operator.increment.datastar"
         },
         {
-          "match": "(?<![=!<>])=(?!=)|\\+=|-=|\\*=|/=",
+          "match": ">>>=|<<=|>>=|\\*\\*=|&=|\\|=|\\^=|\\+=|-=|\\*=|/=|%=|(?<![=!<>])=(?![=>])",
           "name": "keyword.operator.assignment.datastar"
         },
         {
-          "match": "[-+*/%]|<|>|!|\\?|:",
+          "match": ">>>|<<|>>|[~^|&]",
+          "name": "keyword.operator.bitwise.datastar"
+        },
+        {
+          "match": "\\*\\*|[-+*/%]|<|>|!|\\?|:",
           "name": "keyword.operator.arithmetic.datastar"
         }
       ]
@@ -252,6 +288,116 @@
     "identifier": {
       "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b",
       "name": "variable.other.readwrite.datastar"
+    },
+    "comments": {
+      "comment": "A comment in an expression. A line comment ends where the line does, or at a quote, which may close the attribute or the Kotlin string it is written in.",
+      "patterns": [
+        {
+          "match": "/\\*.*?\\*/",
+          "name": "comment.block.datastar"
+        },
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.datastar"
+        },
+        {
+          "match": "//.*?(?=[\"']|$)",
+          "name": "comment.line.double-slash.datastar"
+        }
+      ]
+    },
+    "entity-strings": {
+      "comment": "A string in HTML's spellings of a quote, as an attribute in double quotes holds a double quote.",
+      "patterns": [
+        {
+          "begin": "&quot;|&#34;",
+          "end": "&quot;|&#34;",
+          "name": "string.quoted.double.datastar",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.datastar"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.datastar"
+            }
+          }
+        },
+        {
+          "begin": "&#39;|&apos;",
+          "end": "&#39;|&apos;",
+          "name": "string.quoted.single.datastar",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.datastar"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.datastar"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "comment": "Each keyword with the scope TypeScript's grammar gives it. grammar.test.ts holds these and the constants to the analysis's list.",
+      "patterns": [
+        {
+          "match": "(?<![.$])\\b(if|else|switch|case)\\b",
+          "name": "keyword.control.conditional.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(return|await|yield|break|continue|throw)\\b",
+          "name": "keyword.control.flow.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(for|while|do)\\b",
+          "name": "keyword.control.loop.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(try|catch|finally)\\b",
+          "name": "keyword.control.trycatch.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(new)\\b",
+          "name": "keyword.operator.new.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(typeof|void|delete|instanceof|in|of)\\b",
+          "name": "keyword.operator.expression.$1.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(this)\\b",
+          "name": "variable.language.this.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(let|const|var)\\b",
+          "name": "storage.type.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(function)\\b",
+          "name": "storage.type.function.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(class)\\b",
+          "name": "storage.type.class.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(async)\\b",
+          "name": "storage.modifier.async.datastar"
+        }
+      ]
+    },
+    "spread": {
+      "match": "\\.\\.\\.",
+      "name": "keyword.operator.spread.datastar"
+    },
+    "function-call": {
+      "match": "\\b([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*\\()",
+      "name": "entity.name.function.datastar"
     }
   }
 }

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { defaultPrefix, type Issue, type Route } from "./analysis.ts";
 import { IssueStore, StreamlordCodeActionProvider } from "./codeActions.ts";
-import { applyRecommendedColors, removeRecommendedColors } from "./colors.ts";
+import { applyRecommendedColors, followThemeChange, removeRecommendedColors } from "./colors.ts";
 import { StreamlordCompletionProvider } from "./completion.ts";
 import { StreamlordHoverProvider } from "./hover.ts";
 import { Inspector } from "./inspector.ts";
@@ -121,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("streamlord.inspector.open", () => inspector.open()),
     vscode.commands.registerCommand("streamlord.colors.apply", () => applyRecommendedColors()),
     vscode.commands.registerCommand("streamlord.colors.remove", () => removeRecommendedColors()),
+    vscode.window.onDidChangeActiveColorTheme(() => void followThemeChange()),
     vscode.commands.registerCommand("streamlord.reindexSignals", async () => {
       const n = await signals.rebuild();
       void vscode.window.showInformationMessage(`Streamlord: indexed ${n} signal names.`);
