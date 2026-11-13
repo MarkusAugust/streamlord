@@ -261,6 +261,16 @@ class SpringAdapterTest {
         val empty = MockHttpServletRequest("GET", "/x")
         assertNull(empty.readSignals<Search>(streamlord))
         assertEquals(Search(), empty.readSignalsOr(Search(), streamlord))
+
+        // payload: null, as the client sends it in the query and in the body: no signals, as above.
+        val nullQuery = MockHttpServletRequest("GET", "/x").apply { addParameter("datastar", "null") }
+        assertTrue(nullQuery.readSignals().isEmpty())
+        val nullBody =
+            MockHttpServletRequest("POST", "/x").apply {
+                setContent("null".toByteArray())
+                contentType = "application/json"
+            }
+        assertEquals(Search(), nullBody.readSignalsOr(Search(), streamlord))
     }
 
     @Test

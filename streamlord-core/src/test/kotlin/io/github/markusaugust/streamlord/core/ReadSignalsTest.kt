@@ -69,6 +69,17 @@ class ReadSignalsTest {
             assertNull(Streamlord.Default.readSignals<Map<String, Any?>>(req))
         }
 
+    // payload: null in a backend action's options: the client sends JSON.stringify(null), in the body or the query.
+    @Test
+    fun `a null payload is read as no signals, as an absent one is`() =
+        runTest {
+            for (req in listOf(FakeRequest("POST", body = "null"), FakeRequest("GET", query = mapOf("datastar" to " null ")))) {
+                assertEquals(JsonObject.EMPTY, Streamlord.Default.readSignals(req))
+                assertNull(Streamlord.Default.readSignalsJson(req))
+                assertNull(Streamlord.Default.readSignals<Map<String, Any?>>(req))
+            }
+        }
+
     @Test
     fun `typed reads through the built-in codec`() =
         runTest {
