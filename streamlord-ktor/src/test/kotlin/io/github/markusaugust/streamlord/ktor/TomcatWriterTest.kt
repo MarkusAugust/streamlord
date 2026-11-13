@@ -26,6 +26,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import org.apache.catalina.connector.CoyoteOutputStream
 import org.apache.catalina.connector.OutputBuffer
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.net.Socket
 import java.util.Collections
 import java.util.concurrent.CompletableFuture
@@ -276,6 +278,20 @@ class TomcatWriterTest {
         }
     }
 
+    // On macOS a socket bound to every address may share its port with one another process binds
+    // to the loopback address, and a client of localhost then reaches that one and waits out its
+    // timeout. The server a test starts is the only one at the address the test reads from.
+    @Test
+    fun `a test reads from its own Tomcat though another server holds the port on the loopback address`() {
+        val module: Application.() -> Unit = { routing { get("/") { call.respondDatastar(heartbeat = null) {} } } }
+        ServerSocket(0, 50, InetAddress.getLoopbackAddress()).use { other ->
+            other.soTimeout = 200
+            runCatching { tomcat(discardFacades = true, module, other.localPort) { port -> read(port, "/") } }
+            val reached = runCatching { other.accept().close() }.isSuccess
+            assertTrue(!reached, "the test's client reached the other server on port ${other.localPort}")
+        }
+    }
+
     /** The value within twenty seconds, or a failure that says which of the waits ran out. */
     private fun <T> CompletableFuture<T>.within(never: String): T =
         try {
@@ -292,9 +308,10 @@ class TomcatWriterTest {
     private fun tomcat(
         discardFacades: Boolean,
         module: Application.() -> Unit,
+        port: Int = 0,
         test: (Int) -> Unit,
     ) {
-        val server = embeddedServer(Tomcat, port = 0, module = module).start(wait = false)
+        val server = embeddedServer(Tomcat, port = port, module = module).start(wait = false)
         try {
             // Ktor sets up its connectors after configureTomcat runs, so the setting goes on afterwards.
             val field = server.engine.javaClass.getDeclaredField("server")
