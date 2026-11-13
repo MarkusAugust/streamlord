@@ -125,12 +125,20 @@ internal fun Analyzer.expressionAtCaret(
         if (offset <= html.contentStart || offset > html.contentEnd) return null
         return expressionInMarkup(html.text, decodedIndex(html, offset), prefix, templates = false, kotlinEscapes = !html.raw)
     }
+    expressionOptions(src).firstOrNull { it.value.start < offset && offset <= it.value.end }?.let { o ->
+        val s = o.value
+        if (offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
+        return ExpressionAtCaret(s.text.substring(0, decodedIndex(s, offset)), allowActions = true, patchInScope = false)
+    }
+    // The innermost call: a helper's string handed to another, dataOnClick(getExpr("...")), is the helper's.
     val site =
-        findCallSites(src, catalog.expressionCallSites.keys, lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen }
+        findCallSites(src, catalog.expressionCallSites.keys, lex(src)).lastOrNull { it.openParen < offset && offset <= it.closeParen }
             ?: return null
     val spec = catalog.expressionCallSites[site.name] ?: return null
+    val strings = site.expressionStrings(spec)
     val s =
-        site.selectString(spec) ?: site.args.mapNotNull { it.string }.firstOrNull { it.start < offset && offset <= it.end } ?: return null
+        strings.firstOrNull { it.start < offset && offset <= it.end } ?: strings.firstOrNull()
+            ?: site.args.mapNotNull { it.string }.firstOrNull { it.start < offset && offset <= it.end } ?: return null
     if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
     // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
     val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true

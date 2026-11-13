@@ -542,7 +542,7 @@
     "dataLines": ["selector", "mode", "namespace", "useViewTransition", "viewTransitionSelector", "elements", "signals", "onlyIfMissing"]
   },
   "kotlinCallSites": {
-    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. Used by the editor to know where to validate and complete.",
+    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. more: the parameters after it that take an expression too, each by its place or its name. Used by the editor to know where to validate and complete.",
     "expression": {
       "dataOn": { "arg": 1, "named": "expression" }, "dataOnClick": { "arg": 0, "named": "expression" }, "dataOnSubmit": { "arg": 0, "named": "expression" }, "dataOnChange": { "arg": 0, "named": "expression" },
       "dataOnInput": { "arg": 0, "named": "expression" }, "dataOnKeydown": { "arg": 0, "named": "expression" }, "dataOnFetch": { "arg": 0, "named": "expression" },
@@ -552,7 +552,15 @@
       "dataSignals": { "arg": "last", "named": "expression", "onlyIfStringArgs": true },
       "dataOnRaf": { "arg": 0, "named": "expression" }, "dataOnResize": { "arg": 0, "named": "expression" }, "dataCustomValidity": { "arg": 0, "named": "expression" },
       "dataReplaceUrl": { "arg": 0, "named": "expression" }, "dataViewTransition": { "arg": 0, "named": "expression" }, "dataAnimate": { "arg": "last", "named": "expression" },
-      "setExpr": { "arg": 1, "named": "expression" }, "peek": { "arg": 0, "named": "expression" }, "clipboardExpr": { "arg": 0, "named": "expression" }
+      "setExpr": { "arg": 1, "named": "expression" }, "peek": { "arg": 0, "named": "expression" }, "clipboardExpr": { "arg": 0, "named": "expression" },
+      "getExpr": { "arg": 0, "named": "expression" }, "postExpr": { "arg": 0, "named": "expression" }, "putExpr": { "arg": 0, "named": "expression" },
+      "patchExpr": { "arg": 0, "named": "expression" }, "deleteExpr": { "arg": 0, "named": "expression" }, "queryExpr": { "arg": 0, "named": "expression" },
+      "setAllExpr": { "arg": 0, "named": "expression" },
+      "fitExpr": { "arg": 0, "named": "value", "more": ["oldMin", "oldMax", "newMin", "newMax"] }
+    },
+    "expressionOptions": {
+      "$comment": "The options of FetchOptions whose value is an expression, set in the options' lambda: name = \"...\". map: the option is a map, headerExprs = mapOf(\"name\" to \"...\"), whose values are the expressions.",
+      "payloadExpr": {}, "requestCancellationExpr": {}, "headerExprs": { "map": true }
     },
     "html": {
       "patchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },

@@ -694,7 +694,7 @@ describe("the lists both editors share", () => {
   it("knows the catalog's backend actions, and the DSL's call sites", () => {
     const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as {
       actions: { name: string; kind: string }[];
-      kotlinCallSites: { expression: Record<string, { arg: number | string }> };
+      kotlinCallSites: { expression: Record<string, { arg: number | string; more?: string[] }> };
     };
     const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
     const backend = /\(((?:[a-z]+\|)+[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
@@ -702,8 +702,9 @@ describe("the lists both editors share", () => {
     const kt = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\\b\(?:?\(\?:((?:[A-Za-z]+\|)*[A-Za-z]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const sites = Object.entries(catalog.kotlinCallSites.expression).filter(([n]) => !n.startsWith("$"));
-    const at = (arg: (a: number | string) => boolean) => sites.filter(([, s]) => arg(s.arg)).map(([n]) => n).sort();
+    const at = (arg: (a: number | string) => boolean) => sites.filter(([, s]) => arg(s.arg) && !s.more).map(([n]) => n).sort();
     assert.deepEqual(names(kt.repository["expression-call-first-arg"].patterns[0].begin), at((a) => a === 0));
+    assert.deepEqual(names(kt.repository["expression-call-every-arg"].begin), sites.filter(([, s]) => s.more).map(([n]) => n).sort());
     assert.deepEqual(names(kt.repository["expression-call-second-arg"].patterns[0].begin), at((a) => a === 1 || a === "last"));
     assert.deepEqual(names(kt.repository["expression-call-lone-object"].patterns[0].begin), at((a) => a === "last"));
   });

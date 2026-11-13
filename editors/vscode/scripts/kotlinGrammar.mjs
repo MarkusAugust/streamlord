@@ -87,8 +87,13 @@ const expressionString = (anchor) =>
 export function kotlinInjectionGrammar(catalog) {
   const sites = catalog.kotlinCallSites;
   const expression = Object.entries(sites.expression).filter(([name]) => !name.startsWith("$"));
-  const at = (test) => alternation(expression.filter(([, s]) => test(s.arg)).map(([n]) => n));
+  // A call whose later parameters take an expression too, fitExpr, has every string argument read as one.
+  const at = (test) => alternation(expression.filter(([, s]) => test(s.arg) && !s.more).map(([n]) => n));
   const first = at((a) => a === 0);
+  const every = alternation(expression.filter(([, s]) => s.more).map(([n]) => n));
+  const options = Object.entries(sites.expressionOptions).filter(([name]) => !name.startsWith("$"));
+  const plainOptions = alternation(options.filter(([, o]) => !o.map).map(([n]) => n));
+  const mapOptions = alternation(options.filter(([, o]) => o.map).map(([n]) => n));
   const second = at((a) => a === 1 || a === "last");
   const last = at((a) => a === "last");
   const signalAttributes = alternation(catalog.attributes.filter((a) => a.valueKind === "signal").flatMap((a) => a.kotlin));
@@ -250,6 +255,37 @@ export function kotlinInjectionGrammar(catalog) {
       4,
       r`(?=\s*\{)`,
     ),
+    "expression-call-every-arg": {
+      comment:
+        "fitExpr(\"...\", \"...\", ...): every string argument is an expression, passed by its place or its name, on any line. What a bracket inside holds is Kotlin's.",
+      begin: RECV + r`\b((?:` + every + r`))(\s*\()`,
+      beginCaptures: { 2: FN },
+      end: r`\)`,
+      patterns: [{ include: "#kotlin-brackets" }, ...expressionString(r`(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?`), { include: "source.kotlin" }],
+    },
+    "expression-option": {
+      comment:
+        "payloadExpr = \"...\" and the other options of FetchOptions whose value is an expression, and each value of headerExprs = mapOf(\"X-Id\" to \"...\"), whose name is a plain string.",
+      patterns: [
+        expressionCall("An option set to an expression.", r`\b(` + plainOptions + r`)(\s*)(=)(\s*)`, { 3: { name: "keyword.operator.assignment.kotlin" } }, 5),
+        {
+          begin: r`\b(` + mapOptions + r`)(\s*)(=)(\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\s*\()`,
+          beginCaptures: { 3: { name: "keyword.operator.assignment.kotlin" }, 5: FN },
+          end: r`\)`,
+          patterns: [
+            { include: "#kotlin-brackets" },
+            expressionCall("A value after its name and to.", r`(\$*"[^"\n]*")(\s*)(to)(\s*)`, { 1: { name: "string.quoted.double.kotlin" }, 3: FN }, 5),
+            { include: "source.kotlin" },
+          ],
+        },
+      ],
+    },
+    "kotlin-brackets": {
+      comment: "Brackets inside a call this grammar reads, which hold Kotlin: another call's arguments, signal(\"m\").",
+      begin: r`\(`,
+      end: r`\)`,
+      patterns: [{ include: "#kotlin-brackets" }, { include: "source.kotlin" }],
+    },
     "signal-name-call": {
       comment: "dataBind(\"name\"), dataRef, dataIndicator: the argument names a signal.",
       match: RECV + r`\b((?:` + signalAttributes + r`))(\s*\(\s*)(\$*")` + SIGNAL_NAME + '(")',
@@ -331,6 +367,8 @@ export function kotlinDslInjectionGrammar() {
     scopeName: "streamlord.kotlin.dsl.injection",
     injectionSelector: `L:meta.dsl-file.streamlord -comment -string -${STRING} -${MARKER}`,
     patterns: [
+      "expression-call-every-arg",
+      "expression-option",
       "expression-call-signal-pair",
       "expression-call-second-arg",
       "expression-call-lone-object",

@@ -193,6 +193,13 @@ private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]
 /** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
 private val STATEMENT_END = regex("""[ \t]*(?:[;}\n\r]|$)""")
 
+/** A declaration of the name that follows, `val payloadExpr = `, which sets no option. */
+private val DECLARED_BEFORE = regex("""\bva[lr]\s+\z""")
+
+/** The calls a map option is set to, `headerExprs = mapOf(...)`, and the `to` before a value in one. */
+private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
+private val TO_BEFORE = regex("""\bto\s*\z""")
+
 /** The DSL helper that says the same as a whole-string expression, when there is one, by its name. */
 private val HELPERS: List<Pair<Regex, String>> =
     listOf(
@@ -247,7 +254,7 @@ public class Analyzer(
      */
     internal val dslNames: Set<String> =
         catalog.attributes.flatMap { it.kotlin }.toSet() + catalog.expressionCallSites.keys + catalog.signalNameHelpers.keys +
-            "statements"
+            catalog.expressionOptions.keys + "statements"
 
     /** Whether the call named [name] at [nameStart] is not Streamlord's, as [opts] says: then its strings are free strings. */
     private fun foreignCalls(opts: Reading): (name: String, nameStart: Int) -> Boolean {
@@ -255,6 +262,12 @@ public class Analyzer(
         // Every call the analysis looks for is core's or the DSL's, so without core none is Streamlord's.
         return { name, at -> !modules.core || modules.foreign(name, at) || (modules.htmlDsl == false && name in dslNames) }
     }
+
+    /** `payloadExpr = ` and the other options that take an expression, set: what [expressionOptions] looks for. */
+    private val optionAssigned: Regex? =
+        catalog.expressionOptions.keys
+            .takeIf { it.isNotEmpty() }
+            ?.let { regex("""\b(""" + it.joinToString("|") + """)\s*=(?!=)\s*""") }
 
     /** Names of all DSL functions the analysis recognises in Kotlin source. */
     internal val callSiteNames: Set<String> get() = allSiteNames
@@ -356,6 +369,12 @@ public class Analyzer(
             val issues = checkAttributesIndex(m, value, opts, src, hyphenated, helpers)
             if (issues.isNotEmpty()) out += SiteIssues(null, value, issues)
         }
+        for (o in expressionOptions(src, lex)) {
+            if (foreign(o.name, o.nameStart)) continue
+            claimed += o.value.start
+            val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null)
+            if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
+        }
         // A literal joined to values with `+` is read as one string with a hole for each value.
         val chained = HashSet<Int>()
         val topLevel = lex.strings.mapTo(HashSet()) { it.start }
@@ -386,6 +405,7 @@ public class Analyzer(
         catalog.expressionCallSites[site.name]?.let { spec ->
             if (!(spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null })) {
                 expressionString(site, spec, src, lex)?.let { out += it }
+                out += site.moreStrings(spec)
             }
         }
         catalog.scriptCallSites[site.name]?.let { spec -> site.selectString(spec)?.let { out += it } }
@@ -447,6 +467,39 @@ public class Analyzer(
                 }
             val value = lex.stringAt(assigned.range.last + 2)?.takeIf { it.start == assigned.range.last + 1 }
             out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, assigned, lex) != null)
+        }
+        return out
+    }
+
+    /**
+     * Each option of a backend action's FetchOptions in [src] set to an expression, for the checks,
+     * completion and colouring: `payloadExpr = "..."`, a literal that is the whole value, unterminated
+     * while it is typed, and each value of a map option, `headerExprs = mapOf("X-Id" to "...")`.
+     */
+    public fun expressionOptions(
+        src: String,
+        lex: KotlinLex = lex(src),
+    ): List<ExpressionOption> {
+        val assigned = optionAssigned ?: return emptyList()
+        val out = ArrayList<ExpressionOption>()
+        val maps by lazy(LazyThreadSafetyMode.NONE) { findCallSites(src, MAP_CALLS, lex) }
+        for (m in assigned.findAll(src)) {
+            val at = m.range.first
+            if (!lex.mask[at] || DECLARED_BEFORE.containsMatchIn(src.substring(maxOf(0, at - 16), at))) continue
+            val name = m.groupValues[1]
+            val after = m.range.last + 1
+            if ("map" !in catalog.expressionOptions.getValue(name)) {
+                val value = lex.stringAt(after + 1)?.takeIf { it.start == after } ?: continue
+                if (value.unterminated || STATEMENT_END.matchesAt(src, value.end)) out += ExpressionOption(name, at, value)
+                continue
+            }
+            val call = maps.firstOrNull { it.nameStart == after } ?: continue
+            for (arg in call.args) {
+                val value = lex.stringsIn(arg.start, arg.end).lastOrNull() ?: continue
+                if (uncommented(src, arg).end == value.end && TO_BEFORE.containsMatchIn(src.substring(arg.start, value.start))) {
+                    out += ExpressionOption(name, at, value)
+                }
+            }
         }
         return out
     }
@@ -688,8 +741,7 @@ public class Analyzer(
             }
             catalog.expressionCallSites[site.name]?.let { spec ->
                 if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return@let
-                val s = site.selectString(spec)?.takeUnless { it.unterminated } ?: return@let
-                add(s, expressionSignalReferences(s.text), site)
+                for (s in site.expressionStrings(spec)) if (!s.unterminated) add(s, expressionSignalReferences(s.text), site)
             }
             catalog.htmlCallSites[site.name]?.let { spec ->
                 val s = markupString(site, spec)?.takeUnless { it.unterminated } ?: return@let
@@ -713,6 +765,11 @@ public class Analyzer(
             if (catalog.parseAttributeName(m.groupValues[1].asciiLowercase(), opts.prefix)?.spec?.valueKind == ValueKind.EXPRESSION) {
                 add(s, expressionSignalReferences(s.text), null)
             }
+        }
+        for (o in expressionOptions(src, lex)) {
+            if (foreign(o.name, o.nameStart)) continue
+            claimed += o.value.start
+            if (!o.value.unterminated) add(o.value, expressionSignalReferences(o.value.text), null)
         }
         for (s in lex.strings) {
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
@@ -1921,16 +1978,28 @@ public class Analyzer(
         helpers: Set<String>,
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
-        val s = expressionString(site, spec, src, lex) ?: return emptyList()
-        if (s.unterminated) return emptyList()
         val attribute = catalog.attributesByKotlin[site.name]
         val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
+        val strings = listOfNotNull(expressionString(site, spec, src, lex)) + site.moreStrings(spec)
+        return strings.flatMap { expressionIssues(it, src, opts, hyphenated, helpers, named, attribute, dslEvent(site)) }
+    }
+
+    /** The issues of [s], a literal Datastar runs as an expression: its Kotlin templates, and the expression itself. */
+    private fun expressionIssues(
+        s: KotlinString,
+        src: String,
+        opts: Reading,
+        hyphenated: Set<String>,
+        helpers: Set<String>,
+        named: String,
+        attribute: AttributeSpec?,
+        event: String?,
+    ): List<Issue> {
+        if (s.unterminated) return emptyList()
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
         val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
-        val text = s.text
-        if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        val found = expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute, event = dslEvent(site))
-        issues += mapIssues(s, src, found)
+        if (PLACEHOLDER in s.text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
+        issues += mapIssues(s, src, expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event))
         return issues
     }
 
@@ -2329,6 +2398,13 @@ public class Analyzer(
  * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
  * diagnostics judge the value only when it is [whole], the full statement and not the first half of a concatenation.
  */
+/** An option of FetchOptions set to an expression: its [name], where the name starts, and the literal that is the expression. */
+public data class ExpressionOption(
+    val name: String,
+    val nameStart: Int,
+    val value: KotlinString,
+)
+
 public data class AttributesIndex(
     val name: String,
     val nameStart: Int,

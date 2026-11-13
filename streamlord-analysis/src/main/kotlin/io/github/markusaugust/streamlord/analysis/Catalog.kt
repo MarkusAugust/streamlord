@@ -103,6 +103,8 @@ public data class CallSiteSpec(
     val selectorArg: String? = null,
     val modeArg: String? = null,
     val onlyIfStringArgs: Boolean = false,
+    /** The parameters after [arg] that take an expression too, each by its place or its name: `fitExpr`'s ends. */
+    val more: List<String> = emptyList(),
 ) {
     val last: Boolean get() = arg == null
 }
@@ -206,6 +208,9 @@ public class Catalog private constructor(
     /** The expression helpers, whose first argument is a signal name, each with its flags: `reads`, `shared`. */
     public val signalNameHelpers: Map<String, Set<String>>
 
+    /** The options of a backend action's FetchOptions whose value is an expression, each with its flags: `map`. */
+    public val expressionOptions: Map<String, Set<String>>
+
     init {
         val groups = raw.obj("modifierGroups") ?: JsonObject.EMPTY
         attributes =
@@ -268,6 +273,7 @@ public class Catalog private constructor(
         selectorCallSites = callSites(sites.obj("selector"))
         signalCalls = flagged(sites.obj("signals")!!)
         signalNameHelpers = flagged(sites.obj("signalNames")!!)
+        expressionOptions = flagged(sites.obj("expressionOptions") ?: JsonObject.EMPTY)
     }
 
     internal val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
@@ -368,6 +374,7 @@ public class Catalog private constructor(
                     selectorArg = spec.string("selectorArg"),
                     modeArg = spec.string("modeArg"),
                     onlyIfStringArgs = spec.boolean("onlyIfStringArgs") ?: false,
+                    more = spec.array("more")?.strings() ?: emptyList(),
                 )
         }
         return out
