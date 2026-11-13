@@ -15,6 +15,20 @@ class CspNonceTest {
         assertTrue(policy.contains("default-src 'self'"), policy)
     }
 
+    /**
+     * In CSP mode Datastar's client creates one Trusted Types policy, `datastar` (engine/csp.ts), and
+     * passes every string it turns into markup or a script through it, so the starter policy can
+     * require Trusted Types and allow that one policy by name.
+     */
+    @Test
+    fun `the starter policy requires Trusted Types and allows the one policy Datastar creates`() {
+        val policy = CspNonce.starterPolicy("abc123+/=")
+
+        assertTrue(policy.contains("require-trusted-types-for 'script'"), policy)
+        assertTrue(policy.contains("trusted-types datastar"), policy)
+        assertEquals("datastar", CspNonce.TRUSTED_TYPES_POLICY)
+    }
+
     @Test
     fun `an empty nonce is refused here rather than in the browser`() {
         val failure = assertFailsWith<IllegalArgumentException> { CspNonce.checked("") }
