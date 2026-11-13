@@ -132,7 +132,10 @@ All notable changes to Streamlord are recorded here. The format follows
   core's own words: an empty or non-ASCII `eventId`, a `retry` of no time, less or a fraction of a
   millisecond, a blank or multi-line selector or `viewTransitionSelector`, signals that are not one
   JSON object, a blank script, a `javascript:` redirect, elements that are only white space, and a
-  selector a response header cannot carry. The rules live once, in core's `EventRules`.
+  selector a response header cannot carry. The rules live once, in core's `EventRules`. A call is
+  judged in a file that imports Streamlord and neither declares the name nor imports it from
+  elsewhere, made without a receiver, on `this`, on one of core's companions, on a receiver named
+  as a stream (`sse`, `stream`, `datastar`), or on `call` for Ktor's `respond*`.
 - The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
   dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
   there that the client never dispatches, `'start'` for `'started'`, is warned of, with the fix.

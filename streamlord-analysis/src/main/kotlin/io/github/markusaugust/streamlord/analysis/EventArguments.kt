@@ -84,6 +84,7 @@ private fun literal(arg: Arg?): KotlinString? = arg?.string?.takeIf { !it.unterm
 internal fun eventArgumentIssues(
     site: CallSite,
     selector: Arg?,
+    ours: Boolean,
 ): List<Issue> {
     val call = EVENT_CALLS[site.name] ?: return emptyList()
     val out = ArrayList<Issue>()
@@ -110,8 +111,10 @@ internal fun eventArgumentIssues(
         }
     }
     val first = site.named(call.first) ?: site.positional.firstOrNull().takeIf { !site.trailingLambda || call.first != "elements" }
+    // removeElements' selector was judged by its name alone before the rest, and still is.
+    if (call.first == "selector") selectorIssue(literal(first), "selector")
+    if (!ours) return out
     when (call.first) {
-        "selector" -> selectorIssue(literal(first), "selector")
         "signals" -> literal(first)?.let { refused(it.start, it.end, EventRules.signals(it.text)) }
         "script" -> literal(first)?.let { refused(it.start, it.end, EventRules.script(it.text)) }
         "url" -> literal(first)?.let { refused(it.start, it.end, EventRules.redirect(it.text)) }
@@ -133,10 +136,13 @@ internal fun blankElementsIssue(
     site: CallSite,
     elements: KotlinString,
     mode: ElementPatchMode,
+    selector: Arg?,
 ): Issue? {
     val call = EVENT_CALLS[site.name] ?: return null
     if (elements.unterminated || elements.interpolations.isNotEmpty()) return null
-    val problem = EventRules.elements(elements.text, mode, call.response) ?: return null
+    // A selector the code computes is taken to be one, which judges the fewest elements as none.
+    val given = selector?.text?.takeIf { it != "null" }?.let { literal(selector)?.text ?: "#" }
+    val problem = EventRules.elements(elements.text, mode, given, call.response) ?: return null
     return Issue(elements.start, elements.end, "${site.name} throws: $problem.", Severity.ERROR, "event-refused", Docs.SSE)
 }
 
@@ -146,3 +152,54 @@ internal fun modeWithoutSelector(
     site: CallSite,
     mode: ElementPatchMode,
 ): String? = EventRules.modeWithoutSelector(mode)?.let { "${site.name} throws: $it." }
+
+/** The receivers of core's companions, whose calls are Streamlord's on any file that imports it. */
+private val COMPANIONS = setOf("ExecuteScript", "PatchElements", "PatchSignals", "this")
+
+/** A receiver named as a stream is: `sse`, `stream`, `datastarStream`. */
+private val STREAM_RECEIVER = regex("""(?i)sse|stream|datastar""")
+private val RECEIVER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*$""")
+private const val STREAMLORD = "io.github.markusaugust.streamlord."
+
+/**
+ * Which calls of [src] are Streamlord's SSE calls and answers, read once for the file. A call is
+ * when the file imports something of Streamlord's, does not declare the name or import it from
+ * elsewhere ([shadowsCore]), and the call has no receiver, or one of core's companions, `this`, a
+ * receiver named as a stream (`sse`, `stream`, `datastar` in any case), or `call` for Ktor's `respond*`.
+ */
+internal class EventCalls(
+    private val src: String,
+) {
+    private val imports =
+        src
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("import ") }
+            .map {
+                it
+                    .removePrefix("import ")
+                    .substringBefore("//")
+                    .trim()
+                    .removeSuffix(";")
+                    .trim()
+            }.toList()
+    private val streamlord = imports.any { it.startsWith(STREAMLORD) }
+    private val shadowed = HashMap<String, Boolean>()
+
+    fun ours(site: CallSite): Boolean {
+        if (!streamlord) return false
+        val elsewhere =
+            shadowed.getOrPut(site.name) {
+                shadowsCore(src, site.name) && imports.none { it.startsWith(STREAMLORD) && it.endsWith(".${site.name}") }
+            }
+        if (elsewhere) return false
+        var i = site.nameStart - 1
+        while (i >= 0 && src[i].isWhitespace()) i--
+        if (i < 0 || src[i] != '.') return true
+        i--
+        if (i >= 0 && src[i] == '?') i--
+        val receiver = RECEIVER_NAME.find(src.substring(maxOf(0, i - 80), i + 1))?.value ?: return false
+        return receiver in COMPANIONS || STREAM_RECEIVER.containsMatchIn(receiver) ||
+            (receiver == "call" && site.name.startsWith("respond"))
+    }
+}

@@ -44,7 +44,7 @@ public data class ElementsResponse(
     init {
         // An inner patch of nothing empties its target, and a remove needs no elements at all.
         if (Wire.noElements(elements, mode, selector)) {
-            EventRules.blankElements(mode, response = true)?.let {
+            EventRules.missingElements(mode, response = true)?.let {
                 throw DatastarEventValidationException(it)
             }
         }
@@ -105,7 +105,7 @@ public data class ScriptResponse(
     val attributes: Map<String, String> = emptyMap(),
 ) : DatastarResponse {
     init {
-        if (script.isBlank()) throw DatastarEventValidationException("script must not be blank")
+        EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
         attributes.keys.forEach(Wire::attributeName)
         attributes.values.forEach { Wire.singleLine(it, "script attribute") }
     }

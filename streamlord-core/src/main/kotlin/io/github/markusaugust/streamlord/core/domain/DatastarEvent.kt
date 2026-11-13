@@ -81,7 +81,7 @@ public data class PatchElements(
         val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
         if (mode != ElementPatchMode.REMOVE && empty) {
             throw DatastarEventValidationException(
-                EventRules.blankElements(mode, response = false) ?: "Patch mode 'inner' requires elements; pass \"\" to empty the target",
+                EventRules.missingElements(mode, response = false)!!,
             )
         }
     }
@@ -189,7 +189,7 @@ public data class ExecuteScript(
 ) : DatastarEvent {
     init {
         validateCommon(eventId, retry)
-        if (script.isBlank()) throw DatastarEventValidationException("script must not be blank")
+        EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
         attributes.keys.forEach(Wire::attributeName)
         if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
             throw DatastarEventValidationException(

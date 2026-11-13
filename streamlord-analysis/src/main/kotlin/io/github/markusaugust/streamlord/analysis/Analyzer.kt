@@ -337,6 +337,7 @@ public class Analyzer(
         val foreign = foreignCalls(opts)
         val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
         val dsl = Sdk.of(opts).htmlDsl
+        val eventCalls = EventCalls(src)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
         for (site in findCallSites(src, allSiteNames, lex)) {
@@ -344,10 +345,10 @@ public class Analyzer(
             if (foreign(site.name, site.nameStart)) continue
             val issues = ArrayList<Issue>()
             catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, lex, hyphenated, opts, siteHelpers) }
-            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated) }
+            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated, eventCalls) }
             html?.let { issues += it.issues }
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
-            if (site.name in eventCallNames && site.name !in htmlSiteNames) issues += eventArgumentIssues(site, null)
+            if (site.name in eventCallNames && site.name !in htmlSiteNames) issues += eventArgumentIssues(site, null, eventCalls.ours(site))
             issues += checkKeyCaseSite(site, src)
             issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
@@ -359,7 +360,7 @@ public class Analyzer(
         // The calls whose arguments core alone judges, those the loop above has not read.
         for (site in findCallSites(src, eventOnlyNames, lex)) {
             if (foreign(site.name, site.nameStart)) continue
-            val issues = eventArgumentIssues(site, null)
+            val issues = eventArgumentIssues(site, null, eventCalls.ours(site))
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
@@ -2013,6 +2014,7 @@ public class Analyzer(
         src: String,
         lex: KotlinLex,
         hyphenated: Set<String>,
+        eventCalls: EventCalls,
     ): Judged {
         val s = markupString(site, spec, src, lex)
         if (s == null && !site.trailingLambda) return Judged()
@@ -2054,8 +2056,9 @@ public class Analyzer(
                     fixes = if (modeArg.named != null) listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")) else emptyList(),
                 )
         }
-        issues += eventArgumentIssues(site, selectorArg)
-        if (s != null && modeKnown != null) blankElementsIssue(site, s, modeKnown)?.let { issues += it }
+        val ours = eventCalls.ours(site)
+        issues += eventArgumentIssues(site, selectorArg, ours)
+        if (ours && s != null && modeKnown != null) blankElementsIssue(site, s, modeKnown, selectorArg)?.let { issues += it }
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")
         if (s != null) {

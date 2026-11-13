@@ -317,7 +317,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsRespons
 
 public final class io/github/markusaugust/streamlord/core/domain/EventRules {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/EventRules;
-	public final fun elements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Z)Ljava/lang/String;
+	public final fun elements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Z)Ljava/lang/String;
 	public final fun eventId (Ljava/lang/String;)Ljava/lang/String;
 	public final fun headerSelector (Ljava/lang/String;)Ljava/lang/String;
 	public final fun modeWithoutSelector (Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;)Ljava/lang/String;

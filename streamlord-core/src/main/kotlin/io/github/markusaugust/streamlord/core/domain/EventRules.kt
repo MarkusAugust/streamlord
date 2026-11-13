@@ -27,7 +27,8 @@ public object EventRules {
     /** Signals as JSON text: one object, with no key the client cannot hold. */
     public fun signals(json: String): String? = refusal { Wire.signals(json) }
 
-    public fun script(script: String): String? = refusal { ExecuteScript(script, autoRemove = false) }
+    /** A script of nothing but white space, which runs nothing. */
+    public fun script(script: String): String? = if (script.isBlank()) "script must not be blank" else null
 
     public fun redirect(url: String): String? = refusal { ExecuteScript.redirect(url) }
 
@@ -36,26 +37,28 @@ public object EventRules {
         if (mode.requiresSelector) "Patch mode '${mode.wire}' requires a selector" else null
 
     /**
-     * Why [html] is refused as the elements of a patch in [mode] where it is white space as HTML counts
-     * it, which every reading of it takes for nothing; null for other markup, judged apart.
+     * Why [html] is refused as the elements of a patch in [mode] with [selector], by an event or, with
+     * [response], by an answer that is no stream: where core reads it as no elements at all.
      */
     public fun elements(
         html: String,
         mode: ElementPatchMode,
+        selector: String?,
         response: Boolean,
-    ): String? = if (Wire.htmlBlank(html)) blankElements(mode, response) else null
+    ): String? = if (mode == ElementPatchMode.INNER || !Wire.noElements(html, mode, selector)) null else missingElements(mode, response)
 
     /**
-     * Why elements that are white space as HTML counts it are refused in [mode], by an event or, with
-     * [response], by an answer that is no stream; null in `inner`, which they empty, and in `remove`.
+     * Why a patch in [mode] with no elements is refused, by an event or, with [response], by an answer
+     * that is no stream; null in `remove`, and in an answer's `inner`, which empties its target.
      */
-    internal fun blankElements(
+    internal fun missingElements(
         mode: ElementPatchMode,
         response: Boolean,
     ): String? =
         when {
-            mode == ElementPatchMode.INNER || mode == ElementPatchMode.REMOVE -> null
-            response -> "elements must not be blank"
+            mode == ElementPatchMode.REMOVE -> null
+            response -> if (mode == ElementPatchMode.INNER) null else "elements must not be blank"
+            mode == ElementPatchMode.INNER -> "Patch mode 'inner' requires elements; pass \"\" to empty the target"
             else -> "Patch mode '${mode.wire}' requires elements"
         }
 
