@@ -1163,7 +1163,8 @@ public class MarkupValidator(
      * applies an element's attributes in their order, and `data-init` runs at once, so the request
      * has started before the indicator listens for it, and the signal stays false. With a modifier
      * the init waits, a delay or a view transition, and the indicator is there in time. The fix moves
-     * the indicator before the init where its text is written as it reads, [movable].
+     * the indicator before the init; where the text is not [movable], a Kotlin string that may write a
+     * quote, a backslash or a dollar escaped, only when it holds none.
      */
     private fun indicatorAfterInit(
         tag: Tag,
