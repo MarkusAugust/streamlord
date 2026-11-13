@@ -315,6 +315,7 @@ public final class io/github/markusaugust/streamlord/core/domain/ElementsRespons
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ExecuteScript : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/ExecuteScript$Companion;
 	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;ZLjava/util/Map;Ljava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
@@ -334,6 +335,12 @@ public final class io/github/markusaugust/streamlord/core/domain/ExecuteScript :
 	public fun hashCode ()I
 	public final fun toPatchElements ()Lio/github/markusaugust/streamlord/core/domain/PatchElements;
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/ExecuteScript$Companion {
+	public final fun pushUrl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ExecuteScript;
+	public final fun redirect (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ExecuteScript;
+	public final fun replaceUrl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/ExecuteScript;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard {
@@ -464,6 +471,7 @@ public final class io/github/markusaugust/streamlord/core/domain/PatchElements$C
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/PatchSignals : io/github/markusaugust/streamlord/core/domain/DatastarEvent {
+	public static final field Companion Lio/github/markusaugust/streamlord/core/domain/PatchSignals$Companion;
 	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;Lkotlin/time/Duration;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
@@ -479,6 +487,11 @@ public final class io/github/markusaugust/streamlord/core/domain/PatchSignals : 
 	public final fun getSignals ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/PatchSignals$Companion {
+	public final fun remove-moChb0s ([Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
+	public static synthetic fun remove-moChb0s$default (Lio/github/markusaugust/streamlord/core/domain/PatchSignals$Companion;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/Position : java/lang/Enum {

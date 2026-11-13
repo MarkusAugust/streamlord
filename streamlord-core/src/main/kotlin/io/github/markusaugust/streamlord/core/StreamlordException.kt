@@ -48,14 +48,27 @@ public open class SignalsDecodeException(
  * as JSON without the browser asking this server first; JSON it cannot send that way. The answer
  * is a `415`, and a handler that knows only [SignalsDecodeException] still answers a `400`.
  *
+ * Datastar's `contentType: 'form'` sends a form that way, as the form's own fields and no signals;
+ * the message says so, and a handler reads such a request's fields as form parameters
+ * (`call.receiveParameters()` on Ktor, `@RequestParam` or a bound object on Spring).
+ *
  * [contentType] is the header as the request had it, or `null` when it had none.
  */
 public class SignalsMediaTypeException(
     public val contentType: String?,
 ) : SignalsDecodeException(
         "Signals in a request body must be sent as application/json; this one is " +
-            (contentType?.let { "'$it'" } ?: "without a Content-Type"),
+            (contentType?.let { "'$it'" } ?: "without a Content-Type") +
+            if (contentType != null && isForm(contentType)) {
+                ". Datastar sends a form with contentType: 'form' as the form's own fields and no signals: " +
+                    "read them as form parameters, as your framework reads any form"
+            } else {
+                ""
+            },
     )
+
+private fun isForm(contentType: String): Boolean =
+    contentType.substringBefore(';').trim().lowercase().let { it == "application/x-www-form-urlencoded" || it == "multipart/form-data" }
 
 /**
  * Raised when an incoming signal payload exceeds the limit configured on

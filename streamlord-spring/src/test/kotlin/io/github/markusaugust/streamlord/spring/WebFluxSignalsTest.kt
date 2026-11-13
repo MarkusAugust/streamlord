@@ -39,7 +39,7 @@ class WebFluxSignalsTest {
 
         @PostMapping("/typed")
         suspend fun typed(exchange: ServerWebExchange): String =
-            exchange.readSignalsOr(Search("default"), Streamlord(codec = JacksonSignalsCodec())).query
+            exchange.readSignalsOr(Search("default"), Streamlord(codec = JacksonSignalsCodec.default())).query
 
         @PostMapping("/small")
         suspend fun small(exchange: ServerWebExchange): String = exchange.readSignalsJson(Streamlord(maxSignalsSize = 8)) ?: "none"

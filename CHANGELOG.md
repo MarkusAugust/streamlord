@@ -192,6 +192,14 @@ All notable changes to Streamlord are recorded here. The format follows
   has three more values, `doc`, `flagDocs` and `suggest`, last, each with a default; code compiled
   against the old constructor needs a rebuild.
 - Every modifier property of the DSL has KDoc.
+- WebFlux reads signals from the exchange, as WebMVC reads them from the request:
+  `exchange.readSignals()`, `readSignals<T>()`, `readSignalsOr(default)` and `readSignalsJson()`,
+  each `suspend`, with the limits and the `Content-Type` check of the others, and
+  `WebFluxIncomingRequest` and `exchange.isDatastarRequest`. streamlord-spring takes reactor-core
+  `compileOnly`, which every WebFlux application already has.
+- `ExecuteScript.redirect`, `ExecuteScript.replaceUrl`, `ExecuteScript.pushUrl` and
+  `PatchSignals.remove` build the events `redirect`, `replaceUrl`, `pushUrl` and `removeSignals`
+  send on a stream, for a `Flow` of events on WebFlux or `respondDatastar(flow)` on Ktor.
 
 ### Fixed
 
@@ -317,6 +325,9 @@ All notable changes to Streamlord are recorded here. The format follows
   reference writes them, as the JSON they stand for, where they threw. The client runs signals
   that `JSON.parse` refuses as JavaScript, so it takes them. Signals that would be computed,
   `{a: 1 + 1}`, still throw `DatastarEventValidationException`. Sending signals still takes JSON.
+- The `415` that `readSignals` answers a form with says what to do: Datastar's
+  `contentType: 'form'` sends the form's fields and no signals, so read them as form parameters.
+  [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
 
 ## [0.21.0] - 2026-11-11
 

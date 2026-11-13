@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.core.port.driving
 
-import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
@@ -10,7 +9,6 @@ import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.interpolate
-import io.github.markusaugust.streamlord.core.domain.safeUrl
 import io.github.markusaugust.streamlord.core.domain.withEventId
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.port.driven.SignalsCodec
@@ -229,7 +227,7 @@ public interface DatastarStream {
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        send(PatchSignals(JsonWriter.write(nested(signals.asList())), onlyIfMissing, eventId, retry))
+        send(PatchSignals(JsonWriter.write(SignalNames.nested(signals.asList())), onlyIfMissing, eventId, retry))
     }
 
     /**
@@ -244,17 +242,7 @@ public interface DatastarStream {
         eventId: String? = null,
         retry: Duration? = null,
     ) {
-        val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
-        send(PatchSignals(JsonWriter.write(nested(removed.map { it to null })), eventId = eventId, retry = retry))
-    }
-
-    private fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
-        for ((name, _) in pairs) {
-            (SignalNames.hyphenProblem(name) ?: SignalNames.pathProblem(name))?.let {
-                throw DatastarEventValidationException("signal $name $it")
-            }
-        }
-        return SignalNames.nest(pairs)
+        send(PatchSignals.remove(*names, eventId = eventId, retry = retry))
     }
 
     /** Execute JavaScript in the browser. See [ExecuteScript]. */
@@ -278,8 +266,7 @@ public interface DatastarStream {
      *   `http`, `https`, `mailto` or `tel` one is followed, as [interpolate] has it.
      */
     public suspend fun redirect(url: String) {
-        require(safeUrl(url)) { "redirect follows a relative URL or an http, https, mailto or tel one, not '$url'" }
-        executeScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
+        send(ExecuteScript.redirect(url))
     }
 
     /**
@@ -295,7 +282,7 @@ public interface DatastarStream {
      * a `SecurityError`, so pass a path, or an absolute URL on the page's own origin.
      */
     public suspend fun replaceUrl(url: String) {
-        executeScript("window.history.replaceState(window.history.state, '', ${JsonWriter.writeString(url)})")
+        send(ExecuteScript.replaceUrl(url))
     }
 
     /**
@@ -309,7 +296,7 @@ public interface DatastarStream {
      * Quoted and refused as for [replaceUrl].
      */
     public suspend fun pushUrl(url: String) {
-        executeScript("window.history.pushState(null, '', ${JsonWriter.writeString(url)})")
+        send(ExecuteScript.pushUrl(url))
     }
 }
 

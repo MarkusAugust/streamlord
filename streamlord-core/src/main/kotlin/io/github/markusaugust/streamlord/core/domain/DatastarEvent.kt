@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
@@ -148,6 +149,23 @@ public data class PatchSignals(
         validateCommon(eventId, retry)
         Wire.signals(signals)
     }
+
+    public companion object {
+        /**
+         * A patch that removes signals by name, as `removeSignals` on a stream sends it, for code
+         * that builds the events itself, as a `Flow` of them does. A dotted name removes a nested
+         * signal, and a name under another one being removed is left out. A name with a hyphen is
+         * refused; remove such a key with the JSON form, `PatchSignals("""{"form": {"first-name": null}}""")`.
+         */
+        public fun remove(
+            vararg names: String,
+            eventId: String? = null,
+            retry: Duration? = null,
+        ): PatchSignals {
+            val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
+            return PatchSignals(JsonWriter.write(SignalNames.nested(removed.map { it to null })), eventId = eventId, retry = retry)
+        }
+    }
 }
 
 /**
@@ -202,6 +220,28 @@ public data class ExecuteScript(
                 append(Wire.escapeScriptBody(script))
                 append("</script>")
             }
+
+    public companion object {
+        /**
+         * Send the browser to another page, as `redirect` on a stream does, for code that builds the
+         * events itself. The URL is quoted, and the navigation runs from a `setTimeout`, as the
+         * official SDKs do, so the script element is applied and removed before the page unloads.
+         *
+         * @throws IllegalArgumentException for a URL with a scheme that does more than navigate, such
+         *   as `javascript:`: only a relative URL or an `http`, `https`, `mailto` or `tel` one is followed.
+         */
+        public fun redirect(url: String): ExecuteScript {
+            require(safeUrl(url)) { "redirect follows a relative URL or an http, https, mailto or tel one, not '$url'" }
+            return ExecuteScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
+        }
+
+        /** Put [url] in the address bar in place of the current history entry, as `replaceUrl` on a stream does. */
+        public fun replaceUrl(url: String): ExecuteScript =
+            ExecuteScript("window.history.replaceState(window.history.state, '', ${JsonWriter.writeString(url)})")
+
+        /** Put [url] in the address bar as a new history entry, as `pushUrl` on a stream does. */
+        public fun pushUrl(url: String): ExecuteScript = ExecuteScript("window.history.pushState(null, '', ${JsonWriter.writeString(url)})")
+    }
 
     /** The wire-level event this script becomes. */
     public fun toPatchElements(): PatchElements =

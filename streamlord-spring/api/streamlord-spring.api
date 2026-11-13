@@ -27,8 +27,14 @@ public final class io/github/markusaugust/streamlord/spring/ElementPatchModeConv
 public final class io/github/markusaugust/streamlord/spring/ReactiveKt {
 	public static final fun asDatastarResponse (Lkotlinx/coroutines/flow/Flow;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/ResponseEntity;
 	public static synthetic fun asDatastarResponse$default (Lkotlinx/coroutines/flow/Flow;Lio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lorg/springframework/http/ResponseEntity;
+	public static final fun asIncomingRequest (Lorg/springframework/web/server/ServerWebExchange;)Lio/github/markusaugust/streamlord/core/port/driven/IncomingRequest;
 	public static final fun asServerSentEvents (Lkotlinx/coroutines/flow/Flow;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun asServerSentEvents$default (Lkotlinx/coroutines/flow/Flow;Lio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public static final fun isDatastarRequest (Lorg/springframework/web/server/ServerWebExchange;)Z
+	public static final fun readSignals (Lorg/springframework/web/server/ServerWebExchange;Lio/github/markusaugust/streamlord/core/application/Streamlord;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun readSignals$default (Lorg/springframework/web/server/ServerWebExchange;Lio/github/markusaugust/streamlord/core/application/Streamlord;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun readSignalsJson (Lorg/springframework/web/server/ServerWebExchange;Lio/github/markusaugust/streamlord/core/application/Streamlord;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun readSignalsJson$default (Lorg/springframework/web/server/ServerWebExchange;Lio/github/markusaugust/streamlord/core/application/Streamlord;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static final fun toServerSentEvent (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;Lio/github/markusaugust/streamlord/core/application/Streamlord;)Lorg/springframework/http/codec/ServerSentEvent;
 	public static synthetic fun toServerSentEvent$default (Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;Lio/github/markusaugust/streamlord/core/application/Streamlord;ILjava/lang/Object;)Lorg/springframework/http/codec/ServerSentEvent;
 }
@@ -95,5 +101,13 @@ public final class io/github/markusaugust/streamlord/spring/StreamlordExceptionH
 	public final fun signalsTooLarge (Lio/github/markusaugust/streamlord/core/SignalsTooLargeException;)Lorg/springframework/http/ResponseEntity;
 	public final synthetic fun signalsUnreadable ()Lorg/springframework/http/ResponseEntity;
 	public final fun signalsUnreadable (Ljava/lang/Exception;)Lorg/springframework/http/ResponseEntity;
+}
+
+public final class io/github/markusaugust/streamlord/spring/WebFluxIncomingRequest : io/github/markusaugust/streamlord/core/port/driven/IncomingRequest {
+	public fun <init> (Lorg/springframework/web/server/ServerWebExchange;)V
+	public fun bodyText (ILkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getMethod ()Ljava/lang/String;
+	public fun header (Ljava/lang/String;)Ljava/lang/String;
+	public fun queryParameter (Ljava/lang/String;)Ljava/lang/String;
 }
 
