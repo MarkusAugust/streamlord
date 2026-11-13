@@ -240,7 +240,7 @@ class ColorSettingsDemoTest : com.intellij.testFramework.fixtures.BasePlatformTe
         val page =
             io.github.markusaugust.streamlord.intellij.highlighting
                 .DatastarColorSettingsPage()
-        val tags = page.additionalHighlightingTagToDescriptorMap!!
+        val tags = page.additionalHighlightingTagToDescriptorMap
         val used = Regex("<([a-z]+)>").findAll(page.demoText).map { it.groupValues[1] }.toSet()
         assertEquals("tags the demo never uses", emptySet<String>(), tags.keys - used)
         assertEquals("tags the page does not know", emptySet<String>(), used - tags.keys)

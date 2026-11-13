@@ -210,6 +210,9 @@ private class ExpressionScanner(
     /** What came before, for a slash: `a` a value, `k` a keyword, else the character. */
     private var last: Char? = null
 
+    /** Where the colon after an object's key stands: punctuation there, no operator, as the VS Code grammar scopes it. */
+    private var keyColon = -1
+
     fun all(): List<Token> {
         run(0, inTemplate = false)
         return out
@@ -273,6 +276,7 @@ private class ExpressionScanner(
                     }
                     j = minOf(j + 1, text.length)
                     out += Token(i, j, TokenKind.STRING)
+                    if (last == '{' || last == ',') markKeyColon(j)
                     last = 'a'
                     i = j
                 }
@@ -316,7 +320,7 @@ private class ExpressionScanner(
                 else -> {
                     val op = OPERATORS.firstOrNull { text.startsWith(it, i) }
                     if (op != null) {
-                        out += Token(i, i + op.length, if (op == "=>") TokenKind.KEYWORD else TokenKind.OPERATOR)
+                        if (i != keyColon) out += Token(i, i + op.length, if (op == "=>") TokenKind.KEYWORD else TokenKind.OPERATOR)
                         last = if (op == "++" || op == "--") 'a' else op.last()
                         i += op.length
                     } else {
@@ -437,8 +441,16 @@ private class ExpressionScanner(
                 else -> TokenKind.IDENTIFIER
             }
         out += Token(start, j, kind)
+        if (keyPlace) markKeyColon(j)
         last = if (kind == TokenKind.KEYWORD && word !in VALUE_WORDS) 'k' else 'a'
         return j
+    }
+
+    /** Note the colon after a key that ends at [from], if one follows it. */
+    private fun markKeyColon(from: Int) {
+        var k = from
+        while (k < text.length && text[k].isWhitespace()) k++
+        if (text.getOrNull(k) == ':' && text.getOrNull(k + 1) != ':') keyColon = k
     }
 
     /** The first character from [from] that is not white space. */

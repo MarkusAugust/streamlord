@@ -24,12 +24,14 @@ class DatastarColorSettingsPage : ColorSettingsPage {
 
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> = TAGS
 
+    // Every key the plugin paints stands in the preview at least once; ColorSettingsDemoTest holds it to the keys.
     override fun getDemoText(): String =
         """
-        <div <prefix>data-</prefix><plugin>signals</plugin>="{count: <number>0</number>, open: <keyword>false</keyword>}"
-             <prefix>data-</prefix><plugin>on</plugin><sigil>:</sigil><key>click</key><sigil>__</sigil><modifier>debounce</modifier><sigil>.</sigil><duration>500ms</duration>="<signal>${'$'}count</signal>++; <backend>@post</backend>(<string>'/count'</string>, {<option>headers</option>: {<string>'X-Csrf'</string>: <signal>${'$'}csrf</signal>}})"
-             <prefix>data-</prefix><plugin>on-intersect</plugin><sigil>__</sigil><modifier>once</modifier>="<action>@peek</action>(() => <scope>el</scope>.<property>dataset</property>.<signal>${'$'}user</signal><path>.name</path>)"
-             <prefix>data-</prefix><plugin>text</plugin>="<scope>evt</scope> ? <string>'yes'</string> : <regex>/^a/</regex>.<method>test</method>(<signal>${'$'}form</signal><path>.q</path>)">
+        <div <prefix>data-</prefix><plugin>signals</plugin>="{<object>count</object>: <number>0</number>, open: <keyword>false</keyword>}"
+             <prefix>data-</prefix><plugin>on</plugin><sigil>:</sigil><key>click</key><sigil>__</sigil><modifier>debounce</modifier><sigil>.</sigil><duration>500ms</duration><sigil>__</sigil><modifier>case</modifier><sigil>.</sigil><arg>kebab</arg>="<signal>${'$'}count</signal><op>++</op>; <backend>@post</backend>(<string>'/count'</string>, {<option>headers</option>: {<string>'X-Csrf'</string>: <signal>${'$'}csrf</signal>}})"
+             <prefix>data-</prefix><plugin>on-intersect</plugin><sigil>__</sigil><modifier>once</modifier>="<action>@peek</action>(() <keyword>=></keyword> <scope>el</scope>.<property>dataset</property>.<signal>${'$'}user</signal><path>.name</path>)"
+             <prefix>data-</prefix><plugin>text</plugin>="<comment>/* greeting */</comment> <scope>evt</scope> <op>?</op> <string>`hi </string><template>${'$'}{</template><ident>name</ident><template>}</template><string>`</string> <op>:</op> <regex>/^a/</regex>.<method>test</method>(<global>JSON</global>.<method>stringify</method>(<signal>${'$'}form</signal><path>.q</path>))"
+             <prefix>data-</prefix><plugin>show</plugin>="<escape>${'$'}{'${'$'}'}</escape>visible">
         </div>
         """.trimIndent()
 }
@@ -85,4 +87,10 @@ private val TAGS =
         "property" to DatastarColors.PROPERTY,
         "method" to DatastarColors.METHOD,
         "op" to DatastarColors.OPERATOR,
+        "object" to DatastarColors.OBJECT_KEY,
+        "global" to DatastarColors.GLOBAL,
+        "ident" to DatastarColors.IDENTIFIER,
+        "comment" to DatastarColors.COMMENT,
+        "template" to DatastarColors.TEMPLATE_PUNCTUATION,
+        "escape" to DatastarColors.KOTLIN_DOLLAR_ESCAPE,
     )
