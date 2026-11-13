@@ -333,6 +333,7 @@
       "keyCase": "raw",
       "valueKind": "expression",
       "kotlin": ["dataAnimate"],
+      "unlisted": ["duration", "delay", "ease", "loop", "pingpong"],
       "modifiers": [
         { "name": "duration", "type": "duration" },
         { "name": "delay", "type": "duration" },
@@ -413,6 +414,7 @@
       "keyed": false,
       "valueKind": "expression",
       "kotlin": ["dataOnRaf"],
+      "unlisted": ["delay", "debounce", "viewtransition"],
       "modifiers": [{ "$ref": "timing" }, { "$ref": "viewtransition" }],
       "doc": "Pro. Runs on every animation frame."
     },
@@ -423,6 +425,7 @@
       "keyed": false,
       "valueKind": "expression",
       "kotlin": ["dataOnResize"],
+      "unlisted": ["delay", "viewtransition"],
       "modifiers": [{ "$ref": "timing" }, { "$ref": "viewtransition" }],
       "doc": "Pro. Runs when the element's size changes."
     },

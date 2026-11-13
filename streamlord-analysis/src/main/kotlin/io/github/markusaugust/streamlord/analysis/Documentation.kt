@@ -94,7 +94,8 @@ internal fun attributeDoc(
     prefix: String = CatalogNames.PREFIX,
     withKotlin: Boolean = true,
 ): String {
-    val mods = if (a.modifiers.isNotEmpty()) "\n\n**Modifiers:** " + a.modifiers.joinToString(", ") { "`${modifierForm(it)}`" } else ""
+    val listed = a.modifiers.filter { it.listed }
+    val mods = if (listed.isNotEmpty()) "\n\n**Modifiers:** " + listed.joinToString(", ") { "`${modifierForm(it)}`" } else ""
     val kotlin = if (withKotlin && a.kotlin.isNotEmpty()) "\n\n**Kotlin:** " + a.kotlin.joinToString(", ") { "`$it()`" } else ""
     val pro = if (a.pro) "\n\n_Datastar Pro. Requires the Pro bundle, which you license and load yourself._" else ""
     val casing = if (a.keyed) "\n\n**Key casing:** " + casingNote(a) else ""

@@ -134,25 +134,34 @@ All notable changes to Streamlord are recorded here. The format follows
 - In both editors, `data-indicator` after a `data-init` that sends a request on the same element
   is a warning, with a fix that moves it first: the client applies an element's attributes in
   their order and the init's request starts before the indicator exists, so the signal stays
-  false. An init with a modifier waits and is left alone.
+  false. An init with a modifier waits and is left alone, and so is a request sent later, from a
+  function the init hands on, `setTimeout(() => @get('/x'))`.
 - In both editors, with the aliased prefix set, a plain `data-*` Datastar attribute with a key, a
-  modifier or a value that reads a signal or calls an action is a warning, with a fix that writes
-  the alias: the aliased client ignores it. A plain name another library uses, such as
-  `data-bind="text: name"`, says nothing.
+  modifier or a value that reads as Datastar's is a warning, with a fix that writes the alias: the
+  aliased client ignores it. For `data-bind`, `data-indicator` and `data-ref` that value is a bare
+  signal name. A plain name another library uses, such as Knockout's
+  `data-bind="text: $data.name"`, says nothing.
 - In both editors, `data-text-foo`, `data-show-more` and the like, a key after a hyphen on an
   attribute that takes none, get the hint and fix a near name gets, where the value reads as
   Datastar's.
 - In both editors, `data-computed` that changes a signal or calls an action other than `@peek`
-  and the Pro formatters is a warning, as the reference says a computed must do neither.
+  and the Pro formatters is a warning, as the reference says a computed must do neither. A
+  function the computed holds and never calls is left alone.
 - In both editors, the value of `data-json-signals` and `data-on-signal-patch-filter` is held to
   what `filtered` reads, as `filterSignals` is: a key other than `include` and `exclude`, a value
   of either that is no pattern, and a value that is no object.
 - In both editors, the lambda of modifiers of a DSL call is read for what the DSL refuses as it
   renders: a flag of a duration that is not set, `half`, `full` and `threshold` together, a
-  threshold outside 0 to 100, and an interval of no time.
+  threshold outside 0 to 100, and an interval of no time. A line in a comment sets nothing. The
+  DSL and the analysis take these rules from one place, `ModifierRules` in streamlord-core
+  (internal API).
 - Hover on a modifier or one of its tags shows the modifier's own documentation, its tags and
   that a duration's flags come after it, where it showed the whole attribute's. Hover on `el`,
-  `evt`, `patch` and a signal in an expression says what each is.
+  `evt`, `patch` and a signal in an expression says what each is, a signal as the path the client
+  reads, `$['cart']['items']['length']`.
+- The modifiers of `data-on-raf`, `data-on-resize` and `data-animate` that the reference does not
+  list are still accepted, and no longer offered in completion, documented on hover or listed in
+  the attribute's documentation.
 - Completion offers the values after `__threshold.`, `__prop.` and `__event.`, offers a flag of a
   duration once, and offers the defined signals in the value of `data-bind`, `data-indicator` and
   `data-ref`.

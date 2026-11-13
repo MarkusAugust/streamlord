@@ -23,6 +23,8 @@ public data class Modifier(
     val flagDocs: Map<String, String> = emptyMap(),
     /** The values completion offers after the modifier's dot, where the type does not list them. */
     val suggest: List<String> = emptyList(),
+    /** Whether the reference lists it for the attribute; one it does not is accepted, and neither offered nor documented. */
+    val listed: Boolean = true,
 )
 
 /**
@@ -211,10 +213,11 @@ public class Catalog private constructor(
                     valueKind = ValueKind.valueOf((a.string("valueKind") ?: "none").uppercase()),
                     kotlin = a.array("kotlin")?.strings() ?: emptyList(),
                     modifiers =
-                        (a.array("modifiers")?.objects() ?: emptyList()).flatMap { m ->
-                            val ref = m.string("\$ref")
-                            if (ref != null) (groups.array(ref)?.objects() ?: emptyList()).map(::toModifier) else listOf(toModifier(m))
-                        },
+                        (a.array("modifiers")?.objects() ?: emptyList())
+                            .flatMap { m ->
+                                val ref = m.string("\$ref")
+                                if (ref != null) (groups.array(ref)?.objects() ?: emptyList()).map(::toModifier) else listOf(toModifier(m))
+                            }.map { m -> if (m.name in a.array("unlisted")?.strings().orEmpty()) m.copy(listed = false) else m },
                     onlyOn = a.array("onlyOn")?.strings(),
                     doc = a.string("doc") ?: "",
                     requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },

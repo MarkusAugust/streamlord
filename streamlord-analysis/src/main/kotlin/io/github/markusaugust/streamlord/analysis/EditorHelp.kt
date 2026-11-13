@@ -449,7 +449,7 @@ private class Asked(
                 return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = false)
             }
             val items =
-                spec.modifiers.map {
+                spec.modifiers.filter { it.listed }.map {
                     val snippet =
                         when (it.type) {
                             ModifierType.FLAG -> null
@@ -550,7 +550,7 @@ private class Asked(
             val at = offset - range.first
             for (m in parsed.modifiers) {
                 if (at !in m.offset - 2..m.offset + m.text.length) continue
-                val modifier = spec.modifiers.firstOrNull { it.name == m.name } ?: break
+                val modifier = spec.modifiers.firstOrNull { it.name == m.name && it.listed } ?: break
                 return Hover(range.first + m.offset - 2, range.first + m.offset + m.text.length, modifierDoc(modifier, prefix + spec.name))
             }
             return Hover(range, attributeDoc(spec, prefix, withKotlin))
@@ -578,7 +578,19 @@ private class Asked(
         if (word.startsWith("$")) {
             val name = word.substring(1)
             if (name.isEmpty() || name.first() == '$') return null
-            return Hover(range, "**$word**\n\nThe signal $name, read from Datastar's store.")
+            // As the client's signalPath reads it: each part after a dot is a key of the one before.
+            val parts = name.split('.')
+            val path = "$" + parts.joinToString("") { "['$it']" }
+            val owner = parts.dropLast(1).joinToString(".")
+            val length =
+                if (parts.size > 1 &&
+                    parts.last() == "length"
+                ) {
+                    " Where $owner is an array or a string, `length` is its length."
+                } else {
+                    ""
+                }
+            return Hover(range, "**$word**\n\nDatastar reads it as `$path`, the signal path $name in its store.$length")
         }
         val doc =
             when (word) {

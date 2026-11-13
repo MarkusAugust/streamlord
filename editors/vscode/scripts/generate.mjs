@@ -36,7 +36,8 @@ const modifierText = (m) => {
 };
 
 const docFor = (a) => {
-  const mods = expand(a.modifiers);
+  // A modifier the reference does not list for the attribute is accepted, and not documented.
+  const mods = expand(a.modifiers).filter((m) => !(a.unlisted ?? []).includes(m.name));
   const lines = [a.doc, "", ...a.forms.map((f) => "`" + f + "`")];
   if (mods.length) lines.push("", "**Modifiers:** " + mods.map((m) => "`" + modifierText(m) + "`").join(", "));
   if (a.pro) lines.push("", "_Datastar Pro. Requires the Pro bundle, which you license and load yourself._");
