@@ -61,13 +61,21 @@ class AsTheBrowserHoldsItTest {
     }
 
     @Test
-    fun `signals that are not json fail where they are read`() {
-        // Streamlord can no longer send them; another server can, and the client would run them.
+    fun `signals written as an object literal are read as the client reads them`() {
+        // The reference writes them so, as a data-signals value; the client runs what JSON.parse refuses.
+        val events = datastarEvents("event: datastar-patch-signals\ndata: signals {count: 1, user: {name: 'Gorvek'}}\n\n")
+        events.assertSignal("count", 1)
+        events.assertSignal("user.name", "Gorvek")
+    }
+
+    @Test
+    fun `signals that are code and no plain value fail where they are read`() {
+        // Another server can send them, and the client would run them.
         val failure =
             assertFailsWith<DatastarEventValidationException> {
-                datastarEvents("event: datastar-patch-signals\ndata: signals {count: 1}\n\n")
+                datastarEvents("event: datastar-patch-signals\ndata: signals {count: count + 1}\n\n")
             }
-        assertTrue("runs signals that are not JSON as JavaScript" in failure.message.orEmpty(), failure.message)
+        assertTrue("runs as JavaScript" in failure.message.orEmpty(), failure.message)
     }
 
     @Test
