@@ -143,7 +143,13 @@ class WebFluxSignalsTest {
 
     @Test
     fun `a form is read by a bound object on WebFlux, where a request parameter is not`() {
-        val form = { uri: String -> client.post().uri(uri).contentType(MediaType.APPLICATION_FORM_URLENCODED).bodyValue("title=Ash+%26+Gorvek") }
+        val form = { uri: String ->
+            client
+                .post()
+                .uri(uri)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue("title=Ash+%26+Gorvek")
+        }
         datastarEvents(body(form("/quests"))).assertPatchElements(elements = """<li id="quest">Ash &amp; Gorvek</li>""")
         form("/param").exchange().expectStatus().isBadRequest
     }
