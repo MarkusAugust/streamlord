@@ -127,8 +127,7 @@ class NeverThrowsTest {
         for (at in 0..src.length step 5) analyzer.htmlStringAt(src, at)
         collectSignals(Source(src, SourceLanguage.KOTLIN))
         collectSignalDefinitions(Source(src, SourceLanguage.KOTLIN))
-        constantNames(src)
-        otherDeclaredNames(src)
+        declaredNames(src)
     }
 
     private fun thrown(sources: Sequence<String>): List<String> =

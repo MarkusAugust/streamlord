@@ -8,7 +8,6 @@ import io.github.markusaugust.streamlord.analysis.ServerLog
 import io.github.markusaugust.streamlord.analysis.SseMessage
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
-import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
@@ -113,7 +112,7 @@ fun parseRequestsFile(
     text: String?,
     path: String,
 ): RequestsFile {
-    val file = if (text == null) Requests.parseRequestsFile("", path).copy(error = null) else Requests.parseRequestsFile(text, path)
+    val file = Requests.parseRequestsFile(text, path)
     return plain("requests" to file.requests.map(::plain).toTypedArray(), "error" to file.error, "skipped" to file.skipped.plain())
 }
 
@@ -213,13 +212,8 @@ fun environment(
     runningUrl: String?,
     runningName: String?,
 ): Environment {
-    val env = Requests.parseEnv(text ?: "{}")
-    val vars =
-        Requests.mergeVariables(
-            defaultUrl,
-            if (env.errors.isEmpty()) env else Requests.parseEnv("{}"),
-            running(runningUrl, runningName),
-        )
+    val env = Requests.environment(text, defaultUrl, running(runningUrl, runningName))
+    val vars = env.vars
     return plain(
         "vars" to vars.map(::plain).toTypedArray(),
         "errors" to env.errors.plain(),
@@ -339,23 +333,9 @@ fun streamRequest(
     signals: String?,
     headers: dynamic,
 ): StreamRequest {
-    // Judged as written, so the message shows the user's URL and not the one with the signals added.
-    Requests.sendableUrl(url).error?.let { return plain("error" to it) }
-    val json = Requests.compactSignals(signals ?: "")
-    // Judged on the compacted text, which is what goes out, by the reader the server's answer meets.
-    try {
-        js("JSON").parse(json)
-    } catch (e: Throwable) {
-        return plain("error" to "Signals are not valid JSON: ${e.message}")
-    }
-    val sendable = Requests.sendableUrl(Requests.requestUrl(url, method, json))
-    sendable.error?.let { return plain("error" to it) }
-    return plain(
-        "url" to sendable.url,
-        "method" to method.uppercase(),
-        "headers" to record(Requests.requestHeaders(method, entries(headers))),
-        "body" to if (ClientRequest.bodyless(method)) null else json,
-    )
+    val request = Requests.streamRequest(url, method, signals ?: "", entries(headers))
+    request.error?.let { return plain("error" to it) }
+    return plain("url" to request.url, "method" to request.method, "headers" to record(request.headers), "body" to request.body)
 }
 
 @JsExport

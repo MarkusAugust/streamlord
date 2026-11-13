@@ -5,8 +5,6 @@ import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.SseMessage
 import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
-import io.github.markusaugust.streamlord.core.client.ClientRequest
-import io.github.markusaugust.streamlord.core.json.JsonParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -115,28 +113,15 @@ class StreamClient(
         aborted: AtomicBoolean,
         holder: AtomicReferenceStream,
     ) {
-        // Judged as written, so the message shows the user's URL and not the one with the signals added.
-        Requests.sendableUrl(url).error?.let {
-            handlers.onError(it)
-            return
-        }
-        val signalsJson = Requests.compactSignals(signals)
-        // Judged on the compacted text, which is what goes out: a lone no-break space is not blank to it.
-        try {
-            JsonParser.parse(signalsJson)
-        } catch (e: Exception) {
-            handlers.onError("Signals are not valid JSON: ${e.message}")
-            return
-        }
-        val sendable = Requests.sendableUrl(Requests.requestUrl(url, method, signalsJson))
+        val sent = Requests.streamRequest(url, method, signals, headers)
         val target =
-            sendable.url ?: run {
-                handlers.onError(sendable.error ?: "Cannot send $url")
+            sent.url ?: run {
+                handlers.onError(sent.error ?: "Cannot send $url")
                 return
             }
         val request =
             try {
-                build(target, method, signalsJson, headers)
+                build(target, sent)
             } catch (e: Exception) {
                 // A header the HTTP client will not set, such as Host, or a port that is not a number.
                 handlers.onError("Cannot send the request: ${e.message ?: e.javaClass.simpleName}")
@@ -157,7 +142,7 @@ class StreamClient(
                          */
                         val v6 = ipv6Loopback(target) ?: throw e
                         client
-                            .send(build(v6, method, signalsJson, headers), HttpResponse.BodyHandlers.ofInputStream())
+                            .send(build(v6, sent), HttpResponse.BodyHandlers.ofInputStream())
                             .also { holder.stream = it.body() }
                     }
                 }
@@ -204,19 +189,13 @@ class StreamClient(
 
     private fun build(
         url: String,
-        method: String,
-        signalsJson: String,
-        headers: Map<String, String>,
+        sent: Requests.StreamRequest,
     ): HttpRequest {
-        val bodyless = ClientRequest.bodyless(method)
         val builder = HttpRequest.newBuilder(URI(url))
         // The user's headers replace the client's own, Content-Type included, as they do in the client.
-        for ((k, v) in Requests.requestHeaders(method, headers)) builder.setHeader(k, v)
-        if (bodyless) {
-            builder.method(method.uppercase(), HttpRequest.BodyPublishers.noBody())
-        } else {
-            builder.method(method.uppercase(), HttpRequest.BodyPublishers.ofString(signalsJson))
-        }
+        for ((k, v) in sent.headers) builder.setHeader(k, v)
+        val body = sent.body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody()
+        builder.method(sent.method!!, body)
         return builder.build()
     }
 

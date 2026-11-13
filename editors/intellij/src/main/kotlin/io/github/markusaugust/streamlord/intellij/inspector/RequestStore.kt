@@ -136,24 +136,10 @@ class RequestStore(
 
     fun lastUsed(): SavedRequest? = InspectorState.getInstance(project).lastUsed()
 
-    /** The variables that are set, and what is wrong with `.streamlord/env.json`. */
-    data class Environment(
-        val vars: List<Requests.Variable>,
-        val errors: List<String>,
-    )
-
-    /**
-     * The variables `.streamlord/env.json` sets, `baseUrl` from a server the project started or from
-     * the settings when it does not, and what is wrong with the file. An invalid file sets nothing:
-     * a request is not sent half filled.
-     */
+    /** The variables `.streamlord/env.json` sets, `baseUrl` from a server the project started or from the settings when it does not. */
     @RequiresReadLock
-    fun environment(): Environment {
-        val env = Requests.parseEnv(envText() ?: "{}")
-        val usable = if (env.errors.isEmpty()) env else Requests.parseEnv("{}")
-        val running = RunningServers.getInstance(project).current()
-        return Environment(Requests.mergeVariables(settings.state.inspectorDefaultUrl, usable, running), env.errors)
-    }
+    fun environment(): Requests.Environment =
+        Requests.environment(envText(), settings.state.inspectorDefaultUrl, RunningServers.getInstance(project).current())
 
     private fun envFile(): VirtualFile? = baseDir()?.findFileByRelativePath(Requests.ENV_FILE)
 

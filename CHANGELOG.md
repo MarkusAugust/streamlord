@@ -19,6 +19,14 @@ All notable changes to Streamlord are recorded here. The format follows
   `Source`: give it `htmlDsl = false` where you passed `foreignHelpers(htmlDsl = false)`, which is
   gone. `analyzeProject` takes the prefix in place of options. A host that cannot see the classpath
   reads the modules from the imports with `modulesFromImports(source)`, as VS Code does.
+- `constantNames` and `otherDeclaredNames` in streamlord-analysis are one `declaredNames(text)`,
+  and `projectConstants` takes what it gives for each file: write
+  `projectConstants(texts.map(::declaredNames))`. `Requests.streamRequest`, `Requests.signalsProblem`
+  and `Requests.environment` are new, the request and the variables both editors send, and
+  `Requests.parseRequestsFile` takes null for a file that is not there. The folders a project walk
+  leaves out and the extensions read as markup are `ProjectFiles`.
+- The VS Code extension finds the signals of `.tmpl`, `.gotmpl` and `.gohtml` files too, which the
+  IntelliJ plugin reads as markup by default: both editors read one list.
 - `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a
   `data-on` listens for, after `attribute`. Source that names its arguments, or passes four or fewer,
   compiles as before; code compiled against the old signature needs a rebuild.

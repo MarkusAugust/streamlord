@@ -29,7 +29,7 @@ class InterpolationProjectTest {
     fun `finds the constants the project gives the analysis`() {
         val expected = JsonParser.parseObject(fixtureText("$dir/expected.json"))
         val sources = expected.obj("files")!!.keys.map { fixtureText("$dir/$it") }
-        assertEquals(expected.array("constants")!!.strings().toSet(), projectConstants(sources))
+        assertEquals(expected.array("constants")!!.strings().toSet(), projectConstants(sources.map(::declaredNames)))
     }
 
     @Test

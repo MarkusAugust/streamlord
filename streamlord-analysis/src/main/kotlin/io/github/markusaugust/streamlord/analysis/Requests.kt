@@ -106,9 +106,9 @@ public object Requests {
      * [RequestsFile.error], so a save does not write over it. An empty file holds no requests.
      */
     public fun parseRequestsFile(
-        text: String,
+        text: String?,
         path: String = REQUESTS_FILE,
-    ): RequestsFile = readRequests(text.removePrefix("\uFEFF"), path).file
+    ): RequestsFile = if (text == null) RequestsFile.EMPTY else readRequests(text.removePrefix("\uFEFF"), path).file
 
     /** Whether a file's text holds nothing: no character but the whitespace JSON allows between values. */
     private fun empty(text: String): Boolean = text.all { it in " \t\n\r" }
@@ -640,6 +640,26 @@ public object Requests {
         return out
     }
 
+    /** The variables a request may name, and what reading the env file found wrong. */
+    public data class Environment(
+        val vars: List<Variable>,
+        val errors: List<String>,
+    )
+
+    /**
+     * The variables of the env file's [text], null where there is none, over [defaultUrl]; a server
+     * the editor saw start, [running], gives `baseUrl` where the file sets none. A file with errors
+     * sets nothing: a request is not sent half filled.
+     */
+    public fun environment(
+        text: String?,
+        defaultUrl: String,
+        running: RunningServer?,
+    ): Environment {
+        val env = parseEnv(text ?: "{}")
+        return Environment(mergeVariables(defaultUrl, if (env.errors.isEmpty()) env else parseEnv("{}"), running), env.errors)
+    }
+
     /** The values by name, for substitution. */
     public fun variableValues(vars: List<Variable>): Map<String, String> = vars.associate { it.name to it.value }
 
@@ -976,6 +996,44 @@ public object Requests {
             i++
         }
         return out.toString()
+    }
+
+    /** Why [signals] cannot be sent, judged on the compacted text that goes out, by the reader the server's answer meets; null when they can. */
+    public fun signalsProblem(signals: String): String? = jsonProblem(compactSignals(signals))?.let { "Signals are not valid JSON: $it" }
+
+    /** What to send: the request Datastar's client would send, or the [error] that keeps it from being sent. */
+    public data class StreamRequest(
+        val url: String?,
+        val method: String?,
+        val headers: Map<String, String>,
+        val body: String?,
+        val error: String?,
+    )
+
+    /**
+     * The request Datastar's client would send: the signals in the query for a GET or a DELETE and
+     * in the body otherwise, its own headers, and [headers], the user's, over them.
+     */
+    public fun streamRequest(
+        url: String,
+        method: String,
+        signals: String,
+        headers: Map<String, String>,
+    ): StreamRequest {
+        fun refused(error: String) = StreamRequest(null, null, emptyMap(), null, error)
+        // Judged as written, so the message shows the user's URL and not the one with the signals added.
+        sendableUrl(url).error?.let { return refused(it) }
+        signalsProblem(signals)?.let { return refused(it) }
+        val json = compactSignals(signals)
+        val sendable = sendableUrl(requestUrl(url, method, json))
+        sendable.error?.let { return refused(it) }
+        return StreamRequest(
+            sendable.url,
+            method.uppercase(),
+            requestHeaders(method, headers),
+            if (ClientRequest.bodyless(method)) null else json,
+            null,
+        )
     }
 
     /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */

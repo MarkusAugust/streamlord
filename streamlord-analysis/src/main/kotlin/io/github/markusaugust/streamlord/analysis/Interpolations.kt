@@ -389,18 +389,20 @@ internal fun fileFacts(
     return FileFacts(src, code, declarations(src, code)).also { lastFacts = it }
 }
 
-/** The names a Kotlin file declares that another file can mean by the bare name: its `const val`s, and every other `val` or `var`. */
-private class VisibleNames(
-    val src: String,
-    val constants: Set<String>,
-    val others: Set<String>,
+/** The names a Kotlin file declares that other files can see, as [declaredNames] reads them. */
+public class DeclaredNames(
+    /** The `const val`s: top level or in an object or a class, and not private, `internal` counting as seen. */
+    public val constants: Set<String>,
+    /** Every other `val` or `var`, at top level, in a class or in a constructor, getters included; a parameter or a local is seen in its file only. */
+    public val others: Set<String>,
 )
 
 @Volatile
-private var lastVisible: VisibleNames? = null
+private var lastVisible: Pair<String, DeclaredNames>? = null
 
-private fun visibleNames(src: String): VisibleNames {
-    lastVisible?.let { if (it.src == src) return it }
+/** The names the Kotlin file [src] declares that another file can mean by the bare name. */
+public fun declaredNames(src: String): DeclaredNames {
+    lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
             ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask)) }
@@ -409,34 +411,20 @@ private fun visibleNames(src: String): VisibleNames {
     for ((name, list) in names) {
         for (d in list) if (d.shared) (if (d.constant) constants else others) += name
     }
-    return VisibleNames(src, constants, others).also { lastVisible = it }
+    return DeclaredNames(constants, others).also { lastVisible = src to it }
 }
 
 /**
- * The `const val` names a Kotlin file declares that other files can see: top level or in an
- * object or a class, and not private, `internal` counting as seen. What [projectConstants] gathers.
+ * The constants of a project whose Kotlin files declare [files], to pass as [Source.constants]:
+ * each file's constants, less every name some file declares as anything else another file could
+ * mean by it.
  */
-public fun constantNames(src: String): Set<String> = visibleNames(src).constants
-
-/**
- * The other names a Kotlin file declares that other files can see: a `val` or `var` that is not
- * a `const`, at top level, in a class or in a constructor, getters included. A parameter or a
- * local is seen in this file only.
- */
-public fun otherDeclaredNames(src: String): Set<String> = visibleNames(src).others
-
-/**
- * The constants of a project whose Kotlin files are [sources], to pass as [Source.constants]:
- * each file's [constantNames], less every name some file declares as anything else another file
- * could mean by it.
- */
-public fun projectConstants(sources: Iterable<String>): Set<String> {
+public fun projectConstants(files: Iterable<DeclaredNames>): Set<String> {
     val out = HashSet<String>()
     val others = HashSet<String>()
-    for (src in sources) {
-        val v = visibleNames(src)
-        out += v.constants
-        others += v.others
+    for (file in files) {
+        out += file.constants
+        others += file.others
     }
     return out - others
 }

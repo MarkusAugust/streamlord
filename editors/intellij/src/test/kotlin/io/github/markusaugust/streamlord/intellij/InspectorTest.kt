@@ -499,7 +499,7 @@ class InspectorTest : BasePlatformTestCase() {
     fun `test variables come from the env file, which is judged and extended`() {
         val store = RequestStore.getInstance(project)
         assertEquals(
-            RequestStore.Environment(
+            Requests.Environment(
                 listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
                 emptyList(),
             ),
@@ -519,7 +519,7 @@ class InspectorTest : BasePlatformTestCase() {
             )
             WriteCommandAction.runWriteCommandAction(project) { VfsUtil.saveText(file, "{\"csrf\": \"x\"}") }
             assertEquals(
-                RequestStore.Environment(
+                Requests.Environment(
                     listOf(Requests.Variable("baseUrl", "http://localhost:8080", Requests.VariableSource.DEFAULT)),
                     listOf(".streamlord/env.json is not valid: \"csrf\" is not a known key. Use baseUrl, signals, headers or params."),
                 ),

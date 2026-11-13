@@ -21,7 +21,7 @@ class ProjectConstantsTest {
                 """private object Quiet { const val inner = "i" }""",
                 """val text = "const val fake = 1"""",
             ).joinToString("\n")
-        assertEquals(setOf("KEY", "label", "title"), constantNames(src))
+        assertEquals(setOf("KEY", "label", "title"), declaredNames(src).constants)
     }
 
     @Test
@@ -38,21 +38,21 @@ class ProjectConstantsTest {
                 """private val quiet = 1""",
                 """internal var shared = 2""",
             ).joinToString("\n")
-        assertEquals(setOf("count", "heading", "shared", "title"), otherDeclaredNames(src))
+        assertEquals(setOf("count", "heading", "shared", "title"), declaredNames(src).others)
     }
 
     @Test
     fun `drops a constant that another file declares as something else`() {
         val a = "const val title = \"Home\"\nconst val label = \"Name\""
         val b = "class Request { val title get() = header(\"title\") }"
-        assertEquals(setOf("label"), projectConstants(listOf(a, b)))
+        assertEquals(setOf("label"), projectConstants(listOf(a, b).map(::declaredNames)))
     }
 
     @Test
     fun `keeps a constant that another file only takes as a parameter`() {
         val a = "const val title = \"Home\""
         val b = "fun page(title: String) = title\nfun list() { val title = 3 }"
-        assertEquals(setOf("title"), projectConstants(listOf(a, b)))
+        assertEquals(setOf("title"), projectConstants(listOf(a, b).map(::declaredNames)))
     }
 
     @Test
@@ -60,11 +60,18 @@ class ProjectConstantsTest {
         val a = "private const val title = \"Home\""
         val b = "val title get() = call.request.queryParameters[\"title\"]"
         val c = "import org.intellij.lang.annotations.Language\n\n@Language(\"html\")\nfun page() = \"\"\"<h1>\$title</h1>\"\"\""
-        val issues = analyzer.analyzeKotlin(Source(c, SourceLanguage.KOTLIN, constants = projectConstants(listOf(a, b, c))))
+        val issues =
+            analyzer.analyzeKotlin(
+                Source(c, SourceLanguage.KOTLIN, constants = projectConstants(listOf(a, b, c).map(::declaredNames))),
+            )
         assertTrue(issues.any { it.code == "unescaped-interpolation" }, issues.toString())
         val silent =
             analyzer.analyzeKotlin(
-                Source(c, SourceLanguage.KOTLIN, constants = projectConstants(listOf("const val title = \"Home\"", c))),
+                Source(
+                    c,
+                    SourceLanguage.KOTLIN,
+                    constants = projectConstants(listOf("const val title = \"Home\"", c).map(::declaredNames)),
+                ),
             )
         assertEquals(emptyList(), silent.filter { it.code == "unescaped-interpolation" })
     }

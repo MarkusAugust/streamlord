@@ -288,6 +288,12 @@ public final class io/github/markusaugust/streamlord/analysis/DatastarFrame {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/analysis/DeclaredNames {
+	public fun <init> (Ljava/util/Set;Ljava/util/Set;)V
+	public final fun getConstants ()Ljava/util/Set;
+	public final fun getOthers ()Ljava/util/Set;
+}
+
 public final class io/github/markusaugust/streamlord/analysis/Docs {
 	public static final field ACTIONS Ljava/lang/String;
 	public static final field ATTRIBUTES Ljava/lang/String;
@@ -443,8 +449,7 @@ public final class io/github/markusaugust/streamlord/analysis/InterpolationKind 
 }
 
 public final class io/github/markusaugust/streamlord/analysis/InterpolationsKt {
-	public static final fun constantNames (Ljava/lang/String;)Ljava/util/Set;
-	public static final fun otherDeclaredNames (Ljava/lang/String;)Ljava/util/Set;
+	public static final fun declaredNames (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/DeclaredNames;
 	public static final fun projectConstants (Ljava/lang/Iterable;)Ljava/util/Set;
 }
 
@@ -764,6 +769,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public final fun compactSignals (Ljava/lang/String;)Ljava/lang/String;
 	public final fun describeVariables (Ljava/util/List;)Ljava/lang/String;
 	public final fun emptyBodyHint (ILjava/lang/String;)Ljava/lang/String;
+	public final fun environment (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/RunningServer;)Lio/github/markusaugust/streamlord/analysis/Requests$Environment;
 	public final fun getENV_KEYS ()Ljava/util/List;
 	public final fun getMETHODS ()Ljava/util/List;
 	public final fun lineAndColumn (Ljava/lang/String;I)Ljava/lang/String;
@@ -792,6 +798,8 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public static synthetic fun saveRequest$default (Lio/github/markusaugust/streamlord/analysis/Requests;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SavedRequest;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/RequestsEdit;
 	public final fun sendableUrl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/Requests$SendableUrl;
 	public final fun serializeRequestsFile (Lio/github/markusaugust/streamlord/analysis/RequestsFile;)Ljava/lang/String;
+	public final fun signalsProblem (Ljava/lang/String;)Ljava/lang/String;
+	public final fun streamRequest (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)Lio/github/markusaugust/streamlord/analysis/Requests$StreamRequest;
 	public final fun substitute (Ljava/lang/String;Ljava/util/Map;)Lio/github/markusaugust/streamlord/analysis/Requests$Substituted;
 	public final fun toCurl (Lio/github/markusaugust/streamlord/analysis/SavedRequest;)Ljava/lang/String;
 	public final fun unreachableHint (Ljava/lang/String;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/RunningServer;)Ljava/lang/String;
@@ -837,6 +845,19 @@ public final class io/github/markusaugust/streamlord/analysis/Requests$Env {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/analysis/Requests$Environment {
+	public fun <init> (Ljava/util/List;Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;Ljava/util/List;)Lio/github/markusaugust/streamlord/analysis/Requests$Environment;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/Requests$Environment;Ljava/util/List;Ljava/util/List;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Requests$Environment;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getErrors ()Ljava/util/List;
+	public final fun getVars ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/analysis/Requests$Field : java/lang/Enum {
 	public static final field HEADERS Lio/github/markusaugust/streamlord/analysis/Requests$Field;
 	public static final field SIGNALS Lio/github/markusaugust/streamlord/analysis/Requests$Field;
@@ -869,6 +890,25 @@ public final class io/github/markusaugust/streamlord/analysis/Requests$SendableU
 	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/Requests$SendableUrl;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Requests$SendableUrl;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getError ()Ljava/lang/String;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/Requests$StreamRequest {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/Map;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/Requests$StreamRequest;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/Requests$StreamRequest;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/Requests$StreamRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBody ()Ljava/lang/String;
+	public final fun getError ()Ljava/lang/String;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getMethod ()Ljava/lang/String;
 	public final fun getUrl ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;

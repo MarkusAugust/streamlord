@@ -4,6 +4,7 @@ package io.github.markusaugust.streamlord.editor
 
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Completion
+import io.github.markusaugust.streamlord.analysis.DeclaredNames
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalProperty
@@ -17,10 +18,10 @@ import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.complete
-import io.github.markusaugust.streamlord.analysis.constantNames
+import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.modulesFromImports
-import io.github.markusaugust.streamlord.analysis.otherDeclaredNames
+import io.github.markusaugust.streamlord.analysis.projectConstants
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.analysis.signalDrift
 import io.github.markusaugust.streamlord.analysis.signalSites
@@ -322,24 +323,21 @@ fun signalsOf(
 ): FileSignals {
     val file = source(src, kotlin)
     val selectors = collectSelectors(src)
+    val names = if (kotlin) declaredNames(src) else null
     return plain(
         "signals" to collectSignals(file).plain(),
         "definitions" to collectSignalDefinitions(file).plain(),
         "ids" to selectors.ids.plain(),
         "classes" to selectors.classes.plain(),
-        "constants" to (if (kotlin) constantNames(src) else emptySet()).plain(),
-        "others" to (if (kotlin) otherDeclaredNames(src) else emptySet()).plain(),
+        "constants" to names?.constants.orEmpty().plain(),
+        "others" to names?.others.orEmpty().plain(),
     )
 }
 
 /** The constants of the workspace: each file's, less every name some file declares as anything else. */
 @JsExport
-fun constantsAcross(files: Array<FileSignals>): Array<String> {
-    val out = HashSet<String>()
-    for (file in files) out += file.constants
-    for (file in files) out -= file.others.toSet()
-    return out.plain()
-}
+fun constantsAcross(files: Array<FileSignals>): Array<String> =
+    projectConstants(files.map { DeclaredNames(it.constants.toSet(), it.others.toSet()) }).plain()
 
 // ---- Navigation and rename ---------------------------------------------------------------------
 
