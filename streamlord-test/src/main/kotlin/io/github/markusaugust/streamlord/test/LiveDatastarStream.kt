@@ -143,7 +143,17 @@ public class LiveDatastarStream private constructor(
         timeout: Duration = DEFAULT_TIMEOUT,
     ): PatchElements {
         val assertion = { seen: DatastarEvents ->
-            seen.assertPatchElements(selector, mode, elements, containing, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+            seen.assertPatchElements(
+                selector,
+                mode,
+                elements,
+                containing,
+                namespace,
+                useViewTransition,
+                viewTransitionSelector,
+                eventId,
+                retry,
+            )
         }
         return lock.withLock {
             val start = elementsPlace.at

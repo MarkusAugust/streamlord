@@ -20,7 +20,13 @@ class ElementsViewTransitionSelectorTest {
             routing {
                 get("/el") { call.respondElements("<li id=\"a\">x</li>", useViewTransition = true, viewTransitionSelector = "#list") }
                 get("/plain") {
-                    val refused = runCatching { call.respondElements("<li id=\"a\">x</li>", viewTransitionSelector = "#list") }.exceptionOrNull()
+                    val refused =
+                        runCatching {
+                            call.respondElements(
+                                "<li id=\"a\">x</li>",
+                                viewTransitionSelector = "#list",
+                            )
+                        }.exceptionOrNull()
                     call.respondText(refused?.let { it::class.simpleName }.toString())
                 }
             }

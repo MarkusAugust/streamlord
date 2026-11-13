@@ -77,21 +77,47 @@ class WebFluxSignalsTest {
         assertEquals("none", body(client.get().uri("/search")))
         assertEquals(
             """{"query":"ash"}""",
-            body(client.post().uri("/search").contentType(MediaType.APPLICATION_JSON).bodyValue("""{"query":"ash"}""")),
+            body(
+                client
+                    .post()
+                    .uri("/search")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("""{"query":"ash"}"""),
+            ),
         )
         assertEquals("none", body(client.post().uri("/search").contentType(MediaType.APPLICATION_JSON)))
         assertEquals(
             "ash",
-            body(client.post().uri("/typed").contentType(MediaType.APPLICATION_JSON).bodyValue("""{"query":"ash"}""")),
+            body(
+                client
+                    .post()
+                    .uri("/typed")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("""{"query":"ash"}"""),
+            ),
         )
         assertEquals("default", body(client.post().uri("/typed")))
     }
 
     @Test
     fun `a form is refused with a 415 that says how to read one, and a body over the limit with a 413`() {
-        val form = body(client.post().uri("/search").contentType(MediaType.APPLICATION_FORM_URLENCODED).bodyValue("query=ash"))
+        val form =
+            body(
+                client
+                    .post()
+                    .uri("/search")
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .bodyValue("query=ash"),
+            )
         assertEquals(true, "contentType: 'form'" in form, form)
-        val large = body(client.post().uri("/small").contentType(MediaType.APPLICATION_JSON).bodyValue("""{"query":"ash"}"""))
+        val large =
+            body(
+                client
+                    .post()
+                    .uri("/small")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("""{"query":"ash"}"""),
+            )
         assertEquals(true, "limit is 8" in large, large)
     }
 

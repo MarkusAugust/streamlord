@@ -59,7 +59,12 @@ class ElementsResponseViewTransitionSelectorTest {
         val args = case.obj("argsRaw")!!
         val selector = args.string("viewTransitionSelector")
         val failure =
-            assertFailsWith<DatastarEventValidationException> { ElementsResponse(args.string("elements")!!, viewTransitionSelector = selector) }
+            assertFailsWith<DatastarEventValidationException> {
+                ElementsResponse(
+                    args.string("elements")!!,
+                    viewTransitionSelector = selector,
+                )
+            }
         assertTrue("useViewTransition" in failure.message.orEmpty(), failure.message)
         assertFailsWith<DatastarEventValidationException> { PatchElements(args.string("elements"), viewTransitionSelector = selector) }
         val frame = "event: datastar-patch-elements\ndata: viewTransitionSelector $selector\ndata: elements ${args.string("elements")}\n\n"

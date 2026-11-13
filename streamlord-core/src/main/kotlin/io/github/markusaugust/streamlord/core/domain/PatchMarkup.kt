@@ -40,7 +40,19 @@ internal object PatchMarkup {
                 (mode == ElementPatchMode.OUTER || mode == ElementPatchMode.REPLACE) &&
                 !DOCUMENT_END.containsMatchIn(elements.replace(SVG, ""))
         val walk = Walk(namespace, byId)
-        walkMarkup(elements, walk, if (namespace == ElementNamespace.SVG) NS_SVG else if (namespace == ElementNamespace.MATHML) NS_MATH else NS_HTML)
+        walkMarkup(
+            elements,
+            walk,
+            if (namespace ==
+                ElementNamespace.SVG
+            ) {
+                NS_SVG
+            } else if (namespace == ElementNamespace.MATHML) {
+                NS_MATH
+            } else {
+                NS_HTML
+            },
+        )
         return walk.problem
     }
 
@@ -153,19 +165,94 @@ internal object PatchMarkup {
     // The SVG and MathML elements HTML has no element of the same name for, lowercased as the walk reports them.
     private val SVG_ELEMENTS =
         setOf(
-            "animate", "animatemotion", "animatetransform", "circle", "clippath", "defs", "ellipse", "feblend",
-            "fecolormatrix", "fecomponenttransfer", "fecomposite", "feconvolvematrix", "fediffuselighting",
-            "fedisplacementmap", "fedistantlight", "fedropshadow", "feflood", "fefunca", "fefuncb", "fefuncg",
-            "fefuncr", "fegaussianblur", "feimage", "femerge", "femergenode", "femorphology", "feoffset",
-            "fepointlight", "fespecularlighting", "fespotlight", "fetile", "feturbulence", "filter", "foreignobject",
-            "g", "line", "lineargradient", "marker", "mask", "metadata", "mpath", "path", "pattern", "polygon",
-            "polyline", "radialgradient", "rect", "set", "stop", "switch", "symbol", "text", "textpath", "tspan",
-            "use", "view",
+            "animate",
+            "animatemotion",
+            "animatetransform",
+            "circle",
+            "clippath",
+            "defs",
+            "ellipse",
+            "feblend",
+            "fecolormatrix",
+            "fecomponenttransfer",
+            "fecomposite",
+            "feconvolvematrix",
+            "fediffuselighting",
+            "fedisplacementmap",
+            "fedistantlight",
+            "fedropshadow",
+            "feflood",
+            "fefunca",
+            "fefuncb",
+            "fefuncg",
+            "fefuncr",
+            "fegaussianblur",
+            "feimage",
+            "femerge",
+            "femergenode",
+            "femorphology",
+            "feoffset",
+            "fepointlight",
+            "fespecularlighting",
+            "fespotlight",
+            "fetile",
+            "feturbulence",
+            "filter",
+            "foreignobject",
+            "g",
+            "line",
+            "lineargradient",
+            "marker",
+            "mask",
+            "metadata",
+            "mpath",
+            "path",
+            "pattern",
+            "polygon",
+            "polyline",
+            "radialgradient",
+            "rect",
+            "set",
+            "stop",
+            "switch",
+            "symbol",
+            "text",
+            "textpath",
+            "tspan",
+            "use",
+            "view",
         )
     private val MATHML_ELEMENTS =
         setOf(
-            "annotation", "annotation-xml", "maction", "menclose", "merror", "mfrac", "mi", "mmultiscripts", "mn",
-            "mo", "mover", "mpadded", "mphantom", "mprescripts", "mroot", "mrow", "ms", "mspace", "msqrt", "mstyle",
-            "msub", "msubsup", "msup", "mtable", "mtd", "mtext", "mtr", "munder", "munderover", "semantics",
+            "annotation",
+            "annotation-xml",
+            "maction",
+            "menclose",
+            "merror",
+            "mfrac",
+            "mi",
+            "mmultiscripts",
+            "mn",
+            "mo",
+            "mover",
+            "mpadded",
+            "mphantom",
+            "mprescripts",
+            "mroot",
+            "mrow",
+            "ms",
+            "mspace",
+            "msqrt",
+            "mstyle",
+            "msub",
+            "msubsup",
+            "msup",
+            "mtable",
+            "mtd",
+            "mtext",
+            "mtr",
+            "munder",
+            "munderover",
+            "semantics",
         )
 }

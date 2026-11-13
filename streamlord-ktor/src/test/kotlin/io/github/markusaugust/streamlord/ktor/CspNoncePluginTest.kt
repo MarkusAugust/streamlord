@@ -50,7 +50,7 @@ class CspNoncePluginTest {
                 assertNotNull(nonce, "the page carries no data-nonce, so Datastar stays on new Function")
                 assertEquals(
                     "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'; " +
-                    "require-trusted-types-for 'script'; trusted-types datastar",
+                        "require-trusted-types-for 'script'; trusted-types datastar",
                     response.headers[CspNonce.HEADER],
                 )
                 seen += nonce

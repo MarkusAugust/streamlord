@@ -68,7 +68,11 @@ public class SignalsMediaTypeException(
     )
 
 private fun isForm(contentType: String): Boolean =
-    contentType.substringBefore(';').trim().lowercase().let { it == "application/x-www-form-urlencoded" || it == "multipart/form-data" }
+    contentType
+        .substringBefore(';')
+        .trim()
+        .lowercase()
+        .let { it == "application/x-www-form-urlencoded" || it == "multipart/form-data" }
 
 /**
  * Raised when an incoming signal payload exceeds the limit configured on

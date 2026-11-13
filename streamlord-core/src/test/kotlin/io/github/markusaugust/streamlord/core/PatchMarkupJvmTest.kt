@@ -58,11 +58,24 @@ class PatchMarkupJvmTest {
 
     @Test
     fun `in the svg or mathml namespace, an HTML element that leaves the root it is parsed in is refused`() {
-        refused("<div> is HTML") { PatchElements("<div id=\"a\">x</div>", selector = "#s", mode = ElementPatchMode.INNER, namespace = ElementNamespace.SVG) }
-        refused("<p> is HTML") { PatchElements("<g><p>x</p></g>", selector = "#s", mode = ElementPatchMode.APPEND, namespace = ElementNamespace.SVG) }
-        refused("<div> is HTML") { PatchElements("<div>x</div>", selector = "#m", mode = ElementPatchMode.INNER, namespace = ElementNamespace.MATHML) }
-        refused("<b> is HTML") { ElementsResponse("<b>x</b>", selector = "#s", mode = ElementPatchMode.INNER, namespace = ElementNamespace.SVG) }
-        PatchElements("<foreignObject><div>x</div></foreignObject>", selector = "#s", mode = ElementPatchMode.INNER, namespace = ElementNamespace.SVG)
+        refused("<div> is HTML") {
+            PatchElements("<div id=\"a\">x</div>", selector = "#s", mode = ElementPatchMode.INNER, namespace = ElementNamespace.SVG)
+        }
+        refused("<p> is HTML") {
+            PatchElements("<g><p>x</p></g>", selector = "#s", mode = ElementPatchMode.APPEND, namespace = ElementNamespace.SVG)
+        }
+        refused("<div> is HTML") {
+            PatchElements("<div>x</div>", selector = "#m", mode = ElementPatchMode.INNER, namespace = ElementNamespace.MATHML)
+        }
+        refused(
+            "<b> is HTML",
+        ) { ElementsResponse("<b>x</b>", selector = "#s", mode = ElementPatchMode.INNER, namespace = ElementNamespace.SVG) }
+        PatchElements(
+            "<foreignObject><div>x</div></foreignObject>",
+            selector = "#s",
+            mode = ElementPatchMode.INNER,
+            namespace = ElementNamespace.SVG,
+        )
         PatchElements("<mi><b>x</b></mi>", selector = "#m", mode = ElementPatchMode.INNER, namespace = ElementNamespace.MATHML)
         PatchElements("<circle></circle>", selector = "#s", mode = ElementPatchMode.INNER, namespace = ElementNamespace.SVG)
     }
@@ -71,7 +84,9 @@ class PatchMarkupJvmTest {
     fun `in the html namespace, an SVG or MathML element outside its root is refused`() {
         refused("<circle> is an SVG element") { PatchElements("<circle r=\"1\"/>", selector = "#s", mode = ElementPatchMode.APPEND) }
         refused("<rect> is an SVG element") { PatchElements("<div id=\"a\"><rect/></div>") }
-        refused("<mfrac> is a MathML element") { PatchElements("<mfrac><mn>1</mn><mn>2</mn></mfrac>", selector = "#m", mode = ElementPatchMode.INNER) }
+        refused("<mfrac> is a MathML element") {
+            PatchElements("<mfrac><mn>1</mn><mn>2</mn></mfrac>", selector = "#m", mode = ElementPatchMode.INNER)
+        }
         PatchElements("<svg id=\"s\"><circle r=\"1\"/></svg>")
         PatchElements("<math id=\"m\"><mfrac><mn>1</mn><mn>2</mn></mfrac></math>")
         PatchElements("<g-chart id=\"c\"></g-chart>")

@@ -61,7 +61,10 @@ class SseDecoderTest {
             PatchSignals("""{"a":"it's","b":[1,{"${'$'}c_2":true}],"d":"x"}"""),
             decoded("""{'a': 'it\'s', b: [1, {${'$'}c_2: true},], "d": 'x',}"""),
         )
-        assertEquals(PatchSignals("""{"a":1}""", onlyIfMissing = true), SseDecoder.decodeOne("event: datastar-patch-signals\ndata: onlyIfMissing true\ndata: signals {a: 1}\n\n"))
+        assertEquals(
+            PatchSignals("""{"a":1}""", onlyIfMissing = true),
+            SseDecoder.decodeOne("event: datastar-patch-signals\ndata: onlyIfMissing true\ndata: signals {a: 1}\n\n"),
+        )
     }
 
     @Test
