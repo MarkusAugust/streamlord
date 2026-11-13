@@ -125,6 +125,18 @@ class PatternsTest {
         assertEquals(listOf("0-1", "1-2"), found("(a)|(b)", "ab"))
     }
 
+    /**
+     * After an empty match `findAll` looks again one code point on in JavaScript and one UTF-16 unit on
+     * on the JVM, which finds one more empty match between the halves of an astral character. That is
+     * the standard library's stepping, not the pattern's, so no spelling makes the two alike, and a
+     * pattern that matches an empty string is never iterated: PatternsInMainTest holds the sources to it.
+     */
+    @Test
+    fun `after an empty match the engines differ only between the halves of an astral character`() {
+        assertEquals(listOf("0-0", "1-1", "3-3", "4-4"), found("""x*""", "a\uD83D\uDE00b") - "2-2")
+        assertEquals(listOf("0-1", "3-4"), found("""[a-z]+""", "a\uD83D\uDE00b"))
+    }
+
     @Test
     fun `where a group stands is known`() {
         val pattern = regex("""(a)?(b+)""")

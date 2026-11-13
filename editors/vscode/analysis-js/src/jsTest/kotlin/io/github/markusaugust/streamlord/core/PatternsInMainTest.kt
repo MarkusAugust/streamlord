@@ -55,6 +55,25 @@ class PatternsInMainTest {
         assertEquals(emptyList(), refused)
     }
 
+    /** PatternsTest has why: after an empty match the JVM looks again inside an astral character, and JavaScript past it. */
+    @Test
+    fun `no pattern that matches an empty string is iterated with findAll`() {
+        val iterated = ArrayList<String>()
+        var seen = 0
+        for (file in files) {
+            val src = fixtureText(file)
+            for (call in Regex("""\b([A-Z][A-Z0-9_]*)\.findAll\(""").findAll(src)) {
+                val name = call.groupValues[1]
+                val declared = Regex("""\bval $name\s*=\s*regex\(""").find(src) ?: continue
+                val literal = patternLiterals(src.substring(declared.range.first)).firstOrNull() ?: continue
+                seen++
+                if (regex(literal).find("") != null) iterated += "$file: $name"
+            }
+        }
+        assertTrue(seen > 30, "found $seen iterated patterns")
+        assertEquals(emptyList(), iterated)
+    }
+
     /** The string literals in the arguments of each `regex(` call, a Kotlin template in one read as the letter x. */
     private fun patternLiterals(src: String): List<String> {
         val out = ArrayList<String>()
