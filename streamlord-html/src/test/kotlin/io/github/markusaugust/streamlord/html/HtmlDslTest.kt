@@ -206,7 +206,12 @@ class HtmlDslTest {
     @Test
     fun `the address and the value of setAll may be expressions`() {
         assertEquals("""@get('/items/' + ${'$'}id)""", getExpr("'/items/' + ${signal("id")}"))
-        assertEquals("""@post(`/items/${'$'}{${'$'}id}`, {retry: 'never'})""", postExpr("`/items/${'$'}{${signal("id")}}`") { retry = FetchOptions.Retry.NEVER })
+        assertEquals(
+            """@post(`/items/${'$'}{${'$'}id}`, {retry: 'never'})""",
+            postExpr("`/items/${'$'}{${signal("id")}}`") {
+                retry = FetchOptions.Retry.NEVER
+            },
+        )
         assertEquals("""@put(${'$'}u)""", putExpr(signal("u")))
         assertEquals("""@patch(${'$'}u)""", patchExpr(signal("u")))
         assertEquals("""@delete(${'$'}u)""", deleteExpr(signal("u")))
