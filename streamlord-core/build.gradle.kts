@@ -67,16 +67,23 @@ tasks.withType<Test>().configureEach {
  */
 @CacheableTask
 abstract class GenerateCatalogNames : DefaultTask() {
-    @get:InputFile
+    /**
+     * The catalogs in catalog/, of which there must be one. A file tree, not the file it holds:
+     * the configuration cache keeps a file resolved while the build is configured, and after a
+     * catalog is renamed would hand the task the old path, where a tree is listed again each run.
+     */
+    @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val catalog: RegularFileProperty
+    abstract val catalogs: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
     @TaskAction
     fun generate() {
-        val file = catalog.get().asFile
+        val file =
+            catalogs.files.singleOrNull()
+                ?: throw GradleException("catalog/ must hold one datastar-*.json, not ${catalogs.files.map { it.name }}")
         @Suppress("UNCHECKED_CAST")
         val json = groovy.json.JsonSlurper().parse(file) as Map<String, Any?>
         val version = json["version"] as String
@@ -138,12 +145,11 @@ abstract class GenerateCatalogNames : DefaultTask() {
 val generateCatalogNames =
     tasks.register<GenerateCatalogNames>("generateCatalogNames") {
         // The one catalog there is; a second version beside it is a decision this build should not guess.
-        catalog.set(
+        catalogs.from(
             rootProject.layout.projectDirectory
                 .dir("catalog")
                 .asFileTree
-                .matching { include("datastar-*.json") }
-                .singleFile,
+                .matching { include("datastar-*.json") },
         )
         output.set(layout.buildDirectory.dir("generated/catalogNames"))
     }
