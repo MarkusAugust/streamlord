@@ -1,8 +1,8 @@
 {"what":"file","language":"kotlin"}
 {"what":"diagnostic","code":"missing-id","link":"https://data-star.dev/reference/sse_events","message":"<div> has no id. Without a selector, Datastar matches top-level elements by id and silently ignores the rest.","range":"2:26-2:31","severity":"Warning","source":"streamlord"}
-{"what":"diagnostic","code":"mode-needs-selector","link":"https://data-star.dev/reference/sse_events","message":"Mode APPEND requires a selector; Streamlord will reject this event at runtime.","range":"3:9-3:22","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"mode-needs-selector","link":"https://data-star.dev/reference/sse_events","message":"patchElements throws: Patch mode 'append' requires a selector.","range":"3:9-3:22","severity":"Error","source":"streamlord"}
 {"what":"diagnostic","code":"unclosed","message":"<span> is never closed.","range":"6:38-6:44","severity":"Error","source":"streamlord"}
-{"what":"diagnostic","code":"blank-selector","message":"Selector must not be blank.","range":"7:24-7:27","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"blank-selector","link":"https://data-star.dev/reference/sse_events","message":"removeElements throws: selector must not be blank.","range":"7:24-7:27","severity":"Error","source":"streamlord"}
 {"what":"action","at":"1:1-8:1","n":0,"after":{"value":"b9d44f49da31"},"edits":[{"file":"drawn/kotlin/blank-selector-1.kt","range":"2:30-2:30","text":" id=\"div\""}],"kind":"quickfix","preferred":true,"title":"Add id=\"div\""}
 {"what":"action","at":"1:1-8:1","n":1,"after":{"value":"21911401c1aa"},"edits":[{"file":"drawn/kotlin/blank-selector-1.kt","range":"3:37-3:37","text":"selector = \"\", "}],"kind":"quickfix","preferred":true,"title":"Add selector = \"\""}
 {"what":"action","at":"2:26-2:31","n":0,"after":{"value":"b9d44f49da31"},"edits":[{"file":"drawn/kotlin/blank-selector-1.kt","range":"2:30-2:30","text":" id=\"div\""}],"kind":"quickfix","preferred":true,"title":"Add id=\"div\""}

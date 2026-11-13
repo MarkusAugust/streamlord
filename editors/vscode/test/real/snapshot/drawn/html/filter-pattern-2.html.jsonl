@@ -4,12 +4,12 @@
 {"what":"action","at":"1:62-1:72","n":0,"after":"<button data-on:click=\"@post('/x', {filterSignals: {include: /^user/i}})\"></button><button data-on:click=\"@get('/x', {headers: {include: '/^user/i'}})\"></button>\n","edits":[{"file":"drawn/html/filter-pattern-2.html","range":"1:62-1:72","text":"/^user/i"}],"kind":"quickfix","preferred":true,"title":"Change to /^user/i"}
 {"what":"hover","at":"1:2-1:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"1:2-1:8"}]}
 {"what":"hover","at":"1:9-1:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:9-1:22"}]}
-{"what":"hover","at":"1:24-1:29","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"1:24-1:29"}]}
+{"what":"hover","at":"1:24-1:29","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"1:24-1:29"}]}
 {"what":"hover","at":"1:37-1:50","answers":[{"contents":[{"value":"dce602caff94"}],"range":"1:37-1:50"}]}
 {"what":"hover","at":"1:79-1:85","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"1:79-1:85"}]}
 {"what":"hover","at":"1:87-1:93","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"1:87-1:93"}]}
 {"what":"hover","at":"1:94-1:107","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:94-1:107"}]}
-{"what":"hover","at":"1:109-1:113","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"1:109-1:113"}]}
+{"what":"hover","at":"1:109-1:113","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"1:109-1:113"}]}
 {"what":"hover","at":"1:121-1:128","answers":[{"contents":["**headers**: `Record<string, string>`, default `{}`\n\nHeaders added to the request, after Datastar's own Accept and Datastar-Request: true."],"range":"1:121-1:128"}]}
 {"what":"hover","at":"1:157-1:163","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"1:157-1:163"}]}
 {"what":"signature","at":"1:30-1:34","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}

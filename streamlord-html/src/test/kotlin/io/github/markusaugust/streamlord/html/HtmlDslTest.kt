@@ -165,9 +165,83 @@ class HtmlDslTest {
     fun `payload`() {
         assertEquals("""@post('/x', {payload: {id: 7}})""", post("/x") { payload = mapOf("id" to 7) })
         assertEquals(
-            """@get('/x', {payload: {id: ${'$'}selected}})""",
+            """@get('/x', {payload: ({id: ${'$'}selected})})""",
             get("/x") { payloadExpr = "{id: ${'$'}selected}" },
         )
+    }
+
+    // fetch.ts sends a payload that is not undefined, null among them: JSON.stringify(null) is the body.
+    @Test
+    fun `a payload set to null is written as null`() {
+        assertEquals("""@post('/x', {payload: null})""", post("/x") { payload = null })
+        assertEquals("""@post('/x')""", post("/x"))
+    }
+
+    // FetchArgs takes an AbortController for requestCancellation, which only an expression gives.
+    @Test
+    fun `request cancellation takes an expression`() {
+        assertEquals(
+            """@get('/feed', {requestCancellation: (${'$'}controller)})""",
+            get("/feed") { requestCancellationExpr = signal("controller") },
+        )
+        assertFailsWith<IllegalArgumentException> {
+            get("/feed") {
+                requestCancellation = FetchOptions.RequestCancellation.CLEANUP
+                requestCancellationExpr = signal("controller")
+            }
+        }
+    }
+
+    @Test
+    fun `a header value may be an expression, its name written as a literal`() {
+        assertEquals(
+            """@get('/x', {headers: {'X-Csrf-Token': 't', Authorization: ('Bearer ' + ${'$'}token), 'x\x27y': (${'$'}a)}})""",
+            get("/x") {
+                headers = mapOf("X-Csrf-Token" to "t")
+                headerExprs = mapOf("Authorization" to "'Bearer ' + ${signal("token")}", "x'y" to signal("a"))
+            },
+        )
+        // As HTTP names them, in any case: the browser's Headers would join the two values.
+        for (name in listOf("A", "a")) {
+            assertFailsWith<IllegalArgumentException> {
+                get("/x") {
+                    headers = mapOf("A" to "t")
+                    headerExprs = mapOf(name to signal("a"))
+                }
+            }
+        }
+        assertFailsWith<IllegalArgumentException> { get("/x") { headers = mapOf("Authorization" to "a", "authorization" to "b") } }
+    }
+
+    // In parentheses, an expression cannot close the argument or the object it stands in and add one of its own.
+    @Test
+    fun `an expression stays one value where it is written`() {
+        assertEquals("""@get(('/a', {payload: 1}))""", getExpr(expression = "'/a', {payload: 1}"))
+        assertEquals(
+            """@get('/x', {headers: {A: (1}, {payload: 2)}})""",
+            get("/x") { headerExprs = mapOf("A" to "1}, {payload: 2") },
+        )
+        assertEquals("""@setAll((1, {include: /x/}))""", setAllExpr("1, {include: /x/}"))
+        assertEquals("""@post('/x', {payload: (1}, {retry: 'never')})""", post("/x") { payloadExpr = "1}, {retry: 'never'" })
+    }
+
+    @Test
+    fun `the address and the value of setAll may be expressions`() {
+        assertEquals("""@get(('/items/' + ${'$'}id))""", getExpr("'/items/' + ${signal("id")}"))
+        assertEquals(
+            """@post((`/items/${'$'}{${'$'}id}`), {retry: 'never'})""",
+            postExpr("`/items/${'$'}{${signal("id")}}`") {
+                retry = FetchOptions.Retry.NEVER
+            },
+        )
+        assertEquals("""@put((${'$'}u))""", putExpr(signal("u")))
+        assertEquals("""@patch((${'$'}u))""", patchExpr(signal("u")))
+        assertEquals("""@delete((${'$'}u))""", deleteExpr(signal("u")))
+        assertEquals("""@query((${'$'}u))""", queryExpr(signal("u")))
+        assertFailsWith<IllegalArgumentException> { getExpr(" ") }
+        assertEquals("""@setAll((${'$'}default))""", setAllExpr(signal("default")))
+        assertEquals("""@setAll((${'$'}default), {include: /^form\./})""", setAllExpr(signal("default"), SignalFilter.include("^form\\.")))
+        assertFailsWith<IllegalArgumentException> { setAllExpr("") }
     }
 
     @Test

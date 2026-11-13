@@ -8,7 +8,7 @@
 {"what":"action","at":"31:48-31:54","n":1,"after":{"value":"58ee9228adbc"},"edits":[{"file":"kotlin/Fragments.kt","range":"31:48-31:49","text":"${'$'}"}],"kind":"quickfix","preferred":false,"title":"Escape as ${'$'}price"}
 {"what":"action","at":"32:11-32:29","n":0,"after":{"value":"a6959f4d2789"},"edits":[{"file":"kotlin/Fragments.kt","range":"32:11-32:29","text":"${Trusted(title.escaped())}"}],"kind":"quickfix","preferred":false,"title":"Mark ${title.escaped()} as markup"}
 {"what":"hover","at":"9:33-9:46","answers":[{"contents":[{"value":"5204ed61fb46"}],"range":"9:33-9:46"}]}
-{"what":"hover","at":"9:49-9:54","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body."],"range":"9:49-9:54"}]}
+{"what":"hover","at":"9:49-9:54","answers":[{"contents":[{"value":"2ac987a2dca5"}],"range":"9:49-9:54"}]}
 {"what":"hover","at":"9:65-9:86","answers":[{"contents":[{"value":"4bc280aaffa0"}],"range":"9:65-9:86"}]}
 {"what":"hover","at":"11:30-11:47","answers":[{"contents":[{"value":"c2e3cfeac5f6"}],"range":"11:30-11:47"}]}
 {"what":"hover","at":"11:53-11:62","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"11:53-11:62"}]}
@@ -16,7 +16,7 @@
 {"what":"hover","at":"16:10-16:19","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"16:10-16:19"}]}
 {"what":"hover","at":"17:15-17:27","answers":[{"contents":[{"value":"5204ed61fb46"}],"range":"17:15-17:44"}]}
 {"what":"hover","at":"17:28-17:44","answers":[{"contents":[{"value":"8c3dd820520a"}],"range":"17:28-17:44"}]}
-{"what":"hover","at":"17:46-17:50","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string."],"range":"17:46-17:50"}]}
+{"what":"hover","at":"17:46-17:50","answers":[{"contents":[{"value":"accab38b3e72"}],"range":"17:46-17:50"}]}
 {"what":"hover","at":"17:66-17:71","answers":[{"contents":[{"value":"ee0ee6a340e2"}],"range":"17:66-17:71"}]}
 {"what":"hover","at":"21:33-21:42","answers":[{"contents":["**data-show**\n\nShows the element when the expression is truthy.\n\n`data-show=\"expr\"`"],"range":"21:33-21:42"}]}
 {"what":"hover","at":"21:45-21:50","answers":[{"contents":["**$slots**\n\nDatastar reads it as `$['slots']`, the signal path slots in its store."],"range":"21:44-21:50"}]}

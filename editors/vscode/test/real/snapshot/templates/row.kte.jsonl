@@ -10,7 +10,7 @@
 {"what":"hover","at":"6:19-6:22","answers":[{"contents":["**$qty**\n\nDatastar reads it as `$['qty']`, the signal path qty in its store."],"range":"6:18-6:22"}]}
 {"what":"hover","at":"7:28-7:41","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"7:28-7:41"}]}
 {"what":"hover","at":"8:15-8:28","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"8:15-8:28"}]}
-{"what":"hover","at":"8:30-8:35","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"8:30-8:35"}]}
+{"what":"hover","at":"8:30-8:35","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"8:30-8:35"}]}
 {"what":"hover","at":"9:15-9:28","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:15-9:28"}]}
 {"what":"hover","at":"9:46-9:61","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:46-9:72"}]}
 {"what":"hover","at":"9:62-9:72","answers":[{"contents":[{"value":"8c3dd820520a"}],"range":"9:62-9:72"}]}

@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
 import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.core.domain.Position
@@ -270,6 +271,9 @@ public class Analyzer(
     private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers + valueNameHelpers
     private val htmlSiteNames: Set<String> = catalog.htmlCallSites.keys
 
+    /** The SSE calls and answers whose arguments core judges, of those [allSiteNames] leaves out. */
+    private val eventOnlyNames: Set<String> = eventCallNames - allSiteNames
+
     /**
      * The calls streamlord-html alone defines, which are somebody else's in a project without it:
      * the attributes' helpers, the expression call sites and the expression helpers.
@@ -333,6 +337,7 @@ public class Analyzer(
         val foreign = foreignCalls(opts)
         val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
         val dsl = Sdk.of(opts).htmlDsl
+        val eventCalls = EventCalls(src)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
         for (site in findCallSites(src, allSiteNames, lex)) {
@@ -340,10 +345,10 @@ public class Analyzer(
             if (foreign(site.name, site.nameStart)) continue
             val issues = ArrayList<Issue>()
             catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, lex, hyphenated, opts, siteHelpers) }
-            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated) }
+            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated, eventCalls) }
             html?.let { issues += it.issues }
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
-            catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
+            if (site.name in eventCallNames && site.name !in htmlSiteNames) issues += eventArgumentIssues(site, null, eventCalls.ours(site))
             issues += checkKeyCaseSite(site, src)
             issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
@@ -351,6 +356,12 @@ public class Analyzer(
                 for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
             }
             if (issues.isNotEmpty() || html?.rewrite != null) out += SiteIssues(site, null, issues, html?.rewrite)
+        }
+        // The calls whose arguments core alone judges, those the loop above has not read.
+        for (site in findCallSites(src, eventOnlyNames, lex)) {
+            if (foreign(site.name, site.nameStart)) continue
+            val issues = eventArgumentIssues(site, null, eventCalls.ours(site))
+            if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
         // declares, since the text cannot tell whether the call fits it.
@@ -1959,7 +1970,8 @@ public class Analyzer(
         val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute))
+        val found = expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute, event = dslEvent(site))
+        issues += mapIssues(s, src, found)
         return issues
     }
 
@@ -2002,6 +2014,7 @@ public class Analyzer(
         src: String,
         lex: KotlinLex,
         hyphenated: Set<String>,
+        eventCalls: EventCalls,
     ): Judged {
         val s = markupString(site, spec, src, lex)
         if (s == null && !site.trailingLambda) return Judged()
@@ -2027,20 +2040,25 @@ public class Analyzer(
         val view = s?.let { markupView(src, it) } ?: ""
         val judged = s?.let { judgeHoles(it, src, opts, view) }
         val issues = ArrayList(judged?.issues.orEmpty())
-        if (modeArg != null && mode != null && mode != "outer" && mode != "replace" && selector == null) {
+        val modeKnown = if (modeArg == null) ElementPatchMode.DEFAULT else mode?.let { ElementPatchMode.fromWire(it) }
+        val needsSelector = modeKnown?.takeIf { modeArg != null && selector == null }?.let { modeWithoutSelector(site, it) }
+        if (modeArg != null && needsSelector != null) {
             val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
             issues +=
                 Issue(
                     start = site.nameStart,
                     end = site.openParen,
-                    message = "Mode ${mode.uppercase()} requires a selector; Streamlord will reject this event at runtime.",
+                    message = needsSelector,
                     severity = Severity.ERROR,
                     code = "mode-needs-selector",
                     link = Docs.SSE,
                     fixes = if (modeArg.named != null) listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")) else emptyList(),
                 )
         }
+        val ours = eventCalls.ours(site)
+        issues += eventArgumentIssues(site, selectorArg, ours)
+        if (ours && s != null && modeKnown != null) blankElementsIssue(site, s, modeKnown, selectorArg)?.let { issues += it }
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")
         if (s != null) {
@@ -2345,19 +2363,6 @@ public class Analyzer(
                 "script-close",
             ),
         )
-    }
-
-    private fun checkSelectorSite(
-        site: CallSite,
-        spec: CallSiteSpec,
-    ): List<Issue> {
-        val s = site.selectString(spec) ?: return emptyList()
-        if (s.unterminated) return emptyList()
-        if (s.text.isBlank()) return listOf(Issue(s.start, s.end, "Selector must not be blank.", Severity.ERROR, "blank-selector"))
-        if (s.text.any { it == '\r' || it == '\n' }) {
-            return listOf(Issue(s.start, s.end, "Selector must not contain line breaks.", Severity.ERROR, "selector-newline"))
-        }
-        return emptyList()
     }
 }
 

@@ -106,6 +106,18 @@ class WebFluxSignalsTest {
             ),
         )
         assertEquals("none", body(client.post().uri("/search").contentType(MediaType.APPLICATION_JSON)))
+        // payload: null, as the client sends it in the query and in the body.
+        assertEquals("none", body(client.get().uri("/search?datastar={n}", "null")))
+        assertEquals(
+            "none",
+            body(
+                client
+                    .post()
+                    .uri("/search")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("null"),
+            ),
+        )
         assertEquals(
             "ash",
             body(

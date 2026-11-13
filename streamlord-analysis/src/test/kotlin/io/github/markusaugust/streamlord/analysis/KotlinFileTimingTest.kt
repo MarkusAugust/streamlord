@@ -28,6 +28,17 @@ class KotlinFileTimingTest {
     }
 
     @Test
+    fun `each SSE call's literal arguments are judged without reading the calls before it`() {
+        grows(
+            "SSE calls with literal arguments",
+            40,
+            file {
+                "suspend fun S.f$it() { patchSignals(\"[$it]\", eventId = \"\"); redirect(\"javascript:$it\"); executeScript(\"x()\", retry = 0.seconds) }"
+            },
+        )
+    }
+
+    @Test
     fun `each attributes assignment finds its string without searching the strings before it`() {
         val assignments = file { "fun T.f$it() { attributes[\"data-on:click\"] = \"\\\$n$it++\" }" }
         grows("attributes assignments", 40, assignments)

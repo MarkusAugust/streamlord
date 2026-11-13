@@ -15,8 +15,8 @@
 {"what":"action","at":"2:72-2:85","n":0,"after":{"value":"36b6b0be60b3"},"edits":[{"file":"html/names.html","range":"2:72-2:79","text":"data-on"}],"kind":"quickfix","preferred":true,"title":"Change to data-on"}
 {"what":"action","at":"5:98-5:107","n":0,"after":{"value":"928156bda076"},"edits":[{"file":"html/names.html","range":"5:98-5:107","text":"data-show"}],"kind":"quickfix","preferred":true,"title":"Change to data-show"}
 {"what":"hover","at":"2:2-2:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"2:2-2:5"}]}
-{"what":"hover","at":"2:33-2:38","answers":[{"contents":["**@peek(() => expr)**\n\nReads signals without subscribing.\n\nKotlin: `peek()`"],"range":"2:33-2:38"}]}
-{"what":"hover","at":"2:60-2:64","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"2:60-2:64"}]}
+{"what":"hover","at":"2:33-2:38","answers":[{"contents":[{"value":"22d033a41d8a"}],"range":"2:33-2:38"}]}
+{"what":"hover","at":"2:60-2:64","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"2:60-2:64"}]}
 {"what":"hover","at":"3:108-3:111","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"3:108-3:111"}]}
 {"what":"hover","at":"5:2-5:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"5:2-5:5"}]}
 {"what":"hover","at":"5:119-5:122","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"5:119-5:122"}]}

@@ -200,7 +200,7 @@ class ProDslAsTheClientReadsItTest {
                 listens("button", "click")
                 heard("button", "click", 1)
                 probes = listOf(listOf("pro-action", "fit", 5, 0, 10, 0, 1.5, true, true))
-            }) { button { dataOnClick(fit("5", 0, 10, 0, 1.5, clamp = true, round = true)) } },
+            }) { button { dataOnClick(fit("5", 0, 10, 0, 1.5, shouldClamp = true, shouldRound = true)) } },
             dslCase("intl", "intl", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 heard("button", "click", 1)

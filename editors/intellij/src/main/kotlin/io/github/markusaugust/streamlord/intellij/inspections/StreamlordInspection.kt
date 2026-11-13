@@ -167,8 +167,9 @@ private val INTERPOLATION_CODES =
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, the arguments and options an action is
- * given, kebab-case signals, what the client's own rewrite of an expression does that JavaScript
- * would not, and `patch` where the attribute does not hand it over.
+ * given, the types a datastar-fetch handler compares, kebab-case signals, what the client's own
+ * rewrite of an expression does that JavaScript would not, and `patch` where the attribute does not
+ * hand it over.
  */
 class DatastarExpressionInspection :
     StreamlordInspection(
@@ -187,6 +188,7 @@ class DatastarExpressionInspection :
             "option-value",
             "action-arity",
             "action-argument",
+            "fetch-event-type",
         ),
     )
 
@@ -259,7 +261,7 @@ private val UNKNOWN_SIGNAL_CODES = setOf("unknown-signal", "signal-never-declare
 class DatastarKeyCaseInspection :
     StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))
 
-/** The markup of a patch: complete elements, ids, selectors and modes, scripts. */
+/** The markup of a patch: complete elements, ids, selectors and modes, scripts, and the arguments core refuses as it runs. */
 class StreamlordMarkupInspection :
     StreamlordInspection(
         setOf(
@@ -271,6 +273,7 @@ class StreamlordMarkupInspection :
             "blank-selector",
             "selector-newline",
             "script-close",
+            "event-refused",
         ),
     )
 
@@ -294,6 +297,7 @@ object InspectionCodes {
                 "option-value",
                 "action-arity",
                 "action-argument",
+                "fetch-event-type",
             ) +
             setOf(
                 "unknown-attribute",
@@ -328,5 +332,6 @@ object InspectionCodes {
                 "blank-selector",
                 "selector-newline",
                 "script-close",
+                "event-refused",
             )
 }

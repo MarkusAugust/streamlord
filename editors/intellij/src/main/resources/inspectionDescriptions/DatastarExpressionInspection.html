@@ -19,6 +19,10 @@ client reads: <code>@post('/x', {contentTyp: 'form'})</code> names no option, wi
 <code>retry: 'sometimes'</code>, <code>openWhenHidden: 'yes'</code> or <code>@setAll(true, 'user')</code> are values Datastar
 does not read as meant. Only a literal is judged; a value an expression computes is left alone.
 </p>
+<p>
+In a <code>data-on:datastar-fetch</code> handler, a string compared with <code>evt.detail.type</code> that the client never
+dispatches the event with, <code>'start'</code> for <code>'started'</code>, is flagged, with the near type as a quick fix.
+</p>
 <!-- tooltip end -->
 </body>
 </html>

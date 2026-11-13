@@ -24,6 +24,12 @@ public class FetchOptions {
     /** Extra request headers. */
     public var headers: Map<String, String> = emptyMap()
 
+    /**
+     * Extra request headers whose values are raw JavaScript expressions, e.g. `"'Bearer ' + ${'$'}token"`,
+     * written after [headers] in one object. A name is written as a literal, and one in both, in any case, is refused.
+     */
+    public var headerExprs: Map<String, String> = emptyMap()
+
     /** Keep the connection open while the tab is hidden. Default: false for GET, true otherwise. */
     public var openWhenHidden: Boolean? = null
 
@@ -46,10 +52,25 @@ public class FetchOptions {
     /** `'auto'` (default), `'cleanup'` or `'disabled'`. */
     public var requestCancellation: RequestCancellation? = null
 
-    /** Send this value instead of the signal store. Written as a JavaScript literal by [JsLiteral]. */
-    public var payload: Any? = null
+    /**
+     * A raw JavaScript expression for requestCancellation, e.g. `${'$'}controller`: the client takes an
+     * `AbortController` there, and aborts the request when it is aborted. Set with [requestCancellation], it is refused.
+     */
+    public var requestCancellationExpr: String? = null
 
-    /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`. Overrides [payload]. */
+    private var payloadSet = false
+
+    /**
+     * Send this value instead of the signal store. Written as a JavaScript literal by [JsLiteral].
+     * Set to `null`, it is written as `null`, and the client sends `null`; left unset, the signals go.
+     */
+    public var payload: Any? = null
+        set(value) {
+            field = value
+            payloadSet = true
+        }
+
+    /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`, written in parentheses. Overrides [payload]. */
     public var payloadExpr: String? = null
 
     public enum class ContentType(
@@ -83,7 +104,7 @@ public class FetchOptions {
                 contentType?.let { add("contentType: ${js(it.wire)}") }
                 filterSignals?.let { add("filterSignals: ${it.toJs()}") }
                 selector?.let { add("selector: ${js(it)}") }
-                if (headers.isNotEmpty()) add("headers: ${JsLiteral.write(headers)}")
+                if (headers.isNotEmpty() || headerExprs.isNotEmpty()) add("headers: ${headersJs()}")
                 openWhenHidden?.let { add("openWhenHidden: $it") }
                 retry?.let { add("retry: ${js(it.wire)}") }
                 retryInterval?.let { add("retryInterval: ${it.wholeMilliseconds()}") }
@@ -97,11 +118,34 @@ public class FetchOptions {
                     require(it >= 0) { "retryMaxCount must be 0 or more, not $it" }
                     add("retryMaxCount: $it")
                 }
-                requestCancellation?.let { add("requestCancellation: ${js(it.wire)}") }
-                (payloadExpr ?: payload?.let { JsLiteral.write(it) })?.let { add("payload: $it") }
+                require(requestCancellationExpr == null || requestCancellation == null) {
+                    "requestCancellation and requestCancellationExpr are one option; set one"
+                }
+                (requestCancellationExpr?.let(::expression) ?: requestCancellation?.let { js(it.wire) })?.let {
+                    add("requestCancellation: $it")
+                }
+                (payloadExpr?.let(::expression) ?: if (payloadSet) JsLiteral.write(payload) else null)?.let { add("payload: $it") }
             }
         return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
     }
+
+    private fun headersJs(): String {
+        // HTTP names a header in any case, and the browser's Headers joins the values of one name.
+        val names = (headers.keys.toList() + headerExprs.keys).groupBy { it.lowercase() }.values.firstOrNull { it.size > 1 }
+        require(names == null) { "headers ${names?.joinToString(" and ")} are one header: HTTP names a header in any case" }
+        val written = headers.map { (k, v) -> "${JsLiteral.key(k)}: ${js(v)}" }
+        val computed = headerExprs.map { (k, v) -> "${JsLiteral.key(k)}: ${expression(v)}" }
+        return (written + computed).joinToString(", ", "{", "}")
+    }
+}
+
+/**
+ * [text], a raw JavaScript expression, in parentheses: one value where it is written, which cannot
+ * close the argument or the object around it and open one of its own. Refused when there is none.
+ */
+private fun expression(text: String): String {
+    require(text.isNotBlank()) { "an expression must not be blank" }
+    return "($text)"
 }
 
 /**
@@ -117,44 +161,80 @@ private fun backend(
     options: FetchOptions.() -> Unit,
 ): String {
     val opts = FetchOptions().apply(options).toJs()
-    return if (opts == null) "@$action(${js(uri)})" else "@$action(${js(uri)}, $opts)"
+    return if (opts == null) "@$action($uri)" else "@$action($uri, $opts)"
 }
 
 /** `@get('/uri')`: fetch with signals in the query string, response as SSE or a Datastar response. */
 public fun get(
     uri: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("get", uri, options)
+): String = backend("get", js(uri), options)
+
+/** `@get(expression)`: [get] with the address a raw JavaScript expression, e.g. `"'/items/' + ${'$'}id"`. */
+public fun getExpr(
+    expression: String,
+    options: FetchOptions.() -> Unit = {},
+): String = backend("get", expression(expression), options)
 
 /** `@post('/uri')`: signals in the body. */
 public fun post(
     uri: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("post", uri, options)
+): String = backend("post", js(uri), options)
+
+/** `@post(expression)`: [post] with the address an expression, as in [getExpr]. */
+public fun postExpr(
+    expression: String,
+    options: FetchOptions.() -> Unit = {},
+): String = backend("post", expression(expression), options)
 
 /** `@put('/uri')`. */
 public fun put(
     uri: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("put", uri, options)
+): String = backend("put", js(uri), options)
+
+/** `@put(expression)`: [put] with the address an expression, as in [getExpr]. */
+public fun putExpr(
+    expression: String,
+    options: FetchOptions.() -> Unit = {},
+): String = backend("put", expression(expression), options)
 
 /** `@patch('/uri')`. */
 public fun patch(
     uri: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("patch", uri, options)
+): String = backend("patch", js(uri), options)
+
+/** `@patch(expression)`: [patch] with the address an expression, as in [getExpr]. */
+public fun patchExpr(
+    expression: String,
+    options: FetchOptions.() -> Unit = {},
+): String = backend("patch", expression(expression), options)
 
 /** `@delete('/uri')`: signals in the query string. */
 public fun delete(
     uri: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("delete", uri, options)
+): String = backend("delete", js(uri), options)
+
+/** `@delete(expression)`: [delete] with the address an expression, as in [getExpr]. */
+public fun deleteExpr(
+    expression: String,
+    options: FetchOptions.() -> Unit = {},
+): String = backend("delete", expression(expression), options)
 
 /** `@query('/uri')`: the HTTP QUERY method, signals in the body, read-only semantics. */
 public fun query(
     uri: String,
     options: FetchOptions.() -> Unit = {},
-): String = backend("query", uri, options)
+): String = backend("query", js(uri), options)
+
+/** `@query(expression)`: [query] with the address an expression, as in [getExpr]. */
+public fun queryExpr(
+    expression: String,
+    options: FetchOptions.() -> Unit = {},
+): String = backend("query", expression(expression), options)
 
 /**
  * `@setAll(value, filter)`: set every matching signal. The filter of these two actions is
@@ -166,6 +246,15 @@ public fun setAll(
     filter: SignalFilter? = null,
 ): String =
     if (filter == null) "@setAll(${JsLiteral.write(value)})" else "@setAll(${JsLiteral.write(value)}, ${filter.withInclude().toJs()})"
+
+/** `@setAll(expression, filter)`: [setAll] with the value a raw JavaScript expression, e.g. a signal. */
+public fun setAllExpr(
+    expression: String,
+    filter: SignalFilter? = null,
+): String {
+    val value = expression(expression)
+    return if (filter == null) "@setAll($value)" else "@setAll($value, ${filter.withInclude().toJs()})"
+}
 
 /** `@toggleAll(filter)`: flip every matching boolean signal. See [setAll] for the filter. */
 public fun toggleAll(filter: SignalFilter? = null): String =

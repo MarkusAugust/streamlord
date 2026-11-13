@@ -86,6 +86,8 @@ public final class io/github/markusaugust/streamlord/html/pro/ProActionsKt {
 	public static synthetic fun clipboardExpr$default (Ljava/lang/String;ZILjava/lang/Object;)Ljava/lang/String;
 	public static final fun fit (Ljava/lang/String;Ljava/lang/Number;Ljava/lang/Number;Ljava/lang/Number;Ljava/lang/Number;ZZ)Ljava/lang/String;
 	public static synthetic fun fit$default (Ljava/lang/String;Ljava/lang/Number;Ljava/lang/Number;Ljava/lang/Number;Ljava/lang/Number;ZZILjava/lang/Object;)Ljava/lang/String;
+	public static final fun fitExpr (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZ)Ljava/lang/String;
+	public static synthetic fun fitExpr$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZILjava/lang/Object;)Ljava/lang/String;
 	public static final fun intl (Lio/github/markusaugust/streamlord/html/pro/IntlType;Ljava/lang/String;Ljava/util/Map;[Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun intl$default (Lio/github/markusaugust/streamlord/html/pro/IntlType;Ljava/lang/String;Ljava/util/Map;[Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 }

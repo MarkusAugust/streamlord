@@ -8,6 +8,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a
+  `data-on` listens for, after `attribute`. Source that names its arguments, or passes four or fewer,
+  compiles as before; code compiled against the old signature needs a rebuild.
+- The editors say a mode that needs a selector, and a blank or multi-line selector of
+  `removeElements`, in core's words, `patchElements throws: Patch mode 'inner' requires a selector.`,
+  where they had words of their own.
+- An action's hover in the editors names each parameter with what it takes and what it is, as the
+  reference has it, and links the action's place in the reference, where it gave the signature and a line.
+- `fit` in streamlord-html-pro names its flags `shouldClamp` and `shouldRound`, as the reference
+  does, where it named them `clamp` and `round`. A call that names them needs the new names.
 - The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.
 - Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
   `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
@@ -121,6 +131,27 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- The editors flag a literal argument of an SSE call or an answer that core refuses as it runs, in
+  core's own words: an empty or non-ASCII `eventId`, a `retry` of no time, less or a fraction of a
+  millisecond, a blank or multi-line selector or `viewTransitionSelector`, signals that are not one
+  JSON object, a blank script, a `javascript:` redirect, elements that are only white space, and a
+  selector a response header cannot carry. The rules live once, in core's `EventRules`. A call is
+  judged in a file that imports Streamlord and neither declares the name nor imports it from
+  elsewhere, made without a receiver, on `this`, on one of core's companions, on a receiver named
+  as a stream (`sse`, `stream`, `datastar`), or on `call` for Ktor's `respond*`.
+- The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
+  dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
+  there that the client never dispatches, `'start'` for `'started'`, is warned of, with the fix.
+- The backend actions of streamlord-html take expressions where the client does: `getExpr`,
+  `postExpr`, `putExpr`, `patchExpr`, `deleteExpr` and `queryExpr` take the address as an
+  expression, `headerExprs` takes header values as expressions, `requestCancellationExpr` takes an
+  `AbortController`, and `setAllExpr` takes the value of `@setAll` as an expression. In
+  streamlord-html-pro, `fitExpr` takes the ends of the ranges as expressions. Each expression is
+  written in parentheses, so one that holds a comma or a brace stays one value, or fails as a syntax
+  error, and never opens options of its own. `payloadExpr` and `clipboardExpr` are written so too,
+  and refuse a blank expression. A header named twice, in `headers` and `headerExprs` or
+  in either, in any case (`Authorization` and `authorization`), is refused, as is
+  `requestCancellationExpr` set with `requestCancellation`.
 - An answer of elements that is not a stream can name the element its view transition runs on:
   `viewTransitionSelector`, sent as the header `datastar-view-transition-selector`, which
   Datastar 1.0.5 reads. It is sent only with `useViewTransition`, as in a stream.
@@ -213,6 +244,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- `payload = null` in the options of a backend action is written as `payload: null`, and the client
+  sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the
+  body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the
+  empty object, `readSignalsJson()` and a typed `readSignals<T>()` give `null`, and
+  `readSignalsOr(default)` the default, in core, Ktor, Spring WebMvc and WebFlux alike, where it threw.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in

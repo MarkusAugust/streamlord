@@ -1,7 +1,7 @@
 {"what":"file","language":"kotlin"}
 {"what":"diagnostic","code":"missing-id","link":"https://data-star.dev/reference/sse_events","message":"<div> has no id. Without a selector, Datastar matches top-level elements by id and silently ignores the rest.","range":"2:24-2:29","severity":"Warning","source":"streamlord"}
-{"what":"diagnostic","code":"mode-needs-selector","link":"https://data-star.dev/reference/sse_events","message":"Mode APPEND requires a selector; Streamlord will reject this event at runtime.","range":"4:7-4:20","severity":"Error","source":"streamlord"}
-{"what":"diagnostic","code":"blank-selector","message":"Selector must not be blank.","range":"5:22-5:25","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"mode-needs-selector","link":"https://data-star.dev/reference/sse_events","message":"patchElements throws: Patch mode 'append' requires a selector.","range":"4:7-4:20","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"blank-selector","link":"https://data-star.dev/reference/sse_events","message":"removeElements throws: selector must not be blank.","range":"5:22-5:25","severity":"Error","source":"streamlord"}
 {"what":"diagnostic","code":"script-close","message":"`</script` inside a script body. Streamlord escapes it to `<\\/script`, which only works inside a JavaScript string or regex.","range":"6:31-6:39","severity":"Warning","source":"streamlord"}
 {"what":"action","at":"1:1-9:1","n":0,"after":{"value":"594daa407aad"},"edits":[{"file":"drawn/kotlin/blank-selector-2.kt","range":"2:28-2:28","text":" id=\"div\""}],"kind":"quickfix","preferred":true,"title":"Add id=\"div\""}
 {"what":"action","at":"1:1-9:1","n":1,"after":{"value":"4b6876489d77"},"edits":[{"file":"drawn/kotlin/blank-selector-2.kt","range":"4:35-4:35","text":"selector = \"\", "}],"kind":"quickfix","preferred":true,"title":"Add selector = \"\""}

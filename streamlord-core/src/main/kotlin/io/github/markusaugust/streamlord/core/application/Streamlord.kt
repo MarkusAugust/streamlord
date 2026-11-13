@@ -251,7 +251,8 @@ public class Streamlord(
      * While [requireJsonContentType] is on, a request whose body is declared anything but
      * `application/json` throws [SignalsMediaTypeException] before the body is read. A request
      * with no `Content-Type` has its body read first, within [maxSignalsSize], and throws it
-     * after the read when the body is not blank; a blank one is no signals, and `null`.
+     * after the read when the body is not blank; a blank one is no signals, and `null`. So is the
+     * JSON `null`, which the client sends for `payload: null` in a backend action's options.
      */
     public suspend fun readSignalsJson(request: IncomingRequest): String? {
         val inQuery = request.carriesSignalsInQuery
@@ -265,7 +266,7 @@ public class Streamlord(
             } else {
                 request.bodyText(maxSignalsSize)
             }
-        val text = raw?.takeIf { it.isNotBlank() } ?: return null
+        val text = raw?.takeIf { it.isNotBlank() && it.trim() != "null" } ?: return null
         if (text.length > maxSignalsSize) throw SignalsTooLargeException(text.length.toLong(), maxSignalsSize)
         if (checked && contentType == null) throw SignalsMediaTypeException(null)
         return text

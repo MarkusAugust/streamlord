@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
@@ -63,6 +64,13 @@ class CatalogTest {
                 if (pro) assertTrue(fn !in freeAttributeFns, "pro attribute function $fn must not exist in the free module")
             }
         }
+    }
+
+    @Test
+    fun `the types of intl are the catalog's, in its order`() {
+        val intl = catalog.array("actions")!!.objects().single { it.string("name") == "intl" }
+        val types = (intl.array("values")!!.first() as JsonArray).strings()
+        assertEquals(types, IntlType.entries.map { it.wire })
     }
 
     @Test

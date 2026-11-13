@@ -1,20 +1,34 @@
 public final class io/github/markusaugust/streamlord/html/ActionsKt {
 	public static final fun delete (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun delete$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun deleteExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun deleteExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun get (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun get$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun getExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun getExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun js (Ljava/lang/String;)Ljava/lang/String;
 	public static final fun patch (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun patch$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun patchExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun patchExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun peek (Ljava/lang/String;)Ljava/lang/String;
 	public static final fun post (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun post$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun postExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun postExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun put (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun put$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun putExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun putExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun query (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun query$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun queryExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static synthetic fun queryExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun setAll (Ljava/lang/Object;Lio/github/markusaugust/streamlord/html/SignalFilter;)Ljava/lang/String;
 	public static synthetic fun setAll$default (Ljava/lang/Object;Lio/github/markusaugust/streamlord/html/SignalFilter;ILjava/lang/Object;)Ljava/lang/String;
+	public static final fun setAllExpr (Ljava/lang/String;Lio/github/markusaugust/streamlord/html/SignalFilter;)Ljava/lang/String;
+	public static synthetic fun setAllExpr$default (Ljava/lang/String;Lio/github/markusaugust/streamlord/html/SignalFilter;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun toggleAll (Lio/github/markusaugust/streamlord/html/SignalFilter;)Ljava/lang/String;
 	public static synthetic fun toggleAll$default (Lio/github/markusaugust/streamlord/html/SignalFilter;ILjava/lang/Object;)Ljava/lang/String;
 }
@@ -151,11 +165,13 @@ public final class io/github/markusaugust/streamlord/html/FetchOptions {
 	public fun <init> ()V
 	public final fun getContentType ()Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
 	public final fun getFilterSignals ()Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public final fun getHeaderExprs ()Ljava/util/Map;
 	public final fun getHeaders ()Ljava/util/Map;
 	public final fun getOpenWhenHidden ()Ljava/lang/Boolean;
 	public final fun getPayload ()Ljava/lang/Object;
 	public final fun getPayloadExpr ()Ljava/lang/String;
 	public final fun getRequestCancellation ()Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
+	public final fun getRequestCancellationExpr ()Ljava/lang/String;
 	public final fun getRetry ()Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
 	public final fun getRetryInterval-FghU774 ()Lkotlin/time/Duration;
 	public final fun getRetryMaxCount ()Ljava/lang/Integer;
@@ -164,11 +180,13 @@ public final class io/github/markusaugust/streamlord/html/FetchOptions {
 	public final fun getSelector ()Ljava/lang/String;
 	public final fun setContentType (Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;)V
 	public final fun setFilterSignals (Lio/github/markusaugust/streamlord/html/SignalFilter;)V
+	public final fun setHeaderExprs (Ljava/util/Map;)V
 	public final fun setHeaders (Ljava/util/Map;)V
 	public final fun setOpenWhenHidden (Ljava/lang/Boolean;)V
 	public final fun setPayload (Ljava/lang/Object;)V
 	public final fun setPayloadExpr (Ljava/lang/String;)V
 	public final fun setRequestCancellation (Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;)V
+	public final fun setRequestCancellationExpr (Ljava/lang/String;)V
 	public final fun setRetry (Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;)V
 	public final fun setRetryInterval-BwNAW2A (Lkotlin/time/Duration;)V
 	public final fun setRetryMaxCount (Ljava/lang/Integer;)V

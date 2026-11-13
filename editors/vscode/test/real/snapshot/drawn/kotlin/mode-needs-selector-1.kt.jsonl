@@ -1,5 +1,5 @@
 {"what":"file","language":"kotlin"}
-{"what":"diagnostic","code":"mode-needs-selector","link":"https://data-star.dev/reference/sse_events","message":"Mode APPEND requires a selector; Streamlord will reject this event at runtime.","range":"1:1-1:14","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"mode-needs-selector","link":"https://data-star.dev/reference/sse_events","message":"patchElements throws: Patch mode 'append' requires a selector.","range":"1:1-1:14","severity":"Error","source":"streamlord"}
 {"what":"action","at":"1:1-1:14","n":0,"after":"patchElements(\"<li>x</li>\", selector = \"\", mode = APPEND)\n","edits":[{"file":"drawn/kotlin/mode-needs-selector-1.kt","range":"1:29-1:29","text":"selector = \"\", "}],"kind":"quickfix","preferred":true,"title":"Add selector = \"\""}
 {"what":"action","at":"1:1-2:1","n":0,"after":"patchElements(\"<li>x</li>\", selector = \"\", mode = APPEND)\n","edits":[{"file":"drawn/kotlin/mode-needs-selector-1.kt","range":"1:29-1:29","text":"selector = \"\", "}],"kind":"quickfix","preferred":true,"title":"Add selector = \"\""}
 {"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}

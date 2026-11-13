@@ -106,14 +106,31 @@ internal fun attributeDoc(
 /** Markdown documentation of an option of the backend actions: its type, its default and what it does. */
 internal fun fetchOptionDoc(o: FetchOption): String = "**${o.name}**: `${o.type}`, default `${o.default}`\n\n${o.doc}"
 
-/** Markdown documentation of an action, with its signature and the Kotlin helper when asked for. */
+/**
+ * Markdown documentation of an action: its signature, each parameter with the kind the catalog
+ * gives it and what it is, the link to the reference, and the Kotlin helper when asked for.
+ */
 internal fun actionDoc(
     a: ActionSpec,
     withKotlin: Boolean = true,
+    catalog: Catalog = Catalog.default,
 ): String {
+    val kinds = catalog.actionKinds[a.name].orEmpty()
+    val docs = catalog.parameterDocs[a.name].orEmpty()
+    val parameters =
+        a.parameters.mapIndexed { n, p ->
+            val kind =
+                kinds.getOrNull(n)?.takeIf { it != ArgumentKind.ANY }?.phrase()?.let {
+                    it.replaceFirstChar(Char::uppercaseChar) +
+                        ". "
+                }
+            "`$p`: ${kind.orEmpty()}${docs.getOrNull(n).orEmpty()}"
+        }
     val pro = if (a.pro) "\n\n_Datastar Pro._" else ""
     val kotlin = if (withKotlin) "\n\nKotlin: `${a.kotlin}()`" else ""
-    return "**${a.signature}**\n\n${a.doc}$pro$kotlin"
+    return "**${a.signature}**\n\n${a.doc}\n\n${parameters.joinToString(
+        "  \n",
+    )}$pro\n\n[Reference](${Docs.ACTIONS}#${a.name.lowercase()})$kotlin"
 }
 
 /** The Markdown as plain HTML for editors that render HTML: bold, code, italics, links and paragraphs only, which is all the docs use. */
