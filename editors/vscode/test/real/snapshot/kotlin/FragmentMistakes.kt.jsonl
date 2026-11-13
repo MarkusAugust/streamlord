@@ -54,16 +54,16 @@
 {"what":"action","at":"43:55-43:61","n":0,"after":{"value":"2362f4e41e66"},"edits":[{"file":"kotlin/FragmentMistakes.kt","range":"43:55-43:61","text":"%s"},{"file":"kotlin/FragmentMistakes.kt","range":"43:66-43:66","text":", query"}],"kind":"quickfix","preferred":true,"title":"Make $query a %s placeholder, which interpolate escapes"}
 {"what":"hover","at":"16:48-16:57","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"16:48-16:57"}]}
 {"what":"hover","at":"20:49-20:58","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"20:49-20:58"}]}
-{"what":"hover","at":"20:61-20:66","answers":[{"contents":["**$count**\n\nThe signal count, read from Datastar's store."],"range":"20:60-20:66"}]}
+{"what":"hover","at":"20:61-20:66","answers":[{"contents":["**$count**\n\nDatastar reads it as `$['count']`, the signal path count in its store."],"range":"20:60-20:66"}]}
 {"what":"hover","at":"24:35-24:48","answers":[{"contents":[{"value":"5204ed61fb46"}],"range":"24:35-24:48"}]}
 {"what":"hover","at":"26:34-26:62","answers":[{"contents":[{"value":"5204ed61fb46"}],"range":"26:34-26:62"}]}
 {"what":"hover","at":"30:36-30:45","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"30:36-30:45"}]}
-{"what":"hover","at":"30:48-30:53","answers":[{"contents":["**$count**\n\nThe signal count, read from Datastar's store."],"range":"30:47-30:53"}]}
+{"what":"hover","at":"30:48-30:53","answers":[{"contents":["**$count**\n\nDatastar reads it as `$['count']`, the signal path count in its store."],"range":"30:47-30:53"}]}
 {"what":"hover","at":"34:27-34:37","answers":[{"contents":["**data-nonce**\n\nOn the html element: enables CSP mode with this nonce.\n\n`data-nonce=\"nonce\"`"],"range":"34:27-34:37"}]}
 {"what":"hover","at":"36:29-36:38","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"36:29-36:38"}]}
-{"what":"hover","at":"36:41-36:49","answers":[{"contents":["**$my-count**\n\nThe signal my-count, read from Datastar's store."],"range":"36:40-36:49"}]}
+{"what":"hover","at":"36:41-36:49","answers":[{"contents":["**$my-count**\n\nDatastar reads it as `$['my-count']`, the signal path my-count in its store."],"range":"36:40-36:49"}]}
 {"what":"hover","at":"38:36-38:45","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"38:36-38:45"}]}
-{"what":"hover","at":"38:48-38:75","answers":[{"contents":["**$nobodyInTheForgeDefinesThis**\n\nThe signal nobodyInTheForgeDefinesThis, read from Datastar's store."],"range":"38:47-38:75"}]}
+{"what":"hover","at":"38:48-38:75","answers":[{"contents":["**$nobodyInTheForgeDefinesThis**\n\nDatastar reads it as `$['nobodyInTheForgeDefinesThis']`, the signal path nobodyInTheForgeDefinesThis in its store."],"range":"38:47-38:75"}]}
 {"what":"hover","at":"41:28-41:39","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`"],"range":"41:28-41:39"}]}
 {"what":"hover","at":"41:46-41:55","answers":[{"contents":[{"value":"86295d9773ed"}],"range":"41:46-41:55"}]}
 {"what":"definition","at":"30:48-30:53","answers":[{"file":"drawn/html/expressions.html","range":"4:25-4:30"},{"file":"drawn/html/expressions.html","range":"73:25-73:30"},{"file":"drawn/kotlin/kotlin-interpolation-2.kt","range":"3:23-3:28"},{"file":"kotlin/ViewMistakes.kt","range":"21:22-21:27"},{"file":"kotlin/ViewMistakes.kt","range":"40:44-40:49"}]}

@@ -4,7 +4,7 @@
 {"what":"action","at":"1:19-1:24","n":0,"after":"<input data-bind=\"user\">\n","edits":[{"file":"drawn/html/signal-name-1.html","range":"1:19-1:20","text":""}],"kind":"quickfix","preferred":true,"title":"Change to user"}
 {"what":"hover","at":"1:2-1:7","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"1:2-1:7"}]}
 {"what":"hover","at":"1:8-1:17","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"1:8-1:17"},{"contents":[{"value":"dc28109c20fa"}],"range":"1:8-1:17"}]}
-{"what":"hover","at":"1:20-1:24","answers":[{"contents":["**$user**\n\nThe signal user, read from Datastar's store."],"range":"1:19-1:24"}]}
+{"what":"hover","at":"1:20-1:24","answers":[{"contents":["**$user**\n\nDatastar reads it as `$['user']`, the signal path user in its store."],"range":"1:19-1:24"}]}
 {"what":"definition","at":"1:19-1:24","answers":[{"file":"drawn/html/signal-name-1.html","range":"1:19-1:24"}]}
 {"what":"references","at":"1:19-1:24","answers":[{"file":"drawn/html/signal-name-1.html","range":"1:19-1:24"}]}
 {"what":"rename","at":"1:1-1:18","error":"No signal here to rename."}
