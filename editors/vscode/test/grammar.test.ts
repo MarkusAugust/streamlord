@@ -23,7 +23,15 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.kotlin.injection": read("syntaxes/kotlin-injection.tmLanguage.json"),
   "streamlord.kotlin.dsl.injection": read("syntaxes/kotlin-dsl-injection.tmLanguage.json"),
   "streamlord.html.injection": read("syntaxes/html-injection.tmLanguage.json"),
+  "streamlord.kotlin.template.injection": read("syntaxes/kotlin-template-injection.tmLanguage.json"),
+  // VS Code's own Handlebars grammar, which brings its own tags; a template language that wraps HTML as jte's does.
+  "text.html.handlebars": read("test/fixtures/host-handlebars.json"),
+  "text.html.jte": { scopeName: "text.html.jte", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
+  "text.html.derivative": { scopeName: "text.html.derivative", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
 };
+
+/** The extension's grammars, injected where its package.json says, as VS Code injects them. */
+const contributed = (JSON.parse(readFileSync(new URL("package.json", root), "utf8")) as { contributes: { grammars: { scopeName: string; injectTo?: string[] }[] } }).contributes.grammars;
 
 let registry: textmate.Registry;
 
@@ -36,7 +44,7 @@ before(async () => {
       createOnigString: (s: string) => new oniguruma.OnigString(s),
     }),
     loadGrammar: async (scope: string) => grammars[scope] ?? null,
-    getInjections: (scope: string) => (scope === "source.kotlin" ? ["streamlord.kotlin.injection", "streamlord.kotlin.dsl.injection", "streamlord.html.injection"] : scope === "text.html.basic" ? ["streamlord.html.injection"] : undefined),
+    getInjections: (scope: string) => contributed.filter((g) => g.injectTo?.includes(scope)).map((g) => g.scopeName),
   });
 });
 
@@ -77,7 +85,7 @@ describe("kotlin injection grammar", () => {
     assert.ok(!embedded(await tokens("source.kotlin", call, false)), "without it");
     const inPackage = await tokenLines("source.kotlin", ["package io.github.markusaugust.streamlord.html", call]);
     assert.ok(embedded(inPackage[1]!), "in the DSL's own package");
-    const html = await tokens("source.kotlin", `patchElements("""<div data-text="$count"></div>""")`, false);
+    const html = await tokens("source.kotlin", `patchElements($$"""<div data-text="$count"></div>""")`, false);
     assert.match(scopeOf(html, "count"), /variable\.other\.constant\.signal\.datastar/);
     // An import inside a comment or a raw string opens nothing, and a name that only starts as the package is another.
     for (const [why, lines] of [
@@ -164,7 +172,7 @@ describe("kotlin injection grammar", () => {
 
   // The client reads a signal as \$(\w+(?:[.-]\w+)*) (engine.ts): digits and hyphens are part of the name.
   it("reads a signal as far as the client does", async () => {
-    const t = await tokens("source.kotlin", `dataText("$123 + $foo-bar + $items.0.name")`);
+    const t = await tokens("source.kotlin", `dataText($$"$123 + $foo-bar + $items.0.name")`);
     assert.match(scopeOf(t, "123"), /variable\.other\.constant\.signal\.datastar/);
     assert.match(scopeOf(t, "foo-bar"), /variable\.other\.constant\.signal\.datastar/);
     assert.match(scopeOf(t, "items"), /variable\.other\.constant\.signal\.datastar/);
@@ -172,7 +180,7 @@ describe("kotlin injection grammar", () => {
   });
 
   it("highlights datastar tokens inside dsl strings", async () => {
-    const t = await tokens("source.kotlin", `dataOnClick("$count++; @post('/x', {contentType: 'form', retry: 'never'})")`);
+    const t = await tokens("source.kotlin", `dataOnClick("\\$count++; @post('/x', {contentType: 'form', retry: 'never'})")`);
     assert.match(scopeOf(t, "count"), /variable\.other\.constant\.signal\.datastar/);
     assert.match(scopeOf(t, "$"), /punctuation\.definition\.signal\.datastar/);
     assert.match(scopeOf(t, "post"), /entity\.name\.function\.action\.backend\.datastar/);
@@ -195,13 +203,13 @@ describe("kotlin injection grammar", () => {
   });
 
   it("highlights html and data-* attributes inside patchElements strings", async () => {
-    const t = await tokens("source.kotlin", `s.patchElements("""<div id="a" data-on:click__debounce.500ms.leading="$n++"></div>""")`);
+    const t = await tokens("source.kotlin", `s.patchElements($$"""<div id="a" data-on:click__debounce.500ms.leading="$n++"></div>""")`);
     assert.match(scopeOf(t, "data-"), /entity\.other\.attribute-name\.datastar\.prefix/);
     assert.match(scopeOf(t, "on"), /entity\.other\.attribute-name\.datastar\.plugin/);
     assert.match(scopeOf(t, "click"), /entity\.other\.attribute-name\.datastar\.key/);
     assert.match(scopeOf(t, "debounce"), /keyword\.other\.modifier\.datastar/);
-    assert.match(scopeOf(t, ".500ms"), /constant\.numeric\.duration\.datastar/);
-    assert.match(scopeOf(t, ".leading"), /constant\.other\.modifier-arg\.datastar/);
+    assert.match(scopeOf(t, "500ms"), /constant\.numeric\.duration\.datastar/);
+    assert.match(scopeOf(t, "leading"), /variable\.other\.enummember\.modifier-arg\.datastar/);
     assert.match(scopeOf(t, "n"), /variable\.other\.constant\.signal\.datastar/);
     assert.match(scopeOf(t, "div"), /entity\.name\.tag\.html/);
   });
@@ -263,7 +271,7 @@ describe("html injection grammar", () => {
     const t = await tokens("text.html.basic", `<div data-star-on-intersect__threshold.50="x()">`);
     assert.match(scopeOf(t, "data-star-"), /attribute-name\.datastar\.prefix/);
     assert.match(scopeOf(t, "on-intersect"), /attribute-name\.datastar\.plugin/);
-    assert.match(scopeOf(t, ".50"), /constant\.numeric\.datastar/);
+    assert.match(scopeOf(t, "50"), /constant\.numeric\.datastar/);
   });
 
   it("leaves a data-* attribute of the page's own, or a typo, to HTML", async () => {
@@ -287,8 +295,10 @@ describe("html injection grammar", () => {
   it("reads only the value of an attribute that takes an expression as one", async () => {
     const t = await tokens("text.html.basic", `<input data-bind="user.name" data-show="$open">`);
     assert.match(scopeOf(t, "bind"), /attribute-name\.datastar\.plugin/);
-    assert.ok(!scopeOf(t, "user.name").includes("datastar"), scopeOf(t, "user.name"));
-    assert.match(scopeOf(t, "user.name"), /string\.quoted\.double\.html/);
+    // A signal's name, as the client reads it, not an expression.
+    assert.match(scopeOf(t, "user"), /variable\.other\.constant\.signal\.datastar/);
+    assert.match(scopeOf(t, ".name"), /variable\.other\.property\.signal-path\.datastar/);
+    assert.ok(!scopeOf(t, "user").includes("meta.embedded.inline.datastar"), scopeOf(t, "user"));
     assert.ok(t.some((x) => x.text.includes("open") && x.scopes.includes("meta.embedded.inline.datastar")));
   });
 
@@ -297,7 +307,7 @@ describe("html injection grammar", () => {
     assert.ok(html.some((x) => x.text.includes("open") && x.scopes.includes("meta.embedded.inline.datastar")), "single quotes");
     assert.ok(html.some((x) => x.text.includes("a") && x.scopes.includes("meta.embedded.inline.datastar")), "JSON in single quotes");
     assert.match(scopeOf(html, "bind"), /attribute-name\.datastar\.plugin/);
-    assert.ok(html.some((x) => x.text === "name" && !x.scopes.some((s) => s.includes("datastar"))), "a plain value keeps HTML's string");
+    assert.match(scopeOf(html, "name"), /variable\.other\.constant\.signal\.datastar/, "a signal name in single quotes");
     assert.match(scopeOf(html, "class"), /entity\.other\.attribute-name\.html/);
     const kt = await tokens("source.kotlin", `val h = "<div data-show=\\"\\$open\\" data-text='\\$count' data-persist id=\\"a\\">"`, false);
     assert.match(scopeOf(kt, "open"), /signal\.datastar/);
@@ -328,8 +338,11 @@ describe("html injection grammar", () => {
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/html-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\(\?:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const of = (kinds: (k: string) => boolean) => [...new Set(catalog.attributes.filter((a) => kinds(a.valueKind)).map((a) => a.name))].sort();
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-value"].begin), of((k) => k === "expression"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k !== "expression"));
+    // A filter, {include: /x/}, is an object the client evaluates; a signal attribute names a signal.
+    assert.deepEqual(names(grammar.repository["datastar-attribute-with-value"].begin), of((k) => k === "expression" || k === "filter"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-with-unquoted-value"].match), of((k) => k === "expression" || k === "filter"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-with-signal-value"].begin), of((k) => k === "signal"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k === "text" || k === "none"));
     assert.deepEqual(names(grammar.repository["datastar-attribute-bare"].match), of(() => true));
   });
 
@@ -338,5 +351,337 @@ describe("html injection grammar", () => {
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
     const keys = /^\\b\(([A-Za-z|]+)\)/.exec(grammar.repository["option-keys"].match)?.[1]?.split("|").sort();
     assert.deepEqual(keys, [...catalog.fetchOptions.map((o) => o.name), "include", "exclude"].sort());
+  });
+});
+
+/** A token's own scopes: everything but the regions it sits in. */
+const own = (t: { scopes: string[] }) => t.scopes.filter((s) => !/^(meta|text|source)\./.test(s)).join(" ");
+
+/** Each token that is not white space, with its own scopes. */
+async function kinds(scope: string, line: string, withDsl = true): Promise<[string, string][]> {
+  return (await tokens(scope, line, withDsl)).filter((t) => t.text.trim() !== "").map((t) => [t.text, own(t)]);
+}
+
+/** The tokens of `line` from the first whose text is `from` on, and up to the one whose text is `to`. */
+function between(all: [string, string][], from: string, to?: string): [string, string][] {
+  const start = all.findIndex(([text]) => text === from);
+  assert.ok(start >= 0, `no token '${from}' in ${JSON.stringify(all)}`);
+  const rest = all.slice(start);
+  const end = to === undefined ? rest.length : rest.findIndex(([text]) => text === to) + 1;
+  assert.ok(end > 0, `no token '${to}'`);
+  return rest.slice(0, end);
+}
+
+const S = {
+  prefix: "entity.other.attribute-name.datastar.prefix",
+  plugin: "entity.other.attribute-name.datastar.plugin",
+  colon: "entity.other.attribute-name.datastar punctuation.separator.key.datastar",
+  key: "entity.other.attribute-name.datastar.key",
+  sigil: "entity.other.attribute-name.datastar punctuation.definition.modifier.datastar",
+  dot: "entity.other.attribute-name.datastar punctuation.separator.argument.datastar",
+  modifier: "keyword.other.modifier.datastar",
+  arg: "variable.other.enummember.modifier-arg.datastar",
+  number: "constant.numeric.datastar",
+  duration: "constant.numeric.duration.datastar",
+  dollar: "variable.other.constant.signal.datastar punctuation.definition.signal.datastar",
+  signal: "variable.other.constant.signal.datastar",
+  path: "variable.other.property.signal-path.datastar",
+  at: "entity.name.function.action.datastar punctuation.definition.action.datastar",
+  action: "entity.name.function.action.datastar",
+  backendAt: "entity.name.function.action.backend.datastar punctuation.definition.action.datastar",
+  backend: "entity.name.function.action.backend.datastar",
+  identifier: "variable.other.readwrite.datastar",
+  property: "variable.other.property.datastar",
+  objectKey: "variable.other.property.key.datastar",
+  option: "support.type.property-name.option.datastar",
+  method: "entity.name.function.method.datastar",
+  call: "entity.name.function.datastar",
+  global: "support.class.global.datastar",
+  accessor: "punctuation.accessor.datastar",
+  punctuation: "punctuation.datastar",
+  arithmetic: "keyword.operator.arithmetic.datastar",
+  assignment: "keyword.operator.assignment.datastar",
+  bitwise: "keyword.operator.bitwise.datastar",
+  spread: "keyword.operator.spread.datastar",
+  arrow: "storage.type.function.arrow.datastar",
+  escape: "constant.character.escape.kotlin",
+  dollarEscape: "constant.character.escape.dollar.kotlin",
+  stringStart: "punctuation.definition.string.begin.html",
+  stringEnd: "punctuation.definition.string.end.html",
+  ktStart: "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin",
+  ktEnd: "punctuation.definition.string.end.kotlin string.quoted.double.kotlin",
+  ktRawStart: "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin",
+  ktRawEnd: "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin",
+  templateBegin: "punctuation.definition.template-expression.begin.kotlin",
+  templateEnd: "punctuation.definition.template-expression.end.kotlin",
+  template: "variable.other.readwrite.kotlin",
+};
+
+describe("datastar colours, every token exactly", () => {
+  it("splits an attribute name, with a modifier after one with an argument", async () => {
+    const t = await kinds("text.html.basic", `<div data-on:keydown__case.kebab__window__debounce.500ms__threshold.50="x">`);
+    assert.deepEqual(between(t, "data-", "50"), [
+      ["data-", S.prefix],
+      ["on", S.plugin],
+      [":", S.colon],
+      ["keydown", S.key],
+      ["__", S.sigil],
+      ["case", S.modifier],
+      [".", S.dot],
+      ["kebab", S.arg],
+      ["__", S.sigil],
+      ["window", S.modifier],
+      ["__", S.sigil],
+      ["debounce", S.modifier],
+      [".", S.dot],
+      ["500ms", S.duration],
+      ["__", S.sigil],
+      ["threshold", S.modifier],
+      [".", S.dot],
+      ["50", S.number],
+    ]);
+  });
+
+  it("colours every part of plain JavaScript", async () => {
+    const t = await kinds("text.html.basic", `<div data-text="foo = {a: Math.max(x.length), b: go(() => typeof y)}; ...$g; @peek(() => 1)">`);
+    assert.deepEqual(between(t, "foo", "1"), [
+      ["foo", S.identifier],
+      ["=", S.assignment],
+      ["{", S.punctuation],
+      ["a", S.objectKey],
+      [":", S.arithmetic],
+      ["Math", S.global],
+      [".", S.accessor],
+      ["max", S.method],
+      ["(", S.punctuation],
+      ["x", S.identifier],
+      [".", S.accessor],
+      ["length", S.property],
+      [")", S.punctuation],
+      [",", S.punctuation],
+      ["b", S.objectKey],
+      [":", S.arithmetic],
+      ["go", S.call],
+      ["(", S.punctuation],
+      ["(", S.punctuation],
+      [")", S.punctuation],
+      ["=>", S.arrow],
+      ["typeof", "keyword.operator.expression.typeof.datastar"],
+      ["y", S.identifier],
+      [")", S.punctuation],
+      ["}", S.punctuation],
+      [";", S.punctuation],
+      ["...", S.spread],
+      ["$", S.dollar],
+      ["g", S.signal],
+      [";", S.punctuation],
+      ["@", S.at],
+      ["peek", S.action],
+      ["(", S.punctuation],
+      ["(", S.punctuation],
+      [")", S.punctuation],
+      ["=>", S.arrow],
+      ["1", S.number],
+    ]);
+  });
+
+  it("gives each keyword the scope TypeScript's grammar gives it", async () => {
+    const t = await kinds("text.html.basic", `<div data-init="if (x in o) return new A(this); let v = void delete a instanceof B; async function f() { await g }">`);
+    const of = (w: string) => t.find(([text]) => text === w)?.[1];
+    assert.equal(of("if"), "keyword.control.conditional.datastar");
+    assert.equal(of("return"), "keyword.control.flow.datastar");
+    assert.equal(of("await"), "keyword.control.flow.datastar");
+    assert.equal(of("in"), "keyword.operator.expression.in.datastar");
+    assert.equal(of("instanceof"), "keyword.operator.expression.instanceof.datastar");
+    assert.equal(of("void"), "keyword.operator.expression.void.datastar");
+    assert.equal(of("delete"), "keyword.operator.expression.delete.datastar");
+    assert.equal(of("new"), "keyword.operator.new.datastar");
+    assert.equal(of("this"), "variable.language.this.datastar");
+    assert.equal(of("let"), "storage.type.datastar");
+    assert.equal(of("function"), "storage.type.function.datastar");
+    assert.equal(of("async"), "storage.modifier.async.datastar");
+  });
+
+  it("reads numbers and operators as JavaScript does", async () => {
+    const t = await kinds("text.html.basic", `<div data-text=".5 + 10n ~ 1_000 ^ 0xFF | 1e3 & 2 ** 3">`);
+    assert.deepEqual(between(t, ".5", "3"), [
+      [".5", S.number],
+      ["+", S.arithmetic],
+      ["10n", S.number],
+      ["~", S.bitwise],
+      ["1_000", S.number],
+      ["^", S.bitwise],
+      ["0xFF", S.number],
+      ["|", S.bitwise],
+      ["1e3", S.number],
+      ["&", S.bitwise],
+      ["2", S.number],
+      ["**", S.arithmetic],
+      ["3", S.number],
+    ]);
+  });
+
+  it("divides after a value, opens a regex after an operator, and knows comments", async () => {
+    const t = await kinds("text.html.basic", `<div data-text="$a / 2 / $b /* $c */ + f(/x/) // $d">`);
+    assert.deepEqual(between(t, "$", "// $d"), [
+      ["$", S.dollar],
+      ["a", S.signal],
+      ["/", S.arithmetic],
+      ["2", S.number],
+      ["/", S.arithmetic],
+      ["$", S.dollar],
+      ["b", S.signal],
+      ["/* $c */", "comment.block.datastar"],
+      ["+", S.arithmetic],
+      ["f", S.call],
+      ["(", S.punctuation],
+      ["/x/", "string.regexp.datastar"],
+      [")", S.punctuation],
+      ["// $d", "comment.line.double-slash.datastar"],
+    ]);
+    assert.equal(t[t.length - 2]![1], S.stringEnd, "the comment ends where the value does");
+  });
+
+  it("reads an HTML entity quote as a string, an unquoted value as an expression", async () => {
+    const t = await kinds("text.html.basic", `<div data-text="&quot;x&quot; + 1" data-show=$open>`);
+    assert.deepEqual(between(t, "&quot;", "1"), [
+      ["&quot;", "string.quoted.double.datastar punctuation.definition.string.begin.datastar"],
+      ["x", "string.quoted.double.datastar"],
+      ["&quot;", "string.quoted.double.datastar punctuation.definition.string.end.datastar"],
+      ["+", S.arithmetic],
+      ["1", S.number],
+    ]);
+    assert.deepEqual(between(t, "show"), [
+      ["show", S.plugin],
+      ["=", "punctuation.separator.key-value.html"],
+      ["$", S.dollar],
+      ["open", S.signal],
+      [">", "punctuation.definition.tag.end.html"],
+    ]);
+  });
+
+  it("reads a filter's object, and a signal attribute's name", async () => {
+    const t = await kinds("text.html.basic", `<div data-persist="{include: /^a/}" data-indicator="busy" data-ref='box'>`);
+    assert.deepEqual(between(t, "{", "}"), [
+      ["{", S.punctuation],
+      ["include", S.option],
+      [":", S.arithmetic],
+      ["/^a/", "string.regexp.datastar"],
+      ["}", S.punctuation],
+    ]);
+    assert.deepEqual(between(t, "indicator"), [
+      ["indicator", S.plugin],
+      ["=", "punctuation.separator.key-value.html"],
+      ['"', S.stringStart],
+      ["busy", S.signal],
+      ['"', S.stringEnd],
+      ["data-", S.prefix],
+      ["ref", S.plugin],
+      ["=", "punctuation.separator.key-value.html"],
+      ["'", S.stringStart],
+      ["box", S.signal],
+      ["'", S.stringEnd],
+      [">", "punctuation.definition.tag.end.html"],
+    ]);
+  });
+
+  it("colours SVG and MathML attributes", async () => {
+    for (const line of [`<svg data-on:click="$a++"><circle data-attr:r="$r"/></svg>`, `<math data-show="$m"></math>`]) {
+      const t = await tokens("text.html.basic", line);
+      assert.ok(t.some((x) => x.scopes.includes(S.plugin)), line);
+      assert.ok(t.some((x) => x.scopes.includes(S.signal)), line);
+    }
+  });
+
+  it("colours a template language's HTML: Handlebars and jte", async () => {
+    for (const scope of ["text.html.handlebars", "text.html.jte"]) {
+      const t = await kinds(scope, `<div data-on:click="$a++" data-color="x">{{name}}</div>`);
+      assert.deepEqual(between(t, "data-", "a"), [["data-", S.prefix], ["on", S.plugin], [":", S.colon], ["click", S.key], ["=", "punctuation.separator.key-value.html"], ['"', S.stringStart], ["$", S.dollar], ["a", S.signal]], scope);
+      assert.ok(!t.some(([text, s]) => text.includes("color") && s.includes("datastar")), scope);
+    }
+    const injected = contributed.find((g) => g.scopeName === "streamlord.html.injection")!.injectTo!;
+    for (const scope of ["text.html.basic", "text.html.derivative", "text.html.handlebars", "text.html.mustache", "text.html.jte", "text.html.kte", "source.kotlin"]) assert.ok(injected.includes(scope), scope);
+  });
+});
+
+describe("datastar colours in Kotlin strings", () => {
+  it("leaves a Kotlin template to Kotlin, and reads an escaped dollar as a signal", async () => {
+    const t = await kinds("source.kotlin", `div { dataText("$n + \\$total + \${'$'}m + \${x}") }`);
+    assert.deepEqual(between(t, '"', '"'), [['"', S.ktStart], ["$", S.templateBegin], ["n", S.template], ["+", S.arithmetic], ["\\", S.escape], ["$", S.dollar], ["total", S.signal], ["+", S.arithmetic], ["${'$'}", S.dollarEscape], ["m", S.signal], ["+", S.arithmetic], ["${", S.templateBegin], ["x", "identifier.kotlin"], ["}", S.templateEnd], ['"', S.ktEnd]]);
+    const multi = await kinds("source.kotlin", `div { dataShow($$"$open && $\${id} > 0") }`);
+    assert.deepEqual(between(multi, "$", "0"), [["$", S.dollar], ["open", S.signal], ["&&", "keyword.operator.comparison.datastar"], ["$${", S.templateBegin], ["id", "identifier.kotlin"], ["}", S.templateEnd], [">", S.arithmetic], ["0", S.number]]);
+    const html = await kinds("source.kotlin", `val h = """<p data-text="$n + \${'$'}m"></p>"""`, false);
+    assert.deepEqual(between(html, "$", "m"), [["$", S.templateBegin], ["n", S.template], ["+", S.arithmetic], ["${'$'}", S.dollarEscape], ["m", S.signal]]);
+  });
+
+  it("colours a DSL call's expression on the next line, in a raw string, by name, and as a lone object", async () => {
+    const next = await tokenLines("source.kotlin", [DSL_IMPORT, "div { dataOn(", '    "click",', '    "\\$a++",', ") }", "val y = 2"]);
+    assert.ok(next[3]!.some((x) => x.scopes.includes(S.signal)), "the expression on its own line");
+    assert.ok(!next[2]!.some((x) => x.scopes.includes("meta.embedded.inline.datastar")), "the event is no expression");
+    assert.ok(next[5]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the next statement is code");
+    const first = await tokenLines("source.kotlin", [DSL_IMPORT, "div { dataText(", '    "\\$a"', ") }"]);
+    assert.ok(first[2]!.some((x) => x.scopes.includes(S.signal)), "a first argument on its own line");
+    const raw = await kinds("source.kotlin", `div { dataText($$"""$a + 1""") }`);
+    assert.deepEqual(between(raw, '$$"""', '"""'), [['$$"""', S.ktRawStart], ["$", S.dollar], ["a", S.signal], ["+", S.arithmetic], ["1", S.number], ['"""', S.ktRawEnd]]);
+    for (const call of [`dataOnClick(expression = "\\$b++")`, `dataSignals("{a: \\$b}")`, `dataClass("{x: \\$b}")`, `dataAttr("{x: \\$b}")`, `dataStyle("{x: \\$b}")`, `dataComputed("{x: () => \\$b}")`, `dataAnimate("{x: \\$b}")`]) {
+      const t = await kinds("source.kotlin", `div { ${call} }`);
+      assert.ok(t.some(([text, s]) => text === "b" && s === S.signal), call);
+    }
+    const receiver = await tokens("source.kotlin", `fun f() { sse.executeScript("console.log(1)") }`, false);
+    assert.ok(receiver.some((x) => x.scopes.includes("meta.embedded.block.javascript")), "a call after a receiver");
+  });
+
+  it("colours the DSL's signal names", async () => {
+    for (const [call, name] of [[`dataBind("user.name")`, "user"], [`dataRef("box")`, "box"], [`dataIndicator("busy")`, "busy"], [`dataSignals("count", "0")`, "count"], [`dataComputed("total", "\\$a")`, "total"]] as const) {
+      const t = await kinds("source.kotlin", `div { ${call} }`);
+      assert.ok(t.some(([text, s]) => text === name && s === S.signal), `${call}: ${JSON.stringify(t)}`);
+    }
+  });
+
+  it("colours HTML in a raw string that opens on the next line", async () => {
+    const lines = await tokenLines("source.kotlin", ['val h = """', '    <div data-text="${\'$\'}a">', '""".trimIndent()', 'val sql = """', "    select $x", '"""', "val y = 2"]);
+    assert.ok(lines[1]!.some((x) => x.scopes.includes(S.plugin)), "the attribute");
+    assert.ok(lines[1]!.some((x) => x.scopes.includes(S.signal)), "the signal");
+    assert.ok(!lines[4]!.some((x) => x.scopes.some((s) => s.includes("html"))), "a string that is no HTML");
+    assert.ok(lines[4]!.some((x) => x.scopes.includes("string.quoted.triple.kotlin")), "still a string");
+    assert.ok(lines[6]!.every((x) => !x.scopes.some((s) => s.startsWith("string"))), "the next statement is code");
+  });
+
+  it("reads a long line without backtracking", async () => {
+    const value = Array.from({ length: 400 }, () => "$a / 2 / $b + {k: {n: [($c)]}}").join(" + ");
+    const started = performance.now();
+    await tokens("text.html.basic", `<div data-text="${value}">`);
+    await tokens("source.kotlin", `div { dataText("${value.replaceAll("$", "\\$")}") }`);
+    await tokens("text.html.basic", `<div data-text="${"/".repeat(2000)}${"{".repeat(500)}">`);
+    assert.ok(performance.now() - started < 3000, `took ${performance.now() - started} ms`);
+  });
+});
+
+describe("the lists both editors share", () => {
+  it("knows the catalog's backend actions, and the DSL's call sites", () => {
+    const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as {
+      actions: { name: string; kind: string }[];
+      kotlinCallSites: { expression: Record<string, { arg: number | string }> };
+    };
+    const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
+    const backend = /\(\?:?((?:[a-z]+\|)*[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
+    assert.deepEqual(backend, catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name).sort());
+    const kt = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
+    const names = (pattern: string) => /\\b\(?:?\(\?:((?:[A-Za-z]+\|)*[A-Za-z]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
+    const sites = Object.entries(catalog.kotlinCallSites.expression).filter(([n]) => !n.startsWith("$"));
+    const at = (arg: (a: number | string) => boolean) => sites.filter(([, s]) => arg(s.arg)).map(([n]) => n).sort();
+    assert.deepEqual(names(kt.repository["expression-call-first-arg"].begin), at((a) => a === 0));
+    assert.deepEqual(names(kt.repository["expression-call-second-arg"].begin), at((a) => a === 1 || a === "last"));
+    assert.deepEqual(names(kt.repository["expression-call-lone-object"].begin), at((a) => a === "last"));
+  });
+
+  it("knows the same globals and keywords as the analysis", () => {
+    const tokensKt = readFileSync(new URL("../../streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Tokens.kt", root), "utf8");
+    const set = (name: string) => [...new RegExp(`val ${name}[^=]*=\\s*setOf\\(([^)]*)\\)`).exec(tokensKt)![1]!.matchAll(/"(\w+)"/g)].map((m) => m[1]!).sort();
+    const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
+    const words = (pattern: string) => /\\b\((?:\?:)?([\w|]+)\)\\b/.exec(pattern)![1]!.split("|");
+    assert.deepEqual(words(expr.repository.globals.match).sort(), set("JS_GLOBALS"));
+    const keywords = (expr.repository.keywords.patterns as { match: string }[]).flatMap((p) => words(p.match));
+    assert.deepEqual([...keywords, ...words(expr.repository.constants.match)].sort(), set("JS_KEYWORDS"));
   });
 });
