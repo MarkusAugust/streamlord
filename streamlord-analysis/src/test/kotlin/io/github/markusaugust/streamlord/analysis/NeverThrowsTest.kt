@@ -118,15 +118,15 @@ class NeverThrowsTest {
     /** Everything an editor asks of a Kotlin file, as each editor may set it up. */
     private fun analyse(src: String) {
         for (opts in OPTIONS) {
-            val sites = analyzer.analyzeKotlinSites(src, opts)
+            val sites = analyzer.analyzeKotlinSites(opts.copy(text = src))
             for (site in sites) for (issue in site.issues) for (fix in issue.fixes) fix.apply(src)
             for (at in 0..src.length step 5) rewriteAt(sites, at)?.apply(src)
-            analyzer.signalReferencesInKotlin(src, opts)
+            analyzer.signalReferences(opts.copy(text = src))
         }
         analyzer.attributesIndexes(src)
         for (at in 0..src.length step 5) analyzer.htmlStringAt(src, at)
-        collectSignals(src, SourceLanguage.KOTLIN)
-        collectSignalDefinitions(src, SourceLanguage.KOTLIN)
+        collectSignals(Source(src, SourceLanguage.KOTLIN))
+        collectSignalDefinitions(Source(src, SourceLanguage.KOTLIN))
         constantNames(src)
         otherDeclaredNames(src)
     }
@@ -149,15 +149,15 @@ class NeverThrowsTest {
         const val COUNT = 4000
         val OPTIONS =
             listOf(
-                AnalyzeOptions(),
-                AnalyzeOptions(htmlDsl = true, valueFact = { _, _ -> ValueFact.STRING }),
-                AnalyzeOptions(htmlDsl = false, checkHtmlAttributes = false, valueFact = { start, _ ->
+                Source("", SourceLanguage.KOTLIN),
+                Source("", SourceLanguage.KOTLIN, htmlDsl = true, valueFact = { _, _ -> ValueFact.STRING }),
+                Source("", SourceLanguage.KOTLIN, htmlDsl = false, valueFact = { start, _ ->
                     ValueFact.entries[
                         start %
                             ValueFact.entries.size,
                     ]
                 }),
-                AnalyzeOptions(core = false),
+                Source("", SourceLanguage.KOTLIN, core = false),
             )
     }
 }

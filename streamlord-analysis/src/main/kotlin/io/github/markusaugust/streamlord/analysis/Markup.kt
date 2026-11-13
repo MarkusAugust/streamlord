@@ -436,7 +436,7 @@ public data class MarkupOptions(
     val hyphenatedSignals: Set<String> = emptySet(),
     /** Whether the markup is a template's or an HTML file's, whose template comments and tags are skipped, rather than a Kotlin string's. */
     val templates: Boolean = true,
-    /** As [AnalyzeOptions.prefixSetting]. */
+    /** As [Source.prefixSetting]. */
     val prefixSetting: String = PREFIX_SETTING,
 )
 

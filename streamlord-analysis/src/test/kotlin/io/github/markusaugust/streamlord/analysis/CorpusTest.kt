@@ -26,14 +26,17 @@ class CorpusTest {
         val prefix = case.string("prefix") ?: "data-"
         // A case may give the workspace's `const val` names, which modules the project has, and the calls that are not Streamlord's.
         val foreign = case.array("foreign")?.strings()?.toSet()
-        val opts =
-            AnalyzeOptions(
+        val starts = foreign?.let { callStarts(source, it).toSet() } ?: emptySet()
+
+        fun read(language: SourceLanguage) =
+            Source(
+                source,
+                language,
                 prefix,
-                true,
-                constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
-                htmlDsl = case.boolean("htmlDsl"),
                 core = case.boolean("core"),
-                foreignCalls = foreign?.let { callStarts(source, it).toSet() } ?: emptySet(),
+                htmlDsl = case.boolean("htmlDsl"),
+                constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
+                foreign = { _, at -> at in starts },
             )
         return when (kind) {
             "expression" -> {
@@ -45,23 +48,23 @@ class CorpusTest {
             }
 
             "html" -> {
-                analyzer.analyzeHtml(source, opts)
+                analyzer.analyzeHtml(read(SourceLanguage.HTML))
             }
 
             "kotlin" -> {
-                analyzer.analyzeKotlin(source, opts)
+                analyzer.analyzeKotlin(read(SourceLanguage.KOTLIN))
             }
 
             // The signals the source reads that it does not itself declare.
             "references" -> {
-                val defined = collectSignalDefinitions(source, SourceLanguage.HTML)
-                analyzer.signalReferencesInHtml(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML))
+                analyzer.signalReferences(read(SourceLanguage.HTML)).mapNotNull { unknownSignalIssue(it, defined) }
             }
 
             // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
             "kotlin-references" -> {
-                val defined = collectSignalDefinitions(source, SourceLanguage.KOTLIN)
-                analyzer.signalReferencesInKotlin(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
+                analyzer.signalReferences(read(SourceLanguage.KOTLIN)).mapNotNull { unknownSignalIssue(it, defined) }
             }
 
             else -> {

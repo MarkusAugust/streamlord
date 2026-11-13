@@ -97,10 +97,9 @@ private val READ_SIGNALS_BEFORE = regex("""\breadSignals\s*$""")
  * Declarations are collected the way completion collects them, which is deliberately generous:
  * a name offered twice costs nothing, and a name missed here would become a false warning.
  */
-public fun collectSignalFacts(
-    src: String,
-    language: SourceLanguage,
-): SignalFacts {
+public fun collectSignalFacts(source: Source): SignalFacts {
+    val src = source.text
+    val language = source.language
     if (language == SourceLanguage.HTML) {
         return SignalFacts(collectDeclaredSignals(src, language), emptySet(), emptyMap(), emptyList())
     }

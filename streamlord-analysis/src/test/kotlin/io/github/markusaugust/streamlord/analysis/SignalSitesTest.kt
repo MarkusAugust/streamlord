@@ -8,8 +8,8 @@ import kotlin.test.assertNull
 class SignalSitesTest {
     private val html =
         """<div data-signals:user.name="''" data-text="${'$'}user.name.length + ${'$'}other" data-on:click="${'$'}count = 1"></div>"""
-    private val declarations = signalDeclarations(html, SourceLanguage.HTML)
-    private val reads = Analyzer().signalReferencesInHtml(html)
+    private val declarations = signalDeclarations(Source(html, SourceLanguage.HTML))
+    private val reads = Analyzer().signalReferences(Source(html, SourceLanguage.HTML))
     private val sites = signalSites(reads, declarations, setOf("user", "user.name", "count"))
 
     private fun shown(site: SignalSite) =
@@ -59,11 +59,11 @@ class SignalSitesTest {
         val written = sites.filter { it.names("user", under = true) }.map { it.renameText(html, "user", "person") }
         assertEquals(listOf("person", "person.name"), written)
         val json = """<div data-signals="{user: {name: ''}}"></div>"""
-        val keys = signalSites(emptyList(), signalDeclarations(json, SourceLanguage.HTML), emptySet())
+        val keys = signalSites(emptyList(), signalDeclarations(Source(json, SourceLanguage.HTML)), emptySet())
         assertEquals(listOf("person", "name"), keys.map { it.renameText(json, "user", "person") })
         // A key inside the object stays as it is, so a rename of the object leaves it alone.
         val keyed = """<div data-signals:hero="{strength: 1}" data-signals="{user: {name: ''}}"></div>"""
-        val moved = signalSites(emptyList(), signalDeclarations(keyed, SourceLanguage.HTML), emptySet())
+        val moved = signalSites(emptyList(), signalDeclarations(Source(keyed, SourceLanguage.HTML)), emptySet())
         assertEquals(listOf("hero"), moved.filter { it.names("hero", under = true) }.map { keyed.substring(it.start, it.end) })
         assertEquals(listOf("user"), moved.filter { it.names("user", under = true) }.map { keyed.substring(it.start, it.end) })
     }

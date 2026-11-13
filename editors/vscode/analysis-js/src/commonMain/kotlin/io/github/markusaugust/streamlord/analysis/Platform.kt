@@ -10,7 +10,7 @@ public expect class ProjectIssue {
 
 internal expect fun Analyzer.issuesUnder(
     root: File,
-    opts: AnalyzeOptions,
+    prefix: String,
     skipped: Set<String>,
 ): List<ProjectIssue>
 

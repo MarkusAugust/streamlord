@@ -14,31 +14,47 @@ private val STREAMLORD_IMPORT = regex("""^[ \t]*import[ \t]+io\.github\.markusau
 private val IMPORT_OR_PACKAGE = regex("import|package")
 private val SELECTOR_ARGUMENTS = setOf("selector", "viewTransitionSelector")
 
-internal class Modules(
+/** Which of Streamlord's modules the file can use, as its [Source] says: settled once, by [of], for every rule. */
+internal class Modules private constructor(
     val core: Boolean,
-    val htmlDsl: Boolean,
+    /** As [Source.htmlDsl]: null where nothing says. Without core there is no streamlord-html either. */
+    val htmlDsl: Boolean?,
     /** Whether a call found by its name is somebody else's, as [Source.foreign] says. */
     val foreign: (name: String, nameStart: Int) -> Boolean,
-)
+) {
+    /** Whether the file may call the DSL: so it may unless something says it cannot. */
+    val dsl: Boolean get() = htmlDsl != false
+
+    companion object {
+        val DEFAULT = Modules(true, null, NOT_FOREIGN)
+
+        fun of(source: Source): Modules {
+            val core = source.core != false
+            return Modules(core, if (core) source.htmlDsl else false, source.foreign)
+        }
+    }
+}
 
 /**
- * The modules [source] can use. Where the editor cannot tell, a Kotlin file has the DSL through an
- * import of `io.github.markusaugust.streamlord.html` or from inside that package, and core unless
- * it imports the official SDK and nothing of Streamlord: core's functions are members of a stream
- * a file may be handed without any import. Markup has both.
+ * [source] with the modules its imports prove where the host cannot tell, for an editor that sees
+ * no classpath. A Kotlin file has the DSL through an import of `io.github.markusaugust.streamlord.html`
+ * or from inside that package, and core unless it imports the official SDK and nothing of
+ * Streamlord: core's functions are members of a stream a file may be handed without any import.
+ * Markup is left as it is.
  */
-internal fun Analyzer.modulesOf(source: Source): Modules {
+public fun Analyzer.modulesFromImports(source: Source): Source {
+    if (source.language != SourceLanguage.KOTLIN) return source
     val text = source.text
-    if (source.language != SourceLanguage.KOTLIN) return Modules(source.core ?: true, source.htmlDsl ?: true, source.foreign)
     val core = source.core ?: !(OFFICIAL_SDK_IMPORT.containsMatchIn(text) && !STREAMLORD_IMPORT.containsMatchIn(text))
-    return Modules(core, core && (source.htmlDsl ?: importsDsl(text)), source.foreign)
+    return source.copy(core = core, htmlDsl = core && (source.htmlDsl ?: importsDsl(text)))
 }
 
 /**
  * The calls of a Kotlin file that are somebody else's and define no signal there: where the file
  * cannot call the DSL, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too.
  */
-public fun foreignHelpers(htmlDsl: Boolean): Set<String> = if (htmlDsl) emptySet() else Catalog.default.signalNameHelpers.keys
+internal fun foreignHelpers(source: Source): Set<String> =
+    if (source.language != SourceLanguage.KOTLIN || Modules.of(source).dsl) emptySet() else Catalog.default.signalNameHelpers.keys
 
 /** Whether [src] imports the DSL, or is in its package, in its code: a line in a comment or a raw string imports nothing. */
 private fun Analyzer.importsDsl(src: String): Boolean {
@@ -47,12 +63,6 @@ private fun Analyzer.importsDsl(src: String): Boolean {
     if (!USES_HTML_DSL.containsMatchIn(text)) return false
     val mask = lex(text).mask
     return USES_HTML_DSL.findAll(text).any { m -> mask[m.range.first + IMPORT_OR_PACKAGE.find(m.value)!!.range.first] }
-}
-
-/** The options a [source] is judged with by the checks: the modules as [modulesOf] settles them, read once. */
-internal fun Analyzer.analyzeOptions(source: Source): AnalyzeOptions {
-    val modules = modulesOf(source)
-    return AnalyzeOptions(prefix = source.prefix, htmlDsl = modules.htmlDsl, core = modules.core)
 }
 
 /** The HTML string at [offset]: one that looks like HTML, or the markup handed to a Streamlord call where the file has [core]. */
@@ -125,7 +135,7 @@ internal fun Analyzer.expressionAtCaret(
 ): ExpressionAtCaret? {
     val expression = expressionAtCaret(src, offset, kotlin = true, prefix = prefix) ?: return null
     if (inAttributesIndex(src, offset) || htmlStringAt(src, offset, modules) != null) return expression
-    if (!modules.htmlDsl) return null
+    if (!modules.dsl) return null
     val call = callAround(src, offset, catalog.expressionCallSites.keys)
     return expression.takeUnless { call != null && modules.foreign(call.name, call.nameStart) }
 }
@@ -137,7 +147,7 @@ internal fun Analyzer.inForeignDslCall(
     modules: Modules,
 ): Boolean {
     val call = callAround(src, offset, dslNames) ?: return false
-    return !modules.htmlDsl || modules.foreign(call.name, call.nameStart)
+    return !modules.dsl || modules.foreign(call.name, call.nameStart)
 }
 
 /**
@@ -149,7 +159,7 @@ internal fun Analyzer.selectorBefore(
     offset: Int,
     modules: Modules,
 ): String? {
-    val sites = streamlordCallNames(modules.core, modules.htmlDsl).takeIf { it.isNotEmpty() } ?: return null
+    val sites = streamlordCallNames(modules.core, modules.dsl).takeIf { it.isNotEmpty() } ?: return null
     val site = findCallSites(src, sites, lex(src)).firstOrNull { it.openParen < offset && offset <= it.closeParen } ?: return null
     val arg =
         site.args.firstOrNull { a ->

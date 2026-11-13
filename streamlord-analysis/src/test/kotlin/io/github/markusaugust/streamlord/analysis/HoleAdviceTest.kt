@@ -20,8 +20,15 @@ class HoleAdviceTest {
             val name = case.string("name")
             val source = case.string("source")!!
             val expected = case.array("issues")!!.objects()
-            val opts = AnalyzeOptions(coreHtml = case.boolean("coreHtml"))
-            val issues = analyzer.analyzeKotlin(source, opts).sortedWith(compareBy({ it.start }, { it.end }, { it.code }))
+            val issues =
+                analyzer
+                    .analyzeKotlin(
+                        Source(source, SourceLanguage.KOTLIN, coreHtml = case.boolean("coreHtml")),
+                    ).sortedWith(
+                        compareBy({
+                            it.start
+                        }, { it.end }, { it.code }),
+                    )
             assertEquals(
                 expected.map { "${it.string("code")} ${it.string("text")}" },
                 issues.map { "${it.code} ${source.substring(it.start, it.end)}" },

@@ -340,21 +340,14 @@ public data class SignalDeclaration(
     }
 }
 
-public fun collectSignals(
-    src: String,
-    language: SourceLanguage,
-): Set<String> = collectSignals(src, language, NOT_FOREIGN)
-
 /**
- * [collectSignals] with the calls named in [foreign] left out: they are somebody else's and name no
- * signal. An editor passes the catalog's `signalNameHelpers` for a file that cannot call
- * streamlord-html: their names, `set` and `toggle`, are other APIs' too.
+ * The signals [source] names. In a Kotlin file that cannot call streamlord-html, the DSL's short
+ * helpers are somebody else's and name no signal: their names, `set` and `toggle`, are other APIs' too.
  */
-public fun collectSignals(
-    src: String,
-    language: SourceLanguage,
-    foreign: Set<String>,
-): Set<String> = collectSignals(src, language) { name, _ -> name in foreign }
+public fun collectSignals(source: Source): Set<String> {
+    val foreign = foreignHelpers(source)
+    return collectSignals(source.text, source.language) { name, _ -> name in foreign }
+}
 
 private fun collectSignals(
     src: String,
@@ -392,20 +385,10 @@ public fun collectDeclaredSignals(
  * `class:Form` for a `@Serializable` class whose properties are here, and `toJsonValue:Form` for a
  * class a page is declared from. [isKnownSignal] reads them together.
  */
-public fun collectSignalDefinitions(
-    src: String,
-    language: SourceLanguage,
-): Set<String> = collectSignalDefinitions(src, language, NOT_FOREIGN)
-
-/** [collectSignalDefinitions] with the calls named in [foreign] left out, as [collectSignals] takes them. */
-public fun collectSignalDefinitions(
-    src: String,
-    language: SourceLanguage,
-    foreign: Set<String>,
-): Set<String> = collectSignalDefinitions(src, language, { name, _ -> name in foreign })
-
-/** No call is somebody else's: what a definition is read with when the host says nothing. */
-private val NOT_FOREIGN: (String, Int) -> Boolean = { _, _ -> false }
+public fun collectSignalDefinitions(source: Source): Set<String> {
+    val foreign = foreignHelpers(source)
+    return collectSignalDefinitions(source.text, source.language, { name, _ -> name in foreign })
+}
 
 /**
  * [collectSignalDefinitions] with the calls that are not Streamlord's left out, as [foreign] says
@@ -437,18 +420,10 @@ internal fun collectSignalDefinitions(
  * go to declaration lands on and a rename rewrites. A spread and a codec define signals at no place
  * that names them, so neither is here.
  */
-public fun signalDeclarations(
-    src: String,
-    language: SourceLanguage,
-): List<SignalDeclaration> = signalDeclarations(src, language, emptySet())
-
-/** [signalDeclarations] with the calls named in [foreign] left out, as [collectSignals] takes them. */
-public fun signalDeclarations(
-    src: String,
-    language: SourceLanguage,
-    foreign: Set<String>,
-): List<SignalDeclaration> =
-    definedAt(src, language, Spread(), { name, _ -> name in foreign }).sortedWith(compareBy({ it.start }, { it.end }))
+public fun signalDeclarations(source: Source): List<SignalDeclaration> {
+    val foreign = foreignHelpers(source)
+    return definedAt(source.text, source.language, Spread(), { name, _ -> name in foreign }).sortedWith(compareBy({ it.start }, { it.end }))
+}
 
 /**
  * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a

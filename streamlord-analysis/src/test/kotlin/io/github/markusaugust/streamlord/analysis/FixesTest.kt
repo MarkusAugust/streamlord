@@ -10,7 +10,6 @@ import kotlin.test.assertTrue
  */
 class FixesTest {
     private val analyzer = Analyzer()
-    private val opts = AnalyzeOptions("data-", true)
 
     private fun line(
         code: String?,
@@ -29,8 +28,8 @@ class FixesTest {
             val issues =
                 when (case.string("language")) {
                     "expression" -> analyzer.validateExpression(source)
-                    "html" -> analyzer.analyzeHtml(source, opts)
-                    else -> analyzer.analyzeKotlin(source, opts)
+                    "html" -> analyzer.analyzeHtml(source)
+                    else -> analyzer.analyzeKotlin(source)
                 }
             val seen =
                 issues.sortedWith(compareBy({ it.start }, { it.end }, { it.code })).mapIndexed { n, i ->

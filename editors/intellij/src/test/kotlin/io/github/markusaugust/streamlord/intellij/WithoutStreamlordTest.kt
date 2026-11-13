@@ -5,6 +5,7 @@ import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.ThreeState
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
@@ -107,12 +108,12 @@ class WithoutStreamlordTest : WithoutDslTestCase() {
     fun `test the project has none of streamlord, and while the ide indexes that is not known`() {
         val file = myFixture.configureByText("Page.kt", "fun f() = 1")
         for (library in StreamlordLibrary.entries) assertEquals(library.name, false, ProjectLibraries.known(file, library))
-        val options = StreamlordAnalysis.getInstance(project).options(file)
+        val options = StreamlordAnalysis.getInstance(project).source(file.text, SourceLanguage.KOTLIN, file)
         assertEquals(false, options.htmlDsl)
         assertEquals(false, options.core)
         DumbModeTestUtils.runInDumbModeSynchronously(project) {
             for (library in StreamlordLibrary.entries) assertNull(library.name, ProjectLibraries.known(file, library))
-            val dumb = StreamlordAnalysis.getInstance(project).options(file)
+            val dumb = StreamlordAnalysis.getInstance(project).source(file.text, SourceLanguage.KOTLIN, file)
             assertNull(dumb.htmlDsl)
             assertNull(dumb.core)
         }

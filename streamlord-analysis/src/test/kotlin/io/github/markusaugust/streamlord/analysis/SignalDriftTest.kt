@@ -25,9 +25,9 @@ class SignalDriftTest {
 
     private fun drift(vararg files: Pair<String, SignalFacts>) = signalDrift(files.toMap()).issues
 
-    private fun kotlin(src: String) = collectSignalFacts(src, SourceLanguage.KOTLIN)
+    private fun kotlin(src: String) = collectSignalFacts(Source(src, SourceLanguage.KOTLIN))
 
-    private fun html(src: String) = collectSignalFacts(src, SourceLanguage.HTML)
+    private fun html(src: String) = collectSignalFacts(Source(src, SourceLanguage.HTML))
 
     @Test
     fun `the report says what it had to judge, so an empty result can be believed`() {

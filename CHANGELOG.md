@@ -8,6 +8,17 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- streamlord-analysis describes a file one way, `Source`, and every entry takes it. `AnalyzeOptions`
+  is gone: write `analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`
+  where you wrote `analyzer.analyzeKotlin(text, AnalyzeOptions(prefix, constants = names))`, and
+  likewise for `analyzeHtml` and `analyzeKotlinSites`; `analyzeKotlin(text)` and `analyzeHtml(text)`
+  stay for a file of which nothing more is known. `foreignCalls`, a set of offsets, is
+  `Source.foreign`, a function of a call's name and where it starts, and `checkHtmlAttributes` is
+  gone. `signalReferencesInKotlin` and `signalReferencesInHtml` are `signalReferences(source)`, and
+  `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and `collectSignalFacts` take a
+  `Source`: give it `htmlDsl = false` where you passed `foreignHelpers(htmlDsl = false)`, which is
+  gone. `analyzeProject` takes the prefix in place of options. A host that cannot see the classpath
+  reads the modules from the imports with `modulesFromImports(source)`, as VS Code does.
 - `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a
   `data-on` listens for, after `attribute`. Source that names its arguments, or passes four or fewer,
   compiles as before; code compiled against the old signature needs a rebuild.

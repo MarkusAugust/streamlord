@@ -43,7 +43,7 @@ class ExpressionTimingTest {
                 "<div data-init=\"@get('/x')\" " + (0 until n).joinToString(" ") { "data-on:e$it=\"\$a$it\" data-text=\"\$b\"" } +
                     " data-indicator:i></div>"
             },
-        ) { analyzer.analyzeHtml(it, AnalyzeOptions("data-star-", true)) }
+        ) { analyzer.analyzeHtml(Source(it, SourceLanguage.HTML, "data-star-")) }
     }
 
     @Test

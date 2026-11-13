@@ -2,7 +2,6 @@
 
 package io.github.markusaugust.streamlord.editor
 
-import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.SignalFacts
@@ -12,16 +11,14 @@ import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.Workspace
-import io.github.markusaugust.streamlord.analysis.analyzeOptions
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.constantNames
-import io.github.markusaugust.streamlord.analysis.foreignHelpers
 import io.github.markusaugust.streamlord.analysis.hover
-import io.github.markusaugust.streamlord.analysis.modulesOf
+import io.github.markusaugust.streamlord.analysis.modulesFromImports
 import io.github.markusaugust.streamlord.analysis.otherDeclaredNames
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.analysis.signalDrift
@@ -29,6 +26,7 @@ import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
 import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.analysis.Fix as AnalysedFix
 import io.github.markusaugust.streamlord.analysis.Issue as AnalysedIssue
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration as AnalysedDeclaration
@@ -118,26 +116,25 @@ private fun plain(issue: AnalysedIssue): Issue =
                 ?.toTypedArray(),
     )
 
-private fun language(kotlin: Boolean): SourceLanguage = if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML
-
-/** How a file is read: a Kotlin file with the modules its imports show, markup with the prefix alone. */
-private fun options(
+/** How VS Code describes a file: by its text alone, which sees no classpath, so a Kotlin file's imports say which modules it has. */
+private fun source(
     src: String,
     kotlin: Boolean,
-    prefix: String,
-): AnalyzeOptions {
-    if (!kotlin) return AnalyzeOptions(prefix = prefix, prefixSetting = PREFIX_SETTING)
-    return analyzer.analyzeOptions(source(src, true, prefix)).copy(prefixSetting = PREFIX_SETTING)
-}
+    prefix: String = CatalogNames.PREFIX,
+    constants: Array<String> = emptyArray(),
+): Source =
+    analyzer.modulesFromImports(
+        Source(
+            src,
+            if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML,
+            prefix,
+            constants = constants.toHashSet(),
+            prefixSetting = PREFIX_SETTING,
+        ),
+    )
 
 /** The prefix setting by the id VS Code's settings are searched by. */
 private const val PREFIX_SETTING = "streamlord.attributePrefix"
-
-private fun reads(
-    src: String,
-    kotlin: Boolean,
-    opts: AnalyzeOptions,
-): List<SignalReference> = if (kotlin) analyzer.signalReferencesInKotlin(src, opts) else analyzer.signalReferencesInHtml(src, opts)
 
 // The adapters hand the same array until the workspace changes, so its set is made once.
 private var lastNames: Array<String>? = null
@@ -166,9 +163,16 @@ fun diagnose(
     defined: Array<String>?,
     others: Array<DriftFacts>?,
 ): Array<Issue> {
-    val opts = options(src, kotlin, prefix).copy(constants = constants.toHashSet())
-    val found = if (kotlin) sites(src, opts).flatMap { it.issues } else analyzer.analyzeHtml(src, opts)
-    val unknown = if (defined == null) emptyList() else reads(src, kotlin, opts).mapNotNull { unknownSignalIssue(it, setOf(defined)) }
+    val file = source(src, kotlin, prefix, constants)
+    val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
+    val unknown =
+        if (defined ==
+            null
+        ) {
+            emptyList()
+        } else {
+            analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, setOf(defined)) }
+        }
     val drift = if (others == null || !kotlin) emptyList() else drift(src, others)
     return (found + unknown + drift).map(::plain).toTypedArray()
 }
@@ -179,7 +183,7 @@ private fun drift(
     others: Array<DriftFacts>,
 ): List<AnalysedIssue> {
     // A file with no signals class and no lookup can report nothing, whatever the others say.
-    val own = collectSignalFacts(src, SourceLanguage.KOTLIN)
+    val own = collectSignalFacts(source(src, true))
     if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
     // Only this file's issues are asked for, so another file's reads and offsets play no part.
     val facts = HashMap<String, SignalFacts>()
@@ -205,14 +209,11 @@ private fun drift(
 private const val THIS_FILE = "this"
 
 // The Kotlin file analysed last: the lightbulb asks about the text the diagnostics were just made for.
-private var lastSites: Triple<String, AnalyzeOptions, List<SiteIssues>>? = null
+private var lastSites: Pair<Source, List<SiteIssues>>? = null
 
-private fun sites(
-    src: String,
-    opts: AnalyzeOptions,
-): List<SiteIssues> {
-    lastSites?.takeIf { it.first == src && it.second == opts }?.let { return it.third }
-    return analyzer.analyzeKotlinSites(src, opts).also { lastSites = Triple(src, opts, it) }
+private fun sites(file: Source): List<SiteIssues> {
+    lastSites?.takeIf { it.first == file }?.let { return it.second }
+    return analyzer.analyzeKotlinSites(file).also { lastSites = file to it }
 }
 
 /**
@@ -227,7 +228,7 @@ fun rewriteAt(
     end: Int,
     prefix: String,
     constants: Array<String>,
-): Fix? = analysedRewriteAt(sites(src, options(src, true, prefix).copy(constants = constants.toHashSet())), start, end)?.let(::plain)
+): Fix? = analysedRewriteAt(sites(source(src, true, prefix, constants)), start, end)?.let(::plain)
 
 // ---- The workspace's signals -------------------------------------------------------------------
 
@@ -273,7 +274,7 @@ interface DriftFacts {
 fun driftFactsOf(
     src: String,
     kotlin: Boolean,
-): DriftFacts = plain(collectSignalFacts(src, language(kotlin)))
+): DriftFacts = plain(collectSignalFacts(source(src, kotlin)))
 
 private fun plain(facts: SignalFacts): DriftFacts =
     plain(
@@ -296,22 +297,16 @@ private fun plain(facts: SignalFacts): DriftFacts =
         "imports" to facts.imports.plain(),
     )
 
-/** The calls of [src] that are somebody else's and define no signal, by the modules its imports show. */
-private fun foreignHelpers(
-    src: String,
-    kotlin: Boolean,
-): Set<String> = foreignHelpers(htmlDsl = !kotlin || analyzer.modulesOf(source(src, true, "")).htmlDsl)
-
 @JsExport
 fun signalsOf(
     src: String,
     kotlin: Boolean,
 ): FileSignals {
-    val foreign = foreignHelpers(src, kotlin)
+    val file = source(src, kotlin)
     val selectors = collectSelectors(src)
     return plain(
-        "signals" to collectSignals(src, language(kotlin), foreign).plain(),
-        "definitions" to collectSignalDefinitions(src, language(kotlin), foreign).plain(),
+        "signals" to collectSignals(file).plain(),
+        "definitions" to collectSignalDefinitions(file).plain(),
         "ids" to selectors.ids.plain(),
         "classes" to selectors.classes.plain(),
         "constants" to (if (kotlin) constantNames(src) else emptySet()).plain(),
@@ -398,14 +393,17 @@ fun signalPlaces(
     src: String,
     kotlin: Boolean,
     prefix: String,
-): SignalPlaces =
-    plain(
-        "declarations" to signalDeclarations(src, language(kotlin), foreignHelpers(src, kotlin)).map(::plain).toTypedArray(),
+): SignalPlaces {
+    val file = source(src, kotlin, prefix)
+    return plain(
+        "declarations" to signalDeclarations(file).map(::plain).toTypedArray(),
         "reads" to
-            reads(src, kotlin, options(src, kotlin, prefix))
+            analyzer
+                .signalReferences(file)
                 .map { plain<SignalRead>("start" to it.start, "end" to it.end, "name" to it.name) }
                 .toTypedArray(),
     )
+}
 
 /** The place at [offset] that names a signal of [defined], the signals the workspace defines, or null. */
 @JsExport
@@ -493,15 +491,9 @@ interface Signature {
     val active: Int
 }
 
-private fun source(
-    src: String,
-    kotlin: Boolean,
-    prefix: String,
-): Source = Source(src, language(kotlin), prefix)
-
 /** The attribute prefix Datastar reads when none is set. */
 @JsExport
-fun defaultPrefix(): String = AnalyzeOptions().prefix
+fun defaultPrefix(): String = CatalogNames.PREFIX
 
 /**
  * The items to offer at [offset] of [src], in the order shown: [signals], [ids] and [classes] are

@@ -60,9 +60,12 @@ class ProjectConstantsTest {
         val a = "private const val title = \"Home\""
         val b = "val title get() = call.request.queryParameters[\"title\"]"
         val c = "import org.intellij.lang.annotations.Language\n\n@Language(\"html\")\nfun page() = \"\"\"<h1>\$title</h1>\"\"\""
-        val issues = analyzer.analyzeKotlin(c, AnalyzeOptions("data-", true, projectConstants(listOf(a, b, c))))
+        val issues = analyzer.analyzeKotlin(Source(c, SourceLanguage.KOTLIN, constants = projectConstants(listOf(a, b, c))))
         assertTrue(issues.any { it.code == "unescaped-interpolation" }, issues.toString())
-        val silent = analyzer.analyzeKotlin(c, AnalyzeOptions("data-", true, projectConstants(listOf("const val title = \"Home\"", c))))
+        val silent =
+            analyzer.analyzeKotlin(
+                Source(c, SourceLanguage.KOTLIN, constants = projectConstants(listOf("const val title = \"Home\"", c))),
+            )
         assertEquals(emptyList(), silent.filter { it.code == "unescaped-interpolation" })
     }
 }

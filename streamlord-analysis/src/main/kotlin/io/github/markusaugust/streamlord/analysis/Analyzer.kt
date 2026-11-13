@@ -24,49 +24,8 @@ import kotlin.time.Duration
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
  */
 
-public data class AnalyzeOptions(
-    val prefix: String = CatalogNames.PREFIX,
-    val checkHtmlAttributes: Boolean = true,
-    /** The `const val` names the workspace declares: a value the author wrote, silent wherever it lands. */
-    val constants: Set<String> = emptySet(),
-    /** What the editor knows of a Kotlin value written into an HTML string, from types the text cannot show (IntelliJ). */
-    val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
-    /** Whether streamlord-html is on the classpath: null when the host does not know, and the file's imports decide. */
-    val htmlDsl: Boolean? = null,
-    /** Whether streamlord-core is on the classpath; null counts as present. Without core there is no streamlord-html either. */
-    val core: Boolean? = null,
-    /** Where the name of each call starts ([CallSite.nameStart]) that the host knows is not Streamlord's. */
-    val foreignCalls: Set<Int> = emptySet(),
-    /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
-    val prefixSetting: String = PREFIX_SETTING,
-    /** Whether the project's core has `Html`, which came in 0.16.0 and a message may send the author to; null counts as having it. */
-    val coreHtml: Boolean? = null,
-)
-
 /** The setting as the IntelliJ plugin's settings page shows it. */
 internal const val PREFIX_SETTING: String = "the Streamlord attribute prefix setting"
-
-/** Which of Streamlord's modules the analysed file can use, as [AnalyzeOptions] says. */
-internal class Sdk private constructor(
-    val core: Boolean,
-    /** As [AnalyzeOptions.htmlDsl]: null leaves it to the file's imports. */
-    val htmlDsl: Boolean?,
-) {
-    companion object {
-        val DEFAULT = Sdk(true, null)
-        private val DSL = Sdk(true, true)
-        private val CORE_ONLY = Sdk(true, false)
-        private val NONE = Sdk(false, false)
-
-        fun of(opts: AnalyzeOptions): Sdk =
-            when {
-                opts.core == false -> NONE
-                opts.htmlDsl == true -> DSL
-                opts.htmlDsl == false -> CORE_ONLY
-                else -> DEFAULT
-            }
-    }
-}
 
 /**
  * What the editor knows of a value: its type, or that it is a constant or markup. [NULLABLE] is a
@@ -283,11 +242,10 @@ public class Analyzer(
             "statements"
 
     /** Whether the call named [name] at [nameStart] is not Streamlord's, as [opts] says: then its strings are free strings. */
-    private fun foreignCalls(opts: AnalyzeOptions): (name: String, nameStart: Int) -> Boolean {
-        val sdk = Sdk.of(opts)
-        val given = opts.foreignCalls
+    private fun foreignCalls(opts: Source): (name: String, nameStart: Int) -> Boolean {
+        val modules = Modules.of(opts)
         // Every call the analysis looks for is core's or the DSL's, so without core none is Streamlord's.
-        return { name, at -> !sdk.core || at in given || (sdk.htmlDsl == false && name in dslNames) }
+        return { name, at -> !modules.core || modules.foreign(name, at) || (modules.htmlDsl == false && name in dslNames) }
     }
 
     /** Names of all DSL functions the analysis recognises in Kotlin source. */
@@ -308,35 +266,34 @@ public class Analyzer(
         return lex
     }
 
-    public fun analyzeKotlin(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<Issue> = analyzeKotlinSites(src, opts).flatMap { it.issues }
+    /** The issues of a Kotlin file of which nothing more is known than its text. */
+    public fun analyzeKotlin(src: String): List<Issue> = analyzeKotlin(Source(src, SourceLanguage.KOTLIN))
+
+    public fun analyzeKotlin(source: Source): List<Issue> = analyzeKotlinSites(source).flatMap { it.issues }
 
     /**
-     * Every `.kt` file under [root] that VS Code indexes, analysed with the constants the files
-     * declare between them ([projectConstants]) added to [opts]'s: the verdict VS Code gives the
+     * Every `.kt` file under [root] that VS Code indexes, read with [prefix] and the constants the
+     * files declare between them ([projectConstants]): the verdict VS Code gives the
      * same workspace. Below [root], folders named `build`, `node_modules`, `.gradle`, `dist`, `out`
      * or `target`, and hidden ones, are left out. The issues come in path order, then by offset;
      * [failures] keeps those that should fail a build.
      */
     public fun analyzeProject(
         root: File,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<ProjectIssue> = issuesUnder(root, opts, SKIPPED_FOLDERS)
+        prefix: String = CatalogNames.PREFIX,
+    ): List<ProjectIssue> = issuesUnder(root, prefix, SKIPPED_FOLDERS)
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
-    public fun analyzeKotlinSites(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<SiteIssues> {
+    public fun analyzeKotlinSites(source: Source): List<SiteIssues> {
+        val src = source.text
+        val opts = source
         val out = ArrayList<SiteIssues>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
         val facts = fileFacts(src, lex)
         val foreign = foreignCalls(opts)
         val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
-        val dsl = Sdk.of(opts).htmlDsl
+        val dsl = Modules.of(opts).htmlDsl
         val eventCalls = EventCalls(src)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
@@ -516,12 +473,11 @@ public class Analyzer(
     private fun checkAttributesIndex(
         m: MatchResult,
         value: KotlinString?,
-        opts: AnalyzeOptions,
+        opts: Source,
         src: String,
         hyphenated: Set<String>,
         helpers: Set<String>,
     ): List<Issue> {
-        if (!opts.checkHtmlAttributes) return emptyList()
         val name = m.groupValues[1]
         val nameStart = m.range.first + m.value.indexOf('"') + 1
         // The attribute in a space of its own, `name="value"`: the name at 0, the value after the `="`.
@@ -579,7 +535,7 @@ public class Analyzer(
     private fun signalNameHoles(
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Source,
         attribute: String,
     ): List<Issue> {
         val out = ArrayList<Issue>()
@@ -662,14 +618,15 @@ public class Analyzer(
     }
 
     /** Analyse an HTML document (a template): attributes and expressions only, no id or completeness rules. */
-    public fun analyzeHtml(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<Issue> = analyzeHtml(src, opts, hyphenatedSignals(src, SourceLanguage.HTML))
+    public fun analyzeHtml(src: String): List<Issue> = analyzeHtml(Source(src, SourceLanguage.HTML))
+
+    /** As [analyzeHtml], for markup the host knows more of: its prefix, and how it names the prefix setting. */
+    public fun analyzeHtml(source: Source): List<Issue> =
+        analyzeHtml(source.text, source, hyphenatedSignals(source.text, SourceLanguage.HTML))
 
     private fun analyzeHtml(
         src: String,
-        opts: AnalyzeOptions,
+        opts: Source,
         hyphenated: Set<String>,
         templates: Boolean = true,
     ): List<Issue> {
@@ -690,15 +647,16 @@ public class Analyzer(
     }
 
     /**
-     * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
-     * call, in the name handed to a helper such as `signal("count")`, and in the attributes of HTML
-     * strings, handed to a call or free-standing. A Kotlin template (`$count` in a plain literal)
-     * is not a signal and is left out; the interpolation check speaks for it.
+     * Every signal the Datastar expressions of a file read. In markup, those of its attributes; in
+     * Kotlin, those in the expression handed to a DSL call, in the name handed to a helper such as
+     * `signal("count")`, and in the attributes of HTML strings, handed to a call or free-standing. A
+     * Kotlin template (`$count` in a plain literal) is not a signal and is left out; the
+     * interpolation check speaks for it.
      */
-    public fun signalReferencesInKotlin(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<SignalReference> {
+    public fun signalReferences(source: Source): List<SignalReference> {
+        val src = source.text
+        val opts = source
+        if (source.language != SourceLanguage.KOTLIN) return markupSignalReferences(src, catalog, source.prefix)
         val out = ArrayList<SignalReference>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
@@ -731,7 +689,7 @@ public class Analyzer(
             }
         }
         val helpers =
-            dslHelpers(src, HELPER_READ_CALLS, Sdk.of(opts).htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
+            dslHelpers(src, HELPER_READ_CALLS, Modules.of(opts).htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
                 ?: emptyList()
         for (site in helpers) {
             // A call on a receiver, `filter.not("x")`, is not the top-level helper.
@@ -755,12 +713,6 @@ public class Analyzer(
         return out
     }
 
-    /** Every signal the Datastar expressions of an HTML document or template read. */
-    public fun signalReferencesInHtml(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<SignalReference> = markupSignalReferences(src, catalog, opts.prefix)
-
     /** The markup rules of one HTML string handed to a patch, with the id rule on or off. */
     public fun validateMarkup(
         html: String,
@@ -776,13 +728,12 @@ public class Analyzer(
      */
     private fun checkFreeHtmlString(
         s: KotlinString,
-        opts: AnalyzeOptions,
+        opts: Source,
         src: String,
         hyphenated: Set<String>,
     ): Judged {
         val view = markupView(src, s)
         val judged = judgeHoles(s, src, opts, view)
-        if (!opts.checkHtmlAttributes) return judged
         return Judged(judged.issues + mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false)), judged.rewrite)
     }
 
@@ -829,7 +780,7 @@ public class Analyzer(
         formatArg: Arg,
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Source,
         hyphenated: Set<String>,
     ): List<Issue> {
         val holes = percentHoles(s.text)
@@ -1054,7 +1005,7 @@ public class Analyzer(
                     }
                 }
         }
-        if (opts.checkHtmlAttributes) issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
+        issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
         return issues
     }
 
@@ -1400,17 +1351,17 @@ public class Analyzer(
     private fun judgeHoles(
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Source,
         view: String,
     ): Judged {
         if (s.interpolations.isEmpty()) return Judged()
         val trapOf = traps(s, src)
         // Without core there is no interpolate to build the string with, and Trusted is not Streamlord's.
-        val sdk = Sdk.of(opts)
+        val sdk = Modules.of(opts)
         val core = sdk.core
         // A fix writes interpolate or Trusted only where the name is core's: not somebody else's call or import.
-        val canInterpolate = coreNameUsable(src, "interpolate", sdk, opts.foreignCalls)
-        val canTrust = coreNameUsable(src, "Trusted", sdk, opts.foreignCalls)
+        val canInterpolate = coreNameUsable(src, "interpolate", sdk)
+        val canTrust = coreNameUsable(src, "Trusted", sdk)
         // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
         val written = HashMap<Int, String>()
         for ((k, ip) in s.interpolations.withIndex()) {
@@ -1775,7 +1726,7 @@ public class Analyzer(
         ip: Interpolation,
         told: ValueFact?,
         position: Position,
-        opts: AnalyzeOptions,
+        opts: Source,
     ): Boolean {
         val fact = told.plain()
         if (position == Position.DATASTAR || position == Position.STYLE) return fact.interpolateTakesIn(position)
@@ -1799,11 +1750,11 @@ public class Analyzer(
     private fun holeFact(
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Source,
         ip: Interpolation,
     ): ValueFact? {
         opts.valueFact?.invoke(ip.start, ip.end)?.let { return it }
-        val sdk = Sdk.of(opts)
+        val sdk = Modules.of(opts)
         val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
         val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }
         if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
@@ -1958,7 +1909,7 @@ public class Analyzer(
         src: String,
         lex: KotlinLex,
         hyphenated: Set<String>,
-        opts: AnalyzeOptions,
+        opts: Source,
         helpers: Set<String>,
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
@@ -1986,7 +1937,7 @@ public class Analyzer(
     private fun expressionHoles(
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Source,
         attribute: String,
         helpers: Set<String>? = null,
     ): List<Issue> {
@@ -2010,7 +1961,7 @@ public class Analyzer(
     private fun checkHtmlSite(
         site: CallSite,
         spec: CallSiteSpec,
-        opts: AnalyzeOptions,
+        opts: Source,
         src: String,
         lex: KotlinLex,
         hyphenated: Set<String>,
@@ -2071,7 +2022,7 @@ public class Analyzer(
                         MarkupOptions(
                             requireIds,
                             opts.prefix,
-                            opts.checkHtmlAttributes,
+                            true,
                             hyphenated,
                             templates = false,
                             prefixSetting = opts.prefixSetting,

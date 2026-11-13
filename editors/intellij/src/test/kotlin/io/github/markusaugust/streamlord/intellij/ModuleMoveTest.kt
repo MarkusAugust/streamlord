@@ -9,6 +9,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.testFramework.HeavyPlatformTestCase
 import com.intellij.testFramework.PsiTestUtil
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
@@ -44,7 +45,7 @@ class ModuleMoveTest : HeavyPlatformTestCase() {
 
         assertEquals("web", ModuleUtilCore.findModuleForPsiElement(file)?.name)
         assertEquals(true, ProjectLibraries.known(file, StreamlordLibrary.HTML))
-        assertEquals(true, analysis.options(file).htmlDsl)
+        assertEquals(true, analysis.source(file.text, SourceLanguage.KOTLIN, file).htmlDsl)
         assertEquals(1, claimed(file))
         val before = analysis.resolves.get()
         analysis.kotlinIssues(file)
@@ -56,7 +57,7 @@ class ModuleMoveTest : HeavyPlatformTestCase() {
         assertEquals("plain", ModuleUtilCore.findModuleForPsiElement(file)?.name)
         assertEquals(false, ProjectLibraries.known(file, StreamlordLibrary.HTML))
         assertEquals(true, ProjectLibraries.known(file, StreamlordLibrary.CORE))
-        assertEquals(false, analysis.options(file).htmlDsl)
+        assertEquals(false, analysis.source(file.text, SourceLanguage.KOTLIN, file).htmlDsl)
         assertEquals("the DSL-named call's string is prose here", 0, claimed(file))
         // What a call resolves to is the module's classpath's: the verdicts are found again there.
         val moved = analysis.resolves.get()

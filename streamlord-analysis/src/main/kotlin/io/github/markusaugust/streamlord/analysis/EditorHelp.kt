@@ -11,21 +11,37 @@ import io.github.markusaugust.streamlord.core.client.regex
  */
 
 /**
- * The file an editor asks about: its [text], how it is written, and what the editor knows of the
- * module. A Kotlin file holds the kotlinx.html DSL, its `attributes["data-..."]` form and HTML
- * strings, each found by where the caret stands.
+ * A file as an editor or a build hands it to the analysis: its [text], how it is written, and what
+ * the host knows of the module and the project. Every entry reads a file through this one
+ * description. A Kotlin file holds the kotlinx.html DSL, its `attributes["data-..."]` form and HTML
+ * strings, each found by where it stands.
  */
-public class Source(
-    public val text: String,
-    public val language: SourceLanguage,
-    public val prefix: String = CatalogNames.PREFIX,
-    /** Whether the module has streamlord-core; null where the editor cannot tell, and the imports decide. */
-    public val core: Boolean? = null,
-    /** Whether the module has streamlord-html; null where the editor cannot tell, and the imports decide. */
-    public val htmlDsl: Boolean? = null,
+public data class Source(
+    val text: String,
+    val language: SourceLanguage,
+    val prefix: String = CatalogNames.PREFIX,
+    /** Whether the module has streamlord-core; null where the host cannot tell, which counts as having it. */
+    val core: Boolean? = null,
+    /**
+     * Whether the module has streamlord-html; null where the host cannot tell: the DSL's calls are read as the DSL's, and its
+     * short helpers only where the file names the DSL. An editor that sees no classpath reads it from the imports with
+     * [modulesFromImports].
+     */
+    val htmlDsl: Boolean? = null,
+    /** Whether the project's core has `Html`, which came in 0.16.0 and a message may send the author to; null counts as having it. */
+    val coreHtml: Boolean? = null,
+    /** The `const val` names the workspace declares: a value the author wrote, silent wherever it lands. */
+    val constants: Set<String> = emptySet(),
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
-    public val foreign: (name: String, nameStart: Int) -> Boolean = { _, _ -> false },
+    val foreign: (name: String, nameStart: Int) -> Boolean = NOT_FOREIGN,
+    /** What the editor knows of a Kotlin value written into an HTML string, from types the text cannot show (IntelliJ). */
+    val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
+    /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
+    val prefixSetting: String = PREFIX_SETTING,
 )
+
+/** No call is somebody else's: what a host that resolves nothing says. */
+internal val NOT_FOREIGN: (name: String, nameStart: Int) -> Boolean = { _, _ -> false }
 
 /** What the rest of the workspace defines: signals, ids and classes, this file's among them or not. */
 public class Workspace(
@@ -187,7 +203,7 @@ private class Asked(
     val prefix = source.prefix
     val catalog = analyzer.catalog
     val kotlin = source.language == SourceLanguage.KOTLIN
-    val modules = analyzer.modulesOf(source)
+    val modules = Modules.of(source)
 
     fun complete(
         workspace: Workspace,
@@ -425,7 +441,7 @@ private class Asked(
      * file's. The editor is asked about none of its calls, which there may be thousands of.
      */
     private fun definitions(): Set<String> {
-        val foreign = foreignHelpers(htmlDsl = !kotlin || modules.htmlDsl)
+        val foreign = foreignHelpers(source)
         return collectSignalDefinitions(text, source.language, { name, _ -> name in foreign }, if (kotlin) analyzer.lex(text) else null)
     }
 
@@ -565,7 +581,7 @@ private class Asked(
 
     fun hover(): Hover? {
         if (offset !in 0..text.length) return null
-        val withKotlin = modules.htmlDsl
+        val withKotlin = modules.dsl
         wordAt(ACTION_WORD)?.let { range ->
             val action = catalog.actionsByName[text.substring(range.first + 1, range.last + 1)]
             val foreign = kotlin && analyzer.inForeignDslCall(text, offset, modules)

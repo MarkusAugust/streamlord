@@ -17,17 +17,18 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
+import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalReference
+import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
-import io.github.markusaugust.streamlord.analysis.foreignHelpers
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.analysis.signalDrift
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
@@ -207,11 +208,11 @@ class SignalIndex(
             if (language == SourceLanguage.KOTLIN &&
                 callsAny(current, helpers)
             ) {
-                signalDeclarations(current, language, helpers)
+                signalDeclarations(Source(current, language, htmlDsl = false))
             } else {
                 null
             }
-        val declared = Declared(signalDeclarations(current, language), withoutDsl)
+        val declared = Declared(signalDeclarations(Source(current, language)), withoutDsl)
         if (keep) e.declared = declared
         return declared
     }
@@ -225,10 +226,10 @@ class SignalIndex(
         val (current, keep) = textOf(e, text) ?: return null
         val analysis = StreamlordAnalysis.getInstance(project)
         val reads =
-            when (language) {
-                SourceLanguage.KOTLIN -> analysis.analyzer.signalReferencesInKotlin(current, analysis.options())
-                SourceLanguage.HTML -> analysis.analyzer.signalReferencesInHtml(current, analysis.options())
-            }.map { SignalReference(it.start, it.end, it.name) }
+            analysis.analyzer
+                .signalReferences(
+                    analysis.source(current, language),
+                ).map { SignalReference(it.start, it.end, it.name) }
         if (keep) e.reads = reads
         return reads
     }
@@ -245,7 +246,7 @@ class SignalIndex(
         val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
         if (language != SourceLanguage.KOTLIN) return emptyList()
         val own = entryFor(file) ?: return emptyList()
-        val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(file.text, language)
+        val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language))
         // A file with no signals class and no lookup can report nothing, whatever the others say.
         if (ownFacts.classes.isEmpty() && ownFacts.lookups.isEmpty()) return emptyList()
         refresh()
@@ -267,7 +268,7 @@ class SignalIndex(
         e.facts?.let { return it }
         val language = e.file?.let(::languageOf) ?: return null
         val (current, keep) = textOf(e, text) ?: return null
-        return collectSignalFacts(current, language).also { if (keep) e.facts = it }
+        return collectSignalFacts(Source(current, language)).also { if (keep) e.facts = it }
     }
 
     private fun places(of: (Entry) -> List<Triple<Int, Int, String>>?): List<Place> {
@@ -393,7 +394,7 @@ class SignalIndex(
         val helpers = shortHelpers()
         val withoutDsl =
             if (language == SourceLanguage.KOTLIN && callsAny(text, helpers)) {
-                Names(collectSignals(text, language, helpers), collectSignalDefinitions(text, language, helpers))
+                Source(text, language, htmlDsl = false).let { Names(collectSignals(it), collectSignalDefinitions(it)) }
             } else {
                 null
             }
@@ -403,8 +404,8 @@ class SignalIndex(
                 stamp,
                 text.length,
                 prefix(),
-                collectSignals(text, language),
-                collectSignalDefinitions(text, language),
+                collectSignals(Source(text, language)),
+                collectSignalDefinitions(Source(text, language)),
                 withoutDsl,
                 collectSelectors(text),
             )
@@ -479,7 +480,7 @@ class SignalIndex(
     private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 
     /** The DSL's helpers that name a signal, somebody else's in a module without the DSL. */
-    private fun shortHelpers(): Set<String> = foreignHelpers(htmlDsl = false)
+    private fun shortHelpers(): Set<String> = Catalog.default.signalNameHelpers.keys
 
     /** Whether [text] calls one of [names] on no receiver: a file without such a call reads the same in every module. */
     private fun callsAny(

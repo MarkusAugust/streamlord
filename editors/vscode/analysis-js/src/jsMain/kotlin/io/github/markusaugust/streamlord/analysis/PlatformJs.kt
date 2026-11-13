@@ -12,7 +12,7 @@ public actual class ProjectIssue private constructor() {
 @Suppress("UNUSED_PARAMETER", "UnusedReceiverParameter")
 internal actual fun Analyzer.issuesUnder(
     root: File,
-    opts: AnalyzeOptions,
+    prefix: String,
     skipped: Set<String>,
 ): List<ProjectIssue> = emptyList()
 

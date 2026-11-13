@@ -14,7 +14,12 @@ class RewriteAtTest {
         src: String,
         from: String,
         to: String = "",
-    ): Fix? = rewriteAt(analyzer.analyzeKotlinSites(src), src.indexOf(from), src.indexOf(to, src.indexOf(from)) + to.length)
+    ): Fix? =
+        rewriteAt(
+            analyzer.analyzeKotlinSites(Source(src, SourceLanguage.KOTLIN)),
+            src.indexOf(from),
+            src.indexOf(to, src.indexOf(from)) + to.length,
+        )
 
     private val card = "fun card(name: String) = \"<p class=\\\"x\\\">\$name</p>\""
 

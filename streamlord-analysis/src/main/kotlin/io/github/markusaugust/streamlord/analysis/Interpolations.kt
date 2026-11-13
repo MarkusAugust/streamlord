@@ -426,7 +426,7 @@ public fun constantNames(src: String): Set<String> = visibleNames(src).constants
 public fun otherDeclaredNames(src: String): Set<String> = visibleNames(src).others
 
 /**
- * The constants of a project whose Kotlin files are [sources], to pass as [AnalyzeOptions.constants]:
+ * The constants of a project whose Kotlin files are [sources], to pass as [Source.constants]:
  * each file's [constantNames], less every name some file declares as anything else another file
  * could mean by it.
  */
@@ -1217,7 +1217,7 @@ private val HOLE_HELPERS: Set<String> =
 private fun helperArguments(
     src: String,
     t: String,
-    sdk: Sdk,
+    sdk: Modules,
 ): List<String>? {
     val m = CALL_START.find(t) ?: return null
     val name = m.groupValues[1]
@@ -1242,7 +1242,7 @@ private fun ownArgument(
     arg: String,
     at: Int,
     constants: Set<String>,
-    sdk: Sdk,
+    sdk: Modules,
 ): Boolean {
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
@@ -1288,7 +1288,7 @@ internal fun valueKind(
     at: Int,
     constants: Set<String>,
     nonNull: Boolean = false,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: Modules = Modules.DEFAULT,
 ): ValueFact? {
     val t = value.trim()
     if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null ||
@@ -1359,7 +1359,7 @@ private fun callKind(
     t: String,
     at: Int,
     constants: Set<String>,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: Modules = Modules.DEFAULT,
 ): ValueFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
@@ -1515,7 +1515,7 @@ internal fun markupValue(
     value: String,
     at: Int,
     depth: Int = 0,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: Modules = Modules.DEFAULT,
 ): Boolean {
     val values = holeValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
@@ -1573,7 +1573,7 @@ private fun markupElements(
     receiver: String,
     at: Int,
     depth: Int,
-    sdk: Sdk,
+    sdk: Modules,
 ): Boolean {
     val t = receiver.trim()
     if (IDENT.matchEntire(t) != null) {
@@ -1638,7 +1638,7 @@ internal fun isMarkup(
     src: String,
     s: KotlinString,
     ip: Interpolation,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: Modules = Modules.DEFAULT,
 ): Boolean = markupValue(src, ip.text, s.start, sdk = sdk)
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
@@ -2107,19 +2107,18 @@ private fun formatBody(
 
 /**
  * Whether a fix may write [name] of core's domain, `interpolate` or `Trusted`, in [src]: core is
- * there, no call of the name is one the host knows is somebody else's ([foreignCalls]), and nothing
- * else in the file takes the name.
+ * there, no call of the name is one the host knows is somebody else's ([Modules.foreign]), and
+ * nothing else in the file takes the name.
  */
 internal fun coreNameUsable(
     src: String,
     name: String,
-    sdk: Sdk,
-    foreignCalls: Set<Int>,
+    sdk: Modules,
 ): Boolean {
     if (!sdk.core) return false
     val facts = fileFacts(src)
-    if (foreignCalls.isNotEmpty() &&
-        facts.coreCalls.getOrPut(name) { findCallSites(src, setOf(name)).map { it.nameStart } }.any { it in foreignCalls }
+    if (sdk.foreign !== NOT_FOREIGN &&
+        facts.coreCalls.getOrPut(name) { findCallSites(src, setOf(name)).map { it.nameStart } }.any { sdk.foreign(name, it) }
     ) {
         return false
     }

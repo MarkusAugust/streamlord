@@ -10,9 +10,8 @@ import kotlin.test.assertEquals
 /** How long the markup takes to read, and where a comment ends; what it reports is in the shared corpus. */
 class MarkupTest {
     private val analyzer = Analyzer()
-    private val opts = AnalyzeOptions("data-", true)
 
-    private fun html(src: String) = analyzer.analyzeHtml(src, opts)
+    private fun html(src: String) = analyzer.analyzeHtml(src)
 
     // Each of these took seconds, or minutes, with the form it replaces, which read the markup again
     // or backtracked for each part of it.
