@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.test
 
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
@@ -18,6 +19,7 @@ import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
 import kotlin.reflect.KClass
+import kotlin.time.Duration
 
 /**
  * What a Datastar response said, ready to be asserted on.
@@ -92,6 +94,11 @@ public class DatastarEvents(
      * @param elements The markup, compared whole.
      * @param containing A fragment the markup must contain, for the common case where the whole
      *   of it is not the point.
+     * @param namespace The namespace; a patch sent without one matches [ElementNamespace.HTML].
+     * @param useViewTransition Whether the patch runs in a view transition.
+     * @param viewTransitionSelector The element the view transition runs on.
+     * @param eventId The SSE `id:` the frame carried.
+     * @param retry The SSE `retry:` the frame carried.
      * @return the matching patch, so a test can go on asserting on it with its own tools.
      */
     public fun assertPatchElements(
@@ -99,10 +106,14 @@ public class DatastarEvents(
         mode: ElementPatchMode? = null,
         elements: String? = null,
         containing: String? = null,
+        namespace: ElementNamespace? = null,
+        useViewTransition: Boolean? = null,
+        viewTransitionSelector: String? = null,
+        eventId: String? = null,
+        retry: Duration? = null,
     ): PatchElements {
-        val wanted = elementsWanted(selector, mode, elements, containing)
-        return events.filterIsInstance<PatchElements>().firstOrNull { it.matches(selector, mode, elements, containing) }
-            ?: fail("No element patch with $wanted")
+        val wanted = Wanted(selector, mode, elements, containing, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+        return events.filterIsInstance<PatchElements>().firstOrNull(wanted::matches) ?: fail("No element patch with $wanted")
     }
 
     /**
@@ -118,36 +129,53 @@ public class DatastarEvents(
         mode: ElementPatchMode? = null,
         elements: String? = null,
         containing: String? = null,
+        namespace: ElementNamespace? = null,
+        useViewTransition: Boolean? = null,
+        viewTransitionSelector: String? = null,
+        eventId: String? = null,
+        retry: Duration? = null,
     ) {
-        val found = events.filterIsInstance<PatchElements>().firstOrNull { it.matches(selector, mode, elements, containing) }
-        if (found != null) {
-            fail("Expected no element patch with ${elementsWanted(selector, mode, elements, containing)}, found ${describe(found)}")
-        }
+        val wanted = Wanted(selector, mode, elements, containing, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+        val found = events.filterIsInstance<PatchElements>().firstOrNull(wanted::matches)
+        if (found != null) fail("Expected no element patch with $wanted, found ${describe(found)}")
     }
 
-    private fun PatchElements.matches(
-        selector: String?,
-        mode: ElementPatchMode?,
-        elements: String?,
-        containing: String?,
-    ): Boolean =
-        (selector == null || this.selector == selector) &&
-            (mode == null || this.mode == mode) &&
-            (elements == null || this.elements == onWire(elements)) &&
-            (containing == null || this.elements?.contains(containing) == true)
+    /** What an element patch is asked to be; `null` asks nothing. */
+    private class Wanted(
+        val selector: String?,
+        val mode: ElementPatchMode?,
+        val elements: String?,
+        val containing: String?,
+        val namespace: ElementNamespace?,
+        val useViewTransition: Boolean?,
+        val viewTransitionSelector: String?,
+        val eventId: String?,
+        val retry: Duration?,
+    ) {
+        fun matches(patch: PatchElements): Boolean =
+            (selector == null || patch.selector == selector) &&
+                (mode == null || patch.mode == mode) &&
+                (elements == null || patch.elements == Wire.lines(elements).joinToString("\n")) &&
+                (containing == null || patch.elements?.contains(containing) == true) &&
+                (namespace == null || patch.namespace == namespace) &&
+                (useViewTransition == null || patch.useViewTransition == useViewTransition) &&
+                (viewTransitionSelector == null || patch.viewTransitionSelector == viewTransitionSelector) &&
+                (eventId == null || patch.eventId == eventId) &&
+                (retry == null || patch.retry == retry)
 
-    private fun elementsWanted(
-        selector: String?,
-        mode: ElementPatchMode?,
-        elements: String?,
-        containing: String?,
-    ): String =
-        listOfNotNull(
-            selector?.let { "selector $it" },
-            mode?.let { "mode ${it.wire}" },
-            elements?.let { "elements exactly $it" },
-            containing?.let { "elements containing $it" },
-        ).ifEmpty { listOf("any shape") }.joinToString(", ")
+        override fun toString(): String =
+            listOfNotNull(
+                selector?.let { "selector $it" },
+                mode?.let { "mode ${it.wire}" },
+                elements?.let { "elements exactly $it" },
+                containing?.let { "elements containing $it" },
+                namespace?.let { "namespace ${it.wire}" },
+                useViewTransition?.let { "useViewTransition $it" },
+                viewTransitionSelector?.let { "viewTransitionSelector $it" },
+                eventId?.let { "event id $it" },
+                retry?.let { "retry $it" },
+            ).ifEmpty { listOf("any shape") }.joinToString(", ")
+    }
 
     /**
      * One signal patch matching every argument given.
@@ -280,9 +308,6 @@ public class DatastarEvents(
                 event
             },
         )
-
-    /** Markup as the wire carries it: every kind of line break arrives as `\n`. */
-    private fun onWire(elements: String): String = Wire.lines(elements).joinToString("\n")
 
     /** Every failure prints the stream, because the first question is always what it did send. */
     private fun fail(what: String): Nothing = throw AssertionError(withStream(what))

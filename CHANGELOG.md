@@ -200,6 +200,11 @@ All notable changes to Streamlord are recorded here. The format follows
 - `ExecuteScript.redirect`, `ExecuteScript.replaceUrl`, `ExecuteScript.pushUrl` and
   `PatchSignals.remove` build the events `redirect`, `replaceUrl`, `pushUrl` and `removeSignals`
   send on a stream, for a `Flow` of events on WebFlux or `respondDatastar(flow)` on Ktor.
+- `assertPatchElements` and `assertNoPatchElements` in streamlord-test match `namespace`,
+  `useViewTransition`, `viewTransitionSelector`, `eventId` and `retry` too, after `containing`, and
+  `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`. A call that passes
+  `timeout` by position needs it named, and code compiled against the old signatures needs a
+  rebuild.
 
 ### Fixed
 

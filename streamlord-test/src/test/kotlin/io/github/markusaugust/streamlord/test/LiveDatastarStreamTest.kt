@@ -152,6 +152,19 @@ class LiveDatastarStreamTest {
         }
 
     @Test
+    fun `an element patch is awaited by its view transition and event id`() =
+        runTest {
+            feed().use { stream ->
+                outbox.put("event: datastar-patch-elements\ndata: elements <div id=\"a\">1</div>\n\n")
+                outbox.put("event: datastar-patch-elements\nid: 9\ndata: selector #a\ndata: mode remove\ndata: useViewTransition true\n\n")
+
+                val patch = stream.awaitPatchElements(useViewTransition = true, eventId = "9")
+
+                assertEquals(ElementPatchMode.REMOVE, patch.mode)
+            }
+        }
+
+    @Test
     fun `an await does not count an event an earlier await moved past`() =
         runTest {
             feed().use { stream ->

@@ -9,11 +9,11 @@ public final class io/github/markusaugust/streamlord/test/DatastarEvents : java/
 	public final fun assertEventTypes ([Lkotlin/reflect/KClass;)V
 	public final fun assertExactly ([Lio/github/markusaugust/streamlord/core/domain/DatastarEvent;)V
 	public final fun assertNoEvents ()V
-	public final fun assertNoPatchElements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;)V
-	public static synthetic fun assertNoPatchElements$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)V
+	public final fun assertNoPatchElements-bIxd9AE (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Ljava/lang/Boolean;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)V
+	public static synthetic fun assertNoPatchElements-bIxd9AE$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Ljava/lang/Boolean;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)V
 	public final fun assertNoSignal (Ljava/lang/String;)V
-	public final fun assertPatchElements (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
-	public static synthetic fun assertPatchElements$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public final fun assertPatchElements-bIxd9AE (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Ljava/lang/Boolean;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
+	public static synthetic fun assertPatchElements-bIxd9AE$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Ljava/lang/Boolean;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchElements;
 	public final fun assertPatchSignals (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
 	public static synthetic fun assertPatchSignals$default (Lio/github/markusaugust/streamlord/test/DatastarEvents;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
 	public final fun assertSignal (Ljava/lang/String;Ljava/lang/Object;)V
@@ -56,8 +56,8 @@ public final class io/github/markusaugust/streamlord/test/DatastarEventsKt {
 
 public final class io/github/markusaugust/streamlord/test/LiveDatastarStream : java/lang/AutoCloseable {
 	public static final field Companion Lio/github/markusaugust/streamlord/test/LiveDatastarStream$Companion;
-	public final fun awaitPatchElements-myKFqkg (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun awaitPatchElements-myKFqkg$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun awaitPatchElements-qbehDQM (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Ljava/lang/Boolean;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun awaitPatchElements-qbehDQM$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/core/domain/ElementNamespace;Ljava/lang/Boolean;Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun awaitSignal-exY8QGI (Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun awaitSignal-exY8QGI$default (Lio/github/markusaugust/streamlord/test/LiveDatastarStream;Ljava/lang/String;Ljava/lang/Object;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public fun close ()V
