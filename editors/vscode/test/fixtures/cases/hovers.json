@@ -31,6 +31,7 @@
     {"name":"a signal read in an expression","language":"html","text":"<div data-text=\"$us¦er.name\"></div>","hover":{"word":"$user.name","doc":"**$user.name**\n\nThe signal user.name, read from Datastar's store."}},
     {"name":"a member named like a scope name is no scope name","language":"html","text":"<div data-text=\"$a + x.e¦l\"></div>","hover":null},
     {"name":"a scope name in a string is text","language":"html","text":"<div data-text=\"'e¦l'\"></div>","hover":null},
-    {"name":"a signal in a DSL string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataText(\"\\$co¦unt\") }","hover":{"word":"$count","doc":"**$count**\n\nThe signal count, read from Datastar's store."}}
+    {"name":"a signal in a DSL string","language":"kotlin","text":"import io.github.markusaugust.streamlord.html.*\ndiv { dataText(\"\\$co¦unt\") }","hover":{"word":"$count","doc":"**$count**\n\nThe signal count, read from Datastar's store."}},
+    {"name":"a dollar the client reads no name after is no signal","language":"html","text":"<button data-on:click=\"$¦år + 1\"></button>","hover":null}
   ]
 }
