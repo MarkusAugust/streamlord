@@ -437,6 +437,8 @@ internal fun actionArgumentIssues(
                 val kind = kinds.getOrNull(n) ?: break
                 if (kind == ArgumentKind.ANY) continue
                 val v = brackets.value(piece)
+                // A Pro action's string is what the browser makes of a number, which it takes whole.
+                if (spec.pro && kind == ArgumentKind.STRING && v.written == Written.NUMBER) continue
                 val parameter = parameters[n].removeSuffix("?")
                 // A parameter the signature names is named; one it writes out, as @peek(() => expr), is shown in it.
                 val takes =

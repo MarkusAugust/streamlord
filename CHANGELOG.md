@@ -451,7 +451,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `JSON cannot hold Sorcerer.`, where it gave the qualified name, and `null` for a local class.
 - The editors judge the arguments of the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds
   the reference declares, as they judge the free ones, `@fit('a', 0, 1, 0, 10)` among them, and
-  their hover says what each parameter takes; they judged the number of arguments alone.
+  their hover says what each parameter takes; they judged the number of arguments alone. A number
+  where one takes a string is let be, as the browser turns it into one: `@clipboard(1)` copies `1`.
 - IntelliJ's inspection "Signal no file defines" is now called "Unknown signals", as the VS Code setting
   `streamlord.diagnostics.unknownSignals` that turns the same two warnings on and off is. Its
   settings in an inspection profile are kept.
