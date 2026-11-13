@@ -13,7 +13,7 @@
 {"what":"hover","at":"7:51-7:68","answers":[{"contents":[{"value":"36efd861cf5a"}],"range":"7:51-7:68"}]}
 {"what":"hover","at":"7:71-7:79","answers":[{"contents":["**$selected**\n\nDatastar reads it as `$['selected']`, the signal path selected in its store."],"range":"7:70-7:79"}]}
 {"what":"hover","at":"9:7-9:35","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:7-9:35"}]}
-{"what":"hover","at":"9:37-9:41","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"9:37-9:41"}]}
+{"what":"hover","at":"9:37-9:41","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"9:37-9:41"}]}
 {"what":"hover","at":"10:7-10:16","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"10:7-10:16"}]}
 {"what":"hover","at":"10:19-10:26","answers":[{"contents":["**$selcted**\n\nDatastar reads it as `$['selcted']`, the signal path selcted in its store."],"range":"10:18-10:26"}]}
 {"what":"signature","at":"9:42-9:66","active":0,"parameter":0,"signatures":[{"documentation":"GET with signals in the query string.","label":"@get(uri, options?)","parameters":[{"label":[5,8]},{"label":[10,18]}]}]}

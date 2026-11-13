@@ -5,7 +5,7 @@
 {"what":"hover","at":"13:9-13:21","answers":[{"contents":[{"value":"69e2600e0061"}],"range":"13:9-13:21"}]}
 {"what":"hover","at":"13:34-13:47","answers":[{"contents":["**$hero.strength**\n\nDatastar reads it as `$['hero']['strength']`, the signal path hero.strength in its store."],"range":"13:33-13:47"}]}
 {"what":"hover","at":"14:9-14:17","answers":[{"contents":["**data-init**\n\nRuns an expression once when the element enters the DOM.\n\n`data-init=\"expr\"`\n\n**Modifiers:** `__delay.500ms`, `__viewtransition`\n\n**Kotlin:** `dataInit()`"],"range":"14:9-14:17"}]}
-{"what":"hover","at":"14:18-14:21","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string."],"range":"14:18-14:21"}]}
+{"what":"hover","at":"14:18-14:21","answers":[{"contents":[{"value":"accab38b3e72"}],"range":"14:18-14:21"}]}
 {"what":"hover","at":"15:14-15:22","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"15:14-15:22"}]}
 {"what":"hover","at":"15:26-15:34","answers":[{"contents":["**$heroName**\n\nDatastar reads it as `$['heroName']`, the signal path heroName in its store."],"range":"15:25-15:34"}]}
 {"what":"hover","at":"17:13-17:21","answers":[{"contents":["**data-show**\n\nShows the element when the expression is truthy.\n\n`data-show=\"expr\"`\n\n**Kotlin:** `dataShow()`"],"range":"17:13-17:21"}]}
@@ -20,26 +20,26 @@
 {"what":"hover","at":"28:13-28:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"28:13-28:24"}]}
 {"what":"hover","at":"29:13-29:26","answers":[{"contents":[{"value":"f14056469ba7"}],"range":"29:13-29:26"}]}
 {"what":"hover","at":"33:13-33:19","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"33:13-33:19"}]}
-{"what":"hover","at":"33:29-33:33","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body."],"range":"33:29-33:33"}]}
+{"what":"hover","at":"33:29-33:33","answers":[{"contents":[{"value":"2ac987a2dca5"}],"range":"33:29-33:33"}]}
 {"what":"hover","at":"40:13-40:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"40:13-40:24"}]}
-{"what":"hover","at":"40:26-40:31","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"40:26-40:31"}]}
+{"what":"hover","at":"40:26-40:31","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"40:26-40:31"}]}
 {"what":"hover","at":"40:44-40:55","answers":[{"contents":[{"value":"ecd6ee1cb21f"}],"range":"40:44-40:55"}]}
 {"what":"hover","at":"40:65-40:72","answers":[{"contents":["**headers**: `Record<string, string>`, default `{}`\n\nHeaders added to the request, after Datastar's own Accept and Datastar-Request: true."],"range":"40:65-40:72"}]}
 {"what":"hover","at":"40:87-40:95","answers":[{"contents":["**$heroName**\n\nDatastar reads it as `$['heroName']`, the signal path heroName in its store."],"range":"40:86-40:95"}]}
 {"what":"hover","at":"41:13-41:26","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"41:13-41:26"}]}
 {"what":"hover","at":"41:29-41:31","answers":[{"contents":["**evt**\n\nThe event that ran the expression of data-on; undefined in the others."],"range":"41:28-41:31"}]}
-{"what":"hover","at":"41:51-41:55","answers":[{"contents":["**@put(uri, options?)**\n\nPUT with signals in the body.\n\nKotlin: `put()`"],"range":"41:51-41:55"}]}
+{"what":"hover","at":"41:51-41:55","answers":[{"contents":[{"value":"3ad0fdac4c34"}],"range":"41:51-41:55"}]}
 {"what":"hover","at":"41:71-41:84","answers":[{"contents":["**$selectedQuest**\n\nDatastar reads it as `$['selectedQuest']`, the signal path selectedQuest in its store."],"range":"41:70-41:84"}]}
 {"what":"hover","at":"45:13-45:21","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"45:13-45:21"}]}
 {"what":"hover","at":"46:13-46:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"46:13-46:24"}]}
-{"what":"hover","at":"46:26-46:30","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"46:26-46:30"}]}
+{"what":"hover","at":"46:26-46:30","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"46:26-46:30"}]}
 {"what":"hover","at":"47:13-47:25","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"47:13-47:25"}]}
 {"what":"hover","at":"50:13-50:25","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"50:13-50:25"}]}
-{"what":"hover","at":"50:27-50:32","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"50:27-50:32"}]}
+{"what":"hover","at":"50:27-50:32","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"50:27-50:32"}]}
 {"what":"hover","at":"53:13-53:28","answers":[{"contents":[{"value":"6ac264db37cf"}],"range":"53:13-53:28"}]}
-{"what":"hover","at":"53:30-53:34","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"53:30-53:34"}]}
+{"what":"hover","at":"53:30-53:34","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"53:30-53:34"}]}
 {"what":"hover","at":"54:13-54:27","answers":[{"contents":["**data-on-interval**\n\nRuns an expression on an interval (default 1s).\n\n`data-on-interval=\"expr\"`\n\n**Modifiers:** `__duration.500ms`, `__viewtransition`\n\n**Kotlin:** `dataOnInterval()`"],"range":"54:13-54:27"}]}
-{"what":"hover","at":"54:29-54:33","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"54:29-54:33"}]}
+{"what":"hover","at":"54:29-54:33","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"54:29-54:33"}]}
 {"what":"hover","at":"55:13-55:30","answers":[{"contents":[{"value":"4ebed2099a54"}],"range":"55:13-55:30"}]}
 {"what":"hover","at":"55:45-55:49","answers":[{"contents":["**patch**\n\nThe signals that changed, with their new values: data-on-signal-patch hands it to its expression."],"range":"55:44-55:49"}]}
 {"what":"hover","at":"56:13-56:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"56:13-56:24"}]}
@@ -50,7 +50,7 @@
 {"what":"hover","at":"60:15-60:30","answers":[{"contents":[{"value":"f81c541900d5"}],"range":"60:15-60:30"}]}
 {"what":"hover","at":"62:13-62:23","answers":[{"contents":["**data-effect**\n\nRuns an expression whenever a signal it reads changes.\n\n`data-effect=\"expr\"`\n\n**Kotlin:** `dataEffect()`"],"range":"62:13-62:23"}]}
 {"what":"hover","at":"62:27-62:32","answers":[{"contents":["**$power**\n\nDatastar reads it as `$['power']`, the signal path power in its store."],"range":"62:26-62:32"}]}
-{"what":"hover","at":"62:40-62:45","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"62:40-62:45"}]}
+{"what":"hover","at":"62:40-62:45","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"62:40-62:45"}]}
 {"what":"hover","at":"63:13-63:29","answers":[{"contents":["**data-preserve-attr**\n\nKeeps the listed attributes through a morph.\n\n`data-preserve-attr=\"name name\"`\n\n**Kotlin:** `dataPreserveAttr()`"],"range":"63:13-63:29"}]}
 {"what":"hover","at":"64:13-64:23","answers":[{"contents":["**data-ignore**\n\nDatastar leaves this element (and its subtree, unless __self) alone.\n\n`data-ignore`  \n`data-ignore__self`\n\n**Modifiers:** `__self`\n\n**Kotlin:** `dataIgnore()`"],"range":"64:13-64:23"}]}
 {"what":"hover","at":"67:25-67:37","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"67:25-67:44"}]}
@@ -77,7 +77,7 @@
 {"what":"hover","at":"80:13-80:27","answers":[{"contents":[{"value":"34abca7f567e"}],"range":"80:13-80:27"}]}
 {"what":"hover","at":"81:13-81:31","answers":[{"contents":[{"value":"42dbad403bc7"}],"range":"81:13-81:31"}]}
 {"what":"hover","at":"82:13-82:21","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"82:13-82:21"}]}
-{"what":"hover","at":"82:22-82:26","answers":[{"contents":["**@peek(() => expr)**\n\nReads signals without subscribing."],"range":"82:22-82:26"}]}
+{"what":"hover","at":"82:22-82:26","answers":[{"contents":[{"value":"c254414f83fd"}],"range":"82:22-82:26"}]}
 {"what":"signature","at":"40:32-40:41","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"signature","at":"40:42-40:97","active":0,"parameter":1,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"signature","at":"41:56-41:84","active":0,"parameter":0,"signatures":[{"documentation":"PUT with signals in the body.","label":"@put(uri, options?)","parameters":[{"label":[5,8]},{"label":[10,18]}]}]}

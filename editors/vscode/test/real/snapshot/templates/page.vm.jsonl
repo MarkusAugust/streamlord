@@ -6,11 +6,11 @@
 {"what":"hover","at":"1:44-1:56","answers":[{"contents":["**$members.size**\n\nDatastar reads it as `$['members']['size']`, the signal path members.size in its store."],"range":"1:43-1:56"}]}
 {"what":"hover","at":"3:8-3:17","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"3:8-3:17"}]}
 {"what":"hover","at":"3:35-3:48","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"3:35-3:48"}]}
-{"what":"hover","at":"3:50-3:54","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"3:50-3:54"}]}
+{"what":"hover","at":"3:50-3:54","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"3:50-3:54"}]}
 {"what":"hover","at":"5:6-5:15","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"5:6-5:15"}]}
 {"what":"hover","at":"5:18-5:25","answers":[{"contents":["**$members**\n\nDatastar reads it as `$['members']`, the signal path members in its store."],"range":"5:17-5:25"}]}
 {"what":"hover","at":"6:11-6:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"6:11-6:24"}]}
-{"what":"hover","at":"6:26-6:30","answers":[{"contents":["**@put(uri, options?)**\n\nPUT with signals in the body.\n\nKotlin: `put()`"],"range":"6:26-6:30"}]}
+{"what":"hover","at":"6:26-6:30","answers":[{"contents":[{"value":"3ad0fdac4c34"}],"range":"6:26-6:30"}]}
 {"what":"signature","at":"3:55-3:76","active":0,"parameter":0,"signatures":[{"documentation":"GET with signals in the query string.","label":"@get(uri, options?)","parameters":[{"label":[5,8]},{"label":[10,18]}]}]}
 {"what":"signature","at":"6:32-6:40","active":0,"parameter":0,"signatures":[{"documentation":"PUT with signals in the body.","label":"@put(uri, options?)","parameters":[{"label":[5,8]},{"label":[10,18]}]}]}
 {"what":"definition","at":"1:34-1:41","answers":[{"file":"templates/page.vm","range":"1:34-1:41"}]}

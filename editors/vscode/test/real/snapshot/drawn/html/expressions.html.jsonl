@@ -172,7 +172,7 @@
 {"what":"hover","at":"13:40-13:46","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"13:40-13:46"}]}
 {"what":"hover","at":"14:2-14:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"14:2-14:8"}]}
 {"what":"hover","at":"14:9-14:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"14:9-14:22"}]}
-{"what":"hover","at":"14:24-14:28","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"14:24-14:28"}]}
+{"what":"hover","at":"14:24-14:28","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"14:24-14:28"}]}
 {"what":"hover","at":"14:41-14:47","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"14:41-14:47"}]}
 {"what":"hover","at":"15:2-15:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"15:2-15:8"}]}
 {"what":"hover","at":"15:9-15:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"15:9-15:22"}]}
@@ -217,7 +217,7 @@
 {"what":"hover","at":"25:9-25:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"25:9-25:22"}]}
 {"what":"hover","at":"25:29-25:30","answers":[{"contents":["**$a**\n\nDatastar reads it as `$['a']`, the signal path a in its store."],"range":"25:28-25:30"}]}
 {"what":"hover","at":"25:42-25:43","answers":[{"contents":["**$b**\n\nDatastar reads it as `$['b']`, the signal path b in its store."],"range":"25:41-25:43"}]}
-{"what":"hover","at":"25:48-25:52","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"25:48-25:52"}]}
+{"what":"hover","at":"25:48-25:52","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"25:48-25:52"}]}
 {"what":"hover","at":"25:64-25:70","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"25:64-25:70"}]}
 {"what":"hover","at":"26:2-26:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"26:2-26:8"}]}
 {"what":"hover","at":"26:9-26:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"26:9-26:22"}]}
@@ -265,7 +265,7 @@
 {"what":"hover","at":"37:45-37:51","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"37:45-37:51"}]}
 {"what":"hover","at":"38:2-38:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"38:2-38:8"}]}
 {"what":"hover","at":"38:9-38:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"38:9-38:22"}]}
-{"what":"hover","at":"38:30-38:35","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"38:30-38:35"}]}
+{"what":"hover","at":"38:30-38:35","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"38:30-38:35"}]}
 {"what":"hover","at":"38:50-38:56","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"38:50-38:56"}]}
 {"what":"hover","at":"39:2-39:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"39:2-39:8"}]}
 {"what":"hover","at":"39:9-39:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"39:9-39:22"}]}
@@ -322,17 +322,17 @@
 {"what":"hover","at":"51:60-51:66","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"51:60-51:66"}]}
 {"what":"hover","at":"52:2-52:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"52:2-52:8"}]}
 {"what":"hover","at":"52:9-52:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"52:9-52:22"}]}
-{"what":"hover","at":"52:24-52:28","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"52:24-52:28"}]}
+{"what":"hover","at":"52:24-52:28","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"52:24-52:28"}]}
 {"what":"hover","at":"52:34-52:40","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"52:34-52:40"}]}
 {"what":"hover","at":"53:2-53:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"53:2-53:8"}]}
 {"what":"hover","at":"53:9-53:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"53:9-53:22"}]}
 {"what":"hover","at":"53:25-53:26","answers":[{"contents":["**$f**\n\nDatastar reads it as `$['f']`, the signal path f in its store."],"range":"53:24-53:26"}]}
-{"what":"hover","at":"53:29-53:34","answers":[{"contents":["**@peek(() => expr)**\n\nReads signals without subscribing.\n\nKotlin: `peek()`"],"range":"53:29-53:34"}]}
+{"what":"hover","at":"53:29-53:34","answers":[{"contents":[{"value":"22d033a41d8a"}],"range":"53:29-53:34"}]}
 {"what":"hover","at":"53:40-53:46","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"53:40-53:46"}]}
 {"what":"hover","at":"54:2-54:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"54:2-54:8"}]}
 {"what":"hover","at":"54:9-54:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"54:9-54:22"}]}
 {"what":"hover","at":"54:25-54:25","answers":[{"contents":["**$a**\n\nDatastar reads it as `$['a']`, the signal path a in its store."],"range":"54:24-54:26"}]}
-{"what":"hover","at":"54:26-54:30","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"54:26-54:30"}]}
+{"what":"hover","at":"54:26-54:30","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"54:26-54:30"}]}
 {"what":"hover","at":"54:42-54:48","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"54:42-54:48"}]}
 {"what":"hover","at":"55:2-55:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"55:2-55:8"}]}
 {"what":"hover","at":"55:9-55:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"55:9-55:22"}]}
@@ -393,7 +393,7 @@
 {"what":"hover","at":"68:46-68:52","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"68:46-68:52"}]}
 {"what":"hover","at":"69:2-69:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"69:2-69:8"}]}
 {"what":"hover","at":"69:9-69:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"69:9-69:22"}]}
-{"what":"hover","at":"69:24-69:28","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"69:24-69:28"}]}
+{"what":"hover","at":"69:24-69:28","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"69:24-69:28"}]}
 {"what":"hover","at":"69:40-69:46","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"69:40-69:46"}]}
 {"what":"hover","at":"70:2-70:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"70:2-70:8"}]}
 {"what":"hover","at":"70:9-70:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"70:9-70:22"}]}
@@ -409,7 +409,7 @@
 {"what":"hover","at":"73:2-73:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"73:2-73:8"}]}
 {"what":"hover","at":"73:9-73:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"73:9-73:22"}]}
 {"what":"hover","at":"73:25-73:30","answers":[{"contents":["**$count**\n\nDatastar reads it as `$['count']`, the signal path count in its store."],"range":"73:24-73:30"}]}
-{"what":"hover","at":"73:34-73:39","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"73:34-73:39"}]}
+{"what":"hover","at":"73:34-73:39","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"73:34-73:39"}]}
 {"what":"hover","at":"73:47-73:54","answers":[{"contents":["**headers**: `Record<string, string>`, default `{}`\n\nHeaders added to the request, after Datastar's own Accept and Datastar-Request: true."],"range":"73:47-73:54"}]}
 {"what":"hover","at":"73:76-73:82","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"73:76-73:82"}]}
 {"what":"hover","at":"74:2-74:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"74:2-74:8"}]}
@@ -419,7 +419,7 @@
 {"what":"hover","at":"74:69-74:75","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"74:69-74:75"}]}
 {"what":"hover","at":"75:2-75:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"75:2-75:8"}]}
 {"what":"hover","at":"75:9-75:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"75:9-75:22"}]}
-{"what":"hover","at":"75:24-75:29","answers":[{"contents":["**@peek(() => expr)**\n\nReads signals without subscribing.\n\nKotlin: `peek()`"],"range":"75:24-75:29"}]}
+{"what":"hover","at":"75:24-75:29","answers":[{"contents":[{"value":"22d033a41d8a"}],"range":"75:24-75:29"}]}
 {"what":"hover","at":"75:37-75:40","answers":[{"contents":["**$a.b**\n\nDatastar reads it as `$['a']['b']`, the signal path a.b in its store."],"range":"75:36-75:40"}]}
 {"what":"hover","at":"75:47-75:53","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"75:47-75:53"}]}
 {"what":"hover","at":"76:2-76:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"76:2-76:8"}]}
@@ -436,14 +436,14 @@
 {"what":"hover","at":"79:41-79:47","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"79:41-79:47"}]}
 {"what":"hover","at":"80:2-80:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"80:2-80:8"}]}
 {"what":"hover","at":"80:9-80:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"80:9-80:22"}]}
-{"what":"hover","at":"80:24-80:29","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"80:24-80:29"}]}
+{"what":"hover","at":"80:24-80:29","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"80:24-80:29"}]}
 {"what":"hover","at":"80:40-80:46","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"80:40-80:46"}]}
 {"what":"hover","at":"81:2-81:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"81:2-81:8"}]}
 {"what":"hover","at":"81:9-81:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"81:9-81:22"}]}
 {"what":"hover","at":"81:41-81:47","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"81:41-81:47"}]}
 {"what":"hover","at":"82:2-82:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"82:2-82:8"}]}
 {"what":"hover","at":"82:9-82:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"82:9-82:22"}]}
-{"what":"hover","at":"82:24-82:34","answers":[{"contents":["**@clipboard(text, isBase64?)**\n\nPro. Copies text to the clipboard.\n\n_Datastar Pro._\n\nKotlin: `clipboard()`"],"range":"82:24-82:34"}]}
+{"what":"hover","at":"82:24-82:34","answers":[{"contents":[{"value":"9d655fcd3196"}],"range":"82:24-82:34"}]}
 {"what":"hover","at":"82:45-82:51","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"82:45-82:51"}]}
 {"what":"hover","at":"83:2-83:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"83:2-83:8"}]}
 {"what":"hover","at":"83:9-83:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"83:9-83:22"}]}
@@ -469,7 +469,7 @@
 {"what":"hover","at":"85:106-85:112","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"85:106-85:112"}]}
 {"what":"hover","at":"86:2-86:8","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"86:2-86:8"}]}
 {"what":"hover","at":"86:9-86:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"86:9-86:22"}]}
-{"what":"hover","at":"86:24-86:28","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"86:24-86:28"}]}
+{"what":"hover","at":"86:24-86:28","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"86:24-86:28"}]}
 {"what":"hover","at":"86:54-86:55","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"86:53-86:55"}]}
 {"what":"hover","at":"86:61-86:67","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"86:61-86:67"}]}
 {"what":"hover","at":"87:3-87:7","answers":[{"contents":[{"value":"bc844e599acf"}],"range":"87:3-87:7"}]}

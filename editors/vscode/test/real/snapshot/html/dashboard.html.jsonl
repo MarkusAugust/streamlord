@@ -23,7 +23,7 @@
 {"what":"hover","at":"9:13-9:26","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:13-9:26"}]}
 {"what":"hover","at":"9:29-9:38","answers":[{"contents":["**$questOpen**\n\nDatastar reads it as `$['questOpen']`, the signal path questOpen in its store."],"range":"9:28-9:38"}]}
 {"what":"hover","at":"9:43-9:52","answers":[{"contents":["**$questOpen**\n\nDatastar reads it as `$['questOpen']`, the signal path questOpen in its store."],"range":"9:42-9:52"}]}
-{"what":"hover","at":"9:54-9:59","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"9:54-9:59"}]}
+{"what":"hover","at":"9:54-9:59","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"9:54-9:59"}]}
 {"what":"hover","at":"9:74-9:87","answers":[{"contents":["**$selectedQuest**\n\nDatastar reads it as `$['selectedQuest']`, the signal path selectedQuest in its store."],"range":"9:73-9:87"}]}
 {"what":"hover","at":"9:96-9:102","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"9:96-9:102"}]}
 {"what":"hover","at":"10:6-10:11","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"10:6-10:11"}]}

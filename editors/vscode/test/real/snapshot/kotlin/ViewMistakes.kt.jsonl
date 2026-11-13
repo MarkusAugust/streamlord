@@ -95,7 +95,7 @@
 {"what":"hover","at":"10:20-10:31","answers":[{"contents":["**$name.length**\n\nDatastar reads it as `$['name']['length']`, the signal path name.length in its store. Where name is an array or a string, `length` is its length."],"range":"10:19-10:31"}]}
 {"what":"hover","at":"11:9-11:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"11:9-11:20"}]}
 {"what":"hover","at":"12:9-12:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"12:9-12:20"}]}
-{"what":"hover","at":"12:22-12:26","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"12:22-12:26"}]}
+{"what":"hover","at":"12:22-12:26","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"12:22-12:26"}]}
 {"what":"hover","at":"13:9-13:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"13:9-13:20"}]}
 {"what":"hover","at":"13:24-13:29","answers":[{"contents":["**$count**\n\nDatastar reads it as `$['count']`, the signal path count in its store."],"range":"13:23-13:29"}]}
 {"what":"hover","at":"14:9-14:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"14:9-14:20"}]}
@@ -106,9 +106,9 @@
 {"what":"hover","at":"17:9-17:17","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"17:9-17:17"}]}
 {"what":"hover","at":"17:22-17:27","answers":[{"contents":["**$count**\n\nDatastar reads it as `$['count']`, the signal path count in its store."],"range":"17:21-17:27"}]}
 {"what":"hover","at":"18:9-18:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"18:9-18:20"}]}
-{"what":"hover","at":"18:22-18:32","answers":[{"contents":["**@clipboard(text, isBase64?)**\n\nPro. Copies text to the clipboard.\n\n_Datastar Pro._\n\nKotlin: `clipboard()`"],"range":"18:22-18:32"}]}
+{"what":"hover","at":"18:22-18:32","answers":[{"contents":[{"value":"9d655fcd3196"}],"range":"18:22-18:32"}]}
 {"what":"hover","at":"19:9-19:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"19:9-19:20"}]}
-{"what":"hover","at":"19:22-19:27","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"19:22-19:27"}]}
+{"what":"hover","at":"19:22-19:27","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"19:22-19:27"}]}
 {"what":"hover","at":"20:9-20:20","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"20:9-20:20"}]}
 {"what":"hover","at":"21:9-21:20","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"21:9-21:20"}]}
 {"what":"hover","at":"22:9-22:20","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"22:9-22:20"}]}

@@ -71,7 +71,7 @@
 {"what":"hover","at":"4:67-4:73","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"4:67-4:73"}]}
 {"what":"hover","at":"5:4-5:10","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"5:4-5:10"}]}
 {"what":"hover","at":"5:11-5:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"5:11-5:24"}]}
-{"what":"hover","at":"5:26-5:30","answers":[{"contents":["**@get(uri, options?)**\n\nGET with signals in the query string.\n\nKotlin: `get()`"],"range":"5:26-5:30"}]}
+{"what":"hover","at":"5:26-5:30","answers":[{"contents":[{"value":"282fa87ad529"}],"range":"5:26-5:30"}]}
 {"what":"hover","at":"5:71-5:77","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"5:71-5:77"}]}
 {"what":"hover","at":"6:4-6:10","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"6:4-6:10"}]}
 {"what":"hover","at":"6:11-6:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"6:11-6:24"}]}
@@ -167,7 +167,7 @@
 {"what":"hover","at":"34:38-34:41","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"34:38-34:41"}]}
 {"what":"hover","at":"35:4-35:10","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"35:4-35:10"}]}
 {"what":"hover","at":"35:11-35:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"35:11-35:24"}]}
-{"what":"hover","at":"35:26-35:36","answers":[{"contents":["**@clipboard(text, isBase64?)**\n\nPro. Copies text to the clipboard.\n\n_Datastar Pro._\n\nKotlin: `clipboard()`"],"range":"35:26-35:36"}]}
+{"what":"hover","at":"35:26-35:36","answers":[{"contents":[{"value":"9d655fcd3196"}],"range":"35:26-35:36"}]}
 {"what":"hover","at":"35:57-35:63","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"35:57-35:63"}]}
 {"what":"hover","at":"36:4-36:10","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"36:4-36:10"}]}
 {"what":"hover","at":"36:11-36:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"36:11-36:24"}]}
@@ -175,7 +175,7 @@
 {"what":"hover","at":"36:72-36:78","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"36:72-36:78"}]}
 {"what":"hover","at":"37:4-37:10","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"37:4-37:10"}]}
 {"what":"hover","at":"37:11-37:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"37:11-37:24"}]}
-{"what":"hover","at":"37:26-37:31","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"37:26-37:31"}]}
+{"what":"hover","at":"37:26-37:31","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"37:26-37:31"}]}
 {"what":"hover","at":"37:62-37:67","answers":[{"contents":[{"value":"ee0ee6a340e2"}],"range":"37:62-37:67"}]}
 {"what":"hover","at":"37:107-37:113","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"37:107-37:113"}]}
 {"what":"hover","at":"38:4-38:5","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"38:4-38:5"}]}
