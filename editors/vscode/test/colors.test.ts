@@ -5,7 +5,7 @@ import { DARK_RULES, LIGHT_RULES } from "../src/palette.ts";
 
 /** The opt-in palette is written for the theme in use, by its kind, never as a rule every theme gets. */
 describe("recommended colours", () => {
-  const mine = { scope: ["comment"], settings: { foreground: "#123456" } };
+  const mine = { name: "mine", scope: ["comment"], settings: { foreground: "#123456" } };
 
   it("writes the light palette for a light theme and the dark one for a dark theme, by kind and not by name", () => {
     const light = withRecommendedColors({ textMateRules: [mine] }, { name: "Solarized Light", dark: false });
