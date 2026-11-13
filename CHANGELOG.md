@@ -112,6 +112,12 @@ All notable changes to Streamlord are recorded here. The format follows
   element has no id throws `DatastarEventValidationException`: the client looks each one up by its
   id and skips one without, with only a console warning. Without the guard such a patch is sent as
   before, since the SDK specification's own tests send `<div>Merge</div>` that way.
+- `CspNonce.starterPolicy`, the default of `CspNoncePlugin` and `CspNonceFilter`, requires Trusted
+  Types: it ends in `require-trusted-types-for 'script'; trusted-types datastar`, allowing the one
+  policy Datastar's client creates in CSP mode, now named by `CspNonce.TRUSTED_TYPES_POLICY`. Any
+  other code that writes a string into the DOM as markup or a script is refused by the browser, and
+  so is a patch that morphs in an inline `on*` attribute or a `<script src>`. A page that needs
+  either, or a library that creates a policy of its own, sets its own policy.
 
 ### Added
 
@@ -205,6 +211,10 @@ All notable changes to Streamlord are recorded here. The format follows
   `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`. A call that passes
   `timeout` by position needs it named, and code compiled against the old signatures needs a
   rebuild.
+- [Security](https://streamlord-docs.netlify.app/security/) says that CSP mode does not make an
+  expression safe, that a page without it needs `'unsafe-eval'`, that the aliased bundle reads
+  `data-star-nonce`, and that signals are the reader's to read and change, so they hold nothing
+  secret and are checked on the server.
 
 ### Fixed
 

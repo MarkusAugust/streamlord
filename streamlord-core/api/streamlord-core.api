@@ -211,6 +211,7 @@ public final class io/github/markusaugust/streamlord/core/domain/CspNonce {
 	public static final field HEADER Ljava/lang/String;
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/CspNonce;
 	public static final field REPORT_ONLY_HEADER Ljava/lang/String;
+	public static final field TRUSTED_TYPES_POLICY Ljava/lang/String;
 	public final fun checked (Ljava/lang/String;)Ljava/lang/String;
 	public final fun generate ()Ljava/lang/String;
 	public final fun problem (Ljava/lang/String;)Ljava/lang/String;
