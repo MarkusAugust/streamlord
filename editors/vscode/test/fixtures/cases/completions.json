@@ -82,6 +82,8 @@
     {"name":"the properties of __prop after its dot","language":"html","text":"<input data-bind:x__prop.¦>","labels":["checked","value"],"items":[{"label":"checked","kind":"value","from":0}]},
     {"name":"the events of __event after each dot, those written left out","language":"html","text":"<input data-bind:x__event.input.¦>","labels":["blur","change"],"items":[{"label":"change","kind":"value","from":0}]},
     {"name":"a flag of a duration is offered once","language":"html","text":"<div data-on:click__debounce.500ms.leading.¦=\"$a = 1\"></div>","labels":["notrailing"],"items":[{"label":"notrailing","kind":"value","from":0}]},
-    {"name":"the one flag of an interval, written already, is not offered again","language":"html","text":"<div data-on-interval__duration.1s.leading.¦=\"$a = 1\"></div>","labels":[],"items":[]}
+    {"name":"the one flag of an interval, written already, is not offered again","language":"html","text":"<div data-on-interval__duration.1s.leading.¦=\"$a = 1\"></div>","labels":[],"items":[]},
+    {"name":"no modifier the reference does not list for a Pro attribute","language":"html","text":"<div data-on-raf__¦=\"$a++\"></div>","labels":["throttle"],"items":[]},
+    {"name":"no modifier the reference does not list for data-on-resize","language":"html","text":"<div data-on-resize__¦=\"$a++\"></div>","labels":["debounce","throttle"],"items":[]}
   ]
 }
