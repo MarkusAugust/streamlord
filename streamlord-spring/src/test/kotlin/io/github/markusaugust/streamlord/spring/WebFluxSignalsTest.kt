@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.json.jackson.JacksonSignalsCodec
 import io.github.markusaugust.streamlord.test.datastarEvents
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +18,9 @@ import org.springframework.http.codec.ServerSentEvent
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ServerWebExchange
 import kotlin.test.Test
@@ -27,6 +30,10 @@ import kotlin.test.assertEquals
 class WebFluxSignalsTest {
     data class Search(
         val query: String = "",
+    )
+
+    data class Quest(
+        val title: String,
     )
 
     @RestController
@@ -43,6 +50,19 @@ class WebFluxSignalsTest {
 
         @PostMapping("/small")
         suspend fun small(exchange: ServerWebExchange): String = exchange.readSignalsJson(Streamlord(maxSignalsSize = 8)) ?: "none"
+
+        // A form sent with contentType: 'form', as signals.md shows it on WebFlux.
+        @PostMapping("/quests")
+        fun add(
+            @ModelAttribute quest: Quest,
+        ): ResponseEntity<Flow<ServerSentEvent<String>>> =
+            flowOf(PatchElements(interpolate("""<li id="quest">%s</li>""", quest.title))).asDatastarResponse()
+
+        // What the page does not show: on WebFlux a @RequestParam is read from the query alone.
+        @PostMapping("/param")
+        fun param(
+            @RequestParam title: String,
+        ): String = title
 
         @GetMapping("/done")
         fun done(): ResponseEntity<Flow<ServerSentEvent<String>>> =
@@ -119,6 +139,13 @@ class WebFluxSignalsTest {
                     .bodyValue("""{"query":"ash"}"""),
             )
         assertEquals(true, "limit is 8" in large, large)
+    }
+
+    @Test
+    fun `a form is read by a bound object on WebFlux, where a request parameter is not`() {
+        val form = { uri: String -> client.post().uri(uri).contentType(MediaType.APPLICATION_FORM_URLENCODED).bodyValue("title=Ash+%26+Gorvek") }
+        datastarEvents(body(form("/quests"))).assertPatchElements(elements = """<li id="quest">Ash &amp; Gorvek</li>""")
+        form("/param").exchange().expectStatus().isBadRequest
     }
 
     @Test

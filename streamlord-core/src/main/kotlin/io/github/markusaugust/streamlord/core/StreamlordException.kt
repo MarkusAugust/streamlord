@@ -50,7 +50,8 @@ public open class SignalsDecodeException(
  *
  * Datastar's `contentType: 'form'` sends a form that way, as the form's own fields and no signals;
  * the message says so, and a handler reads such a request's fields as form parameters
- * (`call.receiveParameters()` on Ktor, `@RequestParam` or a bound object on Spring).
+ * (`call.receiveParameters()` on Ktor, a `@ModelAttribute` object on Spring WebMVC and WebFlux,
+ * or a `@RequestParam` on WebMVC alone, since WebFlux reads one from the query string only).
  *
  * [contentType] is the header as the request had it, or `null` when it had none.
  */

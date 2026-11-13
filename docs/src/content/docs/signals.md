@@ -39,7 +39,7 @@ post("/quests") {
 }
 ```
 
-On Spring, a `@RequestParam` takes the field, on WebMVC and WebFlux alike:
+On Spring WebMVC, a `@RequestParam` takes the field:
 
 ```kotlin sample=spring
 @PostMapping("/quests")
@@ -50,6 +50,18 @@ fun add(
     response.datastarStream {
         patchElements(interpolate("""<li id="quest">%s</li>""", title))
     }
+```
+
+On WebFlux a `@RequestParam` is read from the query string alone, and a form's field answers
+`400`. Bind the form to an object instead, which works on WebMVC too:
+
+```kotlin sample=spring
+data class Quest(val title: String)
+
+@PostMapping("/quests")
+fun add(@ModelAttribute quest: Quest): ResponseEntity<Flow<ServerSentEvent<String>>> =
+    flowOf(PatchElements(interpolate("""<li id="quest">%s</li>""", quest.title)))
+        .asDatastarResponse()
 ```
 
 From `@get` or `@delete` the fields travel in the query string instead, where a `datastar`
