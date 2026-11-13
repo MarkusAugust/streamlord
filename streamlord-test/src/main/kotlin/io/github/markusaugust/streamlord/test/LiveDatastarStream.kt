@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.test
 import io.github.markusaugust.streamlord.core.StreamlordException
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
@@ -134,9 +135,26 @@ public class LiveDatastarStream private constructor(
         mode: ElementPatchMode? = null,
         elements: String? = null,
         containing: String? = null,
+        namespace: ElementNamespace? = null,
+        useViewTransition: Boolean? = null,
+        viewTransitionSelector: String? = null,
+        eventId: String? = null,
+        retry: Duration? = null,
         timeout: Duration = DEFAULT_TIMEOUT,
     ): PatchElements {
-        val assertion = { seen: DatastarEvents -> seen.assertPatchElements(selector, mode, elements, containing) }
+        val assertion = { seen: DatastarEvents ->
+            seen.assertPatchElements(
+                selector,
+                mode,
+                elements,
+                containing,
+                namespace,
+                useViewTransition,
+                viewTransitionSelector,
+                eventId,
+                retry,
+            )
+        }
         return lock.withLock {
             val start = elementsPlace.at
             awaitMatch(elementsPlace, timeout, describe = {

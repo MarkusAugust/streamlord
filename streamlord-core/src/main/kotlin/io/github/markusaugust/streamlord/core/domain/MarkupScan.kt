@@ -107,6 +107,15 @@ public fun walkMarkup(
     scanMarkupTracked(html, visitor, NS_HTML, scripting = false, htmlStaysOpen = true, templates = templates)
 }
 
+/** [walkMarkup] of a patch the client parses inside an element of the [context] namespace, as it does an svg or mathml one. */
+internal fun walkMarkup(
+    html: String,
+    visitor: MarkupVisitor,
+    context: Int,
+) {
+    scanMarkupTracked(html, visitor, context, scripting = false, htmlStaysOpen = true)
+}
+
 /** Where a run of text stands among the elements open around it, as a walk that follows the element stack reports it. */
 @InternalStreamlordApi
 public class TextPlace(
@@ -286,7 +295,7 @@ internal val VOID =
     )
 
 /** HTML tags that, met inside an `<svg>` or `<math>`, close the foreign content and return to HTML. */
-private val EXITS_FOREIGN =
+internal val EXITS_FOREIGN =
     setOf(
         "b",
         "big",

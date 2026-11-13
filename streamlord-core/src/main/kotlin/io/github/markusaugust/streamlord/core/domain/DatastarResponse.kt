@@ -30,8 +30,8 @@ public sealed interface DatastarResponse {
 /**
  * A `text/html` body patched as elements. Mirrors [PatchElements].
  *
- * @property viewTransitionSelector CSS selector of the element to run the view transition on. Only
- *   sent when [useViewTransition] is `true`, and read by the client from Datastar 1.0.5 on.
+ * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
+ *   document when `null`. Sent only with [useViewTransition], as in [PatchElements].
  */
 public data class ElementsResponse(
     @Language("HTML") val elements: String,
@@ -61,6 +61,7 @@ public data class ElementsResponse(
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
+        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_HTML

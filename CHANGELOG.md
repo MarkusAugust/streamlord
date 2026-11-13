@@ -90,6 +90,34 @@ All notable changes to Streamlord are recorded here. The format follows
   changed already did. Both editors warn about it. A bare name is judged as before.
 - The IntelliJ plugin runs only with the Kotlin plugin in K2 mode, the default. K1 is gone from
   IntelliJ 2026.2, and an IntelliJ 2026.1 with K1 turned on no longer loads the plugin.
+- `PatchElements.remove` and `removeElements` take `viewTransitionSelector` after
+  `useViewTransition`, as `patchElements` does, so a removal can run its view transition on one
+  element. A call that passes `eventId` or `retry` by position needs them named, and code compiled
+  against the old signatures needs a rebuild.
+- `PatchElements` and `ElementsResponse` throw `DatastarEventValidationException` for markup in the
+  wrong namespace, which the client never patches as written: an HTML element such as `<div>` in
+  the `svg` or `mathml` namespace, where the client parses the patch inside an `<svg>` or a
+  `<math>` that the HTML element closes, so it and all after it are dropped; and an SVG or MathML
+  element such as `<circle>` in the `html` namespace outside its own root, which the browser makes
+  an HTML element that draws nothing. Put HTML in a `<foreignObject>`, or send shapes with
+  `namespace = ElementNamespace.SVG` or inside an `<svg>`.
+- With `guardElements` on, a patch without a selector in `outer` or `replace` mode whose top-level
+  element has no id throws `DatastarEventValidationException`: the client looks each one up by its
+  id and skips one without, with only a console warning. Without the guard such a patch is sent as
+  before, since the SDK specification's own tests send `<div>Merge</div>` that way.
+- `CspNonce.starterPolicy`, the default of `CspNoncePlugin` and `CspNonceFilter`, requires Trusted
+  Types: it ends in `require-trusted-types-for 'script'; trusted-types datastar`, allowing the one
+  policy Datastar's client creates in CSP mode, now named by `CspNonce.TRUSTED_TYPES_POLICY`. Any
+  other code that writes a string into the DOM as markup or a script is refused by the browser, and
+  so is a patch that morphs in an inline `on*` attribute or a `<script src>`. A page that needs either, or a
+  library that creates a policy of its own, sets its own policy; the one before is
+  `install(CspNoncePlugin) { policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" } }`,
+  or the same lambda as `CspNonceFilter(policy = ...)` on Spring.
+- `assertPatchElements` and `assertNoPatchElements` in streamlord-test match `namespace`,
+  `useViewTransition`, `viewTransitionSelector`, `eventId` and `retry` too, after `containing`, and
+  `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`, which breaks a call
+  that passes `timeout` by position: name it, `timeout = 5.seconds`. Code compiled against the old
+  signatures needs a rebuild.
 
 ### Added
 
@@ -170,6 +198,18 @@ All notable changes to Streamlord are recorded here. The format follows
   has three more values, `doc`, `flagDocs` and `suggest`, last, each with a default; code compiled
   against the old constructor needs a rebuild.
 - Every modifier property of the DSL has KDoc.
+- WebFlux reads signals from the exchange, as WebMVC reads them from the request:
+  `exchange.readSignals()`, `readSignals<T>()`, `readSignalsOr(default)` and `readSignalsJson()`,
+  each `suspend`, with the limits and the `Content-Type` check of the others, and
+  `WebFluxIncomingRequest` and `exchange.isDatastarRequest`. streamlord-spring takes reactor-core
+  `compileOnly`, which every WebFlux application already has.
+- `ExecuteScript.redirect`, `ExecuteScript.replaceUrl`, `ExecuteScript.pushUrl` and
+  `PatchSignals.remove` build the events `redirect`, `replaceUrl`, `pushUrl` and `removeSignals`
+  send on a stream, for a `Flow` of events on WebFlux or `respondDatastar(flow)` on Ktor.
+- [Security](https://streamlord-docs.netlify.app/security/) says that CSP mode does not make an
+  expression safe, that a page without it needs `'unsafe-eval'`, that the aliased bundle reads
+  `data-star-nonce`, and that signals are the reader's to read and change, so they hold nothing
+  secret and are checked on the server.
 
 ### Fixed
 
@@ -290,6 +330,15 @@ All notable changes to Streamlord are recorded here. The format follows
   gets its lens and gutter marker.
 - IntelliJ no longer offers to import `CatalogNames.attributes` or the other attribute sets of
   streamlord-core's catalog for a name it cannot resolve: they are internal now.
+- `SseDecoder`, and with it `datastarEvents` and `LiveDatastarStream` in streamlord-test, read
+  signals written as a JavaScript object literal of plain values, `{foo: 1, bar: 2}` as Datastar's
+  reference writes them, as the JSON they stand for, where they threw. The client runs signals
+  that `JSON.parse` refuses as JavaScript, so it takes them. Signals that would be computed,
+  `{a: 1 + 1}`, still throw `DatastarEventValidationException`, and so do signals that are no
+  object, a top-level `[1,2]` or `null`, as before. Sending signals still takes JSON.
+- The `415` that `readSignals` answers a form with says what to do: Datastar's
+  `contentType: 'form'` sends the form's fields and no signals, so read them as form parameters.
+  [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
 
 ## [0.21.0] - 2026-11-11
 

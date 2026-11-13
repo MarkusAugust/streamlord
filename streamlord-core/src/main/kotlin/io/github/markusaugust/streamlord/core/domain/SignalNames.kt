@@ -254,6 +254,14 @@ public object SignalNames {
         }
     }
 
+    /** [nest] of names each held to [hyphenProblem] and [pathProblem] first, as a patch of named signals needs. */
+    internal fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
+        for ((name, _) in pairs) {
+            (hyphenProblem(name) ?: pathProblem(name))?.let { throw DatastarEventValidationException("signal $name $it") }
+        }
+        return nest(pairs)
+    }
+
     /**
      * The pairs as one signal object, with a dotted name nested the way `data-signals:a.b` nests
      * it: `"form.email" to "x"` and `"form.name" to "y"` give `{form: {email: "x", name: "y"}}`.

@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
@@ -39,7 +40,8 @@ public sealed interface DatastarEvent {
  *
  * Datastar demands *elements*, not fragments: each top-level node must be a complete element,
  * and when no [selector] is given each of them must carry an `id` so the client can find its
- * counterpart.
+ * counterpart: one without it skips, with only a console warning. `Streamlord(guardElements = true)`
+ * refuses such a patch; the event itself takes it, since the SDK specification's own tests send one.
  *
  * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE],
  *   and only white space as HTML counts it (tab, line feed, form feed, carriage return, space)
@@ -49,10 +51,15 @@ public sealed interface DatastarEvent {
  *   other modes, the client inserts those as text, and they are taken.
  * @property selector CSS selector for the target. Required for every mode except OUTER and REPLACE.
  * @property mode How the elements are driven into the DOM. Defaults to OUTER (morph).
- * @property namespace The namespace of the new elements. Defaults to HTML.
+ * @property namespace The namespace of the new elements. Defaults to HTML. In [ElementNamespace.SVG]
+ *   and [ElementNamespace.MATHML] the client parses the markup inside an `<svg>` or a `<math>`, so an
+ *   HTML element there, which closes it, is refused, outside a `<foreignObject>` or the like; in HTML
+ *   an SVG or MathML element outside its own root, such as a bare `<circle>`, is refused, since the
+ *   browser would make it an HTML element that draws nothing.
  * @property useViewTransition Wrap the patch in the View Transitions API.
- * @property viewTransitionSelector CSS selector of the element to run the view transition on.
- *   Only sent when [useViewTransition] is `true`.
+ * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
+ *   document when `null`. Sent only with [useViewTransition], since the client reads it for nothing
+ *   else, so `useViewTransition = animate` can name the element whatever `animate` is.
  */
 public data class PatchElements(
     @Language("HTML") val elements: String? = null,
@@ -71,6 +78,7 @@ public data class PatchElements(
         if (mode.requiresSelector && selector == null) {
             throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
         }
+        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
         // An inner patch of nothing empties its target, the one way to clear a container.
         val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
         if (mode != ElementPatchMode.REMOVE && empty) {
@@ -89,6 +97,7 @@ public data class PatchElements(
         public fun remove(
             selector: String,
             useViewTransition: Boolean = false,
+            viewTransitionSelector: String? = null,
             eventId: String? = null,
             retry: Duration? = null,
         ): PatchElements =
@@ -96,6 +105,7 @@ public data class PatchElements(
                 selector = selector,
                 mode = ElementPatchMode.REMOVE,
                 useViewTransition = useViewTransition,
+                viewTransitionSelector = viewTransitionSelector,
                 eventId = eventId,
                 retry = retry,
             )
@@ -139,6 +149,23 @@ public data class PatchSignals(
     init {
         validateCommon(eventId, retry)
         Wire.signals(signals)
+    }
+
+    public companion object {
+        /**
+         * A patch that removes signals by name, as `removeSignals` on a stream sends it, for code
+         * that builds the events itself, as a `Flow` of them does. A dotted name removes a nested
+         * signal, and a name under another one being removed is left out. A name with a hyphen is
+         * refused; remove such a key with the JSON form, `PatchSignals("""{"form": {"first-name": null}}""")`.
+         */
+        public fun remove(
+            vararg names: String,
+            eventId: String? = null,
+            retry: Duration? = null,
+        ): PatchSignals {
+            val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
+            return PatchSignals(JsonWriter.write(SignalNames.nested(removed.map { it to null })), eventId = eventId, retry = retry)
+        }
     }
 }
 
@@ -194,6 +221,28 @@ public data class ExecuteScript(
                 append(Wire.escapeScriptBody(script))
                 append("</script>")
             }
+
+    public companion object {
+        /**
+         * Send the browser to another page, as `redirect` on a stream does, for code that builds the
+         * events itself. The URL is quoted, and the navigation runs from a `setTimeout`, as the
+         * official SDKs do, so the script element is applied and removed before the page unloads.
+         *
+         * @throws IllegalArgumentException for a URL with a scheme that does more than navigate, such
+         *   as `javascript:`: only a relative URL or an `http`, `https`, `mailto` or `tel` one is followed.
+         */
+        public fun redirect(url: String): ExecuteScript {
+            require(safeUrl(url)) { "redirect follows a relative URL or an http, https, mailto or tel one, not '$url'" }
+            return ExecuteScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
+        }
+
+        /** Put [url] in the address bar in place of the current history entry, as `replaceUrl` on a stream does. */
+        public fun replaceUrl(url: String): ExecuteScript =
+            ExecuteScript("window.history.replaceState(window.history.state, '', ${JsonWriter.writeString(url)})")
+
+        /** Put [url] in the address bar as a new history entry, as `pushUrl` on a stream does. */
+        public fun pushUrl(url: String): ExecuteScript = ExecuteScript("window.history.pushState(null, '', ${JsonWriter.writeString(url)})")
+    }
 
     /** The wire-level event this script becomes. */
     public fun toPatchElements(): PatchElements =

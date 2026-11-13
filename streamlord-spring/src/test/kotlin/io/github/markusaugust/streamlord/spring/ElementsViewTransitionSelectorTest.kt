@@ -15,7 +15,7 @@ class ElementsViewTransitionSelectorTest {
         assertEquals("true", el.headers.getFirst("datastar-use-view-transition"))
         assertEquals("#list", el.headers.getFirst("datastar-view-transition-selector"))
         assertEquals("<li id=\"a\">x</li>", el.body)
-        // Without a view transition there is none to select an element for.
+        // Without a view transition there is none to select an element for, and the client reads no selector.
         assertNull(
             datastarElements("<li id=\"a\">x</li>", viewTransitionSelector = "#list").headers.getFirst("datastar-view-transition-selector"),
         )

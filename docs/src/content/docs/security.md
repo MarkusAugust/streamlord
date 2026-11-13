@@ -176,10 +176,18 @@ it had finished, and the client does not come back.
 
 ## CSP
 
-Datastar compiles attribute expressions with `new Function`, which a strict `script-src` blocks.
-A `data-nonce` on the `<html>` element switches the client to compiling through nonce-bearing
-script elements instead, and the value in that attribute has to be the value in the response's
-`Content-Security-Policy` header.
+Datastar compiles attribute expressions with `new Function`, which a strict `script-src` blocks:
+without CSP mode, a policy has to allow `'unsafe-eval'` in `script-src` or no expression on the
+page runs. A `data-nonce` on the `<html>` element switches the client to compiling through
+nonce-bearing script elements instead, and the value in that attribute has to be the value in the
+response's `Content-Security-Policy` header. The aliased bundle, which reads `data-star-*`
+attributes, reads it from `data-star-nonce`; `dataNonce` writes the name
+[`DatastarAttributes.prefix`](/html-dsl/#the-aliased-bundle) gives.
+
+CSP mode changes how an expression is compiled, not what it may do. Every `data-*` expression is
+still code your page runs, with the page's own rights, so a value from a user written into one is
+script injection whatever the policy says. Keep user input out of expressions: put it in markup
+through `interpolate` or the DSL, which escape it, or in a signal the expression reads.
 
 Install the plugin and read the nonce off the call. Both ends come from one variable, so they
 cannot drift:
@@ -246,9 +254,48 @@ interpolate("""<html data-nonce="%s"><body></body></html>""", nonce)
 
 The default policy is `CspNonce.starterPolicy`, which is deliberately strict and deliberately
 small: same-origin everything, scripts from this origin or carrying the nonce, no plugins, a
-`<base>` that cannot be moved. It is somewhere to start, not an answer, and the first thing it
-does in a real application is break something you then have to name. Replace it as soon as you
-know what your page loads:
+`<base>` that cannot be moved, and [Trusted Types](https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API)
+required:
+
+```text
+default-src 'self'; script-src 'self' 'nonce-…'; object-src 'none'; base-uri 'self';
+require-trusted-types-for 'script'; trusted-types datastar
+```
+
+In CSP mode Datastar's client creates one Trusted Types policy, named `datastar`
+(`CspNonce.TRUSTED_TYPES_POLICY`), and passes through it every string it turns into markup or a
+script: a patch, a script it patches in, a compiled expression. The browser then refuses any other
+code on the page that writes a string into the DOM as markup or a script, which is where most
+script injection lands. Two things a patch can carry are refused as well, because the client
+copies them with `setAttribute`, which takes no Trusted Types value: an inline `on*` attribute,
+which the nonce policy blocks anyway, and a `<script src>`; load such a script from the page
+instead. A library of your own that creates a policy needs its name added after `datastar`. A
+browser without Trusted Types ignores both directives.
+
+The policy name is allowed once, and Datastar creates it once: a second copy of the bundle on the
+page, from another URL, finds the `data-nonce` the first removed, so it never enters CSP mode or
+creates the policy, and its expressions are blocked by the nonce policy instead (measured in
+headless Chrome 153 on the 1.0.5 bundle). Load one copy. The starter policy does not add
+`'allow-duplicates'`, which would let any script that runs after Datastar create a `datastar`
+policy of its own that passes every string through.
+
+To go back to the policy without Trusted Types, name it yourself:
+
+```kotlin sample=ktor-application
+install(CspNoncePlugin) {
+    policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" }
+}
+```
+
+```kotlin sample=spring
+@Bean
+fun cspNonceFilter(): CspNonceFilter =
+    CspNonceFilter(policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" })
+```
+
+The starter policy is somewhere to start, not an answer, and the first thing it does in a real
+application is break something you then have to name. Replace it as soon as you know what your
+page loads:
 
 ```kotlin sample=ktor-application
 install(CspNoncePlugin) {
@@ -437,6 +484,14 @@ On Ktor, `install(StreamlordPlugin) { requireJsonContentType = false }` does the
 This closes the cheapest way in, not every way. A handler that changes something on `GET`, or a
 CORS policy that answers yes to other sites, opens it again, so keep CSRF tokens or `SameSite`
 cookies as well.
+
+## Signals are the reader's
+
+Signals live in the page, where the reader can read and change every one of them from the
+browser's console, and they come back with every request as the reader left them. Put nothing in a
+signal the reader may not see, a price the server decides or another user's data, and read
+nothing from one that the server has not checked: a role, a total or an id from the signals is
+what the reader sent, not what you sent. Validate them on the server as you would a form.
 
 ## What is still yours
 

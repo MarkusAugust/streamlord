@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.core.application
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
@@ -12,6 +13,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.ElementsResponse
 import io.github.markusaugust.streamlord.core.domain.PatchElements
+import io.github.markusaugust.streamlord.core.domain.PatchMarkup
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.port.driven.BuiltInSignalsCodec
@@ -60,8 +62,9 @@ public typealias Signals = JsonObject
  *   Kotlin string template ate (`data-text="$count"` shipping as `data-text=""`) throws
  *   [io.github.markusaugust.streamlord.core.domain.InterpolatedExpressionException], and a
  *   `data-*` name one letter from a Datastar one (`data-onn:click`) throws
- *   [io.github.markusaugust.streamlord.core.domain.MistypedAttributeException], instead of
- *   reaching the browser. Both are [StreamlordException]s. Off by default; the kotlinx.html DSL
+ *   [io.github.markusaugust.streamlord.core.domain.MistypedAttributeException], and a patch without
+ *   a selector whose top-level element has no id, which the client skips, throws
+ *   [DatastarEventValidationException], instead of reaching the browser. Both are [StreamlordException]s. Off by default; the kotlinx.html DSL
  *   guards its own expressions regardless. Meant for HTML written as strings or rendered by a
  *   template engine.
  * @property attributePrefixes The `data-*` prefixes the guard recognises: `data-` and the
@@ -223,6 +226,9 @@ public class Streamlord(
     public fun guard(event: DatastarEvent): DatastarEvent {
         if (guardElements && event is PatchElements) {
             event.elements?.let { ElementsGuard.check(it, attributePrefixes, foreign = event.namespace != ElementNamespace.DEFAULT) }
+            PatchMarkup.problem(event.elements, event.selector, event.mode, event.namespace, ids = true)?.let {
+                throw DatastarEventValidationException(it)
+            }
         }
         return event
     }
@@ -231,6 +237,9 @@ public class Streamlord(
     public fun guard(response: DatastarResponse): DatastarResponse {
         if (guardElements && response is ElementsResponse) {
             ElementsGuard.check(response.elements, attributePrefixes, foreign = response.namespace != ElementNamespace.DEFAULT)
+            PatchMarkup.problem(response.elements, response.selector, response.mode, response.namespace, ids = true)?.let {
+                throw DatastarEventValidationException(it)
+            }
         }
         return response
     }

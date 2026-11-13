@@ -59,7 +59,7 @@ class WireLimitsTest {
     // Selectors take any character the page's own ids do; only the event id is held to ASCII.
     @Test
     fun `a selector may carry characters above U+00FF`() {
-        PatchElements("<p id=\"日本\"></p>", selector = "[data-name=\"€\"]", viewTransitionSelector = "#日本")
+        PatchElements("<p id=\"日本\"></p>", selector = "[data-name=\"€\"]", useViewTransition = true, viewTransitionSelector = "#日本")
     }
 
     // NUL in markup is harmless to the client, and an event that exists can always be written.

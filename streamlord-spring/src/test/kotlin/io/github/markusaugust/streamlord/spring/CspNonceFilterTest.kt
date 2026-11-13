@@ -30,7 +30,8 @@ class CspNonceFilterTest {
             val nonce = request.cspNonce
 
             assertEquals(
-                "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'",
+                "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'; " +
+                    "require-trusted-types-for 'script'; trusted-types datastar",
                 response.getHeader(CspNonce.HEADER),
             )
             seen += nonce

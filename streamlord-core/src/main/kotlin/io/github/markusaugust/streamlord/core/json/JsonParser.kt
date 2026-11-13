@@ -34,6 +34,15 @@ public object JsonParser {
     ): JsonObject = parse(text, maxDepth) as? JsonObject ?: throw JsonParseException("Expected a JSON object", 0)
 
     /**
+     * Text that must be a JavaScript object literal of plain values, as a `data-signals` value is
+     * written: JSON, and also a key that is a name, a string in single quotes and a comma before a
+     * closing bracket. Anything that would be computed, a call, an operator, `undefined`, is refused.
+     */
+    internal fun parseObjectLiteral(text: String): JsonObject =
+        Cursor(text, DEFAULT_MAX_DEPTH, javascript = true).parseDocument() as? JsonObject
+            ?: throw JsonParseException("Expected an object", 0)
+
+    /**
      * Whether [text] opens objects and arrays more than [maxDepth] deep, counted as [parse] counts
      * them and with strings skipped. It reads the text once and builds nothing, so a codec that
      * recurses can be spared input that would blow its stack. Text that is not JSON is the
@@ -68,6 +77,7 @@ public object JsonParser {
     private class Cursor(
         private val s: String,
         private val maxDepth: Int,
+        private val javascript: Boolean = false,
     ) {
         private var i = 0
 
@@ -85,6 +95,7 @@ public object JsonParser {
                 '{' -> parseObject(depth + 1)
                 '[' -> parseArray(depth + 1)
                 '"' -> JsonString(parseString())
+                '\'' -> if (javascript) JsonString(parseString()) else fail("Unexpected character '$c'")
                 't' -> literal("true", JsonBoolean.TRUE)
                 'f' -> literal("false", JsonBoolean.FALSE)
                 'n' -> literal("null", JsonNull)
@@ -104,8 +115,17 @@ public object JsonParser {
             }
             while (true) {
                 skipWhitespace()
-                if (peek() != '"') fail("Expected a string key")
-                val key = parseString()
+                if (javascript && peek() == '}') {
+                    i++
+                    return JsonObject(fields)
+                }
+                val key =
+                    when {
+                        peek() == '"' -> parseString()
+                        javascript && peek() == '\'' -> parseString()
+                        javascript && peek()?.startsName() == true -> name()
+                        else -> fail("Expected a string key")
+                    }
                 skipWhitespace()
                 expect(':')
                 skipWhitespace()
@@ -139,6 +159,10 @@ public object JsonParser {
             }
             while (true) {
                 skipWhitespace()
+                if (javascript && peek() == ']') {
+                    i++
+                    return JsonArray(items)
+                }
                 items += parseValue(depth)
                 skipWhitespace()
                 when (peek()) {
@@ -159,13 +183,13 @@ public object JsonParser {
         }
 
         private fun parseString(): String {
-            expect('"')
+            val quote = s[i++]
             val sb = StringBuilder()
             while (true) {
                 if (i >= s.length) fail("Unterminated string")
                 val c = s[i++]
                 when {
-                    c == '"' -> return sb.toString()
+                    c == quote -> return sb.toString()
                     c == '\\' -> sb.append(parseEscape())
                     c < ' ' -> fail("Unescaped control character in string")
                     else -> sb.append(c)
@@ -177,6 +201,7 @@ public object JsonParser {
             if (i >= s.length) fail("Unterminated escape sequence")
             return when (val c = s[i++]) {
                 '"' -> '"'
+                '\'' -> if (javascript) '\'' else fail("Invalid escape '\\$c'")
                 '\\' -> '\\'
                 '/' -> '/'
                 'b' -> '\b'
@@ -254,6 +279,15 @@ public object JsonParser {
         }
 
         private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
+
+        private fun Char.startsName(): Boolean = this in 'a'..'z' || this in 'A'..'Z' || this == '_' || this == '$'
+
+        // A key written as a name, as JavaScript reads one: ASCII alone, which is all signals are named with.
+        private fun name(): String {
+            val start = i
+            while (peek()?.let { it.startsName() || it.isAsciiDigit() } == true) i++
+            return s.substring(start, i)
+        }
 
         private fun fail(message: String): Nothing = throw JsonParseException(message, i)
     }

@@ -66,20 +66,46 @@ every request to that handler with `500` and a `BeanInstantiationException`, as
 
 ## Reading signals
 
-There is no `HttpServletRequest` here. Take the signals the way WebFlux gives them to you, either a
-`@RequestParam` named `datastar` on a `GET` or the request body on a `POST`, and hand the JSON
-to the codec yourself. The protocol rule for *where* the signals live is the same as everywhere;
-only the plumbing differs. A codec that cannot read them throws `SignalsDecodeException`, a `500`
-unless you map it: `@Import(StreamlordExceptionHandler::class)` answers it with `400`, as on
-WebMVC.
+The exchange reads them as the servlet request does on WebMVC, by the same rule for where they
+live, with the same limit of size and of 64 levels of nesting, and the same check of the body's
+`Content-Type`. On WebFlux each read is a `suspend` function, so the handler is one too:
 
-The body never passes through `readSignals` here, so its check of the `Content-Type` is yours.
-Declare the mapping `consumes = ["application/json"]`, so a form on another site cannot post
-signals to it, as [Security](/security/#forms-from-other-sites) explains; Spring answers anything
-else with `415`. Nor does the limit of 64 levels of nesting apply. Jackson refuses a body nested
-past its own limit, by default 500 levels in Jackson 3 and 1000 in Jackson 2, with `SignalsDecodeException`.
-kotlinx has no limit: it reads what the stack holds, and turns the `StackOverflowError` of a body
-nested deeper than that into `SignalsDecodeException`.
+```kotlin sample=spring
+@PostMapping("/search")
+suspend fun search(exchange: ServerWebExchange): ResponseEntity<Flow<ServerSentEvent<String>>> {
+    val query = exchange.readSignals().string("query") ?: ""
+    val hits = repository.search(query)
+    return flowOf(PatchElements(renderResults(hits), selector = "#results", mode = ElementPatchMode.INNER))
+        .asDatastarResponse()
+}
+```
+
+`exchange.readSignals<SearchSignals>(streamlord)` and `exchange.readSignalsOr(SearchSignals(), streamlord)`
+decode them into your class through the bean's codec, and `exchange.readSignalsJson()` gives the
+text. A body that is not declared `application/json` throws `SignalsMediaTypeException`, one
+over the limit `SignalsTooLargeException`, and one the codec cannot read `SignalsDecodeException`;
+`@Import(StreamlordExceptionHandler::class)` answers them with `415`, `413` and `400`, as on WebMVC.
+A form sent with `contentType: 'form'` holds fields rather than signals: [Signals](/signals/#a-form)
+shows how to read one.
+
+## Redirects, the address bar and removing signals
+
+What a stream does with `redirect`, `replaceUrl`, `pushUrl` and `removeSignals`, a flow does with
+the events they send, built by `ExecuteScript` and `PatchSignals`:
+
+```kotlin sample=spring
+@PostMapping("/quests")
+fun save(): ResponseEntity<Flow<ServerSentEvent<String>>> =
+    flowOf(
+        PatchSignals.remove("draft"),
+        ExecuteScript.replaceUrl("/quests/7"),
+        ExecuteScript.redirect("/quests"),
+    ).asDatastarResponse()
+```
+
+`ExecuteScript.pushUrl` adds a history entry where `replaceUrl` replaces one, and
+`PatchElements.remove` removes elements, as `removeElements` does on a stream. Each refuses what
+the stream refuses: `redirect` a `javascript:` URL, `remove` a name the client cannot hold.
 
 ## Cancellation
 

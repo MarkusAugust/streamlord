@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.ktor
 
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
@@ -25,7 +26,9 @@ class ElementsViewTransitionSelectorTest {
             assertEquals("true", el.headers["datastar-use-view-transition"])
             assertEquals("#list", el.headers["datastar-view-transition-selector"])
             assertEquals("<li id=\"a\">x</li>", el.bodyAsText())
-            // Without a view transition there is none to select an element for.
-            assertNull(client.get("/plain").headers["datastar-view-transition-selector"])
+            // Without a view transition there is none to select an element for, and the client reads no selector.
+            val plain = client.get("/plain")
+            assertEquals(HttpStatusCode.OK, plain.status)
+            assertNull(plain.headers["datastar-view-transition-selector"])
         }
 }

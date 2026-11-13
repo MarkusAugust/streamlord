@@ -6,6 +6,7 @@ dependencies {
     compileOnly(libs.jetbrains.annotations) // @Language on the response helpers, see streamlord-core
     compileOnly(libs.spring.webmvc)
     compileOnly(libs.jakarta.servlet)
+    compileOnly(libs.reactor.core) // the Mono a WebFlux body is joined into; every WebFlux application has it
 
     testImplementation(kotlin("test"))
     testImplementation(libs.spring.web)

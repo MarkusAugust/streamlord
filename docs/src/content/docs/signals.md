@@ -15,6 +15,59 @@ down yourself. A body must be declared `Content-Type: application/json`, as Data
 declares every body it sends signals in; one declared otherwise, or not at all, is refused with
 `SignalsMediaTypeException`, a 415, for the reason on [Security](/security/#forms-from-other-sites).
 
+## A form
+
+A form sent with Datastar's `contentType: 'form'` carries the form's own fields, not signals:
+`application/x-www-form-urlencoded`, or `multipart/form-data` when the form says
+`enctype="multipart/form-data"`. `readSignals` refuses it with the same `SignalsMediaTypeException`,
+and its message says to read the fields as form parameters, which is all a handler for a form does:
+
+```kotlin sample=html
+form {
+    dataOnSubmit(post("/quests") { contentType = FetchOptions.ContentType.FORM })
+    input(name = "title")
+    button { +"Add" }
+}
+```
+
+```kotlin sample=ktor-routing
+post("/quests") {
+    val title = call.receiveParameters()["title"].orEmpty()
+    call.respondDatastar {
+        patchElements(interpolate("""<li id="quest">%s</li>""", title))
+    }
+}
+```
+
+On Spring WebMVC, a `@RequestParam` takes the field:
+
+```kotlin sample=spring
+@PostMapping("/quests")
+fun add(
+    @RequestParam title: String,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream {
+        patchElements(interpolate("""<li id="quest">%s</li>""", title))
+    }
+```
+
+On WebFlux a `@RequestParam` is read from the query string alone, and a form's field answers
+`400`. Bind the form to an object instead, which works on WebMVC too:
+
+```kotlin sample=spring
+data class Quest(val title: String)
+
+@PostMapping("/quests")
+fun add(@ModelAttribute quest: Quest): ResponseEntity<Flow<ServerSentEvent<String>>> =
+    flowOf(PatchElements(interpolate("""<li id="quest">%s</li>""", quest.title)))
+        .asDatastarResponse()
+```
+
+From `@get` or `@delete` the fields travel in the query string instead, where a `datastar`
+parameter is none of them, so `readSignals` gives none and `call.request.queryParameters["title"]`
+or `@RequestParam` reads the field.
+
 ## Without a codec
 
 The built-in reader needs no dependency and no data class:

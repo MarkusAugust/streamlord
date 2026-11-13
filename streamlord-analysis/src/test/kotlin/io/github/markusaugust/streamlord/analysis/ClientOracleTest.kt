@@ -314,8 +314,8 @@ class ClientOracleTest {
 
     /**
      * `conformance/dsl/free.json`: what the client did with `retry`, `retryInterval` and
-     * `retryMaxCount`, against what the catalog tells a reader of a hover about them. Each claim
-     * here was true of 1.0.4 and the reading named beside it shows 1.0.5 doing otherwise.
+     * `retryMaxCount`, against what the catalog tells a reader of a hover about them: each claim is
+     * held to the reading named beside it, which shows the client doing what the hover says.
      */
     @Test
     fun `describes the retry options as the client acts on them`() {

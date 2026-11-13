@@ -81,6 +81,12 @@ signal or calls an action where an expression could start, `data-shwo="$open"`, 
 without a value as the attribute it is near is written, `data-persits`. `data-test="login"` says
 nothing there, and neither does `data-test="costs $5"` or a value with a template of its own.
 
+With the guard on, a patch without a selector, which the client matches to the page by id, needs
+an id on each of its top-level elements: `patchElements("<p>Saved</p>")` throws
+`DatastarEventValidationException` saying `<p> has no id`, since the client would skip it with
+only a console warning. Without the guard such a patch is sent as written, because the SDK
+specification's own tests send `<div>Merge</div>` that way.
+
 It is a small scan that builds no tree and copies no markup, and it skips `<script>` and `<style>`
 bodies. `ElementsGuard.check(html)` is also there to call directly, which is worth doing in the
 tests of your markup functions.

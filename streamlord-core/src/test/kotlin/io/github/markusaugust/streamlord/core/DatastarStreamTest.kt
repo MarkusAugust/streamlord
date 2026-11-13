@@ -50,6 +50,7 @@ class DatastarStreamTest {
             stream.patchElements("""<div id="a">1</div>""")
             stream.patchSignals("count" to 1, "gone" to null)
             stream.removeElements("#old")
+            stream.removeElements("#older", useViewTransition = true, viewTransitionSelector = "#list")
             stream.removeSignals("x", "y")
             stream.redirect("/hall?of=kings&x='1'")
             stream.comment()
@@ -66,6 +67,12 @@ class DatastarStreamTest {
             |data: selector #old
             |data: mode remove
             |
+            |event: datastar-patch-elements
+            |data: selector #older
+            |data: mode remove
+            |data: useViewTransition true
+            |data: viewTransitionSelector #list
+            |
             |event: datastar-patch-signals
             |data: signals {"x":null,"y":null}
             |
@@ -80,7 +87,7 @@ class DatastarStreamTest {
                 """.trimMargin(),
                 sink.text(),
             )
-            assertEquals(6, sink.flushCount)
+            assertEquals(7, sink.flushCount)
         }
 
     @Test

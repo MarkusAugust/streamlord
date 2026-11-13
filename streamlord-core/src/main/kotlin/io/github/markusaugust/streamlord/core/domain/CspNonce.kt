@@ -32,6 +32,13 @@ public object CspNonce {
      */
     public const val ATTRIBUTE: String = "data-nonce"
 
+    /**
+     * The name of the one Trusted Types policy Datastar's client creates in CSP mode (csp.ts:19).
+     * Every string it turns into markup or a script, a patch, a patched-in script, a compiled
+     * expression, passes through it, so a policy that requires Trusted Types allows it by name.
+     */
+    public const val TRUSTED_TYPES_POLICY: String = "datastar"
+
     private const val BYTES = 16
 
     // Section 2.3.1 of CSP Level 3: a nonce-value is a base64-value, padding included.
@@ -48,14 +55,22 @@ public object CspNonce {
 
     /**
      * A policy to start from: same-origin everything, scripts from this origin or carrying
-     * [nonce], no plugins, and a `<base>` that cannot be moved off the origin.
+     * [nonce], no plugins, a `<base>` that cannot be moved off the origin, and Trusted Types
+     * required, with Datastar's own policy, [TRUSTED_TYPES_POLICY], the one allowed. A string
+     * written into the DOM as markup or a script by any other code on the page is then refused
+     * by the browser, as are an inline `on*` attribute and a `<script src>` that a patch morphs
+     * in, which Datastar sets with `setAttribute`. A browser without Trusted Types ignores both
+     * directives.
      *
      * It is deliberately strict and deliberately small, so the first thing it does in a real
      * application is break something you then have to name. Replace it with your own as soon as
      * you know what the page actually loads.
      */
     public fun starterPolicy(nonce: String): String =
-        "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'"
+        // No 'allow-duplicates': Datastar creates its policy once, and with it any later script could
+        // create a `datastar` policy of its own that passes every string through.
+        "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'; " +
+            "require-trusted-types-for 'script'; trusted-types $TRUSTED_TYPES_POLICY"
 
     /**
      * Return [nonce] if it can survive the trip into both a header and an HTML attribute.

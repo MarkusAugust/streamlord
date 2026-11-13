@@ -2,6 +2,8 @@ package io.github.markusaugust.streamlord.test
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
@@ -61,13 +63,21 @@ class AsTheBrowserHoldsItTest {
     }
 
     @Test
-    fun `signals that are not json fail where they are read`() {
-        // Streamlord can no longer send them; another server can, and the client would run them.
+    fun `signals written as an object literal are read as the client reads them`() {
+        // The reference writes them so, as a data-signals value; the client runs what JSON.parse refuses.
+        val events = datastarEvents("event: datastar-patch-signals\ndata: signals {count: 1, user: {name: 'Gorvek'}}\n\n")
+        events.assertSignal("count", 1)
+        events.assertSignal("user.name", "Gorvek")
+    }
+
+    @Test
+    fun `signals that are code and no plain value fail where they are read`() {
+        // Another server can send them, and the client would run them.
         val failure =
             assertFailsWith<DatastarEventValidationException> {
-                datastarEvents("event: datastar-patch-signals\ndata: signals {count: 1}\n\n")
+                datastarEvents("event: datastar-patch-signals\ndata: signals {count: count + 1}\n\n")
             }
-        assertTrue("runs signals that are not JSON as JavaScript" in failure.message.orEmpty(), failure.message)
+        assertTrue("runs as JavaScript" in failure.message.orEmpty(), failure.message)
     }
 
     @Test
@@ -76,6 +86,27 @@ class AsTheBrowserHoldsItTest {
         stream(PatchSignals("""{"total": 3}""", retry = 1.seconds)).assertExactly(PatchSignals("""{"total":3}"""))
         stream(PatchElements("<p id=\"a\">one\r\ntwo</p>")).assertExactly(PatchElements("<p id=\"a\">one\r\ntwo</p>"))
         assertFailsWith<AssertionError> { stream(PatchSignals("""{"total":3}""")).assertExactly(PatchSignals("""{"total":4}""")) }
+    }
+
+    @Test
+    fun `an element patch is matched by its namespace, view transition, id and retry`() {
+        val events =
+            stream(
+                PatchElements("<circle id=\"c\" r=\"1\"/>", namespace = ElementNamespace.SVG),
+                PatchElements.remove("#gone", useViewTransition = true, viewTransitionSelector = "#list", eventId = "7", retry = 2.seconds),
+            )
+        events.assertPatchElements(namespace = ElementNamespace.SVG, containing = "circle")
+        events.assertPatchElements(useViewTransition = true, viewTransitionSelector = "#list", eventId = "7", retry = 2.seconds)
+        events.assertPatchElements(mode = ElementPatchMode.REMOVE, useViewTransition = true)
+        assertFailsWith<AssertionError> { events.assertPatchElements(namespace = ElementNamespace.MATHML) }
+        assertFailsWith<AssertionError> { events.assertPatchElements(namespace = ElementNamespace.SVG, useViewTransition = true) }
+        assertFailsWith<AssertionError> { events.assertPatchElements(viewTransitionSelector = "#other") }
+        assertFailsWith<AssertionError> { events.assertPatchElements(eventId = "8") }
+        assertFailsWith<AssertionError> { events.assertPatchElements(retry = 3.seconds) }
+        events.assertNoPatchElements(namespace = ElementNamespace.MATHML)
+        assertFailsWith<AssertionError> { events.assertNoPatchElements(eventId = "7") }
+        val failure = assertFailsWith<AssertionError> { events.assertPatchElements(eventId = "8", retry = 3.seconds) }
+        assertTrue("event id 8, retry 3s" in failure.message.orEmpty(), failure.message)
     }
 
     @Test

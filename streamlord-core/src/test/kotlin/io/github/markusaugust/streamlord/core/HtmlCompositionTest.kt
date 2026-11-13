@@ -43,9 +43,10 @@ class HtmlCompositionTest {
     fun `a response takes an Html as its elements`() {
         val html = interpolate("""<li id="hit">%s</li>""", "<b>")
         assertEquals(ElementsResponse(html.text), ElementsResponse(html))
+        val shape = interpolate("""<text id="hit">%s</text>""", "<b>")
         assertEquals(
-            ElementsResponse(html.text, "#list", ElementPatchMode.APPEND, ElementNamespace.SVG, true),
-            ElementsResponse(html, "#list", ElementPatchMode.APPEND, ElementNamespace.SVG, true),
+            ElementsResponse(shape.text, "#list", ElementPatchMode.APPEND, ElementNamespace.SVG, true),
+            ElementsResponse(shape, "#list", ElementPatchMode.APPEND, ElementNamespace.SVG, true),
         )
     }
 }
