@@ -4,6 +4,7 @@ package io.github.markusaugust.streamlord.editor
 
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Completion
+import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalProperty
 import io.github.markusaugust.streamlord.analysis.SignalReference
@@ -231,6 +232,23 @@ fun rewriteAt(
 ): Fix? = analysedRewriteAt(sites(source(src, true, prefix, constants)), start, end)?.let(::plain)
 
 // ---- The workspace's signals -------------------------------------------------------------------
+
+/** Which files of the workspace are read: as the analysis and the IntelliJ plugin read them. */
+@JsExport
+interface WorkspaceFiles {
+    /** The folders left unread, with every hidden one. */
+    val skippedFolders: Array<String>
+
+    /** HTML's own extensions and the template files', read as markup whatever language an extension gives them. */
+    val markupExtensions: Array<String>
+}
+
+@JsExport
+fun workspaceFiles(): WorkspaceFiles =
+    plain(
+        "skippedFolders" to ProjectFiles.SKIPPED_FOLDERS.plain(),
+        "markupExtensions" to (ProjectFiles.HTML_EXTENSIONS + ProjectFiles.TEMPLATE_EXTENSIONS).plain(),
+    )
 
 /** What one file gives the workspace: the signals it names and defines, its ids and classes, and what its Kotlin lets other files see. */
 @JsExport

@@ -726,6 +726,13 @@ public final class io/github/markusaugust/streamlord/analysis/Place {
 	public final fun getStart ()I
 }
 
+public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {
+	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/ProjectFiles;
+	public final fun getHTML_EXTENSIONS ()Ljava/util/Set;
+	public final fun getSKIPPED_FOLDERS ()Ljava/util/Set;
+	public final fun getTEMPLATE_EXTENSIONS ()Ljava/util/List;
+}
+
 public final class io/github/markusaugust/streamlord/analysis/ProjectIssue {
 	public fun <init> (Ljava/io/File;IILio/github/markusaugust/streamlord/analysis/Issue;)V
 	public final fun component1 ()Ljava/io/File;

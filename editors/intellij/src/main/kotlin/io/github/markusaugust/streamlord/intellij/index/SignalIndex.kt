@@ -19,6 +19,7 @@ import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
+import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
 import io.github.markusaugust.streamlord.analysis.SignalFacts
@@ -475,7 +476,7 @@ class SignalIndex(
     }
 
     private fun indexable(vf: VirtualFile): Boolean =
-        vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in SKIPPED_DIRECTORIES }
+        vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in ProjectFiles.SKIPPED_FOLDERS }
 
     private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 
@@ -505,7 +506,7 @@ class SignalIndex(
     }
 
     /** HTML's own extensions and the template extensions in the settings, which the inspections read as markup too. */
-    private fun markupExtensions(): Set<String> = HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
+    private fun markupExtensions(): Set<String> = ProjectFiles.HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
 
     /** Kotlin sources and markup, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
     private fun languageOf(vf: VirtualFile): SourceLanguage? =
@@ -521,8 +522,6 @@ class SignalIndex(
         private val CALL = Pattern.compile("""\b([A-Za-z_]\w*)\s*\(""")
         private const val FILE_CAP = 5000
         private const val SIZE_CAP = 1_000_000L
-        private val SKIPPED_DIRECTORIES = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
-        private val HTML_EXTENSIONS = setOf("html", "htm", "xhtml")
 
         fun getInstance(project: Project): SignalIndex = project.service()
     }

@@ -1,14 +1,9 @@
 import * as vscode from "vscode";
-import { constantsAcross, driftFactsOf, signalPlaces, signalsOf, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
+import { constantsAcross, driftFactsOf, signalPlaces, signalsOf, workspaceFiles, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
 
-/** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
-const MARKUP_EXTENSIONS = [
-  "html", "htm", "xhtml", "jte", "kte", "ftl", "ftlh", "vm", "mustache", "hbs", "handlebars", "peb", "pebble", "twig", "jinja", "jinja2", "j2",
-  "cshtml", "razor", "php", "erb", "ejs", "liquid", "njk", "edge", "astro", "svelte", "vue",
-];
+/** The markup files read whatever language an extension gives them, and the folders left unread with every hidden one, as the analysis has them. */
+const { markupExtensions: MARKUP_EXTENSIONS, skippedFolders: SKIPPED_FOLDERS } = workspaceFiles();
 const SOURCE_GLOB = `**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`;
-/** The folders left unread, as `analyzeProject` leaves them: build output, dependencies, and every hidden folder. */
-const SKIPPED_FOLDERS: readonly string[] = ["build", "node_modules", ".gradle", "dist", "out", "target"];
 const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 const FILE_CAP = 5000;
 

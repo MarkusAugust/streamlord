@@ -155,9 +155,6 @@ private const val REFUSES_SCHEME = "interpolate(...), which refuses a scheme tha
 private const val CODE_URL_ADVICE =
     "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
 
-/** The folders [Analyzer.analyzeProject] leaves unread, as the VS Code index does: build output and dependencies. */
-private val SKIPPED_FOLDERS = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
-
 /** Where a markup's holes land, read with the text of the known ones in place. */
 private class HoleReading(
     val landings: List<HoleLanding>,
@@ -281,7 +278,7 @@ public class Analyzer(
     public fun analyzeProject(
         root: File,
         prefix: String = CatalogNames.PREFIX,
-    ): List<ProjectIssue> = issuesUnder(root, prefix, SKIPPED_FOLDERS)
+    ): List<ProjectIssue> = issuesUnder(root, prefix, ProjectFiles.SKIPPED_FOLDERS)
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(source: Source): List<SiteIssues> {
