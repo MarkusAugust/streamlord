@@ -149,8 +149,13 @@ class ProDslTest {
         assertEquals("""@clipboard('SGVsbG8=', true)""", clipboard("SGVsbG8=", isBase64 = true))
         assertEquals("@clipboard(${'$'}code)", clipboardExpr(signal("code")))
         assertEquals("@fit(${'$'}sliderValue, 0, 100, 0, 255)", fit(signal("sliderValue"), 0, 100, 0, 255))
-        assertEquals("@fit(${'$'}x, 0, 1, 0, 1, true)", fit(signal("x"), 0, 1, 0, 1, clamp = true))
-        assertEquals("@fit(${'$'}x, 0, 1, 0, 1, false, true)", fit(signal("x"), 0, 1, 0, 1, round = true))
+        assertEquals("@fit(${'$'}x, 0, 1, 0, 1, true)", fit(signal("x"), 0, 1, 0, 1, shouldClamp = true))
+        assertEquals("@fit(${'$'}x, 0, 1, 0, 1, false, true)", fit(signal("x"), 0, 1, 0, 1, shouldRound = true))
+        assertEquals(
+            "@fit(${'$'}x, ${'$'}lo, ${'$'}hi, 0, ${'$'}max * 2, true)",
+            fitExpr(signal("x"), signal("lo"), signal("hi"), "0", "${signal("max")} * 2", shouldClamp = true),
+        )
+        assertFailsWith<IllegalArgumentException> { fitExpr(signal("x"), "", "1", "0", "1") }
         assertEquals(
             """@intl('number', 1000000, {style: 'currency', currency: 'USD'})""",
             intl(

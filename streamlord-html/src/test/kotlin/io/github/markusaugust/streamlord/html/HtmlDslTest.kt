@@ -170,6 +170,53 @@ class HtmlDslTest {
         )
     }
 
+    // fetch.ts sends a payload that is not undefined, null among them: JSON.stringify(null) is the body.
+    @Test
+    fun `a payload set to null is written as null`() {
+        assertEquals("""@post('/x', {payload: null})""", post("/x") { payload = null })
+        assertEquals("""@post('/x')""", post("/x"))
+    }
+
+    // FetchArgs takes an AbortController for requestCancellation, which only an expression gives.
+    @Test
+    fun `request cancellation takes an expression`() {
+        assertEquals(
+            """@get('/feed', {requestCancellation: ${'$'}controller})""",
+            get("/feed") { requestCancellationExpr = signal("controller") },
+        )
+    }
+
+    @Test
+    fun `a header value may be an expression, its name written as a literal`() {
+        assertEquals(
+            """@get('/x', {headers: {'X-Csrf-Token': 't', Authorization: 'Bearer ' + ${'$'}token, 'x\x27y': ${'$'}a}})""",
+            get("/x") {
+                headers = mapOf("X-Csrf-Token" to "t")
+                headerExprs = mapOf("Authorization" to "'Bearer ' + ${signal("token")}", "x'y" to signal("a"))
+            },
+        )
+        assertFailsWith<IllegalArgumentException> {
+            get("/x") {
+                headers = mapOf("A" to "t")
+                headerExprs = mapOf("A" to signal("a"))
+            }
+        }
+    }
+
+    @Test
+    fun `the address and the value of setAll may be expressions`() {
+        assertEquals("""@get('/items/' + ${'$'}id)""", getExpr("'/items/' + ${signal("id")}"))
+        assertEquals("""@post(`/items/${'$'}{${'$'}id}`, {retry: 'never'})""", postExpr("`/items/${'$'}{${signal("id")}}`") { retry = FetchOptions.Retry.NEVER })
+        assertEquals("""@put(${'$'}u)""", putExpr(signal("u")))
+        assertEquals("""@patch(${'$'}u)""", patchExpr(signal("u")))
+        assertEquals("""@delete(${'$'}u)""", deleteExpr(signal("u")))
+        assertEquals("""@query(${'$'}u)""", queryExpr(signal("u")))
+        assertFailsWith<IllegalArgumentException> { getExpr(" ") }
+        assertEquals("""@setAll(${'$'}default)""", setAllExpr(signal("default")))
+        assertEquals("""@setAll(${'$'}default, {include: /^form\./})""", setAllExpr(signal("default"), SignalFilter.include("^form\\.")))
+        assertFailsWith<IllegalArgumentException> { setAllExpr("") }
+    }
+
     @Test
     fun `fetch lifecycle sugar`() {
         assertEquals(
