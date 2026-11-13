@@ -56,6 +56,97 @@ The blank line ends the frame. Those bytes are not typed out here. They are writ
 Streamlord's own encoder during the build, from the event above. Single-line fields are guarded so that a selector carrying a
 newline cannot forge a second `data:` line. See [Security](/security/).
 
+## Removing elements
+
+`remove` takes the elements the selector matches out of the page, and needs no markup:
+
+```kotlin sample=stream
+removeElements("#quest-7")
+```
+
+On its own, as a `Flow` of events carries it, that is `PatchElements.remove`, short for
+`PatchElements(selector = "#quest-7", mode = ElementPatchMode.REMOVE)`:
+
+```kotlin wire=remove-mode
+PatchElements.remove("#quest-7")
+```
+
+```wire=remove-mode
+event: datastar-patch-elements
+data: selector #quest-7
+data: mode remove
+```
+
+## View transitions
+
+`useViewTransition = true` has the client run the patch inside the browser's
+[view transition](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API), so the
+page cross-fades from the old state to the new one, or animates as your
+`::view-transition-*` CSS says. `viewTransitionSelector` runs it on one element instead of the
+whole document; an element the selector does not find leaves it on the document. A browser
+without view transitions patches at once. A removal takes both too:
+
+```kotlin sample=stream
+patchElements(
+    """<ul id="quests"><li>Ashfall</li><li>The Gate</li></ul>""",
+    useViewTransition = true,
+    viewTransitionSelector = "#board",
+)
+removeElements("#quest-7", useViewTransition = true)
+```
+
+```kotlin wire=view-transition
+PatchElements(
+    """<ul id="quests"><li>Ashfall</li></ul>""",
+    useViewTransition = true,
+    viewTransitionSelector = "#board",
+)
+```
+
+```wire=view-transition
+event: datastar-patch-elements
+data: useViewTransition true
+data: viewTransitionSelector #board
+data: elements <ul id="quests"><li>Ashfall</li></ul>
+```
+
+The client reads `viewTransitionSelector` only when it starts a view transition, so a selector
+without `useViewTransition = true` is refused rather than sent for nothing.
+
+## SVG and MathML
+
+The browser parses `<circle>` as an SVG element only inside an `<svg>`. A patch of shapes on their
+own says so with `namespace`, and the client parses them inside an `<svg>`, or a `<math>` for
+MathML, before it patches them in:
+
+```kotlin wire=svg-namespace
+PatchElements(
+    """<circle id="sun" cx="50" cy="50" r="20"></circle>""",
+    namespace = ElementNamespace.SVG,
+)
+```
+
+```wire=svg-namespace
+event: datastar-patch-elements
+data: namespace svg
+data: elements <circle id="sun" cx="50" cy="50" r="20"></circle>
+```
+
+```kotlin sample=stream
+patchElements(
+    "<mfrac><mn>1</mn><mn>3</mn></mfrac>",
+    selector = "#odds",
+    mode = ElementPatchMode.INNER,
+    namespace = ElementNamespace.MATHML,
+)
+```
+
+A patch that holds its own `<svg>` or `<math>` needs no namespace. Streamlord refuses the two
+mistakes the client would swallow: an SVG or MathML element such as `<circle>` in the default
+`html` namespace, which the browser makes an HTML element that draws nothing, and an HTML element
+such as `<div>` in the `svg` or `mathml` namespace, which closes the `<svg>` the client parses in,
+so it and all after it are dropped. HTML inside SVG goes in a `<foreignObject>`.
+
 ## How it is verified
 
 The encoder is checked against the **official Datastar SDK golden files** on every build, and
