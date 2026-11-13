@@ -18,9 +18,14 @@ dependencies {
  */
 @CacheableTask
 abstract class GenerateCatalogText : DefaultTask() {
-    @get:InputFile
+    /**
+     * The catalogs in catalog/, of which there must be one. A file tree, not the file it holds:
+     * the configuration cache keeps a file resolved while the build is configured, and after a
+     * catalog is renamed would hand the task the old path, where a tree is listed again each run.
+     */
+    @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val catalog: RegularFileProperty
+    abstract val catalogs: ConfigurableFileCollection
 
     /** catalog/dom-events.json, the DOM events both editors offer after `data-on:`, compiled in beside the catalog. */
     @get:InputFile
@@ -32,7 +37,9 @@ abstract class GenerateCatalogText : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        val file = catalog.get().asFile
+        val file =
+            catalogs.files.singleOrNull()
+                ?: throw GradleException("catalog/ must hold one datastar-*.json, not ${catalogs.files.map { it.name }}")
         val version = file.name.removePrefix("datastar-").removeSuffix(".json")
         val declared = (groovy.json.JsonSlurper().parse(file) as Map<*, *>)["version"]
         check(declared == version) { "${file.name} says it is Datastar $declared" }
@@ -90,12 +97,11 @@ abstract class GenerateCatalogText : DefaultTask() {
 
 val generateCatalogText =
     tasks.register<GenerateCatalogText>("generateCatalogText") {
-        catalog.set(
+        catalogs.from(
             rootProject.layout.projectDirectory
                 .dir("catalog")
                 .asFileTree
-                .matching { include("datastar-*.json") }
-                .singleFile,
+                .matching { include("datastar-*.json") },
         )
         domEvents.set(rootProject.layout.projectDirectory.file("catalog/dom-events.json"))
         output.set(layout.buildDirectory.dir("generated/catalogText"))
