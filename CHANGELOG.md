@@ -8,6 +8,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- An action's hover in the editors names each parameter with what it takes and what it is, as the
+  reference has it, and links the action's place in the reference, where it gave the signature and a line.
 - `fit` in streamlord-html-pro names its flags `shouldClamp` and `shouldRound`, as the reference
   does, where it named them `clamp` and `round`. A call that names them needs the new names.
 - The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.

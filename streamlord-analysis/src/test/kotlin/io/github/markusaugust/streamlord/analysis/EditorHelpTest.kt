@@ -171,6 +171,15 @@ class EditorHelpTest {
         }
     }
 
+    @Test
+    fun `every action's parameter has what it is said of it in the catalog`() {
+        for (action in analyzer.catalog.actions) {
+            val docs = analyzer.catalog.parameterDocs[action.name].orEmpty()
+            assertEquals(action.parameters.size, docs.size, action.name)
+            assertTrue(docs.none { it.isBlank() || it.endsWith(".").not() }, action.name)
+        }
+    }
+
     private companion object {
         const val CARET = '¦'
     }

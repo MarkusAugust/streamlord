@@ -180,6 +180,9 @@ public class Catalog private constructor(
 
     /** The strings each parameter of each action takes where it takes only some, in order: the types of `@intl`. */
     internal val actionValues: Map<String, List<List<String>>>
+
+    /** What each parameter of each action is, in order, as the hover says it. */
+    internal val parameterDocs: Map<String, List<String>>
     public val fetchEvents: List<String>
 
     /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
@@ -250,6 +253,8 @@ public class Catalog private constructor(
             raw.array("actions")!!.objects().associate { a ->
                 a.string("name")!! to (a.array("values")?.map { (it as JsonArray).strings() } ?: emptyList())
             }
+        parameterDocs =
+            raw.array("actions")!!.objects().associate { a -> a.string("name")!! to (a.array("parameterDocs")?.strings() ?: emptyList()) }
         optionFields = (raw.array("fetchOptions")?.objects() ?: emptyList()).map(::toField)
         fetchOptions = optionFields.map { it.option }
         filterFields = (raw.array("signalFilter")?.objects() ?: emptyList()).map(::toField)

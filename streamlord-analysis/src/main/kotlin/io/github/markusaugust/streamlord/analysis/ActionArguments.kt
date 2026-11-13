@@ -46,7 +46,7 @@ private val NUMERIC_STRING =
     regex("""\s*(?:[+-]?(?:Infinity|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)?\s*""")
 private val IDENTIFIER = regex("""[A-Za-z_$][\w$]*""")
 
-private fun ArgumentKind.phrase(): String =
+internal fun ArgumentKind.phrase(): String =
     when (this) {
         ArgumentKind.STRING -> "a string"
         ArgumentKind.NUMBER -> "a number"

@@ -569,7 +569,7 @@ private class Asked(
         wordAt(ACTION_WORD)?.let { range ->
             val action = catalog.actionsByName[text.substring(range.first + 1, range.last + 1)]
             val foreign = kotlin && analyzer.inForeignDslCall(text, offset, modules)
-            if (action != null && !foreign) return Hover(range, actionDoc(action, withKotlin))
+            if (action != null && !foreign) return Hover(range, actionDoc(action, withKotlin, catalog))
         }
         wordAt(OPTION_WORD)?.let { range ->
             val word = text.substring(range.first, range.last + 1)
@@ -600,7 +600,7 @@ private class Asked(
         catalog.attributesByKotlin[word]?.let { return Hover(range, attributeDoc(it, prefix, withKotlin = true)) }
         val action = catalog.actions.firstOrNull { it.kotlin == word } ?: return null
         val called = '(' in text.substring(range.last + 1, minOf(text.length, range.last + 3)).substringBefore('\n')
-        return if (called) Hover(range, actionDoc(action, withKotlin = false)) else null
+        return if (called) Hover(range, actionDoc(action, withKotlin = false, catalog = catalog)) else null
     }
 
     /**
