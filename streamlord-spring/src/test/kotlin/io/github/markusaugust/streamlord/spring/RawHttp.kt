@@ -50,3 +50,6 @@ private fun whole(answer: String): Boolean {
         else -> false
     }
 }
+
+/** The address the tests serve on and read from. */
+internal const val LOOPBACK = "127.0.0.1"

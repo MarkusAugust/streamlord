@@ -22,6 +22,7 @@ class RealTomcat(
     http2: Boolean = false,
     filters: List<Filter> = emptyList(),
     filterPattern: String = "/*",
+    listenOn: Int = 0,
 ) : AutoCloseable {
     private val baseDir = Files.createTempDirectory("tomcat")
     private val tomcat = Tomcat()
@@ -29,7 +30,7 @@ class RealTomcat(
 
     init {
         tomcat.setBaseDir(baseDir.toString())
-        tomcat.setPort(0)
+        tomcat.setPort(listenOn)
         // HTTP/2 over plain HTTP, reached by an upgrade from HTTP/1.1, as Java's client asks for it.
         if (http2) tomcat.connector.addUpgradeProtocol(Http2Protocol())
         val context = tomcat.addContext("", null)

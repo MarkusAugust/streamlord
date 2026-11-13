@@ -348,6 +348,3 @@ class TomcatWriterTest {
             seen.toString()
         }
 }
-
-/** The address the tests serve on and read from: the server a test starts is the only one there on its port. */
-private const val LOOPBACK = "127.0.0.1"
