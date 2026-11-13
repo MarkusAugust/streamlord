@@ -784,16 +784,19 @@ public class ExpressionValidator(
      * allowed to open it. A `$my-value` named in [hyphenatedSignals] is a declared signal, not a
      * kebab-case slip. With the [attribute] it is the value of, whose [AttributeSpec.returnsValue]
      * stands in for [returnsValue], a name only another attribute's expression is handed is flagged
-     * too ([scopeNameIssues]).
+     * too ([scopeNameIssues]). With the [event] a data-on listens for, a type compared with
+     * `evt.detail.type` that datastar-fetch never comes with is flagged too ([fetchTypeIssues]).
      */
     public fun validate(
         text: String,
         returnsValue: Boolean? = null,
         hyphenatedSignals: Set<String> = emptySet(),
         attribute: AttributeSpec? = null,
+        event: String? = null,
     ): List<Issue> =
         validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
-            (attribute?.let { scopeNameIssues(text, it, handed) + computedSideEffects(text, it) } ?: emptyList())
+            (attribute?.let { scopeNameIssues(text, it, handed) + computedSideEffects(text, it) } ?: emptyList()) +
+            (if (event == DATASTAR_FETCH) fetchTypeIssues(catalog, text) else emptyList())
 
     /**
      * A signal changed or an action with a side effect called in `data-computed`, which the

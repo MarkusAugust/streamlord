@@ -123,6 +123,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
+  dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
+  there that the client never dispatches, `'start'` for `'started'`, is warned of, with the fix.
 - The backend actions of streamlord-html take expressions where the client does: `getExpr`,
   `postExpr`, `putExpr`, `patchExpr`, `deleteExpr` and `queryExpr` take the address as an
   expression, `headerExprs` takes header values as expressions, `requestCancellationExpr` takes an

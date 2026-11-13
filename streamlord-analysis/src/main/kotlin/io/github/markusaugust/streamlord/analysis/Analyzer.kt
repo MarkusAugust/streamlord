@@ -1959,7 +1959,8 @@ public class Analyzer(
         val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
         val text = s.text
         if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute))
+        val found = expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute, event = dslEvent(site))
+        issues += mapIssues(s, src, found)
         return issues
     }
 

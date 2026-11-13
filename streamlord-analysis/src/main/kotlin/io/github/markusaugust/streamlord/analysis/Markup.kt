@@ -579,11 +579,32 @@ private fun emptyKeyAdvice(
 }
 
 /** The key as the client recases it: each value of the last `__case` in turn, or the attribute's default without one. */
-private fun clientCase(
+internal fun clientCase(
     key: String,
     modifiers: List<ParsedModifier>,
     defaultCase: String,
 ): String = ClientCasing.modifyCasing(key, modifiers.lastOrNull { it.name == "case" }?.args?.distinct(), defaultCase)
+
+/** The event the attribute named [name] listens for, as the client recases its key, or null where it is no data-on with a key. */
+internal fun Catalog.listensFor(
+    name: String,
+    prefix: String,
+): String? {
+    val parsed = parseAttributeName(name.asciiLowercase(), prefix) ?: return null
+    if (parsed.spec?.name != "on" || parsed.key.isNullOrEmpty()) return null
+    return clientCase(parsed.key, parsed.modifiers, "kebab")
+}
+
+/** The event a DSL call's expression is run for: `dataOnFetch`'s, or the one `dataOn` is handed as a literal. */
+internal fun dslEvent(site: CallSite): String? =
+    when (site.name) {
+        "dataOnFetch" -> DATASTAR_FETCH
+        "dataOn" -> (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
+        else -> null
+    }
+
+/** The event Datastar dispatches at each step of a backend action's request. */
+internal const val DATASTAR_FETCH = "datastar-fetch"
 
 /** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
 public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
@@ -1127,7 +1148,15 @@ public class MarkupValidator(
                     val from = decoded.toSource(start)
                     return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
                 }
-                for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec)) {
+                val event =
+                    if (spec.name == "on" &&
+                        !parsed.key.isNullOrEmpty()
+                    ) {
+                        clientCase(parsed.key, parsed.modifiers, "kebab")
+                    } else {
+                        null
+                    }
+                for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec, event = event)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(

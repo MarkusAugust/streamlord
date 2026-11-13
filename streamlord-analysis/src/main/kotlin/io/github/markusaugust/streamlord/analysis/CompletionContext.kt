@@ -90,6 +90,8 @@ internal data class ExpressionAtCaret(
     val quote: Char = '\'',
     /** Whether that quote is written escaped, `\"`, as a Kotlin string that is not raw needs it. */
     val escaped: Boolean = false,
+    /** The event a data-on listens for, as the client recases its key, where the expression is one's. */
+    val event: String? = null,
 )
 
 /**
@@ -112,7 +114,12 @@ internal fun Analyzer.expressionAtCaret(
         val spec = catalog.parseAttributeName(at.name.asciiLowercase(), prefix)?.spec ?: return null
         if (spec.valueKind != ValueKind.EXPRESSION && spec.valueKind != ValueKind.SIGNAL) return null
         val before = s.text.substring(0, decodedIndex(s, offset))
-        return ExpressionAtCaret(before, spec.valueKind == ValueKind.EXPRESSION, spec.name == "on-signal-patch")
+        return ExpressionAtCaret(
+            before,
+            spec.valueKind == ValueKind.EXPRESSION,
+            spec.name == "on-signal-patch",
+            event = catalog.listensFor(at.name, prefix),
+        )
     }
     htmlStringAt(src, offset)?.let { html ->
         if (offset <= html.contentStart || offset > html.contentEnd) return null
@@ -127,7 +134,12 @@ internal fun Analyzer.expressionAtCaret(
     if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
     // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
     val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true
-    return ExpressionAtCaret(s.text.substring(0, decodedIndex(s, offset)), allowActions = true, patchInScope = patch)
+    return ExpressionAtCaret(
+        s.text.substring(0, decodedIndex(s, offset)),
+        allowActions = true,
+        patchInScope = patch,
+        event = dslEvent(site),
+    )
 }
 
 /** The expression in the attribute value [caret] stands in, in [markup], or null. */
@@ -148,6 +160,7 @@ private fun Analyzer.expressionInMarkup(
         spec.name == "on-signal-patch",
         quote,
         escaped = quote == '"' && kotlinEscapes,
+        event = catalog.listensFor(at.attribute, prefix),
     )
 }
 
@@ -167,6 +180,8 @@ internal data class ActionCall(
     val argument: Int,
     val option: OptionKeyAt?,
     val value: OptionValueAt? = null,
+    /** Where the argument at the caret starts in the text, when the caret stands in the action's own parentheses; -1 otherwise. */
+    val argumentStart: Int = -1,
 )
 
 /** A key of an object an action reads at the caret: what is typed of it, the keys the object already holds, and the keys it takes. */
@@ -198,6 +213,9 @@ private class OpenBracket(
     val fields: List<ValueField>?,
 ) {
     var argument = 0
+
+    /** Where the current argument starts, for an action's parentheses. */
+    var argumentStart = 0
 
     /** The code of such an object at its own depth, everything else written as [OTHER]: where its keys are read. */
     val keys = StringBuilder()
@@ -247,7 +265,7 @@ internal fun actionCallAt(
         when {
             open != null -> {
                 if (top?.fields != null) top.keys.append(OTHER)
-                stack += OpenBracket(')', open.groupValues[1], null)
+                stack += OpenBracket(')', open.groupValues[1], null).also { it.argumentStart = open.range.last + 1 }
                 i = open.range.last + 1
                 continue
             }
@@ -263,6 +281,7 @@ internal fun actionCallAt(
 
             c == ',' && top?.action != null -> {
                 top.argument++
+                top.argumentStart = i + 1
             }
 
             top?.fields != null -> {
@@ -275,7 +294,8 @@ internal fun actionCallAt(
     if (index < 0) return null
     val call = stack[index]
     val top = stack.last()
-    val fields = top.fields ?: return ActionCall(call.action!!, call.argument, null)
+    val fields =
+        top.fields ?: return ActionCall(call.action!!, call.argument, null, argumentStart = if (top === call) call.argumentStart else -1)
     val keys = top.keys.toString()
     val atEnd = regions[source.length]
     if (atEnd == Region.CODE) {

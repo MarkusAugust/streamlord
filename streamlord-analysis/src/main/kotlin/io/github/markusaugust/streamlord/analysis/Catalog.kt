@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -176,6 +177,9 @@ public class Catalog private constructor(
 
     /** The kind of each parameter of each action, in order. */
     internal val actionKinds: Map<String, List<ArgumentKind>>
+
+    /** The strings each parameter of each action takes where it takes only some, in order: the types of `@intl`. */
+    internal val actionValues: Map<String, List<List<String>>>
     public val fetchEvents: List<String>
 
     /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
@@ -241,6 +245,10 @@ public class Catalog private constructor(
         actionKinds =
             raw.array("actions")!!.objects().associate { a ->
                 a.string("name")!! to (a.array("kinds")?.strings()?.map { ArgumentKind.valueOf(it.uppercase()) } ?: emptyList())
+            }
+        actionValues =
+            raw.array("actions")!!.objects().associate { a ->
+                a.string("name")!! to (a.array("values")?.map { (it as JsonArray).strings() } ?: emptyList())
             }
         optionFields = (raw.array("fetchOptions")?.objects() ?: emptyList()).map(::toField)
         fetchOptions = optionFields.map { it.option }

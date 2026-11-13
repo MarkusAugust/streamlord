@@ -509,7 +509,7 @@
     { "name": "peek", "kind": "signals", "signature": "@peek(() => expr)", "kinds": ["function"], "kotlin": "peek", "doc": "Reads signals without subscribing." },
     { "name": "clipboard", "pro": true, "kind": "pro", "signature": "@clipboard(text, isBase64?)", "kinds": ["any", "any"], "kotlin": "clipboard", "doc": "Pro. Copies text to the clipboard." },
     { "name": "fit", "pro": true, "kind": "pro", "signature": "@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp?, shouldRound?)", "kinds": ["any", "any", "any", "any", "any", "any", "any"], "kotlin": "fit", "doc": "Pro. Linear interpolation between ranges." },
-    { "name": "intl", "pro": true, "kind": "pro", "signature": "@intl(type, value, options?, locale?)", "kinds": ["any", "any", "any", "any"], "kotlin": "intl", "doc": "Pro. Locale-aware formatting via Intl." }
+    { "name": "intl", "pro": true, "kind": "pro", "signature": "@intl(type, value, options?, locale?)", "kinds": ["any", "any", "any", "any"], "values": [["datetime", "number", "pluralRules", "relativeTime", "list", "displayNames"]], "kotlin": "intl", "doc": "Pro. Locale-aware formatting via Intl." }
   ],
   "fetchOptions": [
     { "name": "contentType", "type": "'json' | 'form'", "default": "'json'", "kind": "string", "values": ["json", "form"], "otherwise": "Datastar throws FetchInvalidContentType and sends nothing", "doc": "'json' sends the signals as JSON: the body, or ?datastar= on the URL for @get and @delete. 'form' sends a form instead, the closest one or the one selector names, after the browser has validated it." },

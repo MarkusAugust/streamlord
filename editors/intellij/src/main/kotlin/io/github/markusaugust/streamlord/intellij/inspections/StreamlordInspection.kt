@@ -167,8 +167,9 @@ private val INTERPOLATION_CODES =
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, the arguments and options an action is
- * given, kebab-case signals, what the client's own rewrite of an expression does that JavaScript
- * would not, and `patch` where the attribute does not hand it over.
+ * given, the types a datastar-fetch handler compares, kebab-case signals, what the client's own
+ * rewrite of an expression does that JavaScript would not, and `patch` where the attribute does not
+ * hand it over.
  */
 class DatastarExpressionInspection :
     StreamlordInspection(
@@ -187,6 +188,7 @@ class DatastarExpressionInspection :
             "option-value",
             "action-arity",
             "action-argument",
+            "fetch-event-type",
         ),
     )
 
@@ -294,6 +296,7 @@ object InspectionCodes {
                 "option-value",
                 "action-arity",
                 "action-argument",
+                "fetch-event-type",
             ) +
             setOf(
                 "unknown-attribute",
