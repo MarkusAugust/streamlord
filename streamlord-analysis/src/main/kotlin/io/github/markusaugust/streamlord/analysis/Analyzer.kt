@@ -2206,7 +2206,7 @@ public class Analyzer(
         val (start, lambda) = modifiersLambdaAt(site, src)
         if (lambda.isEmpty()) return emptyList()
         // Strings and comments blanked where they stand, so an offset in the lambda is one in the source.
-        val code = String(CharArray(lambda.length) { i -> if (lex.mask[start + i] || lambda[i] == '\n') lambda[i] else ' ' })
+        val code = CharArray(lambda.length) { i -> if (lex.mask[start + i] || lambda[i] == '\n') lambda[i] else ' ' }.concatToString()
         // The value of each property set to a literal, by its name, and where it is set.
         val set = LAMBDA_ASSIGNMENT.findAll(code).associateBy({ it.groupValues[1] }, { it })
 
