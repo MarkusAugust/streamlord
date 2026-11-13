@@ -19,6 +19,50 @@ internal fun modifierForm(m: Modifier): String =
             ModifierType.IDENT, ModifierType.IDENTS -> ".name"
         }
 
+/**
+ * Markdown documentation of modifier [m] of the attribute named [attribute]: what it does, the
+ * tags it takes after a dot, and that the flags of a duration come after it.
+ */
+internal fun modifierDoc(
+    m: Modifier,
+    attribute: String,
+): String {
+    val example = m.suggest.firstOrNull()
+    val value =
+        when (m.type) {
+            ModifierType.FLAG -> {
+                null
+            }
+
+            ModifierType.DURATION -> {
+                "`.500ms`: the duration, in milliseconds, or `.1s` in seconds."
+            }
+
+            ModifierType.ENUM -> {
+                "one of " + m.values.joinToString(", ") { "`.$it`" } + "."
+            }
+
+            ModifierType.INT -> {
+                "`.${example ?: "n"}`: a whole number" +
+                    (if (m.min != null && m.max != null) " from ${m.min} to ${m.max}." else ".")
+            }
+
+            ModifierType.IDENT -> {
+                "`.${example ?: "name"}`: one name."
+            }
+
+            ModifierType.IDENTS -> {
+                "`.${example ?: "name"}`: one or more names, each after a dot."
+            }
+        }
+    val tags = listOfNotNull(value) + m.flags.map { "`.$it`: ${m.flagDocs[it].orEmpty()}" }
+    val flags = m.flags.joinToString(" and ") { "`.$it`" }
+    return "**__${m.name}** on $attribute" +
+        (if (m.doc.isEmpty()) "" else "\n\n${m.doc}") +
+        (if (tags.isEmpty()) "" else "\n\n**Tags:**  \n" + tags.joinToString("  \n")) +
+        (if (m.flags.isEmpty()) "" else "\n\n$flags ${if (m.flags.size == 1) "comes" else "come"} after the duration.")
+}
+
 /** The browser lowercases attribute names; how Datastar reads the key differs per attribute. */
 internal fun casingNote(a: AttributeSpec): String =
     when (keyKind(a)) {
