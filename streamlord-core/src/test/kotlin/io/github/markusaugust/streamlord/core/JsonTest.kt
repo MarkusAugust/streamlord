@@ -137,6 +137,20 @@ class JsonTest {
         assertFailsWith<SignalsCodecException> { JsonWriter.write(Double.NaN) }
     }
 
+    /** The class is named alike on every platform, a local one too, where the JVM has no qualified name. */
+    @Test
+    fun `the refusal names the class it cannot hold by its simple name`() {
+        class Sorcerer(
+            val name: String,
+        )
+        val instead = "Use a Map, or configure a SignalsCodec adapter (streamlord-json-kotlinx or streamlord-json-jackson)."
+        assertEquals(
+            "JSON cannot hold Sorcerer. $instead",
+            assertFailsWith<SignalsCodecException> { JsonWriter.write(Sorcerer("x")) }.message,
+        )
+        assertEquals("JSON cannot hold Pair. $instead", assertFailsWith<SignalsCodecException> { JsonWriter.write(1 to 2) }.message)
+    }
+
     @Test
     fun `cycles are cut off by the depth limit`() {
         val cyclic = mutableListOf<Any?>()
