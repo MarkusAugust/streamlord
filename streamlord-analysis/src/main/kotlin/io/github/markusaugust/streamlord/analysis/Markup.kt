@@ -129,6 +129,9 @@ private val FILTER_SIGNAL = regex("""\$[A-Za-z_][\w$]*""")
 private val WORD_CHAR_CLASS = regex("""\w""")
 private val IDENT = regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
+
+// A signal's name as the client reads one after `$`, without the `$`.
+private val BARE_SIGNAL = regex("""[A-Za-z_]\w*(?:[.-]\w+)*""")
 private val HAS_CAPITAL = regex("""[A-Z]""")
 private val HAS_LOWERCASE = regex("""[a-z]""")
 
@@ -812,7 +815,10 @@ public class MarkupValidator(
         if (prefix == CatalogNames.PREFIX || !lower.startsWith(CatalogNames.PREFIX)) return null
         val parsed = catalog.parseAttributeName(lower, CatalogNames.PREFIX)?.takeIf { it.spec != null } ?: return null
         val value = attr.value?.let { decodeEntities(it).text }.orEmpty()
-        if (parsed.key == null && parsed.modifiers.isEmpty() && !readsAsDatastar(value)) return null
+        // A value the client reads as a signal's name says Datastar only where it is one: Knockout's data-bind="text: name" is not.
+        val datastar =
+            if (parsed.spec!!.valueKind == ValueKind.SIGNAL) BARE_SIGNAL.matchEntire(value.trim()) != null else readsAsDatastar(value)
+        if (parsed.key == null && parsed.modifiers.isEmpty() && !datastar) return null
         val aliased = prefix + attr.name.substring(CatalogNames.PREFIX.length)
         return Issue(
             attr.nameStart,
@@ -1159,6 +1165,16 @@ public class MarkupValidator(
     }
 
     /**
+     * Whether expression [js] calls a backend action as it runs: in its code, not in a string, nor
+     * in a function it hands on, `setTimeout(() => @get('/x'))`, which sends later.
+     */
+    private fun sendsAtOnce(js: String): Boolean {
+        val regions = jsRegions(js)
+        val inFunctions by lazy(LazyThreadSafetyMode.NONE) { functionDepths(js, regions) }
+        return backendAction.findAll(js).any { regions[it.range.first] == Region.CODE && inFunctions[it.range.first] == 0 }
+    }
+
+    /**
      * `data-init` that sends a request, before `data-indicator` on the same element: the client
      * applies an element's attributes in their order, and `data-init` runs at once, so the request
      * has started before the indicator listens for it, and the signal stays false. With a modifier
@@ -1181,8 +1197,7 @@ public class MarkupValidator(
         if (at < 0) return emptyList()
         val init =
             attrs.subList(0, at).firstOrNull {
-                it.name.asciiLowercase() == "${prefix}init" && it.value != null &&
-                    backendAction.containsMatchIn(decodeEntities(it.value).text)
+                it.name.asciiLowercase() == "${prefix}init" && it.value != null && sendsAtOnce(decodeEntities(it.value).text)
             } ?: return emptyList()
         if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
         val indicator = attrs[at]
@@ -1545,7 +1560,7 @@ public class MarkupValidator(
         // The free plugins hand the value to filtered, as a backend action its filterSignals; Pro's are not read here.
         if (!spec.pro) {
             out +=
-                actionArgumentIssues(catalog, text, jsRegions(text), emptyList(), ::source, filterOf = name, filterLink = link)
+                filterValueIssues(catalog, text, jsRegions(text), ::source, name, link)
         }
         for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
             val (start, end) = source(issue.start, issue.end)

@@ -60,4 +60,13 @@ class ExpressionTimingTest {
             },
         ) { analyzer.analyzeKotlin(it) }
     }
+
+    @Test
+    fun `an init of many functions nested in one another, before an indicator`() {
+        assertGrowsLinearly(
+            "function bodies",
+            20,
+            { n -> "<div data-init=\"" + "f(() => ".repeat(n) + "@get('/x')" + ")".repeat(n) + "\" data-indicator=\"busy\"></div>" },
+        ) { analyzer.analyzeHtml(it) }
+    }
 }

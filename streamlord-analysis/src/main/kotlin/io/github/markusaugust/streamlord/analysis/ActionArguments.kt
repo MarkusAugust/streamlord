@@ -218,23 +218,13 @@ private class Brackets(
     }
 }
 
-/**
- * The warnings for the arguments of every action called in [js], whose characters are [regions]; [span] maps a stretch of it back
- * to the text. With [filterOf], the name of an attribute whose value the client hands to `filtered`, [js] is that value, judged
- * whole as a signal filter, [filterLink] its documentation.
- */
-@OptIn(InternalStreamlordApi::class)
-internal fun actionArgumentIssues(
-    catalog: Catalog,
-    js: String,
+/** The judging of the literals of one script, [js], whose characters are [regions]; [span] maps a stretch of it back to the text. */
+private class Judge(
+    val catalog: Catalog,
+    val js: String,
     regions: ByteArray,
-    rewrites: List<Rewrite>,
-    span: (Int, Int) -> Pair<Int, Int>,
-    filterOf: String? = null,
-    filterLink: String = "",
-): List<Issue> {
-    val calls = rewrites.filter { !it.signal && regions[it.start] == Region.CODE && catalog.actionKinds[it.name]?.isNotEmpty() == true }
-    if (calls.isEmpty() && filterOf == null) return emptyList()
+    val span: (Int, Int) -> Pair<Int, Int>,
+) {
     val brackets = Brackets(js, regions)
     val out = ArrayList<Issue>()
     val filterKey = { key: String ->
@@ -401,75 +391,112 @@ internal fun actionArgumentIssues(
             }
         }
     }
+}
 
-    if (filterOf != null) {
+/** The warnings for the arguments of every action called in [js], whose characters are [regions]; [span] maps a stretch of it back to the text. */
+@OptIn(InternalStreamlordApi::class)
+internal fun actionArgumentIssues(
+    catalog: Catalog,
+    js: String,
+    regions: ByteArray,
+    rewrites: List<Rewrite>,
+    span: (Int, Int) -> Pair<Int, Int>,
+): List<Issue> {
+    val calls = rewrites.filter { !it.signal && regions[it.start] == Region.CODE && catalog.actionKinds[it.name]?.isNotEmpty() == true }
+    if (calls.isEmpty()) return emptyList()
+    val judge = Judge(catalog, js, regions, span)
+    with(judge) {
+        for (r in calls) {
+            val spec = catalog.actionsByName.getValue(r.name)
+            val kinds = catalog.actionKinds.getValue(r.name)
+            val open = r.end - 1
+            if (js.getOrNull(open) != '(' || brackets.close[open] < 0) continue
+            val link = "${Docs.ACTIONS}#${spec.name.lowercase()}"
+            val parameters = spec.parameters
+            val pieces = brackets.pieces(open)
+            if (pieces.any { js.startsWith("...", it.first) }) continue
+            val required = parameters.count { !it.endsWith("?") }
+            if (pieces.size < required) {
+                issue(
+                    r.start,
+                    brackets.close[open] + 1,
+                    "@${spec.name} needs ${count(required)}, as in ${spec.signature}, and is given ${pieces.size}.",
+                    "action-arity",
+                    link,
+                )
+            } else if (pieces.size > parameters.size) {
+                issue(
+                    pieces[parameters.size].first,
+                    pieces.last().last + 1,
+                    "@${spec.name} takes at most ${count(parameters.size)}, as in ${spec.signature}, and Datastar ignores the rest.",
+                    "action-arity",
+                    link,
+                )
+            }
+            for ((n, piece) in pieces.withIndex()) {
+                val kind = kinds.getOrNull(n) ?: break
+                if (kind == ArgumentKind.ANY) continue
+                val v = brackets.value(piece)
+                val parameter = parameters[n].removeSuffix("?")
+                // A parameter the signature names is named; one it writes out, as @peek(() => expr), is shown in it.
+                val takes =
+                    "@${spec.name} takes ${kind.phrase()}" +
+                        (if (IDENTIFIER.matchEntire(parameter) != null) " as $parameter" else ", as in ${spec.signature}") + ", and "
+                val url = spec.kind == "backend" && n == 0
+                when {
+                    !kind.takes(v) || v.written == Written.NULL || (url && v.text == "") -> {
+                        wrong(
+                            kind,
+                            v,
+                            "",
+                            filterChanges = true,
+                            url = url,
+                        )?.let { issue(v.start, v.end, takes + it, "action-argument", link) }
+                    }
+
+                    kind == ArgumentKind.OPTIONS && v.written == Written.OBJECT -> {
+                        judgeObject(
+                            v.start,
+                            catalog.optionFields,
+                            { "@${spec.name} has no option $it, so Datastar ignores it." },
+                            "${Docs.ACTIONS}#options",
+                        )
+                    }
+
+                    kind == ArgumentKind.FILTER && v.written == Written.OBJECT -> {
+                        judgeObject(v.start, catalog.filterFields, filterKey, link)
+                    }
+                }
+            }
+        }
+    }
+    return judge.out
+}
+
+/**
+ * The warnings for [js], the value of the attribute [name] that the client hands to `filtered`, judged as a signal filter is
+ * in `filterSignals`; [link] is the attribute's documentation.
+ */
+internal fun filterValueIssues(
+    catalog: Catalog,
+    js: String,
+    regions: ByteArray,
+    span: (Int, Int) -> Pair<Int, Int>,
+    name: String,
+    link: String,
+): List<Issue> {
+    val judge = Judge(catalog, js, regions, span)
+    with(judge) {
         val v = brackets.value(brackets.trim(0, js.length))
         if (!ArgumentKind.FILTER.takes(v) || v.written == Written.NULL) {
             wrong(ArgumentKind.FILTER, v, "", filterChanges = false, url = false)?.let {
-                issue(v.start, v.end, "$filterOf takes ${ArgumentKind.FILTER.phrase()}, and $it", "option-value", filterLink)
+                issue(v.start, v.end, "$name takes ${ArgumentKind.FILTER.phrase()}, and $it", "option-value", link)
             }
         } else if (v.written == Written.OBJECT) {
-            judgeObject(v.start, catalog.filterFields, filterKey, filterLink)
+            judgeObject(v.start, catalog.filterFields, filterKey, link)
         }
     }
-    for (r in calls) {
-        val spec = catalog.actionsByName.getValue(r.name)
-        val kinds = catalog.actionKinds.getValue(r.name)
-        val open = r.end - 1
-        if (js.getOrNull(open) != '(' || brackets.close[open] < 0) continue
-        val link = "${Docs.ACTIONS}#${spec.name.lowercase()}"
-        val parameters = spec.parameters
-        val pieces = brackets.pieces(open)
-        if (pieces.any { js.startsWith("...", it.first) }) continue
-        val required = parameters.count { !it.endsWith("?") }
-        if (pieces.size < required) {
-            issue(
-                r.start,
-                brackets.close[open] + 1,
-                "@${spec.name} needs ${count(required)}, as in ${spec.signature}, and is given ${pieces.size}.",
-                "action-arity",
-                link,
-            )
-        } else if (pieces.size > parameters.size) {
-            issue(
-                pieces[parameters.size].first,
-                pieces.last().last + 1,
-                "@${spec.name} takes at most ${count(parameters.size)}, as in ${spec.signature}, and Datastar ignores the rest.",
-                "action-arity",
-                link,
-            )
-        }
-        for ((n, piece) in pieces.withIndex()) {
-            val kind = kinds.getOrNull(n) ?: break
-            if (kind == ArgumentKind.ANY) continue
-            val v = brackets.value(piece)
-            val parameter = parameters[n].removeSuffix("?")
-            // A parameter the signature names is named; one it writes out, as @peek(() => expr), is shown in it.
-            val takes =
-                "@${spec.name} takes ${kind.phrase()}" +
-                    (if (IDENTIFIER.matchEntire(parameter) != null) " as $parameter" else ", as in ${spec.signature}") + ", and "
-            val url = spec.kind == "backend" && n == 0
-            when {
-                !kind.takes(v) || v.written == Written.NULL || (url && v.text == "") -> {
-                    wrong(kind, v, "", filterChanges = true, url = url)?.let { issue(v.start, v.end, takes + it, "action-argument", link) }
-                }
-
-                kind == ArgumentKind.OPTIONS && v.written == Written.OBJECT -> {
-                    judgeObject(
-                        v.start,
-                        catalog.optionFields,
-                        { "@${spec.name} has no option $it, so Datastar ignores it." },
-                        "${Docs.ACTIONS}#options",
-                    )
-                }
-
-                kind == ArgumentKind.FILTER && v.written == Written.OBJECT -> {
-                    judgeObject(v.start, catalog.filterFields, filterKey, link)
-                }
-            }
-        }
-    }
-    return out
+    return judge.out
 }
 
 private fun count(n: Int): String = if (n == 1) "1 argument" else "$n arguments"
