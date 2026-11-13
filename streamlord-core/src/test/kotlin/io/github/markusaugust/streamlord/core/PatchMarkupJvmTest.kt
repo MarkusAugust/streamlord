@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
  * is patched; in the html namespace an SVG or MathML element outside its own root is an HTML element
  * that draws nothing.
  */
-class PatchMarkupTest {
+class PatchMarkupJvmTest {
     private fun refused(
         why: String,
         make: () -> Any,
