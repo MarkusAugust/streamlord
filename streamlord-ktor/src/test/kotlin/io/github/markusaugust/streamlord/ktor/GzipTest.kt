@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsBytes

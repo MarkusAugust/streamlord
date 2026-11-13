@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import java.io.ByteArrayOutputStream
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -50,11 +51,3 @@ private fun whole(answer: String): Boolean {
         else -> false
     }
 }
-
-/**
- * The address the tests serve on and read from. On macOS a server on every address may share its port
- * with one another process binds to the loopback address, whose client then reaches that one and
- * waits out its timeout (LoopbackTest). On the loopback address alone, a server on a port taken
- * there fails to start instead.
- */
-internal const val LOOPBACK = "127.0.0.1"

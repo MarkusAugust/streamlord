@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.engine.BaseApplicationResponse

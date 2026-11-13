@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.spring
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.CompletableDeferred

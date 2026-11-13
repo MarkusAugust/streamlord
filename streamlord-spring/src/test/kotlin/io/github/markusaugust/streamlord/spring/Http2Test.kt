@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

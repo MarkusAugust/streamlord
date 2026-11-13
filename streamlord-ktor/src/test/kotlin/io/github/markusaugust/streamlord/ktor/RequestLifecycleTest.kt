@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine

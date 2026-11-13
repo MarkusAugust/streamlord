@@ -1,8 +1,11 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.wire.LOOPBACK
+import io.github.markusaugust.streamlord.wire.boundPort
 import io.ktor.server.application.Application
 import io.ktor.server.engine.ApplicationEngine
 import io.ktor.server.engine.ApplicationEngineFactory
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import kotlinx.coroutines.runBlocking
@@ -12,27 +15,17 @@ import kotlin.time.Duration.Companion.seconds
 import org.apache.catalina.startup.Tomcat as TomcatServer
 
 /**
- * The address the tests serve on and read from. On macOS a server on every address may share its port
- * with one another process binds to the loopback address, whose client then reaches that one and
- * waits out its timeout (LoopbackTest). On the loopback address alone, a server on a port taken
- * there fails to start instead.
+ * [engine] serving [module] on [LOOPBACK] and [port], 0 for any free one, started, with the port it
+ * listens on. Ktor gives Tomcat's connectors no address and builds them after configureTomcat runs,
+ * so on Tomcat the address is set before the start, and each connector is handed to [tomcat] there too.
  */
-internal const val LOOPBACK = "127.0.0.1"
-
-/**
- * [test] against [engine] serving [module] on [LOOPBACK] and [port], 0 for any free one, which it is
- * handed once the server has started. Ktor gives Tomcat's connectors no address and builds them after
- * configureTomcat runs, so on Tomcat the address is set before the start, and each connector is
- * handed to [tomcat] there too.
- */
-internal fun <T, E : ApplicationEngine, C : ApplicationEngine.Configuration> serving(
+internal fun <E : ApplicationEngine, C : ApplicationEngine.Configuration> startOnLoopback(
     engine: ApplicationEngineFactory<E, C>,
     module: Application.() -> Unit,
     port: Int = 0,
     configure: C.() -> Unit = {},
     tomcat: (Connector) -> Unit = {},
-    test: (port: Int) -> T,
-): T {
+): Pair<EmbeddedServer<E, C>, Int> {
     val server =
         embeddedServer(
             engine,
@@ -53,14 +46,33 @@ internal fun <T, E : ApplicationEngine, C : ApplicationEngine.Configuration> ser
     try {
         server.start(wait = false)
         val bound =
-            connectors?.first()?.localPort ?: runBlocking {
-                withTimeout(10.seconds) {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
+            connectors?.let { boundPort(it.first().localPort, "Tomcat") }
+                ?: runBlocking {
+                    withTimeout(10.seconds) {
+                        server.engine
+                            .resolvedConnectors()
+                            .first()
+                            .port
+                    }
                 }
-            }
+        return server to bound
+    } catch (e: Throwable) {
+        server.stop(100, 500)
+        throw e
+    }
+}
+
+/** [test] against [startOnLoopback]'s server, handed its port, which is stopped after. */
+internal fun <T, E : ApplicationEngine, C : ApplicationEngine.Configuration> serving(
+    engine: ApplicationEngineFactory<E, C>,
+    module: Application.() -> Unit,
+    port: Int = 0,
+    configure: C.() -> Unit = {},
+    tomcat: (Connector) -> Unit = {},
+    test: (port: Int) -> T,
+): T {
+    val (server, bound) = startOnLoopback(engine, module, port, configure, tomcat)
+    try {
         return test(bound)
     } finally {
         server.stop(100, 500)
