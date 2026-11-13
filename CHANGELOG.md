@@ -266,6 +266,12 @@ All notable changes to Streamlord are recorded here. The format follows
   after a modifier with an argument, in a DSL expression on the next line, in a raw string, passed
   by name or as a lone object, after a receiver, and in a raw string whose HTML starts on the next
   line. The recommended colours, which stay opt in, now follow the theme's kind.
+- IntelliJ's Datastar colours fall back to other standard keys of your scheme, so they look
+  different in Default and Darcula: an attribute's plugin name (`on`), its prefix, the `:` and `__`
+  and its key now take the HTML attribute colour (they were a keyword, a line comment and a class
+  name); actions take the function declaration colour (they were a keyword and a function call); a
+  modifier's argument takes the constant colour (it was a class name). The colour settings page
+  shows every key in its preview.
 - IntelliJ colours the `data-star-` prefix, a name in capitals, a value around a template
   placeholder and `.hbs` files, and no longer colours a name that is not Datastar's in a template.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
