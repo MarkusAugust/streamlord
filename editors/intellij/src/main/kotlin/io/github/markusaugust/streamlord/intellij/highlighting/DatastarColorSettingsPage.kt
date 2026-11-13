@@ -27,9 +27,9 @@ class DatastarColorSettingsPage : ColorSettingsPage {
     override fun getDemoText(): String =
         """
         <div <prefix>data-</prefix><plugin>signals</plugin>="{count: <number>0</number>, open: <keyword>false</keyword>}"
-             <prefix>data-</prefix><plugin>on</plugin><sigil>:</sigil><key>click</key><sigil>__</sigil><modifier>debounce</modifier><sigil>.</sigil><arg>500ms</arg>="<signal>${'$'}count</signal>++; <backend>@post</backend>(<string>'/count'</string>, {<option>headers</option>: {<string>'X-Csrf'</string>: <signal>${'$'}csrf</signal>}})"
-             <prefix>data-</prefix><plugin>on-intersect</plugin><sigil>__</sigil><modifier>once</modifier>="<action>@peek</action>(() => <scope>el</scope>.dataset.<signal>${'$'}user</signal><path>.name</path>)"
-             <prefix>data-</prefix><plugin>text</plugin>="<scope>evt</scope> ? <string>'yes'</string> : <regex>/^a/</regex>.test(<signal>${'$'}form</signal><path>.q</path>)">
+             <prefix>data-</prefix><plugin>on</plugin><sigil>:</sigil><key>click</key><sigil>__</sigil><modifier>debounce</modifier><sigil>.</sigil><duration>500ms</duration>="<signal>${'$'}count</signal>++; <backend>@post</backend>(<string>'/count'</string>, {<option>headers</option>: {<string>'X-Csrf'</string>: <signal>${'$'}csrf</signal>}})"
+             <prefix>data-</prefix><plugin>on-intersect</plugin><sigil>__</sigil><modifier>once</modifier>="<action>@peek</action>(() => <scope>el</scope>.<property>dataset</property>.<signal>${'$'}user</signal><path>.name</path>)"
+             <prefix>data-</prefix><plugin>text</plugin>="<scope>evt</scope> ? <string>'yes'</string> : <regex>/^a/</regex>.<method>test</method>(<signal>${'$'}form</signal><path>.q</path>)">
         </div>
         """.trimIndent()
 }
@@ -48,6 +48,14 @@ private val DESCRIPTORS =
         AttributesDescriptor("Expression//JavaScript keyword", DatastarColors.KEYWORD),
         AttributesDescriptor("Expression//Number", DatastarColors.NUMBER),
         AttributesDescriptor("Expression//Kotlin dollar escape", DatastarColors.KOTLIN_DOLLAR_ESCAPE),
+        AttributesDescriptor("Expression//Object key", DatastarColors.OBJECT_KEY),
+        AttributesDescriptor("Expression//Property", DatastarColors.PROPERTY),
+        AttributesDescriptor("Expression//Function call", DatastarColors.METHOD),
+        AttributesDescriptor("Expression//Global (window, Math, ...)", DatastarColors.GLOBAL),
+        AttributesDescriptor("Expression//Identifier", DatastarColors.IDENTIFIER),
+        AttributesDescriptor("Expression//Operator", DatastarColors.OPERATOR),
+        AttributesDescriptor("Expression//Comment", DatastarColors.COMMENT),
+        AttributesDescriptor("Expression//Template literal braces", DatastarColors.TEMPLATE_PUNCTUATION),
         AttributesDescriptor("Attribute//Prefix (data-)", DatastarColors.ATTRIBUTE_PREFIX),
         AttributesDescriptor("Attribute//Plugin name", DatastarColors.ATTRIBUTE_PLUGIN),
         AttributesDescriptor("Attribute//Key", DatastarColors.ATTRIBUTE_KEY),
@@ -73,4 +81,8 @@ private val TAGS =
         "modifier" to DatastarColors.MODIFIER,
         "sigil" to DatastarColors.MODIFIER_SIGIL,
         "arg" to DatastarColors.MODIFIER_ARG,
+        "duration" to DatastarColors.DURATION,
+        "property" to DatastarColors.PROPERTY,
+        "method" to DatastarColors.METHOD,
+        "op" to DatastarColors.OPERATOR,
     )

@@ -39,7 +39,7 @@ class HighlightingTest : StreamlordTestCase() {
                 DatastarColors.OBJECT_KEY to DefaultLanguageHighlighterColors.INSTANCE_FIELD,
                 DatastarColors.PROPERTY to DefaultLanguageHighlighterColors.INSTANCE_FIELD,
                 DatastarColors.METHOD to DefaultLanguageHighlighterColors.FUNCTION_CALL,
-                DatastarColors.GLOBAL to DefaultLanguageHighlighterColors.PREDEFINED_SYMBOL,
+                DatastarColors.GLOBAL to DefaultLanguageHighlighterColors.GLOBAL_VARIABLE,
                 DatastarColors.IDENTIFIER to DefaultLanguageHighlighterColors.IDENTIFIER,
                 DatastarColors.OPERATOR to DefaultLanguageHighlighterColors.OPERATION_SIGN,
                 DatastarColors.COMMENT to DefaultLanguageHighlighterColors.BLOCK_COMMENT,
@@ -152,7 +152,10 @@ class HighlightingTest : StreamlordTestCase() {
                 ":" to DatastarColors.OPERATOR,
                 "/^a/" to DatastarColors.REGEX,
             ),
-            painted("page.html", "<input data-bind=\"user.name\" data-indicator=\"busy\" data-ref=\"box\" data-persist=\"{include: /^a/}\">"),
+            painted(
+                "page.html",
+                "<input data-bind=\"user.name\" data-indicator=\"busy\" data-ref=\"box\" data-persist=\"{include: /^a/}\">",
+            ),
         )
     }
 
