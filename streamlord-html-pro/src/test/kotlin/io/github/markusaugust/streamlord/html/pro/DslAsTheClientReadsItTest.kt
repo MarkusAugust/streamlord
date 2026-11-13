@@ -40,6 +40,7 @@ import io.github.markusaugust.streamlord.html.not
 import io.github.markusaugust.streamlord.html.patch
 import io.github.markusaugust.streamlord.html.peek
 import io.github.markusaugust.streamlord.html.post
+import io.github.markusaugust.streamlord.html.postExpr
 import io.github.markusaugust.streamlord.html.put
 import io.github.markusaugust.streamlord.html.query
 import io.github.markusaugust.streamlord.html.set
@@ -1150,6 +1151,18 @@ class DslAsTheClientReadsItTest {
                 button {
                     dataSignals("sel", "3")
                     dataOnClick(post("/x") { payloadExpr = "{id: ${'$'}sel}" })
+                }
+            },
+            dslCase("post to an address and with a header the page computes", "postExpr", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                store = """{"id":3}"""
+                request("POST", "http://localhost/items/3", """{"id":3}""", JSON_BODY + ("X-Id" to "3"))
+                heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
+            }) {
+                button {
+                    dataSignals("id", "3")
+                    dataOnClick(postExpr("'/items/' + ${'$'}id") { headerExprs = mapOf("X-Id" to "${'$'}id") })
                 }
             },
             dslCase("get open when hidden", "get", probe = mapOf("rounds" to 1), expect = {

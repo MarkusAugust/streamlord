@@ -181,44 +181,65 @@ class HtmlDslTest {
     @Test
     fun `request cancellation takes an expression`() {
         assertEquals(
-            """@get('/feed', {requestCancellation: ${'$'}controller})""",
+            """@get('/feed', {requestCancellation: (${'$'}controller)})""",
             get("/feed") { requestCancellationExpr = signal("controller") },
         )
-    }
-
-    @Test
-    fun `a header value may be an expression, its name written as a literal`() {
-        assertEquals(
-            """@get('/x', {headers: {'X-Csrf-Token': 't', Authorization: 'Bearer ' + ${'$'}token, 'x\x27y': ${'$'}a}})""",
-            get("/x") {
-                headers = mapOf("X-Csrf-Token" to "t")
-                headerExprs = mapOf("Authorization" to "'Bearer ' + ${signal("token")}", "x'y" to signal("a"))
-            },
-        )
         assertFailsWith<IllegalArgumentException> {
-            get("/x") {
-                headers = mapOf("A" to "t")
-                headerExprs = mapOf("A" to signal("a"))
+            get("/feed") {
+                requestCancellation = FetchOptions.RequestCancellation.CLEANUP
+                requestCancellationExpr = signal("controller")
             }
         }
     }
 
     @Test
-    fun `the address and the value of setAll may be expressions`() {
-        assertEquals("""@get('/items/' + ${'$'}id)""", getExpr("'/items/' + ${signal("id")}"))
+    fun `a header value may be an expression, its name written as a literal`() {
         assertEquals(
-            """@post(`/items/${'$'}{${'$'}id}`, {retry: 'never'})""",
+            """@get('/x', {headers: {'X-Csrf-Token': 't', Authorization: ('Bearer ' + ${'$'}token), 'x\x27y': (${'$'}a)}})""",
+            get("/x") {
+                headers = mapOf("X-Csrf-Token" to "t")
+                headerExprs = mapOf("Authorization" to "'Bearer ' + ${signal("token")}", "x'y" to signal("a"))
+            },
+        )
+        // As HTTP names them, in any case: the browser's Headers would join the two values.
+        for (name in listOf("A", "a")) {
+            assertFailsWith<IllegalArgumentException> {
+                get("/x") {
+                    headers = mapOf("A" to "t")
+                    headerExprs = mapOf(name to signal("a"))
+                }
+            }
+        }
+        assertFailsWith<IllegalArgumentException> { get("/x") { headers = mapOf("Authorization" to "a", "authorization" to "b") } }
+    }
+
+    // In parentheses, an expression cannot close the argument or the object it stands in and add one of its own.
+    @Test
+    fun `an expression stays one value where it is written`() {
+        assertEquals("""@get(('/a', {payload: 1}))""", getExpr(expression = "'/a', {payload: 1}"))
+        assertEquals(
+            """@get('/x', {headers: {A: (1}, {payload: 2)}})""",
+            get("/x") { headerExprs = mapOf("A" to "1}, {payload: 2") },
+        )
+        assertEquals("""@setAll((1, {include: /x/}))""", setAllExpr("1, {include: /x/}"))
+    }
+
+    @Test
+    fun `the address and the value of setAll may be expressions`() {
+        assertEquals("""@get(('/items/' + ${'$'}id))""", getExpr("'/items/' + ${signal("id")}"))
+        assertEquals(
+            """@post((`/items/${'$'}{${'$'}id}`), {retry: 'never'})""",
             postExpr("`/items/${'$'}{${signal("id")}}`") {
                 retry = FetchOptions.Retry.NEVER
             },
         )
-        assertEquals("""@put(${'$'}u)""", putExpr(signal("u")))
-        assertEquals("""@patch(${'$'}u)""", patchExpr(signal("u")))
-        assertEquals("""@delete(${'$'}u)""", deleteExpr(signal("u")))
-        assertEquals("""@query(${'$'}u)""", queryExpr(signal("u")))
+        assertEquals("""@put((${'$'}u))""", putExpr(signal("u")))
+        assertEquals("""@patch((${'$'}u))""", patchExpr(signal("u")))
+        assertEquals("""@delete((${'$'}u))""", deleteExpr(signal("u")))
+        assertEquals("""@query((${'$'}u))""", queryExpr(signal("u")))
         assertFailsWith<IllegalArgumentException> { getExpr(" ") }
-        assertEquals("""@setAll(${'$'}default)""", setAllExpr(signal("default")))
-        assertEquals("""@setAll(${'$'}default, {include: /^form\./})""", setAllExpr(signal("default"), SignalFilter.include("^form\\.")))
+        assertEquals("""@setAll((${'$'}default))""", setAllExpr(signal("default")))
+        assertEquals("""@setAll((${'$'}default), {include: /^form\./})""", setAllExpr(signal("default"), SignalFilter.include("^form\\.")))
         assertFailsWith<IllegalArgumentException> { setAllExpr("") }
     }
 

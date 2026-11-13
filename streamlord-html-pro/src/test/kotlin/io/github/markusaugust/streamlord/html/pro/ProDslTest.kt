@@ -152,7 +152,7 @@ class ProDslTest {
         assertEquals("@fit(${'$'}x, 0, 1, 0, 1, true)", fit(signal("x"), 0, 1, 0, 1, shouldClamp = true))
         assertEquals("@fit(${'$'}x, 0, 1, 0, 1, false, true)", fit(signal("x"), 0, 1, 0, 1, shouldRound = true))
         assertEquals(
-            "@fit(${'$'}x, ${'$'}lo, ${'$'}hi, 0, ${'$'}max * 2, true)",
+            "@fit(${'$'}x, (${'$'}lo), (${'$'}hi), (0), (${'$'}max * 2), true)",
             fitExpr(signal("x"), signal("lo"), signal("hi"), "0", "${signal("max")} * 2", shouldClamp = true),
         )
         assertFailsWith<IllegalArgumentException> { fitExpr(signal("x"), "", "1", "0", "1") }
