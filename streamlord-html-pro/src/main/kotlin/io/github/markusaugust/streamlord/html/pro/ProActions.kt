@@ -14,11 +14,17 @@ public fun clipboard(
     isBase64: Boolean = false,
 ): String = if (isBase64) "@clipboard(${js(text)}, true)" else "@clipboard(${js(text)})"
 
-/** `@clipboard(expression)` (Pro) with a raw JavaScript expression, e.g. a signal. */
+/**
+ * `@clipboard(expression)` (Pro) with a raw JavaScript expression, e.g. a signal, written in
+ * parentheses, so it stays one argument whatever it holds.
+ */
 public fun clipboardExpr(
     expression: String,
     isBase64: Boolean = false,
-): String = if (isBase64) "@clipboard($expression, true)" else "@clipboard($expression)"
+): String {
+    require(expression.isNotBlank()) { "an expression must not be blank" }
+    return if (isBase64) "@clipboard(($expression), true)" else "@clipboard(($expression))"
+}
 
 /** `@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp, shouldRound)` (Pro): linear interpolation between ranges. */
 public fun fit(

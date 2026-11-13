@@ -148,7 +148,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `AbortController`, and `setAllExpr` takes the value of `@setAll` as an expression. In
   streamlord-html-pro, `fitExpr` takes the ends of the ranges as expressions. Each expression is
   written in parentheses, so one that holds a comma or a brace stays one value, or fails as a syntax
-  error, and never opens options of its own. A header named twice, in `headers` and `headerExprs` or
+  error, and never opens options of its own. `payloadExpr` and `clipboardExpr` are written so too,
+  and refuse a blank expression. A header named twice, in `headers` and `headerExprs` or
   in either, in any case (`Authorization` and `authorization`), is refused, as is
   `requestCancellationExpr` set with `requestCancellation`.
 - An answer of elements that is not a stream can name the element its view transition runs on:

@@ -70,7 +70,7 @@ public class FetchOptions {
             payloadSet = true
         }
 
-    /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`. Overrides [payload]. */
+    /** Send this raw JavaScript expression as the payload, e.g. `"{id: ${'$'}selected}"`, written in parentheses. Overrides [payload]. */
     public var payloadExpr: String? = null
 
     public enum class ContentType(
@@ -124,7 +124,7 @@ public class FetchOptions {
                 (requestCancellationExpr?.let(::expression) ?: requestCancellation?.let { js(it.wire) })?.let {
                     add("requestCancellation: $it")
                 }
-                (payloadExpr ?: if (payloadSet) JsLiteral.write(payload) else null)?.let { add("payload: $it") }
+                (payloadExpr?.let(::expression) ?: if (payloadSet) JsLiteral.write(payload) else null)?.let { add("payload: $it") }
             }
         return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
     }
