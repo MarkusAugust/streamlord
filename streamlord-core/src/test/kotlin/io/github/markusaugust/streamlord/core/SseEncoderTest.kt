@@ -88,15 +88,18 @@ class SseEncoderTest {
         )
     }
 
-    /** Without useViewTransition the client never reads the selector, so asking for one is a mistake. */
+    /**
+     * Without useViewTransition the client never reads the selector (patchElements.ts:78), so it is
+     * left off the wire, and `useViewTransition = animate` with a fixed selector works either way.
+     */
     @Test
-    fun `a view transition selector without a view transition is refused`() {
-        val failure =
-            assertFailsWith<DatastarEventValidationException> {
-                PatchElements("<p id=\"a\">x</p>", viewTransitionSelector = "#list")
-            }
-        assertTrue("useViewTransition" in failure.message.orEmpty(), failure.message)
-        assertFailsWith<DatastarEventValidationException> { PatchElements.remove("#a", viewTransitionSelector = "#list") }
+    fun `a view transition selector without a view transition is left off the wire`() {
+        for (animate in listOf(false, true)) {
+            val out = SseEncoder.encode(PatchElements("<p id=\"a\">x</p>", useViewTransition = animate, viewTransitionSelector = "#list"))
+            assertEquals(animate, "viewTransitionSelector #list" in out, out)
+            val removed = SseEncoder.encode(PatchElements.remove("#a", useViewTransition = animate, viewTransitionSelector = "#list"))
+            assertEquals(animate, "viewTransitionSelector #list" in removed, removed)
+        }
     }
 
     @Test

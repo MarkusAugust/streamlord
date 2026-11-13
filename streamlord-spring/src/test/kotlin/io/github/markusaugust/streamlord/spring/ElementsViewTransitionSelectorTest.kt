@@ -1,9 +1,8 @@
 package io.github.markusaugust.streamlord.spring
 
-import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 /**
  * `datastar-view-transition-selector`, which Datastar's client reads from a `text/html` answer from
@@ -17,6 +16,6 @@ class ElementsViewTransitionSelectorTest {
         assertEquals("#list", el.headers.getFirst("datastar-view-transition-selector"))
         assertEquals("<li id=\"a\">x</li>", el.body)
         // Without a view transition there is none to select an element for, and the client reads no selector.
-        assertFailsWith<DatastarEventValidationException> { datastarElements("<li id=\"a\">x</li>", viewTransitionSelector = "#list") }
+        assertNull(datastarElements("<li id=\"a\">x</li>", viewTransitionSelector = "#list").headers.getFirst("datastar-view-transition-selector"))
     }
 }
