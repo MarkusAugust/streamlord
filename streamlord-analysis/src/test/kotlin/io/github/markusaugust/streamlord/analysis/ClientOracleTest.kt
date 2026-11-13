@@ -335,7 +335,10 @@ class ClientOracleTest {
             val kinds = action.array("kinds")?.strings() ?: fail("@$name has no kinds in the catalog")
             if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the page declares $wanted in $written"
             val optional = parameters.map { "?:" in it || '=' in it }
-            val signature = Catalog.default.actionsByName.getValue(name).parameters
+            val signature =
+                Catalog.default.actionsByName
+                    .getValue(name)
+                    .parameters
             if (signature.map { it.endsWith("?") } != optional) wrong += "@$name: the signature $signature, and the page $written"
         }
         assertEquals(emptyList(), wrong)
@@ -350,7 +353,8 @@ class ClientOracleTest {
     fun `says what the client does with a value an option of strings does not take`() {
         val otherwise = Catalog.default.optionFields.associate { it.name to it.otherwise }
         val cases = cases("fetch-option-values.json")
-        assertEquals(cases.map { it.string("option") }.toSet(), Catalog.default.optionFields.filter { it.values.isNotEmpty() }.map { it.name }.toSet())
+        val ofStrings = Catalog.default.optionFields.filter { it.values.isNotEmpty() }
+        assertEquals(cases.map { it.string("option") }.toSet(), ofStrings.map { it.name }.toSet())
         val wrong = ArrayList<String>()
         for (case in cases) {
             val option = case.string("option")!!

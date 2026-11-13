@@ -2394,10 +2394,6 @@ public class Analyzer(
     }
 }
 
-/**
- * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
- * diagnostics judge the value only when it is [whole], the full statement and not the first half of a concatenation.
- */
 /** An option of FetchOptions set to an expression: its [name], where the name starts, and the literal that is the expression. */
 public data class ExpressionOption(
     val name: String,
@@ -2405,6 +2401,10 @@ public data class ExpressionOption(
     val value: KotlinString,
 )
 
+/**
+ * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
+ * diagnostics judge the value only when it is [whole], the full statement and not the first half of a concatenation.
+ */
 public data class AttributesIndex(
     val name: String,
     val nameStart: Int,

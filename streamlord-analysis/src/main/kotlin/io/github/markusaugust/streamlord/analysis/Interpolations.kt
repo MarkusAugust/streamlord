@@ -539,6 +539,7 @@ private fun lineEnds(
 }
 
 private val MARKUP_INITIALISER = regex("""\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
+
 /** What may follow a value that is the whole of a declaration, read where the value ends: `$` is the end of the file. */
 private val STATEMENT_END = regex("""[ \t]*(?:[\n\r;})\],]|//|$)""")
 

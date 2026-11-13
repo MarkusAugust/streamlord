@@ -255,7 +255,11 @@ class CatalogTest {
         val helpers =
             listOf("io.github.markusaugust.streamlord.html.ActionsKt", "io.github.markusaugust.streamlord.html.pro.ProActionsKt")
                 .flatMap { Class.forName(it).methods.toList() }
-                .filter { it.name.endsWith("Expr") && java.lang.reflect.Modifier.isStatic(it.modifiers) }
+                .filter {
+                    it.name.endsWith("Expr") &&
+                        java.lang.reflect.Modifier
+                            .isStatic(it.modifiers)
+                }
         assertTrue(helpers.size >= 9, "found ${helpers.map { it.name }}")
         for (fn in helpers) {
             val spec = assertNotNull(expression.obj(fn.name), "${fn.name} is no expression call site")
@@ -267,7 +271,12 @@ class CatalogTest {
                 .map { it.name }
                 .filter { it.startsWith("set") && it.contains("Expr") }
                 .map { it.removePrefix("set").replaceFirstChar(Char::lowercaseChar) }
-        val listed = catalog.obj("kotlinCallSites")!!.obj("expressionOptions")!!.keys.filter { !it.startsWith("$") }
+        val listed =
+            catalog
+                .obj("kotlinCallSites")!!
+                .obj("expressionOptions")!!
+                .keys
+                .filter { !it.startsWith("$") }
         assertEquals(options.sorted(), listed.sorted())
     }
 
