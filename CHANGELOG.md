@@ -452,6 +452,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - The editors judge the arguments of the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds
   the reference declares, as they judge the free ones, `@fit('a', 0, 1, 0, 10)` among them, and
   their hover says what each parameter takes; they judged the number of arguments alone.
+- IntelliJ's inspection Signal no file defines is called Unknown signals, as the VS Code setting
+  `streamlord.diagnostics.unknownSignals` that turns the same two warnings on and off is. Its
+  settings in an inspection profile are kept.
 
 ## [0.21.0] - 2026-11-11
 

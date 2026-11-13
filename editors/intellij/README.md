@@ -254,13 +254,15 @@ Settings | Tools | Streamlord:
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family
-(interpolation, expression, attribute, signal no file defines, key casing, patch markup), each
+(interpolation, expression, attribute, unknown signals, key casing, patch markup), each
 with its own severity. A severity you set there applies to the issues at the family's own level
 or above, and never raises one below it: setting the interpolation inspection to a warning makes its errors
 warnings and leaves its weak warnings weak.
-The signal inspection also warns in a Kotlin file on a signal the server reads, through a
-`@Serializable` class or a `Signals` lookup, that no page in the project declares, as VS Code
-does: `signal-never-declared`.
+The unknown signals inspection is the counterpart of VS Code's setting
+`streamlord.diagnostics.unknownSignals`, and turns the same two warnings on and off: a `$name` no
+file in the project defines, and, in a Kotlin file, a signal the server reads, through a
+`@Serializable` class or a `Signals` lookup, that no page in the project declares
+(`signal-never-declared`).
 
 ## Datastar Pro
 
