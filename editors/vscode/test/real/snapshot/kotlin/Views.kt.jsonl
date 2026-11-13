@@ -78,6 +78,7 @@
 {"what":"hover","at":"81:13-81:31","answers":[{"contents":[{"value":"42dbad403bc7"}],"range":"81:13-81:31"}]}
 {"what":"hover","at":"82:13-82:21","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"82:13-82:21"}]}
 {"what":"hover","at":"82:22-82:26","answers":[{"contents":[{"value":"c254414f83fd"}],"range":"82:22-82:26"}]}
+{"what":"hover","at":"82:30-82:34","answers":[{"contents":["**$tick**\n\nDatastar reads it as `$['tick']`, the signal path tick in its store."],"range":"82:29-82:34"}]}
 {"what":"signature","at":"40:32-40:41","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"signature","at":"40:42-40:97","active":0,"parameter":1,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"signature","at":"41:56-41:84","active":0,"parameter":0,"signatures":[{"documentation":"PUT with signals in the body.","label":"@put(uri, options?)","parameters":[{"label":[5,8]},{"label":[10,18]}]}]}
