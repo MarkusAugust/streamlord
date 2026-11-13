@@ -332,11 +332,21 @@ fun streamRequest(
     method: String,
     signals: String?,
     headers: dynamic,
-): StreamRequest {
-    val request = Requests.streamRequest(url, method, signals ?: "", entries(headers))
-    request.error?.let { return plain("error" to it) }
-    return plain("url" to request.url, "method" to request.method, "headers" to record(request.headers), "body" to request.body)
-}
+): StreamRequest =
+    when (val request = Requests.streamRequest(url, method, signals ?: "", entries(headers))) {
+        is Requests.StreamRequest.Refused -> {
+            plain("error" to request.error)
+        }
+
+        is Requests.StreamRequest.Sent -> {
+            plain(
+                "url" to request.url,
+                "method" to request.method,
+                "headers" to record(request.headers),
+                "body" to request.body,
+            )
+        }
+    }
 
 @JsExport
 fun responseReading(

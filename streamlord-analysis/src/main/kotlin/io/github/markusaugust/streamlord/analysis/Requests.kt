@@ -1012,14 +1012,19 @@ public object Requests {
         return if (read is JsonObject) null else "Signals are a JSON object, as Datastar's client sends them."
     }
 
-    /** What to send: the request Datastar's client would send, or the [error] that keeps it from being sent. */
-    public data class StreamRequest(
-        val url: String?,
-        val method: String?,
-        val headers: Map<String, String>,
-        val body: String?,
-        val error: String?,
-    )
+    /** What to send: the request Datastar's client would send, or the error that keeps it from being sent. */
+    public sealed interface StreamRequest {
+        public data class Sent(
+            val url: String,
+            val method: String,
+            val headers: Map<String, String>,
+            val body: String?,
+        ) : StreamRequest
+
+        public data class Refused(
+            val error: String,
+        ) : StreamRequest
+    }
 
     /**
      * The request Datastar's client would send: the signals in the query for a GET or a DELETE and
@@ -1031,19 +1036,17 @@ public object Requests {
         signals: String,
         headers: Map<String, String>,
     ): StreamRequest {
-        fun refused(error: String) = StreamRequest(null, null, emptyMap(), null, error)
         // Judged as written, so the message shows the user's URL and not the one with the signals added.
-        sendableUrl(url).error?.let { return refused(it) }
-        signalsProblem(signals)?.let { return refused(it) }
+        sendableUrl(url).error?.let { return StreamRequest.Refused(it) }
+        signalsProblem(signals)?.let { return StreamRequest.Refused(it) }
         val json = compactSignals(signals)
         val sendable = sendableUrl(requestUrl(url, method, json))
-        sendable.error?.let { return refused(it) }
-        return StreamRequest(
-            sendable.url,
+        val target = sendable.url ?: return StreamRequest.Refused(sendable.error!!)
+        return StreamRequest.Sent(
+            target,
             method.uppercase(),
             requestHeaders(method, headers),
             if (ClientRequest.bodyless(method)) null else json,
-            null,
         )
     }
 

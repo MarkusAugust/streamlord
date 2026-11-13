@@ -166,14 +166,8 @@ fun diagnose(
 ): Array<Issue> {
     val file = source(src, kotlin, prefix, constants)
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
-    val unknown =
-        if (defined ==
-            null
-        ) {
-            emptyList()
-        } else {
-            analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, setOf(defined)) }
-        }
+    val known = defined?.let(::setOf)
+    val unknown = if (known == null) emptyList() else analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, known) }
     val drift = if (others == null || !kotlin) emptyList() else drift(src, others)
     return (found + unknown + drift).map(::plain).toTypedArray()
 }

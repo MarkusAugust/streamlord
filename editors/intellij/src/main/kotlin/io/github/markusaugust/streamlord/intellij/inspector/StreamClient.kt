@@ -113,15 +113,14 @@ class StreamClient(
         aborted: AtomicBoolean,
         holder: AtomicReferenceStream,
     ) {
-        val sent = Requests.streamRequest(url, method, signals, headers)
-        val target =
-            sent.url ?: run {
-                handlers.onError(sent.error ?: "Cannot send $url")
-                return
+        val sent =
+            when (val r = Requests.streamRequest(url, method, signals, headers)) {
+                is Requests.StreamRequest.Refused -> return handlers.onError(r.error)
+                is Requests.StreamRequest.Sent -> r
             }
         val request =
             try {
-                build(target, sent)
+                build(sent.url, sent)
             } catch (e: Exception) {
                 // A header the HTTP client will not set, such as Host, or a port that is not a number.
                 handlers.onError("Cannot send the request: ${e.message ?: e.javaClass.simpleName}")
@@ -140,7 +139,7 @@ class StreamClient(
                          * server listening on ::1 alone is reached by curl and the browser, and by the
                          * VS Code inspector, so it is tried here before the refusal is reported.
                          */
-                        val v6 = ipv6Loopback(target) ?: throw e
+                        val v6 = ipv6Loopback(sent.url) ?: throw e
                         client
                             .send(build(v6, sent), HttpResponse.BodyHandlers.ofInputStream())
                             .also { holder.stream = it.body() }
@@ -189,13 +188,13 @@ class StreamClient(
 
     private fun build(
         url: String,
-        sent: Requests.StreamRequest,
+        sent: Requests.StreamRequest.Sent,
     ): HttpRequest {
         val builder = HttpRequest.newBuilder(URI(url))
         // The user's headers replace the client's own, Content-Type included, as they do in the client.
         for ((k, v) in sent.headers) builder.setHeader(k, v)
         val body = sent.body?.let { HttpRequest.BodyPublishers.ofString(it) } ?: HttpRequest.BodyPublishers.noBody()
-        builder.method(sent.method!!, body)
+        builder.method(sent.method, body)
         return builder.build()
     }
 
