@@ -2,10 +2,14 @@
 {"what":"diagnostic","code":"modifier-args","link":"https://data-star.dev/reference/attributes#data-on","message":"__once takes no arguments; Datastar ignores .twice.","range":"9:26-9:36","severity":"Warning","source":"streamlord"}
 {"what":"hover","at":"2:20-2:35","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"2:20-2:35"}]}
 {"what":"hover","at":"4:8-4:17","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"4:8-4:17"}]}
+{"what":"hover","at":"4:20-4:22","answers":[{"contents":["**$hp**\n\nThe signal hp, read from Datastar's store."],"range":"4:19-4:22"}]}
 {"what":"hover","at":"6:8-6:17","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"6:8-6:17"}]}
 {"what":"hover","at":"8:11-8:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"8:11-8:24"}]}
+{"what":"hover","at":"8:27-8:29","answers":[{"contents":["**$hp**\n\nThe signal hp, read from Datastar's store."],"range":"8:26-8:29"}]}
 {"what":"hover","at":"8:34-8:39","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"8:34-8:39"}]}
-{"what":"hover","at":"9:11-9:36","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:11-9:36"}]}
+{"what":"hover","at":"9:11-9:23","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:11-9:36"}]}
+{"what":"hover","at":"9:24-9:36","answers":[{"contents":["**__once** on data-on\n\nOnly trigger the event listener once."],"range":"9:24-9:36"}]}
+{"what":"hover","at":"9:39-9:41","answers":[{"contents":["**$hp**\n\nThe signal hp, read from Datastar's store."],"range":"9:38-9:41"}]}
 {"what":"signature","at":"8:40-8:64","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"definition","at":"2:33-2:35","answers":[{"file":"templates/page.ftl","range":"2:33-2:35"},{"file":"templates/page.ftl","range":"8:27-8:29"},{"file":"templates/page.ftl","range":"9:39-9:41"}]}
 {"what":"definition","at":"8:27-8:29","answers":[{"file":"templates/page.ftl","range":"2:33-2:35"},{"file":"templates/page.ftl","range":"8:27-8:29"},{"file":"templates/page.ftl","range":"9:39-9:41"}]}

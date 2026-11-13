@@ -6,28 +6,39 @@
 {"what":"hover","at":"5:12-5:14","answers":[{"contents":[{"value":"d7ab264a6570"}],"range":"5:12-5:14"}]}
 {"what":"hover","at":"6:6-6:8","answers":[{"contents":[{"value":"b2007c53bd8a"}],"range":"6:6-6:8"}]}
 {"what":"hover","at":"6:9-6:18","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"6:9-6:18"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"6:9-6:18"}]}
+{"what":"hover","at":"6:21-6:29","answers":[{"contents":["**$heroName**\n\nThe signal heroName, read from Datastar's store."],"range":"6:20-6:29"}]}
 {"what":"hover","at":"6:33-6:35","answers":[{"contents":[{"value":"b2007c53bd8a"}],"range":"6:33-6:35"}]}
 {"what":"hover","at":"7:6-7:7","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"7:6-7:7"}]}
 {"what":"hover","at":"7:8-7:17","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"7:8-7:17"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"7:8-7:17"}]}
+{"what":"hover","at":"7:20-7:33","answers":[{"contents":["**$hero.strength**\n\nThe signal hero.strength, read from Datastar's store."],"range":"7:19-7:33"}]}
+{"what":"hover","at":"7:37-7:48","answers":[{"contents":["**$hero.wisdom**\n\nThe signal hero.wisdom, read from Datastar's store."],"range":"7:36-7:48"}]}
 {"what":"hover","at":"7:52-7:53","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"7:52-7:53"}]}
 {"what":"hover","at":"8:6-8:7","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"8:6-8:7"}]}
 {"what":"hover","at":"8:8-8:17","answers":[{"contents":["**data-show**\n\nShows the element when the expression is truthy.\n\n`data-show=\"expr\"`\n\n**Kotlin:** `dataShow()`"],"range":"8:8-8:17"},{"contents":["Shows the element when the expression is truthy.\n\n`data-show=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-show)"],"range":"8:8-8:17"}]}
+{"what":"hover","at":"8:20-8:29","answers":[{"contents":["**$questOpen**\n\nThe signal questOpen, read from Datastar's store."],"range":"8:19-8:29"}]}
 {"what":"hover","at":"8:31-8:48","answers":[{"contents":[{"value":"36efd861cf5a"}],"range":"8:31-8:48"}]}
+{"what":"hover","at":"8:51-8:64","answers":[{"contents":["**$quests.urgent**\n\nThe signal quests.urgent, read from Datastar's store."],"range":"8:50-8:64"}]}
 {"what":"hover","at":"8:78-8:79","answers":[{"contents":[{"value":"d23d57b2c556"}],"range":"8:78-8:79"}]}
 {"what":"hover","at":"9:6-9:12","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"9:6-9:12"}]}
 {"what":"hover","at":"9:13-9:26","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:13-9:26"}]}
+{"what":"hover","at":"9:29-9:38","answers":[{"contents":["**$questOpen**\n\nThe signal questOpen, read from Datastar's store."],"range":"9:28-9:38"}]}
+{"what":"hover","at":"9:43-9:52","answers":[{"contents":["**$questOpen**\n\nThe signal questOpen, read from Datastar's store."],"range":"9:42-9:52"}]}
 {"what":"hover","at":"9:54-9:59","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"9:54-9:59"}]}
+{"what":"hover","at":"9:74-9:87","answers":[{"contents":["**$selectedQuest**\n\nThe signal selectedQuest, read from Datastar's store."],"range":"9:73-9:87"}]}
 {"what":"hover","at":"9:96-9:102","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"9:96-9:102"}]}
 {"what":"hover","at":"10:6-10:11","answers":[{"contents":[{"value":"01ba790ba8f1"}],"range":"10:6-10:11"}]}
 {"what":"hover","at":"10:12-10:33","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"10:12-10:33"}]}
 {"what":"hover","at":"11:6-11:10","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"11:6-11:10"}]}
 {"what":"hover","at":"11:11-11:20","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"11:11-11:20"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"11:11-11:20"}]}
+{"what":"hover","at":"11:23-11:40","answers":[{"contents":["**$searchText.length**\n\nThe signal searchText.length, read from Datastar's store."],"range":"11:22-11:40"}]}
 {"what":"hover","at":"11:44-11:48","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"11:44-11:48"}]}
 {"what":"hover","at":"12:6-12:10","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"12:6-12:10"}]}
 {"what":"hover","at":"12:11-12:20","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"12:11-12:20"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"12:11-12:20"}]}
+{"what":"hover","at":"12:23-12:40","answers":[{"contents":["**$nobodyDefinesThis**\n\nThe signal nobodyDefinesThis, read from Datastar's store."],"range":"12:22-12:40"}]}
 {"what":"hover","at":"12:44-12:48","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"12:44-12:48"}]}
 {"what":"hover","at":"13:6-13:10","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"13:6-13:10"}]}
 {"what":"hover","at":"13:11-13:20","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"13:11-13:20"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"13:11-13:20"}]}
+{"what":"hover","at":"13:23-13:45","answers":[{"contents":["**$hero.nobodyDefinesThis**\n\nThe signal hero.nobodyDefinesThis, read from Datastar's store."],"range":"13:22-13:45"}]}
 {"what":"hover","at":"13:49-13:53","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"13:49-13:53"}]}
 {"what":"hover","at":"14:5-14:12","answers":[{"contents":[{"value":"590713814692"}],"range":"14:5-14:12"}]}
 {"what":"hover","at":"15:3-15:7","answers":[{"contents":[{"value":"bc844e599acf"}],"range":"15:3-15:7"}]}

@@ -1,8 +1,10 @@
 {"what":"file","language":"html"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:19","answers":[{"contents":[{"value":"69e2600e0061"}],"range":"1:6-1:19"},{"contents":[{"value":"f24d260f81ba"}],"range":"1:6-1:19"}]}
+{"what":"hover","at":"1:26-1:27","answers":[{"contents":["**$x**\n\nThe signal x, read from Datastar's store."],"range":"1:25-1:27"}]}
 {"what":"hover","at":"1:86-1:89","answers":[{"contents":["Character entity representing '&', unicode equivalent 'U+0026'"],"range":"1:86-1:90"}]}
 {"what":"hover","at":"1:91-1:94","answers":[{"contents":["Character entity representing '&', unicode equivalent 'U+0026'"],"range":"1:91-1:95"}]}
+{"what":"hover","at":"1:111-1:112","answers":[{"contents":["**$f**\n\nThe signal f, read from Datastar's store."],"range":"1:110-1:112"}]}
 {"what":"hover","at":"1:126-1:129","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:126-1:129"}]}
 {"what":"hover","at":"1:131-1:134","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:131-1:134"}]}
 {"what":"hover","at":"1:135-1:148","answers":[{"contents":[{"value":"69e2600e0061"}],"range":"1:135-1:148"},{"contents":[{"value":"f24d260f81ba"}],"range":"1:135-1:148"}]}

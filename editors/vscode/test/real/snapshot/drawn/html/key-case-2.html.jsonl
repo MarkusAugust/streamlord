@@ -5,6 +5,8 @@
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:25","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"1:6-1:25"}]}
 {"what":"hover","at":"1:30-1:39","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"1:30-1:39"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"1:30-1:39"}]}
+{"what":"hover","at":"1:42-1:48","answers":[{"contents":["**$fooBar**\n\nThe signal fooBar, read from Datastar's store."],"range":"1:41-1:48"}]}
+{"what":"hover","at":"1:52-1:58","answers":[{"contents":["**$foobar**\n\nThe signal foobar, read from Datastar's store."],"range":"1:51-1:58"}]}
 {"what":"hover","at":"1:62-1:65","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:62-1:65"}]}
 {"what":"definition","at":"1:19-1:25","answers":[{"file":"aliased/aliased-1.html","range":"1:24-1:30"},{"file":"drawn/html/key-case-2.html","range":"1:19-1:25"}]}
 {"what":"definition","at":"1:42-1:48","answers":[{"file":"drawn/html/silent-8.html","range":"1:19-1:26"},{"file":"drawn/html/silent-8.html","range":"1:82-1:88"},{"file":"drawn/html/silent-8.html","range":"1:105-1:111"},{"file":"drawn/kotlin/silent-1.kt","range":"2:16-2:22"},{"file":"drawn/kotlin/silent-1.kt","range":"8:17-8:23"},{"file":"drawn/kotlin/silent-1.kt","range":"9:13-9:19"},{"file":"drawn/kotlin/silent-1.kt","range":"14:17-14:23"},{"file":"kotlin/ViewMistakes.kt","range":"20:22-20:28"}]}

@@ -1,4 +1,7 @@
 {"what":"file","language":"html"}
+{"what":"diagnostic","code":"prefix-mismatch","message":"The prefix is set to data-star-, so Datastar ignores data-on:click. Check streamlord.attributePrefix.","range":"1:31-1:44","severity":"Warning","source":"streamlord"}
+{"what":"action","at":"1:1-2:1","n":0,"after":"<div data-star-on:click=\"x()\" data-star-on:click=\"y(\"></div>\n","edits":[{"file":"aliased/aliased-4.html","range":"1:31-1:36","text":"data-star-"}],"kind":"quickfix","preferred":true,"title":"Change to data-star-on:click"}
+{"what":"action","at":"1:31-1:44","n":0,"after":"<div data-star-on:click=\"x()\" data-star-on:click=\"y(\"></div>\n","edits":[{"file":"aliased/aliased-4.html","range":"1:31-1:36","text":"data-star-"}],"kind":"quickfix","preferred":true,"title":"Change to data-star-on:click"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:24","answers":[{"contents":[{"value":"89d14ad1d552"}],"range":"1:6-1:24"}]}
 {"what":"hover","at":"1:52-1:55","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:52-1:55"}]}

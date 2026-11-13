@@ -7,11 +7,14 @@
 {"what":"action","at":"9:64-9:72","n":0,"after":{"value":"e3acb921b874"},"edits":[{"file":"templates/row.kte","range":"9:72-9:72","text":".500ms"}],"kind":"quickfix","preferred":true,"title":"Add .500ms"}
 {"what":"hover","at":"4:22-4:38","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"4:22-4:38"}]}
 {"what":"hover","at":"6:7-6:16","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"6:7-6:16"}]}
+{"what":"hover","at":"6:19-6:22","answers":[{"contents":["**$qty**\n\nThe signal qty, read from Datastar's store."],"range":"6:18-6:22"}]}
 {"what":"hover","at":"7:28-7:41","answers":[{"contents":[{"value":"80df2f26c8cf"}],"range":"7:28-7:41"}]}
 {"what":"hover","at":"8:15-8:28","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"8:15-8:28"}]}
 {"what":"hover","at":"8:30-8:35","answers":[{"contents":["**@post(uri, options?)**\n\nPOST with signals in the body.\n\nKotlin: `post()`"],"range":"8:30-8:35"}]}
 {"what":"hover","at":"9:15-9:28","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:15-9:28"}]}
-{"what":"hover","at":"9:46-9:72","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:46-9:72"}]}
+{"what":"hover","at":"9:46-9:61","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"9:46-9:72"}]}
+{"what":"hover","at":"9:62-9:72","answers":[{"contents":[{"value":"8c3dd820520a"}],"range":"9:62-9:72"}]}
+{"what":"hover","at":"9:75-9:78","answers":[{"contents":["**$qty**\n\nThe signal qty, read from Datastar's store."],"range":"9:74-9:78"}]}
 {"what":"signature","at":"8:36-8:50","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
 {"what":"definition","at":"4:35-4:38","answers":[{"file":"templates/row.kte","range":"4:35-4:38"},{"file":"templates/row.kte","range":"7:38-7:41"},{"file":"templates/row.kte","range":"9:75-9:78"}]}
 {"what":"definition","at":"7:38-7:41","answers":[{"file":"templates/row.kte","range":"4:35-4:38"},{"file":"templates/row.kte","range":"7:38-7:41"},{"file":"templates/row.kte","range":"9:75-9:78"}]}

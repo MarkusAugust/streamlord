@@ -4,7 +4,10 @@
 {"what":"action","at":"7:11-7:25","n":0,"after":{"value":"c89407a167c4"},"edits":[{"file":"templates/card.mustache","range":"7:11-7:19","text":"data-on"}],"kind":"quickfix","preferred":true,"title":"Change to data-on"}
 {"what":"hover","at":"1:27-1:44","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"1:27-1:44"}]}
 {"what":"hover","at":"2:7-2:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"2:7-2:20"}]}
+{"what":"hover","at":"2:23-2:27","answers":[{"contents":["**$open**\n\nThe signal open, read from Datastar's store."],"range":"2:22-2:27"}]}
+{"what":"hover","at":"2:32-2:36","answers":[{"contents":["**$open**\n\nThe signal open, read from Datastar's store."],"range":"2:31-2:36"}]}
 {"what":"hover","at":"4:6-4:15","answers":[{"contents":["**data-show**\n\nShows the element when the expression is truthy.\n\n`data-show=\"expr\"`\n\n**Kotlin:** `dataShow()`"],"range":"4:6-4:15"}]}
+{"what":"hover","at":"4:18-4:22","answers":[{"contents":["**$open**\n\nThe signal open, read from Datastar's store."],"range":"4:17-4:22"}]}
 {"what":"hover","at":"4:24-4:33","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"4:24-4:33"}]}
 {"what":"hover","at":"6:11-6:24","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"6:11-6:24"}]}
 {"what":"hover","at":"6:26-6:33","answers":[{"contents":["**@delete(uri, options?)**\n\nDELETE with signals in the query string.\n\nKotlin: `delete()`"],"range":"6:26-6:33"}]}
