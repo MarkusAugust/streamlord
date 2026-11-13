@@ -614,6 +614,25 @@ if (actionCases.some((a) => a.parameters.length === 0) || Object.keys(fetchArgs)
   throw new Error("an action declared no parameter, or FetchArgs no field");
 }
 
+// ------------------------------------------------------- fetch-option-values.json
+
+// What fetch.ts does with an option whose type is a set of strings when it is given another: the
+// strings the source compares the option with, `option === 'x'` or `!==`, and the errors it throws
+// with the option in their detail. A value it compares with none of them takes the branch of any
+// listed value it never compares with, or, when there is none, ends in one of those errors.
+const fetchOptionValues = Object.entries(fetchArgs)
+  .map(([option, type]) => ({ option, values: type.split("|").map((t) => t.trim()).filter((t) => /^'[^']*'$/.test(t)).map((t) => t.slice(1, -1)) }))
+  .filter(({ values }) => values.length > 0)
+  .map(({ option, values }) => ({
+    option,
+    values,
+    compared: [...new Set([...fetchSource.matchAll(new RegExp(`\\b${option}\\s*[!=]==\\s*'([^']*)'`, "g"))].map((m) => m[1]))].sort(),
+    throws: [...fetchSource.matchAll(new RegExp(`error\\('(\\w+)',\\s*\\{[^}]*\\b${option}\\b[^}]*\\}\\)`, "g"))].map((m) => m[1]),
+  }));
+if (fetchOptionValues.length === 0 || fetchOptionValues.some((o) => o.compared.length === 0)) {
+  throw new Error("FetchArgs has no option of strings, or fetch.ts compares one with nothing");
+}
+
 // ------------------------------------------------------------------- writing
 
 const files = {
@@ -671,6 +690,14 @@ const files = {
       "inside an option, such as filterSignals.include, is not listed. A name in the client's FetchArgs type that is not here " +
       "is one the action never reads.",
     cases: fetchOptions,
+  },
+  "fetch-option-values.json": {
+    $comment:
+      "Each option of the FetchArgs type of plugins/actions/fetch.ts of the Datastar " + version + " client whose type is a set of " +
+      "strings, read from its TypeScript: values are those strings, compared the strings the source compares the option with " +
+      "(=== or !==), and throws the errors it throws with the option in their detail. A value it compares with none of them " +
+      "takes the branch of a value it never compares with, or, when every value is compared, the else that throws.",
+    cases: fetchOptionValues,
   },
   "actions.json": {
     $comment:

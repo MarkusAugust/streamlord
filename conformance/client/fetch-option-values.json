@@ -1,0 +1,48 @@
+{
+  "$comment": "Each option of the FetchArgs type of plugins/actions/fetch.ts of the Datastar 1.0.5 client whose type is a set of strings, read from its TypeScript: values are those strings, compared the strings the source compares the option with (=== or !==), and throws the errors it throws with the option in their detail. A value it compares with none of them takes the branch of a value it never compares with, or, when every value is compared, the else that throws.",
+  "version": "1.0.5",
+  "cases": [
+    {
+      "option": "contentType",
+      "values": [
+        "json",
+        "form"
+      ],
+      "compared": [
+        "form",
+        "json"
+      ],
+      "throws": [
+        "FetchInvalidContentType"
+      ]
+    },
+    {
+      "option": "requestCancellation",
+      "values": [
+        "auto",
+        "cleanup",
+        "disabled"
+      ],
+      "compared": [
+        "auto",
+        "cleanup"
+      ],
+      "throws": []
+    },
+    {
+      "option": "retry",
+      "values": [
+        "auto",
+        "error",
+        "always",
+        "never"
+      ],
+      "compared": [
+        "always",
+        "error",
+        "never"
+      ],
+      "throws": []
+    }
+  ]
+}

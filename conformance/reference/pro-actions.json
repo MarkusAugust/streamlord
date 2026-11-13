@@ -1,0 +1,10 @@
+{
+  "$comment": "The signatures of the Datastar Pro actions as https://data-star.dev/reference/actions writes them, copied from the page as it stood when fetched. Pro's code is never read; the page is public. ClientOracleTest holds the catalog's kinds and optional parameters of each Pro action to them.",
+  "url": "https://data-star.dev/reference/actions",
+  "fetched": "2026-11-13",
+  "signatures": {
+    "clipboard": "@clipboard(text: string, isBase64?: boolean)",
+    "fit": "@fit(v: number, oldMin: number, oldMax: number, newMin: number, newMax: number, shouldClamp=false, shouldRound=false)",
+    "intl": "@intl(type: string, value: any, options?: Record<string, any>, locale?: string | string[])"
+  }
+}
