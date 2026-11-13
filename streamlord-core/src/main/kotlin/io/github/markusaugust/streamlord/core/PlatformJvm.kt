@@ -29,8 +29,6 @@ internal fun bigNumberText(
         else -> null
     }
 
-internal fun typeName(value: Any): String? = value::class.qualifiedName
-
 private val random = SecureRandom()
 
 /** [bytes] random bytes from [SecureRandom], base64 encoded. */

@@ -4,7 +4,6 @@ import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.bigNumberText
 import io.github.markusaugust.streamlord.core.client.hex
-import io.github.markusaugust.streamlord.core.typeName
 
 /**
  * Writes plain Kotlin values as compact JSON, with no dependencies.
@@ -146,7 +145,7 @@ public object JsonWriter {
                 is BooleanArray -> all(value.asIterable(), depth)
 
                 else -> throw SignalsCodecException(
-                    "${style.name} cannot hold ${typeName(value)}. ${style.instead}",
+                    "${style.name} cannot hold ${value::class.simpleName}. ${style.instead}",
                 )
             }
         }

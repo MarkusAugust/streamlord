@@ -447,6 +447,8 @@ All notable changes to Streamlord are recorded here. The format follows
   [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
 - A `val` set to `interpolate(...)`, or to its `.text`, with eight blanks or more before what
   follows on the line, is read as the whole of what follows says, where the blanks made it markup.
+- The `SignalsCodecException` for a value JSON cannot hold names its class by its simple name,
+  `JSON cannot hold Sorcerer.`, where it gave the qualified name, and `null` for a local class.
 
 ## [0.21.0] - 2026-11-11
 
