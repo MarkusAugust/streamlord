@@ -147,7 +147,8 @@ class ProDslTest {
     fun `pro actions`() {
         assertEquals("""@clipboard('Hello, world!')""", clipboard("Hello, world!"))
         assertEquals("""@clipboard('SGVsbG8=', true)""", clipboard("SGVsbG8=", isBase64 = true))
-        assertEquals("@clipboard(${'$'}code)", clipboardExpr(signal("code")))
+        assertEquals("@clipboard((${'$'}code))", clipboardExpr(signal("code")))
+        assertEquals("@clipboard(('a', true), true)", clipboardExpr("'a', true", isBase64 = true))
         assertEquals("@fit(${'$'}sliderValue, 0, 100, 0, 255)", fit(signal("sliderValue"), 0, 100, 0, 255))
         assertEquals("@fit(${'$'}x, 0, 1, 0, 1, true)", fit(signal("x"), 0, 1, 0, 1, shouldClamp = true))
         assertEquals("@fit(${'$'}x, 0, 1, 0, 1, false, true)", fit(signal("x"), 0, 1, 0, 1, shouldRound = true))

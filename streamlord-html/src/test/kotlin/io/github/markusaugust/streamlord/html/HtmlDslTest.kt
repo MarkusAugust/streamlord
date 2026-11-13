@@ -165,7 +165,7 @@ class HtmlDslTest {
     fun `payload`() {
         assertEquals("""@post('/x', {payload: {id: 7}})""", post("/x") { payload = mapOf("id" to 7) })
         assertEquals(
-            """@get('/x', {payload: {id: ${'$'}selected}})""",
+            """@get('/x', {payload: ({id: ${'$'}selected})})""",
             get("/x") { payloadExpr = "{id: ${'$'}selected}" },
         )
     }
@@ -222,6 +222,7 @@ class HtmlDslTest {
             get("/x") { headerExprs = mapOf("A" to "1}, {payload: 2") },
         )
         assertEquals("""@setAll((1, {include: /x/}))""", setAllExpr("1, {include: /x/}"))
+        assertEquals("""@post('/x', {payload: (1}, {retry: 'never')})""", post("/x") { payloadExpr = "1}, {retry: 'never'" })
     }
 
     @Test
