@@ -353,6 +353,18 @@ fun tagsAfter(hero: Hero) = interpolate("<p>%s</p>", hero.tags).text
 
 To pass the elements of a list as the values, spread it: `interpolate(format, *values.toTypedArray())`.
 
+A value that is yours, a constant, an enum entry or `${"$"}`, stays a template in the format where
+`interpolate` would refuse it or might escape markup it holds: Kotlin fills it in as before, and
+`interpolate` reads it as part of the markup. One whose text the file shows with a per cent sign
+does not, since `interpolate` would read that as a placeholder:
+
+```kotlin sample=declarations
+const val SAVE_ROUTE = "/save"
+
+fun saveBefore(label: String) = "<button data-on:click=\"@post('$SAVE_ROUTE')\">$label</button>"
+fun saveAfter(label: String) = interpolate("<button data-on:click=\"@post('$SAVE_ROUTE')\">%s</button>", label).text
+```
+
 When no rewrite is offered, the warning of each value ends with the reason:
 
 | What stands in the way | What to do |

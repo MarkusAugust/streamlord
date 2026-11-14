@@ -743,7 +743,7 @@
     "end": 1393,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
    },
    {
     "line": 53,
@@ -1850,7 +1850,7 @@
     "end": 29366,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
    },
    {
     "line": 777,
@@ -1859,7 +1859,7 @@
     "end": 29941,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
    },
    {
     "line": 797,
@@ -1868,7 +1868,7 @@
     "end": 30590,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $variant, which may be markup you built."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
    },
    {
     "line": 820,
@@ -1922,7 +1922,7 @@
     "end": 32635,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) is not offered here: it would escape $$variant, which may be markup you built."
+    "message": "Kotlin writes $$query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while $$query stands in data-text."
    },
    {
     "line": 852,
@@ -2039,7 +2039,7 @@
     "end": 36729,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${if (flag) \"nothing\" else query} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${if (flag) \"red\" else \"blue\"} stands in style."
+    "message": "Kotlin writes ${if (flag) \"nothing\" else query} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${if (flag) \"red\" else query} stands in style."
    },
    {
     "line": 938,
@@ -2066,7 +2066,7 @@
     "end": 37099,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${if (flag) html else \"\"} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${if (flag) \"red\" else \"blue\"} stands in style."
+    "message": "Kotlin writes ${if (flag) html else \"\"} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) cannot take this string while ${if (flag) \"red\" else query} stands in style."
    },
    {
     "line": 957,
@@ -2075,7 +2075,7 @@
     "end": 37784,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes ${when (n) { 0 -> \"none\"; else …} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${when { flag -> \"red\"; else ->…} stands in style."
+    "message": "Kotlin writes ${when (n) { 0 -> \"none\"; else …} into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) cannot take this string while ${when (n) { 0 -> \"red\"; else -…} stands in style."
    },
    {
     "line": 958,

@@ -2029,19 +2029,20 @@ internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that
  * call after it, with the imports the file lacks. Each value of [trusted], by its place among the
  * values, is passed as `Trusted(...)`, CSS in the body of a `<style>` that the author vouches for,
  * and the title names them; one not known to be a String, by its entry, as its `toString()`, the
- * text a template writes of it. The text is made the first time it is read, and a copy of the fix
- * under another title shares it.
+ * text a template writes of it. Each template of [kept] stays in the format as it is written. The
+ * text is made the first time it is read, and a copy of the fix under another title shares it.
  */
 internal fun interpolateFix(
     src: String,
     s: KotlinString,
     trim: String,
     trusted: Map<Int, Boolean>,
+    kept: Set<Int> = emptySet(),
 ): Fix {
     val named = trusted.keys.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
     val title = if (trusted.isEmpty()) ESCAPES_TITLE else "$REWRITE_TITLE, with $named as Trusted(...)"
     val imports = coreImports(src, listOfNotNull("Trusted".takeIf { trusted.isNotEmpty() }, "interpolate"))
-    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted) }
+    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted, kept) }
 }
 
 /**
@@ -2056,9 +2057,11 @@ private fun interpolateText(
     s: KotlinString,
     trim: String,
     trusted: Map<Int, Boolean>,
+    kept: Set<Int>,
 ): String {
     val literals = s.literals.ifEmpty { listOf(s) }
-    val bodies = literals.map { StringBuilder(formatBody(src, it)) }
+    val stays = kept.mapTo(HashSet()) { s.interpolations[it].start }
+    val bodies = literals.map { StringBuilder(formatBody(src, it, stays)) }
     for (value in s.interpolations.filter { it.kind == InterpolationKind.OPERAND }) {
         val before = literals.indexOfLast { it.end <= value.start }
         if (before >= 0) bodies[before].append("%s") else bodies[0].insert(0, "%s")
@@ -2076,24 +2079,27 @@ private fun interpolateText(
         form = written
     }
     val values =
-        s.interpolations.mapIndexed { k, it ->
+        s.interpolations.mapIndexedNotNull { k, it ->
             val text = it.text.trim()
-            when (trusted[k]) {
-                null -> text
-                true -> "Trusted($text)"
+            val vouched = trusted[k]
+            when {
+                k in kept -> null
+                vouched == null -> text
+                vouched -> "Trusted($text)"
                 // A safe call would make it a String?, and an operator would bind looser than the call.
-                false -> "Trusted(${if (wholeOperand(text) && '?' !in text) text else "($text)"}.toString())"
+                else -> "Trusted(${if (wholeOperand(text) && '?' !in text) text else "($text)"}.toString())"
             }
         }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
     // would break whatever took the String.
-    return "interpolate($format$trim, ${values.joinToString(", ")}).text"
+    return "interpolate($format$trim${values.joinToString("") { ", $it" }}).text"
 }
 
-/** What the literal holds, as source, with each template a `%s` and each per cent sign it writes doubled. */
+/** What the literal holds, as source, with each template a `%s`, but one starting at [stays], and each per cent sign it writes doubled. */
 private fun formatBody(
     src: String,
     literal: KotlinString,
+    stays: Set<Int>,
 ): String {
     // Where the literal writes a per cent sign, and how many characters of source spell it.
     val percents = HashMap<Int, Int>()
@@ -2105,7 +2111,7 @@ private fun formatBody(
         val hole = holes[k]
         val n = percents[k] ?: 0
         if (hole != null) {
-            out.append("%s")
+            out.append(if (k in stays) src.substring(k, hole.end) else "%s")
             k = hole.end
         } else if (n > 0) {
             out.append(src, k, k + n).append(src, k, k + n)
@@ -2402,6 +2408,16 @@ internal fun typeShown(
     value: String,
     at: Int,
 ): Boolean = IDENT.matchEntire(value.trim()) != null && declarationOf(src, value.trim(), at)?.type != null
+
+/** Whether a constant's text, as the file shows it, holds a per cent sign: in the value as written, or in the `const val` it names. */
+internal fun constantPercent(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean {
+    val t = value.trim()
+    return '%' in t || (IDENT.matchEntire(t) != null && declarationOf(src, t, at)?.text?.contains('%') == true)
+}
 
 /** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
 internal fun visiblyList(

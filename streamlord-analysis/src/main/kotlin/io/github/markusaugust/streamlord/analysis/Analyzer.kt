@@ -1644,6 +1644,15 @@ public class Analyzer(
                     told[k].isString() || (opts.valueFact == null && !typeShown(src, s.interpolations[k].text, s.start))
                 }
         }
+        // A value of the author's own that interpolate would not take as it is, a constant or `${"$"}`, stays a template in
+        // the format, which Kotlin fills in as before; not one whose text, as the file shows it, interpolate would read
+        // as a placeholder.
+        val kept by lazy(LazyThreadSafetyMode.NONE) {
+            holes.filterTo(HashSet()) { k ->
+                val ip = s.interpolations[k]
+                !keeps[k] && told[k].isConstant() && ip.kind != InterpolationKind.OPERAND && !constantPercent(src, ip.text, s.start)
+            }
+        }
         val trim = trimAfter(src, s)
         // Why the string cannot be rewritten whatever its values are, in a few words, or null where it can.
         val unfit by lazy(LazyThreadSafetyMode.NONE) {
@@ -1662,9 +1671,11 @@ public class Analyzer(
             }
         }
         // interpolate(...) can take the string only when every value is one it accepts where it lands.
-        val fixable by lazy(LazyThreadSafetyMode.NONE) { canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched.keys } }
+        val fixable by lazy(LazyThreadSafetyMode.NONE) {
+            canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched.keys || it in kept }
+        }
         // The first values it does not take as they are: what the message of another value names.
-        val inTheWay by lazy(LazyThreadSafetyMode.NONE) { holes.filterNot { keeps[it] }.take(2) }
+        val inTheWay by lazy(LazyThreadSafetyMode.NONE) { holes.filterNot { keeps[it] || it in kept }.take(2) }
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
         // value, where one may be null, which a template writes as `null` and interpolate as nothing, nor under
         // trimIndent, where a value with a line break changed what was trimmed.
@@ -1673,7 +1684,7 @@ public class Analyzer(
                 holes.none { told[it].isNullable() || told[it].isNullableString() || mayBeNull(src, s.interpolations[it].text, s.start) }
         }
         // The rewrite is made once for the string, and only where an issue offers it.
-        val rewrite by lazy(LazyThreadSafetyMode.NONE) { interpolateFix(src, s, trim?.text.orEmpty(), vouched) }
+        val rewrite by lazy(LazyThreadSafetyMode.NONE) { interpolateFix(src, s, trim?.text.orEmpty(), vouched, kept) }
         var offered = false
 
         fun rewriteAs(
