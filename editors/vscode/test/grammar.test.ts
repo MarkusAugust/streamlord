@@ -782,3 +782,91 @@ describe("what is not Datastar's", () => {
     assert.ok(performance.now() - started < 1000, `took ${performance.now() - started} ms`);
   });
 });
+
+describe("Kotlin strings the analysis reads as Datastar", () => {
+  const text = (t: { text: string }[]) => t.filter((x) => x.text.trim() !== "");
+  const kindsOf = (t: { text: string; scopes: string[] }[]): [string, string][] => text(t).map((x) => [x.text, own(x)]);
+
+  it("counts the dollars of a raw string that opens on the next line", async () => {
+    const two = await tokenLines("source.kotlin", ['val h = $$"""', '    <p data-text="$count + $${id} + $$id"></p>', '""".trimIndent()']);
+    assert.deepEqual(between(kindsOf(two[1]!), "$", '"'), [
+      ["$", S.dollar],
+      ["count", S.signal],
+      ["+", S.arithmetic],
+      ["$${", S.templateBegin],
+      ["id", "identifier.kotlin"],
+      ["}", S.templateEnd],
+      ["+", S.arithmetic],
+      ["$$", S.templateBegin],
+      ["id", S.template],
+      ['"', S.stringEnd],
+    ]);
+    const three = await tokenLines("source.kotlin", ['val h = $$$"""', '    <p data-text="$$a + $$${b}"></p>', '"""']);
+    assert.ok(text(three[1]!).some((x) => x.text === "a" && x.scopes.includes(S.signal)), "two dollars are text in a $$$ string");
+    assert.ok(text(three[1]!).some((x) => x.text === "$$${" && x.scopes.includes(S.templateBegin)), "three open a template");
+    const one = await tokenLines("source.kotlin", ['val h = """', '    <p data-text="$x + ${y}"></p>', '"""']);
+    assert.ok(text(one[1]!).some((x) => x.text === "x" && x.scopes.includes(S.template)), "one dollar opens a template in a plain raw string");
+  });
+
+  it("colours the named arguments of a call that takes two", async () => {
+    for (const [call, signal, plain] of [
+      [`dataOn(event = "input", expression = "\\$q = el.value")`, "q", "input"],
+      [`dataOn(expression = "\\$q++", event = "click")`, "q", "click"],
+      [`dataSignals(name = "flag", expression = "\\$on")`, "on", null],
+      [`dataComputed(name = "total", expression = "\\$a + 1")`, "a", null],
+      [`dataClass(name = "hidden", expression = "!\\$open")`, "open", "hidden"],
+      [`dataAttr(name = "title", expression = "\\$t")`, "t", "title"],
+    ] as const) {
+      const t = (await tokenLines("source.kotlin", [DSL_IMPORT, `div { ${call} }`]))[1]!;
+      assert.ok(t.some((x) => x.text === signal && x.scopes.includes(S.signal)), `${call}: ${JSON.stringify(kindsOf(t))}`);
+      if (plain) assert.ok(!t.some((x) => x.text.includes(plain) && x.scopes.some((s) => s.includes("datastar"))), `${call}: ${plain} is no expression`);
+    }
+    const named = (await tokenLines("source.kotlin", [DSL_IMPORT, `div { dataSignals(name = "flag", expression = "true") }`]))[1]!;
+    assert.ok(named.some((x) => x.text === "flag" && x.scopes.includes(S.signal)), "the signal a pair names");
+  });
+
+  it("reads a marked double-quoted literal as HTML however it opens", async () => {
+    const lines = await tokenLines("source.kotlin", [`@Language("HTML")`, `val p = "Hello <b data-text=\\"\\$name\\"></b>"`, "val after = 1"]);
+    assert.match(scopeOf(lines[1]!, "b"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(lines[1]!, "name"), /variable\.other\.constant\.signal\.datastar/);
+    assert.ok(lines[2]!.every((x) => !x.scopes.some((s) => s.includes("html") || s.startsWith("string"))), "the next line is code");
+  });
+
+  it("reads interpolate's format as HTML, however it opens", async () => {
+    for (const call of [
+      `interpolate("Hello <b data-text=\\"\\$name\\" data-attr:title=\\"%s\\"></b>", "t")`,
+      `interpolate(format = "Hello <b data-text=\\"\\$name\\"></b>")`,
+      `interpolate(listOf("data-x-"), "Hello <b data-text=\\"\\$name\\"></b>")`,
+      `interpolate("""Hello <b data-text="${'$'}name"></b>""")`,
+    ]) {
+      const t = await tokens("source.kotlin", `val p = ${call}`, false);
+      assert.match(scopeOf(t, "b"), /entity\.name\.tag\.html/, call);
+      assert.match(scopeOf(t, "name"), /variable\.other\.constant\.signal\.datastar/, call);
+      assert.ok(!t.some((x) => x.text === "t" && x.scopes.some((s) => s.includes("html"))), `${call}: a value is no markup`);
+    }
+  });
+
+  it("reads an ordinary attribute's value in escaped quotes as a string", async () => {
+    const t = await tokens("source.kotlin", `fun p() = "<div class=\\"btn\\" id=\\"x\\" data-text=\\"\\$a\\"></div>"`, false);
+    assert.ok(t.every((x) => !x.scopes.some((s) => s.startsWith("invalid"))), JSON.stringify(kindsOf(t)));
+    assert.match(scopeOf(t, "btn"), /string\.quoted\.double\.html/);
+    assert.match(scopeOf(t, "a"), /variable\.other\.constant\.signal\.datastar/);
+    assert.match(t[t.length - 1]!.scopes.join(" "), /punctuation\.definition\.string\.end\.kotlin/);
+  });
+
+  it("reads a raw string's lines after their margin", async () => {
+    const lines = await tokenLines("source.kotlin", ['val h = """', '    |<div data-show="${\'$\'}open">', '    |</div>', '""".trimMargin()']);
+    assert.match(scopeOf(lines[1]!, "div"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(lines[1]!, "open"), /variable\.other\.constant\.signal\.datastar/);
+  });
+
+  it("reads an escaped dollar in a JavaScript template as the template's own", async () => {
+    const t = await kinds("source.kotlin", 'val h = """<p data-text="`x ${\'$\'}{${\'$\'}b}`"></p>"""', false);
+    assert.deepEqual(between(t, "${'$'}{", "}"), [
+      ["${'$'}{", "string.template.datastar punctuation.definition.template-expression.begin.datastar"],
+      ["${'$'}", "string.template.datastar " + S.dollarEscape],
+      ["b", "string.template.datastar " + S.signal],
+      ["}", "string.template.datastar punctuation.definition.template-expression.end.datastar"],
+    ]);
+  });
+});
