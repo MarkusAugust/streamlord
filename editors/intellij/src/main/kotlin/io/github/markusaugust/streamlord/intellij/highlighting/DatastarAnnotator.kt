@@ -16,9 +16,9 @@ import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.NameToken
 import io.github.markusaugust.streamlord.analysis.PLACEHOLDER
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.Token
 import io.github.markusaugust.streamlord.analysis.ValueKind
-import io.github.markusaugust.streamlord.analysis.enginesWriteDollarBraces
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.htmlStringAt
 import io.github.markusaugust.streamlord.analysis.readsDsl
@@ -28,6 +28,7 @@ import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
 import io.github.markusaugust.streamlord.analysis.tokenizeExpression
 import io.github.markusaugust.streamlord.analysis.tokenizeSignalName
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.templateEngine
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
@@ -53,7 +54,7 @@ class HtmlDatastarAnnotator : Annotator {
         for (t in valueTokens(
             spec,
             valueElement.value,
-            file.name,
+            templateEngine(file),
         )) {
             paint(holder, TextRange(start + t.start, start + t.end), DatastarColors.of(t.kind))
         }
@@ -249,7 +250,7 @@ class TemplateTextAnnotator : Annotator {
                     paint(holder, TextRange(base + attr.nameStart + p.start, base + attr.nameStart + p.end), DatastarColors.of(p.part))
                 }
                 val value = attr.value ?: continue
-                for (t in valueTokens(spec, value, file.name)) {
+                for (t in valueTokens(spec, value, templateEngine(file))) {
                     paint(holder, TextRange(base + attr.valueStart + t.start, base + attr.valueStart + t.end), DatastarColors.of(t.kind))
                 }
             }
@@ -277,15 +278,15 @@ private fun datastarName(
     return null
 }
 
-/** The tokens of a value as written in markup, around the placeholders of the engine of the file named [fileName]. */
+/** The tokens of a value as written in markup, around the placeholders of the file's [engine]. */
 private fun valueTokens(
     spec: AttributeSpec,
     value: String,
-    fileName: String,
+    engine: TemplateEngine?,
 ): List<Token> {
     if (value.isBlank()) return emptyList()
     return when (spec.valueKind) {
-        ValueKind.EXPRESSION, ValueKind.FILTER -> tokenizeExpression(value, templatePlaceholders(value, enginesWriteDollarBraces(fileName)))
+        ValueKind.EXPRESSION, ValueKind.FILTER -> tokenizeExpression(value, templatePlaceholders(value, engine))
         ValueKind.SIGNAL -> tokenizeSignalName(value)
         else -> emptyList()
     }

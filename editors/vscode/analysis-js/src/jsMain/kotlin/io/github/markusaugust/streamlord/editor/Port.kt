@@ -13,6 +13,7 @@ import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.Workspace
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
@@ -124,7 +125,7 @@ private fun source(
     kotlin: Boolean,
     prefix: String = CatalogNames.PREFIX,
     constants: Array<String> = emptyArray(),
-    fileName: String? = null,
+    engine: TemplateEngine? = null,
 ): Source =
     Source(
         src,
@@ -133,8 +134,18 @@ private fun source(
         Modules.FROM_IMPORTS,
         constants.toHashSet(),
         prefixSetting = PREFIX_SETTING,
-        fileName = fileName,
+        engine = engine,
     )
+
+/** The engine of a document VS Code gives [languageId], as the template extensions name their languages. */
+private fun engineOf(languageId: String?): TemplateEngine? =
+    when (languageId) {
+        "jte", "kte" -> TemplateEngine.JTE
+        "freemarker", "ftl" -> TemplateEngine.FREEMARKER
+        "velocity" -> TemplateEngine.VELOCITY
+        "razor", "aspnetcorerazor" -> TemplateEngine.RAZOR
+        else -> null
+    }
 
 /** The prefix setting by the id VS Code's settings are searched by. */
 private const val PREFIX_SETTING = "streamlord.attributePrefix"
@@ -155,8 +166,8 @@ private fun setOf(names: Array<String>): Set<String> {
  * What is wrong in [src], a Kotlin file when [kotlin] and markup otherwise. [constants] are the
  * `const val` names of the workspace. With [defined], the signals the workspace defines, a read of
  * a signal that is none of them is reported too; with [others], what the workspace's other files
- * say about signals, so is a signal the server reads that no page declares. [fileName] says which
- * template engine writes into the file.
+ * say about signals, so is a signal the server reads that no page declares. [languageId] is VS
+ * Code's for the document, which names the template engine that writes into it.
  */
 @JsExport
 fun diagnose(
@@ -166,9 +177,9 @@ fun diagnose(
     constants: Array<String>,
     defined: Array<String>?,
     others: Array<DriftFacts>?,
-    fileName: String? = null,
+    languageId: String? = null,
 ): Array<Issue> {
-    val file = source(src, kotlin, prefix, constants, fileName)
+    val file = source(src, kotlin, prefix, constants, engineOf(languageId))
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
     val known = defined?.let(::setOf)
     val unknown = if (known == null) emptyList() else analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, known) }

@@ -59,7 +59,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     const signalsDefined = defined(document);
     const others = signalsDefined && kotlin ? signals.driftExcept(document.uri) : null;
-    const found = checks.issues(document.uri.toString(), document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], signalsDefined, others);
+    const found = checks.issues(document.uri.toString(), document.getText(), kotlin, prefix(), kotlin ? signals.allConstants() : [], signalsDefined, others, document.languageId);
     issues.set(document.uri, found);
     diagnostics.set(
       document.uri,

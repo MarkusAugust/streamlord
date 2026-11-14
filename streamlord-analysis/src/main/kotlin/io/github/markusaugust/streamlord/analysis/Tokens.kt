@@ -517,90 +517,34 @@ public fun tokenizeSignalName(text: String): List<Token> {
     return out
 }
 
-/** The files whose engine writes `${...}` before the browser reads the page, inside a JavaScript template too: jte, kte, FreeMarker and Velocity. */
-private val DOLLAR_BRACE_ENGINES = setOf("jte", "kte", "ftl", "ftlh", "ftlx", "vm", "vtl", "fhtml")
-
-/** Whether the engine of the file named [fileName] writes `${...}` itself, wherever it stands in a value. */
-public fun enginesWriteDollarBraces(fileName: String): Boolean = fileName.substringAfterLast('.').lowercase() in DOLLAR_BRACE_ENGINES
-
 /**
- * Where a template engine writes into a value before the browser reads it: `${...}`, `{{...}}`,
- * `{% %}`, `<% %>`, a directive with its condition, and Streamlord's own `__kt__`. A `${` inside a
- * JavaScript template literal is JavaScript's own and is none, unless [engineDollars] says the
- * file's engine writes it first (see [enginesWriteDollarBraces]).
+ * Where a template engine writes into a value before the browser reads it: the constructs of
+ * catalog/template-syntax.json and Streamlord's own `__kt__`. A `${` inside a JavaScript template
+ * literal is JavaScript's own and is none, unless the file's [engine] writes it first; Razor's
+ * constructs are Razor's, and the first `@` of its `@@`, which writes the other.
  */
 public fun templatePlaceholders(
     value: String,
-    engineDollars: Boolean = false,
+    engine: TemplateEngine? = null,
 ): List<IntRange> {
     val quotes = QuoteScan(value)
     val out = ArrayList<IntRange>()
     for (m in TEMPLATE_SYNTAX.findAll(value)) {
         var s = m.range.first
         while (s < m.range.last && (value[s].isWhitespace() || value[s] == '>')) s++
-        if (value[s] == '!' && value.getOrNull(s - 1) == '$') s--
         if (out.lastOrNull()?.let { s <= it.last } == true) continue
-        if (!engineDollars && value.startsWith("\${", s) && quotes.at(s) == '`') continue
+        if (engine?.writesDollarBraces != true && value.startsWith("\${", s) && quotes.at(s) == '`') continue
         out += s until placeholderEnd(value, s)
     }
-    return out
-}
-
-/** Where the placeholder that starts at [s] ends. */
-private fun placeholderEnd(
-    value: String,
-    s: Int,
-): Int {
-    fun closeAt(close: String): Int = value.indexOf(close, s + 2).let { if (it < 0) value.length else it + close.length }
-    return when {
-        value.startsWith("{{", s) -> {
-            closeAt("}}").let { if (it < value.length && value[it] == '}') it + 1 else it }
-        }
-
-        value.startsWith("{%", s) -> {
-            closeAt("%}")
-        }
-
-        value.startsWith("<%", s) -> {
-            closeAt("%>")
-        }
-
-        value.startsWith("[#", s) || value.startsWith("[=", s) -> {
-            closeAt("]")
-        }
-
-        value.startsWith(PLACEHOLDER, s) -> {
-            s + PLACEHOLDER.length
-        }
-
-        value.getOrNull(s + 1) == '{' || value.getOrNull(s + 2) == '{' -> {
-            balanced(value, value.indexOf('{', s), '{', '}')
-        }
-
-        else -> {
-            // A directive: its word and the condition in parentheses after it.
-            var j = s + 1
-            while (j < value.length && value[j].isLetter()) j++
-            if (value.getOrNull(j) == '(') balanced(value, j, '(', ')') else j
+    if (engine == TemplateEngine.RAZOR) {
+        out += razorConstructs(value)
+        var at = value.indexOf("@@")
+        while (at >= 0) {
+            out += at..at
+            at = value.indexOf("@@", at + 2)
         }
     }
-}
-
-/** The offset after the bracket that closes the one at [open], or the end. */
-private fun balanced(
-    text: String,
-    open: Int,
-    opening: Char,
-    closing: Char,
-): Int {
-    var depth = 0
-    var j = open
-    while (j < text.length) {
-        if (text[j] == opening) depth++
-        if (text[j] == closing && --depth == 0) return j + 1
-        j++
-    }
-    return text.length
+    return out.sortedBy { it.first }
 }
 
 /** The parts of a rendered `data-*` attribute name, for highlighting. */

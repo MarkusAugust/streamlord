@@ -103,20 +103,6 @@ private val OPTIONAL_END: Map<String, Set<String>> =
         "tfoot" to setOf("tbody"),
     )
 
-/**
- * Where a template engine or a Kotlin template will substitute text, the expression cannot be
- * judged before rendering: Pebble, Twig, Jinja, Handlebars and Mustache (`{{ }}`, `{% %}`),
- * ERB, EJS and JTE comments (`<% %>`), Kotlin, Thymeleaf, FreeMarker, JTE, kte and Velocity
- * (`${ }`, and JTE's `!{ }` for unescaped output), Thymeleaf's `*{ }`, `#{ }` and `@{ }`,
- * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
- * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
- */
-internal val TEMPLATE_SYNTAX: Regex =
-    regex(
-        """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
-            """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
-    )
-
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = regex("""^\d+(ms|s)?$""")
 private val WHOLE_NUMBER = regex("""^\d+$""")
@@ -376,22 +362,16 @@ private fun valueEnd(
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
- * inside a JavaScript template literal is JavaScript's own and does not count, unless
- * [engineDollars] says the file's engine writes it first (see [enginesWriteDollarBraces]).
+ * inside a JavaScript template literal is JavaScript's own and does not count; an engine whose
+ * rules differ is read through [judgedValue].
  */
-internal fun hasTemplateSyntax(
-    value: String,
-    engineDollars: Boolean = false,
-): Boolean {
+internal fun hasTemplateSyntax(value: String): Boolean {
     val quotes = QuoteScan(value)
-    return TEMPLATE_SYNTAX.findAll(value).any { engineDollars || it.value != "\${" || quotes.at(it.range.first) != '`' }
+    return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
 }
 
 /** Whether [value] holds template syntax besides the [PLACEHOLDER] of a Kotlin template, which the expression checks read around. */
-internal fun hasForeignTemplateSyntax(
-    value: String,
-    engineDollars: Boolean = false,
-): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"), engineDollars)
+internal fun hasForeignTemplateSyntax(value: String): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"))
 
 /**
  * The issues of [text], an expression with a [PLACEHOLDER] where a Kotlin template or a `%s` writes a
@@ -1050,7 +1030,7 @@ public class MarkupValidator(
         kotlin: Boolean = false,
         prefixSetting: String = PREFIX_SETTING,
         movable: Boolean = true,
-        engineDollars: Boolean = false,
+        engine: TemplateEngine? = null,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -1349,8 +1329,11 @@ public class MarkupValidator(
             if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
                 issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
             }
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasForeignTemplateSyntax(value, engineDollars)) {
-                val decoded = decodeEntities(value)
+            // The value as the checks judge it, the file's engine's own syntax masked; null where it waits for rendering.
+            val masked = value?.let { judgedValue(it, engine) }
+            val expression = value?.let { judgedValue(it, engine, aroundPlaceholders = true) }
+            if (expression != null && spec.valueKind == ValueKind.EXPRESSION && expression.isNotEmpty()) {
+                val decoded = decodeEntities(expression)
 
                 fun source(
                     start: Int,
@@ -1385,15 +1368,13 @@ public class MarkupValidator(
                         )
                 }
             }
-            if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars)) {
+            if (masked != null && spec.valueKind == ValueKind.FILTER && masked.isNotBlank()) {
                 issues += validateFilter(attr, spec, prefix)
             }
-            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() &&
-                !hasTemplateSyntax(value, engineDollars)
-            ) {
+            if (spec.name == "computed" && parsed.key == null && masked != null && masked.isNotBlank()) {
                 issues += validateComputedObject(attr, prefix)
             }
-            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars) &&
+            if (value != null && masked != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() &&
                 named.none { it.start >= attr.valueStart } && SIGNAL_NAME.matchEntire(value.trim()) == null
             ) {
                 issues +=

@@ -209,13 +209,12 @@ class ExpressionKindsTest {
     fun `an engine that writes dollar braces owns them inside a JavaScript template`() {
         val value = "`Hi \${user.name!'x'}` + \$a"
         assertEquals(emptyList(), templatePlaceholders(value))
-        assertEquals(listOf(4 until 20), templatePlaceholders(value, enginesWriteDollarBraces("page.ftl")))
+        assertEquals(listOf(4 until 20), templatePlaceholders(value, TemplateEngine.FREEMARKER))
         assertEquals(
             listOf("`Hi " to TokenKind.STRING, "`" to TokenKind.STRING, "+" to TokenKind.OPERATOR, "\$a" to TokenKind.SIGNAL),
-            tokens(value, templatePlaceholders(value, true)),
+            tokens(value, templatePlaceholders(value, TemplateEngine.JTE)),
         )
-        for (name in listOf("a.jte", "a.kte", "a.ftl", "a.ftlh", "a.vm")) assertTrue(enginesWriteDollarBraces(name), name)
-        for (name in listOf("a.html", "a.peb", "a.hbs", "a.twig")) assertTrue(!enginesWriteDollarBraces(name), name)
+        assertEquals(emptyList(), templatePlaceholders(value, TemplateEngine.RAZOR).filter { it.first == 4 })
     }
 
     @Test
