@@ -494,6 +494,18 @@ All notable changes to Streamlord are recorded here. The format follows
 - IntelliJ no longer calls `DATA-TEXT` or `Data-On:Click` an attribute that is not allowed here,
   and a weaker problem inside an error, such as the Pro hint under a missing key, which IntelliJ
   does not draw, is said with the error and its fixes are offered there, as VS Code shows both.
+- Hover no longer fails in IntelliJ on the first character of a word in an expression, VS Code
+  shows it there too, and both show the signal written with Kotlin's `${'$'}` in an HTML string, a
+  DSL string and `interpolate`.
+- Hover and completion document the keys of a signal filter, an option's values, the types
+  `datastar-fetch` is dispatched with, the Datastar events as the key of `data-on`, and in VS Code
+  the DSL's `...Expr` helpers. Signature help says what each parameter is.
+- Option completion leaves out the keys the object already has, offers `true` and `false` for an
+  option that takes a boolean, and after `evt.` in `data-on` offers the members of the event it
+  listens for. IntelliJ no longer lists `datastar-fetch` twice or offers the file's words after
+  `__`, and VS Code no longer shows two hovers on `data-text` and the others its HTML data documents.
+- The pre-1.0 fix needs a key after the dash, so a half typed `data-on-` is no longer changed to
+  `data-on:` with an empty key.
 - In the catalog, an attribute may name the page of the reference that describes it, `reference`;
   `AttributeSpec` has one more value, `reference`, last, and code compiled against the old
   constructor needs a rebuild.
