@@ -464,6 +464,39 @@ All notable changes to Streamlord are recorded here. The format follows
   In the catalog, an expression call site may name the parameters after it that take an expression
   too, `more`, and `expressionOptions` lists the options; `CallSiteSpec` has one more value, `more`,
   last, and code compiled against the old constructor needs a rebuild.
+- Markup under `data-ignore`, and an element with `data-ignore__self`, is no longer checked in either
+  editor, and a signal declared there is not counted as declared, as the client applies nothing there.
+  Under an alias the same holds for `data-star-ignore`.
+- `data-on:keyDown` and `Data-On:Click` work, as the browser hands the client `keydown` and `click`:
+  they get a hint to write the event in lower case, where the fix wrote `key-down__case.camel`, an
+  event no element fires. `dataOn("keyDown", ...)` is a warning, since the DSL writes `keyDown`.
+- Modifier arguments are judged as the client reads them: `__case.snake.pascal` applies both values
+  and is no error; `__debounce` without a duration, or with `.abc`, waits 0 ms and is a warning, not
+  an error; `data-on-interval` with no duration or `__duration.0ms` runs as often as the browser
+  allows, which is said; `__threshold.0.5` reads 0, with a fix to `__threshold.50`; a modifier
+  written twice is read from the last; `__document` with `__window`, and `__window` with
+  `__outside`, is ignored, which is said. A Pro modifier its reference does not list, such as
+  `data-on-raf__debounce`, is not judged, as what the Pro plugin reads of it is not known.
+- `data-star-rating` and other `data-star-*` names that are no Datastar attribute are left alone
+  under the default prefix, where they were called aliased Datastar attributes.
+- An issue on `data-nonce`, and VS Code's HTML data for it, links to the security page of the
+  Datastar reference, where the attribute is described.
+- `evt.type` outside `data-on` is a warning: the client hands the event to `data-on` alone, and
+  reading from it elsewhere throws. `$$count` is a warning with a fix, as the browser reads `$$`.
+  `await @post(...)` is an error on `await`, with why, where it was one on `@`.
+  `data-on-signal-patch-filter` without `data-on-signal-patch` on the element is a warning, and so
+  is `data-attr:view-box` on SVG, which sets `view-box`, with a fix to the object form.
+- Knockout's `data-bind="text: name"`, a share button's `data-text="Check this out"` and other
+  values another library reads say that `data-ignore`, or an aliased bundle, keeps Datastar off them.
+- In the DSL, `dataIndicator` after a `dataInit` that sends at once in the same element gets the
+  order warning HTML gets, and an empty expression, `dataShow("")`, is the error it throws as the
+  page renders, where it was a warning.
+- IntelliJ no longer calls `DATA-TEXT` or `Data-On:Click` an attribute that is not allowed here,
+  and a weaker problem inside an error, such as the Pro hint under a missing key, which IntelliJ
+  does not draw, is said with the error and its fixes are offered there, as VS Code shows both.
+- In the catalog, an attribute may name the page of the reference that describes it, `reference`;
+  `AttributeSpec` has one more value, `reference`, last, and code compiled against the old
+  constructor needs a rebuild.
 
 ## [0.21.0] - 2026-11-11
 
