@@ -1330,6 +1330,17 @@ class DslAsTheClientReadsItTest {
                     dataOnClick("probe(${peek(signal("a"))})")
                 }
             },
+            dslCase("peek of an object literal", "peek", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                store = """{"a":4}"""
+                heard("button", "click", 1)
+                probes = listOf(listOf(mapOf("a" to 4)))
+            }) {
+                button {
+                    dataSignals("a", "4")
+                    dataOnClick("probe(${peek("{a: ${'$'}a}")})")
+                }
+            },
             dslCase("expression helpers", "statements", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 store = """{"n":1,"m":5,"on":false,"s":"","t":0}"""
