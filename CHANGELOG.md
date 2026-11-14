@@ -298,6 +298,41 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- VS Code: in a `$$"""` raw string that opens on the next line, `$$count` and `$${id}` are Kotlin's
+  templates again, not Datastar signals, as in a one-line string.
+- VS Code colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor files, where their extension
+  or VS Code's own grammar reads them, and leaves each engine's placeholders to the engine. The
+  `streamlord.languages` default names FreeMarker by its language id, `freemarker`, where it said
+  `ftl`, so diagnostics, completion and hover reach `.ftl` files too.
+- VS Code: an unclosed `'`, `` ` `` or `/*` in a value, as you type it, colours that value alone,
+  not the rest of the file, and so does `@post([[@{/save}]])` in Thymeleaf.
+- VS Code: `{{ user.name }}`, `{% if %}` and `${...}` in a value in an HTML file are the engine's
+  and get no Datastar colour, and Thymeleaf's `th:attr="data-signals=${x}"` is Thymeleaf's own.
+- VS Code colours the expression of `dataOn(event = "input", expression = "...")`,
+  `dataSignals(name = ..., expression = ...)`, `dataComputed`, `dataClass` and `dataAttr` with named
+  arguments, in any order.
+- VS Code colours HTML in a string under `@Language("HTML")`, in `interpolate("Hello <b ...>")` and
+  in a `trimMargin` raw string whose lines start with `|`, however the string opens. IntelliJ
+  colours `interpolate`'s format however it opens too.
+- VS Code: an ordinary attribute in escaped quotes in a plain Kotlin string,
+  `"<div class=\"btn\">"`, is a string, not an error.
+- IntelliJ: JSON in escaped quotes in a plain Kotlin string, `data-signals='{\"count\": 0}'`, has
+  its keys and values coloured, as in VS Code, where it was one string.
+- `${...}` in a value of a jte, kte, FreeMarker or Velocity file is the engine's inside a JavaScript
+  template too: IntelliJ no longer colours it as Datastar, and neither editor reports
+  `${user.name!'x'}` there as an expression error.
+- IntelliJ: an action such as `@post` has a colour again in the classic Default scheme, and a global
+  such as `Math` and the parts of an attribute's name have one in Darcula and the New UI's Dark:
+  each key falls back to a standard key every bundled scheme colours.
+- A quoted object key, `{'text-red-500': $err}` as `data-class` writes one, is coloured as a key
+  and its colon as the key's, in both editors.
+- `${'$'}{${'$'}b}` in a JavaScript template in a Kotlin raw string is the template's `${` and the
+  signal `$b`, in both editors.
+- `{{#flag}}$a{{/flag}}`: IntelliJ colours `$a` beside the placeholder. VS Code colours `evt?.target`
+  as a property, as IntelliJ does, and gives a value's quotes the string colour.
+- VS Code reads a line of many Datastar attributes in time that grows with its length, where it
+  grew with its square: 400 attributes take a quarter of the time they did.
+
 - `payload = null` in the options of a backend action is written as `payload: null`, and the client
   sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the
   body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the

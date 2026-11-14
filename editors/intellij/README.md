@@ -118,11 +118,13 @@ template file IntelliJ reads as plain text is still spelled whole.
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
 colour, and the attribute value is coloured as a Datastar expression. The plugin brings no colours
-of its own: each token takes the colour your theme gives a standard one, a signal that of a static
-field, a backend action such as `@get` that of a keyword, and any other action that of a function
-call. IntelliJ's own schemes give a function call and a class name no colour, so there an action,
-an attribute key and a modifier argument read as plain text. Settings | Editor | Color Scheme |
-Streamlord lets you give any of them one.
+of its own: each token takes the colour your theme gives a standard one. A signal has that of a
+static field, a property or an object's key that of an instance field, an action such as `@get`
+and a modifier that of a keyword, a global such as `Math` and a modifier's argument that of a
+constant, and the parts of the attribute's name that of metadata, as an annotation has. Every one
+of IntelliJ's own schemes, classic Default, Darcula and the New UI's Light, Dark and Islands Dark,
+colours each of them; a name, a call and an operator stay as plain as they are in JavaScript.
+Settings | Editor | Color Scheme | Streamlord lets you give any of them a colour of your own.
 
 **HTML injection** into Kotlin strings that open with a tag but carry no `@Language("HTML")`, so
 tags complete and close as in an HTML file. Streamlord's own parameters carry the annotation
