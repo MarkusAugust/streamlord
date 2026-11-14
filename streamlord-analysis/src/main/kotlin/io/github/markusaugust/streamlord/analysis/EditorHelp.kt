@@ -182,6 +182,12 @@ private val ATTRIBUTE_WORD = regex("""[A-Za-z][A-Za-z0-9_:.-]*""")
 private val KOTLIN_WORD = regex("""[A-Za-z_][A-Za-z0-9_]*""")
 private val STRING_OPENED = regex("""['"`]([\w-]*)""")
 
+/** Kotlin's dollar in a string, which writes the `$` a signal is read after. */
+private const val KOTLIN_DOLLAR = "\${'$'}"
+
+/** A signal written after Kotlin's dollar, either way of writing it: `${'$'}count`, `${"$"}user.name`. */
+private val KOTLIN_DOLLAR_SIGNAL = regex("""\$\{(?:'\$'|"\$")\}\w+(?:[.-]\w+)*""")
+
 /** `evt.detail.type ===` at the end of the text, maybe with a string opened after it: what is written after the operator. */
 private val FETCH_TYPE_COMPARED = regex("""(?:^|[^\w$.])evt\s*\.\s*detail\s*\.\s*type\s*(?:===?|!==?)\s*((?:['"`][\w-]*)?)$""")
 
@@ -616,12 +622,14 @@ private class Asked(
      * code of expression [e]: not in a string, nor a member of something else.
      */
     private fun codeWord(e: ExpressionAtCaret): Hover? {
-        val range = wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
-        val word = text.substring(range.first, range.last + 1)
-        val inBefore = e.before.length - (offset - range.first)
+        // Kotlin's own dollar, `${'$'}count`, is the `$` the client reads: the word is read from the name after it.
+        val dollar = if (kotlin) wordAt(KOTLIN_DOLLAR_SIGNAL) else null
+        val range = dollar ?: wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
+        val word = if (dollar != null) "$" + text.substring(range.first + KOTLIN_DOLLAR.length, range.last + 1) else text.substring(range)
+        val read = if (dollar != null) expression(range.first + KOTLIN_DOLLAR.length)?.before?.dropLast(1) ?: return null else e.before
+        val inBefore = if (dollar != null) read.length else e.before.length - (offset - range.first)
         // With the caret on the word's first character, the text before it ends where the word starts: the word is read after it.
-        val read = if (inBefore == e.before.length) e.before + word else e.before
-        if (inBefore < 0 || jsRegions(read)[inBefore] != Region.CODE || e.before.getOrNull(inBefore - 1) == '.') return null
+        if (inBefore < 0 || jsRegions(read + word)[inBefore] != Region.CODE || read.getOrNull(inBefore - 1) == '.') return null
         // A `$` the client reads no name after, as in `$år`, is no signal.
         if (word.startsWith("$")) {
             val name = word.substring(1)

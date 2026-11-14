@@ -87,4 +87,14 @@ class DocumentationTargetTest : StreamlordTestCase() {
         val retry = of(myFixture.lookupElements!!.first { it.lookupString == "retry" })
         assertTrue(retry.streamlord().single().html, "<b>retry</b>" in retry.streamlord().single().html)
     }
+
+    // `${'$'}` is Kotlin's way to write the dollar the client reads a signal after.
+    fun `test a signal written with Kotlin's dollar in an HTML string is documented, on the dollar and on the name`() {
+        myFixture.configureByText("Dollar.kt", "fun h() = \"<div data-on:click=\\\"\${'\$'}myCount++\\\"></div>\"")
+        val text = myFixture.file.text
+        for (offset in listOf(text.indexOf("\${'\$'}"), text.indexOf("myCount") + 3)) {
+            val doc = at(offset).streamlord().single().html
+            assertTrue(doc, "the signal path myCount" in doc)
+        }
+    }
 }
