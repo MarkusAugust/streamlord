@@ -118,7 +118,7 @@ What happens to a value is decided by where it landed, not by where it came from
 | A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the placeholder already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
 | The `content` of a `<meta>` that starts with a time, as `http-equiv="refresh"` reads it | Escaped, and the URL after `url=` **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |
-| A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator` | **Refused**, unless it is a number or a boolean |
+| A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator`; and Pro's `data-match-media`, whose query the reference writes as a string literal | **Refused**, unless it is a number or a boolean |
 | A `data-*` attribute Datastar reads as it stands: `data-nonce`, `data-preserve-attr`, `data-ignore`, `data-ignore-morph` | Escaped |
 | An event handler such as `onclick`, or `srcdoc` | **Refused** |
 | A tag name, an attribute name, an unquoted value | **Refused** |

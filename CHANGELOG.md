@@ -321,6 +321,9 @@ All notable changes to Streamlord are recorded here. The format follows
   placeholder and `.hbs` files, and no longer colours a name that is not Datastar's in a template.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
+- `interpolate` refuses a value in `data-match-media`, where it escaped one: the reference writes
+  the query as a string literal, so Datastar Pro may run it. The editors warn of a Kotlin value
+  there as in any Datastar expression, and no longer offer the rewrite to `interpolate`.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

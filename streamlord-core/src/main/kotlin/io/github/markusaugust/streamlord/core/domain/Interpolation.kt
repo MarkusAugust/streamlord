@@ -97,9 +97,9 @@ public enum class Position {
     /**
      * A `data-*` attribute whose value Datastar evaluates, an expression or a signal filter
      * ([ElementsGuard.evaluatedAttributes]), or follows as a signal path: `data-bind`, `data-ref`
-     * and `data-indicator`, where `__proto__.x` writes into every object of the page. An attribute
-     * the client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an
-     * ordinary one.
+     * and `data-indicator`, where `__proto__.x` writes into every object of the page; and Pro's
+     * `data-match-media`, whose query the reference writes as a string literal. An attribute the
+     * client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an ordinary one.
      */
     DATASTAR,
 
@@ -420,6 +420,13 @@ private fun Position.admits(value: Any?): Boolean =
 
         Position.STRUCTURE, Position.CODE -> false
     }
+
+/**
+ * Pro's media query, `data-match-media:dark="'(prefers-color-scheme: dark)'"`: the reference writes
+ * it as a string literal, and Pro's source is not here to say it is never run, so a value is
+ * refused there as in an expression.
+ */
+private const val MATCH_MEDIA = "match-media"
 
 private val SCHEME = regex("^([A-Za-z][A-Za-z0-9+.-]*):")
 private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
@@ -1103,7 +1110,7 @@ private class Landscape(
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false
         val rest = lower.substring(prefix.length)
         val name = rest.substringBefore(':').substringBefore("__")
-        return name in ElementsGuard.evaluatedAttributes || name in signalPaths
+        return name in ElementsGuard.evaluatedAttributes || name in signalPaths || name == MATCH_MEDIA
     }
 
     /** The span [at] is in, or -1. Spans are found in order and never overlap, so the last to start at or before it is the one. */
