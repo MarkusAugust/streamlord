@@ -1988,7 +1988,7 @@ public class Analyzer(
         val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
         val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }
         if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
-        if (isMarkup(src, s, ip, sdk)) return ValueFact.MARKUP
+        if (isMarkup(src, s, ip, sdk) || markupCollection(src, ip.text, s.start, sdk)) return ValueFact.MARKUP
         return weakest(kinds)
     }
 

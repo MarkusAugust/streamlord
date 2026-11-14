@@ -1395,7 +1395,7 @@ private val USES_ELEMENTS =
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)[ \t\r]*(?=\n|(?![\s\S]))|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
-private val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*text$""")
+private val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*(?:text|html)$""")
 private val CREATE_HTML = regex("""^createHTML\s*\(""")
 private val APPEND_HTML = regex("""\bappendHTML\s*\(""")
 private val NAME_AT_END = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
@@ -1523,10 +1523,11 @@ internal fun markupValue(
     if (sum.size > 1) return htmlLiteral(sum[0].trim())
     if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
+    // The text of an Html or the html of a Trusted, the markup each holds; neither has the other.
     if (sdk.core &&
         textOf != null &&
         (
-            coreCall(src, textOf, "interpolate") ||
+            coreCall(src, textOf, "interpolate") || coreCall(src, textOf, "Trusted") ||
                 (IDENT.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
         )
     ) {
@@ -1550,6 +1551,17 @@ internal fun markupValue(
     if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk)
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk)
 }
+
+/**
+ * Whether [value] is a name for a collection of Html or Trusted, `rows: List<Html>`: markup the
+ * author built, which a template writes in brackets and interpolate would escape.
+ */
+internal fun markupCollection(
+    src: String,
+    value: String,
+    at: Int,
+    sdk: FileModules,
+): Boolean = IDENT.matchEntire(value.trim()) != null && markupElements(src, value.trim(), at, 0, sdk)
 
 /** How many names deep a value is followed to what it is set to. */
 private const val VALUE_DEPTH = 4

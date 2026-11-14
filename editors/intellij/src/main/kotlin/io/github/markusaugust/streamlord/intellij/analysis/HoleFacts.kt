@@ -454,6 +454,9 @@ object HoleFacts {
                 // The text of an Html, or of interpolate(...).
                 name == "text" && call == null -> isMarkup(receiver, depth)
 
+                // The html of a Trusted; a property of that name elsewhere is read by its declaration.
+                name == "html" && call == null && isMarkup(receiver, depth) -> true
+
                 // createHTML().div { ... }, and StringBuilder().appendHTML().div { ... }.toString().
                 call != null && isHtmlConsumer(receiver) -> true
 

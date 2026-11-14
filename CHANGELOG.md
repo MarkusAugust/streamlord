@@ -331,6 +331,9 @@ All notable changes to Streamlord are recorded here. The format follows
   or `data:text/html,`, is said to be in a URL that runs whatever it holds, and the rewrite to
   `interpolate`, which threw for every value there, is no longer offered for the string. In a call
   to `interpolate` such a placeholder is an error, as `interpolate` throws for every value.
+- The `html` of a `Trusted`, `${t.html}`, and a name for a `List<Html>` are markup you built, as
+  the `text` of an `Html` is: nothing is said of them in element text, and no rewrite to
+  `interpolate` escapes them there, where both editors offered one first.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
