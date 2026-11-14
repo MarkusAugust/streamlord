@@ -28,11 +28,20 @@ describe("what the analysis finds in the open documents", () => {
     assert.equal(lines.length, 2);
   });
 
-  // jte, kte, FreeMarker and Velocity write ${...} before the browser reads the value, inside a JavaScript template too.
-  it("leaves an engine's dollar braces in a JavaScript template to the engine", () => {
+  // Each editor names the file's engine from its own language id, so a file associated with an engine, or untitled, gets its rules.
+  it("leaves each engine's own syntax out of the checks, and judges the rest", () => {
     const lint = new Lint(() => {});
-    const page = `<div data-text="\`Hi \${user.name!'x'}\`"></div>`;
-    assert.deepEqual(lint.issues("file:///page.ftl", page, false, "data-", [], null, null), []);
-    assert.equal(lint.issues("file:///page.html", page, false, "data-", [], null, null).length, 1, "JavaScript's own in an HTML file");
+    const issues = (language: string, page: string, key = "file:///page.x") => lint.issues(key, page, false, "data-", [], null, null, language).map((i) => i.code);
+    const backtick = `<div data-text="\`Hi \${user.name!'x'}\`"></div>`;
+    assert.deepEqual(issues("freemarker", backtick), [], "FreeMarker writes ${} inside a JavaScript template");
+    assert.deepEqual(issues("freemarker", backtick, "untitled:Untitled-1"), [], "an untitled FreeMarker file");
+    assert.deepEqual(issues("html", backtick), ["expression-syntax"], "JavaScript's own in an HTML file");
+    assert.deepEqual(issues("freemarker", `<div data-text="<#if a>$a<#else>$b</#if>"></div>`), [], "a FreeMarker directive");
+    assert.deepEqual(issues("php", `<div data-text="<?= htmlspecialchars("a") ?>"></div>`), [], "PHP");
+    assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save')" data-text="@Model.Name" data-show="@(Model.A + 1)"></div>`), [], "Razor");
+    // Razor writes @@ as the @ Datastar reads: the rest is judged.
+    assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save'"></div>`), ["expression-syntax"], "Razor's @@post( is Datastar's @post(");
+    // Only the engine's placeholder is left out: what is around it is still judged.
+    assert.deepEqual(issues("jte", "<div data-text=\"`Hi ${name}` + ((\"></div>"), ["expression-syntax"], "the rest of a jte value");
   });
 });
