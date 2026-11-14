@@ -432,7 +432,7 @@ value, so `readSignals()` on `/rows/delete` sees `ids` and nothing else.
 
 Every option has such a twin whose name ends in `Expr`, for a value the page computes:
 `retryExpr = $$"$mode"`, `contentTypeExpr`, `retryMaxCountExpr` and the rest. A filter's halves
-take one too, `SignalFilter(includeExpr = $$"$pattern")`, and `SignalFilter(expression = ...)`
+take one too, `SignalFilter(includeExpr = $$"$pattern")`, and `SignalFilter(filterExpr = ...)`
 is the whole filter as one expression, for `@setAll` and `@toggleAll` as well.
 
 ## The size limit

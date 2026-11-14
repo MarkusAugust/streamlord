@@ -327,7 +327,7 @@ public final class io/github/markusaugust/streamlord/html/SignalFilter {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getExclude ()Lkotlin/text/Regex;
 	public final fun getExcludeExpr ()Ljava/lang/String;
-	public final fun getExpression ()Ljava/lang/String;
+	public final fun getFilterExpr ()Ljava/lang/String;
 	public final fun getInclude ()Lkotlin/text/Regex;
 	public final fun getIncludeExpr ()Ljava/lang/String;
 	public fun hashCode ()I

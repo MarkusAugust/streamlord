@@ -56,17 +56,17 @@ public data class SignalFilter(
     /** [exclude] as a raw JavaScript expression, as [includeExpr]. */
     val excludeExpr: String? = null,
     /** The whole filter as a raw JavaScript expression, e.g. a signal that holds one; set with any other, it is refused. */
-    val expression: String? = null,
+    val filterExpr: String? = null,
 ) {
     /** Render as a JavaScript object literal with regex literals, an expression in parentheses. */
     public fun toJs(): String {
         require(include == null || includeExpr == null) { "include and includeExpr are one key; set one" }
         require(exclude == null || excludeExpr == null) { "exclude and excludeExpr are one key; set one" }
-        if (expression != null) {
+        if (filterExpr != null) {
             require(include == null && exclude == null && includeExpr == null && excludeExpr == null) {
-                "expression is the whole filter; set it alone"
+                "filterExpr is the whole filter; set it alone"
             }
-            return parenthesized(expression)
+            return parenthesized(filterExpr)
         }
         return buildList {
             (include?.let(::regexLiteral) ?: includeExpr?.let(::parenthesized))?.let { add("include: $it") }

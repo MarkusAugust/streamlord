@@ -296,7 +296,7 @@ public fun toggleAll(filter: SignalFilter? = null): String =
     if (filter == null) "@toggleAll()" else "@toggleAll(${filter.withInclude().toJs()})"
 
 private fun SignalFilter.withInclude(): SignalFilter =
-    if (include == null && includeExpr == null && expression == null) copy(include = Regex(".*")) else this
+    if (include == null && includeExpr == null && filterExpr == null) copy(include = Regex(".*")) else this
 
 /** `@peek((expression))`: [peek] handed a function the page holds or writes, e.g. `"() => ${'$'}a"` or a signal. */
 public fun peekExpr(expression: String): String = "@peek(${expression(expression)})"
