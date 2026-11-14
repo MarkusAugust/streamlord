@@ -19,9 +19,9 @@ class SignalReferencesTest {
             }
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
-            val defined = collectSignalDefinitions(src, language)
+            val defined = collectSignalDefinitions(Source(src, language))
             val kotlin = language == SourceLanguage.KOTLIN
-            val refs = if (kotlin) analyzer.signalReferencesInKotlin(src) else analyzer.signalReferencesInHtml(src)
+            val refs = analyzer.signalReferences(Source(src, language))
             val issues = refs.mapNotNull { unknownSignalIssue(it, defined) }
             case["refs"]?.let { assertEquals(it.toKotlin(), refs.map { r -> listOf(src.substring(r.start, r.end), r.name) }, name) }
             case.array("unknown")?.let { assertEquals(it.strings(), issues.map { i -> src.substring(i.start, i.end) }, name) }
@@ -31,7 +31,7 @@ class SignalReferencesTest {
                 val fixes = issues.map { i -> i.fixes.map { f -> listOf(src.substring(f.start, f.end), f.text) } }
                 assertEquals(expected.toKotlin(), fixes, name)
             }
-            case.array("signals")?.let { assertEquals(it.strings(), collectSignals(src, language).sorted(), name) }
+            case.array("signals")?.let { assertEquals(it.strings(), collectSignals(Source(src, language)).sorted(), name) }
             case.array("definitions")?.let { assertEquals(it.strings(), defined.sorted(), name) }
         }
     }

@@ -26,14 +26,16 @@ class CorpusTest {
         val prefix = case.string("prefix") ?: "data-"
         // A case may give the workspace's `const val` names, which modules the project has, and the calls that are not Streamlord's.
         val foreign = case.array("foreign")?.strings()?.toSet()
-        val opts =
-            AnalyzeOptions(
+        val starts = foreign?.let { callStarts(source, it).toSet() } ?: emptySet()
+
+        fun read(language: SourceLanguage) =
+            Source(
+                source,
+                language,
                 prefix,
-                true,
+                case.modules(Modules.UNKNOWN),
                 constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
-                htmlDsl = case.boolean("htmlDsl"),
-                core = case.boolean("core"),
-                foreignCalls = foreign?.let { callStarts(source, it).toSet() } ?: emptySet(),
+                foreign = { _, at -> at in starts },
             )
         return when (kind) {
             "expression" -> {
@@ -45,23 +47,23 @@ class CorpusTest {
             }
 
             "html" -> {
-                analyzer.analyzeHtml(source, opts)
+                analyzer.analyzeHtml(read(SourceLanguage.HTML))
             }
 
             "kotlin" -> {
-                analyzer.analyzeKotlin(source, opts)
+                analyzer.analyzeKotlin(read(SourceLanguage.KOTLIN))
             }
 
             // The signals the source reads that it does not itself declare.
             "references" -> {
-                val defined = collectSignalDefinitions(source, SourceLanguage.HTML)
-                analyzer.signalReferencesInHtml(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML))
+                analyzer.signalReferences(read(SourceLanguage.HTML)).mapNotNull { unknownSignalIssue(it, defined) }
             }
 
             // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
             "kotlin-references" -> {
-                val defined = collectSignalDefinitions(source, SourceLanguage.KOTLIN)
-                analyzer.signalReferencesInKotlin(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
+                analyzer.signalReferences(read(SourceLanguage.KOTLIN)).mapNotNull { unknownSignalIssue(it, defined) }
             }
 
             else -> {
@@ -184,4 +186,11 @@ class CorpusTest {
             }
         }
     }
+}
+
+/** What a case says of the modules: [otherwise] where it names neither, and both as known where it names one. */
+internal fun JsonObject.modules(otherwise: Modules): Modules {
+    val core = boolean("core")
+    val dsl = boolean("htmlDsl")
+    return if (core == null && dsl == null) otherwise else Modules.known(core ?: true, dsl ?: true)
 }

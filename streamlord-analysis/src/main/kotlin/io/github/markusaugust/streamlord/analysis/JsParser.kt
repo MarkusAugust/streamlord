@@ -13,7 +13,7 @@ import io.github.markusaugust.streamlord.core.client.codePointString
  *
  * A few messages are friendlier than acorn's ("Unexpected end of input"); the verdict is the same.
  */
-public class JsSyntaxError(
+internal class JsSyntaxError(
     message: String,
     /** Offset of the offending token. */
     public val pos: Int,
@@ -21,7 +21,7 @@ public class JsSyntaxError(
     public val raisedAt: Int,
 ) : RuntimeException(message)
 
-public object JsParser {
+internal object JsParser {
     /** Parse [source] as a script; throws [JsSyntaxError] on the first problem. */
     public fun check(source: String) {
         try {

@@ -90,7 +90,7 @@ class InspectorPanel(
     private val client = StreamClient(scope)
 
     /** The variables as last read, off the UI thread; what the form shows. Connect and the curl export read them again first. */
-    private var environment = RequestStore.Environment(emptyList(), emptyList())
+    private var environment = Requests.Environment(emptyList(), emptyList())
 
     /** The request to select once the list is read again, and the read under way. */
     private var selecting: SavedRequest? = null
@@ -544,7 +544,7 @@ class InspectorPanel(
 
     private fun show(
         file: RequestsFile,
-        env: RequestStore.Environment,
+        env: Requests.Environment,
         pathProblem: String?,
     ) {
         val saved = file.requests
@@ -677,10 +677,8 @@ class InspectorPanel(
 
     private fun send(raw: SavedRequest) {
         val (request, vars) = resolve(raw, sending = true) ?: return
-        try {
-            JsonParser.parse(Requests.compactSignals(request.signals))
-        } catch (e: Exception) {
-            failed(request.url, "Signals are not valid JSON: ${e.message}")
+        Requests.signalsProblem(request.signals)?.let {
+            failed(request.url, it)
             return
         }
         store.addRecent(raw)

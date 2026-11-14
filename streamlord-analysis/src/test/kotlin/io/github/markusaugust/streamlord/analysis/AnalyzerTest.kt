@@ -17,7 +17,6 @@ import kotlin.test.assertTrue
  */
 class AnalyzerTest {
     private val analyzer = Analyzer()
-    private val opts = AnalyzeOptions("data-", true)
 
     private fun literal(s: KotlinString?): Map<String, Any?>? =
         s?.let {
@@ -77,7 +76,7 @@ class AnalyzerTest {
 
             "signals" -> {
                 val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
-                mapOf("signals" to collectSignals(source, language).sorted())
+                mapOf("signals" to collectSignals(Source(source, language)).sorted())
             }
 
             "selectors" -> {
@@ -87,7 +86,7 @@ class AnalyzerTest {
 
             "fixture" -> {
                 val text = fixtureText("editors/vscode/test/fixtures/${case.string("file")}")
-                mapOf("codes" to analyzer.analyzeHtml(text, opts).map { it.code })
+                mapOf("codes" to analyzer.analyzeHtml(text).map { it.code })
             }
 
             else -> {
@@ -130,16 +129,21 @@ class AnalyzerTest {
     @Test
     fun `an aliased attribute under the default prefix names the setting as the editor names it`() {
         val said = "This is an aliased Datastar attribute, but the prefix is set to data-. Check"
-        val vscode = AnalyzeOptions(prefixSetting = "streamlord.attributePrefix")
         val html = "<div data-star-on:click=\"x()\"></div>"
         val kotlin = "fun f() = \"\"\"<p data-star-text=\"1\"></p>\"\"\""
 
         fun message(issues: List<Issue>) = issues.single { it.code == "prefix-mismatch" }.message
 
-        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeHtml(html, AnalyzeOptions())))
-        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeKotlin(kotlin, AnalyzeOptions())))
-        assertEquals("$said streamlord.attributePrefix.", message(analyzer.analyzeHtml(html, vscode)))
-        assertEquals("$said streamlord.attributePrefix.", message(analyzer.analyzeKotlin(kotlin, vscode)))
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeHtml(html)))
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeKotlin(kotlin)))
+        assertEquals(
+            "$said streamlord.attributePrefix.",
+            message(analyzer.analyzeHtml(Source(html, SourceLanguage.HTML, prefixSetting = "streamlord.attributePrefix"))),
+        )
+        assertEquals(
+            "$said streamlord.attributePrefix.",
+            message(analyzer.analyzeKotlin(Source(kotlin, SourceLanguage.KOTLIN, prefixSetting = "streamlord.attributePrefix"))),
+        )
     }
 }
 

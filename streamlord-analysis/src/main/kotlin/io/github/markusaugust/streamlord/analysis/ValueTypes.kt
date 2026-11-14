@@ -68,7 +68,7 @@ public fun ValueFact.Companion.ofResolvedClass(qualified: String): ValueFact? {
  * Streamlord's `Html` [ValueFact.MARKUP] and `Trusted` [ValueFact.TRUSTED], bare or in full. Null for any other type,
  * `com.acme.Html` among them.
  */
-public fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
+internal fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     val type = written.filterNot { it.isWhitespace() }
     val bare = type.removeSuffix("?")
     val nullable = bare != type
@@ -113,7 +113,7 @@ internal fun declaredFact(
     }
 
 /** Whether [type] is a collection of Streamlord's markup, as `List<Html>`; the whitespace in it is ignored. */
-public fun isMarkupCollection(type: String): Boolean =
+internal fun isMarkupCollection(type: String): Boolean =
     MARKUP_COLLECTION.matchEntire(type.replace(OUT_PROJECTION, "<").filterNot { it.isWhitespace() }) != null
 
 // `out` as a keyword, so a type named `outHtml` is not read as `out Html`.

@@ -16,7 +16,7 @@ class LargeLiteralTest {
         val rows = (0 until 1000).joinToString("") { "<p title=\"\$q\" data-text=\"\$k\" class=\"\${q.trim()}\">\$q</p>\n" }
         val src = "fun f(q: String, k: Int): String {\n    // language=HTML\n    return \"\"\"<div>$rows</div>\"\"\"\n}\n"
         val started = TimeSource.Monotonic.markNow()
-        val issues = Analyzer().analyzeKotlin(src, AnalyzeOptions("data-", true))
+        val issues = Analyzer().analyzeKotlin(src)
         val ms = started.elapsedNow().inWholeMilliseconds
         assertEquals(3000, issues.count { it.code == "unescaped-interpolation" })
         assertEquals(1000, issues.count { it.code == "kotlin-interpolation" })

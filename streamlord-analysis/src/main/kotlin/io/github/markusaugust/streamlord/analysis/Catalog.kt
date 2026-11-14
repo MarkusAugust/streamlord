@@ -76,7 +76,7 @@ public data class AttributeSpec(
  */
 internal enum class ArgumentKind { STRING, NUMBER, BOOLEAN, OBJECT, OPTIONS, FILTER, FUNCTION, PATTERN, ANY }
 
-public data class ActionSpec(
+internal data class ActionSpec(
     val name: String,
     val pro: Boolean,
     val kind: String,
@@ -137,7 +137,7 @@ public data class DocumentEvent(
 )
 
 /** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one. */
-public data class DomEvent(
+internal data class DomEvent(
     val name: String,
     val mdn: String?,
 )
@@ -166,8 +166,8 @@ public class Catalog private constructor(
     raw: JsonObject,
 ) {
     public val attributes: List<AttributeSpec>
-    public val actions: List<ActionSpec>
-    public val fetchOptions: List<FetchOption>
+    internal val actions: List<ActionSpec>
+    internal val fetchOptions: List<FetchOption>
 
     /** [fetchOptions] with the kind of each. */
     internal val optionFields: List<ValueField>
@@ -183,22 +183,22 @@ public class Catalog private constructor(
 
     /** What each parameter of each action is, in order, as the hover says it. */
     internal val parameterDocs: Map<String, List<String>>
-    public val fetchEvents: List<String>
+    internal val fetchEvents: List<String>
 
     /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
     public val datastarEvents: List<DocumentEvent> =
         (raw.array("datastarEvents")?.objects() ?: emptyList()).map { DocumentEvent(it.string("name") ?: "", it.string("doc") ?: "") }
 
     /** The DOM events an element can be listened to for, from `catalog/dom-events.json`, which no Datastar version changes. */
-    public val domEvents: List<DomEvent> get() = DOM_EVENTS
+    internal val domEvents: List<DomEvent> get() = DOM_EVENTS
 
     /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:567). */
-    public val compiledParameters: List<String>
-    public val patchModes: List<String>
+    internal val compiledParameters: List<String>
+    internal val patchModes: List<String>
     public val expressionCallSites: Map<String, CallSiteSpec>
-    public val htmlCallSites: Map<String, CallSiteSpec>
-    public val scriptCallSites: Map<String, CallSiteSpec>
-    public val selectorCallSites: Map<String, CallSiteSpec>
+    internal val htmlCallSites: Map<String, CallSiteSpec>
+    internal val scriptCallSites: Map<String, CallSiteSpec>
+    internal val selectorCallSites: Map<String, CallSiteSpec>
 
     /** The calls whose arguments are signals by name, each with the flags the catalog gives it: `names`, `json`. */
     public val signalCalls: Map<String, Set<String>>
@@ -270,39 +270,39 @@ public class Catalog private constructor(
         signalNameHelpers = flagged(sites.obj("signalNames")!!)
     }
 
-    public val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
+    internal val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
 
     /**
      * The attribute each DSL helper writes from its string argument. dataOnSignalPatch writes
      * data-on-signal-patch from its string and the filter companion from a SignalFilter, so a
      * helper is never its filter.
      */
-    public val attributesByKotlin: Map<String, AttributeSpec> =
+    internal val attributesByKotlin: Map<String, AttributeSpec> =
         buildMap {
             for (a in attributes) {
                 for (k in a.kotlin) if (get(k)?.valueKind != ValueKind.EXPRESSION || a.valueKind == ValueKind.EXPRESSION) put(k, a)
             }
         }
-    public val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
+    internal val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
 
     /**
      * The words an expression may read without declaring them: the parameters it is compiled with
      * and every plugin's `argNames`, without `$` and `__action`, which are the client's own.
      */
-    public val scopeNames: Set<String> =
+    internal val scopeNames: Set<String> =
         (compiledParameters + attributes.flatMap { it.argNames }).filter { it.first().isLetter() && !it.startsWith("__") }.toSet()
 
     /** The DSL helpers whose first argument is the name of a signal the page declares: those of the attributes whose key is camel-cased. */
-    public val namingHelpers: Set<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.flatMap { it.kotlin }.toSet()
+    internal val namingHelpers: Set<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.flatMap { it.kotlin }.toSet()
 
     /** The attributes whose key is the name of a signal, in which the client camel-cases it. */
-    public val signalKeyAttributes: List<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.map { it.name }
+    internal val signalKeyAttributes: List<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.map { it.name }
 
     /** The backend actions, `@get` and the rest, which send a request. */
-    public val backendActions: List<String> = actions.filter { it.kind == "backend" }.map { it.name }
+    internal val backendActions: List<String> = actions.filter { it.kind == "backend" }.map { it.name }
 
     /** Every DSL function the analysis looks at, of every kind. */
-    public val allCallSiteNames: Set<String> =
+    internal val allCallSiteNames: Set<String> =
         expressionCallSites.keys + htmlCallSites.keys + scriptCallSites.keys + selectorCallSites.keys
 
     /** Parse a rendered attribute name such as `data-on:click__once__debounce.500ms` into its parts. */
@@ -398,7 +398,7 @@ public class Catalog private constructor(
 }
 
 /** Levenshtein distance, for "did you mean" hints. */
-public fun distance(
+internal fun distance(
     a: String,
     b: String,
 ): Int {

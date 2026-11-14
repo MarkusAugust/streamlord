@@ -14,16 +14,18 @@ import io.github.markusaugust.streamlord.analysis.AttributesIndex
 import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.NameToken
 import io.github.markusaugust.streamlord.analysis.PLACEHOLDER
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.Token
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
+import io.github.markusaugust.streamlord.analysis.htmlStringAt
+import io.github.markusaugust.streamlord.analysis.readsDsl
 import io.github.markusaugust.streamlord.analysis.templatePlaceholders
 import io.github.markusaugust.streamlord.analysis.tokenize
 import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
 import io.github.markusaugust.streamlord.analysis.tokenizeExpression
 import io.github.markusaugust.streamlord.analysis.tokenizeSignalName
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
-import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
@@ -83,14 +85,14 @@ class KotlinDatastarAnnotator : Annotator {
                 return
             }
         }
-        val calls = StreamlordCalls.of(file)
-        val html = calls.htmlStringAt(analysis, src, s.contentStart + 1)
+        val source = analysis.source(src, SourceLanguage.KOTLIN, file)
+        val html = analysis.analyzer.htmlStringAt(source, s.contentStart + 1)
         if (html != null && html.start == s.start) {
             paintHtml(holder, src, s, analysis)
             return
         }
         // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
-        if (!calls.dsl) return
+        if (!analysis.analyzer.readsDsl(source)) return
         val named =
             findCallSites(src, SIGNAL_NAME_CALLS, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen }
         if (named != null && named.positional

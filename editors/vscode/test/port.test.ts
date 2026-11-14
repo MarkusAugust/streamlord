@@ -139,13 +139,13 @@ describe("what crosses the port", () => {
     const codes = (others: DriftFacts[] | null) => diagnose(handler, true, "data-", [], [], others).map((i) => i.code);
     assert.deepEqual(codes(null), []);
     assert.deepEqual(codes([]), ["signal-never-declared"]);
-    assert.deepEqual(codes([driftFactsOf(`<input data-bind:query>`, false)]), []);
+    assert.deepEqual(codes([driftFactsOf(`<input data-bind:query>`, false, "data-")]), []);
   });
 
   it("reports a property of a class another file reads signals into, which no page declares", () => {
     const form = `import kotlinx.serialization.Serializable\n\n@Serializable\ndata class Form(val query: String, val page: Int)`;
-    const reads = driftFactsOf(`fun Route.search() {\n    post("/s") { val form = call.readSignals<Form>() }\n}`, true);
-    const page = driftFactsOf(`<input data-bind:query>`, false);
+    const reads = driftFactsOf(`fun Route.search() {\n    post("/s") { val form = call.readSignals<Form>() }\n}`, true, "data-");
+    const page = driftFactsOf(`<input data-bind:query>`, false, "data-");
     const [issue, ...rest] = diagnose(form, true, "data-", [], [], [reads, page]);
     assert.deepEqual(rest, []);
     assert.deepEqual(issue && [issue.code, form.slice(issue.start, issue.end)], ["signal-never-declared", "page"]);
@@ -167,7 +167,7 @@ describe("what crosses the port", () => {
 
   it("takes back what it handed out", () => {
     const places = signalPlaces(html, false, "data-");
-    const defined = signalsOf(html, false).definitions;
+    const defined = signalsOf(html, false, "data-").definitions;
     assert.deepEqual(defined, ["count"]);
     const site = signalSiteAt(places, defined, html.indexOf("count") + 1);
     assert.deepEqual(site && { signal: site.signal, kind: site.declaration?.kind }, { signal: "count", kind: "key" });

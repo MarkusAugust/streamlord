@@ -15,6 +15,7 @@ class EditorHelpTest {
 
     /** The case's text without its caret, the caret, and what the editor knows of the file. */
     private fun asked(case: JsonObject): Pair<Source, Int> {
+        // A case that says nothing of the modules is read as VS Code reads it, by the imports.
         val written = case.string("text")!!
         val caret = written.indexOf(CARET)
         val foreign = case.array("foreign")?.strings()?.toSet() ?: emptySet()
@@ -23,8 +24,7 @@ class EditorHelpTest {
                 text = written.removeRange(caret, caret + 1),
                 language = if (case.string("language") == "kotlin") SourceLanguage.KOTLIN else SourceLanguage.HTML,
                 prefix = case.string("prefix") ?: "data-",
-                core = case.boolean("core"),
-                htmlDsl = case.boolean("htmlDsl"),
+                modules = case.modules(Modules.FROM_IMPORTS),
                 // As an editor that resolves calls answers: by the call whose name starts there.
                 foreign = { name, at -> name in foreign && written.removeRange(caret, caret + 1).startsWith(name, at) },
             )
@@ -145,7 +145,7 @@ class EditorHelpTest {
         val calls = (0 until 2000).joinToString("\n") { "fun f$it() = div { dataSignals(\"s$it\" to 0); dataText(\"\\\$s$it + 1\") }" }
         val text = "import io.github.markusaugust.streamlord.html.*\n$calls\nfun g() = div { dataText(\"\\\$s1999\") }"
         var asked = 0
-        val source = Source(text, SourceLanguage.KOTLIN, foreign = { _, _ -> asked++ < 0 })
+        val source = Source(text, SourceLanguage.KOTLIN, modules = Modules.FROM_IMPORTS, foreign = { _, _ -> asked++ < 0 })
         val caret = text.lastIndexOf("\")")
         val workspace = Workspace(emptyList(), emptyList(), emptyList(), called = "workspace")
         assertTrue(analyzer.complete(source, caret, workspace).items.any { it.label == "\$s1999" })

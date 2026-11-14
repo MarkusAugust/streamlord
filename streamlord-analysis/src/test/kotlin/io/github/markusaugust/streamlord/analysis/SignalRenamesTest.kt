@@ -18,7 +18,7 @@ class SignalRenamesTest {
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
             val at = case.string("at")!!
-            val d = signalDeclarations(src, language).first { src.substring(it.start, it.end) == at }
+            val d = signalDeclarations(Source(src, language)).first { src.substring(it.start, it.end) == at }
             assertEquals(expected, signalRenameText(src, d, rename), name)
         }
     }

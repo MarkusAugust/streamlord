@@ -29,17 +29,17 @@ class InterpolationProjectTest {
     fun `finds the constants the project gives the analysis`() {
         val expected = JsonParser.parseObject(fixtureText("$dir/expected.json"))
         val sources = expected.obj("files")!!.keys.map { fixtureText("$dir/$it") }
-        assertEquals(expected.array("constants")!!.strings().toSet(), projectConstants(sources))
+        assertEquals(expected.array("constants")!!.strings().toSet(), projectConstants(sources.map(::declaredNames)))
     }
 
     @Test
     fun `judges every hole of the project as expected json says`() {
         val expected = JsonParser.parseObject(fixtureText("$dir/expected.json"))
-        val opts = AnalyzeOptions("data-", true, constants = expected.array("constants")!!.strings().toSet())
+        val constants = expected.array("constants")!!.strings().toSet()
         val files = expected.obj("files")!!
         assertTrue(files.isNotEmpty())
         for ((file, issues) in files) {
-            val all = analyzer.analyzeKotlin(fixtureText("$dir/$file"), opts)
+            val all = analyzer.analyzeKotlin(Source(fixtureText("$dir/$file"), SourceLanguage.KOTLIN, constants = constants))
             val seen =
                 all
                     .filter { it.code in codes }

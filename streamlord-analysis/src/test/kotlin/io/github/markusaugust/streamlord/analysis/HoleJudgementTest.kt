@@ -14,14 +14,14 @@ class HoleJudgementTest {
 
     private fun interpolation(
         src: String,
-        opts: AnalyzeOptions,
-    ) = analyzer.analyzeKotlin(src, opts).filter { it.code == "unescaped-interpolation" }.map { it.severity }
+        opts: Source,
+    ) = analyzer.analyzeKotlin(opts.copy(text = src)).filter { it.code == "unescaped-interpolation" }.map { it.severity }
 
     @Test
     fun `the editor's fact wins over what the text shows`() {
         // The text takes both for the author's own: a literal of markup, a workspace constant.
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
-        val text = AnalyzeOptions(constants = setOf("LABEL"))
+        val text = Source("", SourceLanguage.KOTLIN, constants = setOf("LABEL"))
         assertEquals(emptyList(), interpolation(src, text))
         val typed = text.copy(valueFact = { _, _ -> ValueFact.STRING })
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
@@ -87,8 +87,17 @@ class HoleJudgementTest {
         fact: ValueFact,
     ): List<Pair<String, String>> {
         val at = src.lastIndexOf(value)
-        val opts = AnalyzeOptions(valueFact = { start, end -> if (start == at && end == at + value.length) fact else null })
-        return analyzer.analyzeKotlin(src, opts).map { (it.code ?: "") to src.substring(it.start, it.end) }
+        val opts =
+            Source(src, SourceLanguage.KOTLIN, valueFact = { start, end ->
+                if (start == at &&
+                    end == at + value.length
+                ) {
+                    fact
+                } else {
+                    null
+                }
+            })
+        return analyzer.analyzeKotlin(opts).map { (it.code ?: "") to src.substring(it.start, it.end) }
     }
 
     @Test

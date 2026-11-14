@@ -5,10 +5,7 @@ import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
-import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
-import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
-import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import org.jetbrains.kotlin.psi.KtFile
 
 /** What completion, hover and parameter info hand the analysis: the [file] whose text [source] is, and the caret in it. */
@@ -42,8 +39,7 @@ object DatastarCaret {
                 StreamlordAnalysis.isTemplateText(file) ||
                 file.viewProvider.allFiles.any { it.language.isKindOf(HTMLLanguage.INSTANCE) }
         if (!markup) return null
-        val dsl = ProjectLibraries.known(file, StreamlordLibrary.HTML) != false
-        return Asked(file, Source(file.text, SourceLanguage.HTML, analysis.prefix, htmlDsl = dsl), offset)
+        return Asked(file, analysis.source(file.text, SourceLanguage.HTML, file), offset)
     }
 
     private fun inKotlin(
@@ -51,15 +47,8 @@ object DatastarCaret {
         file: KtFile,
         offset: Int,
     ): Asked {
-        val calls = StreamlordCalls.of(file)
-        val source =
-            Source(
-                file.text,
-                SourceLanguage.KOTLIN,
-                analysis.prefix,
-                calls.core,
-                calls.dsl,
-            ) { name, at -> analysis.isForeign(file, name, at) }
+        val foreign = { name: String, at: Int -> analysis.isForeign(file, name, at) }
+        val source = analysis.source(file.text, SourceLanguage.KOTLIN, file).copy(foreign = foreign)
         return Asked(file, source, offset)
     }
 }

@@ -150,6 +150,9 @@ val port =
             out.mkdirs()
             for (name in listOf("streamlord-analysis-js.mjs", "kotlin-kotlin-stdlib.mjs")) library.get().resolve(name).copyTo(out.resolve(name))
             val mark = Regex("""\n *readonly __doNotUseOrImplementIt: \{[^}]*\};""")
-            out.resolve("streamlord-analysis-js.d.mts").writeText(mark.replace(library.get().resolve("streamlord-analysis-js.d.mts").readText(), ""))
+            // A property the port leaves null is left out of the object, so it is optional, as the object has it.
+            val nullable = Regex("""(readonly \w+): Nullable<""")
+            val types = mark.replace(library.get().resolve("streamlord-analysis-js.d.mts").readText(), "")
+            out.resolve("streamlord-analysis-js.d.mts").writeText(nullable.replace(types, "$1?: Nullable<"))
         }
     }

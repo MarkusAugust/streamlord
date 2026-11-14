@@ -15,11 +15,12 @@ import com.intellij.spellchecker.inspections.PlainTextSplitter
 import com.intellij.spellchecker.tokenizer.SpellcheckingStrategy
 import com.intellij.spellchecker.tokenizer.TokenConsumer
 import com.intellij.spellchecker.tokenizer.Tokenizer
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.proseRanges
+import io.github.markusaugust.streamlord.analysis.readsDsl
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
-import io.github.markusaugust.streamlord.intellij.analysis.StreamlordCalls
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtDeclaration
@@ -96,7 +97,7 @@ class DatastarSpellcheckingStrategy :
                 val kind = catalog.parseAttributeName(at.name.lowercase(), analysis.prefix)?.spec?.valueKind
                 if (at.whole && (kind == ValueKind.EXPRESSION || kind == ValueKind.SIGNAL)) at.value?.let { starts += it.start }
             }
-            if (StreamlordCalls.of(file).dsl) {
+            if (analysis.analyzer.readsDsl(analysis.source(src, SourceLanguage.KOTLIN, file))) {
                 val sites = findCallSites(src, catalog.expressionCallSites.keys, analysis.analyzer.lex(src))
                 val foreign = analysis.foreignAmong(file, sites)
                 for (site in sites) {

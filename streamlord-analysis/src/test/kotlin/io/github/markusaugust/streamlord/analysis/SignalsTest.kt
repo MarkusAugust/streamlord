@@ -11,12 +11,13 @@ class SignalsTest {
             val name = case.string("name")
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
-            val foreign = if (case.boolean("withoutDsl") == true) Catalog.default.signalNameHelpers.keys else emptySet()
-            val definitions = collectSignalDefinitions(src, language, foreign)
-            case.array("signals")?.let { assertEquals(it.strings(), collectSignals(src, language, foreign).sorted(), name) }
+            val modules = if (case.boolean("withoutDsl") == true) Modules.known(true, false) else Modules.UNKNOWN
+            val source = Source(src, language, case.string("prefix") ?: "data-", modules)
+            val definitions = collectSignalDefinitions(source)
+            case.array("signals")?.let { assertEquals(it.strings(), collectSignals(source).sorted(), name) }
             case.array("definitions")?.let { assertEquals(it.strings(), definitions.sorted(), name) }
             case.array("encoded")?.let { assertEquals(it.strings(), definitions.filter { d -> d == "*" || ':' in d }, name) }
-            val declarations = signalDeclarations(src, language, foreign)
+            val declarations = signalDeclarations(source)
             case.array("declarations")?.let { expected ->
                 val written = declarations.map { listOf(it.name, src.substring(it.start, it.end)) }
                 assertEquals(expected.map { (it as JsonArray).strings() }, written, name)

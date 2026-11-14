@@ -18,14 +18,14 @@ class FakeIndex {
   }
   allDefinitions() {
     const out = new Set<string>();
-    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin").definitions) out.add(s);
+    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin", "data-").definitions) out.add(s);
     return [...out];
   }
   allSelectors() {
     const ids = new Set<string>();
     const classes = new Set<string>();
     for (const f of this.files.values()) {
-      const s = signalsOf(f.text, f.lang === "kotlin");
+      const s = signalsOf(f.text, f.lang === "kotlin", "data-");
       for (const i of s.ids) ids.add(i);
       for (const c of s.classes) classes.add(c);
     }

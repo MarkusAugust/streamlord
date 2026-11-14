@@ -62,7 +62,7 @@ public class KotlinLex(
      * reading knows that. They come in source order and apart, so the one that may hold the offset is
      * the last to start before it.
      */
-    public fun stringAt(offset: Int): KotlinString? {
+    internal fun stringAt(offset: Int): KotlinString? {
         val before = strings.binarySearch { if (it.start < offset) -1 else 1 }.let { -it - 2 }
         return strings.getOrNull(before)?.takeIf { offset <= it.end }
     }
@@ -270,7 +270,7 @@ private fun makeArg(
  * opposed to string literals, character literals and comments. Kotlin block comments nest,
  * raw strings span lines, and a character literal may hold an escape such as `'A'`.
  */
-public fun lexKotlin(src: String): KotlinLex {
+internal fun lexKotlin(src: String): KotlinLex {
     val strings = ArrayList<KotlinString>()
     val mask = BooleanArray(src.length) { true }
 
@@ -328,7 +328,7 @@ public fun lexKotlin(src: String): KotlinLex {
 }
 
 /** Every string literal in the source that is not inside a comment, in order. */
-public fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
+internal fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
 
 private val HTML_MARKER = regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")

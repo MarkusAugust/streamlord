@@ -13,13 +13,15 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiModificationTracker
-import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
+import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
+import io.github.markusaugust.streamlord.analysis.Source
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
@@ -43,15 +45,20 @@ class StreamlordAnalysis(
 
     val prefix: String get() = settings.attributePrefix
 
-    /** The options for [file], with which of Streamlord's modules it can use; with no file, what the text alone says. */
-    fun options(file: PsiFile? = null): AnalyzeOptions =
-        AnalyzeOptions(
-            prefix = prefix,
-            checkHtmlAttributes = true,
-            htmlDsl = file?.let { ProjectLibraries.known(it, StreamlordLibrary.HTML) },
-            core = file?.let { ProjectLibraries.known(it, StreamlordLibrary.CORE) },
-            coreHtml = file?.let { ProjectLibraries.coreHtml(it) },
-        )
+    /** [text] as the analysis reads it, with the prefix and which of Streamlord's modules the module of [file] has. */
+    fun source(
+        text: String,
+        language: SourceLanguage,
+        file: PsiFile? = null,
+    ): Source = Source(text, language, prefix, modules(file))
+
+    /** Which of Streamlord's modules the module of [file] has: unknown while the IDE indexes, and with no file. */
+    fun modules(file: PsiFile?): Modules {
+        if (file == null) return Modules.UNKNOWN
+        val core = ProjectLibraries.known(file, StreamlordLibrary.CORE) ?: return Modules.UNKNOWN
+        val html = ProjectLibraries.known(file, StreamlordLibrary.HTML) ?: return Modules.UNKNOWN
+        return Modules.known(core, html, ProjectLibraries.coreHtml(file) != false)
+    }
 
     /**
      * The issues of a Kotlin file, by call site or HTML string, each value joined into an HTML string judged by what the Kotlin
@@ -67,8 +74,8 @@ class StreamlordAnalysis(
         if (foreign.isEmpty()) return judged.issues
         resolved.issues?.takeIf { it.first === judged && it.second == foreign }?.let { return it.third }
         val facts = judged.facts
-        val options = judged.options.copy(foreignCalls = foreign, valueFact = { start, end -> facts[TextRange(start, end)] })
-        val kept = analyzer.analyzeKotlinSites(file.text, options)
+        val source = judged.source.copy(foreign = { _, at -> at in foreign }, valueFact = { start, end -> facts[TextRange(start, end)] })
+        val kept = analyzer.analyzeKotlinSites(source)
         resolved.issues = Triple(judged, foreign, kept)
         return kept
     }
@@ -76,17 +83,17 @@ class StreamlordAnalysis(
     /** The issues of the text alone, as the facts and the modules the file can use give them. */
     private fun judgedText(file: KtFile): Judged {
         val facts = holeFacts(file)
-        val options = options(file)
+        val source = source(file.text, SourceLanguage.KOTLIN, file)
         val memo =
             CachedValuesManager.getCachedValue(
                 file,
             ) { CachedValueProvider.Result.create(AtomicReference<Judged>(), file, settings.tracker) }
-        memo.get()?.takeIf { it.facts == facts && it.options == options }?.let { return it }
+        memo.get()?.takeIf { it.facts == facts && it.source == source }?.let { return it }
         val judged =
             Judged(
                 facts,
-                options,
-                analyzer.analyzeKotlinSites(file.text, options.copy(valueFact = { start, end -> facts[TextRange(start, end)] })),
+                source,
+                analyzer.analyzeKotlinSites(source.copy(valueFact = { start, end -> facts[TextRange(start, end)] })),
             )
         memo.set(judged)
         return judged
@@ -217,28 +224,28 @@ class StreamlordAnalysis(
             CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
 
-    /** A first pass: the facts and the options it was run with, and the issues they gave. */
+    /** A first pass: the facts and the file as it was read, and the issues they gave. */
     private class Judged(
         val facts: Map<TextRange, ValueFact>,
-        val options: AnalyzeOptions,
+        val source: Source,
         val issues: List<SiteIssues>,
     )
 
     /** The issues of an HTML document or template. */
     fun htmlIssues(file: PsiFile): List<Issue> =
         CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(analyzer.analyzeHtml(file.text, options()), file, settings.tracker)
+            CachedValueProvider.Result.create(analyzer.analyzeHtml(source(file.text, SourceLanguage.HTML)), file, settings.tracker)
         }
 
-    /** The options a Kotlin file's text is read with, and the signals its expressions read, by the text alone. */
-    private fun kotlinSignalReferences(file: KtFile): Pair<AnalyzeOptions, List<SignalReference>> {
-        val options = options(file)
+    /** How a Kotlin file's text is read, and the signals its expressions read, by the text alone. */
+    private fun kotlinSignalReferences(file: KtFile): Pair<Source, List<SignalReference>> {
+        val source = source(file.text, SourceLanguage.KOTLIN, file)
         val memo =
             CachedValuesManager.getCachedValue(file) {
-                CachedValueProvider.Result.create(AtomicReference<Pair<AnalyzeOptions, List<SignalReference>>>(), file, settings.tracker)
+                CachedValueProvider.Result.create(AtomicReference<Pair<Source, List<SignalReference>>>(), file, settings.tracker)
             }
-        memo.get()?.takeIf { it.first == options }?.let { return it }
-        val read = options to analyzer.signalReferencesInKotlin(file.text, options)
+        memo.get()?.takeIf { it.first == source }?.let { return it }
+        val read = source to analyzer.signalReferences(source)
         memo.set(read)
         return read
     }
@@ -248,13 +255,13 @@ class StreamlordAnalysis(
      * expression handed to one is no Datastar, and its HTML string is a free one. Only a call that holds a read is resolved.
      */
     fun streamlordSignalReferences(file: KtFile): List<SignalReference> {
-        val (options, refs) = kotlinSignalReferences(file)
+        val (source, refs) = kotlinSignalReferences(file)
         if (refs.none { it.site != null }) return refs
         val resolved = resolved(file)
         val foreign = foreignCalls(file, resolved, refs.mapNotNull { it.site })
         if (foreign.isEmpty()) return refs
         resolved.references?.takeIf { it.first === refs && it.second == foreign }?.let { return it.third }
-        val kept = analyzer.signalReferencesInKotlin(file.text, options.copy(foreignCalls = foreign))
+        val kept = analyzer.signalReferences(source.copy(foreign = { _, at -> at in foreign }))
         resolved.references = Triple(refs, foreign, kept)
         return kept
     }
@@ -262,7 +269,7 @@ class StreamlordAnalysis(
     /** The signals the expressions of an HTML document or template read. */
     fun htmlSignalReferences(file: PsiFile): List<SignalReference> =
         CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(analyzer.signalReferencesInHtml(file.text, options()), file, settings.tracker)
+            CachedValueProvider.Result.create(analyzer.signalReferences(source(file.text, SourceLanguage.HTML)), file, settings.tracker)
         }
 
     companion object {

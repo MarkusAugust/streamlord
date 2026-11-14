@@ -8,6 +8,51 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- streamlord-analysis describes a file one way, `Source`, and every entry takes it. `AnalyzeOptions`
+  is gone: write `analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`
+  where you wrote `analyzer.analyzeKotlin(text, AnalyzeOptions(prefix, constants = names))`, and
+  likewise for `analyzeHtml` and `analyzeKotlinSites`; `analyzeKotlin(text)` and `analyzeHtml(text)`
+  stay for a file of which nothing more is known. `foreignCalls`, a set of offsets, is
+  `Source.foreign`, a function of a call's name and where it starts, and `checkHtmlAttributes` is
+  gone, with no replacement. `analyzeProject` takes the prefix in place of options.
+- What a host knows of the modules is one value, `Source.modules`, in place of `core`, `htmlDsl` and
+  `coreHtml`: `Modules.known(core, htmlDsl, coreHtml)` where it sees the classpath,
+  `Modules.UNKNOWN` where it cannot tell (the default, and what null meant), and
+  `Modules.FROM_IMPORTS` for a host that never sees one, which reads a Kotlin file's imports.
+  `streamlordCallNames(core, htmlDsl)` is gone, and `htmlStringAt(text, offset, core)` is
+  `htmlStringAt(source, offset)`; whether a file may call the DSL is `readsDsl(source)`.
+- `signalReferencesInKotlin` and `signalReferencesInHtml` are `signalReferences(source)`.
+  `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and `collectSignalFacts` take a
+  `Source`, read its attributes under `Source.prefix` as `signalReferences` does, and leave out the
+  DSL's short helpers for `Modules.known(true, false)`, where you passed `foreignHelpers(htmlDsl =
+  false)`, which is gone. `constantNames` and `otherDeclaredNames` are one `declaredNames(text)`,
+  and `projectConstants` takes what it gives for each file: `projectConstants(texts.map(::declaredNames))`.
+- `Requests.streamRequest` (sent or refused), `Requests.signalsProblem` and `Requests.environment`
+  are new: the request and the variables both editors send. Signals that are no JSON object are
+  refused, and both editors judge them with the SDK's reader, so VS Code now refuses signals nested
+  deeper than 64 or with a number longer than 1000 digits, as IntelliJ did, and says why in the
+  same words. `Requests.parseRequestsFile` takes null for a file that is not there. The folders a
+  project walk leaves out and the extensions read as markup are `ProjectFiles`.
+- streamlord-analysis shows only what the editors call; the rest is internal. In place of
+  `sourcePosition`, `SourcePosition` and `Issue.position`, call `Issue.format(file, source)`; in place
+  of `Requests.parseEnv`, `mergeVariables`, `substitute` and `Env`, call `Requests.environment` and
+  `Requests.resolveRequest`; in place of `sendableUrl`, `SendableUrl`, `requestUrl` and
+  `ENV_KEYS`, call `Requests.streamRequest`; in place of `collectDeclaredSignals`, read
+  `collectSignalFacts(source).declared`; in place of `Catalog.attributesByName`, call
+  `Catalog.parseAttributeName`. `Catalog`'s other tables (`actions`, `actionsByName`, `ActionSpec`,
+  `attributesByKotlin`, `domEvents`, `DomEvent`, `fetchEvents`, `fetchOptions`, `backendActions`,
+  `compiledParameters`, `patchModes`, `scopeNames`, `namingHelpers`, `signalKeyAttributes`,
+  `allCallSiteNames`, `htmlCallSites`, `scriptCallSites`, `selectorCallSites`) have no replacement:
+  they are what completion and the checks read, so ask `complete`, `hover` and `signatureHelp`. With no replacement either, as internal machinery: `distance`, `Docs`,
+  `JsParser`, `JsSyntaxError`, `KeyKind`, `keyKind`, `keyReading`, `rawKeyNote`, `wireKey`,
+  `TEMPLATE_SYNTAX`, `hasTemplateSyntax`, `lexKotlin` (call `analyzer.lex`), `findKotlinStrings`
+  (`analyzer.lex(text).strings`), `KotlinLex.stringAt`, `isStringStart`, `readKotlinStringAt`,
+  `isKnownSignal`, `nearestSignal`, `isMarkupCollection`, `ValueFact.ofTypeName`,
+  `Analyzer.callSiteNames`, `dslNames`, `validateExpression` (`analyzeHtml` judges an attribute's
+  expression), `Requests.lineAndColumn`, `requestKey` and `serializeRequestsFile` (`saveRequest`
+  and `removeRequest` write the file).
+- The VS Code extension finds the signals of `.tmpl`, `.gotmpl` and `.gohtml` files too, which the
+  IntelliJ plugin reads as markup by default: both editors read one list.
 - `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a
   `data-on` listens for, after `attribute`. Source that names its arguments, or passes four or fewer,
   compiles as before; code compiled against the old signature needs a rebuild.

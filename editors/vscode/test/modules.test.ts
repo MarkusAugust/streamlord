@@ -53,7 +53,7 @@ describe("a DSL-named call in a file without the DSL", () => {
   });
 
   it("gets no completion, hover or signature help", () => {
-    const index = { allDefinitions: () => signalsOf(`<div data-signals:count="0"></div>`, false).definitions, allSelectors: () => ({ ids: new Set(), classes: new Set() }) };
+    const index = { allDefinitions: () => signalsOf(`<div data-signals:count="0"></div>`, false, "data-").definitions, allSelectors: () => ({ ids: new Set(), classes: new Set() }) };
     const completion = new StreamlordCompletionProvider(index as never, () => "data-");
     assert.deepEqual(completion.provideCompletionItems(doc as never, doc.positionAt(src.indexOf("count")) as never), []);
     const hover = new StreamlordHoverProvider(() => "data-");
@@ -72,7 +72,7 @@ describe("a DSL-named call in a file without the DSL", () => {
 });
 
 describe("kotlinx.html's attributes form and HTML strings, whatever the file has", () => {
-  const index = { allDefinitions: () => signalsOf(`<div data-signals:count="0"></div>`, false).definitions, allSelectors: () => ({ ids: new Set(), classes: new Set() }) };
+  const index = { allDefinitions: () => signalsOf(`<div data-signals:count="0"></div>`, false, "data-").definitions, allSelectors: () => ({ ids: new Set(), classes: new Set() }) };
   const completion = new StreamlordCompletionProvider(index as never, () => "data-");
   const labels = (src: string, at: number) => completion.provideCompletionItems(new MockDocument(src, "kotlin") as never, new MockDocument(src, "kotlin").positionAt(at) as never).map((i) => String(i.label));
 

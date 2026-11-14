@@ -25,9 +25,16 @@ class SignalDriftTest {
 
     private fun drift(vararg files: Pair<String, SignalFacts>) = signalDrift(files.toMap()).issues
 
-    private fun kotlin(src: String) = collectSignalFacts(src, SourceLanguage.KOTLIN)
+    private fun kotlin(src: String) = collectSignalFacts(Source(src, SourceLanguage.KOTLIN))
 
-    private fun html(src: String) = collectSignalFacts(src, SourceLanguage.HTML)
+    private fun html(src: String) = collectSignalFacts(Source(src, SourceLanguage.HTML))
+
+    @Test
+    fun `a page declares under the prefix its bundle sets`() {
+        val facts =
+            collectSignalFacts(Source("<div data-signals:plain=\"1\" data-x-signals:foo=\"1\"></div>", SourceLanguage.HTML, "data-x-"))
+        assertEquals(setOf("foo"), facts.declared)
+    }
 
     @Test
     fun `the report says what it had to judge, so an empty result can be believed`() {

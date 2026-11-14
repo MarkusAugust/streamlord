@@ -27,7 +27,7 @@ function workspaceOf(files: Record<string, string>) {
   workspace.textDocuments = docs as unknown as OpenDocument[];
   const language = (path: string) => (path.endsWith(".kt") ? "kotlin" : "html");
   const index = {
-    allDefinitions: () => [...new Set(docs.flatMap((d) => signalsOf(d.text, language(d.uri.path) === "kotlin").definitions))],
+    allDefinitions: () => [...new Set(docs.flatMap((d) => signalsOf(d.text, language(d.uri.path) === "kotlin", "data-").definitions))],
     allPlaces: async () => new Map<string, Places>(docs.map((d) => [d.uri.toString(), placesIn(d.text, language(d.uri.path), "data-")])),
   };
   const provider = new SignalNavigationProvider(index as never, () => "data-");

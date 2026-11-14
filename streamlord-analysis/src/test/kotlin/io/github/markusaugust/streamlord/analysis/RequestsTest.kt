@@ -110,6 +110,7 @@ class RequestsTest {
                 mapOf("url" to r.url, "error" to r.error)
             },
             "sends" to { c -> Requests.sendableUrl(c.string("url")!!).url != null },
+            "signalsRefused" to { c -> Requests.signalsProblem(c.string("signals")!!) != null },
             "readsAsStream" to { c -> Requests.readsAsStream(c.int("status")!!, c.string("contentType")) },
             "emptyBodyHint" to { c -> Requests.emptyBodyHint(c.int("status")!!, c.string("body")!!) },
             "requestHeaders" to { c ->

@@ -389,18 +389,20 @@ internal fun fileFacts(
     return FileFacts(src, code, declarations(src, code)).also { lastFacts = it }
 }
 
-/** The names a Kotlin file declares that another file can mean by the bare name: its `const val`s, and every other `val` or `var`. */
-private class VisibleNames(
-    val src: String,
-    val constants: Set<String>,
-    val others: Set<String>,
+/** The names a Kotlin file declares that other files can see, as [declaredNames] reads them. */
+public class DeclaredNames(
+    /** The `const val`s: top level or in an object or a class, and not private, `internal` counting as seen. */
+    public val constants: Set<String>,
+    /** Every other `val` or `var`, at top level, in a class or in a constructor, getters included; a parameter or a local is seen in its file only. */
+    public val others: Set<String>,
 )
 
 @Volatile
-private var lastVisible: VisibleNames? = null
+private var lastVisible: Pair<String, DeclaredNames>? = null
 
-private fun visibleNames(src: String): VisibleNames {
-    lastVisible?.let { if (it.src == src) return it }
+/** The names the Kotlin file [src] declares that another file can mean by the bare name. */
+public fun declaredNames(src: String): DeclaredNames {
+    lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
             ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask)) }
@@ -409,34 +411,20 @@ private fun visibleNames(src: String): VisibleNames {
     for ((name, list) in names) {
         for (d in list) if (d.shared) (if (d.constant) constants else others) += name
     }
-    return VisibleNames(src, constants, others).also { lastVisible = it }
+    return DeclaredNames(constants, others).also { lastVisible = src to it }
 }
 
 /**
- * The `const val` names a Kotlin file declares that other files can see: top level or in an
- * object or a class, and not private, `internal` counting as seen. What [projectConstants] gathers.
+ * The constants of a project whose Kotlin files declare [files], to pass as [Source.constants]:
+ * each file's constants, less every name some file declares as anything else another file could
+ * mean by it.
  */
-public fun constantNames(src: String): Set<String> = visibleNames(src).constants
-
-/**
- * The other names a Kotlin file declares that other files can see: a `val` or `var` that is not
- * a `const`, at top level, in a class or in a constructor, getters included. A parameter or a
- * local is seen in this file only.
- */
-public fun otherDeclaredNames(src: String): Set<String> = visibleNames(src).others
-
-/**
- * The constants of a project whose Kotlin files are [sources], to pass as [AnalyzeOptions.constants]:
- * each file's [constantNames], less every name some file declares as anything else another file
- * could mean by it.
- */
-public fun projectConstants(sources: Iterable<String>): Set<String> {
+public fun projectConstants(files: Iterable<DeclaredNames>): Set<String> {
     val out = HashSet<String>()
     val others = HashSet<String>()
-    for (src in sources) {
-        val v = visibleNames(src)
-        out += v.constants
-        others += v.others
+    for (file in files) {
+        out += file.constants
+        others += file.others
     }
     return out - others
 }
@@ -1217,7 +1205,7 @@ private val HOLE_HELPERS: Set<String> =
 private fun helperArguments(
     src: String,
     t: String,
-    sdk: Sdk,
+    sdk: FileModules,
 ): List<String>? {
     val m = CALL_START.find(t) ?: return null
     val name = m.groupValues[1]
@@ -1242,7 +1230,7 @@ private fun ownArgument(
     arg: String,
     at: Int,
     constants: Set<String>,
-    sdk: Sdk,
+    sdk: FileModules,
 ): Boolean {
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
@@ -1288,7 +1276,7 @@ internal fun valueKind(
     at: Int,
     constants: Set<String>,
     nonNull: Boolean = false,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): ValueFact? {
     val t = value.trim()
     if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null ||
@@ -1359,7 +1347,7 @@ private fun callKind(
     t: String,
     at: Int,
     constants: Set<String>,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): ValueFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
@@ -1515,7 +1503,7 @@ internal fun markupValue(
     value: String,
     at: Int,
     depth: Int = 0,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): Boolean {
     val values = holeValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
@@ -1573,7 +1561,7 @@ private fun markupElements(
     receiver: String,
     at: Int,
     depth: Int,
-    sdk: Sdk,
+    sdk: FileModules,
 ): Boolean {
     val t = receiver.trim()
     if (IDENT.matchEntire(t) != null) {
@@ -1638,7 +1626,7 @@ internal fun isMarkup(
     src: String,
     s: KotlinString,
     ip: Interpolation,
-    sdk: Sdk = Sdk.DEFAULT,
+    sdk: FileModules = FileModules.DEFAULT,
 ): Boolean = markupValue(src, ip.text, s.start, sdk = sdk)
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
@@ -2107,19 +2095,18 @@ private fun formatBody(
 
 /**
  * Whether a fix may write [name] of core's domain, `interpolate` or `Trusted`, in [src]: core is
- * there, no call of the name is one the host knows is somebody else's ([foreignCalls]), and nothing
- * else in the file takes the name.
+ * there, no call of the name is one the host knows is somebody else's ([Modules.foreign]), and
+ * nothing else in the file takes the name.
  */
 internal fun coreNameUsable(
     src: String,
     name: String,
-    sdk: Sdk,
-    foreignCalls: Set<Int>,
+    sdk: FileModules,
 ): Boolean {
     if (!sdk.core) return false
     val facts = fileFacts(src)
-    if (foreignCalls.isNotEmpty() &&
-        facts.coreCalls.getOrPut(name) { findCallSites(src, setOf(name)).map { it.nameStart } }.any { it in foreignCalls }
+    if (sdk.foreign !== NOT_FOREIGN &&
+        facts.coreCalls.getOrPut(name) { findCallSites(src, setOf(name)).map { it.nameStart } }.any { sdk.foreign(name, it) }
     ) {
         return false
     }

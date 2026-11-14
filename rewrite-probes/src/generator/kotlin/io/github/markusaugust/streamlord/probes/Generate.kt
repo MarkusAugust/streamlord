@@ -1,8 +1,9 @@
 package io.github.markusaugust.streamlord.probes
 
-import io.github.markusaugust.streamlord.analysis.AnalyzeOptions
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Fix
+import io.github.markusaugust.streamlord.analysis.Source
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.rewriteAt
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -103,8 +104,7 @@ private fun render(
     val source = header + declares + "fun f(${case.params}) = ${case.body}\n"
     // The matrix gives the fact an editor that types the values would; any other case is read by its text alone.
     val facts = { start: Int, end: Int -> case.fact.takeIf { source.substring(start, end).trim() in case.written } }
-    val opts = AnalyzeOptions(valueFact = facts.takeIf { case.written.isNotEmpty() })
-    val sites = analyzer.analyzeKotlinSites(source, opts)
+    val sites = analyzer.analyzeKotlinSites(Source(source, SourceLanguage.KOTLIN, valueFact = facts.takeIf { case.written.isNotEmpty() }))
     val issues = sites.flatMap { it.issues }.sortedBy { it.start }
     val variants = ArrayList<Triple<String, Fix, Boolean>>()
     for (issue in issues.filter { it.code in JUDGED }) for (fix in issue.fixes) variants += Triple(fix.title, fix, false)

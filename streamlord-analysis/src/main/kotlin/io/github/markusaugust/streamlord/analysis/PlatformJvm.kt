@@ -26,7 +26,7 @@ public data class ProjectIssue(
 /** What [Analyzer.analyzeProject] answers: the `.kt` files under [root], less the folders named in [skipped] and the hidden ones, in path order. */
 internal fun Analyzer.issuesUnder(
     root: File,
-    opts: AnalyzeOptions,
+    prefix: String,
     skipped: Set<String>,
 ): List<ProjectIssue> {
     val files =
@@ -37,9 +37,11 @@ internal fun Analyzer.issuesUnder(
             .sortedBy { it.invariantSeparatorsPath }
             .map { it to it.readText() }
             .toList()
-    val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
+    val constants = projectConstants(files.map { declaredNames(it.second) })
     return files.flatMap { (file, source) ->
-        analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
+        analyzeKotlin(
+            Source(source, SourceLanguage.KOTLIN, prefix, constants = constants),
+        ).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
             val (line, column) = issue.position(source)
             ProjectIssue(file, line, column, issue)
         }
