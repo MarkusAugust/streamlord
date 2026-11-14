@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.daemon.impl.analysis.XmlUnboundNsPrefixInspection
+import com.intellij.codeInspection.htmlInspections.HtmlUnknownAttributeInspection
 import com.intellij.codeInspection.LanguageInspectionSuppressors
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.lang.injection.InjectedLanguageManager
@@ -79,6 +80,17 @@ class NamespaceSuppressorTest : BasePlatformTestCase() {
         assertTrue(injected!!.containingFile.language.isKindOf(HTMLLanguage.INSTANCE))
         val suppressors = LanguageInspectionSuppressors.INSTANCE.allForLanguage(HTMLLanguage.INSTANCE)
         assertTrue(suppressors.any { it.isSuppressedFor(injected, "XmlUnboundNsPrefix") })
+    }
+
+    // The browser lowercases a name, so the client reads DATA-TEXT as data-text; IntelliJ's own check takes it as written.
+    fun `test a datastar attribute written in capitals is allowed in html`() {
+        myFixture.enableInspections(HtmlUnknownAttributeInspection())
+        myFixture.configureByText(
+            "page.html",
+            """<div DATA-TEXT="${'$'}a" Data-On:Click="${'$'}a++" DATA-ON:CLICK="${'$'}a++" data-text="${'$'}a" Data-Signals:a="1"></div>""",
+        )
+        val found = myFixture.doHighlighting().mapNotNull { it.description }
+        assertEmpty(found.filter { "not allowed here" in it || "is not bound" in it })
     }
 
     fun `test a plain xml file keeps the warning`() {
