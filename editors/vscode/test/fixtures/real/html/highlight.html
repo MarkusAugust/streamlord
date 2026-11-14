@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<body>
+<div data-text="'Hello" id="hs-one"></div>
+<p class="hs-after">An unclosed string colours its value alone.</p>
+<div data-text="`tpl" id="hs-two"></div>
+<div data-text="$hsA /* note" id="hs-three"></div>
+<button data-on:click="@post([[@{/save}]])">Save</button>
+<p class="hs-after">And the next line is HTML.</p>
+<div data-text="{{ user.name }} + $hsA" data-show="{% if a %}$hsShown{% endif %}"></div>
+<div th:attr="data-signals=${signals}" data-text="$hsLabel"></div>
+<div data-class="{'text-red-500': $hsErr}" data-signals='{"hs-key": 1}'></div>
+<input data-on:input="evt?.target.value && ($hsQ = evt.target.value)">
+</body>
+</html>
