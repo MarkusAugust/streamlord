@@ -643,6 +643,16 @@ internal fun Catalog.listensFor(
     return clientCase(parsed.key, parsed.modifiers, "kebab")
 }
 
+/**
+ * The DOM event [key] is once lowercased, where it is written with a capital and only its lower
+ * case names one: `keyDown` is keydown, `DOMContentLoaded` is itself. Null otherwise.
+ */
+internal fun Catalog.lowercaseDomEvent(key: String): String? {
+    val lower = key.asciiLowercase()
+    if (lower == key || domEvents.none { it.name == lower } || domEvents.any { it.name == key }) return null
+    return lower
+}
+
 /** The event a DSL call's expression is run for: `dataOnFetch`'s, or the one `dataOn` is handed as a literal. */
 internal fun dslEvent(site: CallSite): String? =
     when (site.name) {
@@ -1654,6 +1664,21 @@ public class MarkupValidator(
         val keyStart = attr.nameStart + colon + 1
         val name = prefix + spec.name
         val existing = parsed.modifiers.firstOrNull { it.name == "case" }
+        // data-on:keyDown works: the browser hands Datastar keydown, the event that fires.
+        val dom = if (keyKind(spec) == KeyKind.EVENT && existing == null) catalog.lowercaseDomEvent(key) else null
+        if (dom != null) {
+            return listOf(
+                Issue(
+                    start = keyStart,
+                    end = keyStart + key.length,
+                    message = "The browser lowercases attribute names, so this listens for $dom, the DOM event. Write $name:$dom.",
+                    severity = Severity.HINT,
+                    code = "key-case",
+                    link = Docs.attribute(spec.name),
+                    fixes = listOf(Fix("Change to $dom", keyStart, keyStart + key.length, dom)),
+                ),
+            )
+        }
         // With an explicit __case already there, only the key itself changes, when that case gives the name back.
         val fixed =
             if (existing != null) {

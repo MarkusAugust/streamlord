@@ -2208,6 +2208,20 @@ public class Analyzer(
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
         if (!capital) return emptyList()
+        val dom = if (spec.name == "on" && explicitCase == null) catalog.lowercaseDomEvent(name) else null
+        if (dom != null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message = "${site.name}(\"$name\") listens for $name, which no browser fires: the DOM event is $dom.",
+                    severity = Severity.WARNING,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec.name),
+                    fixes = listOf(Fix("Change to $dom", key.contentStart, key.contentEnd, dom)),
+                ),
+            )
+        }
         if (wire == null) {
             return listOf(
                 Issue(
