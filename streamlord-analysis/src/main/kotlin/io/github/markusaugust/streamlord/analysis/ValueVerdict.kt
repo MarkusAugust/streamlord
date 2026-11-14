@@ -34,9 +34,10 @@ internal fun verdict(
             if (plain.scalar()) Verdict.SAFE else Verdict.ESCAPE
         }
 
+        // `true` or `false` is no CSS that does harm.
         Position.STYLE -> {
             when (plain) {
-                ValueFact.NUMBER -> Verdict.SAFE
+                ValueFact.NUMBER, ValueFact.BOOLEAN -> Verdict.SAFE
                 ValueFact.UNSIGNED -> Verdict.DIGITS
                 else -> Verdict.UNSAFE
             }
@@ -50,7 +51,12 @@ internal fun verdict(
             }
         }
 
-        Position.CODE, Position.STRUCTURE -> {
+        // Digits, true, false or null cannot end a script, a style or an event handler.
+        Position.CODE -> {
+            if (plain.scalar()) Verdict.SAFE else Verdict.UNSAFE
+        }
+
+        Position.STRUCTURE -> {
             Verdict.UNSAFE
         }
     }

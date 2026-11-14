@@ -271,9 +271,11 @@ all yours or a declared number or boolean, `${signal("count")}` or `${post("/sav
 only as safe as what it is given: `${signal(query)}` writes the request's text into a Datastar
 expression, where it runs, so it is judged as the `String` it returns. IntelliJ reads the enum
 itself and takes an entry only when the enum does not override `toString`. Any other value is judged by what `interpolate` would let in
-where it lands. A number or a boolean says nothing in text, an attribute, a URL or a `data-*`
-expression, and a number in `style` too; one that may be null, an `Int?`, only where escaping is
-enough. An unsigned number, a `UInt` or a `3u`, says nothing where escaping is enough and is a hint
+where it lands. A number or a boolean says nothing in text, an attribute, a URL, a `data-*`
+expression or `style`, nor in a `<script>`, a `<style>` or an event handler, which digits, `true` and
+`false` cannot end; one that may be null, an `Int?`, only where escaping is enough and in code, which
+`null` cannot end either. Where `interpolate` would refuse such a value, the rewrite keeps it a
+template in the format. An unsigned number, a `UInt` or a `3u`, says nothing where escaping is enough and is a hint
 in a `data-*` expression or `style`: Kotlin writes its digits, but `interpolate` would refuse it
 there. A value that is markup you built, as a whole, says nothing in element text and is a warning
 anywhere else, where its quotes and tags can end what holds it: an HTML literal, an

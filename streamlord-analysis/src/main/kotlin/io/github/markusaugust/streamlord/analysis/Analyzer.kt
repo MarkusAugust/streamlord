@@ -1645,13 +1645,15 @@ public class Analyzer(
                     told[k].isString() || (opts.valueFact == null && !typeShown(src, s.interpolations[k].text, s.start))
                 }
         }
-        // A value of the author's own that interpolate would not take as it is, a constant or `${"$"}`, stays a template in
-        // the format, which Kotlin fills in as before; not one whose text, as the file shows it, interpolate would read
-        // as a placeholder.
+        // A value interpolate would not take as it is, though it is safe where it lands, stays a template in the format,
+        // which Kotlin fills in as before: one of the author's own, a constant or `${"$"}`, but not one whose text, as the
+        // file shows it, interpolate would read as a placeholder; and digits, true, false or null in a script or a style.
         val kept by lazy(LazyThreadSafetyMode.NONE) {
             holes.filterTo(HashSet()) { k ->
                 val ip = s.interpolations[k]
-                !keeps[k] && told[k].isConstant() && ip.kind != InterpolationKind.OPERAND && !constantPercent(src, ip.text, s.start)
+                val own = told[k].isConstant() && !constantPercent(src, ip.text, s.start)
+                val scalar = told[k].scalar() && verdict(told[k], landings[k].position) == Verdict.SAFE
+                !keeps[k] && ip.kind != InterpolationKind.OPERAND && (own || scalar)
             }
         }
         val trim = trimAfter(src, s)
@@ -1833,12 +1835,16 @@ public class Analyzer(
 
                     Position.CODE -> {
                         val vouch = fixable && k in vouched.keys
-                        issue(
-                            "Kotlin writes $shown into ${landing.attribute ?: "a script or style element"}, which the browser runs, " +
-                                "so escaping does not help. Put the value in a data-* attribute and read it from there." +
-                                if (vouch) " CSS you wrote yourself can be passed to interpolate(...) as Trusted(...)." else "",
-                            fixes = if (vouch) listOf(rewriteAs()) else emptyList(),
-                        )
+                        val message =
+                            if (rawElement(view, landing, starts[k]) == "style") {
+                                "Kotlin writes $shown into a <style>, where it is read as CSS, so escaping does not help. " +
+                                    "Choose between classes, or write a number." +
+                                    if (vouch) " CSS you wrote yourself can be passed to interpolate(...) as Trusted(...)." else ""
+                            } else {
+                                "Kotlin writes $shown into ${landing.attribute ?: "a script"}, which the browser runs, " +
+                                    "so escaping does not help. Put the value in a data-* attribute and read it from there."
+                            }
+                        issue(message + rewriteNote().takeIf { !vouch }.orEmpty(), fixes = if (vouch) listOf(rewriteAs()) else emptyList())
                     }
 
                     Position.STRUCTURE -> {

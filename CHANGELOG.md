@@ -352,6 +352,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `@Language("HTML")` or `// language=HTML` was. VS Code colours one marked by the qualified name too.
 - A literal in a value joined into a `+` chain, `"<ul>" + tags.map { "<li>$it</li>" }.joinToString("") + "</ul>"`,
   or in a template of one of its literals, is judged as a string of its own, where it was passed over.
+- A number, a boolean or a nullable one in a `<script>`, a `<style>` or an event handler, and a
+  boolean in `style`, is no longer a warning: digits, `true`, `false` and `null` cannot end them.
+  The rewrite to `interpolate` keeps such a value a template in the format, so it no longer keeps
+  the rewrite from the other values. A String in the body of a `<style>` is said to be read as CSS,
+  with advice for CSS, where it was told to move into a `data-*` attribute.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
