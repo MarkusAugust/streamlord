@@ -23,6 +23,9 @@
     },
     {
       "include": "#datastar-attribute-bare"
+    },
+    {
+      "include": "#attribute-value-escaped"
     }
   ],
   "repository": {
@@ -350,6 +353,21 @@
               "include": "#attribute-name"
             }
           ]
+        }
+      }
+    },
+    "attribute-value-escaped": {
+      "comment": "Any other attribute's value in escaped quotes, as a plain Kotlin string writes it: class=\\\"btn\\\". HTML's grammar would read the backslash as an unquoted value and the quote after it as an error.",
+      "match": "(?<==)(\\\\\")((?:[^\"\\\\]|\\\\[^\"])*)(\\\\\")",
+      "captures": {
+        "1": {
+          "name": "string.quoted.double.html punctuation.definition.string.begin.html"
+        },
+        "2": {
+          "name": "string.quoted.double.html"
+        },
+        "3": {
+          "name": "string.quoted.double.html punctuation.definition.string.end.html"
         }
       }
     }

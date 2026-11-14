@@ -223,7 +223,8 @@
           "name": "string.template.datastar",
           "patterns": [
             {
-              "begin": "\\$\\{",
+              "comment": "A Kotlin string writes the template's dollar as ${'$'}: ${'$'}{ opens the expression as ${ does.",
+              "begin": "\\$\\{'\\$'\\}\\{|\\$\\{(?!'\\$'\\})",
               "end": "\\}",
               "beginCaptures": {
                 "0": {
@@ -241,6 +242,10 @@
                   "include": "#expression"
                 }
               ]
+            },
+            {
+              "match": "\\$\\{'\\$'\\}",
+              "name": "constant.character.escape.dollar.kotlin"
             },
             {
               "match": "\\\\.",

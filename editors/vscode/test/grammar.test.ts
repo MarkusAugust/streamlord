@@ -837,7 +837,7 @@ describe("Kotlin strings the analysis reads as Datastar", () => {
       `interpolate("Hello <b data-text=\\"\\$name\\" data-attr:title=\\"%s\\"></b>", "t")`,
       `interpolate(format = "Hello <b data-text=\\"\\$name\\"></b>")`,
       `interpolate(listOf("data-x-"), "Hello <b data-text=\\"\\$name\\"></b>")`,
-      `interpolate("""Hello <b data-text="${'$'}name"></b>""")`,
+      'interpolate("""Hello <b data-text="${\'$\'}name"></b>""")',
     ]) {
       const t = await tokens("source.kotlin", `val p = ${call}`, false);
       assert.match(scopeOf(t, "b"), /entity\.name\.tag\.html/, call);

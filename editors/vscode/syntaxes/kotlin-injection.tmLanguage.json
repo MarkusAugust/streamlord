@@ -14,6 +14,9 @@
       "include": "#html-call"
     },
     {
+      "include": "#interpolate-call"
+    },
+    {
       "include": "#script-call"
     },
     {
@@ -162,6 +165,9 @@
               "include": "#html-double-string"
             },
             {
+              "include": "#marked-double-string"
+            },
+            {
               "include": "#plain-double-string"
             }
           ],
@@ -181,6 +187,9 @@
             },
             {
               "include": "#html-double-string"
+            },
+            {
+              "include": "#marked-double-string"
             },
             {
               "include": "#plain-double-string"
@@ -303,10 +312,10 @@
       ]
     },
     "html-string-next-line": {
-      "comment": "A raw string that ends its first line: HTML when its next line opens with a tag, as `val h = \"\"\"` and `\"\"\".trimIndent()` write it, else a string. Its first line cannot tell which, so it is read here either way, with the templates its dollars open.",
+      "comment": "A raw string that ends its first line: HTML when its next line opens with a tag, after trimMargin's `|` too, as `val h = \"\"\"` and `\"\"\".trimIndent()` write it, else a string. Its first line cannot tell which, so it is read here either way, with the templates its dollars open.",
       "patterns": [
         {
-          "begin": "(\\$\\$\"\"\")[ \\t]*$",
+          "begin": "(?<!\\$)(\\$\\$\\$\"\"\")[ \\t]*$",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -321,7 +330,7 @@
           "name": "meta.kotlin-string.streamlord",
           "patterns": [
             {
-              "begin": "^(?=[ \\t]*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+              "begin": "^(?=[ \\t]*\\|?<(?:[A-Za-z]|!--|!(?i:doctype)))",
               "end": "(?=\"\"\")",
               "name": "meta.kotlin-template.three.streamlord",
               "contentName": "meta.embedded.block.html",
@@ -340,7 +349,7 @@
           ]
         },
         {
-          "begin": "(\\$\"\"\")[ \\t]*$",
+          "begin": "(?<!\\$)(\\$\\$\"\"\")[ \\t]*$",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -355,7 +364,7 @@
           "name": "meta.kotlin-string.streamlord",
           "patterns": [
             {
-              "begin": "^(?=[ \\t]*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+              "begin": "^(?=[ \\t]*\\|?<(?:[A-Za-z]|!--|!(?i:doctype)))",
               "end": "(?=\"\"\")",
               "name": "meta.kotlin-template.two.streamlord",
               "contentName": "meta.embedded.block.html",
@@ -374,7 +383,7 @@
           ]
         },
         {
-          "begin": "(\"\"\")[ \\t]*$",
+          "begin": "(?<!\\$)(\"\"\")[ \\t]*$",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
@@ -389,7 +398,7 @@
           "name": "meta.kotlin-string.streamlord",
           "patterns": [
             {
-              "begin": "^(?=[ \\t]*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+              "begin": "^(?=[ \\t]*\\|?<(?:[A-Za-z]|!--|!(?i:doctype)))",
               "end": "(?=\"\"\")",
               "name": "meta.kotlin-template.one.streamlord",
               "contentName": "meta.embedded.block.html",
@@ -472,6 +481,66 @@
     "html-double-string": {
       "comment": "A double-quoted literal that opens with a tag, under an HTML marker: HTML.",
       "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--))",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+        }
+      },
+      "end": "(\")",
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+        }
+      },
+      "patterns": [
+        {
+          "begin": "\\G(?<=\\$\\$\\$\")",
+          "end": "(?=\")",
+          "name": "meta.kotlin-template.three.streamlord",
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "include": "#kotlin-escapes"
+            },
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        },
+        {
+          "begin": "\\G(?<=\\$\\$\")",
+          "end": "(?=\")",
+          "name": "meta.kotlin-template.two.streamlord",
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "include": "#kotlin-escapes"
+            },
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        },
+        {
+          "begin": "\\G",
+          "end": "(?=\")",
+          "name": "meta.kotlin-template.one.streamlord",
+          "contentName": "meta.embedded.block.html",
+          "patterns": [
+            {
+              "include": "#kotlin-escapes"
+            },
+            {
+              "include": "text.html.basic"
+            }
+          ]
+        }
+      ],
+      "name": "meta.kotlin-string.streamlord"
+    },
+    "marked-double-string": {
+      "comment": "The double-quoted literal the marker ends at, the one that ends the line: HTML, however it opens (`@Language(\"HTML\") val p = \"Hello <b>\"`).",
+      "begin": "(\\$*\")(?=(?:[^\"\\\\\\n]|\\\\.)*\"[ \\t]*;?[ \\t]*$)",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
@@ -701,7 +770,7 @@
       "comment": "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression, the first a plain string. No capture of a rule that may run many times on a line has patterns of its own: the engine copies the line up to each such capture, which a long line pays for on every call.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\(\\s*(?:(?!expression\\b)[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*)?)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -727,7 +796,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\(\\s*(?:(?!expression\\b)[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*)?)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -758,7 +827,7 @@
       "comment": "dataSignals(\"name\", \"...\"), dataComputed(\"name\", \"...\"): the first argument names a signal, the second is the expression.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b(dataSignals|dataComputed)(\\s*\\(\\s*)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
+          "begin": "(?:(\\??\\.)\\s*)?\\b(dataSignals|dataComputed)(\\s*\\(\\s*(?:name\\s*=\\s*)?)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -793,7 +862,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b(dataSignals|dataComputed)(\\s*\\(\\s*)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
+          "begin": "(?:(\\??\\.)\\s*)?\\b(dataSignals|dataComputed)(\\s*\\(\\s*(?:name\\s*=\\s*)?)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -877,6 +946,64 @@
             }
           ],
           "name": "meta.kotlin-string.streamlord"
+        }
+      ]
+    },
+    "expression-call-named": {
+      "comment": "dataOn(expression = \"...\", event = \"click\"): the expression passed by name after another argument, which the rules above do not read. Only the string after expression = is one.",
+      "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\()(?=[^\\n]*\\bexpression\\s*=)",
+      "beginCaptures": {
+        "2": {
+          "name": "entity.name.function.kotlin"
+        }
+      },
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#kotlin-brackets"
+        },
+        {
+          "begin": "\\bexpression\\s*=\\s*(?:expression\\s*=\\s*)?(\\$*\"\"\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-string-body"
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "\\bexpression\\s*=\\s*(?:expression\\s*=\\s*)?(\\$*\"(?!\"\"))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-string-body"
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "include": "source.kotlin"
         }
       ]
     },
@@ -1395,6 +1522,143 @@
               "name": "entity.name.function.kotlin"
             },
             "4": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G(?<=\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.two.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.one.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        }
+      ]
+    },
+    "interpolate-call": {
+      "comment": "interpolate(\"Hello <b>...\", ...): core's format is HTML however it opens, first or after the prefixes the aliased bundle passes (`interpolate(listOf(\"data-star-\"), \"...\")`), or by name.",
+      "patterns": [
+        {
+          "begin": "(?:(\\??\\.)\\s*)?\\b(interpolate)(\\s*\\(\\s*)((?:(?:prefixes\\s*=\\s*)?listOf\\s*\\([^()\\n]*\\)\\s*,\\s*)?)((?:format\\s*=\\s*)?\\$*)(\"\"\")",
+          "beginCaptures": {
+            "2": {
+              "name": "entity.name.function.kotlin"
+            },
+            "4": {
+              "patterns": [
+                {
+                  "include": "source.kotlin"
+                }
+              ]
+            },
+            "6": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G(?<=\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.two.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.one.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#dollar-escape"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "(?:(\\??\\.)\\s*)?\\b(interpolate)(\\s*\\(\\s*)((?:(?:prefixes\\s*=\\s*)?listOf\\s*\\([^()\\n]*\\)\\s*,\\s*)?)((?:format\\s*=\\s*)?\\$*)(\")",
+          "beginCaptures": {
+            "2": {
+              "name": "entity.name.function.kotlin"
+            },
+            "4": {
+              "patterns": [
+                {
+                  "include": "source.kotlin"
+                }
+              ]
+            },
+            "6": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
             }
           },
