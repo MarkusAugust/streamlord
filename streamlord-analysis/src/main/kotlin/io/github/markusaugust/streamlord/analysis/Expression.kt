@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
@@ -1108,7 +1109,10 @@ public class ExpressionValidator(
         val spec = catalog.actionsByName[name]
         val end = start + 1 + name.length
         if (spec == null) {
-            val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
+            val names = catalog.actions.map { it.name }
+            val near =
+                names.firstOrNull { it.equals(name, ignoreCase = true) }
+                    ?: names.singleOrNull { ElementsGuard.oneEditAway(name, it, swaps = true) }
             return listOf(
                 Issue(
                     start = start,
