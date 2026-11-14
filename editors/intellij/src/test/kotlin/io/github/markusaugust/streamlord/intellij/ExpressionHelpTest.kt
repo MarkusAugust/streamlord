@@ -68,6 +68,20 @@ class ExpressionHelpTest : StreamlordTestCase() {
         assertContainsElements(lookups("d.html", "<button data-on:<caret>></button>"), "click", "datastar-fetch")
     }
 
+    // Only Datastar has words for a modifier: the file's own words are no modifiers.
+    fun `test after a modifier's underscores only modifiers are offered`() {
+        val shown = lookups("w.html", "<p>debouncing onceagain</p><div data-on:click__<caret>=\"\$a++\"></div>")
+        assertContainsElements(shown, "debounce", "once")
+        assertDoesntContain(shown, "debouncing", "onceagain")
+    }
+
+    // In the middle of the event's name, the one item completes it alone, offered once.
+    fun `test a Datastar event is offered once with the caret inside its name`() {
+        val shown = lookups("m9.html", "<div data-on:datastar-fe<caret>tch=\"\$a++\"></div>")
+        assertTrue(shown.toString(), shown.isEmpty())
+        assertEquals("<div data-on:datastar-fetch=\"\$a++\"></div>", myFixture.file.text)
+    }
+
     fun `test parameter info shows the parameter at the caret`() {
         myFixture.configureByText("e.html", "<div data-on:click=\"@get('/x', <caret>\"></div>")
         val handler = DatastarParameterInfoHandler()
