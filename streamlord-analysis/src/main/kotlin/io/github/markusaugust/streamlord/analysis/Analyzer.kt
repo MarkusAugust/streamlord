@@ -398,7 +398,7 @@ public class Analyzer(
             // The chain's own literals are read with it; one in a value it joins, or in a template, is a string of its own.
             if (chain != null) for (l in chain.literals) chained += l.start
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
-            val judged = checkFreeHtmlString(whole, opts, src, hyphenated)
+            val judged = checkFreeHtmlString(whole, opts, src, hyphenated, s.start !in topLevel)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
         val ignored = dslIgnored(src, lex, foreign)
@@ -914,9 +914,10 @@ public class Analyzer(
         opts: Reading,
         src: String,
         hyphenated: Set<String>,
+        inner: Boolean,
     ): Judged {
         val view = markupView(src, s)
-        val judged = judgeHoles(s, src, opts, view)
+        val judged = judgeHoles(s, src, opts, view, inner)
         return Judged(judged.issues + mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false)), judged.rewrite)
     }
 
@@ -1587,6 +1588,7 @@ public class Analyzer(
         src: String,
         opts: Reading,
         view: String,
+        inner: Boolean = false,
     ): Judged {
         if (s.interpolations.isEmpty()) return Judged()
         val trapOf = traps(s, src)
@@ -1893,8 +1895,11 @@ public class Analyzer(
         }
         // The context action is for a string some issue of which offers the rewrite: one with a value to escape.
         if (!offered) return Judged(issues)
-        // One title for the one edit, wherever it is offered.
-        val title = if (vouched.isEmpty() && urlAsked) REFUSES_URL_TITLE else rewrite.title
+        // One title for the one edit, wherever it is offered; a string inside a template of another is named, as the
+        // other's rewrite is offered at the same caret.
+        val title =
+            (if (vouched.isEmpty() && urlAsked) REFUSES_URL_TITLE else rewrite.title) +
+                if (inner) ": ${shortened(src.substring(s.start, s.end))}" else ""
         val titled =
             issues.map { i ->
                 if (i.fixes.none { it.sharesTextWith(rewrite) }) i else i.copy(fixes = i.fixes.map { if (it.sharesTextWith(rewrite)) it.copy(title = title) else it })

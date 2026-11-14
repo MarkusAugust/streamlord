@@ -370,6 +370,9 @@ All notable changes to Streamlord are recorded here. The format follows
   quoted value is still to be escaped.
 - A value that opens a `+` chain, `w + "<p>...</p>"`, is no longer told to be declared `Html` or
   wrapped in `Trusted(...)`, which have no plus to join the rest with: markup you built there is fine.
+- The rewrite of a string inside a template of another names that string in its title,
+  `...which escapes the values: "<li>$v</li>"`, so it no longer stands beside the outer string's
+  rewrite under the same title at one caret.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
