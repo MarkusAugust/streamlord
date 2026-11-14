@@ -551,6 +551,8 @@ private fun <T> closeImplied(
 /**
  * The start tags of [tags] whose attributes the client applies: not an element with
  * `data-ignore`, nor one inside it, nor one with `data-ignore__self` (shouldIgnore in engine.ts).
+ * An element that carries the ignore attribute itself keeps that attribute alone, so that what is
+ * wrong with it is still said.
  */
 internal fun appliedTags(
     tags: List<Tag>,
@@ -570,7 +572,11 @@ internal fun appliedTags(
         closeImplied(open, tag.name) { it.first }
         val names = tag.attributes.map { it.name.asciiLowercase() }
         val ignored = open.lastOrNull()?.second == true || ignore in names
-        if (!ignored && self !in names) out += tag
+        if (!ignored && self !in names) {
+            out += tag
+        } else if (ignore in names || self in names) {
+            out += tag.copy(attributes = tag.attributes.filter { it.name.asciiLowercase().let { n -> n == ignore || n == self } })
+        }
         if (!tag.selfClosing) open += tag.name to ignored
     }
     return out
@@ -801,7 +807,7 @@ public class MarkupValidator(
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         val (tags, topLevelText) = tokenize(html, opts.templates)
-        val applied = if (opts.checkAttributes) appliedTags(tags, opts.prefix).mapTo(HashSet()) { it.start } else emptySet()
+        val applied = if (opts.checkAttributes) appliedTags(tags, opts.prefix).associateBy { it.start } else emptyMap()
         val stack = ArrayList<Tag>()
         val topLevel = ArrayList<Tag>()
         for (tag in tags) {
@@ -821,10 +827,10 @@ public class MarkupValidator(
             closeImplied(stack, tag.name) { it.name }
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
-            if (tag.start in applied) {
+            applied[tag.start]?.let { read ->
                 issues +=
                     validateAttributes(
-                        tag,
+                        read,
                         opts.prefix,
                         html.substring(tag.start, tag.end),
                         opts.hyphenatedSignals,
@@ -1298,7 +1304,7 @@ public class MarkupValidator(
                     } else {
                         null
                     }
-                val foreign = foreignNote(attr.name, prefix, decoded.text)
+                val foreign = if (parsed.key == null && parsed.modifiers.isEmpty()) foreignNote(attr.name, prefix, decoded.text) else ""
                 val judged = expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec, event = event)
                 for (issue in aroundPlaceholders(decoded.text, judged)) {
                     val (start, end) = source(issue.start, issue.end)
@@ -1329,7 +1335,8 @@ public class MarkupValidator(
                     Issue(
                         attr.valueStart,
                         attr.valueEnd,
-                        "$prefix${spec.name} takes a signal name, not an expression." + foreignNote(attr.name, prefix, value),
+                        "$prefix${spec.name} takes a signal name, not an expression." +
+                            if (parsed.key == null && parsed.modifiers.isEmpty()) foreignNote(attr.name, prefix, value) else "",
                         Severity.WARNING,
                         "signal-name-expected",
                     )

@@ -646,8 +646,8 @@ private fun declared(
     // The client applies no attribute of an element data-ignore covers, so it declares nothing there.
     if (language == SourceLanguage.HTML && src.contains(prefix + "ignore", ignoreCase = true)) {
         val tags = tokenize(src).tags.filter { !it.closing }
-        val applied = appliedTags(tags, prefix).mapTo(HashSet()) { it.start }
-        val skipped = tags.filter { it.start !in applied }
+        val applied = appliedTags(tags, prefix).associateBy { it.start }
+        val skipped = tags.filter { applied[it.start]?.attributes?.size != it.attributes.size }
         out.removeAll { d -> skipped.any { d.start >= it.start && d.start < it.end } }
     }
     return out
