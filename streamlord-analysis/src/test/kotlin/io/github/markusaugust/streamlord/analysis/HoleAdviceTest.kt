@@ -47,6 +47,7 @@ class HoleAdviceTest {
                 }
                 for (part in e.array("says")?.strings().orEmpty()) assertTrue(part in issue.message, at)
                 e.string("ends")?.let { assertTrue(issue.message.endsWith(it), at) }
+                e.string("link")?.let { assertEquals(it, issue.link, at) }
                 for (part in e.array("silent")?.strings().orEmpty()) assertTrue(part !in issue.message, at)
             }
         }
