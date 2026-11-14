@@ -180,6 +180,7 @@ private val ACTION_WORD = regex("""@[A-Za-z_][A-Za-z0-9_]*""")
 private val OPTION_WORD = regex("""[A-Za-z_$][\w$]*""")
 private val ATTRIBUTE_WORD = regex("""[A-Za-z][A-Za-z0-9_:.-]*""")
 private val KOTLIN_WORD = regex("""[A-Za-z_][A-Za-z0-9_]*""")
+private val VALUE_WORD = regex("""[\w-]+""")
 private val STRING_OPENED = regex("""['"`]([\w-]*)""")
 
 /** Kotlin's dollar in a string, which writes the `$` a signal is read after. */
@@ -366,21 +367,27 @@ private class Asked(
                 value.field.values.mapIndexed { n, v ->
                     val label = if (value.quoted) v else "${expression.quote}$v${expression.quote}"
                     val insert = if (value.quoted) null else "$q$v$q".takeIf { it != label }
-                    Completion(label, CompletionKind.VALUE, offset - value.typed.length, insert, key = n.toString().padStart(3, '0'))
+                    Completion(
+                        label,
+                        CompletionKind.VALUE,
+                        offset - value.typed.length,
+                        insert,
+                        doc = optionValueDoc(value.field.option, v),
+                        key = n.toString().padStart(3, '0'),
+                    )
                 }
             if (items.isNotEmpty() || value.quoted) return ordered(items, alone = items.isNotEmpty())
         }
         // The strings an argument takes, the types of @intl, or those datastar-fetch is dispatched with, after evt.detail.type ===.
-        val strings =
-            call?.takeIf { it.option == null && it.value == null && it.argumentStart >= 0 }?.let { c ->
-                catalog.actionValues[c.action]?.getOrNull(c.argument)?.let { it to before.substring(c.argumentStart) }
-            } ?: catalog.fetchEvents.takeIf { expression.event == DATASTAR_FETCH }?.let { types ->
-                FETCH_TYPE_COMPARED.find(before)?.let { m ->
-                    val written = m.groupValues[1]
-                    types.takeIf { jsRegions(before)[before.length - written.length - 1] == Region.CODE }?.let { it to written }
-                }
+        call?.takeIf { it.option == null && it.value == null && it.argumentStart >= 0 }?.let { c ->
+            val values = catalog.actionValues[c.action]?.getOrNull(c.argument) ?: return@let
+            stringItems(values, before.substring(c.argumentStart), expression.quote, q) { null }?.let { return it }
+        }
+        if (expression.event == DATASTAR_FETCH) {
+            FETCH_TYPE_COMPARED.find(before)?.groupValues?.get(1)?.takeIf { jsRegions(before)[before.length - it.length - 1] == Region.CODE }?.let {
+                stringItems(catalog.fetchEvents, it, expression.quote, q) { type -> fetchTypeDoc(type, catalog) }?.let { found -> return found }
             }
-        strings?.let { (values, written) -> stringItems(values, written, expression.quote, q)?.let { return it } }
+        }
         actionPrefixAt(before, before.length)?.let { typed ->
             val items =
                 catalog.actions.map {
@@ -420,6 +427,7 @@ private class Asked(
         written: String,
         quote: Char,
         q: String,
+        doc: (String) -> String?,
     ): Completions? {
         val typed = written.trimStart()
         val opened = STRING_OPENED.matchEntire(typed)
@@ -429,7 +437,7 @@ private class Asked(
             values.mapIndexed { n, v ->
                 val label = if (opened != null) v else "$quote$v$quote"
                 val insert = if (opened != null) null else "$q$v$q".takeIf { it != label }
-                Completion(label, CompletionKind.VALUE, offset - name.length, insert, key = n.toString().padStart(3, '0'))
+                Completion(label, CompletionKind.VALUE, offset - name.length, insert, doc = doc(v), key = n.toString().padStart(3, '0'))
             }
         return ordered(items, alone = true)
     }
@@ -586,13 +594,13 @@ private class Asked(
             if (action != null && !foreign) return Hover(range, actionDoc(action, withKotlin, catalog))
         }
         wordAt(OPTION_WORD)?.let { range ->
-            val word = text.substring(range.first, range.last + 1)
-            val option = catalog.fetchOptions.firstOrNull { it.name == word }
-            // The key it is when the caret stands at its end.
-            val expression = option?.let { expression(range.last + 1) }?.takeIf { it.allowActions }
-            val typed = expression?.let { actionCallAt(it.before, it.before.length)?.option?.typed }
-            if (option != null && typed == word) return Hover(range, fetchOptionDoc(option))
+            val word = text.substring(range)
+            // The key it is when the caret stands at its end: an option of a backend action, or a key of a signal filter.
+            val key = expression(range.last + 1)?.takeIf { it.allowActions }?.let { actionCallAt(it.before, it.before.length)?.option }
+            val field = key?.takeIf { it.typed == word }?.fields?.firstOrNull { it.name == word }
+            if (field != null) return Hover(range, fetchOptionDoc(field.option))
         }
+        stringValue()?.let { return it }
         expression(offset)?.let { e -> codeWord(e)?.let { return it } }
         if (!kotlin || analyzer.htmlStringAt(text, offset, modules) != null || inAttributesKey()) {
             val range = wordAt(ATTRIBUTE_WORD) ?: return null
@@ -612,9 +620,31 @@ private class Asked(
         val range = wordAt(KOTLIN_WORD) ?: return null
         val word = text.substring(range.first, range.last + 1)
         catalog.attributesByKotlin[word]?.let { return Hover(range, attributeDoc(it, prefix, withKotlin = true)) }
-        val action = catalog.actions.firstOrNull { it.kotlin == word } ?: return null
         val called = '(' in text.substring(range.last + 1, minOf(text.length, range.last + 3)).substringBefore('\n')
-        return if (called) Hover(range, actionDoc(action, withKotlin = false, catalog = catalog)) else null
+        if (!called) return null
+        catalog.actions.firstOrNull { it.kotlin == word }?.let { return Hover(range, actionDoc(it, withKotlin = false, catalog = catalog)) }
+        // getExpr, fitExpr: the action with some of its arguments given as expressions.
+        val spec = catalog.expressionCallSites[word] ?: return null
+        val action = catalog.actions.firstOrNull { it.kotlin + "Expr" == word } ?: return null
+        return Hover(range, expressionHelperDoc(word, action, spec, catalog))
+    }
+
+    /**
+     * A string an option takes, `'never'` in `{retry: 'never'}`, or a type `datastar-fetch` is
+     * dispatched with, compared with `evt.detail.type`, where the caret stands in the word.
+     */
+    private fun stringValue(): Hover? {
+        val range = wordAt(VALUE_WORD) ?: return null
+        val word = text.substring(range)
+        val e = expression(range.last + 1)?.takeIf { it.allowActions } ?: return null
+        val value = actionCallAt(e.before, e.before.length)?.value
+        if (value != null && value.quoted && value.typed == word && word in value.field.values) {
+            return Hover(range, optionValueDoc(value.field.option, word))
+        }
+        if (e.event != DATASTAR_FETCH || word !in catalog.fetchEvents) return null
+        val written = FETCH_TYPE_COMPARED.find(e.before)?.groupValues?.get(1) ?: return null
+        val opened = written.length == word.length + 1 && jsRegions(e.before)[e.before.length - written.length - 1] == Region.CODE
+        return if (opened) Hover(range, fetchTypeDoc(word, catalog)) else null
     }
 
     /**

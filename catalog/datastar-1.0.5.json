@@ -526,10 +526,26 @@
     { "name": "retryMaxCount", "type": "number", "default": "10", "kind": "number", "otherwise": "it makes no retry at all", "doc": "How many retries Datastar makes over the whole action before it gives up and dispatches retries-failed. An answer that arrives in between does not give it more." }
   ],
   "signalFilter": [
-    { "name": "include", "type": "RegExp | string", "kind": "pattern" },
-    { "name": "exclude", "type": "RegExp | string", "kind": "pattern" }
+    {
+      "name": "include",
+      "type": "RegExp | string",
+      "kind": "pattern",
+      "doc": "Picks the signals whose path, such as user.name, it matches: a regular expression, or a string Datastar makes one of. Left out, it picks every signal."
+    },
+    {
+      "name": "exclude",
+      "type": "RegExp | string",
+      "kind": "pattern",
+      "doc": "Leaves out the signals whose path it matches, even those include picks: a regular expression, or a string Datastar makes one of. Left out, filterSignals leaves out the signals whose name, at any level, starts with _, and @setAll, @toggleAll and data-on-signal-patch-filter leave out none."
+    }
   ],
-  "fetchEvents": ["started", "finished", "error", "retrying", "retries-failed"],
+  "fetchEvents": [
+    { "name": "started", "doc": "The request is about to be sent." },
+    { "name": "finished", "doc": "The action is over, however it ended: after the response, a failure or the last retry." },
+    { "name": "error", "doc": "The response has a status of 400 or more, which evt.detail.argsRaw.status holds." },
+    { "name": "retrying", "doc": "Datastar waits retryInterval and sends the request again." },
+    { "name": "retries-failed", "doc": "The retries retryMaxCount allows are used up, and the action gives up." }
+  ],
   "datastarEvents": [
     { "name": "datastar-fetch", "doc": "Dispatched on the document at each step of a backend action's request; data-on listens there on its own. evt.detail.type is started, finished, error, retrying, retries-failed or the datastar-* event the response sent, and evt.detail.el the element that sent the request." },
     { "name": "datastar-signal-patch", "doc": "Dispatched on the document when signals change; data-on listens there on its own. evt.detail is the patch: the signals that changed, with their new values." }

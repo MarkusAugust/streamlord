@@ -103,8 +103,39 @@ internal fun attributeDoc(
     return "**$prefix${a.name}**\n\n${a.doc}\n\n$forms$casing$mods$kotlin$pro"
 }
 
-/** Markdown documentation of an option of the backend actions: its type, its default and what it does. */
-internal fun fetchOptionDoc(o: FetchOption): String = "**${o.name}**: `${o.type}`, default `${o.default}`\n\n${o.doc}"
+/** Markdown documentation of an option of the backend actions, or a key of a signal filter: its type, its default where it has one and what it does. */
+internal fun fetchOptionDoc(o: FetchOption): String =
+    "**${o.name}**: `${o.type}`" + (if (o.default.isEmpty()) "" else ", default `${o.default}`") + "\n\n${o.doc}"
+
+/** Markdown documentation of [value], one of the strings option [o] takes: what the option does with each. */
+internal fun optionValueDoc(
+    o: FetchOption,
+    value: String,
+): String = "**'$value'**: a value of ${o.name}\n\n${o.doc}"
+
+/** Markdown documentation of [type], a type `datastar-fetch` is dispatched with: what it says, and what the event is. */
+internal fun fetchTypeDoc(
+    type: String,
+    catalog: Catalog,
+): String =
+    "**'$type'**: a type of $DATASTAR_FETCH\n\n${catalog.fetchEventDocs[type].orEmpty()}\n\n" +
+        catalog.datastarEvents.first { it.name == DATASTAR_FETCH }.doc
+
+/**
+ * Markdown documentation of [helper], the DSL's call that writes action [a] with some of its
+ * arguments given as JavaScript expressions, as [spec] names them: by place, and the parameters after it by name.
+ */
+internal fun expressionHelperDoc(
+    helper: String,
+    a: ActionSpec,
+    spec: CallSiteSpec,
+    catalog: Catalog,
+): String {
+    val given = listOfNotNull(spec.arg?.let { a.parameters.getOrNull(it) }) + a.parameters.filter { it.removeSuffix("?") in spec.more }
+    val listed = given.map { "`$it`" }.let { if (it.size > 1) it.dropLast(1).joinToString(", ") + " and " + it.last() else it.joinToString() }
+    val what = if (given.size > 1) "JavaScript expressions" else "a JavaScript expression"
+    return actionDoc(a, withKotlin = false, catalog = catalog) + "\n\n`$helper` writes it with $listed given as $what."
+}
 
 /**
  * Markdown documentation of an action: its signature, each parameter with the kind the catalog
