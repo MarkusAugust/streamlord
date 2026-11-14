@@ -5,6 +5,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
+import com.intellij.testFramework.utils.parameterInfo.MockParameterInfoUIContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
 import io.github.markusaugust.streamlord.analysis.SignatureHelp
 import io.github.markusaugust.streamlord.analysis.Workspace
@@ -67,6 +68,18 @@ class ExpressionHelpTest : StreamlordTestCase() {
         assertContainsElements(lookups("d.html", "<button data-on:<caret>></button>"), "click", "datastar-fetch")
     }
 
+    // Only Datastar has words for a modifier: the file's own words are no modifiers.
+    fun `test after a modifier's underscores only modifiers are offered`() {
+        val shown = lookups("w.html", "<p>debouncing onceagain</p><div data-on:click__<caret>=\"\$a++\"></div>")
+        assertContainsElements(shown, "debounce", "once")
+        assertDoesntContain(shown, "debouncing", "onceagain")
+    }
+
+    // The file's own words hold the name too; it is offered once, as Datastar's event.
+    fun `test a Datastar event is offered once with the caret inside its name`() {
+        assertEquals(listOf("datastar-fetch"), lookups("m9.html", "<div data-on:datastar-fe<caret>tch=\"\$a++\"></div>"))
+    }
+
     fun `test parameter info shows the parameter at the caret`() {
         myFixture.configureByText("e.html", "<div data-on:click=\"@get('/x', <caret>\"></div>")
         val handler = DatastarParameterInfoHandler()
@@ -77,6 +90,9 @@ class ExpressionHelpTest : StreamlordTestCase() {
         val owner = handler.findElementForUpdatingParameterInfo(update)!!
         handler.updateParameterInfo(owner, update)
         assertEquals(1, update.currentParameter)
+        val ui = MockParameterInfoUIContext(owner).apply { currentParameterIndex = update.currentParameter }
+        handler.updateUI(create.itemsToShow!!.single() as SignatureHelp, ui)
+        assertEquals("@get(uri, <b>options?</b>)<p>An object of options.", ui.text.substringBefore(" contentType"))
 
         myFixture.configureByText("View.kt", "fun f() { dataOnClick(\"@post(<caret>\") }")
         val kotlin = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)

@@ -140,9 +140,24 @@ public data class DocumentEvent(
     val doc: String,
 )
 
-/** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one. */
+/** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one, and the interface its listener is handed. */
 internal data class DomEvent(
     val name: String,
+    val mdn: String?,
+    val type: String,
+)
+
+/** An interface an event listener is handed, as lib.dom.d.ts declares it: the one it extends and its own members. */
+internal class EventInterface(
+    val name: String,
+    val extends: String?,
+    val members: List<EventMember>,
+)
+
+/** A member of an [EventInterface]: a property, or a method, and its page on MDN. */
+internal class EventMember(
+    val name: String,
+    val method: Boolean,
     val mdn: String?,
 )
 
@@ -187,7 +202,12 @@ public class Catalog private constructor(
 
     /** What each parameter of each action is, in order, as the hover says it. */
     internal val parameterDocs: Map<String, List<String>>
+
+    /** The types a `datastar-fetch` event of a backend action's own is dispatched with, in order. */
     internal val fetchEvents: List<String>
+
+    /** What each of [fetchEvents] says of the request. */
+    internal val fetchEventDocs: Map<String, String>
 
     /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
     public val datastarEvents: List<DocumentEvent> =
@@ -195,6 +215,9 @@ public class Catalog private constructor(
 
     /** The DOM events an element can be listened to for, from `catalog/dom-events.json`, which no Datastar version changes. */
     internal val domEvents: List<DomEvent> get() = DOM_EVENTS
+
+    /** The interfaces those events are handed, and CustomEvent, by name, from the same file. */
+    internal val eventInterfaces: Map<String, EventInterface> get() = EVENT_INTERFACES
 
     /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:567). */
     internal val compiledParameters: List<String>
@@ -266,7 +289,9 @@ public class Catalog private constructor(
         optionFields = (raw.array("fetchOptions")?.objects() ?: emptyList()).map(::toField)
         fetchOptions = optionFields.map { it.option }
         filterFields = (raw.array("signalFilter")?.objects() ?: emptyList()).map(::toField)
-        fetchEvents = raw.array("fetchEvents")?.strings() ?: emptyList()
+        val events = raw.array("fetchEvents")?.objects() ?: emptyList()
+        fetchEvents = events.map { it.string("name")!! }
+        fetchEventDocs = events.associate { it.string("name")!! to (it.string("doc") ?: "") }
         compiledParameters = raw.array("compiledParameters")!!.strings()
         patchModes = raw.obj("sse")?.array("patchModes")?.strings() ?: emptyList()
         val sites = raw.obj("kotlinCallSites") ?: JsonObject.EMPTY
@@ -396,13 +421,22 @@ public class Catalog private constructor(
         /** Read a catalog from its JSON text. */
         public fun parse(json: String): Catalog = Catalog(JsonParser.parseObject(json))
 
+        private val DOM_EVENTS_FILE by lazy { JsonParser.parseObject(CatalogText.DOM_EVENTS) }
+
         private val DOM_EVENTS: List<DomEvent> by lazy {
-            JsonParser
-                .parseObject(
-                    CatalogText.DOM_EVENTS,
-                ).array("events")!!
-                .objects()
-                .map { DomEvent(it.string("name")!!, it.string("mdn")) }
+            DOM_EVENTS_FILE.array("events")!!.objects().map { DomEvent(it.string("name")!!, it.string("mdn"), it.string("interface")!!) }
+        }
+
+        private val EVENT_INTERFACES: Map<String, EventInterface> by lazy {
+            val all = DOM_EVENTS_FILE.obj("interfaces")!!
+            all.keys.associateWith { name ->
+                val i = all.obj(name)!!
+                EventInterface(
+                    name,
+                    i.string("extends"),
+                    i.array("members")!!.objects().map { EventMember(it.string("name")!!, it.boolean("method")!!, it.string("mdn")) },
+                )
+            }
         }
     }
 }

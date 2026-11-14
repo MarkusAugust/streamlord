@@ -9,7 +9,7 @@ export class StreamlordSignatureHelpProvider implements vscode.SignatureHelpProv
     const found = signatureHelp(document.getText(), document.offsetAt(position), document.languageId === "kotlin", this.prefix());
     if (!found) return null;
     const signature = new vscode.SignatureInformation(found.label, new vscode.MarkdownString(found.doc));
-    signature.parameters = found.parameters.map((p) => new vscode.ParameterInformation(p as [number, number]));
+    signature.parameters = found.parameters.map((p, n) => new vscode.ParameterInformation(p as [number, number], new vscode.MarkdownString(found.parameterDocs[n])));
     const help = new vscode.SignatureHelp();
     help.signatures = [signature];
     help.activeSignature = 0;

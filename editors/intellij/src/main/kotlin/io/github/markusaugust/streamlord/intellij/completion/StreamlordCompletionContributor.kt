@@ -58,8 +58,8 @@ class StreamlordCompletionContributor : CompletionContributor() {
                 .getInstance(project)
                 .analyzer
                 .complete(asked.source, asked.offset, workspace, attributeNames = !yieldNames, domEvents = !yieldNames)
-        // Where a signal, an action, an option or a selector is named, the Kotlin plugin's own list would bury it.
-        if (file is KtFile && found.alone) result.stopHere()
+        // Where only Datastar has names, the Kotlin plugin's list and the file's words would bury them or say them again.
+        if (found.alone) result.stopHere()
         val sorter = CompletionSorter.emptySorter().weigh(ByRank)
         for ((from, items) in found.items.withIndex().groupBy { it.value.replaceFrom }) {
             val typed = asked.source.text.substring(from, asked.offset)

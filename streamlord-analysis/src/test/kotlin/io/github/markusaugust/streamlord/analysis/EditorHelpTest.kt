@@ -137,6 +137,7 @@ class EditorHelpTest {
                 "parameters",
             )
             assertEquals(expected.int("active"), found.active, "active")
+            expected.array("parameterDocs")?.let { assertEquals(it.strings(), found.parameterDocs, "parameterDocs") }
         }
     }
 
@@ -168,6 +169,17 @@ class EditorHelpTest {
             val text = "<div data-on:click=\"@${action.name}("
             val help = analyzer.signatureHelp(Source(text, SourceLanguage.HTML), text.length)
             assertEquals(action.parameters, help?.parameters?.map { action.signature.substring(it) }, action.name)
+        }
+    }
+
+    @Test
+    fun `signature help says what each parameter of every action is, as its hover does`() {
+        for (action in analyzer.catalog.actions) {
+            val text = "<div data-on:click=\"@${action.name}("
+            val help = analyzer.signatureHelp(Source(text, SourceLanguage.HTML), text.length)!!
+            assertEquals(action.parameters.size, help.parameterDocs.size, action.name)
+            val hover = actionDoc(action, catalog = analyzer.catalog)
+            for ((n, doc) in help.parameterDocs.withIndex()) assertTrue("`${action.parameters[n]}`: $doc" in hover, "${action.name}: $doc")
         }
     }
 

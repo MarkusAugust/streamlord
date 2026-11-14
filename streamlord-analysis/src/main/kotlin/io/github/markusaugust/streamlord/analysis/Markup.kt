@@ -681,12 +681,26 @@ internal fun Catalog.lowercaseDomEvent(key: String): String? {
     return lower
 }
 
-/** The event a DSL call's expression is run for: `dataOnFetch`'s, or the one `dataOn` is handed as a literal. */
+/**
+ * The event a DSL call's expression is run for: `dataOnFetch`'s, the one `dataOn` is handed as a
+ * literal, or the one a helper of data-on is named for, `dataOnKeydown`'s keydown.
+ */
 internal fun dslEvent(site: CallSite): String? =
     when (site.name) {
-        "dataOnFetch" -> DATASTAR_FETCH
-        "dataOn" -> (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
-        else -> null
+        "dataOnFetch" -> {
+            DATASTAR_FETCH
+        }
+
+        "dataOn" -> {
+            (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
+        }
+
+        else -> {
+            site.name
+                .takeIf { Catalog.default.attributesByKotlin[it]?.name == "on" }
+                ?.removePrefix("dataOn")
+                ?.lowercase()
+        }
     }
 
 /** The event Datastar dispatches at each step of a backend action's request. */
@@ -1010,7 +1024,9 @@ public class MarkupValidator(
                 // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
                 val dash = parsed.base.indexOf('-')
                 val keyedSpec =
+                    // data-on- has no key yet to move after a colon: a name half typed.
                     if (dash > 0 &&
+                        dash < parsed.base.length - 1 &&
                         parsed.key == null
                     ) {
                         catalog.attributesByName[parsed.base.substring(0, dash)]?.takeIf { it.keyed }
