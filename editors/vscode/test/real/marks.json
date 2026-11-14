@@ -126,5 +126,6 @@
   {"file": "html/help.html", "at": "data-te¦xt=\"$count\""},
   {"file": "html/help.html", "at": "@get(¦'/a'"},
   {"file": "kotlin/HelpDollar.kt", "at": "${'$'}myCo¦unt"},
-  {"file": "kotlin/HelpDollar.kt", "at": "get¦Expr"}
+  {"file": "kotlin/HelpDollar.kt", "at": "get¦Expr"},
+  {"file": "html/actions.html", "at": "@post('/a', {¦retryMaxCount"}
 ]

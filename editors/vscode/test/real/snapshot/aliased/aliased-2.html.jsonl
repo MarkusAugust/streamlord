@@ -1,5 +1,5 @@
 {"what":"file","language":"html"}
-{"what":"diagnostic","code":"missing-nonce","link":"https://data-star.dev/reference/attributes#data-nonce","message":"The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start.","range":"1:7-1:22","severity":"Error","source":"streamlord"}
+{"what":"diagnostic","code":"missing-nonce","link":"https://data-star.dev/reference/security#content-security-policy","message":"The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start.","range":"1:7-1:22","severity":"Error","source":"streamlord"}
 {"what":"hover","at":"1:2-1:6","answers":[{"contents":[{"value":"139b643a8093"}],"range":"1:2-1:6"}]}
 {"what":"hover","at":"1:7-1:22","answers":[{"contents":["**data-star-nonce**\n\nOn the html element: enables CSP mode with this nonce.\n\n`data-star-nonce=\"nonce\"`\n\n**Kotlin:** `dataNonce()`"],"range":"1:7-1:22"}]}
 {"what":"hover","at":"1:27-1:31","answers":[{"contents":[{"value":"bc844e599acf"}],"range":"1:27-1:31"}]}

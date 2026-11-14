@@ -9,13 +9,13 @@
 {"what":"diagnostic","code":"computed-value","link":"https://data-star.dev/reference/attributes#data-computed","message":"Without a key, each value of data-computed must be a function, such as h: () => ...; Datastar raises ComputedExpectedFunction for h.","range":"1:86-1:87","severity":"Error","source":"streamlord"}
 {"what":"diagnostic","code":"computed-value","link":"https://data-star.dev/reference/attributes#data-computed","message":"Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.","range":"1:127-1:134","severity":"Warning","source":"streamlord"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
-{"what":"hover","at":"1:6-1:19","answers":[{"contents":[{"value":"69e2600e0061"}],"range":"1:6-1:19"},{"contents":[{"value":"f24d260f81ba"}],"range":"1:6-1:19"}]}
-{"what":"hover","at":"1:72-1:73","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:71-1:73"}]}
-{"what":"hover","at":"1:79-1:80","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:78-1:80"}]}
-{"what":"hover","at":"1:97-1:98","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:96-1:98"}]}
+{"what":"hover","at":"1:6-1:19","answers":[{"contents":[{"value":"f24d260f81ba"}],"range":"1:6-1:19"}]}
+{"what":"hover","at":"1:71-1:73","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:71-1:73"}]}
+{"what":"hover","at":"1:78-1:80","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:78-1:80"}]}
+{"what":"hover","at":"1:96-1:98","answers":[{"contents":["**$x**\n\nDatastar reads it as `$['x']`, the signal path x in its store."],"range":"1:96-1:98"}]}
 {"what":"hover","at":"1:103-1:106","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:103-1:106"}]}
 {"what":"hover","at":"1:108-1:111","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:108-1:111"}]}
-{"what":"hover","at":"1:112-1:125","answers":[{"contents":[{"value":"69e2600e0061"}],"range":"1:112-1:125"},{"contents":[{"value":"f24d260f81ba"}],"range":"1:112-1:125"}]}
+{"what":"hover","at":"1:112-1:125","answers":[{"contents":[{"value":"f24d260f81ba"}],"range":"1:112-1:125"}]}
 {"what":"hover","at":"1:138-1:141","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:138-1:141"}]}
 {"what":"definition","at":"1:22-1:23","answers":[{"file":"drawn/html/computed-value-2.html","range":"1:22-1:23"},{"file":"drawn/html/expressions.html","range":"10:25-10:26"},{"file":"drawn/html/expressions.html","range":"11:40-11:41"},{"file":"drawn/html/expressions.html","range":"24:25-24:26"},{"file":"drawn/html/expressions.html","range":"51:25-51:26"},{"file":"drawn/html/expressions.html","range":"59:25-59:26"},{"file":"drawn/html/key-case-1.html","range":"1:32-1:33"},{"file":"drawn/html/modifier-args-1.html","range":"1:37-1:38"},{"file":"drawn/html/silent-6.html","range":"1:36-1:37"},{"file":"drawn/html/silent-6.html","range":"1:124-1:125"},{"file":"drawn/html/silent-7.html","range":"1:22-1:23"},{"file":"drawn/html/unknown-modifier-1.html","range":"1:26-1:27"}]}
 {"what":"definition","at":"1:29-1:30","answers":[{"file":"drawn/html/computed-value-2.html","range":"1:29-1:30"},{"file":"drawn/html/expressions.html","range":"9:25-9:26"},{"file":"drawn/html/expressions.html","range":"51:47-51:48"},{"file":"drawn/html/silent-7.html","range":"1:49-1:50"}]}
