@@ -244,6 +244,12 @@ describe("kotlin injection grammar", () => {
     assert.ok(plain.every((x) => !x.scopes.some((s) => s.includes("html") || s.includes("datastar"))), "no html in a query");
   });
 
+  it("reads the annotation by its qualified name too", async () => {
+    // The string opens no tag, so only the marker makes it HTML.
+    const lines = await tokenLines("source.kotlin", [`@org.intellij.lang.annotations.Language("HTML")`, `fun page(): String = """x <b data-text="$count">y</b>"""`]);
+    assert.match(scopeOf(lines[1]!, "text"), /entity\.other\.attribute-name\.datastar\.plugin/);
+  });
+
   it("follows the injection marker across lines", async () => {
     for (const marker of [`@Language("HTML")`, `// language=HTML`]) {
       // The second string's first line opens no tag, so it is no HTML: only the marker could make it one.
