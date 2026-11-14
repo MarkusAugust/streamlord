@@ -28,6 +28,7 @@ class HoleAdviceTest {
                             SourceLanguage.KOTLIN,
                             modules =
                                 case.boolean("coreHtml")?.let { Modules.known(true, true, it) } ?: Modules.UNKNOWN,
+                            constants = case.array("constants")?.strings()?.toSet().orEmpty(),
                         ),
                     ).sortedWith(
                         compareBy({

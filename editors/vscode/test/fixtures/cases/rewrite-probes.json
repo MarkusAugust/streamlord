@@ -96,6 +96,11 @@
     {"name":"the html of a Trusted is markup the author vouched for, written as it is in element text","params":"t: Trusted","body":"\"<ul>${t.html}</ul>\"","rewrite":"none","marks":[]},
     {"name":"the text of an Html is markup interpolate built, written as it is in element text","params":"h: Html","body":"\"<ul>${h.text}</ul>\"","rewrite":"none","marks":[]},
     {"name":"a List of Html in element text is markup the rewrite would escape","params":"rows: List<Html>","body":"\"<ul>${rows}</ul>\"","rewrite":"none","marks":[]},
-    {"name":"a List of Html in element text keeps the rewrite from another value, which says why","params":"rows: List<Html>, a: String","body":"\"<ul>${rows}</ul><p title=\\\"$a\\\">x</p>\"","rewrite":"none","says":["it would escape ${rows}"],"marks":["$a"]}
+    {"name":"a List of Html in element text keeps the rewrite from another value, which says why","params":"rows: List<Html>, a: String","body":"\"<ul>${rows}</ul><p title=\\\"$a\\\">x</p>\"","rewrite":"none","says":["it would escape ${rows}"],"marks":["$a"]},
+    {"name":"a constant in a Datastar attribute stays a template in the format, and the other value is passed","declares":"const val SAVE = \"/save\"","params":"v: String","body":"\"<button data-on:click=\\\"@post('${SAVE}')\\\">${v}</button>\"","rewrite":"offered","marks":["${v}"]},
+    {"name":"a qualified constant in a Datastar attribute stays a template in the format","declares":"object Routes { const val SAVE = \"/save\" }","params":"v: String","body":"\"<button data-on:click=\\\"@post('${Routes.SAVE}')\\\">${v}</button>\"","rewrite":"offered","marks":["${v}"]},
+    {"name":"an enum entry in a Datastar attribute stays a template in the format","declares":"enum class Tab { HOME, AWAY }","params":"v: String","body":"\"<button data-on:click=\\\"@post('/${Tab.HOME}')\\\">${v}</button>\"","rewrite":"offered","marks":["${v}"]},
+    {"name":"a dollar written as a template in a Datastar attribute stays one in the format","params":"v: String","body":"\"<p data-text=\\\"${\"$\"}count\\\">${v}</p>\"","rewrite":"offered","marks":["${v}"]},
+    {"name":"a constant the file shows with a per cent sign is not kept in the format, where interpolate would read it as a placeholder","declares":"const val SAVE = \"/save%s\"","params":"v: String","body":"\"<button data-on:click=\\\"@post('${SAVE}')\\\">${v}</button>\"","rewrite":"none","says":["cannot take this string while ${SAVE}"],"marks":["${v}"]}
   ]
 }
