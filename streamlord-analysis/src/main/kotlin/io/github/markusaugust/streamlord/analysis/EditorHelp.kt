@@ -617,9 +617,11 @@ private class Asked(
      */
     private fun codeWord(e: ExpressionAtCaret): Hover? {
         val range = wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
-        val inBefore = e.before.length - (offset - range.first)
-        if (inBefore < 0 || jsRegions(e.before)[inBefore] != Region.CODE || e.before.getOrNull(inBefore - 1) == '.') return null
         val word = text.substring(range.first, range.last + 1)
+        val inBefore = e.before.length - (offset - range.first)
+        // With the caret on the word's first character, the text before it ends where the word starts: the word is read after it.
+        val read = if (inBefore == e.before.length) e.before + word else e.before
+        if (inBefore < 0 || jsRegions(read)[inBefore] != Region.CODE || e.before.getOrNull(inBefore - 1) == '.') return null
         // A `$` the client reads no name after, as in `$år`, is no signal.
         if (word.startsWith("$")) {
             val name = word.substring(1)
