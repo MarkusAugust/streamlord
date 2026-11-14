@@ -85,7 +85,11 @@ public class Completion internal constructor(
         Completion(label, kind, replaceFrom, insert, snippet, detail, tail, doc, filter, key, end)
 }
 
-/** The items at a caret, in the order shown, and whether nothing else belongs there: a signal, an action, an option or a selector is being named. */
+/**
+ * The items at a caret, in the order shown, and whether nothing else belongs there: a signal, an
+ * action, an option, a selector, a modifier or its value is being named, or an event where the
+ * DOM's are offered too.
+ */
 public class Completions internal constructor(
     public val items: List<Completion>,
     public val alone: Boolean,
@@ -595,7 +599,7 @@ private class Asked(
                         else -> if (tags.size > 1) emptyList() else modifier.suggest
                     }.filter { it !in tags.dropLast(1) }
                 val from = offset - (current.length - current.lastIndexOf('.') - 1)
-                return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = false)
+                return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = true)
             }
             val items =
                 spec.modifiers.filter { it.listed }.map {
@@ -623,7 +627,7 @@ private class Asked(
                         detail = "__${it.name}$form",
                     )
                 }
-            return ordered(items, alone = false)
+            return ordered(items, alone = true)
         }
 
         /** The event of `data-on:`, Datastar's own first, then the DOM's; with [value], a value is opened where none follows yet. */
@@ -670,7 +674,8 @@ private class Asked(
                 } else {
                     emptyList()
                 }
-            return ordered(datastar + dom, alone = false)
+            // With the DOM's events in the list, every event the editor knows is there.
+            return ordered(datastar + dom, alone = domEvents)
         }
     }
 

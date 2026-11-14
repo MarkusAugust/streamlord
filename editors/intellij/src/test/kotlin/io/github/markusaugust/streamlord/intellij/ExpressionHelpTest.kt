@@ -75,11 +75,9 @@ class ExpressionHelpTest : StreamlordTestCase() {
         assertDoesntContain(shown, "debouncing", "onceagain")
     }
 
-    // In the middle of the event's name, the one item completes it alone, offered once.
+    // The file's own words hold the name too; it is offered once, as Datastar's event.
     fun `test a Datastar event is offered once with the caret inside its name`() {
-        val shown = lookups("m9.html", "<div data-on:datastar-fe<caret>tch=\"\$a++\"></div>")
-        assertTrue(shown.toString(), shown.isEmpty())
-        assertEquals("<div data-on:datastar-fetch=\"\$a++\"></div>", myFixture.file.text)
+        assertEquals(listOf("datastar-fetch"), lookups("m9.html", "<div data-on:datastar-fe<caret>tch=\"\$a++\"></div>"))
     }
 
     fun `test parameter info shows the parameter at the caret`() {
