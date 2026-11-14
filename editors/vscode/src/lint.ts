@@ -12,7 +12,8 @@ export class Lint {
 
   issues(key: string, text: string, kotlin: boolean, prefix: string, constants: string[], defined: string[] | null, others: DriftFacts[] | null): Issue[] {
     try {
-      const found = diagnose(text, kotlin, prefix, constants, defined, others);
+      // The key is the document's URI, whose last segment names the file, and so the engine that writes into it.
+      const found = diagnose(text, kotlin, prefix, constants, defined, others, key.slice(key.lastIndexOf("/") + 1));
       this.failing.delete(key);
       return found;
     } catch (e) {

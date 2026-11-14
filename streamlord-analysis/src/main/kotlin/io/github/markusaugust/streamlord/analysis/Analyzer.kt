@@ -827,6 +827,7 @@ public class Analyzer(
                     hyphenated,
                     prefixSetting = opts.prefixSetting,
                     movable = templates,
+                    engineDollars = opts.source.fileName?.let(::enginesWriteDollarBraces) == true,
                 )
         }
         return issues

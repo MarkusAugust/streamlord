@@ -234,7 +234,11 @@ class StreamlordAnalysis(
     /** The issues of an HTML document or template. */
     fun htmlIssues(file: PsiFile): List<Issue> =
         CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(analyzer.analyzeHtml(source(file.text, SourceLanguage.HTML)), file, settings.tracker)
+            CachedValueProvider.Result.create(
+                analyzer.analyzeHtml(source(file.text, SourceLanguage.HTML).copy(fileName = file.name)),
+                file,
+                settings.tracker,
+            )
         }
 
     /** How a Kotlin file's text is read, and the signals its expressions read, by the text alone. */

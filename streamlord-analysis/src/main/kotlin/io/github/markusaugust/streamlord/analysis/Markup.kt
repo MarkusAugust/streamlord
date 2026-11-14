@@ -376,15 +376,22 @@ private fun valueEnd(
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
- * inside a JavaScript template literal is JavaScript's own and does not count.
+ * inside a JavaScript template literal is JavaScript's own and does not count, unless
+ * [engineDollars] says the file's engine writes it first (see [enginesWriteDollarBraces]).
  */
-internal fun hasTemplateSyntax(value: String): Boolean {
+internal fun hasTemplateSyntax(
+    value: String,
+    engineDollars: Boolean = false,
+): Boolean {
     val quotes = QuoteScan(value)
-    return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
+    return TEMPLATE_SYNTAX.findAll(value).any { engineDollars || it.value != "\${" || quotes.at(it.range.first) != '`' }
 }
 
 /** Whether [value] holds template syntax besides the [PLACEHOLDER] of a Kotlin template, which the expression checks read around. */
-internal fun hasForeignTemplateSyntax(value: String): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"))
+internal fun hasForeignTemplateSyntax(
+    value: String,
+    engineDollars: Boolean = false,
+): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"), engineDollars)
 
 /**
  * The issues of [text], an expression with a [PLACEHOLDER] where a Kotlin template or a `%s` writes a
@@ -1043,6 +1050,7 @@ public class MarkupValidator(
         kotlin: Boolean = false,
         prefixSetting: String = PREFIX_SETTING,
         movable: Boolean = true,
+        engineDollars: Boolean = false,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -1341,7 +1349,7 @@ public class MarkupValidator(
             if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
                 issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
             }
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasForeignTemplateSyntax(value)) {
+            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasForeignTemplateSyntax(value, engineDollars)) {
                 val decoded = decodeEntities(value)
 
                 fun source(
@@ -1377,13 +1385,13 @@ public class MarkupValidator(
                         )
                 }
             }
-            if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars)) {
                 issues += validateFilter(attr, spec, prefix)
             }
-            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars)) {
                 issues += validateComputedObject(attr, prefix)
             }
-            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
+            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars) &&
                 named.none { it.start >= attr.valueStart } && SIGNAL_NAME.matchEntire(value.trim()) == null
             ) {
                 issues +=

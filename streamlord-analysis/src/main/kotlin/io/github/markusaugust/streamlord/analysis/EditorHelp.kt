@@ -30,6 +30,8 @@ public data class Source(
     val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,
+    /** The file's name, whose extension says which template engine writes into it (see [enginesWriteDollarBraces]). */
+    val fileName: String? = null,
 )
 
 /** No call is somebody else's: what a host that resolves nothing says. */

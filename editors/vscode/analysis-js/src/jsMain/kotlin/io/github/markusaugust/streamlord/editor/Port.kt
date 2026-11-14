@@ -124,6 +124,7 @@ private fun source(
     kotlin: Boolean,
     prefix: String = CatalogNames.PREFIX,
     constants: Array<String> = emptyArray(),
+    fileName: String? = null,
 ): Source =
     Source(
         src,
@@ -132,6 +133,7 @@ private fun source(
         Modules.FROM_IMPORTS,
         constants.toHashSet(),
         prefixSetting = PREFIX_SETTING,
+        fileName = fileName,
     )
 
 /** The prefix setting by the id VS Code's settings are searched by. */
@@ -153,7 +155,8 @@ private fun setOf(names: Array<String>): Set<String> {
  * What is wrong in [src], a Kotlin file when [kotlin] and markup otherwise. [constants] are the
  * `const val` names of the workspace. With [defined], the signals the workspace defines, a read of
  * a signal that is none of them is reported too; with [others], what the workspace's other files
- * say about signals, so is a signal the server reads that no page declares.
+ * say about signals, so is a signal the server reads that no page declares. [fileName] says which
+ * template engine writes into the file.
  */
 @JsExport
 fun diagnose(
@@ -163,8 +166,9 @@ fun diagnose(
     constants: Array<String>,
     defined: Array<String>?,
     others: Array<DriftFacts>?,
+    fileName: String? = null,
 ): Array<Issue> {
-    val file = source(src, kotlin, prefix, constants)
+    val file = source(src, kotlin, prefix, constants, fileName)
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
     val known = defined?.let(::setOf)
     val unknown = if (known == null) emptyList() else analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, known) }

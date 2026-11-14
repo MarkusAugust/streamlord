@@ -85,8 +85,10 @@ class AnalyzerTest {
             }
 
             "fixture" -> {
-                val text = fixtureText("editors/vscode/test/fixtures/${case.string("file")}")
-                mapOf("codes" to analyzer.analyzeHtml(text).map { it.code })
+                val file = case.string("file")
+                val text = fixtureText("editors/vscode/test/fixtures/$file")
+                // The file's name says which engine writes into it, as each editor tells the analysis.
+                mapOf("codes" to analyzer.analyzeHtml(Source(text, SourceLanguage.HTML, fileName = file)).map { it.code })
             }
 
             else -> {
