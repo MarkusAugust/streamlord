@@ -2043,20 +2043,29 @@ public class Analyzer(
         for ((i, c) in text.withIndex()) {
             if (regions[i] != Region.CODE) continue
             when (c) {
-                '(', '[', '{' -> depth++
-                ')', ']', '}' -> depth--
-                ',' -> if (depth == 0) {
-                    val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
-                    val r = s.toSource(i, i + 1)
-                    return Issue(
-                        r.first,
-                        r.last + 1,
-                        "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
-                            "operator and keeps only what follows it." + if (backend) " The options go in the lambda after the call." else "",
-                        Severity.WARNING,
-                        "one-value",
-                        Docs.EXPRESSIONS,
-                    )
+                '(', '[', '{' -> {
+                    depth++
+                }
+
+                ')', ']', '}' -> {
+                    depth--
+                }
+
+                ',' -> {
+                    if (depth == 0) {
+                        val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
+                        val r = s.toSource(i, i + 1)
+                        return Issue(
+                            r.first,
+                            r.last + 1,
+                            "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
+                                "operator and keeps only what follows it." +
+                                if (backend) " The options go in the lambda after the call." else "",
+                            Severity.WARNING,
+                            "one-value",
+                            Docs.EXPRESSIONS,
+                        )
+                    }
                 }
             }
         }

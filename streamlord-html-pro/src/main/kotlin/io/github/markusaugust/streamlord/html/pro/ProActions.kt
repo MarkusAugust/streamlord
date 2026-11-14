@@ -106,7 +106,11 @@ public fun intl(
 ): String =
     buildString {
         require(value.isNotBlank()) { "the value of intl must not be blank" }
-        append("@intl(").append(js(type.wire)).append(", (").append(value).append(')')
+        append("@intl(")
+            .append(js(type.wire))
+            .append(", (")
+            .append(value)
+            .append(')')
         val readsOptions = type == IntlType.RELATIVE_TIME || type == IntlType.DISPLAY_NAMES
         if (readsOptions || options.isNotEmpty() || locales.isNotEmpty()) append(", ").append(JsLiteral.write(options))
         when (locales.size) {

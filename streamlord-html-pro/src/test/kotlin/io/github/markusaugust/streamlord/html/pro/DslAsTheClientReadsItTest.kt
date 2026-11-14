@@ -1397,13 +1397,21 @@ class DslAsTheClientReadsItTest {
                     )
                 }
             },
-            dslCase("post filtered by a filter written as an expression, with a string include", "post", probe = mapOf("rounds" to 1), expect = {
-                listens("button", "click")
-                store = """{"a":1,"b":2}"""
-                request("POST", "http://localhost/x", """{"b":2}""", JSON_BODY)
-                heard("button", "click", 0)
-                listensPlain("AbortSignal", "abort")
-            }) {
+            dslCase(
+                "post filtered by a filter written as an expression, with a string include",
+                "post",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                    ),
+                expect = {
+                    listens("button", "click")
+                    store = """{"a":1,"b":2}"""
+                    request("POST", "http://localhost/x", """{"b":2}""", JSON_BODY)
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
                 button {
                     dataSignals("a" to 1, "b" to 2)
                     dataOnClick(post("/x") { filterSignals = SignalFilter(expression = "{include: '^b$'}") })
@@ -1417,7 +1425,9 @@ class DslAsTheClientReadsItTest {
             }) {
                 button {
                     dataSignals("a1" to 1, "a2" to 2, "b" to 3, "t" to false, "u" to false)
-                    dataOnClick(setAll(0, SignalFilter(includeExpr = "'^a'")) + "; " + toggleAll(SignalFilter(expression = "{include: /^t$/}")))
+                    dataOnClick(
+                        setAll(0, SignalFilter(includeExpr = "'^a'")) + "; " + toggleAll(SignalFilter(expression = "{include: /^t$/}")),
+                    )
                 }
             },
             dslCase("peek of a function the page holds", "peekExpr", probe = mapOf("rounds" to 1), expect = {

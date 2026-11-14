@@ -314,7 +314,13 @@ private class Judge(
 
                 // Object.assign copies a string's characters and an array's items under their places, and nothing of the rest.
                 kind == ArgumentKind.OBJECT && v.written == Written.STRING -> {
-                    if (v.text == "") ", from which Datastar reads no key" else ", whose characters Datastar reads as keys named by their places, 0, 1 and on"
+                    if (v.text ==
+                        ""
+                    ) {
+                        ", from which Datastar reads no key"
+                    } else {
+                        ", whose characters Datastar reads as keys named by their places, 0, 1 and on"
+                    }
                 }
 
                 kind == ArgumentKind.OBJECT && v.written == Written.ARRAY -> {
@@ -492,13 +498,19 @@ internal fun actionArgumentIssues(
 
                     v.written == Written.STRING && v.text != null && values.getOrNull(n).let { !it.isNullOrEmpty() && v.text !in it } -> {
                         val named = values[n]
-                        val near = named.singleOrNull { it.equals(v.text, ignoreCase = true) || ElementsGuard.oneEditAway(v.text, it, swaps = true) }
+                        val near =
+                            named.singleOrNull {
+                                it.equals(v.text, ignoreCase = true) ||
+                                    ElementsGuard.oneEditAway(v.text, it, swaps = true)
+                            }
                         // A Pro action's values come from its reference page alone, which is all the message can claim.
                         val source = if (spec.pro) ", as the reference names them" else ""
                         issue(
                             v.start,
                             v.end,
-                            "@${spec.name} takes one of ${named.joinToString(", ") { "'$it'" }} as $parameter$source, and ${shown(v)} is none of them." +
+                            "@${spec.name} takes one of ${named.joinToString(
+                                ", ",
+                            ) { "'$it'" }} as $parameter$source, and ${shown(v)} is none of them." +
                                 (near?.let { " Did you mean '$it'?" } ?: ""),
                             "action-argument",
                             link,
