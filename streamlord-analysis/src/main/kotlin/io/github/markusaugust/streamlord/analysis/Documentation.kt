@@ -132,7 +132,8 @@ internal fun expressionHelperDoc(
     catalog: Catalog,
 ): String {
     val given = listOfNotNull(spec.arg?.let { a.parameters.getOrNull(it) }) + a.parameters.filter { it.removeSuffix("?") in spec.more }
-    val listed = given.map { "`$it`" }.let { if (it.size > 1) it.dropLast(1).joinToString(", ") + " and " + it.last() else it.joinToString() }
+    val names = given.map { "`$it`" }
+    val listed = if (names.size > 1) names.dropLast(1).joinToString(", ") + " and " + names.last() else names.joinToString()
     val what = if (given.size > 1) "JavaScript expressions" else "a JavaScript expression"
     return actionDoc(a, withKotlin = false, catalog = catalog) + "\n\n`$helper` writes it with $listed given as $what."
 }
@@ -162,7 +163,12 @@ internal fun parameterDocs(
     val kinds = catalog.actionKinds[a.name].orEmpty()
     val docs = catalog.parameterDocs[a.name].orEmpty()
     return a.parameters.indices.map { n ->
-        val kind = kinds.getOrNull(n)?.takeIf { it != ArgumentKind.ANY }?.phrase()?.let { it.replaceFirstChar(Char::uppercaseChar) + ". " }
+        val kind =
+            kinds
+                .getOrNull(n)
+                ?.takeIf { it != ArgumentKind.ANY }
+                ?.phrase()
+                ?.let { it.replaceFirstChar(Char::uppercaseChar) + ". " }
         kind.orEmpty() + docs.getOrNull(n).orEmpty()
     }
 }

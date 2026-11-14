@@ -601,9 +601,20 @@ internal fun Catalog.listensFor(
  */
 internal fun dslEvent(site: CallSite): String? =
     when (site.name) {
-        "dataOnFetch" -> DATASTAR_FETCH
-        "dataOn" -> (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
-        else -> site.name.takeIf { Catalog.default.attributesByKotlin[it]?.name == "on" }?.removePrefix("dataOn")?.lowercase()
+        "dataOnFetch" -> {
+            DATASTAR_FETCH
+        }
+
+        "dataOn" -> {
+            (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
+        }
+
+        else -> {
+            site.name
+                .takeIf { Catalog.default.attributesByKotlin[it]?.name == "on" }
+                ?.removePrefix("dataOn")
+                ?.lowercase()
+        }
     }
 
 /** The event Datastar dispatches at each step of a backend action's request. */

@@ -409,8 +409,9 @@ private class Asked(
             stringItems(values, before.substring(c.argumentStart), expression.quote, q) { null }?.let { return it }
         }
         if (expression.event == DATASTAR_FETCH) {
-            FETCH_TYPE_COMPARED.find(before)?.groupValues?.get(1)?.takeIf { jsRegions(before)[before.length - it.length - 1] == Region.CODE }?.let {
-                stringItems(catalog.fetchEvents, it, expression.quote, q) { type -> fetchTypeDoc(type, catalog) }?.let { found -> return found }
+            val written = FETCH_TYPE_COMPARED.find(before)?.groupValues?.get(1)
+            if (written != null && jsRegions(before)[before.length - written.length - 1] == Region.CODE) {
+                stringItems(catalog.fetchEvents, written, expression.quote, q) { fetchTypeDoc(it, catalog) }?.let { return it }
             }
         }
         actionPrefixAt(before, before.length)?.let { typed ->
@@ -481,7 +482,13 @@ private class Asked(
             i++
             if (bare && (if (kotlin) c == '"' else c == attributeQuote) && string == null) break
             if (string != null) {
-                if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == string) string = null
+                if (escaped) {
+                    escaped = false
+                } else if (c == '\\') {
+                    escaped = true
+                } else if (c == string) {
+                    string = null
+                }
                 continue
             }
             when (c) {
@@ -507,7 +514,11 @@ private class Asked(
 
                 ':' -> {
                     if (depth == 0 && atKey) {
-                        word.toString().trim().takeIf { OPTION_WORD.matchEntire(it) != null }?.let { keys += it }
+                        word
+                            .toString()
+                            .trim()
+                            .takeIf { OPTION_WORD.matchEntire(it) != null }
+                            ?.let { keys += it }
                         atKey = false
                     }
                 }
@@ -560,7 +571,15 @@ private class Asked(
             for (m in type.members) {
                 val label = if (m.method) "${m.name}()" else m.name
                 val doc = m.mdn?.let { "[MDN]($it)" }
-                items += Completion(label, CompletionKind.OPTION, offset - typed.length, detail = type.name, doc = doc, key = items.size.toString().padStart(3, '0'))
+                items +=
+                    Completion(
+                        label,
+                        CompletionKind.OPTION,
+                        offset - typed.length,
+                        detail = type.name,
+                        doc = doc,
+                        key = items.size.toString().padStart(3, '0'),
+                    )
             }
             type = type.extends?.let { interfaces[it] }
         }

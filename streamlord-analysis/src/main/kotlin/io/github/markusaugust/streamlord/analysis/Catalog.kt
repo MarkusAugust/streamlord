@@ -200,6 +200,7 @@ public class Catalog private constructor(
 
     /** What each parameter of each action is, in order, as the hover says it. */
     internal val parameterDocs: Map<String, List<String>>
+
     /** The types a `datastar-fetch` event of a backend action's own is dispatched with, in order. */
     internal val fetchEvents: List<String>
 

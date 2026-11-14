@@ -67,7 +67,13 @@ class DatastarParameterInfoHandler :
         val signature =
             escape(label.substring(0, current.first)) + "<b>" + escape(label.substring(current)) + "</b>" +
                 escape(label.substring(current.last + 1))
-        context.setupRawUIComponentPresentation(signature + p.parameterDocs.getOrNull(n)?.let(::markdownToHtml).orEmpty())
+        context.setupRawUIComponentPresentation(
+            signature +
+                p.parameterDocs
+                    .getOrNull(n)
+                    ?.let(::markdownToHtml)
+                    .orEmpty(),
+        )
     }
 
     private fun escape(text: String) = StringUtil.escapeXmlEntities(text)
