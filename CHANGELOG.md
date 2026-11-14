@@ -365,6 +365,9 @@ All notable changes to Streamlord are recorded here. The format follows
   a context action: "...with ${css} as Trusted(...)" where it vouches for a value in a `<style>`,
   "...which refuses a URL that runs" where a value starts a URL, where one value's fix and the
   context action named the same edit differently.
+- "Quote the value" on a value without quotes is put first only for a number or a boolean, which
+  the quotes are all it needs; for any other value it is a step, and the message says that the
+  quoted value is still to be escaped.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

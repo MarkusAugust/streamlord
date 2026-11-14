@@ -104,7 +104,7 @@
     "end": 2869,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value."
+    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value. Quoting alone leaves the value as it is: escape it once it is quoted."
    },
    {
     "line": 72,
@@ -367,7 +367,7 @@
     "end": 3772,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value."
+    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value. Quoting alone leaves the value as it is: escape it once it is quoted."
    },
    {
     "line": 96,
@@ -594,7 +594,7 @@
     "end": 2666,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value."
+    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value. Quoting alone leaves the value as it is: escape it once it is quoted."
    },
    {
     "line": 57,
@@ -1463,7 +1463,7 @@
     "end": 25208,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value."
+    "message": "Kotlin writes $query into an attribute value without quotes, where a space starts a new attribute. Quote the value. Quoting alone leaves the value as it is: escape it once it is quoted."
    },
    {
     "line": 640,
@@ -1499,7 +1499,7 @@
     "end": 25334,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into an attribute value without quotes, where a space starts a new attribute. Quote the value."
+    "message": "Kotlin writes $html into an attribute value without quotes, where a space starts a new attribute. Quote the value. Quoting alone leaves the value as it is: escape it once it is quoted."
    },
    {
     "line": 659,

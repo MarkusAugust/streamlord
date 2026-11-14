@@ -1867,10 +1867,13 @@ public class Analyzer(
                             }
 
                             unquotedValueBefore(view, ip.decodedStart) -> {
+                                // Digits and words need the quotes alone; anything else is then a quoted value written as it is.
+                                val enough = fact.scalar()
                                 issue(
-                                    "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
-                                    if (fact.scalar()) Severity.HINT else Severity.WARNING,
-                                    fixes = listOfNotNull(quoteFix(s, view, ip, operands)),
+                                    "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value." +
+                                        if (enough) "" else " Quoting alone leaves the value as it is: escape it once it is quoted.",
+                                    if (enough) Severity.HINT else Severity.WARNING,
+                                    fixes = listOfNotNull(quoteFix(s, view, ip, operands)?.let { if (enough) it else it.copy(preferred = false) }),
                                 )
                             }
 
