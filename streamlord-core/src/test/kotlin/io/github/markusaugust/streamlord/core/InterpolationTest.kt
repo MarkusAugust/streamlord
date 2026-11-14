@@ -54,6 +54,9 @@ class InterpolationTest {
                 """<li data-bind="%s"></li>""",
                 """<li data-ref="%s"></li>""",
                 """<li data-indicator="%s"></li>""",
+                // Pro's media query, which the reference writes as a string literal: Pro may run it.
+                """<li data-match-media:dark="%s"></li>""",
+                """<li data-match-media:dark="'%s'"></li>""",
             )
 
         for (markup in attributes) {
