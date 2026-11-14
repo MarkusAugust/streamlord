@@ -1388,7 +1388,9 @@ public class MarkupValidator(
             if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars)) {
                 issues += validateFilter(attr, spec, prefix)
             }
-            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars)) {
+            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() &&
+                !hasTemplateSyntax(value, engineDollars)
+            ) {
                 issues += validateComputedObject(attr, prefix)
             }
             if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value, engineDollars) &&

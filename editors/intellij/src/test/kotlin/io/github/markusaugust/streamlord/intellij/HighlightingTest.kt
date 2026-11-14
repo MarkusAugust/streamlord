@@ -2,9 +2,9 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
 import com.intellij.openapi.util.JDOMUtil
-import com.intellij.openapi.editor.colors.TextAttributesKey
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 
 /**
@@ -68,6 +68,7 @@ class HighlightingTest : StreamlordTestCase() {
     fun `test every bundled scheme colours every datastar key`() {
         val plain = setOf(DatastarColors.IDENTIFIER, DatastarColors.METHOD, DatastarColors.OPERATOR)
         val manager = EditorColorsManager.getInstance()
+
         fun bundled(name: String) = manager.getScheme(name) ?: manager.allSchemes.first { it.name.contains(name) }
         val schemes =
             listOf(bundled("Default"), bundled("Darcula")) +

@@ -50,7 +50,13 @@ class HtmlDatastarAnnotator : Annotator {
         for (p in parts) paint(holder, TextRange(nameStart + p.start, nameStart + p.end), DatastarColors.of(p.part))
         val valueElement: XmlAttributeValue = element.valueElement ?: return
         val start = valueElement.valueTextRange.startOffset
-        for (t in valueTokens(spec, valueElement.value, file.name)) paint(holder, TextRange(start + t.start, start + t.end), DatastarColors.of(t.kind))
+        for (t in valueTokens(
+            spec,
+            valueElement.value,
+            file.name,
+        )) {
+            paint(holder, TextRange(start + t.start, start + t.end), DatastarColors.of(t.kind))
+        }
     }
 }
 

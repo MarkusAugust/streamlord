@@ -353,7 +353,7 @@ private class ExpressionScanner(
                     j += 2
                 }
 
-                text.startsWith("\${", j) && !text.startsWith(KOTLIN_DOLLAR, j) || text.startsWith(KOTLIN_DOLLAR + "{", j) -> {
+                (text.startsWith("\${", j) && !text.startsWith(KOTLIN_DOLLAR, j)) || text.startsWith(KOTLIN_DOLLAR + "{", j) -> {
                     // A Kotlin string writes the template's dollar as ${'$'}.
                     val open = if (text.startsWith(KOTLIN_DOLLAR, j)) KOTLIN_DOLLAR.length + 1 else 2
                     if (j > from) out += Token(from, j, TokenKind.STRING)

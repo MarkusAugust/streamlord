@@ -761,7 +761,12 @@ public class Analyzer(
         val lex = lex(src)
         val s = lex.stringAt(offset) ?: return null
         if (isHtmlString(src, s)) return s
-        val around = { names: Set<String> -> findCallSites(src, names, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen + 1 } }
+        val around = { names: Set<String> ->
+            findCallSites(src, names, lex).firstOrNull {
+                it.openParen < s.start &&
+                    s.end <= it.closeParen + 1
+            }
+        }
         val formatOf = around(INTERPOLATE)?.takeUnless { shadowsCore(src, "interpolate") }?.let { interpolateFormat(it, src) }
         if (formatOf?.second?.start == s.start) return s
         val site = around(htmlSiteNames) ?: return null

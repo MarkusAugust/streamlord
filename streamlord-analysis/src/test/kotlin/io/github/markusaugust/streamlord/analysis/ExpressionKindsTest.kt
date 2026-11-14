@@ -198,7 +198,10 @@ class ExpressionKindsTest {
         val value = "{{#flag}}\$a{{/flag}}"
         assertEquals(listOf("\$a" to TokenKind.SIGNAL), tokens(value, templatePlaceholders(value)))
         val after = "\$a{{x}} / 2"
-        assertEquals(listOf("\$a" to TokenKind.SIGNAL, "/" to TokenKind.OPERATOR, "2" to TokenKind.NUMBER), tokens(after, templatePlaceholders(after)))
+        assertEquals(
+            listOf("\$a" to TokenKind.SIGNAL, "/" to TokenKind.OPERATOR, "2" to TokenKind.NUMBER),
+            tokens(after, templatePlaceholders(after)),
+        )
     }
 
     // jte, kte, FreeMarker and Velocity write ${...} before the browser reads the value, inside a JavaScript template too.
