@@ -38,3 +38,13 @@ val hsMargin =
     |  <p data-text="`x ${'$'}{${'$'}hsClicks}`"></p>
     |</div>
     """.trimMargin()
+
+// The format on a line of its own, as ktlint wraps it, and a marked literal joined to more.
+fun hsWrapped(title: String) =
+    interpolate(
+        "Hi <b data-text=\"\$hsName\" data-attr:title=\"%s\"></b>",
+        title,
+    )
+
+@Language("HTML")
+val hsJoined = "Hi <b data-text=\"\$hsName\"></b>" + hsGreeting

@@ -4,5 +4,7 @@
 {"what":"hover","at":"2:44-2:49","answers":[{"contents":["**$hsFtl**\n\nDatastar reads it as `$['hsFtl']`, the signal path hsFtl in its store."],"range":"2:43-2:49"}]}
 {"what":"hover","at":"3:9-3:22","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"3:9-3:22"}]}
 {"what":"hover","at":"3:24-3:29","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"3:24-3:29"}]}
+{"what":"hover","at":"4:6-4:15","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"4:6-4:15"}]}
+{"what":"hover","at":"4:29-4:34","answers":[{"contents":["**$hsFtl**\n\nDatastar reads it as `$['hsFtl']`, the signal path hsFtl in its store."],"range":"4:28-4:34"}]}
 {"what":"signature","at":"3:30-3:43","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"label":[6,9]},{"label":[11,19]}]}]}
-{"what":"rename","at":"1:1-4:1","error":"No signal here to rename."}
+{"what":"rename","at":"1:1-5:1","error":"No signal here to rename."}

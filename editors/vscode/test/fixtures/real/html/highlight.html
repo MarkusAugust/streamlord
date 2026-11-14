@@ -11,5 +11,7 @@
 <div th:attr="data-signals=${signals}" data-text="$hsLabel"></div>
 <div data-class="{'text-red-500': $hsErr}" data-signals='{"hs-key": 1}'></div>
 <input data-on:input="evt?.target.value && ($hsQ = evt.target.value)">
+<div data-signals:år="1" data-on:my-évent="$hsA++"></div>
+<div data-text="<#if a>$hsA</#if> <?= $b ?>"></div>
 </body>
 </html>
