@@ -73,7 +73,10 @@ class InspectionTest : StreamlordTestCase() {
             found.toString(),
             found.any {
                 "needs a key" in it &&
-                    it.endsWith("Also: data-match-media is a Datastar Pro attribute; it needs the Pro bundle. See https://data-star.dev/reference/attributes#data-match-media")
+                    it.endsWith(
+                        "Also: data-match-media is a Datastar Pro attribute; it needs the Pro bundle. " +
+                            "See https://data-star.dev/reference/attributes#data-match-media",
+                    )
             },
         )
         assertTrue(found.toString(), found.any { "needs a value" in it && "Unknown modifier __ on data-on" in it })

@@ -66,7 +66,7 @@ abstract class StreamlordInspection(
                 manager.createProblemDescriptor(
                     file,
                     range,
-                    issue.message + (issue.link?.let { " See $it" } ?: "") + covered.joinToString("") { " Also: ${it.message}" },
+                    described(issue) + covered.joinToString("") { " Also: ${described(it)}" },
                     type,
                     isOnTheFly,
                     *quickFixes(issue.fixes + covered.flatMap { it.fixes }),
@@ -102,6 +102,9 @@ abstract class StreamlordInspection(
             return own >= declared || chosen < own
         }
     }
+
+    /** The message and the page it links to. */
+    private fun described(issue: Issue): String = issue.message + (issue.link?.let { " See $it" } ?: "")
 
     private fun highlightType(severity: Severity): ProblemHighlightType =
         when (severity) {
