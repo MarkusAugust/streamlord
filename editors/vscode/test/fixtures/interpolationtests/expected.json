@@ -743,7 +743,7 @@
     "end": 1393,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 53,
@@ -752,7 +752,7 @@
     "end": 2043,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 57,
@@ -761,7 +761,7 @@
     "end": 2177,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 73,
@@ -770,7 +770,7 @@
     "end": 2700,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 77,
@@ -779,7 +779,7 @@
     "end": 2834,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 93,
@@ -788,7 +788,7 @@
     "end": 3364,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 97,
@@ -797,7 +797,7 @@
     "end": 3561,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 113,
@@ -806,7 +806,7 @@
     "end": 4130,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 117,
@@ -815,7 +815,7 @@
     "end": 4276,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 133,
@@ -824,7 +824,7 @@
     "end": 4828,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 137,
@@ -833,7 +833,7 @@
     "end": 4966,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 153,
@@ -842,7 +842,7 @@
     "end": 5513,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 157,
@@ -851,7 +851,7 @@
     "end": 5659,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 173,
@@ -860,7 +860,7 @@
     "end": 6228,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 177,
@@ -869,7 +869,7 @@
     "end": 6442,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup."
+    "message": "Kotlin writes $html into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 193,
@@ -878,7 +878,7 @@
     "end": 7077,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 197,
@@ -887,7 +887,7 @@
     "end": 7211,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 213,
@@ -896,7 +896,7 @@
     "end": 7755,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 217,
@@ -905,7 +905,7 @@
     "end": 7905,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 233,
@@ -914,7 +914,7 @@
     "end": 8461,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 237,
@@ -923,7 +923,7 @@
     "end": 8599,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 253,
@@ -932,7 +932,7 @@
     "end": 9162,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 257,
@@ -941,7 +941,7 @@
     "end": 9320,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of href, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 274,
@@ -950,7 +950,7 @@
     "end": 10011,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of values, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of values, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 278,
@@ -959,7 +959,7 @@
     "end": 10245,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of values, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of values, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 281,
@@ -968,7 +968,7 @@
     "end": 10432,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of values, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of values, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 295,
@@ -977,7 +977,7 @@
     "end": 10890,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of to, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of to, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 299,
@@ -986,7 +986,7 @@
     "end": 11092,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of to, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of to, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 315,
@@ -995,7 +995,7 @@
     "end": 11666,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query at the start of from, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $query at the start of from, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 319,
@@ -1004,7 +1004,7 @@
     "end": 11920,
     "code": "unsafe-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $html at the start of from, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs."
+    "message": "Kotlin writes $html at the start of from, so the value decides the scheme, and a javascript: URL runs. Escaping does not help: start the value with /, # or https://, or build the string with interpolate(...), which refuses a scheme that runs. interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 335,
@@ -1850,7 +1850,7 @@
     "end": 29366,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 777,
@@ -1859,7 +1859,7 @@
     "end": 29941,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 797,
@@ -1868,7 +1868,7 @@
     "end": 30590,
     "code": "unescaped-interpolation",
     "severity": "warning",
-    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...)."
+    "message": "Kotlin writes $query into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). interpolate(...) writes nothing for $maybe where it is null, and Kotlin writes null."
    },
    {
     "line": 820,

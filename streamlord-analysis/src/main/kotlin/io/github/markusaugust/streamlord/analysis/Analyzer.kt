@@ -1679,10 +1679,10 @@ public class Analyzer(
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
         // value, where one may be null, which a template writes as `null` and interpolate as nothing, nor under
         // trimIndent, where a value with a line break changed what was trimmed.
-        val same by lazy(LazyThreadSafetyMode.NONE) {
-            vouched.isEmpty() && (trim == null || trim.margin != null) &&
-                holes.none { told[it].isNullable() || told[it].isNullableString() || mayBeNull(src, s.interpolations[it].text, s.start) }
+        val nullable by lazy(LazyThreadSafetyMode.NONE) {
+            holes.firstOrNull { told[it].isNullable() || told[it].isNullableString() || mayBeNull(src, s.interpolations[it].text, s.start) }
         }
+        val same by lazy(LazyThreadSafetyMode.NONE) { vouched.isEmpty() && (trim == null || trim.margin != null) && nullable == null }
         // The rewrite is made once for the string, and only where an issue offers it.
         val rewrite by lazy(LazyThreadSafetyMode.NONE) { interpolateFix(src, s, trim?.text.orEmpty(), vouched, kept) }
         var offered = false
@@ -1717,14 +1717,19 @@ public class Analyzer(
             fun rewriteNote(): String {
                 if (!canInterpolate || trusted[k]) return ""
                 if (!unfit.isNullOrEmpty()) return " interpolate(...) is not offered here: $unfit."
+                // A value that may be null, which a template writes as null and the rewrite as nothing.
+                val nothing =
+                    nullable?.takeIf { fixable }?.let {
+                        " interpolate(...) writes nothing for ${holeDisplay(s.interpolations[it])} where it is null, and Kotlin writes null."
+                    } ?: ""
                 // This value alone in the way, for the reason interpolateKeeps gives in element text.
                 val own = !keeps[k] && landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants)
-                val other = inTheWay.firstOrNull { it != k } ?: return if (own) OWN_MARKUP_NOTE else ""
+                val other = inTheWay.firstOrNull { it != k } ?: return (if (own) OWN_MARKUP_NOTE else "") + nothing
                 val named = holeDisplay(s.interpolations[other])
                 val place = refusedPlace(view, landings[other], starts[other])
                 val refused = loose[other] || landings[other].position !in ESCAPED_POSITIONS
                 return when {
-                    fixable -> " The fix passes $named, in $place, as Trusted(...)."
+                    fixable -> " The fix passes $named, in $place, as Trusted(...).$nothing"
                     refused -> " interpolate(...) cannot take this string while $named stands in $place."
                     else -> " interpolate(...) is not offered here: it would escape $named, which may be markup you built."
                 }

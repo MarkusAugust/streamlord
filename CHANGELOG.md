@@ -344,6 +344,8 @@ All notable changes to Streamlord are recorded here. The format follows
   template in the format where `interpolate` would refuse it or might escape markup it holds, so a
   route constant in `data-on:click="@post('${SAVE}')"` or a constant of another file no longer
   keeps the rewrite from every other value of the string; one the file shows with a `%` is not kept.
+- The rewrite to `interpolate` of a string with a value that may be null says that `interpolate`
+  writes nothing for it where a template writes `null`, in the message of every value that offers it.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

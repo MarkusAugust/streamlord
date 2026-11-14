@@ -324,7 +324,8 @@ fun rootHtmlAfter(k: WidgetContext, customCss: String?, bodyHtml: String): Strin
 
 Under `.trimIndent()` the fix is never put first, because the trim now runs before the values go
 in: a value that holds a line break no longer changes how much is trimmed. `.trimMargin()` has no
-such catch.
+such catch. Nor is it put first beside a value that may be null, a `String?` or an `Int?`: a
+template writes `null` for it, which no page means, and `interpolate` nothing, as the message says.
 
 A `$$"..."` literal keeps its prefix, so a single dollar that was text for the browser stays text.
 Literals joined to values with `+` become one format, and where they are written differently each
