@@ -112,6 +112,11 @@
     {"name":"a String in the body of a style is said to be read as CSS, with advice for CSS","params":"v: String","body":"\"<style>p { color: ${v} }</style>\"","rewrite":"offered","says":["into a <style>, where it is read as CSS","Choose between classes"],"marks":["${v}"]},
     {"name":"a number in the body of a script cannot end it","params":"n: Int","body":"\"<script>var n = ${n};</script>\"","rewrite":"none","marks":[]},
     {"name":"a boolean in an event handler cannot end it","params":"b: Boolean","body":"\"<p onclick=\\\"go(${b})\\\">x</p>\"","rewrite":"none","marks":[]},
-    {"name":"a boolean in a style is no CSS that does harm","params":"b: Boolean","body":"\"<p style=\\\"x: ${b}\\\">x</p>\"","rewrite":"none","marks":[]}
+    {"name":"a boolean in a style is no CSS that does harm","params":"b: Boolean","body":"\"<p style=\\\"x: ${b}\\\">x</p>\"","rewrite":"none","marks":[]},
+    {"name":"arithmetic is a number's, which style takes","params":"n: Int, v: String","body":"\"<p style=\\\"width: ${n * 2}px\\\" title=\\\"$v\\\">x</p>\"","rewrite":"preferred","marks":["$v"]},
+    {"name":"a sum that starts with a number is one, which style takes","params":"n: Int, v: String","body":"\"<p style=\\\"width: ${n + 1}px\\\" title=\\\"$v\\\">x</p>\"","rewrite":"preferred","marks":["$v"]},
+    {"name":"a sum that starts with a String is no number","params":"v: String","body":"\"<p style=\\\"width: ${v + 1}px\\\">x</p>\"","rewrite":"none","marks":["${v + 1}"]},
+    {"name":"a comparison in a sum is no number","params":"n: Int","body":"\"<p style=\\\"width: ${n + 1 > 2}px\\\">x</p>\"","rewrite":"none","marks":[]},
+    {"name":"the name of an enum entry is the author's own","declares":"enum class Tab { HOME, AWAY }","params":"v: String","body":"\"<p data-text=\\\"${Tab.HOME.name}\\\">${v}</p>\"","rewrite":"offered","marks":["${v}"]}
   ]
 }
