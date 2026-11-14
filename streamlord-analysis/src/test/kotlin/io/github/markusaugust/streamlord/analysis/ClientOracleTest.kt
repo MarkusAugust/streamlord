@@ -430,7 +430,7 @@ class ClientOracleTest {
         analyzer
             .analyzeHtml("<div data-on:click__$modifiers=\"\$a = 1\"></div>")
             .map { it.message }
-            .firstOrNull { "needs a duration" in it || "reads none and does not wait" in it || readsMs.containsMatchIn(it) }
+            .firstOrNull { "waits 0 ms" in it || "reads none and does not wait" in it || readsMs.containsMatchIn(it) }
 
     /** Tags the client reads through JavaScript's number syntax and the check refuses on purpose. */
     private val jsNumberForms = setOf("debounce.1e3ms")
@@ -454,10 +454,10 @@ class ClientOracleTest {
                 assertEquals(readsMs.find(message)!!.groupValues[1], wait, written)
             }
 
-            // "needs a duration" names no number: it is right where the client reads none or no wait, and for
-            // JavaScript's own number syntax, 1e3ms, which the check refuses on purpose (DURATION takes digits).
+            // "waits 0 ms" is right where the client reads none or no wait, and for JavaScript's own number
+            // syntax, 1e3ms, which the check refuses on purpose (DURATION takes digits).
             else -> {
-                assertContains(message, "needs a duration", message = written)
+                assertContains(message, "waits 0 ms", message = written)
                 val read = wait.toDoubleOrNull()
                 assertTrue(
                     read == null || read.isNaN() || read <= 0.0 || written in jsNumberForms,

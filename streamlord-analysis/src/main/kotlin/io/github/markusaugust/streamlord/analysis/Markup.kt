@@ -1169,6 +1169,24 @@ public class MarkupValidator(
                         )
                     continue
                 }
+                // The modifiers are a Map in parseAttributeKey: the last one of a name is the one read.
+                val last = parsed.modifiers.last { it.name == mod.name }
+                if (last !== mod) {
+                    if (last.args != mod.args) {
+                        issues +=
+                            Issue(
+                                mstart,
+                                mend,
+                                "Datastar reads only the last __${mod.name}, __${last.text}, and ignores this one.",
+                                Severity.WARNING,
+                                "modifier-args",
+                                link,
+                            )
+                    }
+                    continue
+                }
+                // What a Pro plugin reads of a modifier its reference does not list is not known here.
+                if (spec.pro && !mspec.listed) continue
                 val present = parsed.modifiers.filter { it !== mod }.map { it.name }
                 issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present, listensFor).map { it.copy(link = link) }
             }
@@ -1833,7 +1851,7 @@ public class MarkupValidator(
             // __debounce..500ms: the client reads the empty tag as the value and never comes to .500ms.
             // Without it, the modifier is the fix only if it holds up itself: __debounce..leading has no duration.
             val fixed = "." + args.joinToString(".")
-            val holds = validateModifierArgs(spec, args, start, end, attribute, present, listensFor).none { it.severity == Severity.ERROR }
+            val holds = validateModifierArgs(spec, args, start, end, attribute, present, listensFor).isEmpty()
             fail(
                 "Datastar reads the first argument of __${spec.name}, which is empty here, and not .${args.first()}." +
                     if (holds) " Write __${spec.name}$fixed." else "",
@@ -1911,7 +1929,21 @@ public class MarkupValidator(
                     return issues
                 }
                 val read = d?.takeIf { it.isNotEmpty() && DURATION.matchEntire(it) == null }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
-                if (d != null && read != null) {
+                // onInterval.ts hands setInterval what tagToMs reads, 0 for no duration and for NaN.
+                val wait =
+                    when {
+                        d.isNullOrEmpty() -> 0.0
+                        DURATION.matchEntire(d) != null -> clientMs(d)
+                        else -> read ?: 0.0
+                    }
+                if (attribute.name == "on-interval" && spec.name == "duration" && wait != null && wait <= 0) {
+                    val how = if (d.isNullOrEmpty()) "without a duration" else "with __${spec.name}.$d"
+                    ignored(
+                        "Datastar runs the interval every 0 ms $how, as often as the browser allows. " +
+                            "Write a duration such as __${spec.name}.1s.",
+                        if (d.isNullOrEmpty() && args.size <= 1) listOf(Fix("Add .1s", at, end, ".1s")) else emptyList(),
+                    )
+                } else if (d != null && read != null) {
                     // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
                     val at = start + spec.name.length
                     val fix = "${jsFormat(read)}ms".takeIf { read >= 0 && read % 1 == 0.0 }
@@ -1920,10 +1952,15 @@ public class MarkupValidator(
                         fix?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 1 + d.length, ".$it")) } ?: emptyList(),
                     )
                 } else if (d.isNullOrEmpty() || DURATION.matchEntire(d) == null) {
-                    val at = start + spec.name.length
+                    // tagToMs reads 0 for no tag and NaN for one with no number, which setTimeout takes as 0.
                     // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
-                    fail(
-                        "__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.",
+                    val such = "Write a duration such as __${spec.name}.500ms or __${spec.name}.1s."
+                    ignored(
+                        if (d.isNullOrEmpty()) {
+                            "__${spec.name} without a duration waits 0 ms. $such"
+                        } else {
+                            "Datastar reads no duration from __${spec.name}.${args.joinToString(".")} and waits 0 ms. $such"
+                        },
                         if (d.isNullOrEmpty() && args.size <= 1) listOf(Fix("Add .500ms", at, end, ".500ms")) else emptyList(),
                     )
                 }
@@ -1952,12 +1989,17 @@ public class MarkupValidator(
                         fail("__${spec.name} needs one of: $allowed.")
                     }
                 }
-                // __case.camel.foo: the client applies each value it has a function for and skips the rest.
-                val applied = if (spec.name == "case") rest.filter { it in ClientCasing.CASES } else rest
-                if (applied.isNotEmpty()) {
-                    fail("__${spec.name} takes a single value.")
-                } else if (rest.isNotEmpty() && v != null && v in spec.values) {
-                    ignored("__${spec.name} takes a single value; Datastar ignores ${rest.joinToString("") { ".$it" }}$listensFor.")
+                // __case.snake.pascal: modifyCasing applies each value in turn, and leaves the key as it is for one it has no function for.
+                val unread = if (spec.name == "case") rest.filter { it !in ClientCasing.CASES } else rest
+                if (unread.isNotEmpty() && v != null && v in spec.values) {
+                    ignored(
+                        if (spec.name == "case") {
+                            val values = unread.joinToString("") { ".$it" }
+                            "Unknown value $values for __case, which Datastar ignores$listensFor. Allowed: $allowed."
+                        } else {
+                            "__${spec.name} takes a single value; Datastar ignores ${rest.joinToString("") { ".$it" }}$listensFor."
+                        },
+                    )
                 }
             }
 
@@ -1972,10 +2014,24 @@ public class MarkupValidator(
                     fail("__${spec.name} needs an integer$range, e.g. __${spec.name}.50.")
                 } else if (v == null) {
                     ignored("Datastar reads __${spec.name} without a value as 0.")
+                } else if (args.size > 1) {
+                    // __threshold.0.5: tagFirst reads the tag before the dot.
+                    val fraction = args.size == 2 && args.all { WHOLE_NUMBER.matchEntire(it) != null }
+                    // A fraction of 1 in hundredths, 0.5 or 0.05, is a whole percentage, 50 or 5.
+                    val hundredths = args[1].padEnd(2, '0')
+                    val percent = if (fraction && v == "0" && hundredths.length == 2) hundredths.trimStart('0').ifEmpty { "0" } else null
+                    ignored(
+                        "Datastar reads __${spec.name}.${args.joinToString(".")} as ${jsFormat(n)}: a dot separates arguments" +
+                            if (fraction) {
+                                ", and the ${spec.name} is a ${if (percent != null) "percentage. Write __${spec.name}.$percent." else "whole percentage."}"
+                            } else {
+                                "."
+                            },
+                        percent?.let { listOf(Fix("Change to __${spec.name}.$it", start, end, "${spec.name}.$it")) } ?: emptyList(),
+                    )
                 } else if ((min != null && n < min) || (max != null && n > max)) {
                     ignored("Datastar clamps __${spec.name}.$v to ${if (min != null && n < min) min else max}.")
                 }
-                if (args.size > 1) fail("__${spec.name} takes a single value.")
             }
 
             ModifierType.IDENT -> {

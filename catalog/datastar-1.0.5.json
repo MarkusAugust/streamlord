@@ -174,8 +174,8 @@
         { "$ref": "case" },
         { "$ref": "timing" },
         { "$ref": "viewtransition" },
-        { "name": "window", "type": "flag", "doc": "Attaches the event listener to the window element." },
-        { "name": "document", "type": "flag", "doc": "Attaches the event listener to the document element." },
+        { "name": "window", "type": "flag", "ignoredWith": ["outside"], "doc": "Attaches the event listener to the window element." },
+        { "name": "document", "type": "flag", "ignoredWith": ["window", "outside"], "doc": "Attaches the event listener to the document element." },
         { "name": "outside", "type": "flag", "doc": "Triggers when the event is outside the element." },
         { "name": "prevent", "type": "flag", "doc": "Calls preventDefault on the event listener." },
         { "name": "stop", "type": "flag", "doc": "Calls stopPropagation on the event listener." }
