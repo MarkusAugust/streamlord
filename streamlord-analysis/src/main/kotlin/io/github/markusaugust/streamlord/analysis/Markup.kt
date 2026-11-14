@@ -507,6 +507,54 @@ public fun tokenize(
     return Tokens(tags, topLevelText)
 }
 
+/**
+ * A start tag closes the open elements whose end tag was left out: `<li>` closes the `<li>`
+ * before it, `<tbody>` closes the cell, the row and the `<thead>` above it. The search stops
+ * at the first element that needs its end tag.
+ */
+private fun <T> closeImplied(
+    stack: MutableList<T>,
+    opening: String,
+    name: (T) -> String,
+) {
+    var i = stack.size - 1
+    while (i >= 0) {
+        val closers = OPTIONAL_END[name(stack[i])] ?: return
+        if (opening in closers) {
+            while (stack.size > i) stack.removeAt(stack.size - 1)
+        }
+        i--
+    }
+}
+
+/**
+ * The start tags of [tags] whose attributes the client applies: not an element with
+ * `data-ignore`, nor one inside it, nor one with `data-ignore__self` (shouldIgnore in engine.ts).
+ */
+internal fun appliedTags(
+    tags: List<Tag>,
+    prefix: String,
+): List<Tag> {
+    val ignore = prefix + "ignore"
+    val self = ignore + "__self"
+    val out = ArrayList<Tag>()
+    // The open elements, each with whether it or one around it has data-ignore.
+    val open = ArrayList<Pair<String, Boolean>>()
+    for (tag in tags) {
+        if (tag.closing) {
+            val idx = open.indexOfLast { it.first == tag.name }
+            if (idx >= 0) while (open.size > idx) open.removeAt(open.size - 1)
+            continue
+        }
+        closeImplied(open, tag.name) { it.first }
+        val names = tag.attributes.map { it.name.asciiLowercase() }
+        val ignored = open.lastOrNull()?.second == true || ignore in names
+        if (!ignored && self !in names) out += tag
+        if (!tag.selfClosing) open += tag.name to ignored
+    }
+    return out
+}
+
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
 private val KOTLIN_TAG_NAME = regex("""(</?)__kt__""")
 
@@ -680,6 +728,7 @@ public class MarkupValidator(
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         val (tags, topLevelText) = tokenize(html, opts.templates)
+        val applied = if (opts.checkAttributes) appliedTags(tags, opts.prefix).mapTo(HashSet()) { it.start } else emptySet()
         val stack = ArrayList<Tag>()
         val topLevel = ArrayList<Tag>()
         for (tag in tags) {
@@ -696,10 +745,10 @@ public class MarkupValidator(
                 }
                 continue
             }
-            closeImplied(stack, tag.name)
+            closeImplied(stack, tag.name) { it.name }
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
-            if (opts.checkAttributes) {
+            if (tag.start in applied) {
                 issues +=
                     validateAttributes(
                         tag,
@@ -747,25 +796,6 @@ public class MarkupValidator(
             }
         }
         return issues
-    }
-
-    /**
-     * A start tag closes the open elements whose end tag was left out: `<li>` closes the `<li>`
-     * before it, `<tbody>` closes the cell, the row and the `<thead>` above it. The search stops
-     * at the first element that needs its end tag.
-     */
-    private fun closeImplied(
-        stack: MutableList<Tag>,
-        opening: String,
-    ) {
-        var i = stack.size - 1
-        while (i >= 0) {
-            val closers = OPTIONAL_END[stack[i].name] ?: return
-            if (opening in closers) {
-                while (stack.size > i) stack.removeAt(stack.size - 1)
-            }
-            i--
-        }
     }
 
     /** Validate the Datastar attributes on one tag. */

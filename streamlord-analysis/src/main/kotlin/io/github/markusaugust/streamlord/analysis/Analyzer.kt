@@ -736,8 +736,7 @@ public class Analyzer(
         templates: Boolean = true,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
-        for (tag in tokenize(src, templates).tags) {
-            if (tag.closing) continue
+        for (tag in appliedTags(tokenize(src, templates).tags, opts.prefix)) {
             issues +=
                 markup.validateAttributes(
                     tag,
