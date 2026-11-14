@@ -506,6 +506,22 @@ All notable changes to Streamlord are recorded here. The format follows
   `__`, and VS Code no longer shows two hovers on `data-text` and the others its HTML data documents.
 - The pre-1.0 fix needs a key after the dash, so a half typed `data-on-` is no longer changed to
   `data-on:` with an empty key.
+- A Kotlin template or a `%s` in an action call no longer turns off the checks of the rest of the
+  call: `@get('/a/$id', {retyr: 'never'})` is told of `retyr`, in an HTML string, a DSL string and
+  `interpolate`.
+- `@intl` warns of a type the reference does not name, with a fix for one written in another case.
+  `@gett` is offered `@get`, and the cases of `switch (evt.detail.type)` are held to the types
+  `datastar-fetch` is dispatched with, as `===` is.
+- An option of the wrong kind says what Datastar does with it, `retryMaxCount: true` counts as 1;
+  `@get(['/a'])`, which the client sends, is no longer reported; a `contentType` the client cannot
+  read is said to fail the action with FetchFailed. `filterSignals` is shown as `RegExp | string`.
+- In the DSL, `peek` writes its expression in parentheses, so `peek("{a: \$a}")` returns the
+  object, and `fit` and `intl` write their value as one argument. A comma at the top of an
+  expression the DSL writes in parentheses, `postExpr("'/a', {retyr: 1}")`, is a warning, as
+  JavaScript keeps only what follows it.
+- Every option of a backend action has an `...Expr` twin that takes an expression, a
+  `SignalFilter` can be an expression or hold expressions (`includeExpr`, `excludeExpr`,
+  `expression`), and `peekExpr` hands `@peek` a function the page has.
 - In the catalog, an attribute may name the page of the reference that describes it, `reference`;
   `AttributeSpec` has one more value, `reference`, last, and code compiled against the old
   constructor needs a rebuild.
