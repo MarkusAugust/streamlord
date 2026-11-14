@@ -13,6 +13,8 @@
     {"name":"a digit after a dollar and a hyphenated signal are no reads to check","source":"<div data-text=\"$1 + $x-y\"></div>","issues":[]},
     {"name":"an object spread into the object form declares its keys","source":"<div data-signals=\"{a: 1, ...{b: 2}, c: {...{d: 3}}}\" data-text=\"$a + $b + $c.d + $e\"></div>","issues":[{"code":"unknown-signal","start":82,"end":84,"fixes":["<div data-signals=\"{a: 1, ...{b: 2}, c: {...{d: 3}}}\" data-text=\"$a + $b + $c.d + $a\"></div>"]}]},
     {"name":"a spread of something not an object literal, which may declare any signal","source":"<div data-signals=\"{...$x}\"></div><div data-signals=\"{...(true ? {b: 12} : {})}\"></div><div data-text=\"$y + $b\"></div>","issues":[]},
-    {"name":"a spread of a variable under a key, which declares nothing beside that key","source":"<div data-signals=\"{a: {...window.init}}\"></div><div data-text=\"$a.y + $q\"></div>","issues":[{"code":"unknown-signal","start":71,"end":73,"fixes":["<div data-signals=\"{a: {...window.init}}\"></div><div data-text=\"$a.y + $a\"></div>"]}]}
+    {"name":"a spread of a variable under a key, which declares nothing beside that key","source":"<div data-signals=\"{a: {...window.init}}\"></div><div data-text=\"$a.y + $q\"></div>","issues":[{"code":"unknown-signal","start":71,"end":73,"fixes":["<div data-signals=\"{a: {...window.init}}\"></div><div data-text=\"$a.y + $a\"></div>"]}]},
+    {"name":"data-ignore: a signal read inside is not the client's","source":"<div data-signals:b=\"1\"><div data-ignore><span data-text=\"$ignored\"></span></div><span data-text=\"$b\"></span></div>","issues":[]},
+    {"name":"data-ignore: a signal declared inside is never declared","source":"<div data-ignore><b data-signals:foo=\"1\"></b></div><p data-text=\"$foo\"></p>","issues":[{"code":"unknown-signal","start":65,"end":69}]}
   ]
 }
