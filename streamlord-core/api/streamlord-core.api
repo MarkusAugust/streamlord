@@ -365,10 +365,11 @@ public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/HoleLanding {
-	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZII)V
-	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIZ)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAttribute ()Ljava/lang/String;
 	public final fun getLoadsCode ()Z
+	public final fun getMarkupInPlace ()Z
 	public final fun getNameStart ()I
 	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
 	public final fun getTagStart ()I
@@ -405,6 +406,7 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt
 	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
 	public static synthetic fun landingAsParsed$default (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
+	public static final fun refusedUrlScheme (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun urlHostFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 }

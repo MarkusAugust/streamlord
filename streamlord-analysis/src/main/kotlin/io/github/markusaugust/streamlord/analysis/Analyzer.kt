@@ -1092,7 +1092,7 @@ public class Analyzer(
             val shown = holeDisplay(ip)
             // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
             val percents = runBefore(format.text, ip.decodedStart, '%')
-            // A %s hole writes nothing for null, which a template writes as null: the fix is offered, and not put first.
+            // A %s placeholder writes nothing for null, which a template writes as null: the fix is offered, and not put first.
             val nullable = told.isNullableString() || mayBeNull(src, ip.text, s.start)
             // It escapes markup held as a String, so the fix would change the page; an Html or a Trusted it writes as it is.
             val keeps =
@@ -1101,7 +1101,7 @@ public class Analyzer(
                 } else {
                     !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
                 }
-            // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the
+            // As a %s placeholder it would be refused, along with every value after it in the URL, unless the literal before it fixes the
             // host, and after a scheme the markup writes that does more than navigate.
             val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
             val fixable =
@@ -1237,7 +1237,7 @@ public class Analyzer(
     }
 
     /**
-     * The template made a `%s` hole in place, and its expression passed as the value at the same
+     * The template made a `%s` placeholder in place, and its expression passed as the value at the same
      * place among the others; [asIs] where interpolate writes the value as it is, [preferred] where
      * the page is left as it was.
      */
