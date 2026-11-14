@@ -349,7 +349,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - A string marked `@org.intellij.lang.annotations.Language("HTML")`, the annotation by its
   qualified name, and one handed straight to a parameter of a function of the same file that
   carries the annotation, are read as HTML and their values judged, as one marked
-  `@Language("HTML")` or `// language=HTML` was.
+  `@Language("HTML")` or `// language=HTML` was. VS Code colours one marked by the qualified name too.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

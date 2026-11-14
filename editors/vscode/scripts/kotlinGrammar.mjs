@@ -151,13 +151,13 @@ export function kotlinInjectionGrammar(catalog) {
       patterns: [
         {
           comment: "The annotation on a parameter (`@Language(\"HTML\") html: String,`): consumed, reaches nothing.",
-          match: r`(@Language\(\s*"(?i:html)"\s*\))(?=\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:)`,
+          match: r`(@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"(?i:html)"\s*\))(?=\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:)`,
           captures: { 1: { name: "storage.type.annotation.kotlin" } },
         },
         {
           comment:
             "The annotation on a function or property: ends after the next triple-quoted literal, or after a double-quoted literal that ends the line (`val x = \"<b>\"`). A double-quoted string before that, such as a parameter default, is a plain string.",
-          begin: r`(@Language\(\s*"(?i:html)"\s*\))`,
+          begin: r`(@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"(?i:html)"\s*\))`,
           beginCaptures: { 1: { name: "storage.type.annotation.kotlin" } },
           end: r`(?<=""")|(?<=")\s*$`,
           patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#plain-double-string" }],

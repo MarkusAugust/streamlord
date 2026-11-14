@@ -48,10 +48,10 @@ carry the annotation (`patchElements`, `PatchElements`, `respondElements`, `data
 is injected without you writing anything. On your own functions, add it yourself.
 
 The VS Code extension does not need the annotation: it treats a string as HTML when it opens with
-a tag, carries the annotation, by its short name or its qualified one, is handed straight to a
-parameter of a function of the same file that carries it, or has a `// language=HTML` comment, and
-gives it the same diagnostics, completions, hover and highlighting as a template file. Both editors
-judge the values written into such a string.
+a tag, carries the annotation, by its short name or its qualified one, or has a `// language=HTML`
+comment, and gives it the same diagnostics, completions, hover and highlighting as a template file.
+A string handed straight to a parameter of a function of the same file that carries the annotation
+gets all of it but the highlighting. Both editors judge the values written into such a string.
 
 ## The guard
 
