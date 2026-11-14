@@ -924,7 +924,9 @@ public class MarkupValidator(
                 // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
                 val dash = parsed.base.indexOf('-')
                 val keyedSpec =
+                    // data-on- has no key yet to move after a colon: a name half typed.
                     if (dash > 0 &&
+                        dash < parsed.base.length - 1 &&
                         parsed.key == null
                     ) {
                         catalog.attributesByName[parsed.base.substring(0, dash)]?.takeIf { it.keyed }
