@@ -48,23 +48,28 @@ abstract class StreamlordInspection(
         val issues = issues(file) ?: return ProblemDescriptor.EMPTY_ARRAY
         val length = file.textLength
         val profiled = profileLevel(file)
+
+        fun range(issue: Issue) = TextRange(issue.start, minOf(maxOf(issue.end, issue.start + 1), length))
         return issues
             .filter { it.code in codes && it.start < length }
             .map { issue ->
-                val range = TextRange(issue.start, minOf(maxOf(issue.end, issue.start + 1), length))
+                val range = range(issue)
+                val chosen = profiled?.takes(issue.severity) == true
+                val type = if (chosen) ProblemHighlightType.GENERIC_ERROR_OR_WARNING else highlightType(issue.severity)
+                // IntelliJ draws no weaker problem whose range an error's holds, so the error says it too and offers its fixes.
+                val covered =
+                    if (type != ProblemHighlightType.GENERIC_ERROR) {
+                        emptyList()
+                    } else {
+                        issues.filter { it !== issue && it.severity != Severity.ERROR && it.start < length && range.contains(range(it)) }
+                    }
                 manager.createProblemDescriptor(
                     file,
                     range,
-                    issue.message + (issue.link?.let { " See $it" } ?: ""),
-                    if (profiled?.takes(issue.severity) ==
-                        true
-                    ) {
-                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING
-                    } else {
-                        highlightType(issue.severity)
-                    },
+                    issue.message + (issue.link?.let { " See $it" } ?: "") + covered.joinToString("") { " Also: ${it.message}" },
+                    type,
                     isOnTheFly,
-                    *quickFixes(issue.fixes),
+                    *quickFixes(issue.fixes + covered.flatMap { it.fixes }),
                 )
             }.toTypedArray()
     }
