@@ -324,6 +324,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - `interpolate` refuses a value in `data-match-media`, where it escaped one: the reference writes
   the query as a string literal, so Datastar Pro may run it. The editors warn of a Kotlin value
   there as in any Datastar expression, and no longer offer the rewrite to `interpolate`.
+- The rewrite to `interpolate` passes a value in the body of a `<style>` that is declared no
+  String, a `List` or a class of yours, as `Trusted(v.toString())`, which compiles, where it wrote
+  `Trusted(v)`; IntelliJ now offers it for such a value too.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

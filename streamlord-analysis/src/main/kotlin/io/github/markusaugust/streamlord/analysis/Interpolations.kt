@@ -1333,6 +1333,7 @@ private val STRING_CHANGES =
         "padStart",
         "padEnd",
         "repeat",
+        "orEmpty",
     )
 private val NON_NULL_ASSERTION = regex("""\s*!!$""")
 private val OPERAND_CHAR = regex("""[\p{L}\p{Nd}_.?!()\[\]{}"']""")
@@ -2015,16 +2016,17 @@ internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that
  * The rewrite of the literal or `+` chain to a call of `interpolate`, over it and [trim], the trim
  * call after it, with the imports the file lacks. Each value of [trusted], by its place among the
  * values, is passed as `Trusted(...)`, CSS in the body of a `<style>` that the author vouches for,
- * and the title names them. The text is made the first time it is read, and a copy of the fix
+ * and the title names them; one not known to be a String, by its entry, as its `toString()`, the
+ * text a template writes of it. The text is made the first time it is read, and a copy of the fix
  * under another title shares it.
  */
 internal fun interpolateFix(
     src: String,
     s: KotlinString,
     trim: String,
-    trusted: Set<Int>,
+    trusted: Map<Int, Boolean>,
 ): Fix {
-    val named = trusted.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
+    val named = trusted.keys.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
     val title = if (trusted.isEmpty()) ESCAPES_TITLE else "$REWRITE_TITLE, with $named as Trusted(...)"
     val imports = coreImports(src, listOfNotNull("Trusted".takeIf { trusted.isNotEmpty() }, "interpolate"))
     return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted) }
@@ -2041,7 +2043,7 @@ private fun interpolateText(
     src: String,
     s: KotlinString,
     trim: String,
-    trusted: Set<Int>,
+    trusted: Map<Int, Boolean>,
 ): String {
     val literals = s.literals.ifEmpty { listOf(s) }
     val bodies = literals.map { StringBuilder(formatBody(src, it)) }
@@ -2061,7 +2063,16 @@ private fun interpolateText(
         format.append(bodies[k]).append(written.second)
         form = written
     }
-    val values = s.interpolations.mapIndexed { k, it -> if (k in trusted) "Trusted(${it.text.trim()})" else it.text.trim() }
+    val values =
+        s.interpolations.mapIndexed { k, it ->
+            val text = it.text.trim()
+            when (trusted[k]) {
+                null -> text
+                true -> "Trusted($text)"
+                // A safe call would make it a String?, and an operator would bind looser than the call.
+                false -> "Trusted(${if (wholeOperand(text) && '?' !in text) text else "($text)"}.toString())"
+            }
+        }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
     // would break whatever took the String.
     return "interpolate($format$trim, ${values.joinToString(", ")}).text"
@@ -2372,6 +2383,13 @@ private val LIST_TYPE = regex("""(?:kotlin\.collections\.)?(?:List|MutableList|A
 
 /** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
 internal fun callResult(value: String): Boolean = holeValues(value).all { lastCall(it.text) != null }
+
+/** Whether [value] is a name the file declares with a type, which the value then has: one not shown a String is not one. */
+internal fun typeShown(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean = IDENT.matchEntire(value.trim()) != null && declarationOf(src, value.trim(), at)?.type != null
 
 /** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
 internal fun visiblyList(

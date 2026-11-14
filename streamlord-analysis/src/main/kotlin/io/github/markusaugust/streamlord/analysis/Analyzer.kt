@@ -1578,12 +1578,16 @@ public class Analyzer(
             }
         }
         // CSS in the body of a <style> is the author's to vouch for: the rewrite passes it as Trusted(...), which takes
-        // a String. An editor that types the values says which are; the text alone leaves most unknown.
+        // a String, and a value shown to be none as the text a template writes of it: by whether it is taken for one.
+        // An editor that types the values says which are; the text alone leaves most unknown, and is taken at its word.
         val vouched by lazy(LazyThreadSafetyMode.NONE) {
-            holes.filterTo(LinkedHashSet()) { k ->
-                canTrust && !keeps[k] && (told[k].isString() || (told[k] == null && opts.valueFact == null)) &&
-                    rawElement(view, landings[k], starts[k]) == "style" && !mayBeNull(src, s.interpolations[k].text, s.start)
-            }
+            holes
+                .filter { k ->
+                    canTrust && !keeps[k] && (told[k].isString() || told[k] == null) &&
+                        rawElement(view, landings[k], starts[k]) == "style" && !mayBeNull(src, s.interpolations[k].text, s.start)
+                }.associateWithTo(LinkedHashMap()) { k ->
+                    told[k].isString() || (opts.valueFact == null && !typeShown(src, s.interpolations[k].text, s.start))
+                }
         }
         val trim = trimAfter(src, s)
         // Why the string cannot be rewritten whatever its values are, in a few words, or null where it can.
@@ -1603,7 +1607,7 @@ public class Analyzer(
             }
         }
         // interpolate(...) can take the string only when every value is one it accepts where it lands.
-        val fixable by lazy(LazyThreadSafetyMode.NONE) { canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched } }
+        val fixable by lazy(LazyThreadSafetyMode.NONE) { canInterpolate && unfit == null && holes.all { keeps[it] || it in vouched.keys } }
         // The first values it does not take as they are: what the message of another value names.
         val inTheWay by lazy(LazyThreadSafetyMode.NONE) { holes.filterNot { keeps[it] }.take(2) }
         // Whether the rewrite leaves the page as it was, so that an editor may prefer it: not where it vouches for a
@@ -1757,7 +1761,7 @@ public class Analyzer(
                     }
 
                     Position.CODE -> {
-                        val vouch = fixable && k in vouched
+                        val vouch = fixable && k in vouched.keys
                         issue(
                             "Kotlin writes $shown into ${landing.attribute ?: "a script or style element"}, which the browser runs, " +
                                 "so escaping does not help. Put the value in a data-* attribute and read it from there." +
