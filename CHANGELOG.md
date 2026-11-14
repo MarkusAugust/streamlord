@@ -334,6 +334,12 @@ All notable changes to Streamlord are recorded here. The format follows
 - The `html` of a `Trusted`, `${t.html}`, and a name for a `List<Html>` are markup you built, as
   the `text` of an `Html` is: nothing is said of them in element text, and no rewrite to
   `interpolate` escapes them there, where both editors offered one first.
+- In a call to `interpolate`, the fix that makes a Kotlin template a `%s` placeholder is not put
+  first under `.trimIndent()`, as the docs say, nor for a `String?`, whose `null` it writes as
+  nothing: it is offered for one now, and the message says so. It is offered for a format passed
+  by name too, and its title says truly that `interpolate` writes a `Trusted` as it is and escapes an
+  `Html` in a `<textarea>` or a `<title>`. Its issues link to the strings page, as the other issues
+  of a value do, and to Datastar's guide where Datastar runs the value.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

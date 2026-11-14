@@ -372,11 +372,15 @@ a `String` in a `data-*` expression, is an error where the value is known to be 
 where it is not; a `UInt` there is an error, with a `toLong()` fix. And a Kotlin template written
 into the format, `interpolate("<p>$name</p>")`, is `interpolate-template`: Kotlin fills it in before
 `interpolate` sees the markup, so it is neither escaped nor refused, and the fix turns it into a
-`%s` placeholder with the value among the arguments. Markup is no exception, an `Html` or a
+`%s` placeholder with the value among the arguments. The fix is not put first under `.trimIndent()`,
+where the trim then runs before the value goes in, nor for a value that may be null, which a
+template writes as `null` and `interpolate` as nothing. Markup is no exception, an `Html` or a
 `Trusted`: in `interpolate("<div>$inner</div>")` Kotlin writes the text of `inner` into the format,
 where `interpolate` reads it again as markup of yours, so a `%s` in it, which a value may have put
 there, becomes a placeholder and the call throws, and a `%%` becomes `%`. It is
-`interpolate-template` too, a warning, with the fix that gives it a placeholder of its own:
+`interpolate-template` too, a warning, with the fix that gives it a placeholder of its own, where
+`interpolate` writes it as it is; in a `<textarea>` or a `<title>` it escapes an `Html`, as it does
+anywhere but element text:
 
 ```kotlin sample=statements
 val inner = interpolate("<b>%s</b>", "Gorvek")

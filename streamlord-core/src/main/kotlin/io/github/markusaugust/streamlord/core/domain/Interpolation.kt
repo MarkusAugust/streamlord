@@ -309,7 +309,7 @@ private fun interpolated(
         val landing = landingOf(landscapes, hole)
         // Markup interpolate built is markup where it starts and ends in the data state in
         // every reading, so that it cannot move the holes after it; anywhere else it is characters.
-        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text, hole) }) {
+        if (value is Html && landing.markupInPlace && landscapes.all { it.closes(value.text, hole) }) {
             out.append(value.text)
         } else {
             if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
@@ -492,6 +492,9 @@ private fun StringBuilder.escaped(value: Any?) {
  * @property nameStart Where the attribute name it landed on starts in the markup, when it landed on
  *   one; or -1. The name is the browser's: an `=` first in it is part of it, a value after an `=`
  *   and white space is no name.
+ * @property markupInPlace Whether an [Html] that closes what it opens is written there as it
+ *   stands: in element text that is text in every reading, and not the body of a `textarea` or a
+ *   `title`, where interpolate escapes it as it does anywhere else.
  */
 @InternalStreamlordApi
 public class HoleLanding(
@@ -501,6 +504,7 @@ public class HoleLanding(
     public val loadsCode: Boolean,
     public val tagStart: Int = -1,
     public val nameStart: Int = -1,
+    public val markupInPlace: Boolean = false,
 )
 
 /**
@@ -563,6 +567,7 @@ private fun HoleLanding.inSource(written: Written): HoleLanding =
         loadsCode,
         if (tagStart < 0) tagStart else written.sourceOf(tagStart),
         if (nameStart < 0) nameStart else written.sourceOf(nameStart),
+        markupInPlace,
     )
 
 /**
@@ -746,13 +751,15 @@ private fun landingOf(
     hole: Int,
 ): HoleLanding {
     val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
+    val position = strictest.positionOf(hole)
     return HoleLanding(
-        strictest.positionOf(hole),
+        position,
         strictest.attributeAt(hole),
         strictest.valueStartAt(hole),
         strictest.loadsCodeAt(hole),
         strictest.tagStartAt(hole),
         strictest.nameStartAt(hole),
+        position == Position.TEXT && landscapes.all { it.inData(hole) },
     )
 }
 

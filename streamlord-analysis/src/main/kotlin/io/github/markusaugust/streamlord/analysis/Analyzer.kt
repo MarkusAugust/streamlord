@@ -971,7 +971,7 @@ public class Analyzer(
         // What stands before the format is the prefixes of an aliased bundle, and no value.
         val values = site.args.filter { it.start > formatArg.start && it.named == null }.map { uncommented(src, it) }
         // The values one by one, as the vararg overload takes them: no spread and nothing by name.
-        val plain = site.args.all { it.named == null } && values.none { it.text.startsWith("*") }
+        val plain = site.args.all { it.named == null || it.start == formatArg.start } && values.none { it.text.startsWith("*") }
         val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
         val kinds =
             values.mapIndexed { k, it ->
@@ -1086,33 +1086,37 @@ public class Analyzer(
             if (fact.writesItself()) continue
             if (fact.isNullable() && landing.position in ESCAPED_POSITIONS) continue
             // Markup in element text is safe as markup, but interpolate reads it as format: a %s in it is a hole.
-            val markupText = fact.isMarkup() && landing.position == Position.TEXT
+            val markupText = fact.isMarkup() && landing.markupInPlace
             val shown = holeDisplay(ip)
             // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
             val percents = runBefore(format.text, ip.decodedStart, '%')
-            // A %s hole writes nothing for null and escapes markup held as a String, so the fix would change the page;
-            // an Html or a Trusted it writes as it is.
+            // A %s hole writes nothing for null, which a template writes as null: the fix is offered, and not put first.
+            val nullable = told.isNullableString() || mayBeNull(src, ip.text, s.start)
+            // It escapes markup held as a String, so the fix would change the page; an Html or a Trusted it writes as it is.
             val keeps =
-                !told.isNullableString() &&
-                    !mayBeNull(src, ip.text, s.start) &&
-                    if (markupText) {
-                        markupValued(src, format, ip)
-                    } else {
-                        !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
-                    }
-            // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the host.
+                if (markupText) {
+                    markupValued(src, format, ip)
+                } else {
+                    !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
+                }
+            // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the
+            // host, and after a scheme the markup writes that does more than navigate.
             val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
             val fixable =
                 landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
-                    percents % 2 == 0 && keeps
-            val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg, markupText)) else emptyList()
+                    percents % 2 == 0 && keeps && runningScheme(reading, starts, k) == null
+            // Under trimIndent the trim now runs before the value goes in, so a line break in it is no longer trimmed.
+            val indentTrimmed = trimAfter(src, format)?.let { it.margin == null } == true
+            val asIs = markupText || told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))
+            val fixes =
+                if (fixable) listOf(holeFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed)) else emptyList()
             val message =
                 when {
                     loadsAnywhere -> templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
                     markupText -> rereadMessage(shown)
                     else -> templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
-                }
-            issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS, fixes)
+                } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin wrote null." else ""
+            issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", holeLink(landing), fixes)
         }
         for ((k, d) in at.withIndex()) {
             val landing = landings[format.interpolations.size + k]
@@ -1130,7 +1134,7 @@ public class Analyzer(
                 fixes: List<Fix> = emptyList(),
             ): Issue {
                 val severity = if (certain) Severity.ERROR else Severity.WARNING
-                return Issue(r.first, r.last + 1, message, severity, "unsafe-interpolation", Docs.EXPRESSIONS, fixes)
+                return Issue(r.first, r.last + 1, message, severity, "unsafe-interpolation", holeLink(landing), fixes)
             }
             // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
             // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
@@ -1170,7 +1174,7 @@ public class Analyzer(
                     markupHeldAsString(src, arg.text, s.start)
                 ) {
                     val message = escapedMarkupMessage(shortened(arg.text))
-                    issues += Issue(r.first, r.last + 1, message, Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS)
+                    issues += Issue(r.first, r.last + 1, message, Severity.WARNING, "interpolate-template", holeLink(landing))
                 }
                 continue
             }
@@ -1230,23 +1234,31 @@ public class Analyzer(
         return lt >= 0 && END_TAG_ATTRIBUTES.matchEntire(view.substring(lt, at)) != null
     }
 
-    /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
+    /**
+     * The template made a `%s` hole in place, and its expression passed as the value at the same
+     * place among the others; [asIs] where interpolate writes the value as it is, [preferred] where
+     * the page is left as it was.
+     */
     private fun holeFix(
         ip: Interpolation,
         shown: String,
         holes: List<Int>,
         values: List<Arg>,
         format: Arg,
-        markup: Boolean,
+        asIs: Boolean,
+        preferred: Boolean,
     ): Fix {
         val index = countBelow(holes, ip.decodedStart)
         val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
         val before = values.getOrNull(index)
         val after = values.lastOrNull() ?: format
         val edit = if (before != null) Edit(before.start, before.start, "$expr, ") else Edit(after.end, after.end, ", $expr")
-        val title = "Make $shown a %s placeholder, " + if (markup) "where interpolate writes it as it is" else "which interpolate escapes"
-        return Fix(title, ip.start, ip.end, "%s", listOf(edit))
+        val title = "Make $shown a %s placeholder, " + if (asIs) "where interpolate writes it as it is" else "which interpolate escapes"
+        return Fix(title, ip.start, ip.end, "%s", listOf(edit), preferred)
     }
+
+    /** The page an issue of a value links to: Datastar's guide where Datastar runs it, the strings page anywhere else. */
+    private fun holeLink(landing: HoleLanding): String = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
 
     /** Where a hole that is not escaped lands, said for a message, and what to write instead. */
     private fun landingWords(
@@ -1712,10 +1724,7 @@ public class Analyzer(
                 severity: Severity = Severity.WARNING,
                 code: String = "unsafe-interpolation",
                 fixes: List<Fix> = emptyList(),
-            ): Issue {
-                val link = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
-                return Issue(ip.start, ip.end, message, severity, code, link, fixes)
-            }
+            ): Issue = Issue(ip.start, ip.end, message, severity, code, holeLink(landing), fixes)
 
             fun unescaped(): Issue {
                 // A String in element text may be markup the author built, which only the author knows: then
