@@ -84,6 +84,9 @@
     {"name":"a value the reading cannot take apart is warned of where it certainly is, and gets no rewrite","params":"a: String","body":"\"<p>\" + object { override fun toString() = a } + \"</p>\"","rewrite":"none","says":["a value joined with + that cannot be read as a whole","cannot be read as values"],"marks":["object"]},
     {"name":"a value before the first literal the reading cannot take apart is warned of where it certainly ends","params":"a: String","body":"try { a } catch (e: Exception) { a } + \"<p>x</p>\"","rewrite":"none","says":["cannot be read as a whole"],"marks":["{ a }"]},
     {"name":"a call on a value the reading cannot take apart is all that is certain of it, and is not marked as markup","params":"a: String","body":"object { override fun toString() = a }.toString() + \"<p>x</p>\"","rewrite":"none","says":["cannot be read as a whole"],"marks":["toString()"]},
-    {"name":"a value in Pro's media query, which Pro may run, gets no rewrite, since interpolate refuses it there","params":"v: String","body":"\"<p data-match-media:dark=\\\"${v}\\\"></p>\"","rewrite":"none","says":["data-match-media"],"marks":["data-match-media:dark","${v}"]}
+    {"name":"a value in Pro's media query, which Pro may run, gets no rewrite, since interpolate refuses it there","params":"v: String","body":"\"<p data-match-media:dark=\\\"${v}\\\"></p>\"","rewrite":"none","says":["data-match-media"],"marks":["data-match-media:dark","${v}"]},
+    {"name":"a List in a style is passed to Trusted as the text a template wrote of it","params":"v: List<String>","body":"\"<style>${v}</style>\"","rewrite":"offered","marks":["${v}"]},
+    {"name":"a value of a type of the author's in a style is passed to Trusted as the text a template wrote of it","params":"v: Widget","body":"\"<style>${v}</style>\"","rewrite":"offered","marks":["${v}"]},
+    {"name":"orEmpty of a String? in a style is a String, passed to Trusted as it is","params":"v: String?","body":"\"<style>${v.orEmpty()}</style>\"","rewrite":"offered","marks":["${v.orEmpty()}"]}
   ]
 }

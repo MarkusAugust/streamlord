@@ -126,7 +126,7 @@
       "a Trusted only the editor sees": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
       "a constant": null,
       "an Html of another package": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
-      "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[]}
+      "a value of unknown type": {"code":"unsafe-interpolation","severity":"warning","fixes":[{"title":"Build this string with interpolate(...), with {shown} as Trusted(...)","preferred":false}]}
     },
     "the body of a script": {
       "a String": {"code":"unsafe-interpolation","severity":"warning","fixes":[]},
