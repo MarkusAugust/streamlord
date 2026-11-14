@@ -189,6 +189,13 @@ private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
 private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
 
+/** The codes of what Kotlin writes into a string, whatever the client then makes of it. */
+private val KOTLIN_OWN =
+    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
+
+/** The words every message of a refusal of the DSL's as the page renders has. */
+private val STREAMLORD_REFUSES = regex("""Streamlord (?:refuses|throws)|as the page renders""")
+
 private val ATTRIBUTES_KEY = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]""")
 private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
@@ -392,8 +399,18 @@ public class Analyzer(
             val judged = checkFreeHtmlString(whole, opts, src, hyphenated)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
-        return out
+        val ignored = dslIgnored(src, lex, foreign)
+        return out.mapNotNull { s ->
+            val kept = s.issues.filter { !ignored(it.start) || ownIssue(it) }
+            if (kept.size == s.issues.size) s else s.copy(issues = kept).takeIf { kept.isNotEmpty() || it.rewrite != null }
+        }
     }
+
+    /**
+     * What Kotlin and Streamlord do with a call or a string, which `dataIgnore` does not change: a
+     * template Kotlin writes into the text, and what the DSL refuses as the page renders.
+     */
+    private fun ownIssue(issue: Issue): Boolean = issue.code in KOTLIN_OWN || STREAMLORD_REFUSES.containsMatchIn(issue.message)
 
     /**
      * The strings [site] judges: the markup, the expression, the script or the selector it is handed,
@@ -882,7 +899,8 @@ public class Analyzer(
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
             add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), null)
         }
-        return out
+        val ignored = dslIgnored(src, lex, foreign)
+        return out.filter { !ignored(it.start) }
     }
 
     /** The markup rules of one HTML string handed to a patch, with the id rule on or off. */
@@ -2334,6 +2352,20 @@ public class Analyzer(
             val keyPart = if (capital) ClientCasing.kebab(name) else name
             val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
+        }
+        val mixed = if (spec.name == "on" && explicitCase == null && !capital) catalog.mixedCaseDomEvent(name) else null
+        if (mixed != null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message = "${site.name}(\"$name\") listens for $name, which no browser fires: the event is $mixed.",
+                    severity = Severity.WARNING,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec),
+                    fixes = listOf(Fix("Change to $mixed", key.contentStart, key.contentEnd, mixed)),
+                ),
+            )
         }
         if (!capital) return emptyList()
         val dom = if (spec.name == "on" && explicitCase == null) catalog.lowercaseDomEvent(name) else null

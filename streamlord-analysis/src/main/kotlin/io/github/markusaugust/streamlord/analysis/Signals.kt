@@ -644,13 +644,31 @@ private fun declared(
         }
     }
     // The client applies no attribute of an element data-ignore covers, so it declares nothing there.
-    if (language == SourceLanguage.HTML && src.contains(prefix + "ignore", ignoreCase = true)) {
-        val tags = tokenize(src).tags.filter { !it.closing }
-        val applied = appliedTags(tags, prefix).associateBy { it.start }
-        val skipped = tags.filter { applied[it.start]?.attributes?.size != it.attributes.size }
-        out.removeAll { d -> skipped.any { d.start >= it.start && d.start < it.end } }
+    if (language == SourceLanguage.KOTLIN) {
+        val lex = given ?: lexKotlin(src)
+        val ignored = dslIgnored(src, lex, foreign)
+        // And in the HTML strings, the elements data-ignore covers, at their offsets in the file.
+        val inStrings =
+            lex.strings
+                .filter { !it.unterminated && it.text.contains(prefix + "ignore", ignoreCase = true) }
+                .flatMap { s -> ignoredTags(s.text, prefix, templates = false).map { s.toSource(it.first, it.last) } }
+        out.removeAll { d -> ignored(d.start) || inStrings.any { d.start in it } }
+    } else if (src.contains(prefix + "ignore", ignoreCase = true)) {
+        val skipped = ignoredTags(src, prefix)
+        out.removeAll { d -> skipped.any { d.start in it } }
     }
     return out
+}
+
+/** The text of each start tag of [html] the client applies nothing of, as [appliedTags] reads them. */
+private fun ignoredTags(
+    html: String,
+    prefix: String,
+    templates: Boolean = true,
+): List<IntRange> {
+    val tags = tokenize(html, templates).tags
+    val applied = appliedTags(tags, prefix).associateBy { it.start }
+    return tags.filter { !it.closing && applied[it.start]?.attributes?.size != it.attributes.size }.map { it.start until it.end }
 }
 
 /** The keys of the object literal [s] holds, each a signal under [under], where it is written; none when [s] holds no object. */

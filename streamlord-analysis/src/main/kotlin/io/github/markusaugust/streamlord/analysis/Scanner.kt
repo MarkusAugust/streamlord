@@ -87,7 +87,30 @@ public class KotlinLex(
         }
         return out
     }
+
+    /**
+     * The blocks of code in [src], each from its `{` to its `}`, in the order they open: a block
+     * comes after every block it is in. One left open runs to the end of the file.
+     */
+    internal fun blocks(src: String): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        val open = ArrayList<Int>()
+        for (i in src.indices) {
+            if (!mask[i]) continue
+            if (src[i] == '{') {
+                open += out.size
+                out += i..src.length
+            } else if (src[i] == '}' && open.isNotEmpty()) {
+                val at = open.removeAt(open.lastIndex)
+                out[at] = out[at].first..i
+            }
+        }
+        return out
+    }
 }
+
+/** The innermost of [this], blocks as [KotlinLex.blocks] gives them, that holds [at]. */
+internal fun List<IntRange>.around(at: Int): IntRange? = lastOrNull { at in it }
 
 private val FUN_BEFORE = regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
 private val NAMED_ARG = regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")

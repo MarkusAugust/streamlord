@@ -695,7 +695,9 @@ private class Asked(
                 doc: String?,
                 rank: Int,
             ): Completion {
-                val snippet = if (opens) Snip().text("$name=\"").place().text("\"") else Snip().text(name)
+                // The browser lowercases the key, so webkitAnimationEnd is written as the key Datastar reads it back from.
+                val key = wireKey(name, KeyCase.KEBAB, null) ?: name
+                val snippet = if (opens) Snip().text("$key=\"").place().text("\"") else Snip().text(key)
                 return Completion(
                     name,
                     CompletionKind.EVENT,

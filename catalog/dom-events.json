@@ -502,22 +502,22 @@
       "interface": "Event"
     },
     {
-      "name": "webkitanimationend",
+      "name": "webkitAnimationEnd",
       "mdn": "https://developer.mozilla.org/docs/Web/API/Element/animationend_event",
       "interface": "Event"
     },
     {
-      "name": "webkitanimationiteration",
+      "name": "webkitAnimationIteration",
       "mdn": "https://developer.mozilla.org/docs/Web/API/Element/animationiteration_event",
       "interface": "Event"
     },
     {
-      "name": "webkitanimationstart",
+      "name": "webkitAnimationStart",
       "mdn": "https://developer.mozilla.org/docs/Web/API/Element/animationstart_event",
       "interface": "Event"
     },
     {
-      "name": "webkittransitionend",
+      "name": "webkitTransitionEnd",
       "mdn": "https://developer.mozilla.org/docs/Web/API/Element/transitionend_event",
       "interface": "Event"
     },

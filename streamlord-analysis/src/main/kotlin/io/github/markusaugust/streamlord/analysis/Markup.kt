@@ -610,6 +610,57 @@ private val SVG_NAMES: Map<String, String> =
         .filter { it.isNotEmpty() }
         .associateBy { it.asciiLowercase() }
 
+/** `attributes["data-ignore"] = ...` in Kotlin, kotlinx.html's own way to write what `dataIgnore()` writes. */
+private val IGNORE_INDEX = regex("""\battributes\s*\[\s*"data-(?:star-)?ignore(__self)?"\s*]""")
+
+/**
+ * Where a Kotlin file builds an element with `dataIgnore()` or `attributes["data-ignore"]`, which
+ * the client leaves alone with all it holds: the DSL calls and strings at those offsets are not
+ * judged, as markup under data-ignore is not. With `self` it is the element's own calls alone,
+ * those of its block and none nested deeper.
+ */
+internal fun dslIgnored(
+    src: String,
+    lex: KotlinLex,
+    foreign: (name: String, nameStart: Int) -> Boolean,
+): (Int) -> Boolean {
+    if (!src.contains("ignore", ignoreCase = true)) return { false }
+    val blocks = lex.blocks(src)
+    val whole = ArrayList<IntRange>()
+    val own = HashSet<IntRange>()
+
+    fun add(
+        at: Int,
+        self: Boolean,
+    ) {
+        val block = blocks.around(at) ?: return
+        if (self) own += block else whole += block
+    }
+    for (site in findCallSites(src, setOf("dataIgnore"), lex)) {
+        if (foreign(site.name, site.nameStart)) continue
+        add(site.nameStart, (site.named("self") ?: site.positional.firstOrNull())?.text?.trim() == "true")
+    }
+    for (m in IGNORE_INDEX.findAll(src)) if (lex.mask[m.range.first]) add(m.range.first, m.groupValues[1].isNotEmpty())
+    if (whole.isEmpty() && own.isEmpty()) return { false }
+    return { at -> whole.any { at in it } || blocks.around(at) in own }
+}
+
+/**
+ * The elements of SVG, as the HTML parser lowercases their names, but those HTML has too (`a`,
+ * `script`, `style`, `title`): the ones an attribute of [SVG_NAMES] belongs on.
+ */
+private val SVG_ELEMENTS =
+    """
+    animate animatemotion animatetransform circle clippath defs desc ellipse filter foreignobject g image line
+    lineargradient marker mask metadata mpath path pattern polygon polyline radialgradient rect set stop svg switch
+    symbol text textpath tspan use view
+    """.split(' ', '\n')
+        .filter { it.isNotEmpty() }
+        .toSet()
+
+/** Whether [name], a tag's name in lower case, is an SVG element's: one of [SVG_ELEMENTS] or a filter primitive, `fe...`. */
+private fun isSvgElement(name: String): Boolean = name in SVG_ELEMENTS || (name.startsWith("fe") && name.length > 2)
+
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
 private val KOTLIN_TAG_NAME = regex("""(</?)__kt__""")
 
@@ -707,6 +758,10 @@ internal fun Catalog.lowercaseDomEvent(key: String): String? {
     if (lower == key || domEvents.none { it.name == lower } || domEvents.any { it.name == key }) return null
     return lower
 }
+
+/** The DOM event in mixed case that [key], written in lower case, is not: webkitanimationend for webkitAnimationEnd. */
+internal fun Catalog.mixedCaseDomEvent(key: String): String? =
+    domEvents.firstOrNull { it.name != key && it.name.asciiLowercase() == key }?.name
 
 /**
  * The event a DSL call's expression is run for: `dataOnFetch`'s, the one `dataOn` is handed as a
@@ -1139,7 +1194,7 @@ public class MarkupValidator(
             if (!spec.keyed && parsed.key != null && parsed.key !in spec.keys && !templated) {
                 issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
             }
-            if (parsed.key != null && !templated) issues += validateKeyCase(attr, parsed, spec, prefix)
+            if (parsed.key != null && !templated) issues += validateKeyCase(attr, parsed, spec, prefix, tag.name)
             val named = validateSignalNames(attr, parsed, spec, prefix, templated)
             issues += named
             if (!templated) issues += validateDottedKey(attr, parsed, spec, prefix)
@@ -1345,7 +1400,8 @@ public class MarkupValidator(
                 issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
             }
         }
-        issues += filterWithoutListener(tag, prefix)
+        // attributes["..."] in Kotlin sets one attribute of an element whose others the code around it sets.
+        if (!kotlin) issues += filterWithoutListener(tag, prefix)
         issues += indicatorWithoutAction(tag, prefix, tagSource)
         issues += indicatorAfterInit(tag, prefix, tagSource, movable)
         return issues
@@ -1793,6 +1849,7 @@ public class MarkupValidator(
         parsed: ParsedAttribute,
         spec: AttributeSpec,
         prefix: String,
+        tagName: String,
     ): List<Issue> {
         val colon = attr.name.indexOf(':')
         if (colon < 0 || spec.keyCase == null) return emptyList()
@@ -1813,7 +1870,7 @@ public class MarkupValidator(
             return Fix("Use the object form", attr.nameStart, end, "$name=$quote{$`as`: $value}$quote")
         }
         // data-attr:view-box sets view-box: attr.ts sets the key as the browser hands it over, and SVG reads viewBox.
-        val oneCase = spec.keyIsAttributeName && !spec.pro && !HAS_CAPITAL.containsMatchIn(key)
+        val oneCase = spec.keyIsAttributeName && !spec.pro && !HAS_CAPITAL.containsMatchIn(key) && isSvgElement(tagName)
         val svg = if (oneCase) SVG_NAMES[key.replace("-", "")] else null
         if (svg != null) {
             return listOf(
@@ -1826,6 +1883,23 @@ public class MarkupValidator(
                     code = "key-case",
                     link = Docs.attribute(spec),
                     fixes = listOfNotNull(objectForm(svg)),
+                ),
+            )
+        }
+        // data-on:webkitanimationend: the browser dispatches webkitAnimationEnd, which this never hears.
+        val recased = parsed.modifiers.any { it.name == "case" }
+        val mixed = if (keyKind(spec) == KeyKind.EVENT && !recased) catalog.mixedCaseDomEvent(key) else null
+        val wire = mixed?.let { wireKey(it, spec.keyCase, null) }
+        if (wire != null) {
+            return listOf(
+                Issue(
+                    start = keyStart,
+                    end = keyStart + key.length,
+                    message = "This listens for $key, which no browser fires: the event is $mixed. Write $name:$wire.",
+                    severity = Severity.WARNING,
+                    code = "key-case",
+                    link = Docs.attribute(spec),
+                    fixes = listOf(Fix("Change to $wire", keyStart, keyStart + key.length, wire)),
                 ),
             )
         }

@@ -21,13 +21,25 @@ function body(text, name) {
   return text.slice(start, text.indexOf("\n}", start));
 }
 
+/**
+ * The prefixed events lib.dom.d.ts keys by their handler's lower-case name, with the name the
+ * browser dispatches them under: the HTML standard's table of event handlers maps
+ * onwebkitanimationend to webkitAnimationEnd (https://html.spec.whatwg.org/#event-handlers-on-elements,-document-objects,-and-window-objects).
+ */
+const DISPATCHED = {
+  webkitanimationend: "webkitAnimationEnd",
+  webkitanimationiteration: "webkitAnimationIteration",
+  webkitanimationstart: "webkitAnimationStart",
+  webkittransitionend: "webkitTransitionEnd",
+};
+
 /** The events of GlobalEventHandlersEventMap in its order, each with its MDN link or null and the interface its listener is handed. */
 export function domEvents(text) {
   const entries = [...body(text, "GlobalEventHandlersEventMap").matchAll(/^\s+"([a-z]+)": (\w+);/gm)];
   const links = new Map(
     [...body(text, "GlobalEventHandlers").matchAll(/\[MDN Reference\]\((https:[^)]+)\)\s*\*\/\s*\n\s+on([a-z]+):/g)].map((m) => [m[2], m[1]]),
   );
-  return entries.map(([, name, type]) => ({ name, mdn: links.get(name) ?? null, interface: type }));
+  return entries.map(([, name, type]) => ({ name: DISPATCHED[name] ?? name, mdn: links.get(name) ?? null, interface: type }));
 }
 
 /**

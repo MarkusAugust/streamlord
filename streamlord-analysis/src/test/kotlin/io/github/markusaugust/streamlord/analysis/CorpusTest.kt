@@ -56,7 +56,7 @@ class CorpusTest {
 
             // The signals the source reads that it does not itself declare.
             "references" -> {
-                val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML))
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
                 analyzer.signalReferences(read(SourceLanguage.HTML)).mapNotNull { unknownSignalIssue(it, defined) }
             }
 
