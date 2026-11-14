@@ -372,7 +372,8 @@ public class Analyzer(
         for (o in expressionOptions(src, lex)) {
             if (foreign(o.name, o.nameStart)) continue
             claimed += o.value.start
-            val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null)
+            // FetchOptions writes each expression option in parentheses.
+            val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null, o.name)
             if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
         }
         // A literal joined to values with `+` is read as one string with a hole for each value.
@@ -2023,7 +2024,43 @@ public class Analyzer(
         val attribute = catalog.attributesByKotlin[site.name]
         val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
         val strings = listOfNotNull(expressionString(site, spec, src, lex)) + site.moreStrings(spec)
-        return strings.flatMap { expressionIssues(it, src, opts, hyphenated, helpers, named, attribute, dslEvent(site)) }
+        val oneValue = site.name.takeIf { spec.oneValue }
+        return strings.flatMap { expressionIssues(it, src, opts, hyphenated, helpers, named, attribute, dslEvent(site), oneValue) }
+    }
+
+    /**
+     * The first comma at the top of [s], which [function] writes in parentheses as one value: there it
+     * is JavaScript's comma operator, and the value is what follows it. `postExpr("'/a', {retry: 'never'}")`
+     * sends to no address.
+     */
+    private fun commaOperatorIssue(
+        s: KotlinString,
+        function: String,
+    ): Issue? {
+        val text = s.text
+        val regions = jsRegions(text)
+        var depth = 0
+        for ((i, c) in text.withIndex()) {
+            if (regions[i] != Region.CODE) continue
+            when (c) {
+                '(', '[', '{' -> depth++
+                ')', ']', '}' -> depth--
+                ',' -> if (depth == 0) {
+                    val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
+                    val r = s.toSource(i, i + 1)
+                    return Issue(
+                        r.first,
+                        r.last + 1,
+                        "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
+                            "operator and keeps only what follows it." + if (backend) " The options go in the lambda after the call." else "",
+                        Severity.WARNING,
+                        "one-value",
+                        Docs.EXPRESSIONS,
+                    )
+                }
+            }
+        }
+        return null
     }
 
     /** The issues of [s], a literal Datastar runs as an expression: its Kotlin templates, and the expression itself. */
@@ -2036,10 +2073,12 @@ public class Analyzer(
         named: String,
         attribute: AttributeSpec?,
         event: String?,
+        oneValue: String? = null,
     ): List<Issue> {
         if (s.unterminated) return emptyList()
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
         val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
+        oneValue?.let { commaOperatorIssue(s, it) }?.let { issues += it }
         val judged = expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event)
         val simple = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE }.mapTo(HashSet()) { it.decodedStart }
         issues += mapIssues(s, src, aroundPlaceholders(s.text, judged) { it in simple })
