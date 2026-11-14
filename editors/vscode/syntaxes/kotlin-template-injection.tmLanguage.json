@@ -5,6 +5,14 @@
   "injectionSelector": "L:meta.kotlin-template.one.streamlord -meta.template.expression.kotlin",
   "patterns": [
     {
+      "match": "^[ \\t]*(\\|)",
+      "captures": {
+        "1": {
+          "name": "string.quoted.triple.kotlin"
+        }
+      }
+    },
+    {
       "match": "(?<!\\\\)(\\$)([A-Za-z_][A-Za-z0-9_]*)",
       "name": "meta.template.expression.kotlin",
       "captures": {

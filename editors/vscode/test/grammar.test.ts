@@ -745,6 +745,8 @@ describe("the lists both editors share", () => {
     const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
     const backend = /\(((?:[a-z]+\|)+[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
     assert.deepEqual(backend, catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name).sort());
+    const razor = JSON.parse(readFileSync(new URL("syntaxes/placeholders-razor-injection.tmLanguage.json", root), "utf8"));
+    assert.deepEqual(/\(((?:[a-z]+\|)+[a-z]+)\)/.exec(razor.patterns[0].match)?.[1]?.split("|").sort(), backend, "Razor's @@ before a backend action");
     const kt = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\\b\(?:?\(\?:((?:[A-Za-z]+\|)*[A-Za-z]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const sites = Object.entries(catalog.kotlinCallSites.expression).filter(([n]) => !n.startsWith("$"));
@@ -1039,7 +1041,7 @@ describe("what the review of the highlighting fixes found", () => {
 
   it("leaves FreeMarker's directives and PHP's tags in an HTML file's value out, as the analysis does", async () => {
     const t = await tokens("text.html.derivative", `<div data-text="<#if a>$a</#if> <?= $b ?> <@m/>" data-show="$c">`);
-    for (const name of ["#if", "?=", "@m"]) {
+    for (const name of ["if a", "= $b", "m/"]) {
       const tok = t.find((x) => x.text.includes(name))!;
       assert.ok(tok.scopes.includes("meta.template.placeholder.streamlord"), `${name}: ${tok.scopes.join(" ")}`);
     }

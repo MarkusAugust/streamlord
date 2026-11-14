@@ -208,7 +208,7 @@
           ]
         },
         {
-          "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+          "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
           "captures": {
             "1": {
               "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
@@ -371,7 +371,7 @@
           ]
         },
         {
-          "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+          "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
           "captures": {
             "1": {
               "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
@@ -525,7 +525,7 @@
           ]
         },
         {
-          "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+          "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
           "captures": {
             "1": {
               "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"

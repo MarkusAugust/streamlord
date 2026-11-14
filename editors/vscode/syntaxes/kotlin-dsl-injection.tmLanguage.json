@@ -41,6 +41,9 @@
       "include": "streamlord.kotlin.injection#interpolate-call"
     },
     {
+      "include": "streamlord.kotlin.injection#interpolate-call-next-line"
+    },
+    {
       "include": "streamlord.kotlin.injection#script-call"
     },
     {

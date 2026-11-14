@@ -20,7 +20,7 @@
   "repository": {
     "attribute-name": {
       "comment": "data-on:click__debounce.500ms.leading -> prefix | plugin | :key | __modifier.argument, as one match, which the Kotlin grammar reads a name of kotlinx.html's attributes[...] with. Not anchored: capture sub-patterns run mid-line, where ^ never matches.",
-      "match": "((?i:data-(?:star-)?))([A-Za-z][A-Za-z-]*)((?::(?:[A-Za-z0-9.-]|_(?!_))+)?(?:__(?:[A-Za-z0-9.-]|_(?!_))+)*)",
+      "match": "((?i:data-(?:star-)?))([A-Za-z][A-Za-z-]*)((?::(?:[\\p{L}\\p{N}.-]|_(?!_))+)?(?:__(?:[A-Za-z0-9.-]|_(?!_))+)*)",
       "captures": {
         "1": {
           "name": "entity.other.attribute-name.datastar.prefix"
@@ -31,7 +31,7 @@
         "3": {
           "patterns": [
             {
-              "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+              "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
               "captures": {
                 "1": {
                   "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
@@ -309,7 +309,7 @@
           ]
         },
         {
-          "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+          "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
           "captures": {
             "1": {
               "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
@@ -473,7 +473,7 @@
           ]
         },
         {
-          "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+          "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
           "captures": {
             "1": {
               "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
@@ -628,7 +628,7 @@
           ]
         },
         {
-          "match": "(:)((?:[A-Za-z0-9.-]|_(?!_))+)",
+          "match": "(:)((?:[\\p{L}\\p{N}.-]|_(?!_))+)",
           "captures": {
             "1": {
               "name": "entity.other.attribute-name.datastar punctuation.separator.key.datastar"
