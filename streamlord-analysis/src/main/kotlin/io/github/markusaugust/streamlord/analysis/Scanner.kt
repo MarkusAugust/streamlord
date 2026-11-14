@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.regex
+import kotlin.concurrent.Volatile
 
 /*
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
@@ -360,20 +361,76 @@ internal fun lexKotlin(src: String): KotlinLex {
 /** Every string literal in the source that is not inside a comment, in order. */
 internal fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
 
-private val HTML_MARKER = regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+/** IntelliJ's injection annotation for HTML, by its short name or its qualified one. */
+internal const val HTML_LANGUAGE = """@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"html"\s*\)"""
+
+private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+private val FUNCTION_NAME = regex("""\bfun\s+(?:<[^>]*>\s*)?(?:[\p{L}_][\p{L}\p{Nd}_]*\s*\.\s*)*([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
+private val PARAMETER_NAME = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*:""")
+
+@Volatile
+private var lastHtmlArguments: Pair<String, Set<Int>>? = null
+
+/**
+ * Where each literal starts that the file hands straight to a parameter of one of its own
+ * functions marked `@Language("HTML")`, by its place or its name, as IntelliJ injects HTML there.
+ */
+private fun htmlArguments(src: String): Set<Int> {
+    lastHtmlArguments?.let { if (it.first == src) return it.second }
+    val out = HashSet<Int>()
+    if (HTML_ANNOTATION.containsMatchIn(src)) {
+        val lex = lexKotlin(src)
+        // Each function's marked parameters, by their place and their name.
+        val marked = HashMap<String, MutableSet<Any>>()
+        for (m in FUNCTION_NAME.findAll(src)) {
+            if (!lex.mask[m.range.first]) continue
+            val open = m.range.last
+            var depth = 0
+            var close = -1
+            val cuts = arrayListOf(open)
+            for (k in open until src.length) {
+                if (!lex.mask[k]) continue
+                when (src[k]) {
+                    '(', '[', '{', '<' -> depth++
+                    ')', ']', '}', '>' -> if (--depth == 0) close = k
+                    ',' -> if (depth == 1) cuts += k
+                }
+                if (close >= 0) break
+            }
+            if (close < 0) continue
+            cuts += close
+            for (k in 0 until cuts.size - 1) {
+                val parameter = src.substring(cuts[k] + 1, cuts[k + 1])
+                if (!HTML_ANNOTATION.containsMatchIn(parameter)) continue
+                val set = marked.getOrPut(m.groupValues[1]) { HashSet() }
+                set += k
+                PARAMETER_NAME.find(parameter.replace(HTML_ANNOTATION, ""))?.let { set += it.groupValues[1] }
+            }
+        }
+        for (site in if (marked.isEmpty()) emptyList() else findCallSites(src, marked.keys, lex)) {
+            val takes = marked[site.name] ?: continue
+            site.positional.forEachIndexed { k, a -> if (k in takes) a.string?.let { out += it.start } }
+            for (a in site.args) if (a.named != null && a.named in takes) a.string?.let { out += it.start }
+        }
+    }
+    lastHtmlArguments = src to out
+    return out
+}
 private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
 /**
  * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,
  * or when the code just before it carries IntelliJ's injection marker: `@Language("HTML")` on
  * the function or property, or a `// language=HTML` comment. The marker reaches the next
- * string literal only.
+ * string literal only. A literal handed straight to a parameter of the file's own function that
+ * carries the annotation is HTML too.
  */
 public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
     if (textOpensWithTag(markupView(src, s))) return true
+    if (s.start in htmlArguments(src)) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
     val after = before.substring(last.range.last + 1)

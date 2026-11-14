@@ -105,7 +105,7 @@
     {"name":"the rewrite of a String? says that interpolate writes nothing for null","params":"v: String?","body":"\"<p>${v}</p>\"","rewrite":"offered","says":["interpolate(...) writes nothing for ${v} where it is null"],"marks":["${v}"]},
     {"name":"another value's rewrite says that interpolate writes nothing for the String? beside it","params":"v: String?, a: String","body":"\"<p title=\\\"$a\\\">${v}</p>\"","rewrite":"offered","says":["interpolate(...) writes nothing for ${v} where it is null"],"marks":["$a","${v}"]},
     {"name":"a literal handed to a parameter of the file's own function marked Language HTML is HTML","declares":"fun html(@org.intellij.lang.annotations.Language(\"HTML\") s: String) = s","params":"v: String","body":"html(\"x${v}y\")","rewrite":"offered","marks":["${v}"]},
-    {"name":"a literal handed by name to such a parameter is HTML too","declares":"fun page(title: String, @org.intellij.lang.annotations.Language(\"HTML\") body: String) = title + body","params":"v: String","body":"page(\"x${v}y\", body = \"x${v}y\")","rewrite":"offered","marks":["${v}"]},
+    {"name":"a literal handed by name to such a parameter is HTML too","declares":"fun page(title: String, @org.intellij.lang.annotations.Language(\"HTML\") body: String) = title + body","params":"v: String","body":"page(\"t\", body = \"x${v}y\")","rewrite":"offered","marks":["${v}"]},
     {"name":"a local val marked with the qualified annotation is HTML","params":"v: String","body":"run {\n    @org.intellij.lang.annotations.Language(\"HTML\")\n    val s = \"x${v}y\"\n    s\n}","rewrite":"offered","marks":["${v}"]}
   ]
 }

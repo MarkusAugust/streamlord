@@ -346,6 +346,10 @@ All notable changes to Streamlord are recorded here. The format follows
   keeps the rewrite from every other value of the string; one the file shows with a `%` is not kept.
 - The rewrite to `interpolate` of a string with a value that may be null says that `interpolate`
   writes nothing for it where a template writes `null`, in the message of every value that offers it.
+- A string marked `@org.intellij.lang.annotations.Language("HTML")`, the annotation by its
+  qualified name, and one handed straight to a parameter of a function of the same file that
+  carries the annotation, are read as HTML and their values judged, as one marked
+  `@Language("HTML")` or `// language=HTML` was.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
