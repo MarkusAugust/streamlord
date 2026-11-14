@@ -485,7 +485,13 @@ All notable changes to Streamlord are recorded here. The format follows
   reading from it elsewhere throws. `$$count` is a warning with a fix, as the browser reads `$$`.
   `await @post(...)` is an error on `await`, with why, where it was one on `@`.
   `data-on-signal-patch-filter` without `data-on-signal-patch` on the element is a warning, and so
-  is `data-attr:view-box` on SVG, which sets `view-box`, with a fix to the object form.
+  is `data-attr:view-box` on an SVG element, which sets `view-box`, with a fix to the object form.
+- The prefixed events keep the case the browser fires them in: `data-on:webkitAnimationEnd` gets the
+  fix `webkit-animation-end__case.camel`, completion writes it so, and `data-on:webkitanimationend`,
+  which no browser fires, is a warning. `catalog/dom-events.json` names the four as the browser does.
+- In the DSL, `dataIgnore()` keeps the checks off the element and what its block holds, as
+  `data-ignore` does in markup, and the signals declared there count as none; what Kotlin writes
+  and what the DSL refuses as the page renders is still said.
 - Knockout's `data-bind="text: name"`, a share button's `data-text="Check this out"` and other
   values another library reads say that `data-ignore`, or an aliased bundle, keeps Datastar off them.
 - In the DSL, `dataIndicator` after a `dataInit` that sends at once in the same element gets the
@@ -521,7 +527,12 @@ All notable changes to Streamlord are recorded here. The format follows
   JavaScript keeps only what follows it.
 - Every option of a backend action has an `...Expr` twin that takes an expression, a
   `SignalFilter` can be an expression or hold expressions (`includeExpr`, `excludeExpr`,
-  `expression`), and `peekExpr` hands `@peek` a function the page has.
+  `filterExpr`), and `peekExpr` hands `@peek` a function the page has. `SignalFilter` has three more
+  values after `include` and `exclude`, so code compiled against it, its `copy` or its constructor,
+  needs a rebuild; source that names `include` and `exclude`, or passes them in that order, stays as it is.
+- In the catalog an expression call site may say the DSL writes its expression as one value,
+  `oneValue`; `CallSiteSpec` has `more` and `oneValue` last, so code compiled against its
+  constructor or `copy` needs a rebuild, and source that names its values stays as it is.
 - In the catalog, an attribute may name the page of the reference that describes it, `reference`;
   `AttributeSpec` has one more value, `reference`, last, and code compiled against the old
   constructor needs a rebuild.
