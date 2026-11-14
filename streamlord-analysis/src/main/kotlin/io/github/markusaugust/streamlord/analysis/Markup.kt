@@ -383,6 +383,27 @@ internal fun hasTemplateSyntax(value: String): Boolean {
     return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
 }
 
+/** Whether [value] holds template syntax besides the [PLACEHOLDER] of a Kotlin template, which the expression checks read around. */
+internal fun hasForeignTemplateSyntax(value: String): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"))
+
+/**
+ * The issues of [text], an expression with a [PLACEHOLDER] where a Kotlin template or a `%s` writes a
+ * value the code computes: none on a placeholder, whose text is not the value's, and the rest judged
+ * as ever. Where a placeholder in code may be a signal the author meant, `$count` read by Kotlin, as
+ * [signalMeant] says of its offset, the syntax is that reading's too and no syntax error is told.
+ */
+internal fun aroundPlaceholders(
+    text: String,
+    issues: List<Issue>,
+    signalMeant: (Int) -> Boolean = { true },
+): List<Issue> {
+    if (PLACEHOLDER !in text) return issues
+    val at = generateSequence(text.indexOf(PLACEHOLDER)) { text.indexOf(PLACEHOLDER, it + 1).takeIf { n -> n >= 0 } }.toList()
+    val regions by lazy(LazyThreadSafetyMode.NONE) { jsRegions(text) }
+    val syntax = issues.none { it.code == "expression-syntax" } || at.none { regions[it] == Region.CODE && signalMeant(it) }
+    return issues.filter { i -> (syntax || i.code != "expression-syntax") && at.none { i.start < it + PLACEHOLDER.length && i.end > it } }
+}
+
 /** Whether a template construct starts at [at] in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
 private fun cutByTemplate(
     tagSource: String,
@@ -1138,7 +1159,7 @@ public class MarkupValidator(
             if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
                 issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
             }
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasTemplateSyntax(value)) {
+            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasForeignTemplateSyntax(value)) {
                 val decoded = decodeEntities(value)
 
                 fun source(
@@ -1156,7 +1177,8 @@ public class MarkupValidator(
                     } else {
                         null
                     }
-                for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec, event = event)) {
+                val judged = expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec, event = event)
+                for (issue in aroundPlaceholders(decoded.text, judged)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(

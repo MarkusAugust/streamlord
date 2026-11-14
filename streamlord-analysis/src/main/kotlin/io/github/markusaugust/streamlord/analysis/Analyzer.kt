@@ -596,8 +596,6 @@ public class Analyzer(
             issues += expressionHoles(value, src, opts, name, helpers)
         }
         if (value != null && kind == ValueKind.SIGNAL) issues += signalNameHoles(value, src, opts, name)
-        // With a template in the value the interpolation issue speaks for it, as at a DSL call.
-        val judgeValue = value != null && !(PLACEHOLDER in value.text && value.interpolations.any { it.kind == InterpolationKind.SIMPLE })
 
         // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
         fun range(
@@ -613,7 +611,7 @@ public class Analyzer(
             }
         for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true, prefixSetting = opts.prefixSetting)) {
             val inName = i.end <= name.length
-            if (!inName && !judgeValue) continue
+            if (!inName && value == null) continue
             val r = range(i.start, i.end)
             val fixes =
                 i.fixes.filter { (it.end <= name.length) == inName }.map { f ->
@@ -2042,8 +2040,9 @@ public class Analyzer(
         if (s.unterminated) return emptyList()
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
         val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
-        if (PLACEHOLDER in s.text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event))
+        val judged = expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event)
+        val simple = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE }.mapTo(HashSet()) { it.decodedStart }
+        issues += mapIssues(s, src, aroundPlaceholders(s.text, judged) { it in simple })
         return issues
     }
 

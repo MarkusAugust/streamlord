@@ -155,7 +155,7 @@ private class Brackets(
     fun value(piece: IntRange): Value {
         val s = piece.first
         val e = piece.last + 1
-        if (s >= e || computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
+        if (s >= e) return Value(s, e, Written.EXPRESSION, null)
         val first = js[s]
 
         fun all(region: Byte) = (s until e).all { regions[it] == region }
@@ -185,6 +185,8 @@ private class Brackets(
 
                 else -> Written.EXPRESSION
             }
+        // An object or an array literal is written whatever a template inside it computes: each of its values is judged on its own.
+        if (written != Written.OBJECT && written != Written.ARRAY && computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
         val content = if (written == Written.STRING) js.substring(s + 1, e - 1).takeIf { '\\' !in it } else null
         return Value(s, e, written, content)
     }
