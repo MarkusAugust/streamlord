@@ -262,5 +262,8 @@ public fun toggleAll(filter: SignalFilter? = null): String =
 
 private fun SignalFilter.withInclude(): SignalFilter = if (include == null) copy(include = Regex(".*")) else this
 
-/** `@peek(() => expression)`: read signals without subscribing. */
-public fun peek(expression: String): String = "@peek(() => $expression)"
+/**
+ * `@peek(() => (expression))`: read signals without subscribing. In parentheses, the expression is
+ * what the function returns, an object literal too, which without them would be read as a block.
+ */
+public fun peek(expression: String): String = "@peek(() => ${expression(expression)})"
