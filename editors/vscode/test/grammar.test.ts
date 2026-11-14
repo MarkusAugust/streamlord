@@ -1019,8 +1019,9 @@ describe("what the review of the highlighting fixes found", () => {
 
   it("reads Razor's @@ as Datastar's @, an action", async () => {
     const t = await kinds("text.html.cshtml", `<div data-on:click="@@post('/save')" data-show="@@peek(() => 1)">`);
-    assert.deepEqual(between(t, "@@", "post"), [["@@", "constant.character.escape.razor.transition " + S.backendAt], ["post", S.backend]]);
-    assert.deepEqual(between(t, "@@", "peek").slice(-2), [["@@", "constant.character.escape.razor.transition " + S.at], ["peek", S.action]]);
+    // The first @ is Razor's escape, the second the @ of Datastar's action, which the browser reads.
+    assert.deepEqual(between(t, "post").length > 0 && between(t, "=", "post").slice(-3), [["@", "constant.character.escape.razor.transition"], ["@", S.backendAt], ["post", S.backend]]);
+    assert.deepEqual(between(t, "peek").length > 0 && t.slice(t.findIndex(([x]) => x === "peek") - 2, t.findIndex(([x]) => x === "peek") + 1), [["@", "constant.character.escape.razor.transition"], ["@", S.at], ["peek", S.action]]);
   });
 
   it("colours a key of any letters, keeps the assignment of a named argument, and the margin a string", async () => {
