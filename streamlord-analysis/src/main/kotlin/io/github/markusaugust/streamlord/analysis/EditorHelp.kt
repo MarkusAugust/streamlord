@@ -202,6 +202,9 @@ private const val KOTLIN_DOLLAR = "\${'$'}"
 /** A signal written after Kotlin's dollar, either way of writing it: `${'$'}count`, `${"$"}user.name`. */
 private val KOTLIN_DOLLAR_SIGNAL = regex("""\$\{(?:'\$'|"\$")\}\w+(?:[.-]\w+)*""")
 
+/** `evt.` at the end of the text, standing on its own, with the start of a member's name typed after it. */
+private val EVT_MEMBER = regex("""(?:^|[^\w$.])evt\s*\.\s*([A-Za-z_]\w*)?$""")
+
 /** `evt.detail.type ===` at the end of the text, maybe with a string opened after it: what is written after the operator. */
 private val FETCH_TYPE_COMPARED = regex("""(?:^|[^\w$.])evt\s*\.\s*detail\s*\.\s*type\s*(?:===?|!==?)\s*((?:['"`][\w-]*)?)$""")
 
@@ -254,6 +257,7 @@ private class Asked(
             val before = e.before
             if (signalPrefixAt(before, before.length) != null) return true
             if (!e.allowActions) return false
+            if (e.evtInScope && EVT_MEMBER.containsMatchIn(before)) return true
             val call = actionCallAt(before, before.length)
             val field = call?.value?.field
             return call?.option != null || field?.values?.isNotEmpty() == true || field?.kind == ArgumentKind.BOOLEAN ||
@@ -348,6 +352,11 @@ private class Asked(
         signalPrefixAt(before, before.length)?.let { typed ->
             // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
             return signals(typed, if (text.getOrNull(offset - typed.length - 1) == '$') "$" else "")
+        }
+        if (expression.evtInScope) {
+            EVT_MEMBER.find(before)?.takeIf { jsRegions(before)[it.range.first + it.value.indexOf("evt")] == Region.CODE }?.let { m ->
+                return eventMembers(expression.event, m.groupValues[1])
+            }
         }
         // A value that is a signal's name, data-bind="query": the name as written, without a dollar.
         if (!expression.allowActions) return SIGNAL_NAME_TYPED.matchEntire(before)?.let { signals(it.groupValues[1], null) } ?: NOTHING
@@ -532,6 +541,29 @@ private class Asked(
                 val insert = if (opened != null) null else "$q$v$q".takeIf { it != label }
                 Completion(label, CompletionKind.VALUE, offset - name.length, insert, doc = doc(v), key = n.toString().padStart(3, '0'))
             }
+        return ordered(items, alone = true)
+    }
+
+    /**
+     * The members of the event a data-on listens for, after `evt.` with [typed] of a name after it:
+     * those of the interface lib.dom.d.ts hands its listener, then those of each it extends. An event
+     * the DOM does not dispatch, Datastar's or the page's own, is a CustomEvent; one not known is an Event.
+     */
+    private fun eventMembers(
+        event: String?,
+        typed: String,
+    ): Completions {
+        val interfaces = catalog.eventInterfaces
+        var type = interfaces[if (event == null) "Event" else catalog.domEvents.firstOrNull { it.name == event }?.type ?: "CustomEvent"]
+        val items = ArrayList<Completion>()
+        while (type != null) {
+            for (m in type.members) {
+                val label = if (m.method) "${m.name}()" else m.name
+                val doc = m.mdn?.let { "[MDN]($it)" }
+                items += Completion(label, CompletionKind.OPTION, offset - typed.length, detail = type.name, doc = doc, key = items.size.toString().padStart(3, '0'))
+            }
+            type = type.extends?.let { interfaces[it] }
+        }
         return ordered(items, alone = true)
     }
 

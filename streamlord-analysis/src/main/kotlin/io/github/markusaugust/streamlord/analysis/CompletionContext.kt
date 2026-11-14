@@ -17,6 +17,9 @@ internal data class ValueAtCaret(
     val before: String,
 )
 
+/** The name data-on hands its expression the event by. */
+private const val EVT = "evt"
+
 /** The character the caret is given in the markup: one that neither closes a value nor starts a reference. */
 private const val CARET = 'x'
 
@@ -92,6 +95,8 @@ internal data class ExpressionAtCaret(
     val escaped: Boolean = false,
     /** The event a data-on listens for, as the client recases its key, where the expression is one's. */
     val event: String? = null,
+    /** Whether `evt` is the event: in data-on, the one attribute the client hands it to. */
+    val evtInScope: Boolean = false,
 )
 
 /**
@@ -119,6 +124,7 @@ internal fun Analyzer.expressionAtCaret(
             spec.valueKind == ValueKind.EXPRESSION,
             spec.name == "on-signal-patch",
             event = catalog.listensFor(at.name, prefix),
+            evtInScope = EVT in spec.argNames,
         )
     }
     htmlStringAt(src, offset)?.let { html ->
@@ -147,6 +153,7 @@ internal fun Analyzer.expressionAtCaret(
         allowActions = true,
         patchInScope = patch,
         event = dslEvent(site),
+        evtInScope = catalog.attributesByKotlin[site.name]?.argNames?.contains(EVT) == true,
     )
 }
 
@@ -169,6 +176,7 @@ private fun Analyzer.expressionInMarkup(
         quote,
         escaped = quote == '"' && kotlinEscapes,
         event = catalog.listensFor(at.attribute, prefix),
+        evtInScope = EVT in spec.argNames,
     )
 }
 

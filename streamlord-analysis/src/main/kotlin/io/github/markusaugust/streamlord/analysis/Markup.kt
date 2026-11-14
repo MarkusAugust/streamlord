@@ -595,12 +595,15 @@ internal fun Catalog.listensFor(
     return clientCase(parsed.key, parsed.modifiers, "kebab")
 }
 
-/** The event a DSL call's expression is run for: `dataOnFetch`'s, or the one `dataOn` is handed as a literal. */
+/**
+ * The event a DSL call's expression is run for: `dataOnFetch`'s, the one `dataOn` is handed as a
+ * literal, or the one a helper of data-on is named for, `dataOnKeydown`'s keydown.
+ */
 internal fun dslEvent(site: CallSite): String? =
     when (site.name) {
         "dataOnFetch" -> DATASTAR_FETCH
         "dataOn" -> (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
-        else -> null
+        else -> site.name.takeIf { Catalog.default.attributesByKotlin[it]?.name == "on" }?.removePrefix("dataOn")?.lowercase()
     }
 
 /** The event Datastar dispatches at each step of a backend action's request. */
