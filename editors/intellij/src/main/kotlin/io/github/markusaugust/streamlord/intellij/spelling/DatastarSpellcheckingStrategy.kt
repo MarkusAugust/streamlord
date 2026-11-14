@@ -102,10 +102,11 @@ class DatastarSpellcheckingStrategy :
                 val foreign = analysis.foreignAmong(file, sites)
                 for (site in sites) {
                     if (site.nameStart in foreign) continue
-                    // The string by its place, or by its name: `dataOnClick(expression = "...")`.
+                    // The strings by their place, or by their name: `dataOnClick(expression = "...")`.
                     val spec = catalog.expressionCallSites[site.name] ?: continue
-                    (site.selectString(spec) ?: site.named("expression")?.string)?.let { starts += it.start }
+                    site.expressionStrings(spec).ifEmpty { listOfNotNull(site.named("expression")?.string) }.forEach { starts += it.start }
                 }
+                for (o in analysis.analyzer.expressionOptions(src)) starts += o.value.start
             }
             CachedValueProvider.Result.create(
                 starts,

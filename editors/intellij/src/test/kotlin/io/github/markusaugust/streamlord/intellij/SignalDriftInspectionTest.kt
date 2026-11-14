@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.codeInspection.LocalInspectionEP
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
@@ -44,6 +45,12 @@ class SignalDriftInspectionTest : StreamlordTestCase() {
         myFixture.addFileToProject("page.html", "<input data-bind:query><div data-signals:page=\"1\"></div>")
         myFixture.configureByText("Search.kt", form)
         assertEquals(emptyList<String>(), drift().map { it.text })
+    }
+
+    // One switch in each editor, named alike: VS Code's is streamlord.diagnostics.unknownSignals.
+    fun `test the inspection is named as the vs code setting that turns the same two warnings off`() {
+        val ep = LocalInspectionEP.LOCAL_INSPECTION.extensionList.single { it.shortName == "UnknownSignalInspection" }
+        assertEquals("Unknown signals", ep.displayName)
     }
 
     fun `test with the unknown-signal inspection off the check is off too`() {

@@ -21,6 +21,7 @@ import kotlinx.html.div
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -241,6 +242,42 @@ class CatalogTest {
                 assertTrue(fn in known, "call site $fn in group $group does not exist in the SDK")
             }
         }
+    }
+
+    /**
+     * Every helper of the DSL whose name says it takes an expression, `getExpr` and the rest, is an
+     * expression call site, with each of its String parameters the expression the editors read; and
+     * every option of FetchOptions that does is one of the expression options.
+     */
+    @Test
+    fun `every expression helper and expression option of the dsl is where the editors read an expression`() {
+        val expression = catalog.obj("kotlinCallSites")!!.obj("expression")!!
+        val helpers =
+            listOf("io.github.markusaugust.streamlord.html.ActionsKt", "io.github.markusaugust.streamlord.html.pro.ProActionsKt")
+                .flatMap { Class.forName(it).methods.toList() }
+                .filter {
+                    it.name.endsWith("Expr") &&
+                        java.lang.reflect.Modifier
+                            .isStatic(it.modifiers)
+                }
+        assertTrue(helpers.size >= 9, "found ${helpers.map { it.name }}")
+        for (fn in helpers) {
+            val spec = assertNotNull(expression.obj(fn.name), "${fn.name} is no expression call site")
+            val strings = fn.parameters.count { it.type == String::class.java }
+            assertEquals(strings, 1 + (spec.array("more")?.size ?: 0), "${fn.name}: how many of its parameters are expressions")
+        }
+        val options =
+            FetchOptions::class.java.methods
+                .map { it.name }
+                .filter { it.startsWith("set") && it.contains("Expr") }
+                .map { it.removePrefix("set").replaceFirstChar(Char::lowercaseChar) }
+        val listed =
+            catalog
+                .obj("kotlinCallSites")!!
+                .obj("expressionOptions")!!
+                .keys
+                .filter { !it.startsWith("$") }
+        assertEquals(options.sorted(), listed.sorted())
     }
 
     /** `keyIsAttributeName` is the flag of exactly the raw-key helpers that refuse a capital, as an HTML attribute name has none. */

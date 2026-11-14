@@ -650,7 +650,7 @@
       "comment": "dataOnClick(\"...\"), dataText(\"...\") and friends: the first argument is the expression, in any kind of string, or passed by name. After a receiver too, where a grammar may colour the call from its dot.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|dataOnRaf|dataInit|dataShow|dataText|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|postExpr|getExpr|putExpr|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -673,7 +673,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|dataOnRaf|dataInit|dataShow|dataText|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|postExpr|getExpr|putExpr|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -880,6 +880,210 @@
         }
       ]
     },
+    "expression-call-every-arg": {
+      "comment": "fitExpr(\"...\", \"...\", ...): every string argument is an expression, passed by its place or its name, on any line. What a bracket inside holds is Kotlin's.",
+      "begin": "(?:(\\??\\.)\\s*)?\\b((?:fitExpr))(\\s*\\()",
+      "beginCaptures": {
+        "2": {
+          "name": "entity.name.function.kotlin"
+        }
+      },
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#kotlin-brackets"
+        },
+        {
+          "begin": "(?:[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*)?(?:expression\\s*=\\s*)?(\\$*\"\"\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-string-body"
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "(?:[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*)?(?:expression\\s*=\\s*)?(\\$*\"(?!\"\"))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#expression-string-body"
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "include": "source.kotlin"
+        }
+      ]
+    },
+    "expression-option": {
+      "comment": "payloadExpr = \"...\" and the other options of FetchOptions whose value is an expression, and each value of headerExprs = mapOf(\"X-Id\" to \"...\"), whose name is a plain string.",
+      "patterns": [
+        {
+          "comment": "An option set to an expression, on no receiver.",
+          "patterns": [
+            {
+              "begin": "(?<!\\.)\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"\"\")",
+              "beginCaptures": {
+                "3": {
+                  "name": "keyword.operator.assignment.kotlin"
+                },
+                "5": {
+                  "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+                }
+              },
+              "end": "(\"\"\")",
+              "endCaptures": {
+                "1": {
+                  "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#expression-string-body"
+                }
+              ],
+              "name": "meta.kotlin-string.streamlord"
+            },
+            {
+              "begin": "(?<!\\.)\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"(?!\"\"))",
+              "beginCaptures": {
+                "3": {
+                  "name": "keyword.operator.assignment.kotlin"
+                },
+                "5": {
+                  "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+                }
+              },
+              "end": "(\")",
+              "endCaptures": {
+                "1": {
+                  "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#expression-string-body"
+                }
+              ],
+              "name": "meta.kotlin-string.streamlord"
+            }
+          ]
+        },
+        {
+          "begin": "(?<!\\.)\\b(headerExprs)(\\s*)(=)(\\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\\s*\\()",
+          "beginCaptures": {
+            "3": {
+              "name": "keyword.operator.assignment.kotlin"
+            },
+            "5": {
+              "name": "entity.name.function.kotlin"
+            }
+          },
+          "end": "\\)",
+          "patterns": [
+            {
+              "include": "#kotlin-brackets"
+            },
+            {
+              "comment": "A value after its name and to.",
+              "patterns": [
+                {
+                  "begin": "(\\$*\"[^\"\\n]*\")(\\s*)(to)(\\s*)(\\$*\"\"\")",
+                  "beginCaptures": {
+                    "1": {
+                      "name": "string.quoted.double.kotlin"
+                    },
+                    "3": {
+                      "name": "entity.name.function.kotlin"
+                    },
+                    "5": {
+                      "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+                    }
+                  },
+                  "end": "(\"\"\")",
+                  "endCaptures": {
+                    "1": {
+                      "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+                    }
+                  },
+                  "patterns": [
+                    {
+                      "include": "#expression-string-body"
+                    }
+                  ],
+                  "name": "meta.kotlin-string.streamlord"
+                },
+                {
+                  "begin": "(\\$*\"[^\"\\n]*\")(\\s*)(to)(\\s*)(\\$*\"(?!\"\"))",
+                  "beginCaptures": {
+                    "1": {
+                      "name": "string.quoted.double.kotlin"
+                    },
+                    "3": {
+                      "name": "entity.name.function.kotlin"
+                    },
+                    "5": {
+                      "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+                    }
+                  },
+                  "end": "(\")",
+                  "endCaptures": {
+                    "1": {
+                      "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+                    }
+                  },
+                  "patterns": [
+                    {
+                      "include": "#expression-string-body"
+                    }
+                  ],
+                  "name": "meta.kotlin-string.streamlord"
+                }
+              ]
+            },
+            {
+              "include": "source.kotlin"
+            }
+          ]
+        }
+      ]
+    },
+    "kotlin-brackets": {
+      "comment": "Brackets inside a call this grammar reads, which hold Kotlin: another call's arguments, signal(\"m\").",
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#kotlin-brackets"
+        },
+        {
+          "include": "source.kotlin"
+        }
+      ]
+    },
     "signal-name-call": {
       "comment": "dataBind(\"name\"), dataRef, dataIndicator: the argument names a signal.",
       "match": "(?:(\\??\\.)\\s*)?\\b((?:dataIndicator|dataBind|dataRef))(\\s*\\(\\s*)(\\$*\")([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)(\")",
@@ -905,7 +1109,7 @@
       "comment": "A call whose arguments start on the next line: the expression is the first string at the start of a line for dataText and friends, the string after the first and its comma for dataOn and friends. The region ends after it, or at the closing parenthesis.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|dataOnRaf|dataInit|dataShow|dataText|peek))(\\s*\\()[ \\t]*$",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|postExpr|getExpr|putExpr|peek))(\\s*\\()[ \\t]*$",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"

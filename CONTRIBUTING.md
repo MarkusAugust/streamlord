@@ -126,6 +126,7 @@ the client itself does, recorded in `conformance/`:
 | `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store, what each attribute plugin declares, the options each backend action reads, and the parameters and option types each action declares | `conformance/generate/client.mjs`, from `datastar-reference/` |
 | `conformance/dom/` | the client run in a browser-like DOM: what each SSE frame did to a page and its store, what the HTML parser does with a script body and where it ends a comment | `conformance/generate/dom.mjs`, from `datastar-reference/` |
 | `conformance/dsl/` | what the client did with the HTML each DSL call writes: the listeners, timers, store, requests and DOM afterwards, held to what the call means | the HTML by `./gradlew :streamlord-html-pro:updateClientReadings`, the reading by `conformance/generate/dsl.mjs`, from `datastar-reference/` |
+| `conformance/reference/` | what Datastar's reference pages say where no free client says it: the signatures of the Pro actions, as `pro-actions.json`, with the date the page was read | `conformance/generate/pro.mjs`, from https://data-star.dev/reference/actions |
 | `conformance/wire/` | the exact HTTP answer each adapter gives, per server, for a fixed set of requests, and in `kotlin/` the request set and the comparison both adapters' tests compile | the adapter tests, with `./gradlew :streamlord-ktor:updateTranscripts :streamlord-spring:updateTranscripts` |
 
 The generators read the free client in `datastar-reference/datastar-<version>/` and nothing
@@ -139,7 +140,9 @@ carries only its public names.
 
 The tests run in `./gradlew build`, on the JVM and on Node, and cost seconds. The generators
 run by hand, when the reference changes, with `cd conformance/generate && npm install && npm run
-reference && npm run client && npm run dom && npm run dsl`. A change to the DSL that changes what
+reference && npm run client && npm run dom && npm run dsl`. `npm run pro` fetches the reference's actions page and
+rewrites `pro-actions.json`: run it when the reference changes a Pro action's signature or the
+catalog gains one, and commit what it writes. A change to the DSL that changes what
 it writes needs `./gradlew :streamlord-html-pro:updateClientReadings` and then `npm run dsl`; the
 test says so. A transcript that is meant to change is rewritten with the
 `updateTranscripts` tasks and shows up as a diff in the pull request, as `updateKotlinAbi` does

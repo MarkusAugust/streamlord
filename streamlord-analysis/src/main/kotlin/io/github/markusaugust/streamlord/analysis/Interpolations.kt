@@ -539,7 +539,9 @@ private fun lineEnds(
 }
 
 private val MARKUP_INITIALISER = regex("""\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
-private val STATEMENT_END = regex("""^[ \t]*(?:[\n\r;})\],]|//|$)""")
+
+/** What may follow a value that is the whole of a declaration, read where the value ends: `$` is the end of the file. */
+private val STATEMENT_END = regex("""[ \t]*(?:[\n\r;})\],]|//|$)""")
 
 /**
  * Which of `interpolate` and `Trusted` what follows a declared name at [at] calls as the whole
@@ -558,28 +560,27 @@ private fun markupInitialiser(
     val open = m.range.last
     val e = src.substring(open, minOf(src.length, open + 20_000))
     val close = closing(e, depths(e), 0)
-    if (close <= 0 || !STATEMENT_END.containsMatchIn(e.substring(close, minOf(e.length, close + 8)))) return null
+    if (close <= 0 || !STATEMENT_END.matchesAt(src, open + close)) return null
     return Triple(name, callee.range.first - m.groupValues[1].length, name != callee.value)
 }
 
-private val TEXT_OF_NAME = regex("""\s*=\s*($NAME)\s*\.\s*text(?=[ \t]*(?:[\n\r;})\],]|//|$))""")
+private val TEXT_OF_NAME = regex("""\s*=\s*($NAME)\s*\.\s*text""")
 private val TEXT_OF_CALL = regex("""\s*=\s*interpolate\s*\(""")
-private val TEXT_AFTER = regex("""^\s*\.\s*text""")
+private val TEXT_AFTER = regex("""\s*\.\s*text""")
 
 /** What a declared name at [at] is set to the `.text` of, when that is its whole value: `name` of `= name.text`, or `interpolate(...)`. */
 private fun textInitialiser(
     src: String,
     at: Int,
 ): String? {
-    TEXT_OF_NAME.matchAt(src, at)?.let { return it.groupValues[1] }
+    TEXT_OF_NAME.matchAt(src, at)?.let { if (STATEMENT_END.matchesAt(src, it.range.last + 1)) return it.groupValues[1] }
     val call = TEXT_OF_CALL.matchAt(src, at) ?: return null
     val open = call.range.last
     val e = src.substring(open, minOf(src.length, open + 20_000))
     val close = closing(e, depths(e), 0)
     if (close < 0) return null
-    val text = TEXT_AFTER.find(e.substring(close, minOf(e.length, close + 16))) ?: return null
-    val after = close + text.value.length
-    if (!STATEMENT_END.containsMatchIn(e.substring(after, minOf(e.length, after + 8)))) return null
+    val text = TEXT_AFTER.matchAt(src, open + close) ?: return null
+    if (!STATEMENT_END.matchesAt(src, text.range.last + 1)) return null
     return src.substring(at + call.value.indexOf("interpolate"), open + close)
 }
 

@@ -252,8 +252,8 @@ project(":streamlord-ktor") {
         "updateTranscripts",
         "*WireTranscriptTest",
         "the wire transcripts under conformance/wire from what the Ktor adapter answers now",
-        // The requests every adapter answers and the comparison with their transcripts.
-        compiling = setOf("test", "oldestKtorTest"),
+        // The requests every adapter answers and the comparison with their transcripts, and where the tests serve.
+        compiling = setOf("test", "oldestKtorTest", "javaxTomcatTest"),
     )
 }
 project(":streamlord-spring") {

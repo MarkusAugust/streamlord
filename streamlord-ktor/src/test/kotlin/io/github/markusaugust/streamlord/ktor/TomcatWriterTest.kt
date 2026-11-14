@@ -1,10 +1,10 @@
 package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.engine.BaseApplicationResponse
-import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.ApplicationSendPipeline
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
@@ -19,7 +19,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -37,7 +36,6 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
-import org.apache.catalina.startup.Tomcat as TomcatServer
 
 /*
  * Ktor's servlet engine writes a response on a coroutine of its own. A failing stream must let that
@@ -267,7 +265,7 @@ class TomcatWriterTest {
             }
         }
         tomcat(discardFacades = true, module) { port ->
-            Socket("localhost", port).use { socket ->
+            Socket(LOOPBACK, port).use { socket ->
                 socket.getOutputStream().write("GET /stall HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 val after = thrown.get(60, TimeUnit.SECONDS) - started.get(60, TimeUnit.SECONDS)
                 // Two seconds of writing and one for the frames, with room for a busy machine.
@@ -292,33 +290,16 @@ class TomcatWriterTest {
     private fun tomcat(
         discardFacades: Boolean,
         module: Application.() -> Unit,
+        port: Int = 0,
         test: (Int) -> Unit,
-    ) {
-        val server = embeddedServer(Tomcat, port = 0, module = module).start(wait = false)
-        try {
-            // Ktor sets up its connectors after configureTomcat runs, so the setting goes on afterwards.
-            val field = server.engine.javaClass.getDeclaredField("server")
-            field.isAccessible = true
-            (field.get(server.engine) as TomcatServer).service.findConnectors().forEach { it.discardFacades = discardFacades }
-            test(
-                runBlocking {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
-                },
-            )
-        } finally {
-            server.stop(100, 500)
-        }
-    }
+    ) = serving(Tomcat, module, port, tomcat = { it.discardFacades = discardFacades }, test = test)
 
     /** One GET, read to its last chunk or until the connection is cut. */
     private fun read(
         port: Int,
         path: String,
     ): String =
-        Socket("localhost", port).use { socket ->
+        Socket(LOOPBACK, port).use { socket ->
             socket.soTimeout = 20_000
             socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
             val seen = StringBuilder()

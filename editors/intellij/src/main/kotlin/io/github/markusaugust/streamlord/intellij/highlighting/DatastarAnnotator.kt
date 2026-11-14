@@ -11,6 +11,7 @@ import com.intellij.psi.xml.XmlAttribute
 import com.intellij.psi.xml.XmlAttributeValue
 import io.github.markusaugust.streamlord.analysis.AttributeSpec
 import io.github.markusaugust.streamlord.analysis.AttributesIndex
+import io.github.markusaugust.streamlord.analysis.ExpressionOption
 import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.NameToken
 import io.github.markusaugust.streamlord.analysis.PLACEHOLDER
@@ -106,17 +107,31 @@ class KotlinDatastarAnnotator : Annotator {
                 return
             }
         }
+        // An option of a backend action's FetchOptions that takes an expression: payloadExpr = "...".
+        if (expressionOptions(file, analysis).any { it.value.start == s.start }) {
+            if (s.text.isNotBlank()) paintExpression(holder, src, s, 0, s.text.length)
+            return
+        }
+        // The innermost call: a helper's string handed to another, dataOnClick(getExpr("...")), is the helper's.
         val site =
-            findCallSites(src, analyzer.catalog.expressionCallSites.keys, lex).firstOrNull {
+            findCallSites(src, analyzer.catalog.expressionCallSites.keys, lex).lastOrNull {
                 it.openParen < s.start &&
                     s.end <= it.closeParen
             }
                 ?: return
         val spec = analyzer.catalog.expressionCallSites[site.name] ?: return
-        val chosen = site.selectString(spec) ?: return
-        if (chosen.start != s.start || analysis.foreignAmong(file, listOf(site)).isNotEmpty()) return
+        if (site.expressionStrings(spec).none { it.start == s.start } || analysis.foreignAmong(file, listOf(site)).isNotEmpty()) return
         paintExpression(holder, src, s, 0, s.text.length)
     }
+
+    /** The options of [file] set to an expression, found once for each version of it. */
+    private fun expressionOptions(
+        file: KtFile,
+        analysis: StreamlordAnalysis,
+    ): List<ExpressionOption> =
+        CachedValuesManager.getCachedValue(file) {
+            CachedValueProvider.Result.create(analysis.analyzer.expressionOptions(file.text), file)
+        }
 
     /** The `attributes["data-..."] =` of [file], found once for each version of it: the annotator is called for every string. */
     private fun attributesIndexes(

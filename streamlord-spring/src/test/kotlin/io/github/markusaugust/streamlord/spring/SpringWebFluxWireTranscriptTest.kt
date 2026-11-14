@@ -6,8 +6,10 @@ import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
 import io.github.markusaugust.streamlord.core.port.driven.rejectDeclaredLengthAbove
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.github.markusaugust.streamlord.wire.WireCases
 import io.github.markusaugust.streamlord.wire.WireTranscript
+import io.github.markusaugust.streamlord.wire.boundPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
@@ -170,6 +172,8 @@ class SpringWebFluxWireTranscriptTest {
     fun start() {
         tomcat.setBaseDir(baseDir.toString())
         tomcat.setPort(0)
+        // On the loopback address, which the transcripts read from; Loopback.kt in conformance/wire has why.
+        tomcat.connector.setProperty("address", LOOPBACK)
         val context = tomcat.addContext("", null)
         val handler = WebHttpHandlerBuilder.applicationContext(AnnotationConfigApplicationContext(Flux::class.java)).build()
         Tomcat.addServlet(context, "reactive", TomcatHttpHandlerAdapter(handler)).apply {
@@ -178,7 +182,7 @@ class SpringWebFluxWireTranscriptTest {
         }
         context.addServletMapping("/", "reactive")
         tomcat.start()
-        port = tomcat.connector.localPort
+        port = boundPort(tomcat.connector.localPort, "Tomcat")
     }
 
     @AfterAll

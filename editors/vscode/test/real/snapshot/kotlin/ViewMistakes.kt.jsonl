@@ -106,7 +106,7 @@
 {"what":"hover","at":"17:9-17:17","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"17:9-17:17"}]}
 {"what":"hover","at":"17:22-17:27","answers":[{"contents":["**$count**\n\nDatastar reads it as `$['count']`, the signal path count in its store."],"range":"17:21-17:27"}]}
 {"what":"hover","at":"18:9-18:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"18:9-18:20"}]}
-{"what":"hover","at":"18:22-18:32","answers":[{"contents":[{"value":"9d655fcd3196"}],"range":"18:22-18:32"}]}
+{"what":"hover","at":"18:22-18:32","answers":[{"contents":[{"value":"3375b54d8ac6"}],"range":"18:22-18:32"}]}
 {"what":"hover","at":"19:9-19:20","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"19:9-19:20"}]}
 {"what":"hover","at":"19:22-19:27","answers":[{"contents":[{"value":"89d492dd10ea"}],"range":"19:22-19:27"}]}
 {"what":"hover","at":"20:9-20:20","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"20:9-20:20"}]}

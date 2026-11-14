@@ -209,6 +209,22 @@ class HighlightingTest : StreamlordTestCase() {
         )
     }
 
+    // As VS Code colours them: the expression of each helper that takes one, every end of fitExpr's, and the options that take one.
+    fun `test the dsl's expression helpers and the expression options of a backend action`() {
+        val calls =
+            listOf("getExpr", "postExpr", "putExpr", "patchExpr", "deleteExpr", "queryExpr", "setAllExpr", "clipboardExpr")
+                .map { "div { dataOnClick($it(\"\\\$a\")) }" } +
+                listOf(
+                    "div { dataText(fitExpr(\"\\\$a\", \"0\", \"\\\$a\", \"0\", \"1\")) }",
+                    "div { dataOnClick(post(\"/x\") { payloadExpr = \"\\\$a\" }) }",
+                    "div { dataOnClick(get(\"/x\") { requestCancellationExpr = \"\\\$a\" }) }",
+                    "div { dataOnClick(get(\"/x\") { headerExprs = mapOf(\"X-Id\" to \"\\\$a\") }) }",
+                )
+        val kt = painted("View.kt", "fun FlowContent.f() {\n" + calls.joinToString("\n") + "\n}")
+        // fitExpr's line has two.
+        assertEquals(calls.size + 1, kt.count { it == "\$a" to DatastarColors.SIGNAL })
+    }
+
     fun `test a template file colours only datastar's names, and around a placeholder`() {
         for (ext in listOf("jte", "peb", "mustache", "hbs")) {
             assertEquals(

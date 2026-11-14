@@ -222,17 +222,17 @@
 {"what":"hover","at":"65:35-65:47","answers":[{"contents":["**$query.length**\n\nDatastar reads it as `$['query']['length']`, the signal path query.length in its store. Where query is an array or a string, `length` is its length."],"range":"65:34-65:47"}]}
 {"what":"hover","at":"66:6-66:12","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"66:6-66:12"}]}
 {"what":"hover","at":"66:13-66:26","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"66:13-66:26"}]}
-{"what":"hover","at":"66:28-66:38","answers":[{"contents":[{"value":"9d655fcd3196"}],"range":"66:28-66:38"}]}
+{"what":"hover","at":"66:28-66:38","answers":[{"contents":[{"value":"3375b54d8ac6"}],"range":"66:28-66:38"}]}
 {"what":"hover","at":"66:40-66:45","answers":[{"contents":["**$query**\n\nDatastar reads it as `$['query']`, the signal path query in its store."],"range":"66:39-66:45"}]}
 {"what":"hover","at":"66:54-66:60","answers":[{"contents":[{"value":"600c68a0ae85"}],"range":"66:54-66:60"}]}
 {"what":"hover","at":"67:6-67:10","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"67:6-67:10"}]}
 {"what":"hover","at":"67:11-67:20","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"67:11-67:20"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"67:11-67:20"}]}
-{"what":"hover","at":"67:22-67:27","answers":[{"contents":[{"value":"4602c0ff5940"}],"range":"67:22-67:27"}]}
+{"what":"hover","at":"67:22-67:27","answers":[{"contents":[{"value":"9edf843b89ce"}],"range":"67:22-67:27"}]}
 {"what":"hover","at":"67:39-67:49","answers":[{"contents":["**$cart.total**\n\nDatastar reads it as `$['cart']['total']`, the signal path cart.total in its store."],"range":"67:38-67:49"}]}
 {"what":"hover","at":"67:92-67:96","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"67:92-67:96"}]}
 {"what":"hover","at":"68:6-68:10","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"68:6-68:10"}]}
 {"what":"hover","at":"68:11-68:20","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"68:11-68:20"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"68:11-68:20"}]}
-{"what":"hover","at":"68:22-68:26","answers":[{"contents":[{"value":"521e29824562"}],"range":"68:22-68:26"}]}
+{"what":"hover","at":"68:22-68:26","answers":[{"contents":[{"value":"6b81d2816336"}],"range":"68:22-68:26"}]}
 {"what":"hover","at":"68:28-68:32","answers":[{"contents":["**$tick**\n\nDatastar reads it as `$['tick']`, the signal path tick in its store."],"range":"68:27-68:32"}]}
 {"what":"hover","at":"68:51-68:55","answers":[{"contents":[{"value":"c1dc2f3cd501"}],"range":"68:51-68:55"}]}
 {"what":"hover","at":"69:5-69:10","answers":[{"contents":[{"value":"00ee1fe0e7d4"}],"range":"69:5-69:10"}]}

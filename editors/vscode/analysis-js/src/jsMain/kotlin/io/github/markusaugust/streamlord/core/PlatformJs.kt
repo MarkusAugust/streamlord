@@ -43,8 +43,6 @@ internal actual fun bigNumberText(
     plainScale: Int,
 ): String? = null
 
-internal actual fun typeName(value: Any): String? = value::class.simpleName
-
 internal actual fun randomBase64(bytes: Int): String {
     val out: dynamic = js("crypto").getRandomValues(js("new Uint8Array(bytes)"))
     return js("btoa")(js("String.fromCharCode").apply(null, out)).unsafeCast<String>()

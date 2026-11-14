@@ -445,6 +445,25 @@ All notable changes to Streamlord are recorded here. The format follows
 - The `415` that `readSignals` answers a form with says what to do: Datastar's
   `contentType: 'form'` sends the form's fields and no signals, so read them as form parameters.
   [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
+- A `val` set to `interpolate(...)`, or to its `.text`, is read as the whole of what follows on the
+  line says, however many blanks come before it, where eight or more made it markup or a String.
+- The `SignalsCodecException` for a value JSON cannot hold names its class by its simple name,
+  `JSON cannot hold Sorcerer.`, where it gave the qualified name, and `null` for a local class.
+- The editors judge the arguments of the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds
+  the reference declares, as they judge the free ones, `@fit('a', 0, 1, 0, 10)` among them, and
+  their hover says what each parameter takes; they judged the number of arguments alone. A number
+  where one takes a string is let be, as the browser turns it into one: `@clipboard(1)` copies `1`.
+- IntelliJ's inspection "Signal no file defines" is now called "Unknown signals", as the VS Code setting
+  `streamlord.diagnostics.unknownSignals` that turns the same two warnings on and off is. Its
+  settings in an inspection profile are kept.
+- The expressions handed to the DSL's expression helpers, `getExpr`, `postExpr`, `putExpr`,
+  `patchExpr`, `deleteExpr`, `queryExpr`, `setAllExpr`, `clipboardExpr` and every argument of
+  `fitExpr`, and the options `payloadExpr`, `requestCancellationExpr` and the values of
+  `headerExprs` in the options of a backend action, are checked, completed, hovered and coloured in
+  both editors, as the expression of `dataText` is. A helper handed to another call, `dataOnClick(getExpr("..."))`, is read as its own.
+  In the catalog, an expression call site may name the parameters after it that take an expression
+  too, `more`, and `expressionOptions` lists the options; `CallSiteSpec` has one more value, `more`,
+  last, and code compiled against the old constructor needs a rebuild.
 
 ## [0.21.0] - 2026-11-11
 

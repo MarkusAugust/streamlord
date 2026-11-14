@@ -227,7 +227,7 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 |---|---|---|
 | `streamlord.diagnostics.enabled` | `true` | Validate Kotlin strings and HTML. |
 | `streamlord.diagnostics.html` | `true` | Also validate markup files. |
-| `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines, and on a signal the server reads that no page declares. |
+| `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines, and on a signal the server reads that no page declares (`signal-never-declared`). IntelliJ's counterpart is the inspection Streamlord › Unknown signals. |
 | `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |

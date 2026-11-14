@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.spring
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.CompletableDeferred
@@ -177,7 +178,7 @@ class StreamEdgesTest {
     }
 
     private fun readGated(port: Int) {
-        Socket("localhost", port).use { socket ->
+        Socket(LOOPBACK, port).use { socket ->
             socket.soTimeout = 30_000
             socket.getOutputStream().write("GET /gated HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
             val seen = StringBuilder()

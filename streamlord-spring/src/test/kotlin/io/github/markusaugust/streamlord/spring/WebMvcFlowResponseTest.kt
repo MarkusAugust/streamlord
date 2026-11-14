@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.spring
 
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -84,7 +85,7 @@ class WebMvcFlowResponseTest {
             HttpClient
                 .newHttpClient()
                 .send(
-                    HttpRequest.newBuilder(URI("http://localhost:${tomcat.port}/flow")).header("Accept-Encoding", "gzip").build(),
+                    HttpRequest.newBuilder(URI("http://$LOOPBACK:${tomcat.port}/flow")).header("Accept-Encoding", "gzip").build(),
                     HttpResponse.BodyHandlers.ofString(),
                 )
         val body = response.body()

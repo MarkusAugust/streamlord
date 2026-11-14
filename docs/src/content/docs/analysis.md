@@ -142,8 +142,8 @@ construction, since it sits in the browser's store and comes back untouched. A s
 reads that nothing declares is always a mistake, and that is the `signal-never-declared` warning,
 pointing at the property or the lookup that will never see a value. Both editors show the same
 warning as you type, judged against the files of the project: in VS Code with
-`streamlord.diagnostics.unknownSignals`, and in IntelliJ with the inspection Streamlord › Signal
-no file defines.
+`streamlord.diagnostics.unknownSignals`, and in IntelliJ with its counterpart, the inspection
+Streamlord › Unknown signals.
 
 Only classes something actually reads signals into are examined, so the rest of your
 `@Serializable` classes are left alone. A read names a class the way Kotlin does, by an import,
@@ -157,7 +157,7 @@ file does not write down, such as `patchSignals(json)` with a string built elsew
 by pages outside the project, such as a service opened alone whose pages live in another
 repository or folder, is warned on though the browser has it. In the editors, open the folder
 that holds both, or turn the check off: the setting `streamlord.diagnostics.unknownSignals` in
-VS Code, or the inspection Streamlord › Signal no file defines in IntelliJ, where one warning can
+VS Code, or the inspection Streamlord › Unknown signals in IntelliJ, where one warning can
 also be suppressed from its Alt+Enter menu.
 
 ## The same check, behind a route

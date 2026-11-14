@@ -35,6 +35,13 @@ public data class CallSite(
     /** Pick the string argument a call-site spec points at. */
     public fun selectString(spec: CallSiteSpec): KotlinString? = selectString(spec.arg, spec.named)
 
+    /** The string arguments of the parameters [CallSiteSpec.more] names, after the one [selectString] picks. */
+    public fun moreStrings(spec: CallSiteSpec): List<KotlinString> =
+        spec.more.mapIndexedNotNull { i, name -> spec.arg?.let { selectString(it + 1 + i, name) } }
+
+    /** Every string argument a call-site spec points at: [selectString]'s and [moreStrings]. */
+    public fun expressionStrings(spec: CallSiteSpec): List<KotlinString> = listOfNotNull(selectString(spec)) + moreStrings(spec)
+
     public fun selectString(
         arg: Int?,
         named: String?,

@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import java.io.ByteArrayOutputStream
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -16,7 +17,7 @@ fun rawGet(
     headers: String = "",
     limitMillis: Int = 30_000,
 ): String =
-    Socket("localhost", port).use { socket ->
+    Socket(LOOPBACK, port).use { socket ->
         socket.soTimeout = limitMillis
         socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: x\r\n$headers\r\n".toByteArray())
         val out = ByteArrayOutputStream()

@@ -13,6 +13,4 @@ internal expect fun bigNumberText(
     plainScale: Int,
 ): String?
 
-internal expect fun typeName(value: Any): String?
-
 internal expect fun randomBase64(bytes: Int): String

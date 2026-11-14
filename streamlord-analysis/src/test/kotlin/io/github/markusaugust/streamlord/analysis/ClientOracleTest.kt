@@ -249,6 +249,8 @@ class ClientOracleTest {
                 "FetchArgs" to "options",
                 "() => any" to "function",
                 "RegExp | string" to "pattern",
+                "Record<string, any>" to "object",
+                "string | string[]" to "any",
             )
         return (kinds[type] ?: fail("no kind for the client's type $type")) to emptyList()
     }
@@ -301,6 +303,65 @@ class ClientOracleTest {
             ) {
                 wrong += "@$name: the signature $signature, and the client's defaults $optional"
             }
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * `conformance/reference/pro-actions.json`: each Pro action of the catalog takes the kinds the
+     * reference page's signature gives it, and those the page lets you leave out are optional.
+     */
+    @Test
+    fun `gives each pro action the parameters the reference page declares`() {
+        val page = JsonParser.parseObject(fixtureText("conformance/reference/pro-actions.json")).obj("signatures")!!
+        val pro = rawCatalog.array("actions")!!.objects().filter { it.boolean("pro") == true }
+        assertEquals(page.keys, pro.map { it.string("name")!! }.toSet())
+        val wrong = ArrayList<String>()
+        for (action in pro) {
+            val name = action.string("name")!!
+            val written = page.string(name)!!
+            // Cut at the commas outside brackets: Record<string, any> is one type.
+            val parameters = written.substringAfter('(').substringBeforeLast(')').split(Regex(""",\s*(?![^<\[]*[>\]])"""))
+            // name: type, name?: type, or name=default, whose type is the default's.
+            val types =
+                parameters.map { p ->
+                    when {
+                        ':' in p -> p.substringAfter(':').trim()
+                        p.substringAfter('=') in setOf("true", "false") -> "boolean"
+                        else -> fail("@$name: no type for $p")
+                    }
+                }
+            val wanted = types.map { kindOf(it).first }
+            val kinds = action.array("kinds")?.strings() ?: fail("@$name has no kinds in the catalog")
+            if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the page declares $wanted in $written"
+            val optional = parameters.map { "?:" in it || '=' in it }
+            val signature =
+                Catalog.default.actionsByName
+                    .getValue(name)
+                    .parameters
+            if (signature.map { it.endsWith("?") } != optional) wrong += "@$name: the signature $signature, and the page $written"
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * `fetch-option-values.json`: what the catalog says Datastar does with a value an option of
+     * strings does not take names the branch the client takes for it: the value it acts as, one the
+     * source never compares with, or the error it throws when it compares with every one.
+     */
+    @Test
+    fun `says what the client does with a value an option of strings does not take`() {
+        val otherwise = Catalog.default.optionFields.associate { it.name to it.otherwise }
+        val cases = cases("fetch-option-values.json")
+        val ofStrings = Catalog.default.optionFields.filter { it.values.isNotEmpty() }
+        assertEquals(cases.map { it.string("option") }.toSet(), ofStrings.map { it.name }.toSet())
+        val wrong = ArrayList<String>()
+        for (case in cases) {
+            val option = case.string("option")!!
+            val sentence = otherwise.getValue(option)
+            val alike = case.array("values")!!.strings() - case.array("compared")!!.strings().toSet()
+            val branch = if (alike.isEmpty()) case.array("throws")!!.strings() else alike.map { "'$it'" }
+            if (branch.isEmpty() || branch.any { it !in sentence }) wrong += "$option: \"$sentence\" does not name $branch"
         }
         assertEquals(emptyList(), wrong)
     }

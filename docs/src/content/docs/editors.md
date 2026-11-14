@@ -87,6 +87,11 @@ template literal that also holds a `${...}`. An empty `data-nonce` on `<html>` i
 Datastar throws `NonceRequired` and does not start, and one that is no base64 value a warning,
 since a browser ignores it in the policy and blocks the scripts.
 
+**Unknown signals.** A `$name` no file in the project defines is a warning, and so, in a Kotlin
+file, is a signal the server reads that no page declares (`signal-never-declared`). One switch in
+each editor turns both on and off: the setting `streamlord.diagnostics.unknownSignals` in VS Code,
+and its counterpart, the inspection Streamlord › Unknown signals, in IntelliJ.
+
 **Completions** for signals, actions, attributes, modifiers, ids and classes. Signals are
 collected from the whole project, since the page that declares one is rarely the file that reads
 it. They work where the value runs over several lines or sits in single quotes, and in Kotlin

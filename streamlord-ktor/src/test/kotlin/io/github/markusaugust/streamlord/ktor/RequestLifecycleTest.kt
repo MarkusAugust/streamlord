@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.ktor
 
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.ApplicationEngine
@@ -35,34 +36,25 @@ class RequestLifecycleTest {
     private fun <E : ApplicationEngine, C : ApplicationEngine.Configuration> cancels(engine: ApplicationEngineFactory<E, C>) {
         val waiting = CompletableFuture<Unit>()
         val ended = CompletableFuture<Throwable>()
-        val server =
-            embeddedServer(engine, port = 0) {
-                routing {
-                    route("/idle") {
-                        install(HttpRequestLifecycle) { cancelCallOnClose = true }
-                        get {
-                            call.respondDatastar(heartbeat = null) {
-                                try {
-                                    waiting.complete(Unit)
-                                    awaitCancellation()
-                                } catch (e: Throwable) {
-                                    ended.complete(e)
-                                    throw e
-                                }
+        serving(engine, {
+            routing {
+                route("/idle") {
+                    install(HttpRequestLifecycle) { cancelCallOnClose = true }
+                    get {
+                        call.respondDatastar(heartbeat = null) {
+                            try {
+                                waiting.complete(Unit)
+                                awaitCancellation()
+                            } catch (e: Throwable) {
+                                ended.complete(e)
+                                throw e
                             }
                         }
                     }
                 }
-            }.start(wait = false)
-        val port =
-            runBlocking {
-                server.engine
-                    .resolvedConnectors()
-                    .first()
-                    .port
             }
-        try {
-            Socket("localhost", port).use { socket ->
+        }) { port ->
+            Socket(LOOPBACK, port).use { socket ->
                 socket.soTimeout = 10_000
                 socket.getOutputStream().write("GET /idle HTTP/1.1\r\nHost: x\r\n\r\n".toByteArray())
                 // Left only once the block waits: a cancel that came before it would never be seen here.
@@ -72,8 +64,6 @@ class RequestLifecycleTest {
 
             // About 200 ms on a desktop; the bound is for a busy CI runner, not a measure of speed.
             assertTrue(ended.get(10, TimeUnit.SECONDS) is CancellationException)
-        } finally {
-            server.stop(100, 500)
         }
     }
 }

@@ -645,6 +645,27 @@ describe("datastar colours in Kotlin strings", () => {
     assert.ok(receiver.some((x) => x.scopes.includes("meta.embedded.block.javascript")), "a call after a receiver");
   });
 
+  it("colours the expression of each DSL expression helper, and of each option of FetchOptions that takes one", async () => {
+    const pro = "import io.github.markusaugust.streamlord.html.pro.*";
+    for (const call of [
+      ...["getExpr", "postExpr", "putExpr", "patchExpr", "deleteExpr", "queryExpr", "setAllExpr"].map((fn) => `dataOnClick(${fn}("\\$b"))`),
+      `dataText(fitExpr("\\$b", "0", "1", "0", "1"))`,
+      `dataText(fitExpr("1", signal("m"), "\\$b", "0", "1"))`,
+      `dataOnClick(clipboardExpr("\\$b"))`,
+      `dataOnClick(post("/x") { payloadExpr = "{id: \\$b}" })`,
+      `dataOnClick(get("/x") { requestCancellationExpr = "\\$b" })`,
+      `dataOnClick(get("/x") { headerExprs = mapOf("X-Id" to "\\$b") })`,
+    ]) {
+      const t = (await tokenLines("source.kotlin", [DSL_IMPORT, pro, `div { ${call} }`]))[2]!;
+      assert.ok(t.some((x) => x.text === "b" && x.scopes.includes(S.signal)), call);
+    }
+    const receiver = await kinds("source.kotlin", `fun f(form: Form) { form.payloadExpr = "\\$b" }`);
+    assert.ok(receiver.every(([, s]) => s !== S.signal), "an option set on a receiver is another's");
+    // A header's name, and what follows the call, are no expression.
+    const t = await kinds("source.kotlin", `div { dataOnClick(get("/x") { headerExprs = mapOf("X-b" to "1") }); val s = "\\$b" }`);
+    assert.ok(t.every(([, s]) => s !== S.signal), JSON.stringify(t));
+  });
+
   it("colours the DSL's signal names", async () => {
     for (const [call, name] of [[`dataBind("user.name")`, "user"], [`dataRef("box")`, "box"], [`dataIndicator("busy")`, "busy"], [`dataSignals("count", "0")`, "count"], [`dataComputed("total", "\\$a")`, "total"]] as const) {
       const t = await kinds("source.kotlin", `div { ${call} }`);
@@ -675,7 +696,7 @@ describe("the lists both editors share", () => {
   it("knows the catalog's backend actions, and the DSL's call sites", () => {
     const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as {
       actions: { name: string; kind: string }[];
-      kotlinCallSites: { expression: Record<string, { arg: number | string }> };
+      kotlinCallSites: { expression: Record<string, { arg: number | string; more?: string[] }> };
     };
     const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
     const backend = /\(((?:[a-z]+\|)+[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
@@ -683,8 +704,9 @@ describe("the lists both editors share", () => {
     const kt = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\\b\(?:?\(\?:((?:[A-Za-z]+\|)*[A-Za-z]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const sites = Object.entries(catalog.kotlinCallSites.expression).filter(([n]) => !n.startsWith("$"));
-    const at = (arg: (a: number | string) => boolean) => sites.filter(([, s]) => arg(s.arg)).map(([n]) => n).sort();
+    const at = (arg: (a: number | string) => boolean) => sites.filter(([, s]) => arg(s.arg) && !s.more).map(([n]) => n).sort();
     assert.deepEqual(names(kt.repository["expression-call-first-arg"].patterns[0].begin), at((a) => a === 0));
+    assert.deepEqual(names(kt.repository["expression-call-every-arg"].begin), sites.filter(([, s]) => s.more).map(([n]) => n).sort());
     assert.deepEqual(names(kt.repository["expression-call-second-arg"].patterns[0].begin), at((a) => a === 1 || a === "last"));
     assert.deepEqual(names(kt.repository["expression-call-lone-object"].patterns[0].begin), at((a) => a === "last"));
   });
