@@ -7,6 +7,9 @@ import kotlin.time.Duration
  * rendered as a JavaScript object literal. Only the options you set are written, so the common
  * case renders nothing at all; one set to the value Datastar takes by default is written all
  * the same, and means what leaving it out means.
+ *
+ * Each option has a twin whose name ends in `Expr`, a raw JavaScript expression the page computes,
+ * such as a signal, written in parentheses; set with its twin, it is refused.
  */
 public class FetchOptions {
     /** `'json'` (default) or `'form'`. */
@@ -51,6 +54,30 @@ public class FetchOptions {
 
     /** `'auto'` (default), `'cleanup'` or `'disabled'`. */
     public var requestCancellation: RequestCancellation? = null
+
+    /** [contentType] as an expression, e.g. `${'$'}mode`: the client compares it with `'json'` and `'form'`. */
+    public var contentTypeExpr: String? = null
+
+    /** [selector] as an expression. */
+    public var selectorExpr: String? = null
+
+    /** [openWhenHidden] as an expression. */
+    public var openWhenHiddenExpr: String? = null
+
+    /** [retry] as an expression: the client compares it with `'error'`, `'always'` and `'never'`. */
+    public var retryExpr: String? = null
+
+    /** [retryInterval] as an expression, in milliseconds. */
+    public var retryIntervalExpr: String? = null
+
+    /** [retryScaler] as an expression. */
+    public var retryScalerExpr: String? = null
+
+    /** [retryMaxWait] as an expression, in milliseconds. */
+    public var retryMaxWaitExpr: String? = null
+
+    /** [retryMaxCount] as an expression. */
+    public var retryMaxCountExpr: String? = null
 
     /**
      * A raw JavaScript expression for requestCancellation, e.g. `${'$'}controller`: the client takes an
@@ -101,29 +128,37 @@ public class FetchOptions {
     public fun toJs(): String? {
         val entries =
             buildList {
-                contentType?.let { add("contentType: ${js(it.wire)}") }
+                /** The option [name], written from its literal [written] or its expression [expr], which are one option. */
+                fun option(
+                    name: String,
+                    written: String?,
+                    expr: String?,
+                ) {
+                    require(expr == null || written == null) { "$name and ${name}Expr are one option; set one" }
+                    (expr?.let(::expression) ?: written)?.let { add("$name: $it") }
+                }
+                option("contentType", contentType?.let { js(it.wire) }, contentTypeExpr)
                 filterSignals?.let { add("filterSignals: ${it.toJs()}") }
-                selector?.let { add("selector: ${js(it)}") }
+                option("selector", selector?.let(::js), selectorExpr)
                 if (headers.isNotEmpty() || headerExprs.isNotEmpty()) add("headers: ${headersJs()}")
-                openWhenHidden?.let { add("openWhenHidden: $it") }
-                retry?.let { add("retry: ${js(it.wire)}") }
-                retryInterval?.let { add("retryInterval: ${it.wholeMilliseconds()}") }
-                retryScaler?.let {
-                    // Below zero the backoff turns into no wait at all.
-                    require(it.isFinite() && it >= 0) { "retryScaler must be a finite number of 0 or more, not $it" }
-                    add("retryScaler: $it")
-                }
-                retryMaxWait?.let { add("retryMaxWait: ${it.wholeMilliseconds()}") }
-                retryMaxCount?.let {
-                    require(it >= 0) { "retryMaxCount must be 0 or more, not $it" }
-                    add("retryMaxCount: $it")
-                }
-                require(requestCancellationExpr == null || requestCancellation == null) {
-                    "requestCancellation and requestCancellationExpr are one option; set one"
-                }
-                (requestCancellationExpr?.let(::expression) ?: requestCancellation?.let { js(it.wire) })?.let {
-                    add("requestCancellation: $it")
-                }
+                option("openWhenHidden", openWhenHidden?.toString(), openWhenHiddenExpr)
+                option("retry", retry?.let { js(it.wire) }, retryExpr)
+                option("retryInterval", retryInterval?.wholeMilliseconds()?.toString(), retryIntervalExpr)
+                val scaler =
+                    retryScaler?.let {
+                        // Below zero the backoff turns into no wait at all.
+                        require(it.isFinite() && it >= 0) { "retryScaler must be a finite number of 0 or more, not $it" }
+                        "$it"
+                    }
+                option("retryScaler", scaler, retryScalerExpr)
+                option("retryMaxWait", retryMaxWait?.wholeMilliseconds()?.toString(), retryMaxWaitExpr)
+                val count =
+                    retryMaxCount?.let {
+                        require(it >= 0) { "retryMaxCount must be 0 or more, not $it" }
+                        "$it"
+                    }
+                option("retryMaxCount", count, retryMaxCountExpr)
+                option("requestCancellation", requestCancellation?.let { js(it.wire) }, requestCancellationExpr)
                 (payloadExpr?.let(::expression) ?: if (payloadSet) JsLiteral.write(payload) else null)?.let { add("payload: $it") }
             }
         return if (entries.isEmpty()) null else entries.joinToString(", ", "{", "}")
@@ -260,7 +295,11 @@ public fun setAllExpr(
 public fun toggleAll(filter: SignalFilter? = null): String =
     if (filter == null) "@toggleAll()" else "@toggleAll(${filter.withInclude().toJs()})"
 
-private fun SignalFilter.withInclude(): SignalFilter = if (include == null) copy(include = Regex(".*")) else this
+private fun SignalFilter.withInclude(): SignalFilter =
+    if (include == null && includeExpr == null && expression == null) copy(include = Regex(".*")) else this
+
+/** `@peek((expression))`: [peek] handed a function the page holds or writes, e.g. `"() => ${'$'}a"` or a signal. */
+public fun peekExpr(expression: String): String = "@peek(${expression(expression)})"
 
 /**
  * `@peek(() => (expression))`: read signals without subscribing. In parentheses, the expression is

@@ -650,7 +650,7 @@
       "comment": "dataOnClick(\"...\"), dataText(\"...\") and friends: the first argument is the expression, in any kind of string, or passed by name. After a receiver too, where a grammar may colour the call from its dot.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|postExpr|getExpr|putExpr|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|peekExpr|postExpr|getExpr|putExpr|peek|fit))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -673,7 +673,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|postExpr|getExpr|putExpr|peek))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|peekExpr|postExpr|getExpr|putExpr|peek|fit))(\\s*\\(\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -701,7 +701,7 @@
       "comment": "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression, the first a plain string. No capture of a rule that may run many times on a line has patterns of its own: the engine copies the line up to each such capture, which a long line pays for on every call.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"\"\")",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -727,7 +727,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\(\\s*)(\\$*\"[^\"\\n]*\")(\\s*,\\s*(?:expression\\s*=\\s*)?)(\\$*\"(?!\"\"))",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -945,7 +945,7 @@
           "comment": "An option set to an expression, on no receiver.",
           "patterns": [
             {
-              "begin": "(?<!\\.)\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"\"\")",
+              "begin": "(?<!\\.)\\b(requestCancellationExpr|openWhenHiddenExpr|retryIntervalExpr|retryMaxCountExpr|retryMaxWaitExpr|contentTypeExpr|retryScalerExpr|selectorExpr|payloadExpr|retryExpr)(\\s*)(=)(\\s*)(\\$*\"\"\")",
               "beginCaptures": {
                 "3": {
                   "name": "keyword.operator.assignment.kotlin"
@@ -968,7 +968,7 @@
               "name": "meta.kotlin-string.streamlord"
             },
             {
-              "begin": "(?<!\\.)\\b(requestCancellationExpr|payloadExpr)(\\s*)(=)(\\s*)(\\$*\"(?!\"\"))",
+              "begin": "(?<!\\.)\\b(requestCancellationExpr|openWhenHiddenExpr|retryIntervalExpr|retryMaxCountExpr|retryMaxWaitExpr|contentTypeExpr|retryScalerExpr|selectorExpr|payloadExpr|retryExpr)(\\s*)(=)(\\s*)(\\$*\"(?!\"\"))",
               "beginCaptures": {
                 "3": {
                   "name": "keyword.operator.assignment.kotlin"
@@ -1109,7 +1109,7 @@
       "comment": "A call whose arguments start on the next line: the expression is the first string at the start of a line for dataText and friends, the string after the first and its comma for dataOn and friends. The region ends after it, or at the closing parenthesis.",
       "patterns": [
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|postExpr|getExpr|putExpr|peek))(\\s*\\()[ \\t]*$",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataCustomValidity|dataViewTransition|dataOnSignalPatch|dataOnIntersect|dataOnInterval|dataReplaceUrl|clipboardExpr|dataOnKeydown|dataOnChange|dataOnResize|dataOnSubmit|dataOnClick|dataOnFetch|dataOnInput|dataEffect|deleteExpr|setAllExpr|dataOnRaf|patchExpr|queryExpr|dataInit|dataShow|dataText|peekExpr|postExpr|getExpr|putExpr|peek|fit))(\\s*\\()[ \\t]*$",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -1163,7 +1163,7 @@
           ]
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn))(\\s*\\()\\s*(\\$*\"[^\"\\n]*\")\\s*,[ \\t]*$",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\()\\s*(\\$*\"[^\"\\n]*\")\\s*,[ \\t]*$",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
@@ -1220,7 +1220,7 @@
           ]
         },
         {
-          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn))(\\s*\\()[ \\t]*$",
+          "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\()[ \\t]*$",
           "beginCaptures": {
             "2": {
               "name": "entity.name.function.kotlin"
