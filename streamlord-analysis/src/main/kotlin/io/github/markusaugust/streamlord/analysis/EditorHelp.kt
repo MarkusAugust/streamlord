@@ -192,8 +192,6 @@ private val ATTRIBUTE_WORD = regex("""[A-Za-z][A-Za-z0-9_:.-]*""")
 private val KOTLIN_WORD = regex("""[A-Za-z_][A-Za-z0-9_]*""")
 private val VALUE_WORD = regex("""[\w-]+""")
 
-/** The character references an attribute value may write a quote or an ampersand with. */
-private val REFERENCES = mapOf("&quot;" to '"', "&#34;" to '"', "&#39;" to '\'', "&apos;" to '\'', "&amp;" to '&')
 private val STRING_OPENED = regex("""['"`]([\w-]*)""")
 
 /** Kotlin's dollar in a string, which writes the `$` a signal is read after. */
@@ -366,7 +364,7 @@ private class Asked(
         call?.option?.let { option ->
             // The colon is written only where none follows yet, after the rest of the name, which the item replaces.
             val colon = if (text.substring(wordEnd(CompletionKind.OPTION)).trimStart().startsWith(":")) "" else ": "
-            val after = keysAfter(attributeQuote = if (expression.quote == '\'') '"' else '\'')
+            val after = keysAfter(expression.after)
             val items =
                 option.fields.map { it.option }.filter { it.name !in option.written && it.name !in after }.map {
                     Completion(
@@ -445,90 +443,20 @@ private class Asked(
     }
 
     /**
-     * The keys of the object the caret names a key of that are written after the key at the caret,
-     * read from the source as the client reads the text: Kotlin's escapes and an HTML file's
-     * character references decoded, nested objects and strings stepped over. The scan ends where the
-     * object closes, or where the Kotlin string or the attribute value written in [attributeQuote] does.
+     * The keys of the object the caret names a key of that are written after the key at the caret:
+     * the text after the caret read as the rest of that object, split at its commas, each key before
+     * its colon.
      */
-    private fun keysAfter(attributeQuote: Char): Set<String> {
-        val keys = HashSet<String>()
-        val word = StringBuilder()
-        var atKey = false
-        var depth = 0
-        var string: Char? = null
-        var escaped = false
-        var i = wordEnd(CompletionKind.OPTION)
-        while (i < text.length) {
-            var c = text[i]
-            var bare = true
-            val reference = if (kotlin) null else REFERENCES.entries.firstOrNull { text.startsWith(it.key, i) }
-            when {
-                kotlin && c == '\\' && i + 1 < text.length -> {
-                    c = text[++i]
-                    bare = false
-                }
-
-                kotlin && text.startsWith(KOTLIN_DOLLAR, i) -> {
-                    c = '$'
-                    i += KOTLIN_DOLLAR.length - 1
-                }
-
-                reference != null -> {
-                    c = reference.value
-                    i += reference.key.length - 1
-                    bare = false
-                }
-            }
-            i++
-            if (bare && (if (kotlin) c == '"' else c == attributeQuote) && string == null) break
-            if (string != null) {
-                if (escaped) {
-                    escaped = false
-                } else if (c == '\\') {
-                    escaped = true
-                } else if (c == string) {
-                    string = null
-                }
-                continue
-            }
-            when (c) {
-                '\'', '"', '`' -> {
-                    string = c
-                }
-
-                '{', '[', '(' -> {
-                    depth++
-                }
-
-                '}', ']', ')' -> {
-                    if (depth == 0) break
-                    depth--
-                }
-
-                ',' -> {
-                    if (depth == 0) {
-                        atKey = true
-                        word.clear()
-                    }
-                }
-
-                ':' -> {
-                    if (depth == 0 && atKey) {
-                        word
-                            .toString()
-                            .trim()
-                            .takeIf { OPTION_WORD.matchEntire(it) != null }
-                            ?.let { keys += it }
-                        atKey = false
-                    }
-                }
-
-                else -> {
-                    if (depth == 0 && atKey) word.append(c)
-                }
-            }
-        }
-        return keys
+    private fun keysAfter(after: String): Set<String> {
+        val js = "{" + after
+        val brackets = Brackets(js, jsRegions(js))
+        val colons = brackets.colons(0)
+        return brackets
+            .pieces(0)
+            .drop(1)
+            .mapNotNull { piece -> colons.firstOrNull { it in piece }?.let { js.substring(piece.first, it).trim() } }
+            .filter { OPTION_WORD.matchEntire(it) != null }
+            .toSet()
     }
 
     /**

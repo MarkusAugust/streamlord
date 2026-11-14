@@ -12,7 +12,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
  */
 
 /** What a literal written as an argument or a value is; [EXPRESSION] is anything else, and never judged. */
-private enum class Written(
+internal enum class Written(
     val phrase: String,
 ) {
     STRING("a string"),
@@ -28,7 +28,7 @@ private enum class Written(
 }
 
 /** A value from [start] to [end] of the script: what it is, and a string's text where it has no escape. */
-private class Value(
+internal class Value(
     val start: Int,
     val end: Int,
     val written: Written,
@@ -84,11 +84,14 @@ private fun ArgumentKind.takes(value: Value): Boolean {
         )
 }
 
+/** Where [Brackets] files the commas outside every bracket. */
+private const val TOP = -1
+
 /**
  * The brackets of [js] in code, read in one pass: where each closes, and the commas and colons
  * at its own depth.
  */
-private class Brackets(
+internal class Brackets(
     val js: String,
     val regions: ByteArray,
 ) {
@@ -121,7 +124,7 @@ private class Brackets(
             when (js[i]) {
                 '(', '[', '{' -> open += i
                 ')', ']', '}' -> open.removeLastOrNull()?.let { close[it] = i }
-                ',' -> open.lastOrNull()?.let { commas.getOrPut(it) { ArrayList() } += i }
+                ',' -> commas.getOrPut(open.lastOrNull() ?: TOP) { ArrayList() } += i
                 ':' -> open.lastOrNull()?.let { colons.getOrPut(it) { ArrayList() } += i }
             }
         }
@@ -135,6 +138,9 @@ private class Brackets(
         val out = cuts.zipWithNext().map { (a, b) -> trim(a + 1, b) }
         return if (out.last().isEmpty()) out.dropLast(1) else out
     }
+
+    /** The commas outside every bracket, in order. */
+    val topCommas: List<Int> get() = commas[TOP] ?: emptyList()
 
     /** The colons of the bracket at [open] at its own depth, in order. */
     fun colons(open: Int): List<Int> = colons[open] ?: emptyList()

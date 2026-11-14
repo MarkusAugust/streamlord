@@ -462,18 +462,9 @@ public class Analyzer(
         val sites = findCallSites(src, INDICATOR_ORDER_CALLS, lex).filter { !foreign(it.name, it.nameStart) }
         if (sites.none { it.name == "dataInit" } || sites.none { it.name == "dataIndicator" }) return emptyList()
 
-        // The `{` of the innermost block around [at], or -1.
-        fun blockOf(at: Int): Int {
-            var depth = 0
-            for (i in at - 1 downTo 0) {
-                if (!lex.mask[i]) continue
-                when (src[i]) {
-                    '}' -> depth++
-                    '{' -> if (depth == 0) return i else depth--
-                }
-            }
-            return -1
-        }
+        val blocks = lex.blocks(src)
+
+        fun blockOf(at: Int) = blocks.around(at)
 
         fun sendsAtOnce(init: CallSite): Boolean {
             if (init.trailingLambda) return false
@@ -485,7 +476,7 @@ public class Analyzer(
         val sending = sites.filter { it.name == "dataInit" && sendsAtOnce(it) }.map { blockOf(it.nameStart) to it.nameStart }
         return sites
             .filter { it.name == "dataIndicator" }
-            .filter { ind -> blockOf(ind.nameStart).let { b -> b >= 0 && sending.any { it.first == b && it.second < ind.nameStart } } }
+            .filter { ind -> blockOf(ind.nameStart).let { b -> b != null && sending.any { it.first == b && it.second < ind.nameStart } } }
             .map { ind ->
                 SiteIssues(
                     ind,
@@ -2135,39 +2126,19 @@ public class Analyzer(
         s: KotlinString,
         function: String,
     ): Issue? {
-        val text = s.text
-        val regions = jsRegions(text)
-        var depth = 0
-        for ((i, c) in text.withIndex()) {
-            if (regions[i] != Region.CODE) continue
-            when (c) {
-                '(', '[', '{' -> {
-                    depth++
-                }
-
-                ')', ']', '}' -> {
-                    depth--
-                }
-
-                ',' -> {
-                    if (depth == 0) {
-                        val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
-                        val r = s.toSource(i, i + 1)
-                        return Issue(
-                            r.first,
-                            r.last + 1,
-                            "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
-                                "operator and keeps only what follows it." +
-                                if (backend) " The options go in the lambda after the call." else "",
-                            Severity.WARNING,
-                            "one-value",
-                            Docs.EXPRESSIONS,
-                        )
-                    }
-                }
-            }
-        }
-        return null
+        val at = Brackets(s.text, jsRegions(s.text)).topCommas.firstOrNull() ?: return null
+        val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
+        val r = s.toSource(at, at + 1)
+        return Issue(
+            r.first,
+            r.last + 1,
+            "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
+                "operator and keeps only what follows it." +
+                if (backend) " The options go in the lambda after the call." else "",
+            Severity.WARNING,
+            "one-value",
+            Docs.EXPRESSIONS,
+        )
     }
 
     /** The issues of [s], a literal Datastar runs as an expression: its Kotlin templates, and the expression itself. */
