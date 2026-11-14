@@ -1000,3 +1000,49 @@ describe("HTML values the analysis reads as Datastar", () => {
     assert.ok(long < short * 8, `400 attributes ${short.toFixed(0)} ms, 1600 ${long.toFixed(0)} ms`);
   });
 });
+
+describe("what the review of the highlighting fixes found", () => {
+  it("reads interpolate's format on a line of its own, as ktlint wraps it", async () => {
+    const lines = await tokenLines("source.kotlin", ["val p = interpolate(", '    "Hi <b data-text=\\"\\$a\\"></b>",', '    "x",', ")", "val y = 2"]);
+    assert.match(scopeOf(lines[1]!, "b"), /entity\.name\.tag\.html/);
+    assert.ok(lines[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)));
+    assert.ok(!lines[2]!.some((x) => x.scopes.some((s) => s.includes("html"))), "a value is no markup");
+    assert.ok(lines[4]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("html"))), "the next statement is code");
+  });
+
+  it("reads a marked literal joined to more as HTML", async () => {
+    const lines = await tokenLines("source.kotlin", [`@Language("HTML")`, `val m2 = "Hi <b data-text=\\"\\$a\\"></b>" + suffix`, "val y = 2"]);
+    assert.match(scopeOf(lines[1]!, "b"), /entity\.name\.tag\.html/);
+    assert.ok(lines[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)));
+    assert.ok(lines[2]!.every((x) => !x.scopes.some((s) => s.includes("html") || s.startsWith("string"))), "the marker reaches no further");
+  });
+
+  it("reads Razor's @@ as Datastar's @, an action", async () => {
+    const t = await kinds("text.html.cshtml", `<div data-on:click="@@post('/save')" data-show="@@peek(() => 1)">`);
+    assert.deepEqual(between(t, "@@", "post"), [["@@", "constant.character.escape.razor.transition " + S.backendAt], ["post", S.backend]]);
+    assert.deepEqual(between(t, "@@", "peek").slice(-2), [["@@", "constant.character.escape.razor.transition " + S.at], ["peek", S.action]]);
+  });
+
+  it("colours a key of any letters, keeps the assignment of a named argument, and the margin a string", async () => {
+    const html = await tokens("text.html.basic", `<div data-signals:år="1" data-on:my-évent="$a">`);
+    assert.match(scopeOf(html, "år"), /entity\.other\.attribute-name\.datastar\.key/);
+    assert.match(scopeOf(html, "my-évent"), /entity\.other\.attribute-name\.datastar\.key/);
+    for (const call of [`dataOn(event = "input", expression = "\\$q")`, `dataText(expression = "\\$q")`, `dataSignals(name = "n", expression = "1")`]) {
+      const t = (await tokenLines("source.kotlin", [DSL_IMPORT, `div { ${call} }`]))[1]!;
+      const assigns = t.filter((x) => x.text === "=");
+      assert.ok(assigns.length > 0 && assigns.every((x) => x.scopes.includes("keyword.operator.assignment.kotlin")), `${call}: ${JSON.stringify(assigns.map((x) => x.scopes))}`);
+    }
+    const margin = await tokenLines("source.kotlin", ['val h = """', '    |<div data-show="${\'$\'}open">', '    |</div>', '""".trimMargin()']);
+    for (const line of [margin[1]!, margin[2]!]) assert.match(scopeOf(line, "|"), /string\.quoted\.triple\.kotlin/);
+  });
+
+  it("leaves FreeMarker's directives and PHP's tags in an HTML file's value out, as the analysis does", async () => {
+    const t = await tokens("text.html.derivative", `<div data-text="<#if a>$a</#if> <?= $b ?> <@m/>" data-show="$c">`);
+    for (const name of ["#if", "?=", "@m"]) {
+      const tok = t.find((x) => x.text.includes(name))!;
+      assert.ok(tok.scopes.includes("meta.template.placeholder.streamlord"), `${name}: ${tok.scopes.join(" ")}`);
+    }
+    assert.ok(t.some((x) => x.text === "c" && x.scopes.includes(S.signal)));
+  });
+});
+
