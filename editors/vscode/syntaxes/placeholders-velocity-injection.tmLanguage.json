@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.placeholders.velocity.injection",
+  "comment": "Velocity's ${...}, its directives and its comments in a Datastar attribute's value are the engine's, written before the browser reads the value: they get the scopes the Velocity extension (sodatea.velocity) gives them, and no Datastar scope. A bare $name is left to Datastar, as the analysis leaves it: Velocity writes a name it does not know as it stands.",
+  "injectionSelector": "L:text.html.velocity meta.value.datastar -source.velocity.embedded -comment.block.velocity",
+  "patterns": [
+    {
+      "begin": "\\#\\*",
+      "end": "\\*\\#",
+      "name": "comment.block.velocity"
+    },
+    {
+      "begin": "(\\$!?\\{)",
+      "end": "(\\})",
+      "name": "source.velocity.embedded",
+      "beginCaptures": {
+        "1": {
+          "name": "variable.other.readwrite.velocity punctuation.definition.variable.begin.velocity"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "variable.other.readwrite.velocity punctuation.definition.variable.end.velocity"
+        }
+      },
+      "contentName": "variable.other.readwrite.velocity"
+    },
+    {
+      "include": "text.velocity#directives"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.placeholders.razor.injection",
+  "comment": "Razor reads every @ in a Datastar attribute's value before the browser does, as it reads one in any attribute: a comment, a code block, an explicit or implicit expression get the Razor grammar's own rules and no Datastar scope. Datastar's @post( is written @@post( in Razor, which Razor writes as @post(.",
+  "injectionSelector": "L:text.html.cshtml meta.value.datastar -meta.expression -meta.comment.razor -meta.structure.razor -source.cs",
+  "patterns": [
+    {
+      "include": "text.html.cshtml#razor-comment"
+    },
+    {
+      "include": "text.html.cshtml#razor-codeblock"
+    },
+    {
+      "include": "text.html.cshtml#escaped-transition"
+    },
+    {
+      "include": "text.html.cshtml#explicit-razor-expression"
+    },
+    {
+      "include": "text.html.cshtml#implicit-expression"
+    }
+  ]
+}

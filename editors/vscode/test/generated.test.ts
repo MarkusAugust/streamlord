@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { htmlElementInjectionGrammar } from "../scripts/htmlGrammar.mjs";
+import { htmlElementInjectionGrammar, htmlInjectionGrammar } from "../scripts/htmlGrammar.mjs";
 import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar, kotlinTemplateInjectionGrammar } from "../scripts/kotlinGrammar.mjs";
 
 /** What `npm run build` writes from the catalog for VS Code's own HTML service and its snippets. */
@@ -29,8 +29,8 @@ describe("generated files", () => {
     const catalog = JSON.parse(readFileSync(new URL("../../../catalog/datastar-1.0.5.json", import.meta.url), "utf8"));
     assert.equal(readFileSync(new URL("../syntaxes/kotlin-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(kotlinInjectionGrammar(catalog)));
     assert.equal(readFileSync(new URL("../syntaxes/kotlin-dsl-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(kotlinDslInjectionGrammar()));
-    const html = JSON.parse(readFileSync(new URL("../syntaxes/html-injection.tmLanguage.json", import.meta.url), "utf8"));
-    assert.equal(readFileSync(new URL("../syntaxes/html-element-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(htmlElementInjectionGrammar(html)));
+    assert.equal(readFileSync(new URL("../syntaxes/html-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(htmlInjectionGrammar(catalog)));
+    assert.equal(readFileSync(new URL("../syntaxes/html-element-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(htmlElementInjectionGrammar(htmlInjectionGrammar(catalog))));
     for (const n of [1, 2, 3] as const) {
       const file = `../syntaxes/kotlin-template${n === 1 ? "" : n}-injection.tmLanguage.json`;
       assert.equal(readFileSync(new URL(file, import.meta.url), "utf8"), grammarText(kotlinTemplateInjectionGrammar(n)), file);

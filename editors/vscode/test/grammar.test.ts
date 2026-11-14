@@ -35,6 +35,10 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.placeholders.jte.injection": read("syntaxes/placeholders-jte-injection.tmLanguage.json"),
   "streamlord.placeholders.handlebars.injection": read("syntaxes/placeholders-handlebars-injection.tmLanguage.json"),
   "streamlord.placeholders.mustache.injection": read("syntaxes/placeholders-mustache-injection.tmLanguage.json"),
+  "streamlord.placeholders.html.injection": read("syntaxes/placeholders-html-injection.tmLanguage.json"),
+  "streamlord.placeholders.freemarker.injection": read("syntaxes/placeholders-freemarker-injection.tmLanguage.json"),
+  "streamlord.placeholders.velocity.injection": read("syntaxes/placeholders-velocity-injection.tmLanguage.json"),
+  "streamlord.placeholders.razor.injection": read("syntaxes/placeholders-razor-injection.tmLanguage.json"),
   "streamlord.html.element.injection": read("syntaxes/html-element-injection.tmLanguage.json"),
   "streamlord.kotlin.template3.injection": read("syntaxes/kotlin-template3-injection.tmLanguage.json"),
   "text.html.derivative": { scopeName: "text.html.derivative", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
@@ -384,14 +388,15 @@ describe("html injection grammar", () => {
   it("knows exactly the catalog's attributes", () => {
     const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/html-injection.tmLanguage.json", root), "utf8"));
-    const names = (pattern: string) => /\(\?:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
+    const names = (pattern: string) => /\(\?i:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const of = (kinds: (k: string) => boolean) => [...new Set(catalog.attributes.filter((a) => kinds(a.valueKind)).map((a) => a.name))].sort();
     // A filter, {include: /x/}, is an object the client evaluates; a signal attribute names a signal.
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-value"].begin), of((k) => k === "expression" || k === "filter"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-unquoted-value"].match), of((k) => k === "expression" || k === "filter"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-signal-value"].begin), of((k) => k === "signal"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k === "text" || k === "none"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-bare"].match), of(() => true));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-expression"].begin), of((k) => k === "expression" || k === "filter"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-signal"].begin), of((k) => k === "signal"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-plain"].begin), of((k) => k === "text" || k === "none"));
+    // Every attribute is read by one of the three.
+    const all = ["expression", "signal", "plain"].flatMap((k) => names(grammar.repository[`datastar-attribute-${k}`].begin)).sort();
+    assert.deepEqual(all, of(() => true));
   });
 
   it("knows exactly the catalog's fetch options, and filterSignals' two keys", () => {
@@ -454,8 +459,10 @@ const S = {
   arrow: "storage.type.function.arrow.datastar",
   escape: "constant.character.escape.kotlin",
   dollarEscape: "constant.character.escape.dollar.kotlin",
-  stringStart: "punctuation.definition.string.begin.html",
-  stringEnd: "punctuation.definition.string.end.html",
+  stringStart: "string.quoted.double.html punctuation.definition.string.begin.html",
+  stringEnd: "string.quoted.double.html punctuation.definition.string.end.html",
+  singleStart: "string.quoted.single.html punctuation.definition.string.begin.html",
+  singleEnd: "string.quoted.single.html punctuation.definition.string.end.html",
   ktStart: "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin",
   ktEnd: "punctuation.definition.string.end.kotlin string.quoted.double.kotlin",
   ktRawStart: "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin",
@@ -629,9 +636,9 @@ describe("datastar colours, every token exactly", () => {
       ["data-", S.prefix],
       ["ref", S.plugin],
       ["=", "punctuation.separator.key-value.html"],
-      ["'", S.stringStart],
+      ["'", S.singleStart],
       ["box", S.signal],
-      ["'", S.stringEnd],
+      ["'", S.singleEnd],
       [">", "punctuation.definition.tag.end.html"],
     ]);
   });
@@ -815,7 +822,7 @@ describe("what is not Datastar's", () => {
 });
 
 describe("Kotlin strings the analysis reads as Datastar", () => {
-  const text = (t: { text: string }[]) => t.filter((x) => x.text.trim() !== "");
+  const text = <T extends { text: string }>(t: T[]) => t.filter((x) => x.text.trim() !== "");
   const kindsOf = (t: { text: string; scopes: string[] }[]): [string, string][] => text(t).map((x) => [x.text, own(x)]);
 
   it("counts the dollars of a raw string that opens on the next line", async () => {
@@ -916,7 +923,7 @@ describe("HTML values the analysis reads as Datastar", () => {
     assert.ok(kt[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)), "the next call's expression");
     assert.ok(kt[2]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the next line is code");
     const raw = await tokenLines("source.kotlin", ['val h = """<div data-text="`x" data-show="$a"></div>"""', "val y = 2"]);
-    assert.ok(raw[0]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)), "the next attribute in a raw string");
+    assert.ok(raw[0]!.some((x) => x.text === "show" && x.scopes.includes(S.plugin)), "the next attribute in a raw string");
     assert.ok(raw[1]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the line after a raw string");
   });
 
@@ -967,8 +974,10 @@ describe("HTML values the analysis reads as Datastar", () => {
       assert.ok(!t.some((x) => x.text.includes("color") && datastar(x)), `${scope}: another's data-*`);
       assert.ok(t.some((x) => x.text === "count" && x.scopes.includes(S.signal)), `${scope} ${placeholder}: ${JSON.stringify(t.map((x) => [x.text, own(x)]))}`);
       assert.ok(t.some((x) => x.text === "click" && x.scopes.includes(S.key)), scope);
-      const inside = t.filter((x) => x.scopes.some((s) => s.endsWith(`.${engine}`) || s.includes(`.${engine}.`)));
-      assert.ok(inside.length > 0 && inside.every((x) => !x.scopes.slice(x.scopes.findIndex((s) => s.includes(engine))).some((s) => s.includes("datastar"))), `${scope} ${placeholder}`);
+      // The engine's scopes, past the file's own: nothing of Datastar's inside them.
+      const at = (x: { scopes: string[] }) => x.scopes.findIndex((s, i) => i > 0 && (s.endsWith(`.${engine}`) || s.includes(`.${engine}.`)));
+      const inside = t.filter((x) => at(x) > 0);
+      assert.ok(inside.length > 0 && inside.every((x) => !x.scopes.slice(at(x)).some((s) => s.includes("datastar"))), `${scope} ${placeholder}`);
     }
     // Each engine's own: a FreeMarker directive is text to Twig, and Velocity's $name is a signal.
     const twig = await tokens("text.html.twig", `<div data-text="<#if a> + $b">`);
