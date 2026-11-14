@@ -14,6 +14,7 @@ import io.github.markusaugust.streamlord.core.domain.HoleLanding
 import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.holeLandings
+import io.github.markusaugust.streamlord.core.domain.refusedUrlScheme
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import java.io.File
@@ -1151,6 +1152,18 @@ public class Analyzer(
                     continue
                 }
             }
+            // After a scheme the markup writes that does more than navigate, interpolate refuses the URL whatever its values.
+            val scheme = if (kind == ArgKind.TRUSTED) null else runningScheme(reading, starts, base + k)
+            if (scheme != null && attribute != null) {
+                val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
+                val certain = !templated && !uncertain
+                val message =
+                    "interpolate throws here ${if (certain) "for every value" else "unless the text before it moves it"}: " +
+                        "the markup starts $attribute with $scheme:, which is not a scheme that only navigates. " +
+                        "Start the URL with /, # or https://."
+                issues += refused(message, certain)
+                continue
+            }
             if (landing.position in ESCAPED_POSITIONS) {
                 // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
                 if (landing.position == Position.TEXT && arg != null && kind != ArgKind.MARKUP && kind != ArgKind.TRUSTED &&
@@ -1389,6 +1402,33 @@ public class Analyzer(
         return HoleReading(landings) { j, to -> markup.substring(written.value[open.indexOf(j)].valueStart, starts[to]) }
     }
 
+    /**
+     * The scheme the markup writes before the value at [k] of a URL that does more than navigate,
+     * `javascript`, after which interpolate refuses every value; null where there is none. Only the
+     * literal before the URL's first value counts, as with a host it fixes.
+     */
+    private fun runningScheme(
+        reading: HoleReading,
+        starts: List<Int>,
+        k: Int,
+    ): String? {
+        val landing = reading.landings[k]
+        val attribute = landing.attribute ?: return null
+        if (landing.position != Position.URL) return null
+        var first = k
+        for ((j, l) in reading.landings.withIndex()) if (l.valueStart == landing.valueStart && starts[j] < starts[first]) first = j
+        return refusedUrlScheme(attribute, reading.prefix(k, first))
+    }
+
+    private fun runningSchemeMessage(
+        shown: String,
+        attribute: String,
+        scheme: String,
+    ): String =
+        "The markup starts $attribute with $scheme:, which is not a scheme that only navigates: the URL can run whatever " +
+            "$shown holds, and escaping does not help, nor would interpolate, which refuses every value there. " +
+            "Start the URL with /, # or https://."
+
     private fun codeUrlMessage(
         shown: String,
         attribute: String,
@@ -1570,8 +1610,11 @@ public class Analyzer(
                     (!told[k].isOther() && trustedValue(src, s.interpolations[k].text, s.start))
             }
         }
-        // It refuses every other value in a URL that loads code unless the literal fixes its host.
-        val loose by lazy(LazyThreadSafetyMode.NONE) { holes.map { k -> hostUnfixed(reading, starts, k) { true } } }
+        // It refuses every other value in a URL that loads code unless the literal fixes its host, and every value
+        // after a scheme the literal writes that does more than navigate.
+        val loose by lazy(LazyThreadSafetyMode.NONE) {
+            holes.map { k -> hostUnfixed(reading, starts, k) { true } || runningScheme(reading, starts, k) != null }
+        }
         val keeps by lazy(LazyThreadSafetyMode.NONE) {
             holes.map { k ->
                 trusted[k] || (!loose[k] && interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts))
@@ -1727,7 +1770,9 @@ public class Analyzer(
                     Position.URL -> {
                         val attribute = landing.attribute ?: "the URL"
                         val prefix = reading.prefix(k, k)
+                        val scheme = runningScheme(reading, starts, k)
                         when {
+                            scheme != null -> issue(runningSchemeMessage(shown, attribute, scheme) + rewriteNote())
                             landing.loadsCode && !urlHostFixedBy(attribute, prefix) -> issue(codeUrlMessage(shown, attribute))
                             urlSchemeFixedBy(attribute, decodeEntities(prefix).text) -> unescaped()
                             else -> schemeIssue(attribute)

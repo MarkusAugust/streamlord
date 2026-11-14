@@ -575,26 +575,35 @@ private fun HoleLanding.inSource(written: Written): HoleLanding =
 public fun urlSchemeFixedBy(
     attribute: String,
     prefix: String,
-): Boolean {
+): Boolean = settledScheme(attribute, prefix)?.let { it.isEmpty() || it in SAFE_SCHEMES } == true
+
+/**
+ * The scheme the start of a URL attribute's value already writes in full when it is one that does
+ * more than navigate, `javascript` of `javascript:`, lowercased: interpolate then refuses every
+ * value written after it. Null where the start settles no scheme or a safe one; read as
+ * [urlSchemeFixedBy] reads.
+ */
+@InternalStreamlordApi
+public fun refusedUrlScheme(
+    attribute: String,
+    prefix: String,
+): String? = settledScheme(attribute, prefix)?.takeIf { it.isNotEmpty() && it !in SAFE_SCHEMES }
+
+/** The scheme [prefix] writes in full, lowercased, empty where a `/`, `?` or `#` comes first; null where it settles none. */
+private fun settledScheme(
+    attribute: String,
+    prefix: String,
+): String? {
     val decoded = decodeEntities(prefix).text
     val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
     val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     for (c in read) {
         when (c) {
-            '/', '?', '#' -> {
-                return true
-            }
-
-            ':' -> {
-                return SCHEME
-                    .find(read)
-                    ?.groupValues
-                    ?.get(1)
-                    ?.asciiLowercase() in SAFE_SCHEMES
-            }
+            '/', '?', '#' -> return ""
+            ':' -> return SCHEME.find(read)?.groupValues?.get(1)?.asciiLowercase()
         }
     }
-    return false
+    return null
 }
 
 /**

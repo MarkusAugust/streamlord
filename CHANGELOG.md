@@ -327,6 +327,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - The rewrite to `interpolate` passes a value in the body of a `<style>` that is declared no
   String, a `List` or a class of yours, as `Trusted(v.toString())`, which compiles, where it wrote
   `Trusted(v)`; IntelliJ now offers it for such a value too.
+- A value after a scheme the markup writes that does more than navigate, `href="javascript:${v}"`
+  or `data:text/html,`, is said to be in a URL that runs whatever it holds, and the rewrite to
+  `interpolate`, which threw for every value there, is no longer offered for the string. In a call
+  to `interpolate` such a placeholder is an error, as `interpolate` throws for every value.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
