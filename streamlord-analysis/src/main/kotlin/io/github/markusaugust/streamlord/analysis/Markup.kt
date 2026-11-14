@@ -555,6 +555,34 @@ internal fun appliedTags(
     return out
 }
 
+/**
+ * A value of another library's: Knockout's or Vue's `name: value` binding, or words, as a share
+ * button's text.
+ */
+private val FOREIGN_VALUE =
+    regex(
+        """\s*(?:[A-Za-z_][\w-]*\s*:\s*\S.*|[A-Za-z\x{80}-\x{10FFFF}][\w'.,!?\x{80}-\x{10FFFF}-]*""" +
+            """(?:\s+[\w'.,!?\x{80}-\x{10FFFF}-]+)+)\s*""",
+    )
+
+/**
+ * The SVG attributes whose name has a capital, by that name in lower case without hyphens: the
+ * table the HTML parser adjusts SVG attributes by (https://html.spec.whatwg.org/#adjust-svg-attributes).
+ */
+private val SVG_NAMES: Map<String, String> =
+    """
+    attributeName attributeType baseFrequency baseProfile calcMode clipPathUnits diffuseConstant edgeMode
+    filterUnits glyphRef gradientTransform gradientUnits kernelMatrix kernelUnitLength keyPoints keySplines
+    keyTimes lengthAdjust limitingConeAngle markerHeight markerUnits markerWidth maskContentUnits maskUnits
+    numOctaves pathLength patternContentUnits patternTransform patternUnits pointsAtX pointsAtY pointsAtZ
+    preserveAlpha preserveAspectRatio primitiveUnits refX refY repeatCount repeatDur requiredExtensions
+    requiredFeatures specularConstant specularExponent spreadMethod startOffset stdDeviation stitchTiles
+    surfaceScale systemLanguage tableValues targetX targetY textLength viewBox viewTarget xChannelSelector
+    yChannelSelector zoomAndPan
+    """.split(' ', '\n')
+        .filter { it.isNotEmpty() }
+        .associateBy { it.asciiLowercase() }
+
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
 private val KOTLIN_TAG_NAME = regex("""(</?)__kt__""")
 
@@ -859,6 +887,21 @@ public class MarkupValidator(
                             value.lastNonSpaceBefore(r.start).let { it == null || it in EXPRESSION_STARTS }
                     )
             }
+    }
+
+    /**
+     * What to do where [value] of the attribute [name] fails as Datastar's and reads nothing of it,
+     * as Knockout's `data-bind="text: name"` and a share button's `data-text="Check this out"` do:
+     * keep Datastar off the element. Empty where the value reads a signal or calls an action.
+     */
+    private fun foreignNote(
+        name: String,
+        prefix: String,
+        value: String,
+    ): String {
+        if (FOREIGN_VALUE.matchEntire(value) == null || clientRewrite(value).rewrites.isNotEmpty()) return ""
+        val alias = if (prefix == CatalogNames.PREFIX) ", or an aliased bundle," else ""
+        return " If ${name.asciiLowercase()} is another library's here, ${prefix}ignore on the element$alias keeps Datastar off it."
     }
 
     /**
@@ -1218,12 +1261,19 @@ public class MarkupValidator(
                     } else {
                         null
                     }
+                val foreign = foreignNote(attr.name, prefix, decoded.text)
                 for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec, event = event)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(
                             start = start,
                             end = end,
+                            message =
+                                if (issue.code == "expression-syntax" && foreign.isNotEmpty()) {
+                                    issue.message.removeSuffix(".") + "." + foreign
+                                } else {
+                                    issue.message
+                                },
                             fixes = issue.fixes.map { source(it.start, it.end).let { (s, e) -> it.copy(start = s, end = e) } },
                         )
                 }
@@ -1241,7 +1291,7 @@ public class MarkupValidator(
                     Issue(
                         attr.valueStart,
                         attr.valueEnd,
-                        "$prefix${spec.name} takes a signal name, not an expression.",
+                        "$prefix${spec.name} takes a signal name, not an expression." + foreignNote(attr.name, prefix, value),
                         Severity.WARNING,
                         "signal-name-expected",
                     )
@@ -1250,9 +1300,31 @@ public class MarkupValidator(
                 issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
             }
         }
+        issues += filterWithoutListener(tag, prefix)
         issues += indicatorWithoutAction(tag, prefix, tagSource)
         issues += indicatorAfterInit(tag, prefix, tagSource, movable)
         return issues
+    }
+
+    /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */
+    private fun filterWithoutListener(
+        tag: Tag,
+        prefix: String,
+    ): List<Issue> {
+        val filter = tag.attributes.firstOrNull { it.name.asciiLowercase() == "${prefix}on-signal-patch-filter" } ?: return emptyList()
+        if (tag.attributes.any { catalog.parseAttributeName(it.name.asciiLowercase(), prefix)?.spec?.name == "on-signal-patch" }) {
+            return emptyList()
+        }
+        return listOf(
+            Issue(
+                filter.nameStart,
+                filter.nameEnd,
+                "${prefix}on-signal-patch-filter does nothing without ${prefix}on-signal-patch on the same element, which reads it.",
+                Severity.WARNING,
+                "wrong-element",
+                Docs.attribute("on-signal-patch-filter"),
+            ),
+        )
     }
 
     /**
@@ -1680,11 +1752,41 @@ public class MarkupValidator(
         val colon = attr.name.indexOf(':')
         if (colon < 0 || spec.keyCase == null) return emptyList()
         val key = attr.name.substring(colon + 1).substringBefore("__")
+        val keyStart = attr.nameStart + colon + 1
+        val name = prefix + spec.name
+
+        /** [attr] as the object form, which keeps [as] as written; null where its value holds both quotes. */
+        fun objectForm(`as`: String): Fix? {
+            val value = attr.value ?: return null
+            val quote =
+                when {
+                    '"' !in value -> '"'
+                    '\'' !in value -> '\''
+                    else -> return null
+                }
+            val end = attr.valueEnd + if (attr.quoted) 1 else 0
+            return Fix("Use the object form", attr.nameStart, end, "$name=$quote{$`as`: $value}$quote")
+        }
+        // data-attr:view-box sets view-box: attr.ts sets the key as the browser hands it over, and SVG reads viewBox.
+        val oneCase = spec.keyIsAttributeName && !spec.pro && !HAS_CAPITAL.containsMatchIn(key)
+        val svg = if (oneCase) SVG_NAMES[key.replace("-", "")] else null
+        if (svg != null) {
+            return listOf(
+                Issue(
+                    start = keyStart,
+                    end = keyStart + key.length,
+                    message =
+                        "This sets $key, but SVG reads $svg, a name with a capital, which the object form keeps: $name=\"{$svg: ...}\".",
+                    severity = Severity.WARNING,
+                    code = "key-case",
+                    link = Docs.attribute(spec),
+                    fixes = listOfNotNull(objectForm(svg)),
+                ),
+            )
+        }
         if (!HAS_CAPITAL.containsMatchIn(key)) return emptyList()
         // HTML written in capitals (DATA-ON:CLICK) is not camelCase: lowercased, the key is what the author meant.
         if (key.length > 1 && !HAS_LOWERCASE.containsMatchIn(key)) return emptyList()
-        val keyStart = attr.nameStart + colon + 1
-        val name = prefix + spec.name
         val existing = parsed.modifiers.firstOrNull { it.name == "case" }
         // data-on:keyDown works: the browser hands Datastar keydown, the event that fires.
         val dom = if (keyKind(spec) == KeyKind.EVENT && existing == null) catalog.lowercaseDomEvent(key) else null
@@ -1744,19 +1846,9 @@ public class MarkupValidator(
         if (keyKind(spec) == KeyKind.RAW) {
             // A kebab-case key would set view-box, not viewBox: for an attribute the object form keeps the
             // name, for a style property no form does, since the object form writes it kebab-case.
-            val value = attr.value
-            val quote =
-                if (value == null || '"' !in value) {
-                    '"'
-                } else if ('\'' !in value) {
-                    '\''
-                } else {
-                    null
-                }
             val fixes =
-                if (spec.name == "attr" && value != null && quote != null) {
-                    val end = attr.valueEnd + if (attr.quoted) 1 else 0
-                    listOf(Fix("Use the object form", attr.nameStart, end, "$name=$quote{$key: $value}$quote"))
+                if (spec.name == "attr" && attr.value != null) {
+                    listOfNotNull(objectForm(key))
                 } else if (spec.name == "style" && !key.startsWith("--")) {
                     listOf(Fix("Change to ${ClientCasing.kebab(key)}", keyStart, keyStart + key.length, ClientCasing.kebab(key)))
                 } else {
