@@ -38,6 +38,37 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.html.element.injection": read("syntaxes/html-element-injection.tmLanguage.json"),
   "streamlord.kotlin.template3.injection": read("syntaxes/kotlin-template3-injection.tmLanguage.json"),
   "text.html.derivative": { scopeName: "text.html.derivative", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
+  // Stand-ins for the template languages whose grammars other extensions bring, each with the rules of its own the injections name.
+  "text.html.ftl": {
+    scopeName: "text.html.ftl",
+    patterns: [{ include: "text.html.basic" }],
+    repository: {
+      interpolation: { begin: "(\\$|#)\\{", end: "\\}", name: "meta.interpolation.freemarker" },
+      directive: { begin: "</?(#)([A-Za-z_][A-Za-z0-9_-]*)", end: ">", name: "meta.directive.freemarker" },
+    },
+  } as unknown as textmate.IRawGrammar,
+  "text.html.velocity": { scopeName: "text.html.velocity", patterns: [{ include: "text.html.basic" }, { include: "text.velocity" }] } as unknown as textmate.IRawGrammar,
+  "text.velocity": {
+    scopeName: "text.velocity",
+    patterns: [{ include: "#directives" }],
+    repository: { directives: { begin: "((#)\\b(?:if|elseif|foreach)\\b)\\s*(\\()", end: "(\\))", name: "source.velocity.embedded" } },
+  } as unknown as textmate.IRawGrammar,
+  "text.html.cshtml": {
+    scopeName: "text.html.cshtml",
+    patterns: [{ include: "text.html.basic" }],
+    repository: { "explicit-razor-expression": { begin: "(@)\\(", end: "\\)", name: "meta.expression.explicit.cshtml" } },
+  } as unknown as textmate.IRawGrammar,
+  // Twig's and PHP's grammars bring their tags as injections of their own, which reach into any region of the file.
+  "text.html.twig": {
+    scopeName: "text.html.twig",
+    patterns: [{ include: "text.html.basic" }],
+    injections: { "L:text.html.twig -comment": { patterns: [{ begin: "\\{\\{", end: "\\}\\}", name: "meta.tag.template.value.twig" }] } },
+  } as unknown as textmate.IRawGrammar,
+  "text.html.php": {
+    scopeName: "text.html.php",
+    patterns: [{ include: "text.html.basic" }],
+    injections: { "L:text.html.php meta.tag": { patterns: [{ begin: "<\\?(?:php|=)", end: "\\?>", name: "meta.embedded.line.php" }] } },
+  } as unknown as textmate.IRawGrammar,
 };
 
 /** The extension's grammars, injected where its package.json says, as VS Code injects them. */
@@ -868,5 +899,95 @@ describe("Kotlin strings the analysis reads as Datastar", () => {
       ["b", "string.template.datastar " + S.signal],
       ["}", "string.template.datastar punctuation.definition.template-expression.end.datastar"],
     ]);
+  });
+});
+
+describe("HTML values the analysis reads as Datastar", () => {
+  const datastar = (t: { scopes: string[] }) => t.scopes.some((s) => s.includes("datastar"));
+
+  it("keeps an unclosed string, template, comment or regex to its own value", async () => {
+    for (const value of [`"'Hello"`, '"`tpl"', '"$a /* note"', '"@post([[@{/save}]])"', '"`a ${$b"', "'`tpl'", `'"x'`, "'$a /* n'", "'/a'"]) {
+      const lines = await tokenLines("text.html.basic", [`<div data-text=${value} id="x"></div>`, `<p class="after">one</p>`]);
+      assert.match(scopeOf(lines[0]!, "id"), /entity\.other\.attribute-name\.html/, value);
+      assert.match(scopeOf(lines[1]!, "class"), /entity\.other\.attribute-name\.html/, value);
+      assert.ok(lines[1]!.every((x) => !datastar(x)), value);
+    }
+    const kt = await tokenLines("source.kotlin", [DSL_IMPORT, `div { dataText("'Hello"); dataShow("\\$a /* x") }`, "val y = 2"]);
+    assert.ok(kt[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)), "the next call's expression");
+    assert.ok(kt[2]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the next line is code");
+    const raw = await tokenLines("source.kotlin", ['val h = """<div data-text="`x" data-show="$a"></div>"""', "val y = 2"]);
+    assert.ok(raw[0]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)), "the next attribute in a raw string");
+    assert.ok(raw[1]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the line after a raw string");
+  });
+
+  it("gives a value's quotes the string scope HTML gives them", async () => {
+    const t = await tokens("text.html.basic", `<div data-text="$a" data-show='$b' data-bind="c" data-ref='d' data-nonce="e">`);
+    const quotes = t.filter((x) => x.text === '"' || x.text === "'");
+    assert.equal(quotes.length, 10);
+    for (const q of quotes) assert.ok(q.scopes.includes(q.text === '"' ? "string.quoted.double.html" : "string.quoted.single.html"), q.scopes.join(" "));
+  });
+
+  it("reads a quoted object key as a key, and an optional chain's property as a property", async () => {
+    const t = await kinds("text.html.basic", `<div data-class="{'text-red-500': $err}" data-signals='{"a-b": 1}' data-text="evt?.target.value">`);
+    assert.deepEqual(between(t, "'text-red-500'", ":"), [["'text-red-500'", S.objectKey], [":", "punctuation.separator.key-value.datastar"]]);
+    assert.deepEqual(between(t, '"a-b"', ":"), [['"a-b"', S.objectKey], [":", "punctuation.separator.key-value.datastar"]]);
+    assert.deepEqual(between(t, "evt", "value"), [["evt", "variable.language.scope.datastar"], ["?.", "punctuation.accessor.optional.datastar"], ["target", S.property], [".", S.accessor], ["value", S.property]]);
+    const kt = await kinds("source.kotlin", `val h = "<div data-signals='{\\"count\\": 0}'></div>"`, false);
+    assert.deepEqual(between(kt, '\\"count\\"', ":"), [['\\"count\\"', S.objectKey], [":", "punctuation.separator.key-value.datastar"]]);
+  });
+
+  it("leaves a template engine's placeholder in an HTML file to the engine, and Thymeleaf's own attributes alone", async () => {
+    const t = await tokens("text.html.derivative", `<div data-text="{{ user.name }} + $count" data-show="{% if a %}$x{% endif %}" data-on:click="@post('/x/{{id}}')">`);
+    for (const name of ["user", "if", "id"]) {
+      const tok = t.find((x) => x.text.includes(name))!;
+      const at = tok.scopes.findIndex((s) => s.includes("placeholder"));
+      assert.ok(at >= 0 && !tok.scopes.slice(at).some((s) => s.includes("datastar")), `${name}: ${tok.scopes.join(" ")}`);
+    }
+    assert.ok(t.some((x) => x.text === "count" && x.scopes.includes(S.signal)));
+    assert.ok(t.some((x) => x.text === "x" && x.scopes.includes(S.signal)));
+    const th = await tokens("text.html.derivative", `<div th:attr="data-signals=\${signals}" data-text="$y">`);
+    assert.ok(!th.some((x) => x.text.includes("signals") && datastar(x)), JSON.stringify(th.map((x) => [x.text, own(x)])));
+    assert.ok(th.some((x) => x.text === "y" && x.scopes.includes(S.signal)));
+    // A ${ in a JavaScript template is JavaScript's own.
+    const js = await tokens("text.html.derivative", "<div data-text=\"`Hi ${$name}`\">");
+    assert.ok(js.some((x) => x.text === "name" && x.scopes.includes(S.signal)));
+  });
+
+  it("colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor, each engine's placeholders left to it", async () => {
+    for (const [scope, placeholder, engine] of [
+      ["text.html.ftl", "${user.id}", "freemarker"],
+      ["text.html.ftl", "<#if a>", "freemarker"],
+      ["text.html.velocity", "${user.id}", "velocity"],
+      ["text.html.velocity", "#if($a)", "velocity"],
+      ["text.html.twig", "{{ user.id }}", "twig"],
+      ["text.html.php", "<?= $user ?>", "php"],
+      ["text.html.cshtml", "@(Model.Id)", "cshtml"],
+    ] as const) {
+      const t = await tokens(scope, `<div data-color="x" data-text="${placeholder} + $count" data-on:click="$a++">`);
+      assert.ok(!t.some((x) => x.text.includes("color") && datastar(x)), `${scope}: another's data-*`);
+      assert.ok(t.some((x) => x.text === "count" && x.scopes.includes(S.signal)), `${scope} ${placeholder}: ${JSON.stringify(t.map((x) => [x.text, own(x)]))}`);
+      assert.ok(t.some((x) => x.text === "click" && x.scopes.includes(S.key)), scope);
+      const inside = t.filter((x) => x.scopes.some((s) => s.endsWith(`.${engine}`) || s.includes(`.${engine}.`)));
+      assert.ok(inside.length > 0 && inside.every((x) => !x.scopes.slice(x.scopes.findIndex((s) => s.includes(engine))).some((s) => s.includes("datastar"))), `${scope} ${placeholder}`);
+    }
+    // Each engine's own: a FreeMarker directive is text to Twig, and Velocity's $name is a signal.
+    const twig = await tokens("text.html.twig", `<div data-text="<#if a> + $b">`);
+    assert.ok(!twig.some((x) => x.scopes.some((s) => s.includes("freemarker"))));
+    const vm = await tokens("text.html.velocity", `<div data-text="$b + 1">`);
+    assert.ok(vm.some((x) => x.text === "b" && x.scopes.includes(S.signal)));
+  });
+
+  it("reads a line of many attributes in time that grows with its length", async () => {
+    const line = (n: number) => "<div " + Array.from({ length: n }, (_, i) => `data-on:click${i}__debounce.5ms="$c${i}++; @post('/x/${i}', {a: ${i}})"`).join(" ") + ">";
+    const time = async (n: number) => {
+      const started = performance.now();
+      await tokens("text.html.basic", line(n));
+      return performance.now() - started;
+    };
+    await time(200);
+    const short = Math.max(await time(400), 1);
+    const long = await time(1600);
+    // Four times the attributes; a cost that grows with the square would take sixteen times as long.
+    assert.ok(long < short * 8, `400 attributes ${short.toFixed(0)} ms, 1600 ${long.toFixed(0)} ms`);
   });
 });
