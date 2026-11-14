@@ -155,6 +155,17 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(ValueFact.TRUSTED, facts["\${vs.first()}"])
     }
 
+    fun `test the html of a Trusted is markup, as the text of an Html is`() {
+        val facts =
+            facts(
+                "import io.github.markusaugust.streamlord.core.domain.Trusted\n" +
+                    "class Page(val html: String)\n" +
+                    "fun f(t: Trusted, p: Page) = \"<ul>\${t.html}\${p.html}</ul>\"",
+            )
+        assertEquals(ValueFact.MARKUP, facts["\${t.html}"])
+        assertEquals(ValueFact.STRING, facts["\${p.html}"])
+    }
+
     fun `test a margin is passed over only where trimMargin is called on the literal`() {
         val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
         assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])

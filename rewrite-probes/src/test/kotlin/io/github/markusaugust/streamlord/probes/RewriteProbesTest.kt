@@ -39,6 +39,7 @@ class RewriteProbesTest {
             "User" -> User("Ann", listOf("a", "b"), Trusted("<b>y</b>"))
             "WidgetContext" -> WidgetContext("root", "content", "events")
             "List<String>" -> listOf("a", "b")
+            "List<Html>" -> listOf(interpolate("<li>%s</li>", "a"), interpolate("<li>%s</li>", "b"))
             "Array<String>" -> arrayOf("a", "b")
             else -> error("No value for a parameter of type $type")
         }

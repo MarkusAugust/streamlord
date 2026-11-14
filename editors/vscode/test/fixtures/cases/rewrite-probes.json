@@ -92,6 +92,10 @@
     {"name":"a scheme that runs is read whatever its case","params":"v: String","body":"\"<a href=\\\"JavaScript:${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with javascript:"],"marks":["${v}"]},
     {"name":"a scheme that runs is read through a character reference","params":"v: String","body":"\"<a href=\\\"java&#115;cript:${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with javascript:"],"marks":["${v}"]},
     {"name":"a data URL in the markup is one interpolate refuses whatever follows","params":"v: String","body":"\"<a href=\\\"data:text/html,${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with data:"],"marks":["${v}"]},
-    {"name":"another value of a string whose markup starts a URL that runs gets no rewrite, and is told why","params":"v: String, w: String","body":"\"<a href=\\\"javascript:${v}\\\">${w}</a>\"","rewrite":"none","says":["cannot take this string while ${v} stands in href"],"marks":["${v}","${w}"]}
+    {"name":"another value of a string whose markup starts a URL that runs gets no rewrite, and is told why","params":"v: String, w: String","body":"\"<a href=\\\"javascript:${v}\\\">${w}</a>\"","rewrite":"none","says":["cannot take this string while ${v} stands in href"],"marks":["${v}","${w}"]},
+    {"name":"the html of a Trusted is markup the author vouched for, written as it is in element text","params":"t: Trusted","body":"\"<ul>${t.html}</ul>\"","rewrite":"none","marks":[]},
+    {"name":"the text of an Html is markup interpolate built, written as it is in element text","params":"h: Html","body":"\"<ul>${h.text}</ul>\"","rewrite":"none","marks":[]},
+    {"name":"a List of Html in element text is markup the rewrite would escape","params":"rows: List<Html>","body":"\"<ul>${rows}</ul>\"","rewrite":"none","marks":[]},
+    {"name":"a List of Html in element text keeps the rewrite from another value, which says why","params":"rows: List<Html>, a: String","body":"\"<ul>${rows}</ul><p title=\\\"$a\\\">x</p>\"","rewrite":"none","says":["it would escape ${rows}"],"marks":["$a"]}
   ]
 }
