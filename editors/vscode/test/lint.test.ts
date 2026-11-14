@@ -27,4 +27,12 @@ describe("what the analysis finds in the open documents", () => {
     lint.issues("file:///deep.kt", tooDeep, true, "data-", [], null, null);
     assert.equal(lines.length, 2);
   });
+
+  // jte, kte, FreeMarker and Velocity write ${...} before the browser reads the value, inside a JavaScript template too.
+  it("leaves an engine's dollar braces in a JavaScript template to the engine", () => {
+    const lint = new Lint(() => {});
+    const page = `<div data-text="\`Hi \${user.name!'x'}\`"></div>`;
+    assert.deepEqual(lint.issues("file:///page.ftl", page, false, "data-", [], null, null), []);
+    assert.equal(lint.issues("file:///page.html", page, false, "data-", [], null, null).length, 1, "JavaScript's own in an HTML file");
+  });
 });
