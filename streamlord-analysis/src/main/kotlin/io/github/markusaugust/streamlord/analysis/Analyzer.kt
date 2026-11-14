@@ -1756,13 +1756,15 @@ public class Analyzer(
                                 )
                         ) &&
                         !mayBeNull(src, ip.text, s.start) && !visiblyList(src, ip.text, s.start)
-                // A Trusted that opens a `+` chain would be joined to nothing, since Kotlin has no plus for it: no such fix there.
+                // A Trusted or an Html that opens a `+` chain would be joined to nothing, since Kotlin has no plus for
+                // either: no such fix there, nor such advice.
+                val opens = ip.start == s.start
                 val fixes =
                     rewritten(!trust) +
-                        if (trust && canTrust && ip.start != s.start && !ip.unread) listOf(trustedFix(src, ip, shown)) else emptyList()
+                        if (trust && canTrust && !opens && !ip.unread) listOf(trustedFix(src, ip, shown)) else emptyList()
                 // Without core, plain Kotlin and kotlinx.html stand in for interpolate and Trusted, and a call or a
                 // value of unknown type may be markup the author composed; a known String stays a warning.
-                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust, opts.modules.coreHtml)
+                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust && !opens, opts.modules.coreHtml)
                 val level = if (!core && trust && fact == null) Severity.HINT else severity
                 return issue(message + rewriteNote(), level, "unescaped-interpolation", fixes)
             }

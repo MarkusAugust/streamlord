@@ -368,6 +368,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - "Quote the value" on a value without quotes is put first only for a number or a boolean, which
   the quotes are all it needs; for any other value it is a step, and the message says that the
   quoted value is still to be escaped.
+- A value that opens a `+` chain, `w + "<p>...</p>"`, is no longer told to be declared `Html` or
+  wrapped in `Trusted(...)`, which have no plus to join the rest with: markup you built there is fine.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
