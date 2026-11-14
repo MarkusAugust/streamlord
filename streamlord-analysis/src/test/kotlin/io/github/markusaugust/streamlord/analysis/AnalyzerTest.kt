@@ -145,6 +145,17 @@ class AnalyzerTest {
             message(analyzer.analyzeKotlin(Source(kotlin, SourceLanguage.KOTLIN, prefixSetting = "streamlord.attributePrefix"))),
         )
     }
+
+    /** The reference describes data-nonce on its security page, not among the attributes, where no anchor has it. */
+    @Test
+    fun `an issue on data-nonce links to the security page of the reference`() {
+        val links =
+            analyzer.analyzeHtml("<html data-nonce=\"\"></html><div data-nonce=\"x\"></div>").map { it.link } +
+                analyzer.analyzeKotlin("fun FlowContent.v() = html { dataNonce(\"\") }").map { it.link }
+        assertEquals(listOf(securityCsp, securityCsp, securityCsp), links)
+    }
+
+    private val securityCsp = "https://data-star.dev/reference/security#content-security-policy"
 }
 
 class TokensTest {

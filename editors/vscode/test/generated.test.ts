@@ -12,6 +12,9 @@ describe("generated files", () => {
     const names = data.globalAttributes.map((a: { name: string }) => a.name);
     assert.ok(names.includes("data-on") && names.includes("data-persist"));
     assert.ok(data.globalAttributes.every((a: { description: { value: string }; references: unknown[] }) => a.description.value.length > 10 && a.references.length === 1));
+    // The reference has data-nonce on its security page, and no anchor for it among the attributes.
+    const nonce = data.globalAttributes.find((a: { name: string }) => a.name === "data-nonce");
+    assert.equal(nonce.references[0].url, "https://data-star.dev/reference/security#content-security-policy");
     const snippets = JSON.parse(readFileSync(new URL("../snippets/html.json", import.meta.url), "utf8"));
     assert.equal(snippets["data-on"].body, 'data-on:${1:click}="${2:expression}"');
     // A value Datastar takes as text, not as an expression.
