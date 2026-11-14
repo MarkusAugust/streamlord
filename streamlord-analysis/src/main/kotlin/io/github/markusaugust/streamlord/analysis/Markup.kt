@@ -1869,58 +1869,39 @@ public class MarkupValidator(
             val end = attr.valueEnd + if (attr.quoted) 1 else 0
             return Fix("Use the object form", attr.nameStart, end, "$name=$quote{$`as`: $value}$quote")
         }
+
+        // The key-case issue on the key, with its fix.
+        fun onKey(
+            message: String,
+            fix: Fix?,
+            severity: Severity = Severity.WARNING,
+        ) = listOf(Issue(keyStart, keyStart + key.length, message, severity, "key-case", Docs.attribute(spec), listOfNotNull(fix)))
+
+        fun changeTo(written: String) = Fix("Change to $written", keyStart, keyStart + key.length, written)
+
         // data-attr:view-box sets view-box: attr.ts sets the key as the browser hands it over, and SVG reads viewBox.
         val oneCase = spec.keyIsAttributeName && !spec.pro && !HAS_CAPITAL.containsMatchIn(key) && isSvgElement(tagName)
         val svg = if (oneCase) SVG_NAMES[key.replace("-", "")] else null
         if (svg != null) {
-            return listOf(
-                Issue(
-                    start = keyStart,
-                    end = keyStart + key.length,
-                    message =
-                        "This sets $key, but SVG reads $svg, a name with a capital, which the object form keeps: $name=\"{$svg: ...}\".",
-                    severity = Severity.WARNING,
-                    code = "key-case",
-                    link = Docs.attribute(spec),
-                    fixes = listOfNotNull(objectForm(svg)),
-                ),
-            )
+            val message = "This sets $key, but SVG reads $svg, a name with a capital, which the object form keeps: $name=\"{$svg: ...}\"."
+            return onKey(message, objectForm(svg))
         }
+        val existing = parsed.modifiers.firstOrNull { it.name == "case" }
+        val event = keyKind(spec) == KeyKind.EVENT && existing == null
         // data-on:webkitanimationend: the browser dispatches webkitAnimationEnd, which this never hears.
-        val recased = parsed.modifiers.any { it.name == "case" }
-        val mixed = if (keyKind(spec) == KeyKind.EVENT && !recased) catalog.mixedCaseDomEvent(key) else null
+        val mixed = if (event) catalog.mixedCaseDomEvent(key) else null
         val wire = mixed?.let { wireKey(it, spec.keyCase, null) }
         if (wire != null) {
-            return listOf(
-                Issue(
-                    start = keyStart,
-                    end = keyStart + key.length,
-                    message = "This listens for $key, which no browser fires: the event is $mixed. Write $name:$wire.",
-                    severity = Severity.WARNING,
-                    code = "key-case",
-                    link = Docs.attribute(spec),
-                    fixes = listOf(Fix("Change to $wire", keyStart, keyStart + key.length, wire)),
-                ),
-            )
+            return onKey("This listens for $key, which no browser fires: the event is $mixed. Write $name:$wire.", changeTo(wire))
         }
         if (!HAS_CAPITAL.containsMatchIn(key)) return emptyList()
         // HTML written in capitals (DATA-ON:CLICK) is not camelCase: lowercased, the key is what the author meant.
         if (key.length > 1 && !HAS_LOWERCASE.containsMatchIn(key)) return emptyList()
-        val existing = parsed.modifiers.firstOrNull { it.name == "case" }
         // data-on:keyDown works: the browser hands Datastar keydown, the event that fires.
-        val dom = if (keyKind(spec) == KeyKind.EVENT && existing == null) catalog.lowercaseDomEvent(key) else null
+        val dom = if (event) catalog.lowercaseDomEvent(key) else null
         if (dom != null) {
-            return listOf(
-                Issue(
-                    start = keyStart,
-                    end = keyStart + key.length,
-                    message = "The browser lowercases attribute names, so this listens for $dom, the DOM event. Write $name:$dom.",
-                    severity = Severity.HINT,
-                    code = "key-case",
-                    link = Docs.attribute(spec),
-                    fixes = listOf(Fix("Change to $dom", keyStart, keyStart + key.length, dom)),
-                ),
-            )
+            val message = "The browser lowercases attribute names, so this listens for $dom, the DOM event. Write $name:$dom."
+            return onKey(message, changeTo(dom), Severity.HINT)
         }
         // With an explicit __case already there, only the key itself changes, when that case gives the name back.
         val fixed =
