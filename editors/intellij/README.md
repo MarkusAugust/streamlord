@@ -121,7 +121,7 @@ colour, and the attribute value is coloured as a Datastar expression. The plugin
 of its own: each token takes the colour your theme gives a standard one. A signal has that of a
 static field, a property or an object's key that of an instance field, an action such as `@get`
 and a modifier that of a keyword, a global such as `Math` and a modifier's argument that of a
-constant, and the parts of the attribute's name that of metadata, as an annotation has. Every one
+constant, and the parts of the attribute's name that of an HTML attribute's name. Every one
 of IntelliJ's own schemes, classic Default, Darcula and the New UI's Light, Dark and Islands Dark,
 colours each of them; a name, a call and an operator stay as plain as they are in JavaScript.
 Settings | Editor | Color Scheme | Streamlord lets you give any of them a colour of your own.

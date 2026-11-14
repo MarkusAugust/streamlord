@@ -26,9 +26,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `Modules.FROM_IMPORTS` for a host that never sees one, which reads a Kotlin file's imports.
   `streamlordCallNames(core, htmlDsl)` is gone, and `htmlStringAt(text, offset, core)` is
   `htmlStringAt(source, offset)`; whether a file may call the DSL is `readsDsl(source)`.
-- `Source.fileName` names the file, whose extension says whether its template engine writes
-  `${...}` inside a JavaScript template too (`enginesWriteDollarBraces`); `templatePlaceholders`
-  takes that as its second argument.
+- `Source.engine` names the template engine whose rules are its own, `TemplateEngine.JTE`,
+  `FREEMARKER`, `VELOCITY` or `RAZOR`, which each editor sets from its own file type or language
+  id; `templatePlaceholders` takes it as its second argument. The constructs every engine shares
+  are one list, `catalog/template-syntax.json`, which the analysis compiles in and the VS Code
+  grammar for an HTML file is written from.
 - `signalReferencesInKotlin` and `signalReferencesInHtml` are `signalReferences(source)`.
   `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and `collectSignalFacts` take a
   `Source`, read its attributes under `Source.prefix` as `signalReferences` does, and leave out the
@@ -323,10 +325,13 @@ All notable changes to Streamlord are recorded here. The format follows
   its keys and values coloured, as in VS Code, where it was one string.
 - `${...}` in a value of a jte, kte, FreeMarker or Velocity file is the engine's inside a JavaScript
   template too: IntelliJ no longer colours it as Datastar, and neither editor reports
-  `${user.name!'x'}` there as an expression error.
-- IntelliJ: an action such as `@post` has a colour again in the classic Default scheme, and a global
-  such as `Math` and the parts of an attribute's name have one in Darcula and the New UI's Dark:
-  each key falls back to a standard key every bundled scheme colours.
+  `${user.name!'x'}` there as an expression error, while the rest of the value is still checked.
+- FreeMarker's `<#if>` and `<@macro>` and PHP's `<?= ?>` in a value are the engine's, and no
+  expression error. In Razor every `@` is Razor's, and `@@post(...)` is read and coloured as the
+  `@post(...)` it writes.
+- IntelliJ: an action such as `@post` has a colour again in the classic Default scheme, a global such
+  as `Math` has one in Darcula and the New UI's Dark, and the parts of an attribute's name have the
+  colour of an HTML attribute's name in every bundled scheme, as in VS Code.
 - A quoted object key, `{'text-red-500': $err}` as `data-class` writes one, is coloured as a key
   and its colon as the key's, in both editors.
 - `${'$'}{${'$'}b}` in a JavaScript template in a Kotlin raw string is the template's `${` and the

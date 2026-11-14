@@ -143,8 +143,8 @@ IDE closes it for you.
 of your Kotlin or your HTML, which belong to your theme. In both editors the Datastar tokens take
 their colours from your theme too, through the standard scopes and keys it already colours. In
 IntelliJ a signal is coloured as a static field, an action such as `@get` and a modifier as a
-keyword, a global such as `Math` as a constant, and the parts of an attribute's name as metadata,
-as an annotation is. Every one of IntelliJ's own schemes colours each of them, classic Default,
+keyword, a global such as `Math` as a constant, and the parts of an attribute's name as an HTML
+attribute's name. Every one of IntelliJ's own schemes colours each of them, classic Default,
 Darcula and the New UI's Light and Dark alike; a name, a call and an operator stay as plain as in
 JavaScript. Settings | Editor | Color Scheme | Streamlord gives any of them a colour of your own.
 
@@ -157,8 +157,20 @@ The JVM template languages are covered: JTE, kte, FreeMarker, Velocity, Mustache
 Thymeleaf is plain HTML and needs nothing special. In VS Code, Twig, PHP and Razor files get the
 same colours, where their extension or VS Code's own grammar reads them. Each engine's own syntax
 in a value, `${...}` in FreeMarker or `{{ }}` in Twig, keeps the engine's colours and is left out
-of the checks; in JTE, kte, FreeMarker and Velocity that holds inside a JavaScript template too,
-since the engine writes it before the browser reads the page.
+of the checks, while the rest of the value is still checked; in JTE, kte, FreeMarker and Velocity
+that holds inside a JavaScript template too, since the engine writes it before the browser reads
+the page. Each editor knows the engine from the file's own language, so a file associated with
+FreeMarker by a setting, or not yet saved, gets FreeMarker's rules too.
+
+Razor reads every `@` before the browser does: `@Model.Name`, `@(...)` and `@{...}` are C#, and so
+is `@post('/save')`, which Razor tries to run as a method named `post`. Write Datastar's actions
+with two: `@@post('/save')`, which Razor writes as the `@post('/save')` the browser reads. VS Code
+colours the first `@` as Razor's escape and the rest as Datastar's action, and the checks read it
+as that action.
+
+```html
+<button data-on:click="@@post('/cart/@Model.Id')">Add</button>
+```
 
 ## The Stream Inspector's two files
 
