@@ -285,7 +285,7 @@ export function kotlinInjectionGrammar(catalog) {
     "expression-call-named": {
       comment:
         "dataOn(expression = \"...\", event = \"click\"): the expression passed by name after another argument, which the rules above do not read. Only the string after expression = is one.",
-      begin: RECV + r`\b((?:` + second + r`))(\s*\()(?=[^\n]*\bexpression\s*=)`,
+      begin: RECV + r`\b((?:` + second + r`))(\s*\()(?=[^()\n]*\bexpression\s*=)`,
       beginCaptures: { 2: FN },
       end: r`\)`,
       patterns: [{ include: "#kotlin-brackets" }, ...expressionString(r`\bexpression\s*(=)\s*`), { include: "source.kotlin" }],

@@ -990,7 +990,7 @@
     },
     "expression-call-named": {
       "comment": "dataOn(expression = \"...\", event = \"click\"): the expression passed by name after another argument, which the rules above do not read. Only the string after expression = is one.",
-      "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\()(?=[^\\n]*\\bexpression\\s*=)",
+      "begin": "(?:(\\??\\.)\\s*)?\\b((?:dataComputed|dataAnimate|dataSignals|dataClass|dataStyle|dataAttr|setExpr|dataOn|intl))(\\s*\\()(?=[^()\\n]*\\bexpression\\s*=)",
       "beginCaptures": {
         "2": {
           "name": "entity.name.function.kotlin"
