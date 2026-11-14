@@ -88,7 +88,12 @@ class AnalyzerTest {
                 val file = case.string("file")
                 val text = fixtureText("editors/vscode/test/fixtures/$file")
                 // The engine that writes into the file, as each editor names it from the file's type.
-                val engine = mapOf("jte" to TemplateEngine.JTE, "ftl" to TemplateEngine.FREEMARKER, "vm" to TemplateEngine.VELOCITY)[file?.substringAfterLast('.')]
+                val engine =
+                    mapOf(
+                        "jte" to TemplateEngine.JTE,
+                        "ftl" to TemplateEngine.FREEMARKER,
+                        "vm" to TemplateEngine.VELOCITY,
+                    )[file?.substringAfterLast('.')]
                 mapOf("codes" to analyzer.analyzeHtml(Source(text, SourceLanguage.HTML, engine = engine)).map { it.code })
             }
 

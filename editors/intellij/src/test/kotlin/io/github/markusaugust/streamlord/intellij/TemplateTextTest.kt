@@ -69,7 +69,14 @@ class TemplateTextTest : BasePlatformTestCase() {
             text: String,
         ): List<String> {
             myFixture.configureByText(name, text)
-            return myFixture.doHighlighting().mapNotNull { it.description }.filter { !it.startsWith("Typo") }.map { it.substringBefore(" See ") }
+            return myFixture
+                .doHighlighting()
+                .mapNotNull { it.description }
+                .filter {
+                    !it.startsWith(
+                        "Typo",
+                    )
+                }.map { it.substringBefore(" See ") }
         }
         assertEquals(emptyList<String>(), codes("page.ftl", "<div data-text=\"<#if a>\$a<#else>\$b</#if>\"></div>"))
         assertEquals(emptyList<String>(), codes("page.ftl", "<div data-text=\"`Hi \${user.name!'x'}`\"></div>"))

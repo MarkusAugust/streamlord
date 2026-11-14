@@ -93,21 +93,39 @@ private val RAZOR_CODE = regex("""(?<!@)@(?!@)(?=[\p{L}_({*])""")
 
 /** Razor's constructs in [value]: each `@` of [RAZOR_CODE] to the end of its name and what it calls, or its brackets. */
 internal fun razorConstructs(value: String): List<IntRange> =
-    RAZOR_CODE.findAll(value).map { m ->
-        val s = m.range.first
-        val end =
-            when (value.getOrNull(s + 1)) {
-                '(' -> balanced(value, s + 1, '(', ')')
-                '{' -> balanced(value, s + 1, '{', '}')
-                '*' -> value.indexOf("*@", s + 2).let { if (it < 0) value.length else it + 2 }
-                else -> {
-                    var j = s + 1
-                    while (j < value.length && (value[j].isLetterOrDigit() || value[j] == '_' || (value[j] == '.' && value.getOrNull(j + 1)?.isLetter() == true))) j++
-                    if (value.getOrNull(j) == '(') balanced(value, j, '(', ')') else j
+    RAZOR_CODE
+        .findAll(value)
+        .map { m ->
+            val s = m.range.first
+            val end =
+                when (value.getOrNull(s + 1)) {
+                    '(' -> {
+                        balanced(value, s + 1, '(', ')')
+                    }
+
+                    '{' -> {
+                        balanced(value, s + 1, '{', '}')
+                    }
+
+                    '*' -> {
+                        value.indexOf("*@", s + 2).let { if (it < 0) value.length else it + 2 }
+                    }
+
+                    else -> {
+                        var j = s + 1
+                        while (j < value.length &&
+                            (
+                                value[j].isLetterOrDigit() || value[j] == '_' ||
+                                    (value[j] == '.' && value.getOrNull(j + 1)?.isLetter() == true)
+                            )
+                        ) {
+                            j++
+                        }
+                        if (value.getOrNull(j) == '(') balanced(value, j, '(', ')') else j
+                    }
                 }
-            }
-        s until end
-    }.toList()
+            s until end
+        }.toList()
 
 /**
  * The value as the checks judge it in a file of [engine], or null where an engine's syntax leaves it
