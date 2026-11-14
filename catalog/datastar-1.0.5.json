@@ -322,6 +322,7 @@
       "kotlin": ["dataNonce"],
       "modifiers": [],
       "onlyOn": ["html"],
+      "reference": "https://data-star.dev/reference/security#content-security-policy",
       "doc": "On the html element: enables CSP mode with this nonce."
     },
     {

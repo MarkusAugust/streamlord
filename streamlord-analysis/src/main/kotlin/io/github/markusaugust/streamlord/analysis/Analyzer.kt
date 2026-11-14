@@ -435,7 +435,7 @@ public class Analyzer(
                 message = problem.removeSuffix(".") + ". ${site.name} refuses it as the page renders.",
                 severity = Severity.ERROR,
                 code = if (empty) "missing-nonce" else "invalid-nonce",
-                link = Docs.attribute("nonce"),
+                link = Docs.attribute(catalog.attributesByName.getValue("nonce")),
             ),
         )
     }
@@ -2217,7 +2217,7 @@ public class Analyzer(
                     message = "${site.name}(\"$name\") listens for $name, which no browser fires: the DOM event is $dom.",
                     severity = Severity.WARNING,
                     code = "key-case-wire",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                     fixes = listOf(Fix("Change to $dom", key.contentStart, key.contentEnd, dom)),
                 ),
             )
@@ -2235,7 +2235,7 @@ public class Analyzer(
                             "Write it in one case.",
                     severity = Severity.HINT,
                     code = "key-case-wire",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                 ),
             )
         }
@@ -2251,7 +2251,7 @@ public class Analyzer(
                         rawKeyNote(spec, CatalogNames.PREFIX, name),
                 severity = Severity.HINT,
                 code = "key-case-wire",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
             ),
         )
     }
@@ -2365,7 +2365,7 @@ public class Analyzer(
             message = "Streamlord refuses \"$name\" at runtime: it $reason.",
             severity = Severity.ERROR,
             code = "key-refused",
-            link = Docs.attribute(spec.name),
+            link = Docs.attribute(spec),
         )
 
     /**

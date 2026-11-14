@@ -159,4 +159,7 @@ internal object Docs {
 
     /** The anchor of one attribute in the reference. */
     public fun attribute(name: String): String = "$ATTRIBUTES#" + if (name.startsWith("data-")) name else "data-$name"
+
+    /** Where the reference describes [spec]: its own page where the catalog names one, its anchor among the attributes otherwise. */
+    public fun attribute(spec: AttributeSpec): String = spec.reference ?: attribute(spec.name)
 }

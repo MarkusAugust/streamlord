@@ -68,6 +68,8 @@ public data class AttributeSpec(
     val argNames: List<String> = emptyList(),
     /** Whether the key is an HTML attribute's name, which the DSL takes as HTML has it: `data-attr`, `data-animate`. */
     val keyIsAttributeName: Boolean = false,
+    /** The page of the reference that describes the attribute, where it is not under its name among the attributes. */
+    val reference: String? = null,
 )
 
 /**
@@ -237,6 +239,7 @@ public class Catalog private constructor(
                     keys = a.array("keys")?.strings() ?: emptyList(),
                     argNames = a.array("argNames")?.strings() ?: emptyList(),
                     keyIsAttributeName = a.boolean("keyIsAttributeName") ?: false,
+                    reference = a.string("reference"),
                 )
             }
         actions =

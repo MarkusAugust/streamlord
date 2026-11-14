@@ -52,7 +52,7 @@ const customData = {
   globalAttributes: catalog.attributes.map((a) => ({
     name: "data-" + a.name,
     description: { kind: "markdown", value: docFor(a) },
-    references: [{ name: "Datastar reference", url: `https://data-star.dev/reference/attributes#data-${a.name}` }],
+    references: [{ name: "Datastar reference", url: a.reference ?? `https://data-star.dev/reference/attributes#data-${a.name}` }],
   })),
 };
 writeFileSync(join(root, "html-customdata.json"), JSON.stringify(customData, null, 2) + "\n");

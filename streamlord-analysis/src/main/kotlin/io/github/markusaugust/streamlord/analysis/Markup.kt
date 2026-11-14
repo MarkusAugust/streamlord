@@ -908,7 +908,10 @@ public class MarkupValidator(
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
             val lower = attr.name.asciiLowercase()
-            if (prefix == CatalogNames.PREFIX && lower.startsWith(CatalogNames.ALIASED_PREFIX)) {
+            // data-star-rating is another library's: only a name the aliased bundle reads is an aliased Datastar attribute.
+            if (prefix == CatalogNames.PREFIX && lower.startsWith(CatalogNames.ALIASED_PREFIX) &&
+                catalog.parseAttributeName(lower, CatalogNames.ALIASED_PREFIX)?.spec != null
+            ) {
                 issues +=
                     Issue(
                         attr.nameStart,
@@ -953,7 +956,7 @@ public class MarkupValidator(
                         message = "$message Did you mean $prefix${meant.name}?",
                         severity = if (sure) Severity.WARNING else Severity.HINT,
                         code = "unknown-attribute",
-                        link = Docs.attribute(meant.name),
+                        link = Docs.attribute(meant),
                         fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
                     )
                 }
@@ -1000,7 +1003,7 @@ public class MarkupValidator(
                 }
                 continue
             }
-            val link = Docs.attribute(spec.name)
+            val link = Docs.attribute(spec)
             if (parsed.key == "" && !templated) {
                 // data-indicator: the client splits the key off at a colon with something after it, so it
                 // looks up an attribute named indicator:, finds none and leaves the element alone.
@@ -1090,6 +1093,7 @@ public class MarkupValidator(
                         "$prefix${spec.name} only works on <${spec.onlyOn.joinToString(">, <")}>.",
                         Severity.WARNING,
                         "wrong-element",
+                        link,
                     )
             }
             // The client reads the nonce off <html> as it loads and throws for an empty one (csp.ts:9-16);
@@ -1392,7 +1396,7 @@ public class MarkupValidator(
                         "A modifier follows two underscores: $prefix${spec.name}:$fixed.",
                 severity = Severity.ERROR,
                 code = "unknown-modifier",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
         )
@@ -1415,7 +1419,7 @@ public class MarkupValidator(
         if (keyKind(spec) != KeyKind.SIGNAL) return emptyList()
         val out = ArrayList<Issue>()
         val name = prefix + spec.name
-        val link = Docs.attribute(spec.name)
+        val link = Docs.attribute(spec)
         val colon = attr.name.indexOf(':')
         // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
         if (!parsed.key.isNullOrEmpty() && colon >= 0 && !cut) {
@@ -1609,7 +1613,7 @@ public class MarkupValidator(
         val decoded = decodeEntities(value)
         val text = decoded.text
         val name = prefix + spec.name
-        val link = Docs.attribute(spec.name)
+        val link = Docs.attribute(spec)
 
         fun source(
             from: Int,
@@ -1692,7 +1696,7 @@ public class MarkupValidator(
                     message = "The browser lowercases attribute names, so this listens for $dom, the DOM event. Write $name:$dom.",
                     severity = Severity.HINT,
                     code = "key-case",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                     fixes = listOf(Fix("Change to $dom", keyStart, keyStart + key.length, dom)),
                 ),
             )
@@ -1724,7 +1728,7 @@ public class MarkupValidator(
                             "$noKey Write it in one case.",
                     severity = Severity.WARNING,
                     code = "key-case",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                 ),
             )
         }
@@ -1769,7 +1773,7 @@ public class MarkupValidator(
                     )}",
                     severity = Severity.WARNING,
                     code = "key-case",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                     fixes = fixes,
                 ),
             )
@@ -1783,7 +1787,7 @@ public class MarkupValidator(
                         "Write $name:$fixed$keep: keys are kebab-case$camelNote.",
                 severity = Severity.WARNING,
                 code = "key-case",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
         )
