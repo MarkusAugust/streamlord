@@ -707,6 +707,12 @@ private class Asked(
                 val modifier = spec.modifiers.firstOrNull { it.name == m.name && it.listed } ?: break
                 return Hover(range.first + m.offset - 2, range.first + m.offset + m.text.length, modifierDoc(modifier, prefix + spec.name))
             }
+            // An event Datastar dispatches, as data-on's key, has documentation of its own.
+            val keyStart = range.first + prefix.length + spec.name.length + 1
+            val event = catalog.datastarEvents.firstOrNull { spec.name == "on" && it.name == parsed.key }
+            if (event != null && offset in keyStart..keyStart + event.name.length) {
+                return Hover(keyStart, keyStart + event.name.length, "**${event.name}**\n\n${event.doc}")
+            }
             return Hover(range, attributeDoc(spec, prefix, withKotlin))
         }
         // The DSL's functions are documented where the file can call them, and a name in a string is none.
