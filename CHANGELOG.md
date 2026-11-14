@@ -26,6 +26,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `Modules.FROM_IMPORTS` for a host that never sees one, which reads a Kotlin file's imports.
   `streamlordCallNames(core, htmlDsl)` is gone, and `htmlStringAt(text, offset, core)` is
   `htmlStringAt(source, offset)`; whether a file may call the DSL is `readsDsl(source)`.
+- `Source.fileName` names the file, whose extension says whether its template engine writes
+  `${...}` inside a JavaScript template too (`enginesWriteDollarBraces`); `templatePlaceholders`
+  takes that as its second argument.
 - `signalReferencesInKotlin` and `signalReferencesInHtml` are `signalReferences(source)`.
   `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and `collectSignalFacts` take a
   `Source`, read its attributes under `Source.prefix` as `signalReferences` does, and leave out the
