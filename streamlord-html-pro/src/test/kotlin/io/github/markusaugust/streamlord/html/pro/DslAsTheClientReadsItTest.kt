@@ -1414,7 +1414,7 @@ class DslAsTheClientReadsItTest {
             ) {
                 button {
                     dataSignals("a" to 1, "b" to 2)
-                    dataOnClick(post("/x") { filterSignals = SignalFilter(expression = "{include: '^b$'}") })
+                    dataOnClick(post("/x") { filterSignals = SignalFilter(filterExpr = "{include: '^b$'}") })
                 }
             },
             dslCase("set all and toggle all with filters the page computes", "setAll", probe = mapOf("rounds" to 1), expect = {
@@ -1426,7 +1426,7 @@ class DslAsTheClientReadsItTest {
                 button {
                     dataSignals("a1" to 1, "a2" to 2, "b" to 3, "t" to false, "u" to false)
                     dataOnClick(
-                        setAll(0, SignalFilter(includeExpr = "'^a'")) + "; " + toggleAll(SignalFilter(expression = "{include: /^t$/}")),
+                        setAll(0, SignalFilter(includeExpr = "'^a'")) + "; " + toggleAll(SignalFilter(filterExpr = "{include: /^t$/}")),
                     )
                 }
             },
