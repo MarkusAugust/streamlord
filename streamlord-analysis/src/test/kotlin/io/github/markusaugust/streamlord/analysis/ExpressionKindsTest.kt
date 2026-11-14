@@ -206,7 +206,7 @@ class ExpressionKindsTest {
     fun `an engine that writes dollar braces owns them inside a JavaScript template`() {
         val value = "`Hi \${user.name!'x'}` + \$a"
         assertEquals(emptyList(), templatePlaceholders(value))
-        assertEquals(listOf(4 until 21), templatePlaceholders(value, enginesWriteDollarBraces("page.ftl")))
+        assertEquals(listOf(4 until 20), templatePlaceholders(value, enginesWriteDollarBraces("page.ftl")))
         assertEquals(
             listOf("`Hi " to TokenKind.STRING, "`" to TokenKind.STRING, "+" to TokenKind.OPERATOR, "\$a" to TokenKind.SIGNAL),
             tokens(value, templatePlaceholders(value, true)),

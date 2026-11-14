@@ -183,8 +183,14 @@ public fun tokenizeExpression(
     opaque: List<IntRange> = emptyList(),
 ): List<Token> {
     if (opaque.isEmpty()) return ExpressionScanner(text).all()
+    // Each range reads as one value, a digit amid spaces, so that a name next to it stays whole and a slash after it divides.
     val masked = CharArray(text.length) { text[it] }
-    for (r in opaque) for (k in maxOf(0, r.first)..minOf(text.length - 1, r.last)) masked[k] = '_'
+    for (r in opaque) {
+        val first = maxOf(0, r.first)
+        val last = minOf(text.length - 1, r.last)
+        for (k in first..last) masked[k] = ' '
+        if (first <= last) masked[(first + last + 1) / 2] = '0'
+    }
     val out = ArrayList<Token>()
     for (t in ExpressionScanner(masked.concatToString()).all()) {
         val inside = opaque.filter { t.start <= it.last && it.first < t.end }.sortedBy { it.first }
@@ -268,15 +274,17 @@ private class ExpressionScanner(
                     last = 'a'
                 }
 
-                c == '\'' || c == '"' -> {
-                    var j = i + 1
-                    while (j < text.length && text[j] != c) {
-                        if (text[j] == '\\') j++
+                c == '\'' || c == '"' || (c == '\\' && next == '"') -> {
+                    // A string in escaped quotes, as a plain Kotlin string writes JSON, ends at the next escaped quote.
+                    val escaped = c == '\\'
+                    var j = i + if (escaped) 2 else 1
+                    while (j < text.length && !(if (escaped) text.startsWith("\\\"", j) else text[j] == c)) {
+                        if (text[j] == '\\' && !escaped) j++
                         j++
                     }
-                    j = minOf(j + 1, text.length)
-                    out += Token(i, j, TokenKind.STRING)
-                    if (last == '{' || last == ',') markKeyColon(j)
+                    j = minOf(j + if (escaped) 2 else 1, text.length)
+                    val key = (last == '{' || last == ',') && markKeyColon(j)
+                    out += Token(i, j, if (key) TokenKind.OBJECT_KEY else TokenKind.STRING)
                     last = 'a'
                     i = j
                 }
@@ -345,12 +353,14 @@ private class ExpressionScanner(
                     j += 2
                 }
 
-                text.startsWith("\${", j) -> {
+                text.startsWith("\${", j) && !text.startsWith(KOTLIN_DOLLAR, j) || text.startsWith(KOTLIN_DOLLAR + "{", j) -> {
+                    // A Kotlin string writes the template's dollar as ${'$'}.
+                    val open = if (text.startsWith(KOTLIN_DOLLAR, j)) KOTLIN_DOLLAR.length + 1 else 2
                     if (j > from) out += Token(from, j, TokenKind.STRING)
-                    out += Token(j, j + 2, TokenKind.TEMPLATE_PUNCTUATION)
+                    out += Token(j, j + open, TokenKind.TEMPLATE_PUNCTUATION)
                     val outer = last
                     last = null
-                    val close = run(j + 2, inTemplate = true)
+                    val close = run(j + open, inTemplate = true)
                     last = outer
                     if (close >= text.length) return text.length
                     out += Token(close, close + 1, TokenKind.TEMPLATE_PUNCTUATION)
@@ -446,11 +456,13 @@ private class ExpressionScanner(
         return j
     }
 
-    /** Note the colon after a key that ends at [from], if one follows it. */
-    private fun markKeyColon(from: Int) {
+    /** Note the colon after a key that ends at [from], if one follows it; whether one does. */
+    private fun markKeyColon(from: Int): Boolean {
         var k = from
         while (k < text.length && text[k].isWhitespace()) k++
-        if (text.getOrNull(k) == ':' && text.getOrNull(k + 1) != ':') keyColon = k
+        if (text.getOrNull(k) != ':' || text.getOrNull(k + 1) == ':') return false
+        keyColon = k
+        return true
     }
 
     /** The first character from [from] that is not white space. */
@@ -505,12 +517,22 @@ public fun tokenizeSignalName(text: String): List<Token> {
     return out
 }
 
+/** The files whose engine writes `${...}` before the browser reads the page, inside a JavaScript template too: jte, kte, FreeMarker and Velocity. */
+private val DOLLAR_BRACE_ENGINES = setOf("jte", "kte", "ftl", "ftlh", "ftlx", "vm", "vtl", "fhtml")
+
+/** Whether the engine of the file named [fileName] writes `${...}` itself, wherever it stands in a value. */
+public fun enginesWriteDollarBraces(fileName: String): Boolean = fileName.substringAfterLast('.').lowercase() in DOLLAR_BRACE_ENGINES
+
 /**
  * Where a template engine writes into a value before the browser reads it: `${...}`, `{{...}}`,
  * `{% %}`, `<% %>`, a directive with its condition, and Streamlord's own `__kt__`. A `${` inside a
- * JavaScript template literal is JavaScript's own and is none.
+ * JavaScript template literal is JavaScript's own and is none, unless [engineDollars] says the
+ * file's engine writes it first (see [enginesWriteDollarBraces]).
  */
-public fun templatePlaceholders(value: String): List<IntRange> {
+public fun templatePlaceholders(
+    value: String,
+    engineDollars: Boolean = false,
+): List<IntRange> {
     val quotes = QuoteScan(value)
     val out = ArrayList<IntRange>()
     for (m in TEMPLATE_SYNTAX.findAll(value)) {
@@ -518,7 +540,7 @@ public fun templatePlaceholders(value: String): List<IntRange> {
         while (s < m.range.last && (value[s].isWhitespace() || value[s] == '>')) s++
         if (value[s] == '!' && value.getOrNull(s - 1) == '$') s--
         if (out.lastOrNull()?.let { s <= it.last } == true) continue
-        if (value.startsWith("\${", s) && quotes.at(s) == '`') continue
+        if (!engineDollars && value.startsWith("\${", s) && quotes.at(s) == '`') continue
         out += s until placeholderEnd(value, s)
     }
     return out

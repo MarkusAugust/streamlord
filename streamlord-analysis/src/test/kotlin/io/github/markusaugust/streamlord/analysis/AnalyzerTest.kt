@@ -170,7 +170,7 @@ class TokensTest {
                 "@post" to TokenKind.ACTION_BACKEND,
                 "'/x'" to TokenKind.STRING,
                 "headers" to TokenKind.OPTION_KEY,
-                "'X-A'" to TokenKind.STRING,
+                "'X-A'" to TokenKind.OBJECT_KEY,
                 "\$token" to TokenKind.SIGNAL,
                 "el" to TokenKind.SCOPE_VARIABLE,
                 "value" to TokenKind.PROPERTY,
