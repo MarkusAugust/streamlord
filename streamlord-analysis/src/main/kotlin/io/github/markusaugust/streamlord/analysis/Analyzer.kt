@@ -1689,13 +1689,12 @@ public class Analyzer(
         // The rewrite is made once for the string, and only where an issue offers it.
         val rewrite by lazy(LazyThreadSafetyMode.NONE) { interpolateFix(src, s, trim?.text.orEmpty(), vouched, kept) }
         var offered = false
+        // Whether a value that starts a URL asks for it, which the title then names: interpolate refuses one that runs.
+        var urlAsked = false
 
-        fun rewriteAs(
-            title: String = rewrite.title,
-            preferred: Boolean = false,
-        ): Fix {
+        fun rewriteAs(preferred: Boolean = false): Fix {
             offered = true
-            return rewrite.copy(title = title, preferred = preferred && same)
+            return rewrite.copy(preferred = preferred && same)
         }
         val issues = ArrayList<Issue>()
         val attributeValues = ExpressionValues(view)
@@ -1711,10 +1710,7 @@ public class Analyzer(
             val severity = if (fact.knownCharacters()) Severity.WARNING else Severity.HINT
 
             // The rewrite escapes nothing of a Trusted, so the issue of one does not offer it.
-            fun rewritten(
-                title: String,
-                preferred: Boolean = true,
-            ): List<Fix> = if (fixable && !trusted[k]) listOf(rewriteAs(title, preferred)) else emptyList()
+            fun rewritten(preferred: Boolean = true): List<Fix> = if (fixable && !trusted[k]) listOf(rewriteAs(preferred)) else emptyList()
 
             // What the rewrite does with another value, or why none is offered: the first value in the way.
             fun rewriteNote(): String {
@@ -1762,7 +1758,7 @@ public class Analyzer(
                         !mayBeNull(src, ip.text, s.start) && !visiblyList(src, ip.text, s.start)
                 // A Trusted that opens a `+` chain would be joined to nothing, since Kotlin has no plus for it: no such fix there.
                 val fixes =
-                    rewritten(ESCAPES_TITLE, !trust) +
+                    rewritten(!trust) +
                         if (trust && canTrust && ip.start != s.start && !ip.unread) listOf(trustedFix(src, ip, shown)) else emptyList()
                 // Without core, plain Kotlin and kotlinx.html stand in for interpolate and Trusted, and a call or a
                 // value of unknown type may be markup the author composed; a known String stays a warning.
@@ -1772,7 +1768,8 @@ public class Analyzer(
             }
 
             fun schemeIssue(attribute: String): Issue {
-                val fixes = rewritten(REFUSES_URL_TITLE)
+                val fixes = rewritten()
+                urlAsked = urlAsked || fixes.isNotEmpty()
                 return issue(
                     "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
                         "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
@@ -1890,7 +1887,14 @@ public class Analyzer(
                 } ?: continue
         }
         // The context action is for a string some issue of which offers the rewrite: one with a value to escape.
-        return Judged(issues, if (offered) rewrite else null)
+        if (!offered) return Judged(issues)
+        // One title for the one edit, wherever it is offered.
+        val title = if (vouched.isEmpty() && urlAsked) REFUSES_URL_TITLE else rewrite.title
+        val titled =
+            issues.map { i ->
+                if (i.fixes.none { it.sharesTextWith(rewrite) }) i else i.copy(fixes = i.fixes.map { if (it.sharesTextWith(rewrite)) it.copy(title = title) else it })
+            }
+        return Judged(titled, rewrite.copy(title = title))
     }
 
     /** The `<style>` or `<script>` whose body the value at [at] of the markup lands in, as the markup scan reads it, or null. */

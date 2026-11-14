@@ -361,6 +361,10 @@ All notable changes to Streamlord are recorded here. The format follows
   `style="width: ${n * 2}px"` or `${n + 1}`, as a number, and `${Tab.HOME.name}` as the author's
   own, as IntelliJ does: none of them is warned of where it is safe, nor keeps the rewrite from the
   other values.
+- The rewrite to `interpolate` has one title wherever it is offered, on each value's warning and as
+  a context action: "...with ${css} as Trusted(...)" where it vouches for a value in a `<style>`,
+  "...which refuses a URL that runs" where a value starts a URL, where one value's fix and the
+  context action named the same edit differently.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
