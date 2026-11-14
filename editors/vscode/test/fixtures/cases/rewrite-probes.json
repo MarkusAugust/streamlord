@@ -87,6 +87,11 @@
     {"name":"a value in Pro's media query, which Pro may run, gets no rewrite, since interpolate refuses it there","params":"v: String","body":"\"<p data-match-media:dark=\\\"${v}\\\"></p>\"","rewrite":"none","says":["data-match-media"],"marks":["data-match-media:dark","${v}"]},
     {"name":"a List in a style is passed to Trusted as the text a template wrote of it","params":"v: List<String>","body":"\"<style>${v}</style>\"","rewrite":"offered","marks":["${v}"]},
     {"name":"a value of a type of the author's in a style is passed to Trusted as the text a template wrote of it","params":"v: Widget","body":"\"<style>${v}</style>\"","rewrite":"offered","marks":["${v}"]},
-    {"name":"orEmpty of a String? in a style is a String, passed to Trusted as it is","params":"v: String?","body":"\"<style>${v.orEmpty()}</style>\"","rewrite":"offered","marks":["${v.orEmpty()}"]}
+    {"name":"orEmpty of a String? in a style is a String, passed to Trusted as it is","params":"v: String?","body":"\"<style>${v.orEmpty()}</style>\"","rewrite":"offered","marks":["${v.orEmpty()}"]},
+    {"name":"a value after javascript: in the markup is in a URL that runs whatever it is: no rewrite, which would throw","params":"v: String","body":"\"<a href=\\\"javascript:${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with javascript:"],"marks":["${v}"]},
+    {"name":"a scheme that runs is read whatever its case","params":"v: String","body":"\"<a href=\\\"JavaScript:${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with javascript:"],"marks":["${v}"]},
+    {"name":"a scheme that runs is read through a character reference","params":"v: String","body":"\"<a href=\\\"java&#115;cript:${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with javascript:"],"marks":["${v}"]},
+    {"name":"a data URL in the markup is one interpolate refuses whatever follows","params":"v: String","body":"\"<a href=\\\"data:text/html,${v}\\\">x</a>\"","rewrite":"none","says":["The markup starts href with data:"],"marks":["${v}"]},
+    {"name":"another value of a string whose markup starts a URL that runs gets no rewrite, and is told why","params":"v: String, w: String","body":"\"<a href=\\\"javascript:${v}\\\">${w}</a>\"","rewrite":"none","says":["cannot take this string while ${v} stands in href"],"marks":["${v}","${w}"]}
   ]
 }
