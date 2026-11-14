@@ -187,6 +187,8 @@ private val ANNOTATION_BEFORE = regex("""@[\p{L}_][\p{L}\p{Nd}_.:]*\s*\z""")
 private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
+private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
+
 private val ATTRIBUTES_KEY = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]""")
 private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
@@ -351,6 +353,7 @@ public class Analyzer(
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             val issues = checkNonceSite(site)
@@ -421,6 +424,68 @@ public class Analyzer(
 
     /** The DSL helpers that write `data-nonce`: `dataNonce`. */
     private val nonceCalls: Set<String> = catalog.attributesByName["nonce"]?.kotlin?.toSet() ?: emptySet()
+
+    /** The DSL helper of a backend action, `get("/x")`, which a `dataInit` handed it sends at once. */
+    private val backendHelper by lazy(LazyThreadSafetyMode.NONE) {
+        regex("""\s*(?:""" + catalog.actions.filter { it.kind == "backend" }.joinToString("|") { Regex.escape(it.kotlin) } + """)\s*\(""")
+    }
+
+    /**
+     * `dataIndicator` called after a `dataInit` that sends at once, in the same element's block:
+     * the DSL writes the attributes in the order of the calls, and the indicator then comes too
+     * late, as the indicator-order check says of HTML. A dataInit with a lambda of modifiers may
+     * wait, and is left alone.
+     */
+    private fun indicatorOrderIssues(
+        src: String,
+        lex: KotlinLex,
+        foreign: (name: String, nameStart: Int) -> Boolean,
+    ): List<SiteIssues> {
+        val sites = findCallSites(src, INDICATOR_ORDER_CALLS, lex).filter { !foreign(it.name, it.nameStart) }
+        if (sites.none { it.name == "dataInit" } || sites.none { it.name == "dataIndicator" }) return emptyList()
+
+        // The `{` of the innermost block around [at], or -1.
+        fun blockOf(at: Int): Int {
+            var depth = 0
+            for (i in at - 1 downTo 0) {
+                if (!lex.mask[i]) continue
+                when (src[i]) {
+                    '}' -> depth++
+                    '{' -> if (depth == 0) return i else depth--
+                }
+            }
+            return -1
+        }
+
+        fun sendsAtOnce(init: CallSite): Boolean {
+            if (init.trailingLambda) return false
+            val arg = init.positional.firstOrNull() ?: init.named("expression") ?: return false
+            val s = arg.string
+            if (s != null) return !s.unterminated && s.interpolations.isEmpty() && markup.sendsAtOnce(s.text)
+            return backendHelper.matchAt(arg.text, 0) != null
+        }
+        val sending = sites.filter { it.name == "dataInit" && sendsAtOnce(it) }.map { blockOf(it.nameStart) to it.nameStart }
+        return sites
+            .filter { it.name == "dataIndicator" }
+            .filter { ind -> blockOf(ind.nameStart).let { b -> b >= 0 && sending.any { it.first == b && it.second < ind.nameStart } } }
+            .map { ind ->
+                SiteIssues(
+                    ind,
+                    null,
+                    listOf(
+                        Issue(
+                            ind.nameStart,
+                            ind.nameStart + ind.name.length,
+                            "dataIndicator comes after dataInit, which starts its request as Datastar applies it, " +
+                                "before the indicator exists, so the signal stays false. Call dataIndicator first.",
+                            Severity.WARNING,
+                            "indicator-order",
+                            Docs.attribute("indicator"),
+                        ),
+                    ),
+                )
+            }
+    }
 
     /** `dataNonce("...")` of a literal it refuses as the page renders, through [CspNonce.checked]: empty, or no base64 value. */
     private fun checkNonceSite(site: CallSite): List<Issue> {
@@ -2024,7 +2089,23 @@ public class Analyzer(
         val attribute = catalog.attributesByKotlin[site.name]
         val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
         val strings = listOfNotNull(expressionString(site, spec, src, lex)) + site.moreStrings(spec)
-        return strings.flatMap { expressionIssues(it, src, opts, hyphenated, helpers, named, attribute, dslEvent(site)) }
+        return strings.flatMap { s ->
+            // An attribute's expression passes ExpressionGuard as the page renders, which refuses an empty one.
+            if (attribute != null && !s.unterminated && s.interpolations.isEmpty() && s.text.isBlank()) {
+                listOf(
+                    Issue(
+                        s.start,
+                        s.end,
+                        "${site.name} throws as the page renders: Streamlord refuses an empty expression.",
+                        Severity.ERROR,
+                        "empty-expression",
+                        Docs.attribute(attribute),
+                    ),
+                )
+            } else {
+                expressionIssues(s, src, opts, hyphenated, helpers, named, attribute, dslEvent(site))
+            }
+        }
     }
 
     /** The issues of [s], a literal Datastar runs as an expression: its Kotlin templates, and the expression itself. */

@@ -1331,7 +1331,7 @@ public class MarkupValidator(
      * Whether expression [js] calls a backend action as it runs: in its code, not in a string, nor
      * in a function it hands on, `setTimeout(() => @get('/x'))`, which sends later.
      */
-    private fun sendsAtOnce(js: String): Boolean {
+    internal fun sendsAtOnce(js: String): Boolean {
         val regions = jsRegions(js)
         val inFunctions by lazy(LazyThreadSafetyMode.NONE) { functionDepths(js, regions) }
         return backendAction.findAll(js).any { regions[it.range.first] == Region.CODE && inFunctions[it.range.first] == 0 }
