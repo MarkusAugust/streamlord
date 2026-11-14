@@ -1734,7 +1734,7 @@ private fun shapeKind(
     for (k in top.indices) {
         if (top[k] !in "+-*/%" || top.getOrNull(k + 1).let { it == '=' || it == top[k] }) continue
         val before = top.substring(from, k).trimEnd()
-        if (before.isEmpty() || !isWordPart(before.last()) && before.last() != ')' && before.last() != ']') continue
+        if (before.isEmpty() || (!isWordPart(before.last()) && before.last() != ')' && before.last() != ']')) continue
         operands += e.substring(from, k)
         from = k + 1
     }
@@ -2126,8 +2126,11 @@ private fun interpolateText(
             val vouched = trusted[k]
             when {
                 k in kept -> null
+
                 vouched == null -> text
+
                 vouched -> "Trusted($text)"
+
                 // A safe call would make it a String?, and an operator would bind looser than the call.
                 else -> "Trusted(${if (wholeOperand(text) && '?' !in text) text else "($text)"}.toString())"
             }

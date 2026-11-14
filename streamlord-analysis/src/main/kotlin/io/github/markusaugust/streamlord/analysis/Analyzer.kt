@@ -1721,7 +1721,9 @@ public class Analyzer(
                 // A value that may be null, which a template writes as null and the rewrite as nothing.
                 val nothing =
                     nullable?.takeIf { fixable }?.let {
-                        " interpolate(...) writes nothing for ${holeDisplay(s.interpolations[it])} where it is null, and Kotlin writes null."
+                        " interpolate(...) writes nothing for ${holeDisplay(
+                            s.interpolations[it],
+                        )} where it is null, and Kotlin writes null."
                     } ?: ""
                 // This value alone in the way, for the reason interpolateKeeps gives in element text.
                 val own = !keeps[k] && landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants)
@@ -1874,10 +1876,14 @@ public class Analyzer(
                                 // Digits and words need the quotes alone; anything else is then a quoted value written as it is.
                                 val enough = fact.scalar()
                                 issue(
-                                    "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value." +
+                                    "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. " +
+                                        "Quote the value." +
                                         if (enough) "" else " Quoting alone leaves the value as it is: escape it once it is quoted.",
                                     if (enough) Severity.HINT else Severity.WARNING,
-                                    fixes = listOfNotNull(quoteFix(s, view, ip, operands)?.let { if (enough) it else it.copy(preferred = false) }),
+                                    fixes =
+                                        listOfNotNull(
+                                            quoteFix(s, view, ip, operands)?.let { if (enough) it else it.copy(preferred = false) },
+                                        ),
                                 )
                             }
 
@@ -1902,7 +1908,14 @@ public class Analyzer(
                 if (inner) ": ${shortened(src.substring(s.start, s.end))}" else ""
         val titled =
             issues.map { i ->
-                if (i.fixes.none { it.sharesTextWith(rewrite) }) i else i.copy(fixes = i.fixes.map { if (it.sharesTextWith(rewrite)) it.copy(title = title) else it })
+                if (i.fixes.none {
+                        it.sharesTextWith(rewrite)
+                    }
+                ) {
+                    i
+                } else {
+                    i.copy(fixes = i.fixes.map { if (it.sharesTextWith(rewrite)) it.copy(title = title) else it })
+                }
             }
         return Judged(titled, rewrite.copy(title = title))
     }

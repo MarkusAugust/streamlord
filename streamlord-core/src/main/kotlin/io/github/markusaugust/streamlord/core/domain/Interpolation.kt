@@ -604,8 +604,17 @@ private fun settledScheme(
     val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     for (c in read) {
         when (c) {
-            '/', '?', '#' -> return ""
-            ':' -> return SCHEME.find(read)?.groupValues?.get(1)?.asciiLowercase()
+            '/', '?', '#' -> {
+                return ""
+            }
+
+            ':' -> {
+                return SCHEME
+                    .find(read)
+                    ?.groupValues
+                    ?.get(1)
+                    ?.asciiLowercase()
+            }
         }
     }
     return null
