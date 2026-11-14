@@ -210,6 +210,7 @@ private val ACTION_OPEN = regex("""@([A-Za-z_$][\w$]*)\s*\(""")
 private val WRITTEN_KEY = regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
 private val TYPED_KEY = regex("""\s*([A-Za-z_$][\w$]*)?""")
 private val VALUE_KEY = regex("""\s*([A-Za-z_$][\w$]*)\s*:\s*(#*)""")
+private val BOOLEAN_TYPED = regex("""\s*([A-Za-z_$][\w$]*)\s*:\s*([a-z]+)""")
 
 /** Something the keys of an object hold that is no key: a string, a regular expression, a bracket. */
 private const val OTHER = '#'
@@ -311,7 +312,14 @@ internal fun actionCallAt(
             TYPED_KEY.matchEntire(keys.substringAfterLast(','))?.let { typed ->
                 OptionKeyAt(typed.groupValues[1], WRITTEN_KEY.findAll(keys).map { it.groupValues[1] }.toList(), fields)
             }
-        val value = top.valueKey()?.takeIf { keys.endsWith(OTHER).not() }?.let { OptionValueAt(it, "", quoted = false) }
+        val value =
+            top.valueKey()?.takeIf { keys.endsWith(OTHER).not() }?.let { OptionValueAt(it, "", quoted = false) }
+                // A word typed as the value of a key that takes true or false: what completion offers there.
+                ?: BOOLEAN_TYPED.matchEntire(keys.substringAfterLast(','))?.let { m ->
+                    fields.firstOrNull { it.name == m.groupValues[1] && it.kind == ArgumentKind.BOOLEAN }?.let {
+                        OptionValueAt(it, m.groupValues[2], quoted = false)
+                    }
+                }
         return ActionCall(call.action!!, call.argument, option, value)
     }
     // In a string opened as the value: what is typed since its quote.

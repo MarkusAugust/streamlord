@@ -177,6 +177,7 @@ private fun Char.continues(kind: CompletionKind): Boolean =
         }
 
 private val DURATIONS = listOf("500ms", "1s", "300ms", "100ms")
+private val BOOLEANS = listOf("true", "false")
 private val SIGNAL_NAME_TYPED = regex("""\s*([\w.]*)""")
 private val SIGNAL_NAME = regex("""\w+(?:[.-]\w+)*""")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
@@ -250,11 +251,8 @@ private class Asked(
             if (signalPrefixAt(before, before.length) != null) return true
             if (!e.allowActions) return false
             val call = actionCallAt(before, before.length)
-            return call?.option != null || call
-                ?.value
-                ?.field
-                ?.values
-                ?.isNotEmpty() == true ||
+            val field = call?.value?.field
+            return call?.option != null || field?.values?.isNotEmpty() == true || field?.kind == ArgumentKind.BOOLEAN ||
                 actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
         }
         if (!names) return false
@@ -369,6 +367,11 @@ private class Asked(
                     )
                 }
             return ordered(items, alone = true)
+        }
+        call?.value?.takeIf { it.field.kind == ArgumentKind.BOOLEAN && !it.quoted }?.let { value ->
+            // A signal or any expression may stand there too, so the two are not offered alone.
+            val items = BOOLEANS.mapIndexed { n, v -> Completion(v, CompletionKind.VALUE, offset - value.typed.length, key = "$n") }
+            return ordered(items, alone = false)
         }
         call?.value?.let { value ->
             // In a string already opened the value is written bare, and quoted otherwise, as an action's path is.
