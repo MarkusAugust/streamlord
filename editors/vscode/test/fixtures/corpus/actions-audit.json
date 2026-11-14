@@ -1,0 +1,9 @@
+{
+  "$comment": "Cases both editors must judge alike, of the arguments and options of action calls in markup; the format is that of html.json.",
+  "kind": "html",
+  "cases": [
+    {"name":"an Intl type the reference does not name","source":"<button data-on:click=\"@intl('currency', 1)\"></button>","issues":[{"code":"pro-action","start":23,"end":28},{"code":"action-argument","start":29,"end":39}]},
+    {"name":"an Intl type written in another case","source":"<button data-on:click=\"@intl('dateTime', 1)\"></button>","issues":[{"code":"pro-action","start":23,"end":28},{"code":"action-argument","start":29,"end":39,"fixes":["<button data-on:click=\"@intl('datetime', 1)\"></button>"]}]},
+    {"name":"the Intl types the reference names, and one the code computes","source":"<button data-on:click=\"@intl('number', 1); @intl('displayNames', 'nb'); @intl($t, 1); @intl(`list`, [])\"></button>","issues":[{"code":"pro-action","start":23,"end":28},{"code":"pro-action","start":43,"end":48},{"code":"pro-action","start":72,"end":77},{"code":"pro-action","start":86,"end":91}]}
+  ]
+}
