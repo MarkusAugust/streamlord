@@ -395,7 +395,8 @@ public class Analyzer(
             // A literal inside a template is joined to its neighbours in the template's code.
             val chain = chainFrom(src, s, if (s.start in topLevel) lex.mask else facts.code)
             val whole = chain ?: s
-            if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
+            // The chain's own literals are read with it; one in a value it joins, or in a template, is a string of its own.
+            if (chain != null) for (l in chain.literals) chained += l.start
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
             val judged = checkFreeHtmlString(whole, opts, src, hyphenated)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)

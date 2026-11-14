@@ -350,6 +350,8 @@ All notable changes to Streamlord are recorded here. The format follows
   qualified name, and one handed straight to a parameter of a function of the same file that
   carries the annotation, are read as HTML and their values judged, as one marked
   `@Language("HTML")` or `// language=HTML` was. VS Code colours one marked by the qualified name too.
+- A literal in a value joined into a `+` chain, `"<ul>" + tags.map { "<li>$it</li>" }.joinToString("") + "</ul>"`,
+  or in a template of one of its literals, is judged as a string of its own, where it was passed over.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.
