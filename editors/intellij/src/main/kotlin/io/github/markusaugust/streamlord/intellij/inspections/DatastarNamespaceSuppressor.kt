@@ -13,6 +13,9 @@ import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
  * IntelliJ reads the colon in `data-on:click` as a namespace prefix and warns that `data-on` is
  * not bound. HTML has no namespace prefixes, so for a Datastar plugin's key the warning is
  * silenced there. XHTML keeps it: a parser that reads the page as XML stops at the prefix.
+ *
+ * IntelliJ also takes a `data-` name as written, so `DATA-TEXT` is an attribute it does not know;
+ * the browser lowercases it, and the client reads it as `data-text`, so that warning goes too.
  */
 class DatastarNamespaceSuppressor :
     InspectionSuppressor,
@@ -21,13 +24,14 @@ class DatastarNamespaceSuppressor :
         element: PsiElement,
         toolId: String,
     ): Boolean {
-        if (toolId != UNBOUND_PREFIX) return false
+        if (toolId != UNBOUND_PREFIX && toolId != UNKNOWN_ATTRIBUTE) return false
         val attribute = PsiTreeUtil.getParentOfType(element, XmlAttribute::class.java, false) ?: return false
         if (!attribute.containingFile.language.isKindOf(HTMLLanguage.INSTANCE)) return false
         val analysis = StreamlordAnalysis.getInstance(attribute.project)
         // A key in the wrong place, `data-on__window:click`, is Streamlord's own check to report.
         val name = attribute.name.lowercase()
-        return ':' in name && analysis.catalog.parseAttributeName(name, analysis.prefix.lowercase())?.spec != null
+        if (toolId == UNBOUND_PREFIX && ':' !in name) return false
+        return analysis.catalog.parseAttributeName(name, analysis.prefix.lowercase())?.spec != null
     }
 
     override fun getSuppressActions(
@@ -37,5 +41,6 @@ class DatastarNamespaceSuppressor :
 
     private companion object {
         const val UNBOUND_PREFIX = "XmlUnboundNsPrefix"
+        const val UNKNOWN_ATTRIBUTE = "HtmlUnknownAttribute"
     }
 }

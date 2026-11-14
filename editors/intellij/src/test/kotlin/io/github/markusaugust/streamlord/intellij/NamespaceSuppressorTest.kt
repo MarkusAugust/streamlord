@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.daemon.impl.analysis.XmlUnboundNsPrefixInspection
-import com.intellij.codeInspection.htmlInspections.HtmlUnknownAttributeInspection
 import com.intellij.codeInspection.LanguageInspectionSuppressors
+import com.intellij.codeInspection.htmlInspections.HtmlUnknownAttributeInspection
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
