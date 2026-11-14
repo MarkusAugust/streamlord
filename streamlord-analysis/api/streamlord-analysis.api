@@ -1170,6 +1170,7 @@ public final class io/github/markusaugust/streamlord/analysis/SignatureHelp {
 	public final fun getActive ()I
 	public final fun getDoc ()Ljava/lang/String;
 	public final fun getLabel ()Ljava/lang/String;
+	public final fun getParameterDocs ()Ljava/util/List;
 	public final fun getParameters ()Ljava/util/List;
 }
 
