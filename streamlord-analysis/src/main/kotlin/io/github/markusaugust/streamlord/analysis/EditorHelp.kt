@@ -98,12 +98,16 @@ public class Hover internal constructor(
     public val markdown: String,
 )
 
-/** The action a caret stands in the arguments of: its signature, what it does, where each parameter stands in [label], and which is at the caret. */
+/**
+ * The action a caret stands in the arguments of: its signature, what it does, where each parameter
+ * stands in [label] and what each is, in Markdown, and which is at the caret.
+ */
 public class SignatureHelp internal constructor(
     public val label: String,
     public val doc: String,
     public val parameters: List<IntRange>,
     public val active: Int,
+    public val parameterDocs: List<String>,
 )
 
 /**
@@ -154,7 +158,8 @@ public fun Analyzer.signatureHelp(
             from = at + name.length
             at until at + name.length
         }
-    return SignatureHelp(action.signature, action.doc, parameters, minOf(call.argument, maxOf(0, parameters.size - 1)))
+    val active = minOf(call.argument, maxOf(0, parameters.size - 1))
+    return SignatureHelp(action.signature, action.doc, parameters, active, parameterDocs(action, catalog))
 }
 
 private val NOTHING = Completions(emptyList(), alone = false)

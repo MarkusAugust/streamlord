@@ -500,6 +500,9 @@ interface Signature {
     /** Where each parameter stands in [label], as `[start, end]`. */
     val parameters: Array<Array<Int>>
     val active: Int
+
+    /** What each parameter is, in Markdown, in order. */
+    val parameterDocs: Array<String>
 }
 
 /** The attribute prefix Datastar reads when none is set. */
@@ -571,5 +574,11 @@ fun signatureHelp(
 ): Signature? {
     val help = analyzer.signatureHelp(source(src, kotlin, prefix), offset) ?: return null
     val parameters = help.parameters.map { arrayOf(it.first, it.last + 1) }.toTypedArray()
-    return plain("label" to help.label, "doc" to help.doc, "parameters" to parameters, "active" to help.active)
+    return plain(
+        "label" to help.label,
+        "doc" to help.doc,
+        "parameters" to parameters,
+        "active" to help.active,
+        "parameterDocs" to help.parameterDocs.toTypedArray(),
+    )
 }

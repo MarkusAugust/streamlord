@@ -146,22 +146,25 @@ internal fun actionDoc(
     withKotlin: Boolean = true,
     catalog: Catalog = Catalog.default,
 ): String {
-    val kinds = catalog.actionKinds[a.name].orEmpty()
-    val docs = catalog.parameterDocs[a.name].orEmpty()
-    val parameters =
-        a.parameters.mapIndexed { n, p ->
-            val kind =
-                kinds.getOrNull(n)?.takeIf { it != ArgumentKind.ANY }?.phrase()?.let {
-                    it.replaceFirstChar(Char::uppercaseChar) +
-                        ". "
-                }
-            "`$p`: ${kind.orEmpty()}${docs.getOrNull(n).orEmpty()}"
-        }
+    val parameters = parameterDocs(a, catalog).mapIndexed { n, doc -> "`${a.parameters[n]}`: $doc" }
     val pro = if (a.pro) "\n\n_Datastar Pro._" else ""
     val kotlin = if (withKotlin) "\n\nKotlin: `${a.kotlin}()`" else ""
     return "**${a.signature}**\n\n${a.doc}\n\n${parameters.joinToString(
         "  \n",
     )}$pro\n\n[Reference](${Docs.ACTIONS}#${a.name.lowercase()})$kotlin"
+}
+
+/** What each parameter of [a] is, in order: the kind the catalog gives it, and what it is said to be. */
+internal fun parameterDocs(
+    a: ActionSpec,
+    catalog: Catalog,
+): List<String> {
+    val kinds = catalog.actionKinds[a.name].orEmpty()
+    val docs = catalog.parameterDocs[a.name].orEmpty()
+    return a.parameters.indices.map { n ->
+        val kind = kinds.getOrNull(n)?.takeIf { it != ArgumentKind.ANY }?.phrase()?.let { it.replaceFirstChar(Char::uppercaseChar) + ". " }
+        kind.orEmpty() + docs.getOrNull(n).orEmpty()
+    }
 }
 
 /** The Markdown as plain HTML for editors that render HTML: bold, code, italics, links and paragraphs only, which is all the docs use. */

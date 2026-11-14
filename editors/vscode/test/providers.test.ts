@@ -379,6 +379,8 @@ describe("signature help", () => {
     assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
     // Each parameter by where it stands in the signature, as VS Code highlights it.
     assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), [[5, 8], [10, 18]]);
+    // And what each is, from the catalog.
+    assert.match(String((h?.signatures[0]?.parameters[0]?.documentation as unknown as { value: string }).value), /^A string\. The address of the request/);
     assert.equal(h?.activeParameter, 1);
     const src = `${DSL}div { dataOnClick("@post(") }`;
     assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);

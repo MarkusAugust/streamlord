@@ -5,6 +5,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.DumbModeTestUtils
 import com.intellij.testFramework.utils.parameterInfo.MockCreateParameterInfoContext
+import com.intellij.testFramework.utils.parameterInfo.MockParameterInfoUIContext
 import com.intellij.testFramework.utils.parameterInfo.MockUpdateParameterInfoContext
 import io.github.markusaugust.streamlord.analysis.SignatureHelp
 import io.github.markusaugust.streamlord.analysis.Workspace
@@ -77,6 +78,9 @@ class ExpressionHelpTest : StreamlordTestCase() {
         val owner = handler.findElementForUpdatingParameterInfo(update)!!
         handler.updateParameterInfo(owner, update)
         assertEquals(1, update.currentParameter)
+        val ui = MockParameterInfoUIContext(owner).apply { currentParameterIndex = update.currentParameter }
+        handler.updateUI(create.itemsToShow!!.single() as SignatureHelp, ui)
+        assertEquals("@get(uri, <b>options?</b>)<p>An object of options.", ui.text.substringBefore(" contentType"))
 
         myFixture.configureByText("View.kt", "fun f() { dataOnClick(\"@post(<caret>\") }")
         val kotlin = MockCreateParameterInfoContext(myFixture.editor, myFixture.file)

@@ -6,8 +6,10 @@ import com.intellij.lang.parameterInfo.ParameterInfoHandler
 import com.intellij.lang.parameterInfo.ParameterInfoUIContext
 import com.intellij.lang.parameterInfo.UpdateParameterInfoContext
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
 import io.github.markusaugust.streamlord.analysis.SignatureHelp
+import io.github.markusaugust.streamlord.analysis.markdownToHtml
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 
@@ -50,19 +52,23 @@ class DatastarParameterInfoHandler :
         context.setCurrentParameter((helpAt(context) ?: return context.removeHint()).active)
     }
 
+    /** The signature with the parameter at the caret in bold, and under it what that parameter is. */
     override fun updateUI(
         p: SignatureHelp,
         context: ParameterInfoUIContext,
     ) {
-        val current = p.parameters.getOrNull(context.currentParameterIndex.coerceIn(0, maxOf(0, p.parameters.size - 1)))
-        context.setupUIComponentPresentation(
-            p.label,
-            current?.first ?: -1,
-            current?.let { it.last + 1 } ?: -1,
-            false,
-            false,
-            false,
-            context.defaultParameterColor,
-        )
+        val n = context.currentParameterIndex.coerceIn(0, maxOf(0, p.parameters.size - 1))
+        val current = p.parameters.getOrNull(n)
+        if (current == null) {
+            context.setupUIComponentPresentation(p.label, -1, -1, false, false, false, context.defaultParameterColor)
+            return
+        }
+        val label = p.label
+        val signature =
+            escape(label.substring(0, current.first)) + "<b>" + escape(label.substring(current)) + "</b>" +
+                escape(label.substring(current.last + 1))
+        context.setupRawUIComponentPresentation(signature + p.parameterDocs.getOrNull(n)?.let(::markdownToHtml).orEmpty())
     }
+
+    private fun escape(text: String) = StringUtil.escapeXmlEntities(text)
 }
