@@ -107,6 +107,8 @@ public data class CallSiteSpec(
     val onlyIfStringArgs: Boolean = false,
     /** The parameters after [arg] that take an expression too, each by its place or its name: `fitExpr`'s ends. */
     val more: List<String> = emptyList(),
+    /** Whether the function writes each expression in parentheses, as one value: `getExpr`, `peek`. */
+    val oneValue: Boolean = false,
 ) {
     val last: Boolean get() = arg == null
 }
@@ -403,6 +405,7 @@ public class Catalog private constructor(
                     modeArg = spec.string("modeArg"),
                     onlyIfStringArgs = spec.boolean("onlyIfStringArgs") ?: false,
                     more = spec.array("more")?.strings() ?: emptyList(),
+                    oneValue = spec.boolean("oneValue") ?: false,
                 )
         }
         return out

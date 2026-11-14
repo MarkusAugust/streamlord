@@ -26,7 +26,11 @@ public fun clipboardExpr(
     return if (isBase64) "@clipboard(($expression), true)" else "@clipboard(($expression))"
 }
 
-/** `@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp, shouldRound)` (Pro): linear interpolation between ranges. */
+/**
+ * `@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp, shouldRound)` (Pro): linear interpolation
+ * between ranges. [value] is a raw JavaScript expression, written in parentheses, so it stays one
+ * argument whatever it holds.
+ */
 public fun fit(
     value: String,
     oldMin: Number,
@@ -64,7 +68,8 @@ private fun fitCall(
     shouldRound: Boolean,
 ): String =
     buildString {
-        append("@fit(").append(value)
+        require(value.isNotBlank()) { "the value of fit must not be blank" }
+        append("@fit((").append(value).append(')')
         for (end in listOf(oldMin, oldMax, newMin, newMax)) append(", ").append(end)
         if (shouldClamp || shouldRound) append(", ").append(shouldClamp)
         if (shouldRound) append(", true")
@@ -86,7 +91,8 @@ public enum class IntlType(
 /**
  * `@intl(type, value, options, locale)` (Pro): locale-aware formatting.
  *
- * @param value A raw JavaScript expression, e.g. `signal("price")` or `new Date()`.
+ * @param value A raw JavaScript expression, e.g. `signal("price")` or `new Date()`, written in
+ * parentheses, so it stays one argument whatever it holds.
  * @param options Passed to the `Intl` constructor as an object literal. For [IntlType.RELATIVE_TIME]
  * and [IntlType.DISPLAY_NAMES] it is always written, empty or not: the client reads a field of it
  * (`unit`, `type`) and throws without one.
@@ -99,7 +105,12 @@ public fun intl(
     vararg locales: String,
 ): String =
     buildString {
-        append("@intl(").append(js(type.wire)).append(", ").append(value)
+        require(value.isNotBlank()) { "the value of intl must not be blank" }
+        append("@intl(")
+            .append(js(type.wire))
+            .append(", (")
+            .append(value)
+            .append(')')
         val readsOptions = type == IntlType.RELATIVE_TIME || type == IntlType.DISPLAY_NAMES
         if (readsOptions || options.isNotEmpty() || locales.isNotEmpty()) append(", ").append(JsLiteral.write(options))
         when (locales.size) {

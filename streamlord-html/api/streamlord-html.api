@@ -13,6 +13,7 @@ public final class io/github/markusaugust/streamlord/html/ActionsKt {
 	public static final fun patchExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun patchExpr$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun peek (Ljava/lang/String;)Ljava/lang/String;
+	public static final fun peekExpr (Ljava/lang/String;)Ljava/lang/String;
 	public static final fun post (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static synthetic fun post$default (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun postExpr (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
@@ -164,35 +165,51 @@ public final class io/github/markusaugust/streamlord/html/FetchEventType {
 public final class io/github/markusaugust/streamlord/html/FetchOptions {
 	public fun <init> ()V
 	public final fun getContentType ()Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;
+	public final fun getContentTypeExpr ()Ljava/lang/String;
 	public final fun getFilterSignals ()Lio/github/markusaugust/streamlord/html/SignalFilter;
 	public final fun getHeaderExprs ()Ljava/util/Map;
 	public final fun getHeaders ()Ljava/util/Map;
 	public final fun getOpenWhenHidden ()Ljava/lang/Boolean;
+	public final fun getOpenWhenHiddenExpr ()Ljava/lang/String;
 	public final fun getPayload ()Ljava/lang/Object;
 	public final fun getPayloadExpr ()Ljava/lang/String;
 	public final fun getRequestCancellation ()Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;
 	public final fun getRequestCancellationExpr ()Ljava/lang/String;
 	public final fun getRetry ()Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;
+	public final fun getRetryExpr ()Ljava/lang/String;
 	public final fun getRetryInterval-FghU774 ()Lkotlin/time/Duration;
+	public final fun getRetryIntervalExpr ()Ljava/lang/String;
 	public final fun getRetryMaxCount ()Ljava/lang/Integer;
+	public final fun getRetryMaxCountExpr ()Ljava/lang/String;
 	public final fun getRetryMaxWait-FghU774 ()Lkotlin/time/Duration;
+	public final fun getRetryMaxWaitExpr ()Ljava/lang/String;
 	public final fun getRetryScaler ()Ljava/lang/Double;
+	public final fun getRetryScalerExpr ()Ljava/lang/String;
 	public final fun getSelector ()Ljava/lang/String;
+	public final fun getSelectorExpr ()Ljava/lang/String;
 	public final fun setContentType (Lio/github/markusaugust/streamlord/html/FetchOptions$ContentType;)V
+	public final fun setContentTypeExpr (Ljava/lang/String;)V
 	public final fun setFilterSignals (Lio/github/markusaugust/streamlord/html/SignalFilter;)V
 	public final fun setHeaderExprs (Ljava/util/Map;)V
 	public final fun setHeaders (Ljava/util/Map;)V
 	public final fun setOpenWhenHidden (Ljava/lang/Boolean;)V
+	public final fun setOpenWhenHiddenExpr (Ljava/lang/String;)V
 	public final fun setPayload (Ljava/lang/Object;)V
 	public final fun setPayloadExpr (Ljava/lang/String;)V
 	public final fun setRequestCancellation (Lio/github/markusaugust/streamlord/html/FetchOptions$RequestCancellation;)V
 	public final fun setRequestCancellationExpr (Ljava/lang/String;)V
 	public final fun setRetry (Lio/github/markusaugust/streamlord/html/FetchOptions$Retry;)V
+	public final fun setRetryExpr (Ljava/lang/String;)V
 	public final fun setRetryInterval-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setRetryIntervalExpr (Ljava/lang/String;)V
 	public final fun setRetryMaxCount (Ljava/lang/Integer;)V
+	public final fun setRetryMaxCountExpr (Ljava/lang/String;)V
 	public final fun setRetryMaxWait-BwNAW2A (Lkotlin/time/Duration;)V
+	public final fun setRetryMaxWaitExpr (Ljava/lang/String;)V
 	public final fun setRetryScaler (Ljava/lang/Double;)V
+	public final fun setRetryScalerExpr (Ljava/lang/String;)V
 	public final fun setSelector (Ljava/lang/String;)V
+	public final fun setSelectorExpr (Ljava/lang/String;)V
 	public final fun toJs ()Ljava/lang/String;
 }
 
@@ -298,15 +315,21 @@ public final class io/github/markusaugust/streamlord/html/OnModifiers : io/githu
 public final class io/github/markusaugust/streamlord/html/SignalFilter {
 	public static final field Companion Lio/github/markusaugust/streamlord/html/SignalFilter$Companion;
 	public fun <init> ()V
-	public fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;)V
-	public synthetic fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lkotlin/text/Regex;Lkotlin/text/Regex;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Lkotlin/text/Regex;
 	public final fun component2 ()Lkotlin/text/Regex;
-	public final fun copy (Lkotlin/text/Regex;Lkotlin/text/Regex;)Lio/github/markusaugust/streamlord/html/SignalFilter;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/html/SignalFilter;Lkotlin/text/Regex;Lkotlin/text/Regex;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Lkotlin/text/Regex;Lkotlin/text/Regex;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/html/SignalFilter;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/html/SignalFilter;Lkotlin/text/Regex;Lkotlin/text/Regex;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/html/SignalFilter;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getExclude ()Lkotlin/text/Regex;
+	public final fun getExcludeExpr ()Ljava/lang/String;
+	public final fun getExpression ()Ljava/lang/String;
 	public final fun getInclude ()Lkotlin/text/Regex;
+	public final fun getIncludeExpr ()Ljava/lang/String;
 	public fun hashCode ()I
 	public final fun toJs ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;

@@ -155,7 +155,7 @@ private class Brackets(
     fun value(piece: IntRange): Value {
         val s = piece.first
         val e = piece.last + 1
-        if (s >= e || computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
+        if (s >= e) return Value(s, e, Written.EXPRESSION, null)
         val first = js[s]
 
         fun all(region: Byte) = (s until e).all { regions[it] == region }
@@ -185,6 +185,8 @@ private class Brackets(
 
                 else -> Written.EXPRESSION
             }
+        // An object or an array literal is written whatever a template inside it computes: each of its values is judged on its own.
+        if (written != Written.OBJECT && written != Written.ARRAY && computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
         val content = if (written == Written.STRING) js.substring(s + 1, e - 1).takeIf { '\\' !in it } else null
         return Value(s, e, written, content)
     }
@@ -260,12 +262,14 @@ private class Judge(
         otherwise: String,
         filterChanges: Boolean,
         url: Boolean,
+        known: Boolean = true,
     ): String? {
         val nan = kind == ArgumentKind.NUMBER && v.written in setOf(Written.STRING, Written.OBJECT, Written.REGEX, Written.FUNCTION)
         val what =
             when {
                 v.written == Written.NULL -> "none"
                 url && v.text == "" -> "empty"
+                url && v.written == Written.ARRAY -> "an empty array"
                 nan -> v.written.phrase + " Datastar reads as NaN"
                 else -> v.written.phrase
             }
@@ -280,6 +284,7 @@ private class Judge(
                             Written.BOOLEAN,
                             Written.OBJECT,
                             Written.REGEX,
+                            Written.ARRAY,
                         )
                 ) -> {
                     ", so Datastar throws FetchNoUrlProvided and sends nothing"
@@ -295,6 +300,35 @@ private class Judge(
 
                 nan && otherwise.isNotEmpty() -> {
                     ", so $otherwise"
+                }
+
+                // A Pro action's code is not read here, so what it does with the value is not said.
+                !known -> {
+                    ""
+                }
+
+                // The client counts with it, and JavaScript counts true as 1.
+                kind == ArgumentKind.NUMBER && v.written == Written.BOOLEAN -> {
+                    ", which Datastar counts as ${if (js.substring(v.start, v.end) == "true") 1 else 0}"
+                }
+
+                // Object.assign copies a string's characters and an array's items under their places, and nothing of the rest.
+                kind == ArgumentKind.OBJECT && v.written == Written.STRING -> {
+                    if (v.text ==
+                        ""
+                    ) {
+                        ", from which Datastar reads no key"
+                    } else {
+                        ", whose characters Datastar reads as keys named by their places, 0, 1 and on"
+                    }
+                }
+
+                kind == ArgumentKind.OBJECT && v.written == Written.ARRAY -> {
+                    ", whose items Datastar reads as keys named by their places, 0, 1 and on"
+                }
+
+                kind == ArgumentKind.OBJECT && v.written != Written.NULL -> {
+                    ", from which Datastar reads no key"
                 }
 
                 kind == ArgumentKind.BOOLEAN -> {
@@ -369,7 +403,9 @@ private class Judge(
             val v = brackets.value(brackets.trim(colon + 1, piece.last + 1))
             val enum = field.values.isNotEmpty()
             when {
-                enum && (v.written == Written.NULL || (v.written == Written.STRING && v.text != null && v.text !in field.values)) -> {
+                // The client compares the option with each of its strings, so any other literal takes the branch of a string it never compares with.
+                enum && v.written !in setOf(Written.EXPRESSION, Written.UNDEFINED) &&
+                    (v.written != Written.STRING || (v.text != null && v.text !in field.values)) -> {
                     issue(
                         v.start,
                         v.end,
@@ -409,6 +445,7 @@ internal fun actionArgumentIssues(
         for (r in calls) {
             val spec = catalog.actionsByName.getValue(r.name)
             val kinds = catalog.actionKinds.getValue(r.name)
+            val values = catalog.actionValues[r.name].orEmpty()
             val open = r.end - 1
             if (js.getOrNull(open) != '(' || brackets.close[open] < 0) continue
             val link = "${Docs.ACTIONS}#${spec.name.lowercase()}"
@@ -445,6 +482,8 @@ internal fun actionArgumentIssues(
                     "@${spec.name} takes ${kind.phrase()}" +
                         (if (IDENTIFIER.matchEntire(parameter) != null) " as $parameter" else ", as in ${spec.signature}") + ", and "
                 val url = spec.kind == "backend" && n == 0
+                // new URL() writes an array as its items joined by commas, and only an empty one has no length.
+                if (url && v.written == Written.ARRAY && js.substring(v.start + 1, v.end - 1).isNotBlank()) continue
                 when {
                     !kind.takes(v) || v.written == Written.NULL || (url && v.text == "") -> {
                         wrong(
@@ -453,7 +492,30 @@ internal fun actionArgumentIssues(
                             "",
                             filterChanges = true,
                             url = url,
+                            known = !spec.pro,
                         )?.let { issue(v.start, v.end, takes + it, "action-argument", link) }
+                    }
+
+                    v.written == Written.STRING && v.text != null && values.getOrNull(n).let { !it.isNullOrEmpty() && v.text !in it } -> {
+                        val named = values[n]
+                        val near =
+                            named.singleOrNull {
+                                it.equals(v.text, ignoreCase = true) ||
+                                    ElementsGuard.oneEditAway(v.text, it, swaps = true)
+                            }
+                        // A Pro action's values come from its reference page alone, which is all the message can claim.
+                        val source = if (spec.pro) ", as the reference names them" else ""
+                        issue(
+                            v.start,
+                            v.end,
+                            "@${spec.name} takes one of ${named.joinToString(
+                                ", ",
+                            ) { "'$it'" }} as $parameter$source, and ${shown(v)} is none of them." +
+                                (near?.let { " Did you mean '$it'?" } ?: ""),
+                            "action-argument",
+                            link,
+                            listOfNotNull(near?.let { Fix("Change to '$it'", v.start, v.end, js[v.start] + it + js[v.start]) }),
+                        )
                     }
 
                     kind == ArgumentKind.OPTIONS && v.written == Written.OBJECT -> {

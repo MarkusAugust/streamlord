@@ -280,6 +280,18 @@ class ClientOracleTest {
     }
 
     /**
+     * `actions.json`: the type a hover shows for `filterSignals` is the client's SignalFilterOptions,
+     * key by key, and its doc says what each key may be.
+     */
+    @Test
+    fun `shows filterSignals as the signal filter the client takes`() {
+        val filter = fixture("actions.json").obj("signalFilter")!!
+        val option = Catalog.default.fetchOptions.single { it.name == "filterSignals" }
+        assertEquals("{" + filter.keys.joinToString(", ") { "$it?: ${filter.string(it)}" } + "}", option.type)
+        assertTrue("regular expressions or strings" in option.doc, option.doc)
+    }
+
+    /**
      * `actions.json`: each free action of the catalog takes as many arguments as its apply declares,
      * of the kinds its types say, and those the client takes left out are optional in its signature.
      */

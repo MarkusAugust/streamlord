@@ -513,8 +513,8 @@
     { "name": "intl", "pro": true, "kind": "pro", "signature": "@intl(type, value, options?, locale?)", "kinds": ["string", "any", "object", "any"], "values": [["datetime", "number", "pluralRules", "relativeTime", "list", "displayNames"]], "parameterDocs": ["Which Intl formatter: datetime, number, pluralRules, relativeTime, list or displayNames.", "The value to format.", "The options of that formatter, as its Intl constructor takes them.", "A locale or a list of them; the browser's when left out."], "kotlin": "intl", "doc": "Pro. Locale-aware formatting via Intl." }
   ],
   "fetchOptions": [
-    { "name": "contentType", "type": "'json' | 'form'", "default": "'json'", "kind": "string", "values": ["json", "form"], "otherwise": "Datastar throws FetchInvalidContentType and sends nothing", "doc": "'json' sends the signals as JSON: the body, or ?datastar= on the URL for @get and @delete. 'form' sends a form instead, the closest one or the one selector names, after the browser has validated it." },
-    { "name": "filterSignals", "type": "{include?: RegExp, exclude?: RegExp}", "default": "{include: /.*/, exclude: /(^|\\.)_/}", "kind": "filter", "doc": "Which signals a 'json' request sends: include and exclude are regular expressions matched against each signal's path. The default sends every signal except those whose name, at any level, starts with _ (_draft, user._token)." },
+    { "name": "contentType", "type": "'json' | 'form'", "default": "'json'", "kind": "string", "values": ["json", "form"], "otherwise": "Datastar sends nothing: the action fails with FetchFailed, whose error is FetchInvalidContentType", "doc": "'json' sends the signals as JSON: the body, or ?datastar= on the URL for @get and @delete. 'form' sends a form instead, the closest one or the one selector names, after the browser has validated it." },
+    { "name": "filterSignals", "type": "{include?: RegExp | string, exclude?: RegExp | string}", "default": "{include: /.*/, exclude: /(^|\\.)_/}", "kind": "filter", "doc": "Which signals a 'json' request sends: include and exclude are regular expressions or strings matched against each signal's path. The default sends every signal except those whose name, at any level, starts with _ (_draft, user._token)." },
     { "name": "selector", "type": "string", "default": "closest form", "kind": "string", "doc": "With contentType 'form', the CSS selector of the form to send in place of the closest one. A 'json' request does not read it." },
     { "name": "headers", "type": "Record<string, string>", "default": "{}", "kind": "object", "doc": "Headers added to the request, after Datastar's own Accept and Datastar-Request: true." },
     { "name": "openWhenHidden", "type": "boolean", "default": "false for @get, true otherwise", "kind": "boolean", "doc": "Whether the request stays open while the tab is hidden. When false, Datastar closes it as the tab is hidden and sends it again as the tab is shown." },
@@ -559,7 +559,7 @@
     "dataLines": ["selector", "mode", "namespace", "useViewTransition", "viewTransitionSelector", "elements", "signals", "onlyIfMissing"]
   },
   "kotlinCallSites": {
-    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. more: the parameters after it that take an expression too, each by its place or its name. Used by the editor to know where to validate and complete.",
+    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. more: the parameters after it that take an expression too, each by its place or its name. oneValue: the function writes each expression in parentheses, as one value. Used by the editor to know where to validate and complete.",
     "expression": {
       "dataOn": { "arg": 1, "named": "expression" }, "dataOnClick": { "arg": 0, "named": "expression" }, "dataOnSubmit": { "arg": 0, "named": "expression" }, "dataOnChange": { "arg": 0, "named": "expression" },
       "dataOnInput": { "arg": 0, "named": "expression" }, "dataOnKeydown": { "arg": 0, "named": "expression" }, "dataOnFetch": { "arg": 0, "named": "expression" },
@@ -569,15 +569,18 @@
       "dataSignals": { "arg": "last", "named": "expression", "onlyIfStringArgs": true },
       "dataOnRaf": { "arg": 0, "named": "expression" }, "dataOnResize": { "arg": 0, "named": "expression" }, "dataCustomValidity": { "arg": 0, "named": "expression" },
       "dataReplaceUrl": { "arg": 0, "named": "expression" }, "dataViewTransition": { "arg": 0, "named": "expression" }, "dataAnimate": { "arg": "last", "named": "expression" },
-      "setExpr": { "arg": 1, "named": "expression" }, "peek": { "arg": 0, "named": "expression" }, "clipboardExpr": { "arg": 0, "named": "expression" },
-      "getExpr": { "arg": 0, "named": "expression" }, "postExpr": { "arg": 0, "named": "expression" }, "putExpr": { "arg": 0, "named": "expression" },
-      "patchExpr": { "arg": 0, "named": "expression" }, "deleteExpr": { "arg": 0, "named": "expression" }, "queryExpr": { "arg": 0, "named": "expression" },
-      "setAllExpr": { "arg": 0, "named": "expression" },
-      "fitExpr": { "arg": 0, "named": "value", "more": ["oldMin", "oldMax", "newMin", "newMax"] }
+      "setExpr": { "arg": 1, "named": "expression" }, "peek": { "arg": 0, "named": "expression", "oneValue": true }, "peekExpr": { "arg": 0, "named": "expression", "oneValue": true }, "clipboardExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "getExpr": { "arg": 0, "named": "expression", "oneValue": true }, "postExpr": { "arg": 0, "named": "expression", "oneValue": true }, "putExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "patchExpr": { "arg": 0, "named": "expression", "oneValue": true }, "deleteExpr": { "arg": 0, "named": "expression", "oneValue": true }, "queryExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "setAllExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "fitExpr": { "arg": 0, "named": "value", "more": ["oldMin", "oldMax", "newMin", "newMax"], "oneValue": true },
+      "fit": { "arg": 0, "named": "value", "oneValue": true }, "intl": { "arg": 1, "named": "value", "oneValue": true }
     },
     "expressionOptions": {
       "$comment": "The options of FetchOptions whose value is an expression, set in the options' lambda: name = \"...\". map: the option is a map, headerExprs = mapOf(\"name\" to \"...\"), whose values are the expressions.",
-      "payloadExpr": {}, "requestCancellationExpr": {}, "headerExprs": { "map": true }
+      "payloadExpr": {}, "requestCancellationExpr": {}, "headerExprs": { "map": true },
+      "contentTypeExpr": {}, "selectorExpr": {}, "openWhenHiddenExpr": {}, "retryExpr": {}, "retryIntervalExpr": {},
+      "retryScalerExpr": {}, "retryMaxWaitExpr": {}, "retryMaxCountExpr": {}
     },
     "html": {
       "patchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },

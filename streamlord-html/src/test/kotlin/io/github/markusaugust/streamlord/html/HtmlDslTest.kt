@@ -158,7 +158,7 @@ class HtmlDslTest {
         assertEquals("@setAll('x', {include: /.*/, exclude: /_temp$/})", setAll("x", SignalFilter.exclude("_temp$")))
         assertEquals("@toggleAll()", toggleAll())
         assertEquals("@toggleAll({include: /.*/, exclude: /^is/})", toggleAll(SignalFilter.exclude("^is")))
-        assertEquals("@peek(() => ${'$'}count)", peek(signal("count")))
+        assertEquals("@peek(() => (${'$'}count))", peek(signal("count")))
     }
 
     @Test

@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
@@ -1003,7 +1004,8 @@ public class ExpressionValidator(
                 var last = p + 1
                 while (js.getOrNull(last + 1) == '$') last++
                 if (last !in rewrittenAt) continue
-                val signal = CLIENT_SIGNAL.matchAt(js, last)?.value ?: continue
+                // A Kotlin template there is the interpolation check's to speak for.
+                val signal = CLIENT_SIGNAL.matchAt(js, last)?.value?.takeUnless { PLACEHOLDER in it } ?: continue
                 val extra = js.substring(p, last)
                 val (start, end) = span(p, last)
                 issues +=
@@ -1186,7 +1188,10 @@ public class ExpressionValidator(
         val spec = catalog.actionsByName[name]
         val end = start + 1 + name.length
         if (spec == null) {
-            val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
+            val names = catalog.actions.map { it.name }
+            val near =
+                names.firstOrNull { it.equals(name, ignoreCase = true) }
+                    ?: names.singleOrNull { ElementsGuard.oneEditAway(name, it, swaps = true) }
             return listOf(
                 Issue(
                     start = start,

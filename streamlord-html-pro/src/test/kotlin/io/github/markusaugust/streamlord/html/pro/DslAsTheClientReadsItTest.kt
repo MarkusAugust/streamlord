@@ -39,6 +39,7 @@ import io.github.markusaugust.streamlord.html.js
 import io.github.markusaugust.streamlord.html.not
 import io.github.markusaugust.streamlord.html.patch
 import io.github.markusaugust.streamlord.html.peek
+import io.github.markusaugust.streamlord.html.peekExpr
 import io.github.markusaugust.streamlord.html.post
 import io.github.markusaugust.streamlord.html.postExpr
 import io.github.markusaugust.streamlord.html.put
@@ -1328,6 +1329,127 @@ class DslAsTheClientReadsItTest {
                 button {
                     dataSignals("a", "4")
                     dataOnClick("probe(${peek(signal("a"))})")
+                }
+            },
+            dslCase(
+                "get retried on error, each option an expression the page computes",
+                "get",
+                probe = mapOf("rounds" to 1, "respond" to mapOf("status" to 500)),
+                expect = {
+                    listens("button", "click")
+                    listensPlain("document", "visibilitychange")
+                    store = """{"r":"error","i":100,"s":3,"w":500,"n":3,"h":false,"p":"^q$"}"""
+                    timer("setTimeout", 100)
+                    timer("setTimeout", 300)
+                    timer("setTimeout", 500)
+                    // The filter includes no signal, so the query string holds an empty object.
+                    repeat(3) { request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT, aborted = false) }
+                    request("GET", "http://localhost/x?datastar=%7B%7D", headers = ACCEPT)
+                    errors += "FetchFailed"
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
+                button {
+                    dataSignals("r", "'error'")
+                    dataSignals("i", "100")
+                    dataSignals("s", "3")
+                    dataSignals("w", "500")
+                    dataSignals("n", "3")
+                    dataSignals("h", "false")
+                    dataSignals("p", "'^q$'")
+                    dataOnClick(
+                        get("/x") {
+                            retryExpr = "${'$'}r"
+                            retryIntervalExpr = "${'$'}i"
+                            retryScalerExpr = "${'$'}s"
+                            retryMaxWaitExpr = "${'$'}w"
+                            retryMaxCountExpr = "${'$'}n"
+                            openWhenHiddenExpr = "${'$'}h"
+                            filterSignals = SignalFilter(includeExpr = "${'$'}p")
+                        },
+                    )
+                }
+            },
+            dslCase("post a form whose content type and selector the page computes", "post", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                listensPlain("f", "submit")
+                store = """{"ct":"form","sel":"#f"}"""
+                request("POST", "http://localhost/x", "q=y", ACCEPT + ("Content-Type" to "application/x-www-form-urlencoded"))
+                heard("button", "click", 0)
+                listensPlain("AbortSignal", "abort")
+            }) {
+                form {
+                    id = "f"
+                    input {
+                        name = "q"
+                        value = "y"
+                    }
+                }
+                button {
+                    dataSignals("ct", "'form'")
+                    dataSignals("sel", "'#f'")
+                    dataOnClick(
+                        post("/x") {
+                            contentTypeExpr = "${'$'}ct"
+                            selectorExpr = "${'$'}sel"
+                        },
+                    )
+                }
+            },
+            dslCase(
+                "post filtered by a filter written as an expression, with a string include",
+                "post",
+                probe =
+                    mapOf(
+                        "rounds" to 1,
+                    ),
+                expect = {
+                    listens("button", "click")
+                    store = """{"a":1,"b":2}"""
+                    request("POST", "http://localhost/x", """{"b":2}""", JSON_BODY)
+                    heard("button", "click", 0)
+                    listensPlain("AbortSignal", "abort")
+                },
+            ) {
+                button {
+                    dataSignals("a" to 1, "b" to 2)
+                    dataOnClick(post("/x") { filterSignals = SignalFilter(expression = "{include: '^b$'}") })
+                }
+            },
+            dslCase("set all and toggle all with filters the page computes", "setAll", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                store = """{"a1":1,"a2":2,"b":3,"t":false,"u":false}"""
+                storeAfter = """{"a1":0,"a2":0,"b":3,"t":true,"u":false}"""
+                heard("button", "click", 0)
+            }) {
+                button {
+                    dataSignals("a1" to 1, "a2" to 2, "b" to 3, "t" to false, "u" to false)
+                    dataOnClick(
+                        setAll(0, SignalFilter(includeExpr = "'^a'")) + "; " + toggleAll(SignalFilter(expression = "{include: /^t$/}")),
+                    )
+                }
+            },
+            dslCase("peek of a function the page holds", "peekExpr", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                store = """{"a":4}"""
+                heard("button", "click", 1)
+                probes = listOf(listOf(4))
+            }) {
+                button {
+                    dataSignals("a", "4")
+                    dataOnClick("probe(${peekExpr("() => ${'$'}a")})")
+                }
+            },
+            dslCase("peek of an object literal", "peek", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                store = """{"a":4}"""
+                heard("button", "click", 1)
+                probes = listOf(listOf(mapOf("a" to 4)))
+            }) {
+                button {
+                    dataSignals("a", "4")
+                    dataOnClick("probe(${peek("{a: ${'$'}a}")})")
                 }
             },
             dslCase("expression helpers", "statements", probe = mapOf("rounds" to 1), expect = {
