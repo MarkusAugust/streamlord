@@ -357,6 +357,10 @@ All notable changes to Streamlord are recorded here. The format follows
   The rewrite to `interpolate` keeps such a value a template in the format, so it no longer keeps
   the rewrite from the other values. A String in the body of a `<style>` is said to be read as CSS,
   with advice for CSS, where it was told to move into a `data-*` attribute.
+- VS Code reads a comparison as a Boolean, arithmetic of numbers the file declares,
+  `style="width: ${n * 2}px"` or `${n + 1}`, as a number, and `${Tab.HOME.name}` as the author's
+  own, as IntelliJ does: none of them is warned of where it is safe, nor keeps the rewrite from the
+  other values.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

@@ -1262,6 +1262,8 @@ private fun qualifiedConstant(
     if (!holders.last()[0].isUpperCase() || declarationOf(src, holders.first(), at) != null) return false
     val name = m.groupValues[2]
     if (SCREAMING.matchEntire(name) != null) return true
+    // The name of an entry, `Tab.HOME.name`, is the name the author gave it.
+    if (name == "name" && holders.size > 1 && SCREAMING.matchEntire(holders.last()) != null) return true
     return name in constants || fileFacts(src).names[name].orEmpty().any { it.constant }
 }
 
@@ -1306,6 +1308,7 @@ internal fun valueKind(
     }
     callKind(src, t, at, constants, sdk)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return ValueFact.CONSTANT
+    shapeKind(src, t, at, constants, sdk)?.let { return it }
     if (IDENT.matchEntire(t) == null) return null
     if (constantAt(src, t, at, constants)) return ValueFact.CONSTANT
     return declaredKind(src, t, at, nonNull, sdk.core)
@@ -1706,6 +1709,45 @@ private val OTHER_OPERATOR = regex("""\?:|\.\.|\s[\p{L}_][\p{L}\p{Nd}_]*\??\s"""
 
 /** Outside brackets: `*`, `/`, `%` or a `-` between operands, which Kotlin defines for numbers. */
 private val ARITHMETIC = regex("""[*/%]|[\p{L}\p{Nd}_)\]]\s*-(?![-=>])""")
+
+/**
+ * What the operators of [value] show it to be: a comparison or a test is a Boolean, whatever is
+ * compared, and arithmetic of numbers alone, each operand a number the text shows or a number
+ * literal, is a number. Null where they show nothing: an operand of another kind may have an
+ * operator of its own.
+ */
+private fun shapeKind(
+    src: String,
+    value: String,
+    at: Int,
+    constants: Set<String>,
+    sdk: FileModules,
+): ValueFact? {
+    val e = unparen(value)
+    val d = depths(e)
+    val top = CharArray(e.length) { if (d[it] == 0) e[it] else ' ' }.concatToString()
+    if (BOOLEAN_OPERATOR.containsMatchIn(top)) return ValueFact.BOOLEAN
+    if (OTHER_OPERATOR.containsMatchIn(top)) return null
+    // Cut at each binary operator: one after an operand, so a sign stays with what it signs.
+    val operands = ArrayList<String>()
+    var from = 0
+    for (k in top.indices) {
+        if (top[k] !in "+-*/%" || top.getOrNull(k + 1).let { it == '=' || it == top[k] }) continue
+        val before = top.substring(from, k).trimEnd()
+        if (before.isEmpty() || !isWordPart(before.last()) && before.last() != ')' && before.last() != ']') continue
+        operands += e.substring(from, k)
+        from = k + 1
+    }
+    if (operands.isEmpty()) return null
+    operands += e.substring(from)
+    return ValueFact.NUMBER.takeIf {
+        operands.all { o ->
+            val operand = o.trim()
+            NUMBER_LITERAL.matchEntire(operand.removePrefix("-")) != null ||
+                valueKind(src, operand, at, constants, sdk = sdk) == ValueFact.NUMBER
+        }
+    }
+}
 
 /**
  * Whether the shape of [value] says it is a number or a boolean, whatever its type: arithmetic, a

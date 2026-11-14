@@ -287,7 +287,8 @@ to a value is read as one string: in `${"<b>" + query + "</b>"}` the literals ar
 so `${if (blank) "nothing" else query}` is the `String` it may be.
 
 VS Code knows what the file it is in declares, each name in the scope it is declared in, and every
-`const val` in the workspace that the file does not declare as something else; IntelliJ also knows
+`const val` in the workspace that the file does not declare as something else; it reads a comparison
+as a Boolean, arithmetic of numbers it knows as a number, and the `name` of an enum entry as yours; IntelliJ also knows
 the types, and what it knows of a value comes before anything the text suggests. Nothing here is an error, because a value the text cannot see into may well
 be a number.
 
