@@ -86,6 +86,10 @@ class DatastarAnswerTest {
             """<script data-a="[object Object]" data-b="1,,x" data-c="1.5" data-d="true" data-e="null" data-f="1e-7">go()</script>""",
             tag("""{"data-a":{"x":1},"data-b":[1,null,"x"],"data-c":1.50,"data-d":true,"data-e":null,"data-f":0.0000001}"""),
         )
+        assertEquals(
+            """<script data-g="0.000001" data-h="0.00002" data-i="1e+21" data-j="-2.5">go()</script>""",
+            tag("""{"data-g":1e-6,"data-h":2e-5,"data-i":1e21,"data-j":-2.50}"""),
+        )
         for (refused in listOf("null", "\"ab\"", "[1]", "{")) {
             assertFailsWith<DatastarEventValidationException>(refused) { tag(refused) }
         }
