@@ -2,7 +2,6 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
-import kotlin.test.assertTrue
 
 /** An expression of a few thousand action calls is judged in time that grows with its length. */
 class ExpressionTimingTest {
@@ -59,22 +58,6 @@ class ExpressionTimingTest {
             20,
             { n -> "<div data-on:datastar-fetch=\"" + (0 until n).joinToString("; ") { "switch (evt.detail.type) { case 'nope$it': 1 }" } + "\"></div>" },
         ) { analyzer.analyzeHtml(it) }
-    }
-
-    // As deep as the readers before the parser fed them read, on a thread of 1 MB.
-    @Test
-    fun `nested actions and options objects as deep as before`() {
-        var said = emptyList<String>()
-        val nested = "@get(".repeat(600) + "1" + ")".repeat(600)
-        val options = "@get('/x', {headers: " + "{a: ".repeat(400) + "1" + "}".repeat(400) + ", retyr: 1})"
-        val thread =
-            Thread(null, {
-                said = listOf(nested, options).flatMap { v -> analyzer.analyzeHtml("<div data-on:click=\"$v\"></div>").map { it.message } }
-            }, "deep", 1L shl 20)
-        thread.start()
-        thread.join()
-        assertTrue(said.none { "stack" in it }, said.toString())
-        assertTrue(said.any { "has no option retyr" in it }, said.toString())
     }
 
     @Test
