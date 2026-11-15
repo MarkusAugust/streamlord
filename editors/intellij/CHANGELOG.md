@@ -2,6 +2,89 @@
 
 All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here.
 
+## 0.15.0
+
+- **Breaking:** the plugin runs only with the Kotlin plugin in K2 mode, the default. An IntelliJ
+  2026.1 with K1 turned on no longer loads it.
+- The plugin speaks Datastar 1.0.5 and judges an expression as the 1.0.5 client compiles it.
+
+**Attributes**
+
+- A bare `data-*` name one edit from a Datastar attribute, `data-persits`, gets a hint and a fix
+  where its value or form says Datastar was meant, as does `data-text-foo`. `data-no:click` warns.
+- With the aliased prefix set, a plain `data-*` Datastar attribute with a key, a modifier or a
+  Datastar value is a warning with a fix that writes the alias. `data-bind="text: $data.name"` is fine.
+- A page is read with the prefix you set throughout: `data-ds-signals:my-value__case.kebab` defines
+  `$my-value`, and completion and messages use it. Under the default prefix `data-star-rating` is fine.
+- Markup under `data-ignore`, or on an element with `data-ignore__self`, is not checked and its
+  signals count as none; so does `dataIgnore()` in the DSL.
+- `data-on:keyDown` gets a hint to write the event in lower case, where the fix wrote
+  `key-down__case.camel`. `data-on:webkitAnimationEnd` gets `webkit-animation-end__case.camel`.
+- `DATA-TEXT` and `Data-On:Click` are no longer an attribute that is not allowed here, and a weaker
+  problem inside an error is shown with the error, with its fixes.
+- New warnings: `data-indicator` after a `data-init` that sends a request (with a fix that moves it
+  first), `data-computed` that changes a signal, and `data-attr:view-box` on an SVG element.
+- `data-json-signals` and `data-on-signal-patch-filter` are held to `include` and `exclude`, and the
+  filter without `data-on-signal-patch` on the element is a warning.
+- `data-match-media`'s value is a media query, and a value of only spaces is an empty expression.
+
+**Modifiers and actions**
+
+- Modifier arguments are judged as the client reads them, `__threshold.0.5` reads 0 with a fix, and
+  the modifier lambda of a DSL call is checked for what the DSL refuses as it renders.
+- Every action is checked for its arguments, the Pro actions `@clipboard`, `@fit` and `@intl` by the
+  kinds the reference declares, and a backend action's options as the client reads them.
+- An option of the wrong kind says what Datastar does with it, `@intl` and the `datastar-fetch`
+  types are offered and checked, and `@gett` is offered `@get`.
+- A Kotlin template or a `%s` in an action call no longer turns off the checks of the rest.
+- The expressions of the DSL's `...Expr` helpers and options are checked, completed, hovered and
+  coloured as `dataText`'s is. `responseOverrides` is no longer offered.
+
+**Expressions, signals and SSE**
+
+- `Unexpected end of input` is said for a value that stops short, `data-text="1 +"`. `evt.type`
+  outside `data-on`, `$$count` and `await @post(...)` are reported, with why.
+- A signal the server reads that no page declares is a warning, `signal-never-declared`. The
+  inspection "Signal no file defines" is called "Unknown signals", and its settings are kept.
+- The keys of an object a signal is given are signals, `$tick++` defines its signal, and
+  `"<p $name=\"x\">"` defines none. Completion after `$` offers only defined signals.
+- The plugin flags a literal argument of an SSE call or an answer that core refuses, in core's
+  words: `patchElements throws: Patch mode 'inner' requires a selector.`
+- Completion no longer slows down on a Kotlin file of thousands of DSL calls.
+
+**Kotlin values in HTML**
+
+- The rewrite to `interpolate(...)` is titled "Build this string with interpolate(...)" and is an
+  intention anywhere in a string with a value to escape.
+- It is offered for `.trimIndent()`, `.trimMargin()`, `$$"..."` and `+` chains, not first for a
+  value that may be null, and not where it would change the page. `interpolate` takes a `Trusted`
+  the plugin resolves anywhere, `user.badge` too.
+- A value that blocks the rewrite is named in the other values' messages; a constant of yours stays
+  a template and blocks nothing. A number or a boolean, nullable or not, in a script is no warning.
+- A list handed to `interpolate` is one value, with a hint and a fix for `listOf(...)`. A value in
+  `data-match-media` is a warning. The warnings link to [Strings](https://streamlord-docs.netlify.app/strings/).
+
+**Completion, hover and colours**
+
+- The events after `data-on:` are listed by their names, `click`, and `data-on` is written
+  `data-on:key=""` with `key` selected. Tab replaces the rest of the word.
+- Option values, modifier values and the defined signals of `data-bind` are completed, and hover
+  documents each action parameter, modifier, `el`, `evt` and signal.
+- Hover no longer fails on the first character of a word. `datastar-fetch` is listed once, and the
+  file's words are no longer offered after `__`.
+- The Datastar colours fall back to standard keys of your scheme, so they look different in Default
+  and Darcula: an attribute name takes the HTML attribute colour, an action the function declaration's.
+- The `data-star-` prefix, names in capitals, `.hbs` files, `interpolate`'s format and JSON in
+  escaped quotes are coloured. `$name` in an ordinary Kotlin string is Kotlin's template.
+- Template engines keep their syntax: `${...}` in jte, kte, FreeMarker and Velocity, FreeMarker's
+  `<#if>` and PHP's `<?= ?>` are no expression error, and in Razor `@@post(...)` reads as `@post(...)`.
+
+**Inspector**
+
+- The Stream Inspector folds a signal patch deeper than 64 levels into the store, and shows the
+  first 10,000 characters of a line, where a line of a megabyte froze the IDE.
+- The route marker no longer stands on a DSL action, and a Ktor `sse("/feed") { }` route gets one.
+
 ## 0.14.0
 
 - An attribute on a line of its own, in a tag opened on a line above, gets its completions: the
