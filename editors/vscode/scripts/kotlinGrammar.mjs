@@ -26,7 +26,34 @@ const PATH = "variable.other.property.signal-path.datastar";
 
 /** A receiver before a call, which a Kotlin grammar may colour from its dot. */
 const RECV = r`(?:(\??\.)\s*)?`;
-const NAMED = r`(?:expression\s*=\s*)?`;
+const NAMED = r`(?:expression\s*(=)\s*)?`;
+/** The name of an argument before an expression's, passed by name: `event = `, `name = `. */
+const OTHER_NAMED = r`(?:(?!expression\b)[A-Za-z_][A-Za-z0-9_]*\s*(=)\s*)?`;
+const ASSIGN = { name: "keyword.operator.assignment.kotlin" };
+
+/**
+ * The groups of [pattern]: how many capture, and which of them is a named argument's `(=)`, which
+ * keeps the colour Kotlin's grammar gives it.
+ */
+function groupsOf(pattern) {
+  let count = 0;
+  const assigns = [];
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === "\\") i++;
+    else if (pattern[i] === "[") while (i < pattern.length && pattern[i] !== "]") i += pattern[i] === "\\" ? 2 : 1;
+    else if (pattern[i] === "(" && pattern[i + 1] !== "?") {
+      count++;
+      if (pattern.startsWith("(=)", i)) assigns.push(count);
+    }
+  }
+  return { count, assigns };
+}
+
+/** The captures of a begin that opens a string in its last group: the named arguments' `=` among [captures], and the quote. */
+function opening(begin, captures, quote) {
+  const { count, assigns } = groupsOf(begin);
+  return { ...Object.fromEntries(assigns.map((n) => [n, ASSIGN])), ...captures, [count]: quote };
+}
 const SIGNAL_NAME = r`([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)`;
 const RAW_QUOTE = r`(\$*""")`;
 const QUOTE = r`(\$*"(?!""))`;
@@ -59,12 +86,12 @@ function embedded(begin, captures, raw, content, inner) {
 }
 
 /** Two rules, a raw string and a plain one, opened by [head] with the string in group [group]. */
-function expressionCall(comment, head, captures, group, lookahead = "") {
+function expressionCall(comment, head, captures, lookahead = "") {
   return {
     comment,
     patterns: [true, false].map((raw) => ({
       begin: head + (raw ? RAW_QUOTE : QUOTE) + lookahead,
-      beginCaptures: { ...captures, [group]: { name: raw ? RAW_START : DQ_START } },
+      beginCaptures: opening(head + (raw ? RAW_QUOTE : QUOTE), captures, { name: raw ? RAW_START : DQ_START }),
       end: raw ? '(""")' : '(")',
       endCaptures: { 1: { name: raw ? RAW_END : DQ_END } },
       patterns: [{ include: "#expression-string-body" }],
@@ -77,7 +104,7 @@ function expressionCall(comment, head, captures, group, lookahead = "") {
 const expressionString = (anchor) =>
   [true, false].map((raw) => ({
     begin: anchor + NAMED + (raw ? RAW_QUOTE : QUOTE),
-    beginCaptures: { 1: { name: raw ? RAW_START : DQ_START } },
+    beginCaptures: opening(anchor + NAMED + (raw ? RAW_QUOTE : QUOTE), {}, { name: raw ? RAW_START : DQ_START }),
     end: raw ? '(""")' : '(")',
     endCaptures: { 1: { name: raw ? RAW_END : DQ_END } },
     patterns: [{ include: "#expression-string-body" }],
@@ -159,15 +186,15 @@ export function kotlinInjectionGrammar(catalog) {
             "The annotation on a function or property: ends after the next triple-quoted literal, or after a double-quoted literal that ends the line (`val x = \"<b>\"`). A double-quoted string before that, such as a parameter default, is a plain string.",
           begin: r`(@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"(?i:html)"\s*\))`,
           beginCaptures: { 1: { name: "storage.type.annotation.kotlin" } },
-          end: r`(?<=""")|(?<=")\s*$`,
-          patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#plain-double-string" }],
+          end: r`(?<=""")|(?<=")\s*$|(?<=")(?=\s*\+)`,
+          patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#marked-double-string" }, { include: "#plain-double-string" }],
           name: MARKER,
         },
         {
           begin: r`(//\s*language=(?i:html)\b[^\n]*)`,
           beginCaptures: { 1: { name: "comment.line.double-slash.kotlin" } },
-          end: r`(?<=""")|(?<=")\s*$`,
-          patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#plain-double-string" }],
+          end: r`(?<=""")|(?<=")\s*$|(?<=")(?=\s*\+)`,
+          patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#marked-double-string" }, { include: "#plain-double-string" }],
           name: MARKER,
         },
         embedded(r`(\$*""")(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
@@ -176,16 +203,16 @@ export function kotlinInjectionGrammar(catalog) {
     },
     "html-string-next-line": {
       comment:
-        "A raw string that ends its first line: HTML when its next line opens with a tag, as `val h = \"\"\"` and `\"\"\".trimIndent()` write it, else a string. Its first line cannot tell which, so it is read here either way, with the templates its dollars open.",
+        "A raw string that ends its first line: HTML when its next line opens with a tag, after trimMargin's `|` too, as `val h = \"\"\"` and `\"\"\".trimIndent()` write it, else a string. Its first line cannot tell which, so it is read here either way, with the templates its dollars open.",
       patterns: [3, 2, 1].map((n) => ({
-        begin: "(" + "\\$".repeat(n - 1) + '""")' + r`[ \t]*$`,
+        begin: r`(?<!\$)(` + "\\$".repeat(n === 1 ? 0 : n) + '""")' + r`[ \t]*$`,
         beginCaptures: { 1: { name: RAW_START } },
         end: '(""")',
         endCaptures: { 1: { name: RAW_END } },
         name: STRING,
         patterns: [
           {
-            begin: r`^(?=[ \t]*<(?:[A-Za-z]|!--|!(?i:doctype)))`,
+            begin: r`^(?=[ \t]*\|?<(?:[A-Za-z]|!--|!(?i:doctype)))`,
             end: '(?=""")',
             name: MARKERS[n],
             contentName: "meta.embedded.block.html",
@@ -199,6 +226,10 @@ export function kotlinInjectionGrammar(catalog) {
     "html-double-string": {
       comment: "A double-quoted literal that opens with a tag, under an HTML marker: HTML.",
       ...embedded(r`(\$*")(?=<(?:[A-Za-z]|!--))`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
+    },
+    "marked-double-string": {
+      comment: "The double-quoted literal the marker ends at, the one that ends the line or is joined to more: HTML, however it opens (`@Language(\"HTML\") val p = \"Hello <b>\" + rest`).",
+      ...embedded(r`(\$*")(?=(?:[^"\\\n]|\\.)*"[ \t]*(?:;[ \t]*|\+.*)?$)`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
     },
     "plain-double-string": {
       comment:
@@ -234,47 +265,51 @@ export function kotlinInjectionGrammar(catalog) {
       "dataOnClick(\"...\"), dataText(\"...\") and friends: the first argument is the expression, in any kind of string, or passed by name. After a receiver too, where a grammar may colour the call from its dot.",
       RECV + r`\b((?:` + first + r`))(\s*\(\s*` + NAMED + ")",
       { 2: FN },
-      4,
     ),
     "expression-call-second-arg": expressionCall(
       "dataOn(\"click\", \"...\"), dataComputed(\"name\", \"...\"): the second argument is the expression, the first a plain string. No capture of a rule that may run many times on a line has patterns of its own: the engine copies the line up to each such capture, which a long line pays for on every call.",
-      RECV + r`\b((?:` + second + r`))(\s*\(\s*)(\$*"[^"\n]*")(\s*,\s*` + NAMED + ")",
-      { 2: FN, 4: { name: "string.quoted.double.kotlin" } },
-      6,
+      RECV + r`\b((?:` + second + r`))(\s*\(\s*` + OTHER_NAMED + r`)(\$*"[^"\n]*")(\s*,\s*` + NAMED + ")",
+      { 2: FN, 5: { name: "string.quoted.double.kotlin" } },
     ),
     "expression-call-signal-pair": expressionCall(
       "dataSignals(\"name\", \"...\"), dataComputed(\"name\", \"...\"): the first argument names a signal, the second is the expression.",
-      RECV + r`\b(dataSignals|dataComputed)(\s*\(\s*)(\$*")` + SIGNAL_NAME + r`(")(\s*,\s*` + NAMED + ")",
-      { 2: FN, 4: { name: DQ_START }, 5: { name: SIGNAL }, 6: { name: PATH }, 7: { name: DQ_END } },
-      9,
+      RECV + r`\b(dataSignals|dataComputed)(\s*\(\s*(?:name\s*(=)\s*)?)(\$*")` + SIGNAL_NAME + r`(")(\s*,\s*` + NAMED + ")",
+      { 2: FN, 5: { name: DQ_START }, 6: { name: SIGNAL }, 7: { name: PATH }, 8: { name: DQ_END } },
     ),
     "expression-call-lone-object": expressionCall(
       "dataClass(\"{hidden: $a}\"), dataSignals(\"{...}\"): a lone object is the expression of a call whose expression is its last argument.",
       RECV + r`\b((?:` + last + r`))(\s*\(\s*` + NAMED + ")",
       { 2: FN },
-      4,
       r`(?=\s*\{)`,
     ),
+    "expression-call-named": {
+      comment:
+        "dataOn(expression = \"...\", event = \"click\"): the expression passed by name after another argument, which the rules above do not read. Only the string after expression = is one.",
+      begin: RECV + r`\b((?:` + second + r`))(\s*\()(?=[^()\n]*\bexpression\s*=)`,
+      beginCaptures: { 2: FN },
+      end: r`\)`,
+      patterns: [{ include: "#kotlin-brackets" }, ...expressionString(r`\bexpression\s*(=)\s*`), { include: "source.kotlin" }],
+    },
     "expression-call-every-arg": {
       comment:
         "fitExpr(\"...\", \"...\", ...): every string argument is an expression, passed by its place or its name, on any line. What a bracket inside holds is Kotlin's.",
       begin: RECV + r`\b((?:` + every + r`))(\s*\()`,
       beginCaptures: { 2: FN },
       end: r`\)`,
-      patterns: [{ include: "#kotlin-brackets" }, ...expressionString(r`(?:[A-Za-z_][A-Za-z0-9_]*\s*=\s*)?`), { include: "source.kotlin" }],
+      patterns: [{ include: "#kotlin-brackets" }, ...expressionString(r`(?:[A-Za-z_][A-Za-z0-9_]*\s*(=)\s*)?`), { include: "source.kotlin" }],
     },
     "expression-option": {
       comment:
         "payloadExpr = \"...\" and the other options of FetchOptions whose value is an expression, and each value of headerExprs = mapOf(\"X-Id\" to \"...\"), whose name is a plain string.",
       patterns: [
-        expressionCall("An option set to an expression, on no receiver.", r`(?<!\.)\b(` + plainOptions + r`)(\s*)(=)(\s*)`, { 3: { name: "keyword.operator.assignment.kotlin" } }, 5),
+        expressionCall("An option set to an expression, on no receiver.", r`(?<!\.)\b(` + plainOptions + r`)(\s*)(=)(\s*)`, {}),
         {
           begin: r`(?<!\.)\b(` + mapOptions + r`)(\s*)(=)(\s*)(mapOf|mutableMapOf|hashMapOf|linkedMapOf)(\s*\()`,
           beginCaptures: { 3: { name: "keyword.operator.assignment.kotlin" }, 5: FN },
           end: r`\)`,
           patterns: [
             { include: "#kotlin-brackets" },
-            expressionCall("A value after its name and to.", r`(\$*"[^"\n]*")(\s*)(to)(\s*)`, { 1: { name: "string.quoted.double.kotlin" }, 3: FN }, 5),
+            expressionCall("A value after its name and to.", r`(\$*"[^"\n]*")(\s*)(to)(\s*)`, { 1: { name: "string.quoted.double.kotlin" }, 3: FN }),
             { include: "source.kotlin" },
           ],
         },
@@ -335,6 +370,33 @@ export function kotlinInjectionGrammar(catalog) {
         ),
       ),
     },
+    "interpolate-call": {
+      comment:
+        "interpolate(\"Hello <b>...\", ...): core's format is HTML however it opens, first or after the prefixes the aliased bundle passes (`interpolate(listOf(\"data-star-\"), \"...\")`), or by name.",
+      patterns: [true, false].map((raw) =>
+        embedded(
+          RECV +
+            r`\b(interpolate)(\s*\(\s*)((?:(?:prefixes\s*=\s*)?listOf\s*\([^()\n]*\)\s*,\s*)?)((?:format\s*=\s*)?\$*)` +
+            (raw ? '(""")' : '(")'),
+          { 2: FN, 4: { patterns: [{ include: "source.kotlin" }] }, 6: { name: raw ? RAW_START : DQ_START } },
+          raw,
+          "meta.embedded.block.html",
+          "text.html.basic",
+        ),
+      ),
+    },
+    "interpolate-call-next-line": {
+      comment: "interpolate(\n    \"Hello <b>...\",\n): the format on a line of its own, as ktlint wraps a long call. The region ends after it, or at the closing parenthesis.",
+      begin: RECV + r`\b(interpolate)(\s*\()[ \t]*$`,
+      beginCaptures: { 2: FN },
+      end: r`(?<=")|(?=\))`,
+      patterns: [
+        ...[true, false].map((raw) =>
+          embedded(r`^\s*((?:format\s*=\s*)?\$*)` + (raw ? '(""")' : '(")'), { 2: { name: raw ? RAW_START : DQ_START } }, raw, "meta.embedded.block.html", "text.html.basic"),
+        ),
+        { include: "source.kotlin" },
+      ],
+    },
     "script-call": {
       comment: "executeScript(\"\"\"...\"\"\"): JavaScript inside the string.",
       patterns: [true, false].map((raw) =>
@@ -354,7 +416,7 @@ export function kotlinInjectionGrammar(catalog) {
     comment: "Generated by scripts/kotlinGrammar.mjs (npm run generate) from catalog/datastar-1.0.5.json. Do not edit by hand.",
     scopeName: "streamlord.kotlin.injection",
     injectionSelector: `L:source.kotlin -comment -string -meta.dsl-file.streamlord -${STRING} -${MARKER}`,
-    patterns: ["dsl-file", "attributes-index", "html-call", "script-call", "html-string", "html-string-next-line"].map((k) => ({ include: "#" + k })),
+    patterns: ["dsl-file", "attributes-index", "html-call", "interpolate-call", "interpolate-call-next-line", "script-call", "html-string", "html-string-next-line"].map((k) => ({ include: "#" + k })),
     repository,
   };
 }
@@ -375,8 +437,11 @@ export function kotlinDslInjectionGrammar() {
       "expression-call-first-arg",
       "signal-name-call",
       "expression-call-next-line",
+      "expression-call-named",
       "attributes-index",
       "html-call",
+      "interpolate-call",
+      "interpolate-call-next-line",
       "script-call",
       "html-string",
       "html-string-next-line",
@@ -395,6 +460,8 @@ export function kotlinTemplateInjectionGrammar(n) {
     scopeName: `streamlord.kotlin.template${n === 1 ? "" : n}.injection`,
     injectionSelector: `L:${MARKERS[n]} -meta.template.expression.kotlin`,
     patterns: [
+      // trimMargin's | before a line of the string is the string's, at any depth of the HTML read inside it.
+      { match: r`^[ \t]*(\|)`, captures: { 1: { name: "string.quoted.triple.kotlin" } } },
       {
         match: before + "(" + dollars + r`)([A-Za-z_][A-Za-z0-9_]*)`,
         name: "meta.template.expression.kotlin",

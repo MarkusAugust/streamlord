@@ -29,10 +29,19 @@
       "include": "streamlord.kotlin.injection#expression-call-next-line"
     },
     {
+      "include": "streamlord.kotlin.injection#expression-call-named"
+    },
+    {
       "include": "streamlord.kotlin.injection#attributes-index"
     },
     {
       "include": "streamlord.kotlin.injection#html-call"
+    },
+    {
+      "include": "streamlord.kotlin.injection#interpolate-call"
+    },
+    {
+      "include": "streamlord.kotlin.injection#interpolate-call-next-line"
     },
     {
       "include": "streamlord.kotlin.injection#script-call"

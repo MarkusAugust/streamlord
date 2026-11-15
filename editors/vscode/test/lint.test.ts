@@ -27,4 +27,22 @@ describe("what the analysis finds in the open documents", () => {
     lint.issues("file:///deep.kt", tooDeep, true, "data-", [], null, null);
     assert.equal(lines.length, 2);
   });
+
+  // Each editor names the file's engine from its own language id, so a file associated with an engine, or untitled, gets its rules.
+  it("leaves each engine's own syntax out of the checks, and judges the rest", () => {
+    const lint = new Lint(() => {});
+    const issues = (language: string, page: string, key = "file:///page.x") => lint.issues(key, page, false, "data-", [], null, null, language).map((i) => i.code);
+    const backtick = `<div data-text="\`Hi \${user.name!'x'}\`"></div>`;
+    assert.deepEqual(issues("freemarker", backtick), [], "FreeMarker writes ${} inside a JavaScript template");
+    assert.deepEqual(issues("freemarker", backtick, "untitled:Untitled-1"), [], "an untitled FreeMarker file");
+    assert.deepEqual(issues("html", backtick), ["expression-syntax"], "JavaScript's own in an HTML file");
+    assert.deepEqual(issues("freemarker", `<div data-text="<#if a>$a<#else>$b</#if>"></div>`), [], "a FreeMarker directive");
+    assert.deepEqual(issues("php", `<div data-text="<?= htmlspecialchars("a") ?>"></div>`), [], "PHP");
+    assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save')" data-text="@Model.Name" data-show="@(Model.A + 1)"></div>`), [], "Razor");
+    assert.deepEqual(issues("razor", `<input data-bind:@Model.Key><div data-signals:@(Model.K)="1"></div>`), [], "Razor in a name");
+    // Razor writes @@ as the @ Datastar reads: the rest is judged.
+    assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save'"></div>`), ["expression-syntax"], "Razor's @@post( is Datastar's @post(");
+    // Only the engine's placeholder is left out: what is around it is still judged.
+    assert.deepEqual(issues("jte", "<div data-text=\"`Hi ${name}` + ((\"></div>"), ["expression-syntax"], "the rest of a jte value");
+  });
 });

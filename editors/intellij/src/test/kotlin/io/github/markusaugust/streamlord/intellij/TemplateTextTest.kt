@@ -63,6 +63,26 @@ class TemplateTextTest : BasePlatformTestCase() {
         assertTrue(items.toString(), "data-on" in items)
     }
 
+    fun `test each engine's own syntax is left out of the checks and the rest judged`() {
+        fun codes(
+            name: String,
+            text: String,
+        ): List<String> {
+            myFixture.configureByText(name, text)
+            return myFixture
+                .doHighlighting()
+                .mapNotNull { it.description }
+                .filter {
+                    !it.startsWith(
+                        "Typo",
+                    )
+                }.map { it.substringBefore(" See ") }
+        }
+        assertEquals(emptyList<String>(), codes("page.ftl", "<div data-text=\"<#if a>\$a<#else>\$b</#if>\"></div>"))
+        assertEquals(emptyList<String>(), codes("page.ftl", "<div data-text=\"`Hi \${user.name!'x'}`\"></div>"))
+        assertEquals(1, codes("page.jte", "<div data-text=\"`Hi \${name}` + ((\"></div>").size)
+    }
+
     fun `test an unknown extension is left alone`() {
         myFixture.configureByText("notes.txt", "<div data-onn:x=\"1\"></div>")
         assertEquals(emptyList<String>(), myFixture.doHighlighting().mapNotNull { it.description }.filter { !it.startsWith("Typo") })

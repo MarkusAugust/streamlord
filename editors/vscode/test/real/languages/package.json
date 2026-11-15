@@ -10,7 +10,7 @@
     "languages": [
       { "id": "jte", "extensions": [".jte"] },
       { "id": "kte", "extensions": [".kte"] },
-      { "id": "ftl", "extensions": [".ftl"] },
+      { "id": "freemarker", "extensions": [".ftl"] },
       { "id": "velocity", "extensions": [".vm"] },
       { "id": "mustache", "extensions": [".mustache"] }
     ]

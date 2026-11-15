@@ -750,9 +750,9 @@ public class Analyzer(
     }
 
     /**
-     * The string literal at an offset when it holds HTML: the argument of an HTML call site, or a
-     * free-standing literal that looks like HTML (see [isHtmlString]). Completion and hover use
-     * it to give Kotlin the HTML side.
+     * The string literal at an offset when it holds HTML: the argument of an HTML call site, the
+     * format of core's `interpolate`, however it opens, or a free-standing literal that looks like
+     * HTML (see [isHtmlString]). Completion, hover and colours use it to give Kotlin the HTML side.
      */
     public fun htmlStringAt(
         src: String,
@@ -761,8 +761,15 @@ public class Analyzer(
         val lex = lex(src)
         val s = lex.stringAt(offset) ?: return null
         if (isHtmlString(src, s)) return s
-        val site =
-            findCallSites(src, htmlSiteNames, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen + 1 } ?: return null
+        val around = { names: Set<String> ->
+            findCallSites(src, names, lex).firstOrNull {
+                it.openParen < s.start &&
+                    s.end <= it.closeParen + 1
+            }
+        }
+        val formatOf = around(INTERPOLATE)?.takeUnless { shadowsCore(src, "interpolate") }?.let { interpolateFormat(it, src) }
+        if (formatOf?.second?.start == s.start) return s
+        val site = around(htmlSiteNames) ?: return null
         val spec = catalog.htmlCallSites[site.name] ?: return null
         val arg = markupString(site, spec)
         return if (arg != null && arg.start == s.start) s else null
@@ -825,6 +832,7 @@ public class Analyzer(
                     hyphenated,
                     prefixSetting = opts.prefixSetting,
                     movable = templates,
+                    engine = opts.source.engine,
                 )
         }
         return issues

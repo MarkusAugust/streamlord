@@ -125,9 +125,12 @@ free-standing HTML strings, and of Datastar's attributes in HTML, the catalog's 
 `data-*` (plugin, key, modifiers and modifier arguments each get their own scope, and the value
 of an attribute that takes an expression is highlighted as a Datastar expression). In Kotlin
 this needs a Kotlin grammar, which a Kotlin extension brings; with Streamlord alone a `.kt` file
-gets every other feature here, uncoloured. Most themes color only
-a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
-into your user settings; `Streamlord: Remove recommended colors` takes it out again.
+gets every other feature here, uncoloured. The same colours reach FreeMarker, Velocity, Twig, PHP
+and Razor where their extension or VS Code's own grammar reads the file, and each engine's
+placeholders in a value, `{{ }}` and `${}` in a plain `.html` file among them, keep the engine's
+colours. Every scope is a standard one, which each of VS Code's built-in themes colours; for a
+palette of Streamlord's own, run `Streamlord: Apply recommended colors` once to write it into your
+user settings; `Streamlord: Remove recommended colors` takes it out again.
 
 **Stream Inspector** (`Streamlord: Open Stream Inspector`): connect to a running endpoint with
 a method, signals and headers; every SSE event arrives decoded, and the signal store is kept
@@ -228,7 +231,7 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 | `streamlord.diagnostics.enabled` | `true` | Validate Kotlin strings and HTML. |
 | `streamlord.diagnostics.html` | `true` | Also validate markup files. |
 | `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines, and on a signal the server reads that no page declares (`signal-never-declared`). IntelliJ's counterpart is the inspection Streamlord › Unknown signals. |
-| `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
+| `streamlord.languages` | html, jte, kte, freemarker, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
 | `streamlord.inspector.requestsFile` | `.streamlord/inspector.json` | Workspace-relative file holding the saved inspector requests, written with `/`, and not `.streamlord/env.json`. A path that is refused says why in the inspector, which then shows the default file. A file elsewhere gets no JSON schema. |

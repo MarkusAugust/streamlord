@@ -32,6 +32,11 @@ abstract class GenerateCatalogText : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val domEvents: RegularFileProperty
 
+    /** catalog/template-syntax.json, the template engines' constructs the checks leave out, compiled in beside the catalog. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val templateSyntax: RegularFileProperty
+
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
@@ -67,9 +72,10 @@ abstract class GenerateCatalogText : DefaultTask() {
         }
         val pieces = pieces(file.readText())
         val events = pieces(domEvents.get().asFile.readText())
+        val syntax = pieces(templateSyntax.get().asFile.readText())
         val text =
             """
-            |// Generated from catalog/${file.name} and catalog/dom-events.json by :streamlord-analysis:generateCatalogText. Do not edit.
+            |// Generated from catalog/${file.name}, catalog/dom-events.json and catalog/template-syntax.json by :streamlord-analysis:generateCatalogText. Do not edit.
             |package io.github.markusaugust.streamlord.analysis
             |
             |/** catalog/${file.name} as it stands, for [Catalog.default]. */
@@ -85,6 +91,12 @@ abstract class GenerateCatalogText : DefaultTask() {
             |    val DOM_EVENTS: String =
             |        listOf(
             |$events,
+            |        ).joinToString("")
+            |
+            |    /** catalog/template-syntax.json as it stands, for [TEMPLATE_SYNTAX]. */
+            |    val TEMPLATE_SYNTAX: String =
+            |        listOf(
+            |$syntax,
             |        ).joinToString("")
             |}
             |
@@ -104,6 +116,7 @@ val generateCatalogText =
                 .matching { include("datastar-*.json") },
         )
         domEvents.set(rootProject.layout.projectDirectory.file("catalog/dom-events.json"))
+        templateSyntax.set(rootProject.layout.projectDirectory.file("catalog/template-syntax.json"))
         output.set(layout.buildDirectory.dir("generated/catalogText"))
     }
 

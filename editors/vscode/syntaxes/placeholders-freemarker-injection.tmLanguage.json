@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.placeholders.freemarker.injection",
+  "comment": "FreeMarker's interpolations, directives and comments in a Datastar attribute's value are the engine's, written before the browser reads the value, inside a JavaScript template too: they get the FreeMarker grammar's own rules (eci99.freemarker-intellisense, text.html.ftl), and no Datastar scope.",
+  "injectionSelector": "L:text.html.ftl meta.value.datastar -meta.interpolation.freemarker -meta.directive -comment.block.freemarker",
+  "patterns": [
+    {
+      "include": "text.html.ftl#comment"
+    },
+    {
+      "include": "text.html.ftl#squareComment"
+    },
+    {
+      "include": "text.html.ftl#interpolation"
+    },
+    {
+      "include": "text.html.ftl#squareInterpolation"
+    },
+    {
+      "include": "text.html.ftl#directive"
+    },
+    {
+      "include": "text.html.ftl#squareDirective"
+    },
+    {
+      "include": "text.html.ftl#userDirective"
+    },
+    {
+      "include": "text.html.ftl#squareUserDirective"
+    }
+  ]
+}

@@ -26,6 +26,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `Modules.FROM_IMPORTS` for a host that never sees one, which reads a Kotlin file's imports.
   `streamlordCallNames(core, htmlDsl)` is gone, and `htmlStringAt(text, offset, core)` is
   `htmlStringAt(source, offset)`; whether a file may call the DSL is `readsDsl(source)`.
+- `Source.engine` names the template engine whose rules are its own, `TemplateEngine.JTE`,
+  `FREEMARKER`, `VELOCITY` or `RAZOR`, which each editor sets from its own file type or language
+  id; `templatePlaceholders` takes it as its second argument. The constructs every engine shares
+  are one list, `catalog/template-syntax.json`, which the analysis compiles in and the VS Code
+  grammar for an HTML file is written from.
 - `signalReferencesInKotlin` and `signalReferencesInHtml` are `signalReferences(source)`.
   `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and `collectSignalFacts` take a
   `Source`, read its attributes under `Source.prefix` as `signalReferences` does, and leave out the
@@ -297,6 +302,44 @@ All notable changes to Streamlord are recorded here. The format follows
   secret and are checked on the server.
 
 ### Fixed
+
+- VS Code: in a `$$"""` raw string that opens on the next line, `$$count` and `$${id}` are Kotlin's
+  templates again, not Datastar signals, as in a one-line string.
+- VS Code colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor files, where their extension
+  or VS Code's own grammar reads them, and leaves each engine's placeholders to the engine. The
+  `streamlord.languages` default names FreeMarker by its language id, `freemarker`, where it said
+  `ftl`, so diagnostics, completion and hover reach `.ftl` files too.
+- VS Code: an unclosed `'`, `` ` `` or `/*` in a value, as you type it, colours that value alone,
+  not the rest of the file, and so does `@post([[@{/save}]])` in Thymeleaf.
+- VS Code: `{{ user.name }}`, `{% if %}` and `${...}` in a value in an HTML file are the engine's
+  and get no Datastar colour, and Thymeleaf's `th:attr="data-signals=${x}"` is Thymeleaf's own.
+- VS Code colours the expression of `dataOn(event = "input", expression = "...")`,
+  `dataSignals(name = ..., expression = ...)`, `dataComputed`, `dataClass` and `dataAttr` with named
+  arguments, in any order.
+- VS Code colours HTML in a string under `@Language("HTML")`, in `interpolate("Hello <b ...>")` and
+  in a `trimMargin` raw string whose lines start with `|`, however the string opens. IntelliJ
+  colours `interpolate`'s format however it opens too.
+- VS Code: an ordinary attribute in escaped quotes in a plain Kotlin string,
+  `"<div class=\"btn\">"`, is a string, not an error.
+- IntelliJ: JSON in escaped quotes in a plain Kotlin string, `data-signals='{\"count\": 0}'`, has
+  its keys and values coloured, as in VS Code, where it was one string.
+- `${...}` in a value of a jte, kte, FreeMarker or Velocity file is the engine's inside a JavaScript
+  template too: IntelliJ no longer colours it as Datastar, and neither editor reports
+  `${user.name!'x'}` there as an expression error, while the rest of the value is still checked.
+- FreeMarker's `<#if>` and `<@macro>` and PHP's `<?= ?>` in a value are the engine's, and no
+  expression error. In Razor every `@` is Razor's, and `@@post(...)` is read and coloured as the
+  `@post(...)` it writes.
+- IntelliJ: an action such as `@post` has a colour again in the classic Default scheme, a global such
+  as `Math` has one in Darcula and the New UI's Dark, and the parts of an attribute's name have the
+  colour of an HTML attribute's name in every bundled scheme, as in VS Code.
+- A quoted object key, `{'text-red-500': $err}` as `data-class` writes one, is coloured as a key
+  and its colon as the key's, in both editors.
+- `${'$'}{${'$'}b}` in a JavaScript template in a Kotlin raw string is the template's `${` and the
+  signal `$b`, in both editors.
+- `{{#flag}}$a{{/flag}}`: IntelliJ colours `$a` beside the placeholder. VS Code colours `evt?.target`
+  as a property, as IntelliJ does, and gives a value's quotes the string colour.
+- VS Code reads a line of many Datastar attributes in time that grows with its length, where it
+  grew with its square: 400 attributes take a quarter of the time they did.
 
 - `payload = null` in the options of a backend action is written as `payload: null`, and the client
   sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the

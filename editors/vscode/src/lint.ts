@@ -10,9 +10,10 @@ export class Lint {
 
   constructor(private readonly log: (line: string) => void) {}
 
-  issues(key: string, text: string, kotlin: boolean, prefix: string, constants: string[], defined: string[] | null, others: DriftFacts[] | null): Issue[] {
+  /** The issues of the document `key`, whose language id `language` names the template engine that writes into it. */
+  issues(key: string, text: string, kotlin: boolean, prefix: string, constants: string[], defined: string[] | null, others: DriftFacts[] | null, language?: string): Issue[] {
     try {
-      const found = diagnose(text, kotlin, prefix, constants, defined, others);
+      const found = diagnose(text, kotlin, prefix, constants, defined, others, language ?? null);
       this.failing.delete(key);
       return found;
     } catch (e) {

@@ -22,6 +22,7 @@ import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
@@ -234,7 +235,11 @@ class StreamlordAnalysis(
     /** The issues of an HTML document or template. */
     fun htmlIssues(file: PsiFile): List<Issue> =
         CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(analyzer.analyzeHtml(source(file.text, SourceLanguage.HTML)), file, settings.tracker)
+            CachedValueProvider.Result.create(
+                analyzer.analyzeHtml(source(file.text, SourceLanguage.HTML).copy(engine = templateEngine(file))),
+                file,
+                settings.tracker,
+            )
         }
 
     /** How a Kotlin file's text is read, and the signals its expressions read, by the text alone. */
@@ -307,5 +312,21 @@ class StreamlordAnalysis(
 
         /** Either side of markup: an HTML tree, or a template read as text. */
         fun isMarkupSide(file: PsiFile): Boolean = isHtmlSide(file) || isTemplateText(file)
+    }
+}
+
+/**
+ * The template engine that writes into [file], from its file type as an engine's plugin names it,
+ * or from its extension where IntelliJ reads the file as text.
+ */
+fun templateEngine(file: PsiFile): TemplateEngine? {
+    val type = file.fileType.name.lowercase()
+    val extension = file.name.substringAfterLast('.', "").lowercase()
+    return when {
+        type in setOf("jte", "kte") || extension in setOf("jte", "kte") -> TemplateEngine.JTE
+        type in setOf("ftl", "freemarker") || extension in setOf("ftl", "ftlh", "ftlx") -> TemplateEngine.FREEMARKER
+        type in setOf("velocity", "vtl") || extension in setOf("vm", "vtl") -> TemplateEngine.VELOCITY
+        type == "razor" || extension in setOf("cshtml", "razor") -> TemplateEngine.RAZOR
+        else -> null
     }
 }

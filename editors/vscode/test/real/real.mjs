@@ -23,7 +23,7 @@ const CARET = "¦";
 /** The prefix of an aliased bundle, which the files under this folder are written for. */
 const ALIASED = "aliased/";
 /** Files of the languages the run declares; anything else in the workspace is there to be found by the extension. */
-const OPENED = /\.(html|kt|jte|kte|ftl|vm|mustache)$/;
+const OPENED = /\.(html|kt|jte|kte|ftl|vm|mustache|cshtml)$/;
 
 if (!existsSync(code)) fail(`VS Code is not at ${code}. Install it, or set STREAMLORD_REAL_CODE to its Contents/MacOS/Code.`);
 

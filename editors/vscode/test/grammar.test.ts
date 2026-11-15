@@ -35,9 +35,44 @@ const grammars: Record<string, textmate.IRawGrammar> = {
   "streamlord.placeholders.jte.injection": read("syntaxes/placeholders-jte-injection.tmLanguage.json"),
   "streamlord.placeholders.handlebars.injection": read("syntaxes/placeholders-handlebars-injection.tmLanguage.json"),
   "streamlord.placeholders.mustache.injection": read("syntaxes/placeholders-mustache-injection.tmLanguage.json"),
+  "streamlord.placeholders.html.injection": read("syntaxes/placeholders-html-injection.tmLanguage.json"),
+  "streamlord.placeholders.freemarker.injection": read("syntaxes/placeholders-freemarker-injection.tmLanguage.json"),
+  "streamlord.placeholders.velocity.injection": read("syntaxes/placeholders-velocity-injection.tmLanguage.json"),
+  "streamlord.placeholders.razor.injection": read("syntaxes/placeholders-razor-injection.tmLanguage.json"),
   "streamlord.html.element.injection": read("syntaxes/html-element-injection.tmLanguage.json"),
   "streamlord.kotlin.template3.injection": read("syntaxes/kotlin-template3-injection.tmLanguage.json"),
   "text.html.derivative": { scopeName: "text.html.derivative", patterns: [{ include: "text.html.basic" }] } as unknown as textmate.IRawGrammar,
+  // Stand-ins for the template languages whose grammars other extensions bring, each with the rules of its own the injections name.
+  "text.html.ftl": {
+    scopeName: "text.html.ftl",
+    patterns: [{ include: "text.html.basic" }],
+    repository: {
+      interpolation: { begin: "(\\$|#)\\{", end: "\\}", name: "meta.interpolation.freemarker" },
+      directive: { begin: "</?(#)([A-Za-z_][A-Za-z0-9_-]*)", end: ">", name: "meta.directive.freemarker" },
+    },
+  } as unknown as textmate.IRawGrammar,
+  "text.html.velocity": { scopeName: "text.html.velocity", patterns: [{ include: "text.html.basic" }, { include: "text.velocity" }] } as unknown as textmate.IRawGrammar,
+  "text.velocity": {
+    scopeName: "text.velocity",
+    patterns: [{ include: "#directives" }],
+    repository: { directives: { begin: "((#)\\b(?:if|elseif|foreach)\\b)\\s*(\\()", end: "(\\))", name: "source.velocity.embedded" } },
+  } as unknown as textmate.IRawGrammar,
+  "text.html.cshtml": {
+    scopeName: "text.html.cshtml",
+    patterns: [{ include: "text.html.basic" }],
+    repository: { "explicit-razor-expression": { begin: "(@)\\(", end: "\\)", name: "meta.expression.explicit.cshtml" } },
+  } as unknown as textmate.IRawGrammar,
+  // Twig's and PHP's grammars bring their tags as injections of their own, which reach into any region of the file.
+  "text.html.twig": {
+    scopeName: "text.html.twig",
+    patterns: [{ include: "text.html.basic" }],
+    injections: { "L:text.html.twig -comment": { patterns: [{ begin: "\\{\\{", end: "\\}\\}", name: "meta.tag.template.value.twig" }] } },
+  } as unknown as textmate.IRawGrammar,
+  "text.html.php": {
+    scopeName: "text.html.php",
+    patterns: [{ include: "text.html.basic" }],
+    injections: { "L:text.html.php meta.tag": { patterns: [{ begin: "<\\?(?:php|=)", end: "\\?>", name: "meta.embedded.line.php" }] } },
+  } as unknown as textmate.IRawGrammar,
 };
 
 /** The extension's grammars, injected where its package.json says, as VS Code injects them. */
@@ -353,14 +388,15 @@ describe("html injection grammar", () => {
   it("knows exactly the catalog's attributes", () => {
     const catalog = JSON.parse(readFileSync(new URL("../../catalog/datastar-1.0.5.json", root), "utf8")) as { attributes: { name: string; valueKind: string }[] };
     const grammar = JSON.parse(readFileSync(new URL("syntaxes/html-injection.tmLanguage.json", root), "utf8"));
-    const names = (pattern: string) => /\(\?:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
+    const names = (pattern: string) => /\(\?i:((?:[a-z-]+\|)*[a-z-]+)\)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const of = (kinds: (k: string) => boolean) => [...new Set(catalog.attributes.filter((a) => kinds(a.valueKind)).map((a) => a.name))].sort();
     // A filter, {include: /x/}, is an object the client evaluates; a signal attribute names a signal.
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-value"].begin), of((k) => k === "expression" || k === "filter"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-unquoted-value"].match), of((k) => k === "expression" || k === "filter"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-signal-value"].begin), of((k) => k === "signal"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-with-plain-value"].begin), of((k) => k === "text" || k === "none"));
-    assert.deepEqual(names(grammar.repository["datastar-attribute-bare"].match), of(() => true));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-expression"].begin), of((k) => k === "expression" || k === "filter"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-signal"].begin), of((k) => k === "signal"));
+    assert.deepEqual(names(grammar.repository["datastar-attribute-plain"].begin), of((k) => k === "text" || k === "none"));
+    // Every attribute is read by one of the three.
+    const all = ["expression", "signal", "plain"].flatMap((k) => names(grammar.repository[`datastar-attribute-${k}`].begin)).sort();
+    assert.deepEqual(all, of(() => true));
   });
 
   it("knows exactly the catalog's fetch options, and filterSignals' two keys", () => {
@@ -423,8 +459,10 @@ const S = {
   arrow: "storage.type.function.arrow.datastar",
   escape: "constant.character.escape.kotlin",
   dollarEscape: "constant.character.escape.dollar.kotlin",
-  stringStart: "punctuation.definition.string.begin.html",
-  stringEnd: "punctuation.definition.string.end.html",
+  stringStart: "string.quoted.double.html punctuation.definition.string.begin.html",
+  stringEnd: "string.quoted.double.html punctuation.definition.string.end.html",
+  singleStart: "string.quoted.single.html punctuation.definition.string.begin.html",
+  singleEnd: "string.quoted.single.html punctuation.definition.string.end.html",
   ktStart: "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin",
   ktEnd: "punctuation.definition.string.end.kotlin string.quoted.double.kotlin",
   ktRawStart: "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin",
@@ -598,9 +636,9 @@ describe("datastar colours, every token exactly", () => {
       ["data-", S.prefix],
       ["ref", S.plugin],
       ["=", "punctuation.separator.key-value.html"],
-      ["'", S.stringStart],
+      ["'", S.singleStart],
       ["box", S.signal],
-      ["'", S.stringEnd],
+      ["'", S.singleEnd],
       [">", "punctuation.definition.tag.end.html"],
     ]);
   });
@@ -707,6 +745,8 @@ describe("the lists both editors share", () => {
     const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
     const backend = /\(((?:[a-z]+\|)+[a-z]+)\)/.exec(expr.repository.action.match)?.[1]?.split("|").sort();
     assert.deepEqual(backend, catalog.actions.filter((a) => a.kind === "backend").map((a) => a.name).sort());
+    const razor = JSON.parse(readFileSync(new URL("syntaxes/placeholders-razor-injection.tmLanguage.json", root), "utf8"));
+    assert.deepEqual(/\(((?:[a-z]+\|)+[a-z]+)\)/.exec(razor.patterns[0].match)?.[1]?.split("|").sort(), backend, "Razor's @@ before a backend action");
     const kt = JSON.parse(readFileSync(new URL("syntaxes/kotlin-injection.tmLanguage.json", root), "utf8"));
     const names = (pattern: string) => /\\b\(?:?\(\?:((?:[A-Za-z]+\|)*[A-Za-z]+)\)/.exec(pattern)?.[1]?.split("|").sort() ?? [];
     const sites = Object.entries(catalog.kotlinCallSites.expression).filter(([n]) => !n.startsWith("$"));
@@ -782,3 +822,230 @@ describe("what is not Datastar's", () => {
     assert.ok(performance.now() - started < 1000, `took ${performance.now() - started} ms`);
   });
 });
+
+describe("Kotlin strings the analysis reads as Datastar", () => {
+  const text = <T extends { text: string }>(t: T[]) => t.filter((x) => x.text.trim() !== "");
+  const kindsOf = (t: { text: string; scopes: string[] }[]): [string, string][] => text(t).map((x) => [x.text, own(x)]);
+
+  it("counts the dollars of a raw string that opens on the next line", async () => {
+    const two = await tokenLines("source.kotlin", ['val h = $$"""', '    <p data-text="$count + $${id} + $$id"></p>', '""".trimIndent()']);
+    assert.deepEqual(between(kindsOf(two[1]!), "$", '"'), [
+      ["$", S.dollar],
+      ["count", S.signal],
+      ["+", S.arithmetic],
+      ["$${", S.templateBegin],
+      ["id", "identifier.kotlin"],
+      ["}", S.templateEnd],
+      ["+", S.arithmetic],
+      ["$$", S.templateBegin],
+      ["id", S.template],
+      ['"', S.stringEnd],
+    ]);
+    const three = await tokenLines("source.kotlin", ['val h = $$$"""', '    <p data-text="$$a + $$${b}"></p>', '"""']);
+    assert.ok(text(three[1]!).some((x) => x.text === "a" && x.scopes.includes(S.signal)), "two dollars are text in a $$$ string");
+    assert.ok(text(three[1]!).some((x) => x.text === "$$${" && x.scopes.includes(S.templateBegin)), "three open a template");
+    const one = await tokenLines("source.kotlin", ['val h = """', '    <p data-text="$x + ${y}"></p>', '"""']);
+    assert.ok(text(one[1]!).some((x) => x.text === "x" && x.scopes.includes(S.template)), "one dollar opens a template in a plain raw string");
+  });
+
+  it("colours the named arguments of a call that takes two", async () => {
+    for (const [call, signal, plain] of [
+      [`dataOn(event = "input", expression = "\\$q = el.value")`, "q", "input"],
+      [`dataOn(expression = "\\$q++", event = "click")`, "q", "click"],
+      [`dataSignals(name = "flag", expression = "\\$on")`, "on", null],
+      [`dataComputed(name = "total", expression = "\\$a + 1")`, "a", null],
+      [`dataClass(name = "hidden", expression = "!\\$open")`, "open", "hidden"],
+      [`dataAttr(name = "title", expression = "\\$t")`, "t", "title"],
+    ] as const) {
+      const t = (await tokenLines("source.kotlin", [DSL_IMPORT, `div { ${call} }`]))[1]!;
+      assert.ok(t.some((x) => x.text === signal && x.scopes.includes(S.signal)), `${call}: ${JSON.stringify(kindsOf(t))}`);
+      if (plain) assert.ok(!t.some((x) => x.text.includes(plain) && x.scopes.some((s) => s.includes("datastar"))), `${call}: ${plain} is no expression`);
+    }
+    const named = (await tokenLines("source.kotlin", [DSL_IMPORT, `div { dataSignals(name = "flag", expression = "true") }`]))[1]!;
+    assert.ok(named.some((x) => x.text === "flag" && x.scopes.includes(S.signal)), "the signal a pair names");
+  });
+
+  it("reads a marked double-quoted literal as HTML however it opens", async () => {
+    const lines = await tokenLines("source.kotlin", [`@Language("HTML")`, `val p = "Hello <b data-text=\\"\\$name\\"></b>"`, "val after = 1"]);
+    assert.match(scopeOf(lines[1]!, "b"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(lines[1]!, "name"), /variable\.other\.constant\.signal\.datastar/);
+    assert.ok(lines[2]!.every((x) => !x.scopes.some((s) => s.includes("html") || s.startsWith("string"))), "the next line is code");
+  });
+
+  it("reads interpolate's format as HTML, however it opens", async () => {
+    for (const call of [
+      `interpolate("Hello <b data-text=\\"\\$name\\" data-attr:title=\\"%s\\"></b>", "t")`,
+      `interpolate(format = "Hello <b data-text=\\"\\$name\\"></b>")`,
+      `interpolate(listOf("data-x-"), "Hello <b data-text=\\"\\$name\\"></b>")`,
+      'interpolate("""Hello <b data-text="${\'$\'}name"></b>""")',
+    ]) {
+      const t = await tokens("source.kotlin", `val p = ${call}`, false);
+      assert.match(scopeOf(t, "b"), /entity\.name\.tag\.html/, call);
+      assert.match(scopeOf(t, "name"), /variable\.other\.constant\.signal\.datastar/, call);
+      assert.ok(!t.some((x) => x.text === "t" && x.scopes.some((s) => s.includes("html"))), `${call}: a value is no markup`);
+    }
+  });
+
+  it("reads an ordinary attribute's value in escaped quotes as a string", async () => {
+    const t = await tokens("source.kotlin", `fun p() = "<div class=\\"btn\\" id=\\"x\\" data-text=\\"\\$a\\"></div>"`, false);
+    assert.ok(t.every((x) => !x.scopes.some((s) => s.startsWith("invalid"))), JSON.stringify(kindsOf(t)));
+    assert.match(scopeOf(t, "btn"), /string\.quoted\.double\.html/);
+    assert.match(scopeOf(t, "a"), /variable\.other\.constant\.signal\.datastar/);
+    assert.match(t[t.length - 1]!.scopes.join(" "), /punctuation\.definition\.string\.end\.kotlin/);
+  });
+
+  it("reads a raw string's lines after their margin", async () => {
+    const lines = await tokenLines("source.kotlin", ['val h = """', '    |<div data-show="${\'$\'}open">', '    |</div>', '""".trimMargin()']);
+    assert.match(scopeOf(lines[1]!, "div"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(lines[1]!, "open"), /variable\.other\.constant\.signal\.datastar/);
+  });
+
+  it("reads an escaped dollar in a JavaScript template as the template's own", async () => {
+    const t = await kinds("source.kotlin", 'val h = """<p data-text="`x ${\'$\'}{${\'$\'}b}`"></p>"""', false);
+    assert.deepEqual(between(t, "${'$'}{", "}"), [
+      ["${'$'}{", "string.template.datastar punctuation.definition.template-expression.begin.datastar"],
+      ["${'$'}", "string.template.datastar " + S.dollarEscape],
+      ["b", "string.template.datastar " + S.signal],
+      ["}", "string.template.datastar punctuation.definition.template-expression.end.datastar"],
+    ]);
+  });
+});
+
+describe("HTML values the analysis reads as Datastar", () => {
+  const datastar = (t: { scopes: string[] }) => t.scopes.some((s) => s.includes("datastar"));
+
+  it("keeps an unclosed string, template, comment or regex to its own value", async () => {
+    for (const value of [`"'Hello"`, '"`tpl"', '"$a /* note"', '"@post([[@{/save}]])"', '"`a ${$b"', "'`tpl'", `'"x'`, "'$a /* n'", "'/a'"]) {
+      const lines = await tokenLines("text.html.basic", [`<div data-text=${value} id="x"></div>`, `<p class="after">one</p>`]);
+      assert.match(scopeOf(lines[0]!, "id"), /entity\.other\.attribute-name\.html/, value);
+      assert.match(scopeOf(lines[1]!, "class"), /entity\.other\.attribute-name\.html/, value);
+      assert.ok(lines[1]!.every((x) => !datastar(x)), value);
+    }
+    const kt = await tokenLines("source.kotlin", [DSL_IMPORT, `div { dataText("'Hello"); dataShow("\\$a /* x") }`, "val y = 2"]);
+    assert.ok(kt[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)), "the next call's expression");
+    assert.ok(kt[2]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the next line is code");
+    const raw = await tokenLines("source.kotlin", ['val h = """<div data-text="`x" data-show="$a"></div>"""', "val y = 2"]);
+    assert.ok(raw[0]!.some((x) => x.text === "show" && x.scopes.includes(S.plugin)), "the next attribute in a raw string");
+    assert.ok(raw[1]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("datastar"))), "the line after a raw string");
+  });
+
+  it("gives a value's quotes the string scope HTML gives them", async () => {
+    const t = await tokens("text.html.basic", `<div data-text="$a" data-show='$b' data-bind="c" data-ref='d' data-nonce="e">`);
+    const quotes = t.filter((x) => x.text === '"' || x.text === "'");
+    assert.equal(quotes.length, 10);
+    for (const q of quotes) assert.ok(q.scopes.includes(q.text === '"' ? "string.quoted.double.html" : "string.quoted.single.html"), q.scopes.join(" "));
+  });
+
+  it("reads a quoted object key as a key, and an optional chain's property as a property", async () => {
+    const t = await kinds("text.html.basic", `<div data-class="{'text-red-500': $err}" data-signals='{"a-b": 1}' data-text="evt?.target.value">`);
+    assert.deepEqual(between(t, "'text-red-500'", ":"), [["'text-red-500'", S.objectKey], [":", "punctuation.separator.key-value.datastar"]]);
+    assert.deepEqual(between(t, '"a-b"', ":"), [['"a-b"', S.objectKey], [":", "punctuation.separator.key-value.datastar"]]);
+    assert.deepEqual(between(t, "evt", "value"), [["evt", "variable.language.scope.datastar"], ["?.", "punctuation.accessor.optional.datastar"], ["target", S.property], [".", S.accessor], ["value", S.property]]);
+    const kt = await kinds("source.kotlin", `val h = "<div data-signals='{\\"count\\": 0}'></div>"`, false);
+    assert.deepEqual(between(kt, '\\"count\\"', ":"), [['\\"count\\"', S.objectKey], [":", "punctuation.separator.key-value.datastar"]]);
+  });
+
+  it("leaves a template engine's placeholder in an HTML file to the engine, and Thymeleaf's own attributes alone", async () => {
+    const t = await tokens("text.html.derivative", `<div data-text="{{ user.name }} + $count" data-show="{% if a %}$x{% endif %}" data-on:click="@post('/x/{{id}}')">`);
+    for (const name of ["user", "if", "id"]) {
+      const tok = t.find((x) => x.text.includes(name))!;
+      const at = tok.scopes.findIndex((s) => s.includes("placeholder"));
+      assert.ok(at >= 0 && !tok.scopes.slice(at).some((s) => s.includes("datastar")), `${name}: ${tok.scopes.join(" ")}`);
+    }
+    assert.ok(t.some((x) => x.text === "count" && x.scopes.includes(S.signal)));
+    assert.ok(t.some((x) => x.text === "x" && x.scopes.includes(S.signal)));
+    const th = await tokens("text.html.derivative", `<div th:attr="data-signals=\${signals}" data-text="$y">`);
+    assert.ok(!th.some((x) => x.text.includes("signals") && datastar(x)), JSON.stringify(th.map((x) => [x.text, own(x)])));
+    assert.ok(th.some((x) => x.text === "y" && x.scopes.includes(S.signal)));
+    // A ${ in a JavaScript template is JavaScript's own.
+    const js = await tokens("text.html.derivative", "<div data-text=\"`Hi ${$name}`\">");
+    assert.ok(js.some((x) => x.text === "name" && x.scopes.includes(S.signal)));
+  });
+
+  it("colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor, each engine's placeholders left to it", async () => {
+    for (const [scope, placeholder, engine] of [
+      ["text.html.ftl", "${user.id}", "freemarker"],
+      ["text.html.ftl", "<#if a>", "freemarker"],
+      ["text.html.velocity", "${user.id}", "velocity"],
+      ["text.html.velocity", "#if($a)", "velocity"],
+      ["text.html.twig", "{{ user.id }}", "twig"],
+      ["text.html.php", "<?= $user ?>", "php"],
+      ["text.html.cshtml", "@(Model.Id)", "cshtml"],
+    ] as const) {
+      const t = await tokens(scope, `<div data-color="x" data-text="${placeholder} + $count" data-on:click="$a++">`);
+      assert.ok(!t.some((x) => x.text.includes("color") && datastar(x)), `${scope}: another's data-*`);
+      assert.ok(t.some((x) => x.text === "count" && x.scopes.includes(S.signal)), `${scope} ${placeholder}: ${JSON.stringify(t.map((x) => [x.text, own(x)]))}`);
+      assert.ok(t.some((x) => x.text === "click" && x.scopes.includes(S.key)), scope);
+      // The engine's scopes, past the file's own: nothing of Datastar's inside them.
+      const at = (x: { scopes: string[] }) => x.scopes.findIndex((s, i) => i > 0 && (s.endsWith(`.${engine}`) || s.includes(`.${engine}.`)));
+      const inside = t.filter((x) => at(x) > 0);
+      assert.ok(inside.length > 0 && inside.every((x) => !x.scopes.slice(at(x)).some((s) => s.includes("datastar"))), `${scope} ${placeholder}`);
+    }
+    // Each engine's own: a FreeMarker directive is text to Twig, and Velocity's $name is a signal.
+    const twig = await tokens("text.html.twig", `<div data-text="<#if a> + $b">`);
+    assert.ok(!twig.some((x) => x.scopes.some((s) => s.includes("freemarker"))));
+    const vm = await tokens("text.html.velocity", `<div data-text="$b + 1">`);
+    assert.ok(vm.some((x) => x.text === "b" && x.scopes.includes(S.signal)));
+  });
+
+  it("reads a line of many attributes in time that grows with its length", async () => {
+    const line = (n: number) => "<div " + Array.from({ length: n }, (_, i) => `data-on:click${i}__debounce.5ms="$c${i}++; @post('/x/${i}', {a: ${i}})"`).join(" ") + ">";
+    const time = async (n: number) => {
+      const started = performance.now();
+      await tokens("text.html.basic", line(n));
+      return performance.now() - started;
+    };
+    await time(200);
+    const short = Math.max(await time(400), 1);
+    const long = await time(1600);
+    // Four times the attributes; a cost that grows with the square would take sixteen times as long.
+    assert.ok(long < short * 8, `400 attributes ${short.toFixed(0)} ms, 1600 ${long.toFixed(0)} ms`);
+  });
+});
+
+describe("what the review of the highlighting fixes found", () => {
+  it("reads interpolate's format on a line of its own, as ktlint wraps it", async () => {
+    const lines = await tokenLines("source.kotlin", ["val p = interpolate(", '    "Hi <b data-text=\\"\\$a\\"></b>",', '    "x",', ")", "val y = 2"]);
+    assert.match(scopeOf(lines[1]!, "b"), /entity\.name\.tag\.html/);
+    assert.ok(lines[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)));
+    assert.ok(!lines[2]!.some((x) => x.scopes.some((s) => s.includes("html"))), "a value is no markup");
+    assert.ok(lines[4]!.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("html"))), "the next statement is code");
+  });
+
+  it("reads a marked literal joined to more as HTML", async () => {
+    const lines = await tokenLines("source.kotlin", [`@Language("HTML")`, `val m2 = "Hi <b data-text=\\"\\$a\\"></b>" + suffix`, "val y = 2"]);
+    assert.match(scopeOf(lines[1]!, "b"), /entity\.name\.tag\.html/);
+    assert.ok(lines[1]!.some((x) => x.text === "a" && x.scopes.includes(S.signal)));
+    assert.ok(lines[2]!.every((x) => !x.scopes.some((s) => s.includes("html") || s.startsWith("string"))), "the marker reaches no further");
+  });
+
+  it("reads Razor's @@ as Datastar's @, an action", async () => {
+    const t = await kinds("text.html.cshtml", `<div data-on:click="@@post('/save')" data-show="@@peek(() => 1)">`);
+    // The first @ is Razor's escape, the second the @ of Datastar's action, which the browser reads.
+    assert.deepEqual(between(t, "post").length > 0 && between(t, "=", "post").slice(-3), [["@", "constant.character.escape.razor.transition"], ["@", S.backendAt], ["post", S.backend]]);
+    assert.deepEqual(between(t, "peek").length > 0 && t.slice(t.findIndex(([x]) => x === "peek") - 2, t.findIndex(([x]) => x === "peek") + 1), [["@", "constant.character.escape.razor.transition"], ["@", S.at], ["peek", S.action]]);
+  });
+
+  it("colours a key of any letters, keeps the assignment of a named argument, and the margin a string", async () => {
+    const html = await tokens("text.html.basic", `<div data-signals:år="1" data-on:my-évent="$a">`);
+    assert.match(scopeOf(html, "år"), /entity\.other\.attribute-name\.datastar\.key/);
+    assert.match(scopeOf(html, "my-évent"), /entity\.other\.attribute-name\.datastar\.key/);
+    for (const call of [`dataOn(event = "input", expression = "\\$q")`, `dataText(expression = "\\$q")`, `dataSignals(name = "n", expression = "1")`]) {
+      const t = (await tokenLines("source.kotlin", [DSL_IMPORT, `div { ${call} }`]))[1]!;
+      const assigns = t.filter((x) => x.text === "=");
+      assert.ok(assigns.length > 0 && assigns.every((x) => x.scopes.includes("keyword.operator.assignment.kotlin")), `${call}: ${JSON.stringify(assigns.map((x) => x.scopes))}`);
+    }
+    const margin = await tokenLines("source.kotlin", ['val h = """', '    |<div data-show="${\'$\'}open">', '    |</div>', '""".trimMargin()']);
+    for (const line of [margin[1]!, margin[2]!]) assert.match(scopeOf(line, "|"), /string\.quoted\.triple\.kotlin/);
+  });
+
+  it("leaves FreeMarker's directives and PHP's tags in an HTML file's value out, as the analysis does", async () => {
+    const t = await tokens("text.html.derivative", `<div data-text="<#if a>$a</#if> <?= $b ?> <@m/>" data-show="$c">`);
+    for (const name of ["if a", "= $b", "m/"]) {
+      const tok = t.find((x) => x.text.includes(name))!;
+      assert.ok(tok.scopes.includes("meta.template.placeholder.streamlord"), `${name}: ${tok.scopes.join(" ")}`);
+    }
+    assert.ok(t.some((x) => x.text === "c" && x.scopes.includes(S.signal)));
+  });
+});
+

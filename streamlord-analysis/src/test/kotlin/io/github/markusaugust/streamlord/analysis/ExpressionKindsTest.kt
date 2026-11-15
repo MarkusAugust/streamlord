@@ -145,14 +145,14 @@ class ExpressionKindsTest {
         assertEquals(emptyList(), templatePlaceholders("`a\${b}`"))
     }
 
-    // An object's colon is punctuation, as the VS Code grammar scopes it; a ternary's is an operator.
+    // An object's colon is punctuation, as the VS Code grammar scopes it; a ternary's is an operator. A quoted key is a key.
     @Test
     fun `the colon after a key is no operator`() {
         assertEquals(
             listOf(
                 "a" to TokenKind.OBJECT_KEY,
                 "1" to TokenKind.NUMBER,
-                "'b'" to TokenKind.STRING,
+                "'b'" to TokenKind.OBJECT_KEY,
                 "\$c" to TokenKind.SIGNAL,
                 "?" to TokenKind.OPERATOR,
                 "2" to TokenKind.NUMBER,
@@ -161,6 +161,60 @@ class ExpressionKindsTest {
             ),
             tokens("{a: 1, 'b': \$c ? 2 : 3}"),
         )
+    }
+
+    // data-signals='{\"count\": 0}' in a plain Kotlin string: each \" is a quote, as the browser reads the value.
+    @Test
+    fun `a string in escaped quotes ends at the next escaped quote`() {
+        assertEquals(
+            listOf(
+                "\\\"count\\\"" to TokenKind.OBJECT_KEY,
+                "0" to TokenKind.NUMBER,
+                "\\\"name\\\"" to TokenKind.OBJECT_KEY,
+                "\\\"x\\\"" to TokenKind.STRING,
+            ),
+            tokens("{\\\"count\\\": 0, \\\"name\\\": \\\"x\\\"}"),
+        )
+    }
+
+    // `${'$'}{` is how a Kotlin raw string writes a JavaScript template's `${`.
+    @Test
+    fun `an escaped dollar opens a JavaScript template's expression`() {
+        assertEquals(
+            listOf(
+                "`x " to TokenKind.STRING,
+                "\${'\$'}{" to TokenKind.TEMPLATE_PUNCTUATION,
+                "\${'\$'}" to TokenKind.KOTLIN_DOLLAR_ESCAPE,
+                "b" to TokenKind.SIGNAL,
+                "}" to TokenKind.TEMPLATE_PUNCTUATION,
+                "`" to TokenKind.STRING,
+            ),
+            tokens("`x \${'\$'}{\${'\$'}b}`"),
+        )
+    }
+
+    @Test
+    fun `a placeholder next to a signal leaves the signal whole`() {
+        val value = "{{#flag}}\$a{{/flag}}"
+        assertEquals(listOf("\$a" to TokenKind.SIGNAL), tokens(value, templatePlaceholders(value)))
+        val after = "\$a{{x}} / 2"
+        assertEquals(
+            listOf("\$a" to TokenKind.SIGNAL, "/" to TokenKind.OPERATOR, "2" to TokenKind.NUMBER),
+            tokens(after, templatePlaceholders(after)),
+        )
+    }
+
+    // jte, kte, FreeMarker and Velocity write ${...} before the browser reads the value, inside a JavaScript template too.
+    @Test
+    fun `an engine that writes dollar braces owns them inside a JavaScript template`() {
+        val value = "`Hi \${user.name!'x'}` + \$a"
+        assertEquals(emptyList(), templatePlaceholders(value))
+        assertEquals(listOf(4 until 20), templatePlaceholders(value, TemplateEngine.FREEMARKER))
+        assertEquals(
+            listOf("`Hi " to TokenKind.STRING, "`" to TokenKind.STRING, "+" to TokenKind.OPERATOR, "\$a" to TokenKind.SIGNAL),
+            tokens(value, templatePlaceholders(value, TemplateEngine.JTE)),
+        )
+        assertEquals(emptyList(), templatePlaceholders(value, TemplateEngine.RAZOR).filter { it.first == 4 })
     }
 
     @Test

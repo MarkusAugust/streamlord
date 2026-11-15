@@ -85,8 +85,16 @@ class AnalyzerTest {
             }
 
             "fixture" -> {
-                val text = fixtureText("editors/vscode/test/fixtures/${case.string("file")}")
-                mapOf("codes" to analyzer.analyzeHtml(text).map { it.code })
+                val file = case.string("file")
+                val text = fixtureText("editors/vscode/test/fixtures/$file")
+                // The engine that writes into the file, as each editor names it from the file's type.
+                val engine =
+                    mapOf(
+                        "jte" to TemplateEngine.JTE,
+                        "ftl" to TemplateEngine.FREEMARKER,
+                        "vm" to TemplateEngine.VELOCITY,
+                    )[file?.substringAfterLast('.')]
+                mapOf("codes" to analyzer.analyzeHtml(Source(text, SourceLanguage.HTML, engine = engine)).map { it.code })
             }
 
             else -> {
@@ -170,7 +178,7 @@ class TokensTest {
                 "@post" to TokenKind.ACTION_BACKEND,
                 "'/x'" to TokenKind.STRING,
                 "headers" to TokenKind.OPTION_KEY,
-                "'X-A'" to TokenKind.STRING,
+                "'X-A'" to TokenKind.OBJECT_KEY,
                 "\$token" to TokenKind.SIGNAL,
                 "el" to TokenKind.SCOPE_VARIABLE,
                 "value" to TokenKind.PROPERTY,

@@ -103,20 +103,6 @@ private val OPTIONAL_END: Map<String, Set<String>> =
         "tfoot" to setOf("tbody"),
     )
 
-/**
- * Where a template engine or a Kotlin template will substitute text, the expression cannot be
- * judged before rendering: Pebble, Twig, Jinja, Handlebars and Mustache (`{{ }}`, `{% %}`),
- * ERB, EJS and JTE comments (`<% %>`), Kotlin, Thymeleaf, FreeMarker, JTE, kte and Velocity
- * (`${ }`, and JTE's `!{ }` for unescaped output), Thymeleaf's `*{ }`, `#{ }` and `@{ }`,
- * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
- * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
- */
-internal val TEMPLATE_SYNTAX: Regex =
-    regex(
-        """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
-            """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
-    )
-
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
 private val DURATION = regex("""^\d+(ms|s)?$""")
 private val WHOLE_NUMBER = regex("""^\d+$""")
@@ -376,7 +362,8 @@ private fun valueEnd(
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
- * inside a JavaScript template literal is JavaScript's own and does not count.
+ * inside a JavaScript template literal is JavaScript's own and does not count; an engine whose
+ * rules differ is read through [judgedValue].
  */
 internal fun hasTemplateSyntax(value: String): Boolean {
     val quotes = QuoteScan(value)
@@ -1043,6 +1030,7 @@ public class MarkupValidator(
         kotlin: Boolean = false,
         prefixSetting: String = PREFIX_SETTING,
         movable: Boolean = true,
+        engine: TemplateEngine? = null,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
@@ -1068,11 +1056,13 @@ public class MarkupValidator(
             val parsed = catalog.parseAttributeName(lower, prefix) ?: continue
             val nameEnd = attr.nameEnd
             val spec = parsed.spec
-            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"]: a template construct
+            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"], Razor's data-bind:@Model.Key: a template construct
             // cut the name short or stands in it, so the key, its modifiers and the value that went with
             // the name are not known until the page is rendered.
             val cut = tagSource != null && cutByTemplate(tagSource, nameEnd - tag.start)
-            val templated = cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name))
+            val templated =
+                cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name)) ||
+                    (engine == TemplateEngine.RAZOR && razorConstructs(attr.name).isNotEmpty())
             if (spec == null && templated) continue
             if (spec == null) {
                 // The rule of the runtime guard, which a key or a modifier after the name makes stricter.
@@ -1341,8 +1331,11 @@ public class MarkupValidator(
             if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
                 issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
             }
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotEmpty() && !hasForeignTemplateSyntax(value)) {
-                val decoded = decodeEntities(value)
+            // The value as the checks judge it, the file's engine's own syntax masked; null where it waits for rendering.
+            val masked = value?.let { judgedValue(it, engine) }
+            val expression = value?.let { judgedValue(it, engine, aroundPlaceholders = true) }
+            if (expression != null && spec.valueKind == ValueKind.EXPRESSION && expression.isNotEmpty()) {
+                val decoded = decodeEntities(expression)
 
                 fun source(
                     start: Int,
@@ -1377,13 +1370,13 @@ public class MarkupValidator(
                         )
                 }
             }
-            if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (masked != null && spec.valueKind == ValueKind.FILTER && masked.isNotBlank()) {
                 issues += validateFilter(attr, spec, prefix)
             }
-            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (spec.name == "computed" && parsed.key == null && masked != null && masked.isNotBlank()) {
                 issues += validateComputedObject(attr, prefix)
             }
-            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
+            if (value != null && masked != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() &&
                 named.none { it.start >= attr.valueStart } && SIGNAL_NAME.matchEntire(value.trim()) == null
             ) {
                 issues +=

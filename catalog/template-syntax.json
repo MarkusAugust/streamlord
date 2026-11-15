@@ -1,0 +1,21 @@
+{
+  "$comment": "Where a template engine writes into an attribute's value before the browser reads it, in every HTML-side file whatever its engine: the analysis leaves these out of the checks, and VS Code's grammar for an HTML file (placeholders-html-injection) is written from this list. A construct opens with its opener and ends at its closer; a brace opener ends at the brace that balances it; a directive is its word and the condition in parentheses after it. Razor's @, and ${...} inside a JavaScript template in jte, FreeMarker and Velocity, are each engine's alone: see TemplateEngine.",
+  "pairs": [
+    ["{{{", "}}}"],
+    ["{{", "}}"],
+    ["{%", "%}"],
+    ["<%", "%>"],
+    ["<?", "?>"],
+    ["[#", "]"],
+    ["[=", "]"],
+    ["</#", ">"],
+    ["<#", ">"],
+    ["</@", ">"],
+    ["<@", ">"]
+  ],
+  "braces": ["$!{", "${", "!{", "*{", "#{", "@{"],
+  "directives": {
+    "@": ["if", "elseif", "else", "endif", "for", "endfor", "template", "import", "param", "raw", "endraw"],
+    "#": ["if", "elseif", "else", "end", "foreach", "set", "macro", "parse", "include"]
+  }
+}

@@ -183,8 +183,14 @@ public fun tokenizeExpression(
     opaque: List<IntRange> = emptyList(),
 ): List<Token> {
     if (opaque.isEmpty()) return ExpressionScanner(text).all()
+    // Each range reads as one value, a digit amid spaces, so that a name next to it stays whole and a slash after it divides.
     val masked = CharArray(text.length) { text[it] }
-    for (r in opaque) for (k in maxOf(0, r.first)..minOf(text.length - 1, r.last)) masked[k] = '_'
+    for (r in opaque) {
+        val first = maxOf(0, r.first)
+        val last = minOf(text.length - 1, r.last)
+        for (k in first..last) masked[k] = ' '
+        if (first <= last) masked[(first + last + 1) / 2] = '0'
+    }
     val out = ArrayList<Token>()
     for (t in ExpressionScanner(masked.concatToString()).all()) {
         val inside = opaque.filter { t.start <= it.last && it.first < t.end }.sortedBy { it.first }
@@ -268,15 +274,17 @@ private class ExpressionScanner(
                     last = 'a'
                 }
 
-                c == '\'' || c == '"' -> {
-                    var j = i + 1
-                    while (j < text.length && text[j] != c) {
-                        if (text[j] == '\\') j++
+                c == '\'' || c == '"' || (c == '\\' && next == '"') -> {
+                    // A string in escaped quotes, as a plain Kotlin string writes JSON, ends at the next escaped quote.
+                    val escaped = c == '\\'
+                    var j = i + if (escaped) 2 else 1
+                    while (j < text.length && !(if (escaped) text.startsWith("\\\"", j) else text[j] == c)) {
+                        if (text[j] == '\\' && !escaped) j++
                         j++
                     }
-                    j = minOf(j + 1, text.length)
-                    out += Token(i, j, TokenKind.STRING)
-                    if (last == '{' || last == ',') markKeyColon(j)
+                    j = minOf(j + if (escaped) 2 else 1, text.length)
+                    val key = (last == '{' || last == ',') && markKeyColon(j)
+                    out += Token(i, j, if (key) TokenKind.OBJECT_KEY else TokenKind.STRING)
                     last = 'a'
                     i = j
                 }
@@ -345,12 +353,14 @@ private class ExpressionScanner(
                     j += 2
                 }
 
-                text.startsWith("\${", j) -> {
+                (text.startsWith("\${", j) && !text.startsWith(KOTLIN_DOLLAR, j)) || text.startsWith(KOTLIN_DOLLAR + "{", j) -> {
+                    // A Kotlin string writes the template's dollar as ${'$'}.
+                    val open = if (text.startsWith(KOTLIN_DOLLAR, j)) KOTLIN_DOLLAR.length + 1 else 2
                     if (j > from) out += Token(from, j, TokenKind.STRING)
-                    out += Token(j, j + 2, TokenKind.TEMPLATE_PUNCTUATION)
+                    out += Token(j, j + open, TokenKind.TEMPLATE_PUNCTUATION)
                     val outer = last
                     last = null
-                    val close = run(j + 2, inTemplate = true)
+                    val close = run(j + open, inTemplate = true)
                     last = outer
                     if (close >= text.length) return text.length
                     out += Token(close, close + 1, TokenKind.TEMPLATE_PUNCTUATION)
@@ -446,11 +456,13 @@ private class ExpressionScanner(
         return j
     }
 
-    /** Note the colon after a key that ends at [from], if one follows it. */
-    private fun markKeyColon(from: Int) {
+    /** Note the colon after a key that ends at [from], if one follows it; whether one does. */
+    private fun markKeyColon(from: Int): Boolean {
         var k = from
         while (k < text.length && text[k].isWhitespace()) k++
-        if (text.getOrNull(k) == ':' && text.getOrNull(k + 1) != ':') keyColon = k
+        if (text.getOrNull(k) != ':' || text.getOrNull(k + 1) == ':') return false
+        keyColon = k
+        return true
     }
 
     /** The first character from [from] that is not white space. */
@@ -506,79 +518,33 @@ public fun tokenizeSignalName(text: String): List<Token> {
 }
 
 /**
- * Where a template engine writes into a value before the browser reads it: `${...}`, `{{...}}`,
- * `{% %}`, `<% %>`, a directive with its condition, and Streamlord's own `__kt__`. A `${` inside a
- * JavaScript template literal is JavaScript's own and is none.
+ * Where a template engine writes into a value before the browser reads it: the constructs of
+ * catalog/template-syntax.json and Streamlord's own `__kt__`. A `${` inside a JavaScript template
+ * literal is JavaScript's own and is none, unless the file's [engine] writes it first; Razor's
+ * constructs are Razor's, and the first `@` of its `@@`, which writes the other.
  */
-public fun templatePlaceholders(value: String): List<IntRange> {
+public fun templatePlaceholders(
+    value: String,
+    engine: TemplateEngine? = null,
+): List<IntRange> {
     val quotes = QuoteScan(value)
     val out = ArrayList<IntRange>()
     for (m in TEMPLATE_SYNTAX.findAll(value)) {
         var s = m.range.first
         while (s < m.range.last && (value[s].isWhitespace() || value[s] == '>')) s++
-        if (value[s] == '!' && value.getOrNull(s - 1) == '$') s--
         if (out.lastOrNull()?.let { s <= it.last } == true) continue
-        if (value.startsWith("\${", s) && quotes.at(s) == '`') continue
+        if (engine?.writesDollarBraces != true && value.startsWith("\${", s) && quotes.at(s) == '`') continue
         out += s until placeholderEnd(value, s)
     }
-    return out
-}
-
-/** Where the placeholder that starts at [s] ends. */
-private fun placeholderEnd(
-    value: String,
-    s: Int,
-): Int {
-    fun closeAt(close: String): Int = value.indexOf(close, s + 2).let { if (it < 0) value.length else it + close.length }
-    return when {
-        value.startsWith("{{", s) -> {
-            closeAt("}}").let { if (it < value.length && value[it] == '}') it + 1 else it }
-        }
-
-        value.startsWith("{%", s) -> {
-            closeAt("%}")
-        }
-
-        value.startsWith("<%", s) -> {
-            closeAt("%>")
-        }
-
-        value.startsWith("[#", s) || value.startsWith("[=", s) -> {
-            closeAt("]")
-        }
-
-        value.startsWith(PLACEHOLDER, s) -> {
-            s + PLACEHOLDER.length
-        }
-
-        value.getOrNull(s + 1) == '{' || value.getOrNull(s + 2) == '{' -> {
-            balanced(value, value.indexOf('{', s), '{', '}')
-        }
-
-        else -> {
-            // A directive: its word and the condition in parentheses after it.
-            var j = s + 1
-            while (j < value.length && value[j].isLetter()) j++
-            if (value.getOrNull(j) == '(') balanced(value, j, '(', ')') else j
+    if (engine == TemplateEngine.RAZOR) {
+        out += razorConstructs(value)
+        var at = value.indexOf("@@")
+        while (at >= 0) {
+            out += at..at
+            at = value.indexOf("@@", at + 2)
         }
     }
-}
-
-/** The offset after the bracket that closes the one at [open], or the end. */
-private fun balanced(
-    text: String,
-    open: Int,
-    opening: Char,
-    closing: Char,
-): Int {
-    var depth = 0
-    var j = open
-    while (j < text.length) {
-        if (text[j] == opening) depth++
-        if (text[j] == closing && --depth == 0) return j + 1
-        j++
-    }
-    return text.length
+    return out.sortedBy { it.first }
 }
 
 /** The parts of a rendered `data-*` attribute name, for highlighting. */
