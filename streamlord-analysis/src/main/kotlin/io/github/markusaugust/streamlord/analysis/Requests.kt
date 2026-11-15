@@ -607,8 +607,12 @@ public object Requests {
         return i
     }
 
-    /** Where a value came from: the settings, the env file, or the log of a server the editor started. */
-    public enum class VariableSource { DEFAULT, ENV, RUNNING }
+    /**
+     * Where a value came from: the settings, the env file, or the log of a server the editor started;
+     * or a source none of these is, which an editor may hand over, read as the file's but never offered
+     * a new base URL.
+     */
+    public enum class VariableSource { DEFAULT, ENV, RUNNING, OTHER }
 
     /** A variable that is set, as text, and where it was set, so the inspector can say both. */
     public data class Variable(
@@ -673,7 +677,7 @@ public object Requests {
                 when (it.source) {
                     VariableSource.DEFAULT -> "   (default)"
                     VariableSource.RUNNING -> "   (from ${it.origin})"
-                    VariableSource.ENV -> ""
+                    VariableSource.ENV, VariableSource.OTHER -> ""
                 }
         }
 
@@ -885,7 +889,7 @@ public object Requests {
                 "{{baseUrl}} is ${baseUrl.value}, where ${baseUrl.origin} said it started."
             }
 
-            VariableSource.ENV -> {
+            VariableSource.ENV, VariableSource.OTHER -> {
                 val elsewhere = baseUrlSuggestion(vars, running)
                 "{{baseUrl}} is ${baseUrl.value}, from $ENV_FILE." +
                     if (elsewhere != null) " ${running?.name} started on $elsewhere." else ""
@@ -931,16 +935,23 @@ public object Requests {
 
     private val OPEN_VARIABLE = regex("""\{\{\s*([A-Za-z]*)$""")
 
-    /** The variables to offer after `{{` at [caret]: those the field takes and the file sets. */
+    /**
+     * The variables to offer after `{{` at [caret]: those the [field] takes and the file sets; a field
+     * none of the three, null, takes what the URL takes but `baseUrl`: the params.
+     */
     public fun variableCompletions(
         text: String,
         caret: Int,
-        field: Field,
+        field: Field?,
         vars: List<Variable>,
     ): Completion? {
         val m = OPEN_VARIABLE.find(text.substring(0, caret)) ?: return null
         val prefix = m.groupValues[1].lowercase()
-        val items = vars.filter { belongsIn(it.name, field) && it.name.lowercase().startsWith(prefix) }
+        val items =
+            vars.filter {
+                (if (field == null) it.name != "baseUrl" && belongsIn(it.name, Field.URL) else belongsIn(it.name, field)) &&
+                    it.name.lowercase().startsWith(prefix)
+            }
         if (items.isEmpty()) return null
         return Completion(m.range.first, if (text.startsWith("}}", caret)) caret + 2 else caret, items)
     }

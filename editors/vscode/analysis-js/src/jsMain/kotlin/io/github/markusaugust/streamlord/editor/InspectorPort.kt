@@ -187,11 +187,11 @@ interface VariableCompletion {
 private fun plain(v: Requests.Variable): Variable =
     plain("name" to v.name, "value" to v.value, "source" to v.source.name.lowercase(), "origin" to v.origin)
 
-private fun source(v: Variable): Requests.VariableSource? = Requests.VariableSource.entries.firstOrNull { it.name.lowercase() == v.source }
-
-/** A source that is none of the three is no default and no running server, which leaves the file. */
 private fun analysed(vars: Array<Variable>): List<Requests.Variable> =
-    vars.map { Requests.Variable(it.name, it.value, source(it) ?: Requests.VariableSource.ENV, it.origin) }
+    vars.map { v ->
+        val source = Requests.VariableSource.entries.firstOrNull { it.name.lowercase() == v.source } ?: Requests.VariableSource.OTHER
+        Requests.Variable(v.name, v.value, source, v.origin)
+    }
 
 private fun running(
     url: String?,
@@ -253,9 +253,7 @@ fun variableCompletions(
     vars: Array<Variable>,
 ): VariableCompletion? {
     val known = Requests.Field.entries.firstOrNull { it.name.lowercase() == field }
-    // A field that is none of the three takes what the URL takes but `baseUrl`: the params.
-    val offered = analysed(vars).filter { known != null || it.name != "baseUrl" }
-    return Requests.variableCompletions(text, caret, known ?: Requests.Field.URL, offered)?.let {
+    return Requests.variableCompletions(text, caret, known, analysed(vars))?.let {
         plain("from" to it.from, "to" to it.to, "items" to it.items.map(::plain).toTypedArray())
     }
 }
@@ -273,16 +271,7 @@ fun baseUrlSuggestion(
     vars: Array<Variable>,
     runningUrl: String?,
     runningName: String?,
-): String? =
-    // Offered only over a `baseUrl` the file is known to set.
-    if (vars.any {
-            it.name == "baseUrl" && source(it) == null
-        }
-    ) {
-        null
-    } else {
-        Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
-    }
+): String? = Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
 
 // ---- The request as the client sends it --------------------------------------------------------
 
