@@ -24,11 +24,11 @@ import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.projectConstants
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
-import io.github.markusaugust.streamlord.analysis.signalDrift
+import io.github.markusaugust.streamlord.analysis.signalDriftIn
 import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
-import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
+import io.github.markusaugust.streamlord.analysis.unknownSignalIssues
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.analysis.Fix as AnalysedFix
 import io.github.markusaugust.streamlord.analysis.Issue as AnalysedIssue
@@ -182,7 +182,7 @@ fun diagnose(
     val file = source(src, kotlin, prefix, constants, engineOf(languageId))
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
     val known = defined?.let(::setOf)
-    val unknown = if (known == null) emptyList() else analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, known) }
+    val unknown = if (known == null) emptyList() else unknownSignalIssues(analyzer.signalReferences(file), known)
     val drift = if (others == null || !kotlin) emptyList() else drift(src, others)
     return (found + unknown + drift).map(::plain).toTypedArray()
 }
@@ -191,15 +191,10 @@ fun diagnose(
 private fun drift(
     src: String,
     others: Array<DriftFacts>,
-): List<AnalysedIssue> {
-    // A file with no signals class and no lookup can report nothing, whatever the others say.
-    val own = collectSignalFacts(source(src, true))
-    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
-    // Only this file's issues are asked for, so another file's reads and offsets play no part.
-    val facts = HashMap<String, SignalFacts>()
-    others.forEachIndexed { i, o ->
-        val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
-        facts["$i"] =
+): List<AnalysedIssue> =
+    signalDriftIn(collectSignalFacts(source(src, true))) {
+        others.map { o ->
+            val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
             SignalFacts(
                 o.declared.toSet(),
                 o.readInto.toSet(),
@@ -210,13 +205,8 @@ private fun drift(
                 o.packageName,
                 o.imports.toSet(),
             )
+        }
     }
-    facts[THIS_FILE] = own
-    return signalDrift(facts).issues[THIS_FILE].orEmpty()
-}
-
-/** The key of the file being diagnosed among the others, which are keyed by their index. */
-private const val THIS_FILE = "this"
 
 // The Kotlin file analysed last: the lightbulb asks about the text the diagnostics were just made for.
 private var lastSites: Pair<Source, List<SiteIssues>>? = null

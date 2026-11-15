@@ -17,7 +17,7 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Fix
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Severity
-import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
+import io.github.markusaugust.streamlord.analysis.unknownSignalIssues
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import org.jetbrains.kotlin.psi.KtFile
@@ -256,7 +256,7 @@ class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
         val drift = if (file is KtFile) index.driftIn(file) else emptyList()
         if (refs.isEmpty()) return drift
         val defined = index.definitionsSeenFrom(file)
-        return refs.mapNotNull { unknownSignalIssue(it, defined) } + drift
+        return unknownSignalIssues(refs, defined) + drift
     }
 }
 

@@ -57,13 +57,13 @@ class CorpusTest {
             // The signals the source reads that it does not itself declare.
             "references" -> {
                 val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
-                analyzer.signalReferences(read(SourceLanguage.HTML)).mapNotNull { unknownSignalIssue(it, defined) }
+                unknownSignalIssues(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
             }
 
             // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
             "kotlin-references" -> {
                 val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
-                analyzer.signalReferences(read(SourceLanguage.KOTLIN)).mapNotNull { unknownSignalIssue(it, defined) }
+                unknownSignalIssues(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
             }
 
             else -> {

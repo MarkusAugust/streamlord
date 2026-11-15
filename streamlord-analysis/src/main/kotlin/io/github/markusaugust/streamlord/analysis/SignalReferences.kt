@@ -157,8 +157,13 @@ internal fun nearestSignal(
         ?.first
 }
 
-/** The warning for a signal the project never defines, or null when it does. */
-public fun unknownSignalIssue(
+/** A warning for each of [refs] that reads a signal the project never defines, [defined] being those it does. */
+public fun unknownSignalIssues(
+    refs: List<SignalReference>,
+    defined: Set<String>,
+): List<Issue> = refs.mapNotNull { unknownSignalIssue(it, defined) }
+
+private fun unknownSignalIssue(
     ref: SignalReference,
     defined: Set<String>,
 ): Issue? {

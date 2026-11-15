@@ -32,7 +32,7 @@ import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
-import io.github.markusaugust.streamlord.analysis.signalDrift
+import io.github.markusaugust.streamlord.analysis.signalDriftIn
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
@@ -238,7 +238,7 @@ class SignalIndex(
 
     /**
      * The signals the Kotlin [file] reads, through a `@Serializable` class or a `Signals` lookup, that no file of the
-     * project declares: the analysis's `signalDrift`, as the VS Code extension asks it. Each file's facts are kept with
+     * project declares: the analysis's `signalDriftIn`, as the VS Code extension asks it. Each file's facts are kept with
      * its entry and read again only when the file changes, so a pass costs one read of the file that changed and a walk
      * over what is kept ("Cache Results of Heavy Computations",
      * https://plugins.jetbrains.com/docs/intellij/psi-performance.html). The daemon runs the inspection again on a
@@ -249,18 +249,14 @@ class SignalIndex(
         if (language != SourceLanguage.KOTLIN) return emptyList()
         val own = entryFor(file) ?: return emptyList()
         val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language, prefix()))
-        // A file with no signals class and no lookup can report nothing, whatever the others say.
-        if (ownFacts.classes.isEmpty() && ownFacts.lookups.isEmpty()) return emptyList()
-        refresh()
-        val facts = HashMap<String, SignalFacts>()
-        for ((key, e) in entries) {
-            if (e === own || e.file == own.file) continue
-            ProgressManager.checkCanceled()
-            // Only this file's issues are asked for, so another file's lookups play no part.
-            factsIn(e, null)?.let { facts[key] = it.copy(lookups = emptyList()) }
+        return signalDriftIn(ownFacts) {
+            refresh()
+            entries.values.mapNotNull { e ->
+                if (e === own || e.file == own.file) return@mapNotNull null
+                ProgressManager.checkCanceled()
+                factsIn(e, null)
+            }
         }
-        facts[THIS_FILE] = ownFacts
-        return signalDrift(facts).issues[THIS_FILE].orEmpty()
     }
 
     private fun factsIn(
@@ -518,8 +514,6 @@ class SignalIndex(
         }
 
     companion object {
-        /** The key of the file [driftIn] judges, which no path is. */
-        private const val THIS_FILE = ""
         private val WITHOUT_DSL = Modules.known(core = true, htmlDsl = false)
         private val CALL = Pattern.compile("""\b([A-Za-z_]\w*)\s*\(""")
         private const val FILE_CAP = 5000

@@ -22,7 +22,7 @@ class SignalReferencesTest {
             val defined = collectSignalDefinitions(Source(src, language))
             val kotlin = language == SourceLanguage.KOTLIN
             val refs = analyzer.signalReferences(Source(src, language))
-            val issues = refs.mapNotNull { unknownSignalIssue(it, defined) }
+            val issues = unknownSignalIssues(refs, defined)
             case["refs"]?.let { assertEquals(it.toKotlin(), refs.map { r -> listOf(src.substring(r.start, r.end), r.name) }, name) }
             case.array("unknown")?.let { assertEquals(it.strings(), issues.map { i -> src.substring(i.start, i.end) }, name) }
             case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code }, name) }

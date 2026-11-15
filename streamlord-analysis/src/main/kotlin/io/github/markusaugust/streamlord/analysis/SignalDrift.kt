@@ -259,12 +259,32 @@ private fun matchingParen(
  *   whose names only the codec knows: a class that is not `@Serializable`, or `*` for a value of no
  *   named class. While it is not empty every read counts as declared, and [issues] stays empty.
  */
-public data class SignalDriftReport(
+internal data class SignalDriftReport(
     val issues: Map<String, List<Issue>>,
     val declared: Set<String>,
     val read: Set<String>,
     val declaredByCodec: Set<String> = emptySet(),
 )
+
+/**
+ * The signals read in the file whose facts are [own] that neither it nor any of [others] declares:
+ * that file's part of [signalDrift]. A file with no signals class and no lookup can report
+ * nothing, so [others] is read only for one that has.
+ */
+public fun signalDriftIn(
+    own: SignalFacts,
+    others: () -> Iterable<SignalFacts>,
+): List<Issue> {
+    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
+    val facts = HashMap<String, SignalFacts>()
+    // Only this file's issues are asked for, so another file's lookups play no part.
+    others().forEachIndexed { i, o -> facts["$i"] = o.copy(lookups = emptyList()) }
+    facts[OWN_FILE] = own
+    return signalDrift(facts).issues[OWN_FILE].orEmpty()
+}
+
+/** The key of the file [signalDriftIn] judges, which no index of the others is. */
+private const val OWN_FILE = ""
 
 /**
  * Signals read in one file that nothing in [facts] declares.
@@ -277,7 +297,7 @@ public data class SignalDriftReport(
  * other serializable classes are its own business, and a request body that happens to be one is
  * not a signal.
  */
-public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
+internal fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val declared = facts.values.flatMapTo(LinkedHashSet()) { it.declared }
     val read = LinkedHashSet<String>()
 
