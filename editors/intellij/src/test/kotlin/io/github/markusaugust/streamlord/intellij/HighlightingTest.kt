@@ -68,6 +68,8 @@ class HighlightingTest : StreamlordTestCase() {
     // not the text's: in classic Default and Darcula, and in the New UI's Light, Dark and Islands Dark.
     fun `test every bundled scheme colours every datastar key`() {
         val plain = setOf(DatastarColors.IDENTIFIER, DatastarColors.METHOD, DatastarColors.OPERATOR)
+        // The XML module loads HTML's keys before the IDE paints any HTML; a test that paints none loads them here.
+        assertEquals("HTML_ATTRIBUTE_NAME", XmlHighlighterColors.HTML_ATTRIBUTE_NAME.externalName)
         val manager = EditorColorsManager.getInstance()
 
         fun bundled(name: String) = manager.getScheme(name) ?: manager.allSchemes.first { it.name.contains(name) }

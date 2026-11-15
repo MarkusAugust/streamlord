@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.intellij.highlighting
 
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
-import com.intellij.openapi.editor.XmlHighlighterColors
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import io.github.markusaugust.streamlord.analysis.NamePart
 import io.github.markusaugust.streamlord.analysis.TokenKind
@@ -26,6 +25,13 @@ object DatastarColors {
         fallback: TextAttributesKey,
     ) = TextAttributesKey.createTextAttributesKey("STREAMLORD_$name", fallback)
 
+    /**
+     * HTML's attribute name, XmlHighlighterColors.HTML_ATTRIBUTE_NAME, found by its name: a key is
+     * one by its name, and XmlHighlighterColors gives it its fallback when the XML module loads it,
+     * before any HTML is painted. The plugin verifier cannot see the XML module of 2026.3, where the
+     * class is there at run time, and reports a reference to it as a missing class.
+     */
+    private val HTML_ATTRIBUTE_NAME = TextAttributesKey.createTextAttributesKey("HTML_ATTRIBUTE_NAME")
     val SIGNAL: TextAttributesKey = key("SIGNAL", DefaultLanguageHighlighterColors.STATIC_FIELD)
     val SIGNAL_PATH: TextAttributesKey = key("SIGNAL_PATH", DefaultLanguageHighlighterColors.INSTANCE_FIELD)
     val ACTION_BACKEND: TextAttributesKey = key("ACTION_BACKEND", DefaultLanguageHighlighterColors.KEYWORD)
@@ -47,11 +53,11 @@ object DatastarColors {
     val NUMBER: TextAttributesKey = key("NUMBER", DefaultLanguageHighlighterColors.NUMBER)
     val KOTLIN_DOLLAR_ESCAPE: TextAttributesKey = key("KOTLIN_DOLLAR_ESCAPE", DefaultLanguageHighlighterColors.VALID_STRING_ESCAPE)
 
-    val ATTRIBUTE_PREFIX: TextAttributesKey = key("ATTRIBUTE_PREFIX", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
-    val ATTRIBUTE_PLUGIN: TextAttributesKey = key("ATTRIBUTE_PLUGIN", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
-    val ATTRIBUTE_KEY: TextAttributesKey = key("ATTRIBUTE_KEY", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
+    val ATTRIBUTE_PREFIX: TextAttributesKey = key("ATTRIBUTE_PREFIX", HTML_ATTRIBUTE_NAME)
+    val ATTRIBUTE_PLUGIN: TextAttributesKey = key("ATTRIBUTE_PLUGIN", HTML_ATTRIBUTE_NAME)
+    val ATTRIBUTE_KEY: TextAttributesKey = key("ATTRIBUTE_KEY", HTML_ATTRIBUTE_NAME)
     val MODIFIER: TextAttributesKey = key("MODIFIER", DefaultLanguageHighlighterColors.KEYWORD)
-    val MODIFIER_SIGIL: TextAttributesKey = key("MODIFIER_SIGIL", XmlHighlighterColors.HTML_ATTRIBUTE_NAME)
+    val MODIFIER_SIGIL: TextAttributesKey = key("MODIFIER_SIGIL", HTML_ATTRIBUTE_NAME)
     val MODIFIER_ARG: TextAttributesKey = key("MODIFIER_ARG", DefaultLanguageHighlighterColors.CONSTANT)
 
     val ALL: List<TextAttributesKey> =
