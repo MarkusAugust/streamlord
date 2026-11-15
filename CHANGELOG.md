@@ -366,6 +366,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - IntelliJ's inspector shows the first 10,000 characters of a value in an event and says how many
   are left out, where a value of a megabyte held the IDE for most of a minute while it was laid
   out. **Copy as curl** gets the whole stream.
+- IntelliJ colours the signal name a DSL call takes, `dataBind("name")`, also after the file has
+  changed on disk while it was open, by git or a formatter. It kept the places of the names in
+  the file as it first read it, so after such a change no name was coloured until the IDE was
+  restarted.
 - Signal completion in both editors no longer offers a name a DSL or core call writes with a
   hyphen, `dataSignals("is-open" to false)`, which Streamlord refuses, so no page has it. A key the
   client keeps as written, `data-signals='{"hs-key": 1}'`, is still offered as `$hs-key`, which

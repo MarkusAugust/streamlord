@@ -3,6 +3,8 @@ package io.github.markusaugust.streamlord.intellij.highlighting
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValueProvider
@@ -16,7 +18,6 @@ import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.NameToken
 import io.github.markusaugust.streamlord.analysis.PLACEHOLDER
 import io.github.markusaugust.streamlord.analysis.SignalNameString
-import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.Token
@@ -32,6 +33,7 @@ import io.github.markusaugust.streamlord.analysis.tokenizeExpression
 import io.github.markusaugust.streamlord.analysis.tokenizeSignalName
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.templateEngine
+import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
@@ -105,7 +107,7 @@ class KotlinDatastarAnnotator : Annotator {
         }
         // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
         if (!analysis.analyzer.readsDsl(source)) return
-        val named = signalNameStrings(file, analysis, source).firstOrNull { it.string.start == s.start }
+        val named = signalNameStrings(file, analysis).firstOrNull { it.string.start == s.start }
         if (named != null && analysis.foreignAmong(file, listOf(named.call)).isEmpty()) {
             if (PLACEHOLDER !in s.text) paintDecoded(holder, s, 0, tokenizeSignalName(s.text))
             return
@@ -127,14 +129,22 @@ class KotlinDatastarAnnotator : Annotator {
         paintExpression(holder, src, s, 0, s.text.length)
     }
 
-    /** The strings of [file] a DSL call names a signal with, found once for each version of it. */
+    /**
+     * The strings of [file] a DSL call names a signal with, found once for each version of it. The text is read inside: the
+     * platform computes a stale value again with the first provider it was given, so a text it captured would stay the first.
+     */
     private fun signalNameStrings(
         file: KtFile,
         analysis: StreamlordAnalysis,
-        source: Source,
     ): List<SignalNameString> =
         CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(analysis.analyzer.signalNameStrings(source), file)
+            CachedValueProvider.Result.create(
+                analysis.analyzer.signalNameStrings(analysis.source(file.text, SourceLanguage.KOTLIN, file)),
+                file,
+                StreamlordSettings.getInstance(file.project).tracker,
+                ProjectRootManager.getInstance(file.project),
+                DumbService.getInstance(file.project).modificationTracker,
+            )
         }
 
     /** The options of [file] set to an expression, found once for each version of it. */
