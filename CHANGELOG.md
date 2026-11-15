@@ -361,8 +361,8 @@ All notable changes to Streamlord are recorded here. The format follows
   the rewrite from the other values. A String in the body of a `<style>` is said to be read as CSS,
   with advice for CSS, where it was told to move into a `data-*` attribute.
 - VS Code reads a comparison as a Boolean, arithmetic of numbers the file declares,
-  `style="width: ${n * 2}px"` or `${n + 1}`, as a number, and `${Tab.HOME.name}` as the author's
-  own, as IntelliJ does: none of them is warned of where it is safe, nor keeps the rewrite from the
+  `style="width: ${n * 2}px"` or `${n + 1}`, as a number, and `${Tab.HOME.name}` of an enum the
+  file shows as the author's own, as IntelliJ does: none of them is warned of where it is safe, nor keeps the rewrite from the
   other values.
 - The rewrite to `interpolate` has one title wherever it is offered, on each value's warning and as
   a context action: "...with ${css} as Trusted(...)" where it vouches for a value in a `<style>`,

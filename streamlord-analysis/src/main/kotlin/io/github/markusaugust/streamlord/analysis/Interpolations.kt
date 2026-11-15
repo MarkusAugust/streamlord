@@ -1343,9 +1343,24 @@ private fun qualifiedConstant(
     if (!holders.last()[0].isUpperCase() || declarationOf(src, holders.first(), at) != null) return false
     val name = m.groupValues[2]
     if (SCREAMING.matchEntire(name) != null) return true
-    // The name of an entry, `Tab.HOME.name`, is the name the author gave it.
-    if (name == "name" && holders.size > 1 && SCREAMING.matchEntire(holders.last()) != null) return true
+    // The name of an entry, `Tab.HOME.name`, is the name the author gave it: of an enum the file shows, as `.name` of anything
+    // else may be any text.
+    if (name == "name" && holders.size > 1) return enumEntryShown(src, holders[holders.size - 2], holders.last())
     return name in constants || fileFacts(src).names[name].orEmpty().any { it.constant }
+}
+
+/** Whether the code of the file declares `enum class [type]` with the entry [entry]. */
+private fun enumEntryShown(
+    src: String,
+    type: String,
+    entry: String,
+): Boolean {
+    val code = fileFacts(src).code
+    val m = regex("""\benum\s+class\s+${Regex.escape(type)}\b""").findAll(src).firstOrNull { code[it.range.first] } ?: return false
+    val open = src.indexOf('{', m.range.last)
+    if (open < 0) return false
+    val entries = src.substring(open + 1).substringBefore(';').substringBefore('}')
+    return regex("""(?:^|[\s,])${Regex.escape(entry)}\b""").containsMatchIn(entries)
 }
 
 /**
