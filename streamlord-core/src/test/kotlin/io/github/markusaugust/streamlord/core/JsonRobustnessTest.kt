@@ -87,6 +87,17 @@ class JsonRobustnessTest {
         assertNull(obj.long("d"))
         assertEquals(Double.POSITIVE_INFINITY, obj.double("e"))
         assertNull(JsonNumber("1e99999999999").toLongOrNull())
+        // A whole number however written is a Long, on the JVM and in JavaScript alike.
+        assertEquals(1000L, JsonNumber("1e3").toKotlin())
+        assertEquals(1L, JsonNumber("1.0").toKotlin())
+        // An exponent no decimal can carry has no whole number, even under a zero.
+        assertNull(JsonNumber("0e99999999999").toLongOrNull())
+        assertNull(JsonNumber("0e-99999999999").toLongOrNull())
+        assertNull(JsonNumber("0.0e-2147483647").toLongOrNull())
+        assertEquals(0L, JsonNumber("0e2147483647").toLongOrNull())
+        assertEquals(0L, JsonNumber("0e2147483648").toLongOrNull())
+        assertEquals(0L, JsonNumber("0.00e-5").toLongOrNull())
+        assertEquals(100L, JsonNumber("1e2").toLongOrNull())
         obj.toKotlin()
     }
 
