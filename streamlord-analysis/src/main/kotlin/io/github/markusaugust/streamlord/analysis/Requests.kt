@@ -973,7 +973,8 @@ public object Requests {
      * after JavaScript's trim (patchSignals.ts:16, text.ts:24 in 1.0.5). Null where the patch is no
      * JSON, which the frame shows as it is. The client nests as deep as a stream says and takes a
      * number however long; a patch past [FOLD_DEPTH] or the parser's number length leaves the store
-     * as it was, refused, with the limit it is past: folding it would spend an editor's stack.
+     * as it was, since folding it would spend an editor's stack. [PatchedStore.message] says so, as it
+     * says where the client throws or Streamlord refuses the patch.
      */
     public fun patchedStore(
         store: JsonObject,
@@ -984,12 +985,26 @@ public object Requests {
             try {
                 JsonParser.parse(patch, FOLD_DEPTH)
             } catch (e: JsonParseException) {
-                return if (e.limit) PatchedStore(store, "${e.message}, which the inspector does not fold", true) else null
+                if (!e.limit) return null
+                return PatchedStore(
+                    store,
+                    "The inspector does not fold this patch, which the client takes: ${e.message}. The store shown is left as it was.",
+                )
             }
         return try {
-            PatchedStore(mergePatchAsClient(store, parsed, onlyIfMissing?.trim(::isJsSpace) == "true"), null, false)
+            PatchedStore(mergePatchAsClient(store, parsed, onlyIfMissing?.trim(::isJsSpace) == "true"), null)
         } catch (e: SignalPatchException) {
-            PatchedStore(e.store, e.message, e.refused)
+            // The client keeps the keys it set before the one it failed on, and so does the store. A throw also leaves its
+            // update batch open (signals.ts:747-762), so the bindings on the page stop redrawing.
+            val message =
+                if (e.refused) {
+                    "Streamlord refuses this signal patch on purpose: ${e.message}. The store shown keeps the keys before it."
+                } else {
+                    "The signal store cannot take this patch: ${e.message}. Datastar's client throws on it too, and the bindings " +
+                        "already on the page then stop redrawing until it is reloaded, though the signals still change, element " +
+                        "patches still land and new bindings show the current value."
+                }
+            PatchedStore(e.store, message)
         }
     }
 
@@ -1505,12 +1520,8 @@ public object Requests {
         }
 }
 
-/**
- * A signal store after a patch: the [store] the client holds, and where it throws, the [error] it
- * throws, whose keys before the one it failed on are kept; [refused] where Streamlord refuses the patch on purpose.
- */
+/** A signal store after a patch: the [store] shown, and what the inspector says of the patch where it is not folded whole. */
 public class PatchedStore(
     public val store: JsonObject,
-    public val error: String?,
-    public val refused: Boolean,
+    public val message: String?,
 )

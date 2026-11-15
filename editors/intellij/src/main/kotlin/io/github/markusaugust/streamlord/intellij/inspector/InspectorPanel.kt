@@ -803,18 +803,7 @@ class InspectorPanel(
         val patched = Requests.patchedStore(signals, text, frame.args["onlyIfMissing"]) ?: return
         signals = patched.store
         storeView.text = pretty(signals)
-        // A throw also leaves the client's update batch open (signals.ts:747-762), so the bindings on the page stop redrawing.
-        when {
-            patched.error == null -> {}
-
-            patched.refused -> {
-                error("Streamlord refuses this signal patch on purpose: ${patched.error}. $REFUSED")
-            }
-
-            else -> {
-                error("The signal store cannot take this patch: ${patched.error}. $CLIENT_THROWS")
-            }
-        }
+        patched.message?.let(::error)
     }
 
     // ---- rendering -----------------------------------------------------------------------------
@@ -1048,11 +1037,6 @@ class InspectorPanel(
         /** How long a failed request waits for the server to finish logging why. */
         private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
-
-        private const val CLIENT_THROWS =
-            "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is " +
-                "reloaded, though the signals still change, element patches still land and new bindings show the current value."
-        private const val REFUSED = "The store shown keeps the keys before it."
 
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 

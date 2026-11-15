@@ -323,7 +323,11 @@ class RequestsTest {
     fun `a patch the client fails on, or Streamlord refuses, says so as the inspector shows it`() {
         val store = JsonParser.parseObject("""{"a":[1,2]}""")
         val refused = Requests.patchedStore(store, """{"o":{"__proto__":{"x":1}}}""", null)!!.message.orEmpty()
-        assertTrue(refused.startsWith("Streamlord refuses this signal patch on purpose: ") && refused.endsWith("The store shown keeps the keys before it."), refused)
+        assertTrue(
+            refused.startsWith("Streamlord refuses this signal patch on purpose: ") &&
+                refused.endsWith("The store shown keeps the keys before it."),
+            refused,
+        )
         val throws = Requests.patchedStore(store, """{"a":{"0":7,"length":-1}}""", null)!!.message.orEmpty()
         assertTrue(throws.startsWith("The signal store cannot take this patch: ") && "Datastar's client throws on it too" in throws, throws)
         assertEquals(null, Requests.patchedStore(store, """{"b":1}""", null)!!.message)

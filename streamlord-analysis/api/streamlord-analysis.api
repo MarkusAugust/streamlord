@@ -648,9 +648,8 @@ public final class io/github/markusaugust/streamlord/analysis/ParsedModifier {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/PatchedStore {
-	public fun <init> (Lio/github/markusaugust/streamlord/core/json/JsonObject;Ljava/lang/String;Z)V
-	public final fun getError ()Ljava/lang/String;
-	public final fun getRefused ()Z
+	public fun <init> (Lio/github/markusaugust/streamlord/core/json/JsonObject;Ljava/lang/String;)V
+	public final fun getMessage ()Ljava/lang/String;
 	public final fun getStore ()Lio/github/markusaugust/streamlord/core/json/JsonObject;
 }
 

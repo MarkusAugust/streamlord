@@ -388,13 +388,12 @@ interface StreamEvent {
     val frame: DatastarFrame?
 }
 
-/** The store after a signal patch, and the [error] the patch ended in; [refused] where Streamlord refuses it on purpose. */
+/** The store after a signal patch, and what the inspector says of the patch where it is not folded whole. */
 @JsExport
 interface PatchedStore {
     /** The store as JSON text. */
     val store: String
-    val error: String?
-    val refused: Boolean
+    val message: String?
 }
 
 /** Reads a response body as Datastar's client reads it, chunk by chunk as it arrives. */
@@ -436,13 +435,9 @@ fun applySignalPatch(
 ): PatchedStore {
     val patched =
         Requests.patchedStore(JsonParser.parseObject(storeJson, NO_LIMIT), patchJson, onlyIfMissing)
-            ?: return plain("store" to storeJson, "refused" to false)
+            ?: return plain("store" to storeJson)
     val store = JsonWriter.write(patched.store, NO_LIMIT)
-    return if (patched.error == null) {
-        plain("store" to store, "refused" to false)
-    } else {
-        plain("store" to store, "error" to patched.error, "refused" to patched.refused)
-    }
+    return if (patched.message == null) plain("store" to store) else plain("store" to store, "message" to patched.message)
 }
 
 // The client nests as deep as a stream says. The limit the SDK reads a request under is its own.
