@@ -37,6 +37,11 @@ abstract class GenerateCatalogText : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val templateSyntax: RegularFileProperty
 
+    /** catalog/javascript-words.json, the JavaScript words both editors colour in an expression, compiled in beside the catalog. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val javascriptWords: RegularFileProperty
+
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
@@ -73,9 +78,10 @@ abstract class GenerateCatalogText : DefaultTask() {
         val pieces = pieces(file.readText())
         val events = pieces(domEvents.get().asFile.readText())
         val syntax = pieces(templateSyntax.get().asFile.readText())
+        val words = pieces(javascriptWords.get().asFile.readText())
         val text =
             """
-            |// Generated from catalog/${file.name}, catalog/dom-events.json and catalog/template-syntax.json by :streamlord-analysis:generateCatalogText. Do not edit.
+            |// Generated from catalog/${file.name}, catalog/dom-events.json, catalog/template-syntax.json and catalog/javascript-words.json by :streamlord-analysis:generateCatalogText. Do not edit.
             |package io.github.markusaugust.streamlord.analysis
             |
             |/** catalog/${file.name} as it stands, for [Catalog.default]. */
@@ -98,6 +104,12 @@ abstract class GenerateCatalogText : DefaultTask() {
             |        listOf(
             |$syntax,
             |        ).joinToString("")
+            |
+            |    /** catalog/javascript-words.json as it stands, for the words Tokens.kt colours. */
+            |    val JAVASCRIPT_WORDS: String =
+            |        listOf(
+            |$words,
+            |        ).joinToString("")
             |}
             |
             """.trimMargin()
@@ -117,6 +129,7 @@ val generateCatalogText =
         )
         domEvents.set(rootProject.layout.projectDirectory.file("catalog/dom-events.json"))
         templateSyntax.set(rootProject.layout.projectDirectory.file("catalog/template-syntax.json"))
+        javascriptWords.set(rootProject.layout.projectDirectory.file("catalog/javascript-words.json"))
         output.set(layout.buildDirectory.dir("generated/catalogText"))
     }
 

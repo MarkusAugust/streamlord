@@ -276,7 +276,7 @@
       ]
     },
     "keywords": {
-      "comment": "Each keyword with the scope TypeScript's grammar gives it. grammar.test.ts holds these and the constants to the analysis's list.",
+      "comment": "Each keyword with the scope TypeScript's grammar gives it. Written by scripts/generate.mjs from catalog/javascript-words.json, with the constants and the globals.",
       "patterns": [
         {
           "match": "(?<![.$])\\b(if|else|switch|case)\\b",
