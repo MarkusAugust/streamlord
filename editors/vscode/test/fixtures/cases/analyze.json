@@ -20,6 +20,7 @@
     {"name":"the freemarker template","kind":"fixture","file":"template.ftl","codes":["unknown-attribute","missing-key"]},
     {"name":"the velocity template","kind":"fixture","file":"template.vm","codes":["modifier-args"]},
     {"name":"the mustache template","kind":"fixture","file":"template.mustache","codes":["pro-attribute","expression-syntax"]},
-    {"name":"the thymeleaf template","kind":"fixture","file":"template.html","codes":["unknown-modifier","modifier-args","missing-key","unknown-attribute","expression-syntax","pro-attribute","pro-attribute","prefix-mismatch"]}
+    {"name":"the thymeleaf template","kind":"fixture","file":"template.html","codes":["unknown-modifier","modifier-args","missing-key","unknown-attribute","expression-syntax","pro-attribute","pro-attribute","prefix-mismatch"]},
+    {"name":"a companion's removal declares the signals it removes, and a list's remove none","kind":"signals","language":"kotlin","source":"send(PatchSignals.remove(\"left\"))\nnames.remove(\"notASignal\")","signals":["left"]}
   ]
 }
