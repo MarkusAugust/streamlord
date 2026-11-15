@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SignalsTest {
     @Test
@@ -22,9 +23,11 @@ class SignalsTest {
                 val written = declarations.map { listOf(it.name, src.substring(it.start, it.end)) }
                 assertEquals(expected.map { (it as JsonArray).strings() }, written, name)
             }
-            // A name Streamlord refuses is still where the call declares it, for go to declaration and rename.
-            val named = definitions.map { it.removePrefix(REFUSED) }.filterNot { it == "*" || ':' in it }
-            assertEquals(named.toSet(), declarations.map { it.name }.toSet(), name)
+            // Every signal the definitions name is where a declaration names it, and every declaration's name counts as
+            // defined, one Streamlord refuses too, for go to declaration and rename.
+            val declared = declarations.map { it.name }.toSet()
+            assertTrue(declared.containsAll(definitions.filterNot { it == "*" || ':' in it }), name)
+            assertEquals(emptyList(), unknownSignalIssues(declared.map { SignalReference(0, it.length + 1, it) }, definitions), name)
         }
     }
 }
