@@ -264,7 +264,7 @@ export class Inspector {
       return;
     }
     try {
-      const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, (frame.args.onlyIfMissing ?? "").trim() === "true");
+      const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, frame.args.onlyIfMissing ?? null);
       // The client keeps the keys it set before the one it failed on, and so does the store shown. A
       // throw also leaves its update batch open (signals.ts:747-762), so the bindings on the page stop
       // redrawing.

@@ -14,6 +14,8 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.json.SignalPatchException
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 
 /*
@@ -966,6 +968,30 @@ public object Requests {
     }
 
     /**
+     * The store after the client applies [patch], a `datastar-patch-signals` frame's `signals`, to
+     * [store] (see [mergePatchAsClient]), with [onlyIfMissing] read as the client reads it: `"true"`
+     * after JavaScript's trim (patchSignals.ts:16, text.ts:24 in 1.0.5). The client nests as deep as
+     * a stream says. Null where the patch is no JSON, which the frame shows as it is.
+     */
+    public fun patchedStore(
+        store: JsonObject,
+        patch: String,
+        onlyIfMissing: String?,
+    ): PatchedStore? {
+        val parsed =
+            try {
+                JsonParser.parse(patch, Int.MAX_VALUE)
+            } catch (_: Exception) {
+                return null
+            }
+        return try {
+            PatchedStore(mergePatchAsClient(store, parsed, onlyIfMissing?.trim(::isJsSpace) == "true"), null, false)
+        } catch (e: SignalPatchException) {
+            PatchedStore(e.store, e.message, e.refused)
+        }
+    }
+
+    /**
      * The signals as compact JSON; text that is not JSON is passed through trimmed.
      *
      * Valid JSON is compacted by dropping the whitespace between its tokens, not by writing it out
@@ -1473,3 +1499,13 @@ public object Requests {
             }
         }
 }
+
+/**
+ * A signal store after a patch: the [store] the client holds, and where it throws, the [error] it
+ * throws, whose keys before the one it failed on are kept; [refused] where Streamlord refuses the patch on purpose.
+ */
+public class PatchedStore(
+    public val store: JsonObject,
+    public val error: String?,
+    public val refused: Boolean,
+)

@@ -198,9 +198,9 @@ describe("what crosses the port", () => {
     assert.equal(event?.frame?.event, "datastar-patch-signals");
     assert.equal(event?.frame?.id, null);
     assert.equal(typeof event?.frame?.receivedAt, "number");
-    const patched = applySignalPatch(`{"b":2}`, event?.frame?.args.signals, false);
+    const patched = applySignalPatch(`{"b":2}`, event?.frame?.args.signals, null);
     assert.deepEqual({ ...patched, store: JSON.parse(patched.store) }, { store: { b: 2, a: 1 }, refused: false });
-    const refused = applySignalPatch(`{"b":2}`, `{"a":1,"__proto__":{"x":1}}`, false);
+    const refused = applySignalPatch(`{"b":2}`, `{"a":1,"__proto__":{"x":1}}`, null);
     assert.deepEqual([JSON.parse(refused.store), refused.refused, typeof refused.error], [{ b: 2, a: 1 }, true, "string"]);
   });
   it("keeps a header whatever it is named", () => {
@@ -223,9 +223,9 @@ describe("what crosses the port", () => {
   });
   it("folds a patch nested deeper than the SDK reads from a request, as the client does", () => {
     const deep = '{"a":'.repeat(200) + "1" + "}".repeat(200);
-    const patched = applySignalPatch(`{"b":2}`, deep, false);
+    const patched = applySignalPatch(`{"b":2}`, deep, null);
     assert.deepEqual([patched.store, patched.error, patched.refused], [`{"b":2,"a":${deep.slice(5, -1)}}`, undefined, false]);
     // And once more into the store that now holds it.
-    assert.equal(applySignalPatch(patched.store, deep, false).store, patched.store);
+    assert.equal(applySignalPatch(patched.store, deep, null).store, patched.store);
   });
 });

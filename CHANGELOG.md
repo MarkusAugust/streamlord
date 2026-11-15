@@ -344,6 +344,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- IntelliJ's inspector folds a signal patch nested deeper than 64 levels into the store, as the
+  client and the VS Code inspector do, where it showed it raw.
 - Signal completion in both editors no longer offers a name a DSL or core call writes with a
   hyphen, `dataSignals("is-open" to false)`, which Streamlord refuses, so no page has it. A key the
   client keeps as written, `data-signals='{"hs-key": 1}'`, is still offered as `$hs-key`, which

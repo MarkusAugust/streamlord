@@ -91,7 +91,7 @@ describe("what the port hands over has the shape its types declare", () => {
     const reader = new port.StreamReader();
     check("StreamEvent", reader.feed(": hello\n\nevent: datastar-patch-signals\nid: 1\ndata: signals {\"a\":1}\n\nevent: datastar-patch-elements\ndata: elements <p>x</p>\n"), "feed");
     check("StreamEvent", reader.finish(), "finish");
-    for (const patch of ['{"a": 1}', '{"a": {"__proto__": 1}}']) check("PatchedStore", port.applySignalPatch("{}", patch, false), "applySignalPatch");
+    for (const patch of ['{"a": 1}', '{"a": {"__proto__": 1}}']) check("PatchedStore", port.applySignalPatch("{}", patch, null), "applySignalPatch");
     assert.deepEqual(found, []);
   });
 });

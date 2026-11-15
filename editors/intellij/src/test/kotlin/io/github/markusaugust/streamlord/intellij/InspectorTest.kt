@@ -1165,7 +1165,7 @@ class InspectorTest : BasePlatformTestCase() {
         val deep = "{\"a\":".repeat(200) + "1" + "}".repeat(200)
         apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to deep), "", 0L))
         val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).singleOrNull { it.text.startsWith("{\n") }
-        assertEquals(deep, store?.text?.let { JsonParser.parse(it, Int.MAX_VALUE).toJson() })
+        assertEquals(JsonParser.parse(deep, Int.MAX_VALUE), store?.text?.let { JsonParser.parse(it, Int.MAX_VALUE) })
     }
 
     // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.
@@ -1197,16 +1197,8 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
     }
 
-    // Measured in headless Chrome for Testing 153 on the 1.0.5 bundle: the characters that may stand on both sides
-    // of `true` in onlyIfMissing and still make it true.
+    // The trim itself is held in streamlord-analysis's RequestsTest; here, that the panel reads onlyIfMissing through it.
     fun `test onlyIfMissing is trimmed as JavaScript trims it`() {
-        val measured =
-            "0009 000a 000b 000c 000d 0020 00a0 1680 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009 200a 2028 2029 202f 205f 3000 feff"
-        val kept = (0..0xFFFF).map { it.toChar() }.filter { InspectorPanel.isStringTrue("${it}true$it") }
-        assertEquals(measured, kept.joinToString(" ") { "%04x".format(it.code) })
-        assertFalse(InspectorPanel.isStringTrue("TRUE"))
-        assertFalse(InspectorPanel.isStringTrue(null))
-
         val panel = InspectorPanel(project, testRootDisposable)
         val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
 

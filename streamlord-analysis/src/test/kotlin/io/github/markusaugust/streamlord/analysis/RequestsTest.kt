@@ -2,10 +2,12 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.mergePatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** The cases of `cases/requests.json`, which the extension's `inspectorPage.test.ts` reads for the inspector page's own `previewUrl`. */
@@ -266,5 +268,20 @@ class RequestsTest {
             file,
         )
         assertEquals(emptyList<String>(), RequestsFile(emptyList()).skipped)
+    }
+
+    // Measured in headless Chrome for Testing 153 on the 1.0.5 bundle: the characters that may stand on both sides
+    // of `true` in onlyIfMissing and still make it true.
+    @Test
+    fun `onlyIfMissing is read as the client reads it, true after JavaScript trims it`() {
+        val measured =
+            "0009 000a 000b 000c 000d 0020 00a0 1680 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009 200a 2028 2029 202f 205f 3000 feff"
+        val store = JsonParser.parseObject("""{"a":0}""")
+
+        fun onlyIfMissing(value: String?) = Requests.patchedStore(store, """{"a":1}""", value)!!.store == store
+        val kept = (0..0xFFFF).map { it.toChar() }.filter { onlyIfMissing("${it}true$it") }
+        assertEquals(measured, kept.joinToString(" ") { it.code.toString(16).padStart(4, '0') })
+        assertFalse(onlyIfMissing("TRUE"))
+        assertFalse(onlyIfMissing(null))
     }
 }

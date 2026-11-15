@@ -10,8 +10,6 @@ import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import io.github.markusaugust.streamlord.core.json.SignalPatchException
-import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.analysis.RequestsEdit as AnalysedEdit
 import io.github.markusaugust.streamlord.analysis.SavedRequest as AnalysedRequest
 import io.github.markusaugust.streamlord.analysis.findRoutes as analysedRoutes
@@ -427,21 +425,25 @@ class StreamReader {
 }
 
 /**
- * The store [storeJson] after the client has folded the signal patch [patchJson] into it. A patch
- * the client fails on keeps the keys before the one it failed at, and so does the store given back.
+ * The store [storeJson] after the client has folded the signal patch [patchJson] into it, with the
+ * frame's [onlyIfMissing] as it stands; see [Requests.patchedStore]. A patch that is no JSON leaves the store as it was.
  */
 @JsExport
 fun applySignalPatch(
     storeJson: String,
     patchJson: String,
-    onlyIfMissing: Boolean,
-): PatchedStore =
-    try {
-        val store = mergePatchAsClient(JsonParser.parseObject(storeJson, NO_LIMIT), JsonParser.parse(patchJson, NO_LIMIT), onlyIfMissing)
-        plain("store" to JsonWriter.write(store, NO_LIMIT), "refused" to false)
-    } catch (e: SignalPatchException) {
-        plain("store" to JsonWriter.write(e.store, NO_LIMIT), "error" to e.message, "refused" to e.refused)
+    onlyIfMissing: String?,
+): PatchedStore {
+    val patched =
+        Requests.patchedStore(JsonParser.parseObject(storeJson, NO_LIMIT), patchJson, onlyIfMissing)
+            ?: return plain("store" to storeJson, "refused" to false)
+    val store = JsonWriter.write(patched.store, NO_LIMIT)
+    return if (patched.error == null) {
+        plain("store" to store, "refused" to false)
+    } else {
+        plain("store" to store, "error" to patched.error, "refused" to patched.refused)
     }
+}
 
 // The client nests as deep as a stream says. The limit the SDK reads a request under is its own.
 private const val NO_LIMIT = Int.MAX_VALUE
