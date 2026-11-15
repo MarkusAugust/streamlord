@@ -346,7 +346,30 @@ internal class FileFacts(
     /** `true` where the character is code: outside literals and comments, or in a template's code. */
     val code: BooleanArray,
     val names: Map<String, List<Declaration>>,
+    /** Every function the file declares, by its name. */
+    val functions: Map<String, List<FunctionDeclaration>> = emptyMap(),
 ) {
+    /**
+     * Where each literal starts that the file hands straight to a parameter marked `@Language("HTML")`
+     * of the function the call means, as far as the text tells: one called without a receiver, a
+     * member of the class the call is in before one of the top level.
+     */
+    val htmlArguments: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val marked = functions.filterValues { list -> list.any { it.html.isNotEmpty() } }.keys
+        val out = HashSet<Int>()
+        for (site in if (marked.isEmpty()) emptyList() else findCallSites(src, marked, lexKotlin(src))) {
+            if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+            val candidates = functions[site.name].orEmpty()
+            val meant =
+                candidates.filter { f -> f.owner?.let { site.nameStart in it } == true }.minByOrNull { it.owner!!.last - it.owner.first }
+                    ?: candidates.firstOrNull { it.owner == null }
+                    ?: continue
+            site.positional.forEachIndexed { k, a -> if (k in meant.html) a.string?.let { out += it.start } }
+            for (a in site.args) if (a.named != null && a.named in meant.html) a.string?.let { out += it.start }
+        }
+        out
+    }
+
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
     val importEdits: MutableMap<String, List<Edit>> = sharedMap()
 
@@ -375,6 +398,12 @@ internal class FileFacts(
     var typeParameters: Map<String, Boolean>? = null
 }
 
+/** A function the file declares: the body of the class it is a member of, and its parameters marked `@Language("HTML")`, by place and by name. */
+internal class FunctionDeclaration(
+    val owner: IntRange?,
+    val html: Set<Any>,
+)
+
 @Volatile
 private var lastFacts: FileFacts? = null
 
@@ -386,7 +415,8 @@ internal fun fileFacts(
     lastFacts?.let { if (it.src == src) return it }
     val l = lex ?: lexKotlin(src)
     val code = codeMask(src, l.strings, l.mask)
-    return FileFacts(src, code, declarations(src, code)).also { lastFacts = it }
+    val functions = HashMap<String, MutableList<FunctionDeclaration>>()
+    return FileFacts(src, code, declarations(src, code, functions), functions).also { lastFacts = it }
 }
 
 /** The names a Kotlin file declares that other files can see, as [declaredNames] reads them. */
@@ -520,6 +550,12 @@ private class ScopeFrame(
 
     /** Whether what this frame declares is out of other files' sight: a private class's body, or a local one's. */
     var hidden = false
+
+    /** For a function's parameters: the class body it is declared in. */
+    var owner: ScopeFrame? = null
+
+    /** Just past the bracket that closes the frame, once it has. */
+    var closeAt = -1
 }
 
 private fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -601,6 +637,41 @@ private fun splitTopLevel(text: String): List<String> {
     return out
 }
 
+private val NAME_BEFORE_BRACKET = regex("""($NAME)\s*$""")
+private val PARAMETER_NAME = regex("""($NAME)\s*:""")
+
+/**
+ * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in,
+ * and each parameter marked `@Language("HTML")`, by place and by name. The parameters are cut at
+ * commas outside brackets, the `<...>` of a type among them and the `->` of a function type not.
+ */
+private fun functionAt(
+    src: String,
+    g: ScopeFrame,
+    close: Int,
+): Triple<String, ScopeFrame?, Set<Any>>? {
+    val name = NAME_BEFORE_BRACKET.find(src.substring(maxOf(0, g.open - 200), g.open))?.groupValues?.get(1) ?: return null
+    val html = HashSet<Any>()
+    var depth = 0
+    var from = g.open + 1
+    var k = 0
+    for (i in g.open + 1..close) {
+        val c = src[i]
+        if (i < close && c in "([{<") depth++
+        if (i < close && (c in ")]}" || (c == '>' && src[i - 1] != '-'))) depth--
+        if (i == close || (c == ',' && depth == 0)) {
+            val parameter = src.substring(from, i)
+            if (HTML_ANNOTATION.containsMatchIn(parameter)) {
+                html += k
+                PARAMETER_NAME.find(parameter.replace(HTML_ANNOTATION, ""))?.let { html += it.groupValues[1] }
+            }
+            from = i + 1
+            k++
+        }
+    }
+    return Triple(name, g.owner, html)
+}
+
 /**
  * Every name the file declares, read from the code alone: a `val` or `var` (destructured too), a
  * parameter of a function, a constructor or a lambda, and a loop variable, each with the stretch
@@ -610,7 +681,10 @@ private fun splitTopLevel(text: String): List<String> {
 private fun declarations(
     src: String,
     code: BooleanArray,
+    functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
+    // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
+    val declared = ArrayList<Triple<String, ScopeFrame?, Set<Any>>>()
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
 
@@ -803,6 +877,7 @@ private fun declarations(
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
+                g.owner = f.takeIf { it.kind == "class" }
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -885,8 +960,10 @@ private fun declarations(
             }
             endPending(g, i + 1)
             for (d in g.ends) d.end = i + 1
+            g.closeAt = i + 1
             if (g.kind == "params") {
                 handOver(PendingScope(parameters(g, i), true))
+                if (functions != null) functionAt(src, g, i)?.let { declared += it }
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer))
             }
@@ -926,6 +1003,10 @@ private fun declarations(
     }
     for (f in stack) endPending(f, src.length)
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
+    for ((name, owner, html) in declared) {
+        val body = owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
+        functions!!.getOrPut(name) { ArrayList() } += FunctionDeclaration(body, html)
+    }
     return names
 }
 

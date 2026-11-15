@@ -348,8 +348,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - The rewrite to `interpolate` of a string with a value that may be null says that `interpolate`
   writes nothing for it where a template writes `null`, in the message of every value that offers it.
 - A string marked `@org.intellij.lang.annotations.Language("HTML")`, the annotation by its
-  qualified name, and one handed straight to a parameter of a function of the same file that
-  carries the annotation, are read as HTML and their values judged, as one marked
+  qualified name, and one handed straight to a parameter that carries the annotation, of a function
+  of the same file the call means (no receiver, a member of the class the call is in first), are read as HTML and their values judged, as one marked
   `@Language("HTML")` or `// language=HTML` was. VS Code colours one marked by the qualified name too.
 - A literal in a value joined into a `+` chain, `"<ul>" + tags.map { "<li>$it</li>" }.joinToString("") + "</ul>"`,
   or in a template of one of its literals, is judged as a string of its own, where it was passed over.
