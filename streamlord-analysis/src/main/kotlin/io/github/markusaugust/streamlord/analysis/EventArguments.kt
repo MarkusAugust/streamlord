@@ -250,17 +250,19 @@ internal class EventCalls(
     fun nameOf(site: CallSite): String? = eventCallName(src, site)
 
     /**
-     * Whether [site] may be core's call, on any receiver: the file imports Streamlord, takes the name
-     * from nowhere else and has no class of its own with a function of the name.
+     * Whether [site] may be core's call, on any receiver: the file imports Streamlord and takes the
+     * name from nowhere else, and on a receiver, no class of the file's own has a function of the name.
      */
     fun named(site: CallSite): Boolean {
         if (!streamlord) return false
         val name = nameOf(site) ?: return false
         val declared = name.substringBefore('.')
-        return !shadowed.getOrPut(name) {
-            (shadowsCore(src, declared) && imports.none { it.startsWith(STREAMLORD) && it.endsWith(".$declared") }) ||
-                ('.' !in name && fileFacts(src).functions[name].orEmpty().any { it.owner != null })
-        }
+        val elsewhere =
+            shadowed.getOrPut(declared) {
+                shadowsCore(src, declared) && imports.none { it.startsWith(STREAMLORD) && it.endsWith(".$declared") }
+            }
+        val member = '.' !in name && receiver(src, site) != "" && fileFacts(src).functions[name].orEmpty().any { it.owner != null }
+        return !elsewhere && !member
     }
 
     /** Whether [site] is core's call as far as the text shows: [named], and on a receiver that is a stream's or a companion's. */
