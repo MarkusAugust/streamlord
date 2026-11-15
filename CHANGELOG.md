@@ -192,11 +192,12 @@ All notable changes to Streamlord are recorded here. The format follows
   position no longer compiles; one that names its arguments compiles as before.
 - In the catalog, core's SSE calls and answers are one list, `kotlinCallSites.events`, with what each
   takes and its flags, in place of the lists `html`, `script` and `selector` and core's entries of
-  `signals`. `CallSiteSpec` has no `selectorArg` and `modeArg`, which no list set any more, so code
-  that names them no longer compiles. It names every call of the public API that sends an event or answers, `ScriptResponse`,
+  `signals`. The list names every call of the public API that sends an event or answers, `ScriptResponse`,
   `PatchSignals`, `SignalsResponse` and the companions' functions among them, and every check of
   both editors reads it: VS Code colours the JavaScript of `ScriptResponse("...")`, and both editors
   read the keys of `PatchSignals` and `SignalsResponse` as the signals they declare.
+  `CallSiteSpec` has no `selectorArg` and `modeArg`, which no list set any more, so code that names
+  them no longer compiles.
 - `PatchSignals` and `SignalsResponse` refuse JSON that is no object for what the client makes of
   it, `signals must be one JSON object, not an array: the client patches its items as signals named
   0, 1 and on`, where they said that the client runs it as JavaScript, and `SseDecoder` says the
