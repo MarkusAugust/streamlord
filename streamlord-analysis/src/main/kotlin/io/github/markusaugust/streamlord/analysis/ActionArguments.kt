@@ -39,8 +39,6 @@ internal class Value(
 /** The longest number literal read. */
 private const val SHORT = 40
 
-private val BOUND = regex("""\s*\.\s*bind\s*\(""")
-
 private val NUMBER_LITERAL =
     regex("""(?:\+(?!\+)|-(?!-))*(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 
@@ -216,7 +214,7 @@ internal class Brackets(
         return Value(s, e, written, content)
     }
 
-    /** `function ...` ending at its body or `.bind(...)`, or an arrow: a name or a parenthesised list, then `=>`; either maybe after `async`. */
+    /** `function ...`, maybe after `async`, or an arrow: a name or a parenthesised list, maybe after `async`, then `=>`. */
     private fun isFunction(
         s: Int,
         e: Int,
@@ -232,10 +230,7 @@ internal class Brackets(
             at += 5
             space()
         }
-        if (word("function")) {
-            val body = js.indexOf('{', at).takeIf { it in at until e && close[it] in at until e } ?: return false
-            return close[body] == e - 1 || BOUND.matchAt(js, close[body] + 1)?.let { close[it.range.last] == e - 1 } == true
-        }
+        if (word("function")) return true
         if (at < e && js[at] == '(') {
             val c = close[at]
             if (c !in at until e) return false

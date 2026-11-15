@@ -12,11 +12,6 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
 private val OPERATORS = listOf("!==", "===", "!=", "==")
-
-// What may stand before and after a literal compared on its own, the comparison binding tighter: `'a' + 'b' === evt.detail.type`
-// compares with what the sum gives, and so does `case 'a' + 'b':`.
-private const val STARTS = "([{},;?:&|=>"
-private const val ENDS = ")]},;?:&|"
 private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
 private val CASE = regex("""(?<![\w$.])case\s*""")
 
@@ -39,64 +34,20 @@ internal fun fetchTypeIssues(
         // A Kotlin template there is the code's value, not written.
         return if ('\\' in content || "\${" in content || PLACEHOLDER in content) null else open..close
     }
-
-    /** Where the text from [from], a [step] of 1 or -1 at a time, has passed white space, and comments where [comments]. */
-    fun past(
-        from: Int,
-        step: Int,
-        comments: Boolean = true,
-    ): Int {
-        var i = from
-        while (i in text.indices && ((comments && regions[i] == Region.COMMENT) || isJsSpace(text[i]))) i += step
-        return i
-    }
-
-    // Whether the text past a literal ends or goes on with one of [chars]: what it is compared with is the literal.
-    fun alone(
-        from: Int,
-        step: Int,
-        chars: String,
-    ) = past(from, step).let { it !in text.indices || text[it] in chars }
-
-    /**
-     * The string literals of the cases of `switch (evt.detail.type) { ... }`, where the match from [at] until [end] is that
-     * switch's subject: a switch compares with each case by `===`. A case of a switch nested inside is that switch's.
-     */
-    fun switchCases(
-        at: Int,
-        end: Int,
-    ): List<IntRange> {
-        val paren = past(at - 1, -1, comments = false)
-        val word = past(paren - 1, -1, comments = false) + 1
-        if (text.getOrNull(paren) != '(' || word < 6 || !text.startsWith("switch", word - 6)) return emptyList()
-        if (text.getOrNull(word - 7).let { it != null && (it.isJsNamePart() || it == '.') }) return emptyList()
-        var i = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
-        val cases = ArrayList<IntRange>()
-        var depth = 0
-        while (i < text.length) {
-            if (regions[i] == Region.CODE && text[i] == '{') depth++
-            if (regions[i] == Region.CODE && text[i] == '}' && --depth == 0) break
-            if (regions[i] == Region.CODE && depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { cases += it } }
-            i++
-        }
-        return cases.filter { alone(it.last + 1, 1, ":}") }
-    }
     for (m in DETAIL_TYPE.findAll(text)) {
         val at = m.range.first
         if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
-        val right =
-            OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { op ->
-                literal(op.range.last + 1)?.takeIf { alone(it.last + 1, 1, ENDS) }
-            }
-        val opEnd = past(at - 1, -1, comments = false) + 1
+        val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
         val left =
-            OPERATORS.firstOrNull { opEnd >= it.length && text.startsWith(it, opEnd - it.length) }?.let { op ->
-                val close = past(opEnd - op.length - 1, -1, comments = false)
+            operatorBefore(text, at).takeIf { it >= 0 }?.let { op ->
+                var close = op - 1
+                while (close >= 0 && isJsSpace(text[close])) close--
                 val q = text.getOrNull(close)
+                // Only a quote can open the literal: looking back for any other character would cost the text before it.
                 val open = if (q == null || q !in "'\"`") -1 else text.lastIndexOf(q, close - 1)
-                if (open >= 0) literal(open)?.takeIf { it.last == close && alone(it.first - 1, -1, STARTS) } else null
+                if (open >= 0) literal(open)?.takeIf { it.last == close } else null
             }
-        for (range in listOfNotNull(left, right) + switchCases(at, m.range.last + 1)) {
+        for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
             val type = text.substring(range.first + 1, range.last)
             if (type in catalog.fetchEvents || type.startsWith("datastar")) continue
             val near =
@@ -123,4 +74,73 @@ internal fun fetchTypeIssues(
         }
     }
     return out
+}
+
+/**
+ * The string literals of the cases of `switch (evt.detail.type) { ... }`, where the match from
+ * [at] until [end] is that switch's subject: a switch compares with each case by `===`. A case of
+ * a switch nested inside is that switch's.
+ */
+private fun switchCases(
+    text: String,
+    regions: ByteArray,
+    at: Int,
+    end: Int,
+    literal: (Int) -> IntRange?,
+): List<IntRange> {
+    if (!switchBefore(text, at)) return emptyList()
+    val open = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
+    val out = ArrayList<IntRange>()
+    var depth = 0
+    var i = open
+    while (i < text.length) {
+        if (regions[i] == Region.CODE) {
+            when (text[i]) {
+                '{' -> {
+                    depth++
+                }
+
+                '}' -> {
+                    if (--depth == 0) break
+                }
+
+                'c' -> {
+                    if (depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { out += it } }
+                }
+            }
+        }
+        i++
+    }
+    return out
+}
+
+/*
+ * The two readings back from a match, each costing what lies between it and what it reads, where a pattern run on all the
+ * text before cost that text at each match.
+ */
+
+/** Where the `===`, `==`, `!==` or `!=` that ends the text before [at], but for white space, starts; -1 for none. */
+private fun operatorBefore(
+    text: String,
+    at: Int,
+): Int {
+    var end = at
+    while (end > 0 && text[end - 1].isWhitespace()) end--
+    return OPERATORS.firstOrNull { end >= it.length && text.startsWith(it, end - it.length) }?.let { end - it.length } ?: -1
+}
+
+/** Whether `switch (` ends the text before [at], but for ASCII white space, and stands on its own, as no property. */
+private fun switchBefore(
+    text: String,
+    at: Int,
+): Boolean {
+    fun space(c: Char) = c == ' ' || c in '\t'..'\r'
+    var i = at
+    while (i > 0 && space(text[i - 1])) i--
+    if (i == 0 || text[i - 1] != '(') return false
+    i--
+    while (i > 0 && space(text[i - 1])) i--
+    if (i < 6 || !text.startsWith("switch", i - 6)) return false
+    val c = text.getOrNull(i - 7) ?: return true
+    return !(c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '_' || c == '$' || c == '.')
 }

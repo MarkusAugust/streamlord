@@ -131,20 +131,8 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
-/** Where a name `await` ends the code of [js] before [pos], but for space and comments, as in `await @post(...)`. */
-private fun awaitBefore(
-    js: String,
-    pos: Int,
-): Int? {
-    val regions = jsRegions(js)
-    var i = pos
-    while (i > 0 && (regions[i - 1] == Region.COMMENT || (regions[i - 1] == Region.CODE && js[i - 1].isJsWhitespace()))) i--
-    val at = i - "await".length
-    return at.takeIf {
-        it >= 0 && js.startsWith("await", it) && regions[it] == Region.CODE &&
-            !js.getOrNull(it - 1).let { c -> c.isJsNamePart() || c == '.' }
-    }
-}
+/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
+private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
 
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
 // on either side, any character beyond ASCII counted as one.
@@ -961,7 +949,12 @@ public class ExpressionValidator(
             val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
             val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
             // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
-            val awaitAt = awaitBefore(rewritten.js, err.pos)?.let(::toText)
+            val awaitAt =
+                AWAIT_BEFORE
+                    .find(rewritten.js.substring(0, err.pos))
+                    ?.range
+                    ?.first
+                    ?.let(::toText)
             if (awaitAt != null) {
                 val message =
                     "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
