@@ -1487,6 +1487,20 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
+    // Swing breaks a long line by measuring it character by character, and a 1.2 MB line held the IDE for 45 seconds.
+    fun `test a long value in a frame is shown cut, with how much is left out`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val long = "{\"a\":".repeat(200_000) + "1" + "}".repeat(200_000)
+        panel.javaClass
+            .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to long), "", 0L))
+        val shown = areas(panel).single { it.text.startsWith("{\"a\":") }.text
+        assertTrue(shown.length.toString(), shown.length < 20_000)
+        assertTrue(shown.takeLast(200), shown.endsWith("… 1,190,001 more characters; Copy as curl and run it to see them all."))
+        assertTrue(long.startsWith(shown.substringBefore("\n…")))
+    }
+
     fun `test every line of the event list starts at its left edge`() {
         val panel = InspectorPanel(project, testRootDisposable)
         val events = events(panel)

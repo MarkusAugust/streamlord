@@ -58,6 +58,7 @@ import java.awt.Rectangle
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.DefaultListCellRenderer
@@ -994,7 +995,7 @@ class InspectorPanel(
                 for ((k, v) in rows) {
                     row(k) {
                         cell(
-                            JBTextArea(v).mono().apply {
+                            JBTextArea(cut(v)).mono().apply {
                                 isEditable = false
                                 isOpaque = false
                                 border = JBUI.Borders.empty()
@@ -1007,6 +1008,14 @@ class InspectorPanel(
         body.border = JBUI.Borders.empty(4, 6)
         card.add(body, BorderLayout.CENTER)
         return card
+    }
+
+    /** [value] up to [MAX_SHOWN] characters: Swing wraps a line by measuring it character by character, and a megabyte holds the IDE for a minute. */
+    private fun cut(value: String): String {
+        if (value.length <= MAX_SHOWN) return value
+        val end = if (value[MAX_SHOWN - 1].isHighSurrogate()) MAX_SHOWN - 1 else MAX_SHOWN
+        val more = String.format(Locale.ROOT, "%,d", value.length - end)
+        return value.substring(0, end) + "\n… $more more characters; Copy as curl and run it to see them all."
     }
 
     /**
@@ -1026,6 +1035,7 @@ class InspectorPanel(
 
     companion object {
         private const val MAX_FRAMES = 500
+        private const val MAX_SHOWN = 10_000
         private const val MODIFIED = "● modified"
 
         /** What a field of the form asks for; each is given the width there is, and asks for little so a narrow panel can hold it. */
