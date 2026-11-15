@@ -92,7 +92,12 @@ private val OPTION_KEYS =
 /** catalog/javascript-words.json, which the VS Code grammar's keywords, constants and globals are written from. */
 private val JS_WORDS = JsonParser.parseObject(CatalogText.JAVASCRIPT_WORDS)
 private val JS_CONSTANTS = JS_WORDS.array("constants")!!.strings().toSet()
-private val JS_KEYWORDS = JS_WORDS.obj("keywords")!!.values.flatMap { (it as JsonArray).strings() }.toSet() + JS_CONSTANTS
+private val JS_KEYWORDS =
+    JS_WORDS
+        .obj("keywords")!!
+        .values
+        .flatMap { (it as JsonArray).strings() }
+        .toSet() + JS_CONSTANTS
 private val JS_GLOBALS = JS_WORDS.array("globals")!!.strings().toSet()
 
 /** The words after which a value follows, as after a name: a slash then divides. */
