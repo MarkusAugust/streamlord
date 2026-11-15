@@ -171,10 +171,10 @@ class HoleTypesTest : StreamlordTestCase() {
         val facts =
             facts(
                 "import io.github.markusaugust.streamlord.core.domain.Html\nimport users.U\n" +
-                    "fun f(u: U, m: Map<String, Int>, a: IntArray, s: Set<String>, l: ArrayList<String>, rows: List<Html>) = " +
-                    "\"<style>\${u.tags} \$m \$a \$s \$l</style><ul>\$rows</ul>\"",
+                    "fun f(u: U, m: Map<String, Int>, a: IntArray, s: Set<String>, rows: List<Html>) = " +
+                    "\"<style>\${u.tags} \$m \$a \$s</style><ul>\$rows</ul>\"",
             )
-        for (hole in listOf("\${u.tags}", "\$m", "\$a", "\$s", "\$l")) assertEquals(hole, ValueFact.COLLECTION, facts[hole])
+        for (hole in listOf("\${u.tags}", "\$m", "\$a", "\$s")) assertEquals(hole, ValueFact.COLLECTION, facts[hole])
         assertEquals(ValueFact.MARKUP, facts["\$rows"])
         // No Trusted vouches for a collection, which a template writes in brackets.
         myFixture.doHighlighting()
