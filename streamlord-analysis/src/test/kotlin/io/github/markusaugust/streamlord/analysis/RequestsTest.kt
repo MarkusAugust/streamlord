@@ -284,4 +284,16 @@ class RequestsTest {
         assertFalse(onlyIfMissing("TRUE"))
         assertFalse(onlyIfMissing(null))
     }
+
+    // The client takes a patch however deep, and a number however long; the inspector says it does not fold one past its limits.
+    @Test
+    fun `a patch too deep or too long to fold leaves the store as it was and says so`() {
+        val store = JsonParser.parseObject("""{"b":2}""")
+        for (patch in listOf("{\"a\":".repeat(200_000) + "1" + "}".repeat(200_000), "{\"a\":1" + "0".repeat(1000) + "}")) {
+            val patched = Requests.patchedStore(store, patch, null)
+            assertEquals(store, patched?.store)
+            assertTrue(patched?.refused == true && patched.error != null, patched?.error)
+        }
+        assertEquals(null, Requests.patchedStore(store, "{a:1}", null), "no JSON, which the frame shows as it is")
+    }
 }

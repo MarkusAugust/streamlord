@@ -228,4 +228,12 @@ describe("what crosses the port", () => {
     // And once more into the store that now holds it.
     assert.equal(applySignalPatch(patched.store, deep, null).store, patched.store);
   });
+  it("leaves the store as it was for a patch too deep or too long to fold, and says so", () => {
+    for (const patch of ['{"a":'.repeat(200_000) + "1" + "}".repeat(200_000), '{"a":1' + "0".repeat(1000) + "}"]) {
+      const patched = applySignalPatch(`{"b":2}`, patch, null);
+      assert.equal(patched.store, `{"b":2}`);
+      assert.equal(patched.refused, true);
+      assert.ok(patched.error);
+    }
+  });
 });

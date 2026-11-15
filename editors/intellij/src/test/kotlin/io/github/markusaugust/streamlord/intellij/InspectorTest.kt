@@ -1168,6 +1168,15 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(JsonParser.parse(deep, Int.MAX_VALUE), store?.text?.let { JsonParser.parse(it, Int.MAX_VALUE) })
     }
 
+    // Past the depth the inspector folds the store is left as it was, with a word why, and the IDE reports no error.
+    fun `test a patch too deep to fold leaves the store and says so`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+        val deep = "{\"a\":".repeat(200_000) + "1" + "}".repeat(200_000)
+        apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to deep), "", 0L))
+        assertTrue(texts(panel).toString(), texts(panel).any { it.startsWith("Streamlord refuses this signal patch on purpose") })
+    }
+
     // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.
     fun `test a patch Streamlord refuses on purpose says so`() {
         val panel = InspectorPanel(project, testRootDisposable)
