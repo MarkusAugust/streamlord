@@ -53,13 +53,17 @@ internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELP
 
 private val OBJECT_START = regex("""^\s*[{\[]""")
 
-/** The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a hyphen. */
+/**
+ * The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a
+ * hyphen; [removes] says the call is core's removal of signals.
+ */
 internal fun signalNameHyphenIssues(
     site: CallSite,
     src: String,
     lex: KotlinLex,
     helpers: Set<String>,
     insideDslCall: (Int) -> Boolean,
+    removes: Boolean,
 ): List<Issue> {
     val out = ArrayList<Issue>()
     val positional = site.positional
@@ -100,7 +104,7 @@ internal fun signalNameHyphenIssues(
         if (s != null && hyphenIsTheReason(s)) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
-    if (eventCallName(src, site)?.let(::eventCallTakes) == "signalNames") {
+    if (removes) {
         for (a in positional) {
             val s = a.string ?: continue
             if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
@@ -245,7 +249,10 @@ internal fun signalNameHyphenSites(
     foreign: (name: String, nameStart: Int) -> Boolean = { _, _ -> false },
 ): List<Pair<CallSite, List<Issue>>> {
     val out = ArrayList<Pair<CallSite, List<Issue>>>()
-    collectHyphenSites(src, lex, helpers, dslCalls, foreign, enclosed = false, shift = 0, depth = 0, out = out)
+    // Whether a call, at its place in the file, removes signals by core's removeSignals or PatchSignals.remove.
+    val core = EventCalls(src)
+    val removes = { site: CallSite -> core.named(site) && core.nameOf(site)?.let(::eventCallTakes) == "signalNames" }
+    collectHyphenSites(src, lex, helpers, dslCalls, foreign, removes, enclosed = false, shift = 0, depth = 0, out = out)
     return out.sortedBy { it.first.nameStart }
 }
 
@@ -255,6 +262,7 @@ private fun collectHyphenSites(
     helpers: Set<String>,
     dslCalls: Set<String>,
     foreign: (String, Int) -> Boolean,
+    removes: (CallSite) -> Boolean,
     enclosed: Boolean,
     shift: Int,
     depth: Int,
@@ -267,7 +275,8 @@ private fun collectHyphenSites(
     for (site in findCallSites(text, SIGNAL_NAMING_CALLS, lex)) {
         if (foreign(site.name, site.nameStart + shift)) continue
         // A string template holds DSL calls too, so the pairs of one are read here as well.
-        val issues = signalNameHyphenIssues(site, text, lex, helpers, inside) + dataSignalsPairIssues(site, text, lex)
+        val issues =
+            signalNameHyphenIssues(site, text, lex, helpers, inside, removes(site.shifted(shift))) + dataSignalsPairIssues(site, text, lex)
         if (issues.isNotEmpty()) out += site.shifted(shift) to issues.map { it.shifted(shift) }
     }
     if (depth >= 4) return
@@ -276,7 +285,18 @@ private fun collectHyphenSites(
             if (t.kind != InterpolationKind.BRACED) continue
             val open = text.indexOf('{', t.start)
             if (open < 0 || open + 1 > t.end - 1 || text.substring(open + 1, t.end - 1) != t.text) continue
-            collectHyphenSites(t.text, lexKotlin(t.text), helpers, dslCalls, foreign, inside(t.start), shift + open + 1, depth + 1, out)
+            collectHyphenSites(
+                t.text,
+                lexKotlin(t.text),
+                helpers,
+                dslCalls,
+                foreign,
+                removes,
+                inside(t.start),
+                shift + open + 1,
+                depth + 1,
+                out,
+            )
         }
     }
 }

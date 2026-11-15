@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.EventRules
+import io.github.markusaugust.streamlord.core.domain.SignalNames
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -69,7 +70,7 @@ internal fun eventArgumentIssues(
 ): List<Issue> {
     val name = calls.nameOf(site) ?: return emptyList()
     val call = EVENT_CALLS.getValue(name)
-    if (!calls.ours(site)) return emptyList()
+    if (!calls.named(site)) return emptyList()
     val out = ArrayList<Issue>()
 
     fun refused(
@@ -95,11 +96,10 @@ internal fun eventArgumentIssues(
     }
     val takes = call.takes ?: return out
     val first = site.named(takes) ?: site.positional.firstOrNull().takeIf { !site.trailingLambda || takes != "elements" }
+    // A removal's selector is judged on a receiver of any name, as it always was; the rest only where the receiver says a stream.
+    if (takes == "selector") selectorIssue(literal(first), "selector")
+    if (!calls.ours(site)) return out
     when (takes) {
-        "selector" -> {
-            selectorIssue(literal(first), "selector")
-        }
-
         "elements" -> {
             selectorIssue(literal(selector), "selector")
         }
@@ -110,6 +110,15 @@ internal fun eventArgumentIssues(
 
         "url" -> {
             literal(first)?.let { refused(it.start, it.end, EventRules.redirect(it.text)) }
+        }
+
+        // A hyphen has an issue of its own, with the name to write instead.
+        "signalNames" -> {
+            for (a in site.positional) {
+                literal(a)?.takeIf { SignalNames.hyphenProblem(it.text) == null }?.let {
+                    refused(it.start, it.end, EventRules.removedSignal(it.text))
+                }
+            }
         }
 
         "script" -> {
@@ -239,11 +248,11 @@ internal fun eventCallName(
 internal fun eventCallTakes(name: String): String? = EVENT_CALLS[name]?.takes
 
 /**
- * Which calls of [src] are Streamlord's SSE calls and answers, read once for the file. A call is
- * when the file imports something of Streamlord's, does not declare the name or import it from
- * elsewhere ([shadowsCore]), the companion's name for a companion's function, and the call has no
- * receiver, or `this`, a receiver named as a stream (`sse`, `stream`, `datastar` in any case), or
- * `call` for Ktor's `respond*`.
+ * Which calls of [src] are Streamlord's SSE calls and answers, read once for the file. A call may be
+ * ([named]) when the file imports something of Streamlord's and does not declare the name or import
+ * it from elsewhere ([shadowsCore]), the companion's name for a companion's function. It is ([ours])
+ * when it also has no receiver, or `this`, a receiver named as a stream (`sse`, `stream`,
+ * `datastar` in any case), or `call` for Ktor's `respond*`.
  */
 internal class EventCalls(
     private val src: String,
@@ -266,16 +275,24 @@ internal class EventCalls(
 
     fun nameOf(site: CallSite): String? = eventCallName(src, site)
 
-    fun ours(site: CallSite): Boolean {
+    /**
+     * Whether [site] may be core's call, on any receiver: the file imports Streamlord, takes the name
+     * from nowhere else and has no class of its own with a function of the name.
+     */
+    fun named(site: CallSite): Boolean {
         if (!streamlord) return false
         val name = nameOf(site) ?: return false
         val declared = name.substringBefore('.')
-        val elsewhere =
-            shadowed.getOrPut(declared) {
-                shadowsCore(src, declared) && imports.none { it.startsWith(STREAMLORD) && it.endsWith(".$declared") }
-            }
-        if (elsewhere) return false
-        if ('.' in name) return true
+        return !shadowed.getOrPut(name) {
+            (shadowsCore(src, declared) && imports.none { it.startsWith(STREAMLORD) && it.endsWith(".$declared") }) ||
+                ('.' !in name && fileFacts(src).functions[name].orEmpty().any { it.owner != null })
+        }
+    }
+
+    /** Whether [site] is core's call as far as the text shows: [named], and on a receiver that is a stream's or a companion's. */
+    fun ours(site: CallSite): Boolean {
+        if (!named(site)) return false
+        if ('.' in nameOf(site)!!) return true
         val receiver = receiver(src, site) ?: return false
         return receiver.isEmpty() || receiver == THIS || STREAM_RECEIVER.containsMatchIn(receiver) ||
             (receiver == "call" && site.name.startsWith("respond"))

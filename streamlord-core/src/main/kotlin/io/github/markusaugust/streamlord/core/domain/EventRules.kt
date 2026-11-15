@@ -33,6 +33,9 @@ public object EventRules {
 
     public fun redirect(url: String): String? = refusal { ExecuteScript.redirect(url) }
 
+    /** A signal named to be removed, as `removeSignals` and `PatchSignals.remove` take it. */
+    public fun removedSignal(name: String): String? = refusal { PatchSignals.remove(name) }
+
     /**
      * An attribute of a script's element named [name]: one HTML can name, and not [effect], the
      * attribute that removes a script sent with [autoRemove], which the browser would drop for the

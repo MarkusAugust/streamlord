@@ -341,7 +341,11 @@ public class Analyzer(
             catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, lex, hyphenated, opts, siteHelpers) }
             val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated, eventCalls) }
             html?.let { issues += it.issues }
-            catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
+            // An answer sends its script as it is, and the client sets it as the element's text: only a stream escapes a script end.
+            catalog.scriptCallSites[site.name]?.takeIf { catalog.eventCalls[site.name]?.response != true }?.let {
+                issues +=
+                    checkScriptSite(site, it)
+            }
             if (site.name in eventCallNames &&
                 site.name !in htmlSiteNames
             ) {
@@ -2395,8 +2399,12 @@ public class Analyzer(
         val judged = s?.let { judgeHoles(it, src, opts, view) }
         val issues = ArrayList(judged?.issues.orEmpty())
         val modeKnown = if (modeArg == null) ElementPatchMode.DEFAULT else mode?.let { ElementPatchMode.fromWire(it) }
-        val ours = eventCalls.ours(site)
-        val needsSelector = modeKnown?.takeIf { ours && modeArg != null && selector == null }?.let { modeWithoutSelector(site, it) }
+        // A mode without a selector is judged on a receiver of any name, as it always was.
+        val needsSelector =
+            modeKnown
+                ?.takeIf {
+                    eventCalls.named(site) && modeArg != null && selector == null
+                }?.let { modeWithoutSelector(site, it) }
         if (modeArg != null && needsSelector != null) {
             val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
@@ -2412,7 +2420,7 @@ public class Analyzer(
                 )
         }
         issues += eventArgumentIssues(site, selectorArg, eventCalls, opts.prefix)
-        if (s != null && modeKnown != null && ours) {
+        if (s != null && modeKnown != null && eventCalls.ours(site)) {
             // `ElementNamespace.SVG`, or `SVG` when imported; a namespace the code computes is not known here.
             val namespaceArg = site.named("namespace") ?: elements?.let { site.positional.getOrNull(it + 3) }
             val namespace =

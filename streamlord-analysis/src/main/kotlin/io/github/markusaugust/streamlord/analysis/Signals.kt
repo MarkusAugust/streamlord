@@ -108,7 +108,13 @@ private val ASSIGNED_SIGNAL =
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
-private val PAIR_CALLS = Catalog.default.signalCalls.keys
+/** The calls whose pairs and names declare signals, by the name they are written with: a companion's `remove` too. */
+private val PAIR_CALLS =
+    Catalog.default.signalCalls.keys +
+        Catalog.default.eventCalls
+            .filterValues { it.takes == "signalNames" }
+            .keys
+            .map { it.substringAfterLast('.') }
 
 /** Whether the call whose name starts at [at] is made on a receiver: a `.` before it, past whitespace and line comments. */
 private fun onReceiver(
@@ -579,6 +585,9 @@ private fun declared(
         val lex = given ?: lexKotlin(src)
         for (site in findCallSites(src, PAIR_CALLS, lex)) {
             if (foreign(site.name, site.nameStart)) continue
+            val removes = eventCallName(src, site)?.let(::eventCallTakes) == "signalNames"
+            // A companion's removal is called by a name others use, `names.remove(...)`.
+            if (site.name !in Catalog.default.signalCalls && !removes) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
                 for (key in argumentKeys(a.text)) out += key.copy(start = a.start + key.start, end = a.start + key.end)
@@ -601,7 +610,7 @@ private fun declared(
                 }
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
-                if (site.name == "removeSignals") out += declarationAt(name, a.start)
+                if (removes) out += declarationAt(name, a.start)
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
                     out += declarationAt(name, a.start)
                     // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.
