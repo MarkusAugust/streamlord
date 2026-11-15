@@ -8,6 +8,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `interpolate` refuses a value in `data-match-media` and throws, where it escaped one: the
+  reference writes the query as a string literal, so Datastar Pro may run it. Write the query into
+  the format, `interpolate("<p data-match-media:dark=\"'$DARK'\">...", ...)` with a constant of
+  yours as a Kotlin template, or set it with the DSL's `dataMatchMedia`. The editors warn of a value
+  there, say so, and no longer offer the rewrite to `interpolate`.
 - streamlord-analysis describes a file one way, `Source`, and every entry takes it. `AnalyzeOptions`
   is gone: write `analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`
   where you wrote `analyzer.analyzeKotlin(text, AnalyzeOptions(prefix, constants = names))`, and
@@ -321,9 +326,6 @@ All notable changes to Streamlord are recorded here. The format follows
   placeholder and `.hbs` files, and no longer colours a name that is not Datastar's in a template.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
-- `interpolate` refuses a value in `data-match-media`, where it escaped one: the reference writes
-  the query as a string literal, so Datastar Pro may run it. The editors warn of a Kotlin value
-  there as in any Datastar expression, and no longer offer the rewrite to `interpolate`.
 - The rewrite to `interpolate` passes a value in the body of a `<style>` that is not shown to be a
   String, a class of yours that writes CSS, as `Trusted(v.toString())`, which compiles, where it
   wrote `Trusted(v)`; a String it passes as `Trusted(v)`. A `List`, a `Set`, a `Map` or an array,

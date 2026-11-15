@@ -174,6 +174,11 @@ public class UnsafeInterpolationException(
                 }
             val fix =
                 when (position) {
+                    Position.DATASTAR if attribute?.substringBefore(':')?.endsWith(MATCH_MEDIA) == true -> {
+                        "Write the query into the markup, where a constant of yours may stand as a Kotlin template, " +
+                            "or set it with the DSL's dataMatchMedia."
+                    }
+
                     Position.DATASTAR -> {
                         // A string written into data-signals is refused by this same rule, so no signal is advised.
                         "Put the value in an attribute of its own, such as data-label, and read it in the expression with " +

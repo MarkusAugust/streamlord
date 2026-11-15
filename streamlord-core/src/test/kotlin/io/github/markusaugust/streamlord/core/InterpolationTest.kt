@@ -69,7 +69,7 @@ class InterpolationTest {
     @Test
     fun `a value refused in a media query is told to be written in the format or set with the DSL`() {
         val failure = assertFailsWith<UnsafeInterpolationException> { render("""<li data-match-media:dark="'%s'"></li>""", "x") }
-        assertTrue("write the query into the markup" in failure.message!!, failure.message!!)
+        assertTrue("the query into the markup" in failure.message!!, failure.message!!)
         assertTrue("dataMatchMedia" in failure.message!!, failure.message!!)
         assertTrue("data-label" !in failure.message!!, failure.message!!)
     }

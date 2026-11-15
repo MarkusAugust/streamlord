@@ -2095,7 +2095,7 @@
     "end": 3608,
     "code": "unsafe-interpolation",
     "severity": "error",
-    "message": "interpolate always throws here: query lands in a script or style element, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
+    "message": "interpolate always throws here: query lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
    },
    {
     "line": 72,

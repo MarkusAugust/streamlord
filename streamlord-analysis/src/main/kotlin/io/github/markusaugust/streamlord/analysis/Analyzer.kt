@@ -1119,8 +1119,8 @@ public class Analyzer(
                 when {
                     loadsAnywhere -> templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
                     markupText -> rereadMessage(shown)
-                    else -> templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
-                } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin wrote null." else ""
+                    else -> templateMessage(shown, landing, endTagAt(view, ip.decodedStart), rawElement(view, landing, ip.decodedStart))
+                } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
             issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", holeLink(landing), fixes)
         }
         for ((k, d) in at.withIndex()) {
@@ -1195,16 +1195,16 @@ public class Analyzer(
             issues +=
                 when {
                     kind == ArgKind.UNSIGNED && arg != null && numbersOnly -> {
-                        val message = if (uncertain) uncertainMessage(shown, landing, false) else unsignedRefusedMessage(shown, landing)
+                        val message = if (uncertain) uncertainMessage(shown, landing, false, null) else unsignedRefusedMessage(shown, landing)
                         refused(message, !uncertain, listOf(toLongFix(arg)))
                     }
 
                     uncertain && kind != null -> {
-                        refused(uncertainMessage(shown, landing, endTag), false)
+                        refused(uncertainMessage(shown, landing, endTag, rawElement(view, landing, d)), false)
                     }
 
                     else -> {
-                        refused(refusedMessage(shown, landing, kind != null, endTag), kind != null && !uncertain)
+                        refused(refusedMessage(shown, landing, kind != null, endTag, rawElement(view, landing, d)), kind != null && !uncertain)
                     }
                 }
         }
@@ -1265,15 +1265,32 @@ public class Analyzer(
     /** The page an issue of a value links to: Datastar's guide where Datastar runs it, the strings page anywhere else. */
     private fun holeLink(landing: HoleLanding): String = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
 
+    /**
+     * What to write instead of a value in a Datastar attribute, ended by [end]: one in Pro's media query
+     * is the query, which belongs in the markup or in the DSL's call; any other is read from an attribute of its own.
+     */
+    private fun datastarAdvice(
+        attribute: String?,
+        end: String,
+    ): String =
+        if (catalog.parseAttributeName(attribute.orEmpty().asciiLowercase(), CatalogNames.PREFIX)?.spec?.name == "match-media" ||
+            attribute?.substringBefore(':')?.endsWith("match-media") == true
+        ) {
+            "Write the query into the markup, where a constant of yours may stand as a Kotlin template, or set it with the DSL's dataMatchMedia$end"
+        } else {
+            "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label$end"
+        }
+
     /** Where a hole that is not escaped lands, said for a message, and what to write instead. */
     private fun landingWords(
         landing: HoleLanding,
         endTag: Boolean,
+        element: String? = null,
     ): Pair<String, String> =
         when (landing.position) {
             Position.DATASTAR -> {
                 "${landing.attribute ?: "a Datastar attribute"}, which Datastar runs as an expression or follows as a signal path" to
-                    "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
+                    datastarAdvice(landing.attribute, ".")
             }
 
             Position.STYLE -> {
@@ -1281,8 +1298,12 @@ public class Analyzer(
                     "Pass a number and write the unit in the markup, or choose between classes."
             }
 
+            Position.CODE if landing.attribute == null && element == "style" -> {
+                "a <style>, where it is read as CSS" to "Choose between classes, or write a number; wrap CSS you wrote yourself in Trusted(...)."
+            }
+
             Position.CODE -> {
-                "${landing.attribute ?: "a script or style element"}, which the browser runs" to
+                "${landing.attribute ?: "a script"}, which the browser runs" to
                     "Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
             }
 
@@ -1306,10 +1327,11 @@ public class Analyzer(
         shown: String,
         landing: HoleLanding,
         endTag: Boolean,
+        element: String?,
     ): String {
         val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
         if (landing.position in ESCAPED_POSITIONS) return "$base Make it a %s placeholder and pass the value to interpolate."
-        val (where, instead) = landingWords(landing, endTag)
+        val (where, instead) = landingWords(landing, endTag, element)
         return "$base It lands in $where. $instead"
     }
 
@@ -1343,9 +1365,10 @@ public class Analyzer(
         landing: HoleLanding,
         certain: Boolean,
         endTag: Boolean,
+        element: String?,
     ): String {
         val allowed = letIn(landing.position)
-        val (where, instead) = landingWords(landing, endTag)
+        val (where, instead) = landingWords(landing, endTag, element)
         return if (certain) {
             "interpolate always throws here: $shown lands in $where, and only $allowed is let in there. $instead"
         } else {
@@ -1358,9 +1381,10 @@ public class Analyzer(
         shown: String,
         landing: HoleLanding,
         endTag: Boolean,
+        element: String?,
     ): String {
         val allowed = letIn(landing.position)
-        val (where, instead) = landingWords(landing, endTag)
+        val (where, instead) = landingWords(landing, endTag, element)
         return "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
             "where only $allowed is let in. $instead"
     }
@@ -2098,7 +2122,7 @@ public class Analyzer(
             ip.end,
             "Kotlin writes ${holeDisplay(ip)} into $attribute, which Datastar runs as an expression or follows as a signal path. " +
                 "Text from outside becomes code there, even inside quotes. " +
-                "Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; " +
+                datastarAdvice(attribute, "; ") +
                 "only a number or a boolean is safe to write in.",
             Severity.WARNING,
             "unsafe-interpolation",
