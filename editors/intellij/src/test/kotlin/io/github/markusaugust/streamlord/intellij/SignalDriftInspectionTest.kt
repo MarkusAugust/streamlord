@@ -4,6 +4,8 @@ import com.intellij.codeInspection.LocalInspectionEP
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection
@@ -101,7 +103,8 @@ class SignalDriftInspectionTest : StreamlordTestCase() {
         myFixture.addFileToProject("page.html", "<input data-bind:query>")
         val file = myFixture.configureByText("Plain.kt", "fun f() = 1")
         val before = UiThreadWork.count.get()
-        assertEquals(emptyList<Any>(), SignalIndex.getInstance(project).driftIn(file))
+        val signals = SignalIndex.getInstance(project).projectSignals(file)
+        assertEquals(emptyList<Any>(), projectSignalIssues(SourceLanguage.KOTLIN, emptyList(), signals))
         assertEquals(0, UiThreadWork.count.get() - before)
     }
 }

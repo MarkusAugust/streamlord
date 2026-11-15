@@ -10,8 +10,6 @@ import io.github.markusaugust.streamlord.analysis.SseParser
 import io.github.markusaugust.streamlord.analysis.decodeDatastar
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import io.github.markusaugust.streamlord.core.json.SignalPatchException
-import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.analysis.RequestsEdit as AnalysedEdit
 import io.github.markusaugust.streamlord.analysis.SavedRequest as AnalysedRequest
 import io.github.markusaugust.streamlord.analysis.findRoutes as analysedRoutes
@@ -189,11 +187,9 @@ interface VariableCompletion {
 private fun plain(v: Requests.Variable): Variable =
     plain("name" to v.name, "value" to v.value, "source" to v.source.name.lowercase(), "origin" to v.origin)
 
-private fun source(v: Variable): Requests.VariableSource? = Requests.VariableSource.entries.firstOrNull { it.name.lowercase() == v.source }
-
-/** A source that is none of the three is no default and no running server, which leaves the file. */
+// The sources are those plain() writes: the extension hands back what environment() gave it.
 private fun analysed(vars: Array<Variable>): List<Requests.Variable> =
-    vars.map { Requests.Variable(it.name, it.value, source(it) ?: Requests.VariableSource.ENV, it.origin) }
+    vars.map { Requests.Variable(it.name, it.value, Requests.VariableSource.valueOf(it.source.uppercase()), it.origin) }
 
 private fun running(
     url: String?,
@@ -255,9 +251,7 @@ fun variableCompletions(
     vars: Array<Variable>,
 ): VariableCompletion? {
     val known = Requests.Field.entries.firstOrNull { it.name.lowercase() == field }
-    // A field that is none of the three takes what the URL takes but `baseUrl`: the params.
-    val offered = analysed(vars).filter { known != null || it.name != "baseUrl" }
-    return Requests.variableCompletions(text, caret, known ?: Requests.Field.URL, offered)?.let {
+    return Requests.variableCompletions(text, caret, known, analysed(vars))?.let {
         plain("from" to it.from, "to" to it.to, "items" to it.items.map(::plain).toTypedArray())
     }
 }
@@ -275,16 +269,7 @@ fun baseUrlSuggestion(
     vars: Array<Variable>,
     runningUrl: String?,
     runningName: String?,
-): String? =
-    // Offered only over a `baseUrl` the file is known to set.
-    if (vars.any {
-            it.name == "baseUrl" && source(it) == null
-        }
-    ) {
-        null
-    } else {
-        Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
-    }
+): String? = Requests.baseUrlSuggestion(analysed(vars), running(runningUrl, runningName))
 
 // ---- The request as the client sends it --------------------------------------------------------
 
@@ -390,13 +375,12 @@ interface StreamEvent {
     val frame: DatastarFrame?
 }
 
-/** The store after a signal patch, and the [error] the patch ended in; [refused] where Streamlord refuses it on purpose. */
+/** The store after a signal patch, and what the inspector says of the patch where it is not folded whole. */
 @JsExport
 interface PatchedStore {
     /** The store as JSON text. */
     val store: String
-    val error: String?
-    val refused: Boolean
+    val message: String?
 }
 
 /** Reads a response body as Datastar's client reads it, chunk by chunk as it arrives. */
@@ -427,21 +411,21 @@ class StreamReader {
 }
 
 /**
- * The store [storeJson] after the client has folded the signal patch [patchJson] into it. A patch
- * the client fails on keeps the keys before the one it failed at, and so does the store given back.
+ * The store [storeJson] after the client has folded the signal patch [patchJson] into it, with the
+ * frame's [onlyIfMissing] as it stands; see [Requests.patchedStore]. A patch that is no JSON leaves the store as it was.
  */
 @JsExport
 fun applySignalPatch(
     storeJson: String,
     patchJson: String,
-    onlyIfMissing: Boolean,
-): PatchedStore =
-    try {
-        val store = mergePatchAsClient(JsonParser.parseObject(storeJson, NO_LIMIT), JsonParser.parse(patchJson, NO_LIMIT), onlyIfMissing)
-        plain("store" to JsonWriter.write(store, NO_LIMIT), "refused" to false)
-    } catch (e: SignalPatchException) {
-        plain("store" to JsonWriter.write(e.store, NO_LIMIT), "error" to e.message, "refused" to e.refused)
-    }
+    onlyIfMissing: String?,
+): PatchedStore {
+    val patched =
+        Requests.patchedStore(JsonParser.parseObject(storeJson, NO_LIMIT), patchJson, onlyIfMissing)
+            ?: return plain("store" to storeJson)
+    val store = JsonWriter.write(patched.store, NO_LIMIT)
+    return if (patched.message == null) plain("store" to store) else plain("store" to store, "message" to patched.message)
+}
 
 // The client nests as deep as a stream says. The limit the SDK reads a request under is its own.
 private const val NO_LIMIT = Int.MAX_VALUE

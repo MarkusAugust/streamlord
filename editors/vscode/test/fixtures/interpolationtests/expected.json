@@ -1,5 +1,5 @@
 {
- "$comment": "The interpolation findings both analyses give the files of the test project in this folder, copied verbatim from the user's interpolationtests project, where every form of A to C also writes query, text from the request, somewhere it does harm, and D_EveryPosition.kt writes every kind of value into every position, with what the editor must say above each line, as E_Interpolate.kt does for calls to interpolate: analyzeKotlin in editors/vscode/src/analyze.ts and Analyzer.analyzeKotlin in streamlord-analysis, each file on its own, with the const vals the workspace declares (constants) known, as the VS Code index and IntelliJ provide them. Only the interpolation codes are listed (kotlin-interpolation, unescaped-interpolation, unsafe-interpolation, interpolate-template, interpolate-placeholders), and missing-id and top-level-text must not appear in any file. Offsets count UTF-16 code units; line is for the reader. What IntelliJ adds with types is in the plugin's own InspectionTest.",
+ "$comment": "The interpolation findings both analyses give the files of the test project in this folder, copied from the user's interpolationtests project with each inserted value called a placeholder, where every form of A to C also writes query, text from the request, somewhere it does harm, and D_EveryPosition.kt writes every kind of value into every position, with what the editor must say above each line, as E_Interpolate.kt does for calls to interpolate: analyzeKotlin in editors/vscode/src/analyze.ts and Analyzer.analyzeKotlin in streamlord-analysis, each file on its own, with the const vals the workspace declares (constants) known, as the VS Code index and IntelliJ provide them. Only the interpolation codes are listed (kotlin-interpolation, unescaped-interpolation, unsafe-interpolation, interpolate-template, interpolate-placeholders), and missing-id and top-level-text must not appear in any file. Offsets count UTF-16 code units; line is for the reader. What IntelliJ adds with types is in the plugin's own InspectionTest.",
  "constants": [
   "variant",
   "fieldId",
@@ -9,7 +9,7 @@
   "A_LanguageComment.kt": [
    {
     "line": 19,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 870,
     "end": 876,
     "code": "unsafe-interpolation",
@@ -18,7 +18,7 @@
    },
    {
     "line": 27,
-    "hole": "$name",
+    "placeholder": "$name",
     "start": 1134,
     "end": 1139,
     "code": "unescaped-interpolation",
@@ -27,7 +27,7 @@
    },
    {
     "line": 27,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 1158,
     "end": 1164,
     "code": "unescaped-interpolation",
@@ -36,7 +36,7 @@
    },
    {
     "line": 34,
-    "hole": "${query.trim()}",
+    "placeholder": "${query.trim()}",
     "start": 1417,
     "end": 1432,
     "code": "unescaped-interpolation",
@@ -45,7 +45,7 @@
    },
    {
     "line": 34,
-    "hole": "${applicant.email}",
+    "placeholder": "${applicant.email}",
     "start": 1448,
     "end": 1466,
     "code": "unescaped-interpolation",
@@ -54,7 +54,7 @@
    },
    {
     "line": 41,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 1728,
     "end": 1734,
     "code": "unescaped-interpolation",
@@ -63,7 +63,7 @@
    },
    {
     "line": 41,
-    "hole": "${if (query.isBlank()) \"nothing\" else query}",
+    "placeholder": "${if (query.isBlank()) \"nothing\" else query}",
     "start": 1780,
     "end": 1824,
     "code": "unescaped-interpolation",
@@ -72,7 +72,7 @@
    },
    {
     "line": 50,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2197,
     "end": 2203,
     "code": "unescaped-interpolation",
@@ -81,7 +81,7 @@
    },
    {
     "line": 58,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2487,
     "end": 2493,
     "code": "unescaped-interpolation",
@@ -90,7 +90,7 @@
    },
    {
     "line": 65,
-    "hole": "${buttonAttributes()}",
+    "placeholder": "${buttonAttributes()}",
     "start": 2785,
     "end": 2806,
     "code": "unsafe-interpolation",
@@ -99,7 +99,7 @@
    },
    {
     "line": 65,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2863,
     "end": 2869,
     "code": "unsafe-interpolation",
@@ -108,7 +108,7 @@
    },
    {
     "line": 72,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3119,
     "end": 3125,
     "code": "unsafe-interpolation",
@@ -117,7 +117,7 @@
    },
    {
     "line": 81,
-    "hole": "$error",
+    "placeholder": "$error",
     "start": 3503,
     "end": 3509,
     "code": "unsafe-interpolation",
@@ -126,7 +126,7 @@
    },
    {
     "line": 81,
-    "hole": "$error",
+    "placeholder": "$error",
     "start": 3513,
     "end": 3519,
     "code": "unescaped-interpolation",
@@ -135,7 +135,7 @@
    },
    {
     "line": 90,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3895,
     "end": 3901,
     "code": "unsafe-interpolation",
@@ -144,7 +144,7 @@
    },
    {
     "line": 100,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 4295,
     "end": 4312,
     "code": "unescaped-interpolation",
@@ -153,7 +153,7 @@
    },
    {
     "line": 101,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 4340,
     "end": 4346,
     "code": "unsafe-interpolation",
@@ -162,7 +162,7 @@
    },
    {
     "line": 110,
-    "hole": "applicant.name",
+    "placeholder": "applicant.name",
     "start": 4657,
     "end": 4671,
     "code": "unescaped-interpolation",
@@ -171,7 +171,7 @@
    },
    {
     "line": 110,
-    "hole": "query",
+    "placeholder": "query",
     "start": 4729,
     "end": 4734,
     "code": "unsafe-interpolation",
@@ -180,7 +180,7 @@
    },
    {
     "line": 110,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 4741,
     "end": 4747,
     "code": "unescaped-interpolation",
@@ -189,7 +189,7 @@
    },
    {
     "line": 120,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 5179,
     "end": 5196,
     "code": "unescaped-interpolation",
@@ -198,7 +198,7 @@
    },
    {
     "line": 121,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 5241,
     "end": 5247,
     "code": "unescaped-interpolation",
@@ -207,7 +207,7 @@
    },
    {
     "line": 122,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 5290,
     "end": 5296,
     "code": "unsafe-interpolation",
@@ -216,7 +216,7 @@
    },
    {
     "line": 133,
-    "hole": "$open",
+    "placeholder": "$open",
     "start": 5766,
     "end": 5771,
     "code": "kotlin-interpolation",
@@ -225,7 +225,7 @@
    },
    {
     "line": 133,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 5818,
     "end": 5824,
     "code": "kotlin-interpolation",
@@ -236,7 +236,7 @@
   "B_LanguageAnnotation.kt": [
    {
     "line": 20,
-    "hole": "${applicant.email}",
+    "placeholder": "${applicant.email}",
     "start": 786,
     "end": 804,
     "code": "unsafe-interpolation",
@@ -245,7 +245,7 @@
    },
    {
     "line": 24,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 1009,
     "end": 1026,
     "code": "unescaped-interpolation",
@@ -254,7 +254,7 @@
    },
    {
     "line": 24,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 1045,
     "end": 1051,
     "code": "unescaped-interpolation",
@@ -263,7 +263,7 @@
    },
    {
     "line": 30,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 1368,
     "end": 1374,
     "code": "unsafe-interpolation",
@@ -272,7 +272,7 @@
    },
    {
     "line": 36,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 1699,
     "end": 1705,
     "code": "unsafe-interpolation",
@@ -281,7 +281,7 @@
    },
    {
     "line": 45,
-    "hole": "$name",
+    "placeholder": "$name",
     "start": 1988,
     "end": 1993,
     "code": "unescaped-interpolation",
@@ -290,7 +290,7 @@
    },
    {
     "line": 45,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2012,
     "end": 2018,
     "code": "unescaped-interpolation",
@@ -299,7 +299,7 @@
    },
    {
     "line": 53,
-    "hole": "${query.trim()}",
+    "placeholder": "${query.trim()}",
     "start": 2296,
     "end": 2311,
     "code": "unescaped-interpolation",
@@ -308,7 +308,7 @@
    },
    {
     "line": 53,
-    "hole": "${applicant.email}",
+    "placeholder": "${applicant.email}",
     "start": 2327,
     "end": 2345,
     "code": "unescaped-interpolation",
@@ -317,7 +317,7 @@
    },
    {
     "line": 61,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 2632,
     "end": 2638,
     "code": "unescaped-interpolation",
@@ -326,7 +326,7 @@
    },
    {
     "line": 61,
-    "hole": "${if (query.isBlank()) \"nothing\" else query}",
+    "placeholder": "${if (query.isBlank()) \"nothing\" else query}",
     "start": 2684,
     "end": 2728,
     "code": "unescaped-interpolation",
@@ -335,7 +335,7 @@
    },
    {
     "line": 71,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3089,
     "end": 3095,
     "code": "unescaped-interpolation",
@@ -344,7 +344,7 @@
    },
    {
     "line": 80,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3378,
     "end": 3384,
     "code": "unescaped-interpolation",
@@ -353,7 +353,7 @@
    },
    {
     "line": 88,
-    "hole": "${buttonAttributes()}",
+    "placeholder": "${buttonAttributes()}",
     "start": 3688,
     "end": 3709,
     "code": "unsafe-interpolation",
@@ -362,7 +362,7 @@
    },
    {
     "line": 88,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3766,
     "end": 3772,
     "code": "unsafe-interpolation",
@@ -371,7 +371,7 @@
    },
    {
     "line": 96,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 4047,
     "end": 4053,
     "code": "unsafe-interpolation",
@@ -380,7 +380,7 @@
    },
    {
     "line": 106,
-    "hole": "$error",
+    "placeholder": "$error",
     "start": 4428,
     "end": 4434,
     "code": "unsafe-interpolation",
@@ -389,7 +389,7 @@
    },
    {
     "line": 106,
-    "hole": "$error",
+    "placeholder": "$error",
     "start": 4438,
     "end": 4444,
     "code": "unescaped-interpolation",
@@ -398,7 +398,7 @@
    },
    {
     "line": 116,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 4826,
     "end": 4832,
     "code": "unsafe-interpolation",
@@ -407,7 +407,7 @@
    },
    {
     "line": 127,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 5251,
     "end": 5268,
     "code": "unescaped-interpolation",
@@ -416,7 +416,7 @@
    },
    {
     "line": 128,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 5296,
     "end": 5302,
     "code": "unsafe-interpolation",
@@ -425,7 +425,7 @@
    },
    {
     "line": 138,
-    "hole": "applicant.name",
+    "placeholder": "applicant.name",
     "start": 5613,
     "end": 5627,
     "code": "unescaped-interpolation",
@@ -434,7 +434,7 @@
    },
    {
     "line": 138,
-    "hole": "query",
+    "placeholder": "query",
     "start": 5685,
     "end": 5690,
     "code": "unsafe-interpolation",
@@ -443,7 +443,7 @@
    },
    {
     "line": 138,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 5697,
     "end": 5703,
     "code": "unescaped-interpolation",
@@ -452,7 +452,7 @@
    },
    {
     "line": 148,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 6070,
     "end": 6087,
     "code": "unescaped-interpolation",
@@ -461,7 +461,7 @@
    },
    {
     "line": 149,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 6132,
     "end": 6138,
     "code": "unescaped-interpolation",
@@ -470,7 +470,7 @@
    },
    {
     "line": 150,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 6181,
     "end": 6187,
     "code": "unsafe-interpolation",
@@ -479,7 +479,7 @@
    },
    {
     "line": 160,
-    "hole": "$open",
+    "placeholder": "$open",
     "start": 6532,
     "end": 6537,
     "code": "kotlin-interpolation",
@@ -488,7 +488,7 @@
    },
    {
     "line": 160,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 6584,
     "end": 6590,
     "code": "kotlin-interpolation",
@@ -499,7 +499,7 @@
   "C_Streamlord.kt": [
    {
     "line": 21,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 963,
     "end": 969,
     "code": "unsafe-interpolation",
@@ -508,7 +508,7 @@
    },
    {
     "line": 26,
-    "hole": "$name",
+    "placeholder": "$name",
     "start": 1186,
     "end": 1191,
     "code": "unescaped-interpolation",
@@ -517,7 +517,7 @@
    },
    {
     "line": 26,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 1210,
     "end": 1216,
     "code": "unescaped-interpolation",
@@ -526,7 +526,7 @@
    },
    {
     "line": 30,
-    "hole": "${query.trim()}",
+    "placeholder": "${query.trim()}",
     "start": 1422,
     "end": 1437,
     "code": "unescaped-interpolation",
@@ -535,7 +535,7 @@
    },
    {
     "line": 30,
-    "hole": "${applicant.email}",
+    "placeholder": "${applicant.email}",
     "start": 1453,
     "end": 1471,
     "code": "unescaped-interpolation",
@@ -544,7 +544,7 @@
    },
    {
     "line": 34,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 1679,
     "end": 1685,
     "code": "unescaped-interpolation",
@@ -553,7 +553,7 @@
    },
    {
     "line": 34,
-    "hole": "${if (query.isBlank()) \"nothing\" else query}",
+    "placeholder": "${if (query.isBlank()) \"nothing\" else query}",
     "start": 1731,
     "end": 1775,
     "code": "unescaped-interpolation",
@@ -562,7 +562,7 @@
    },
    {
     "line": 42,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2094,
     "end": 2100,
     "code": "unescaped-interpolation",
@@ -571,7 +571,7 @@
    },
    {
     "line": 49,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2341,
     "end": 2347,
     "code": "unescaped-interpolation",
@@ -580,7 +580,7 @@
    },
    {
     "line": 53,
-    "hole": "${buttonAttributes()}",
+    "placeholder": "${buttonAttributes()}",
     "start": 2582,
     "end": 2603,
     "code": "unsafe-interpolation",
@@ -589,7 +589,7 @@
    },
    {
     "line": 53,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2660,
     "end": 2666,
     "code": "unsafe-interpolation",
@@ -598,7 +598,7 @@
    },
    {
     "line": 57,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2873,
     "end": 2879,
     "code": "unsafe-interpolation",
@@ -607,7 +607,7 @@
    },
    {
     "line": 62,
-    "hole": "$error",
+    "placeholder": "$error",
     "start": 3182,
     "end": 3188,
     "code": "unsafe-interpolation",
@@ -616,7 +616,7 @@
    },
    {
     "line": 62,
-    "hole": "$error",
+    "placeholder": "$error",
     "start": 3192,
     "end": 3198,
     "code": "unescaped-interpolation",
@@ -625,7 +625,7 @@
    },
    {
     "line": 69,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3546,
     "end": 3552,
     "code": "unsafe-interpolation",
@@ -634,7 +634,7 @@
    },
    {
     "line": 77,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 3913,
     "end": 3930,
     "code": "unescaped-interpolation",
@@ -643,7 +643,7 @@
    },
    {
     "line": 78,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3958,
     "end": 3964,
     "code": "unsafe-interpolation",
@@ -652,7 +652,7 @@
    },
    {
     "line": 85,
-    "hole": "query",
+    "placeholder": "query",
     "start": 4232,
     "end": 4237,
     "code": "unsafe-interpolation",
@@ -661,7 +661,7 @@
    },
    {
     "line": 85,
-    "hole": "applicant.name",
+    "placeholder": "applicant.name",
     "start": 4248,
     "end": 4262,
     "code": "unescaped-interpolation",
@@ -670,7 +670,7 @@
    },
    {
     "line": 93,
-    "hole": "${applicant.name}",
+    "placeholder": "${applicant.name}",
     "start": 4583,
     "end": 4600,
     "code": "unescaped-interpolation",
@@ -679,7 +679,7 @@
    },
    {
     "line": 94,
-    "hole": "$count",
+    "placeholder": "$count",
     "start": 4647,
     "end": 4653,
     "code": "unescaped-interpolation",
@@ -688,7 +688,7 @@
    },
    {
     "line": 95,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 4698,
     "end": 4704,
     "code": "unsafe-interpolation",
@@ -697,7 +697,7 @@
    },
    {
     "line": 103,
-    "hole": "$open",
+    "placeholder": "$open",
     "start": 4994,
     "end": 4999,
     "code": "kotlin-interpolation",
@@ -706,7 +706,7 @@
    },
    {
     "line": 103,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 5040,
     "end": 5046,
     "code": "kotlin-interpolation",
@@ -718,7 +718,7 @@
   "Main.kt": [
    {
     "line": 38,
-    "hole": "${everything(query)}",
+    "placeholder": "${everything(query)}",
     "start": 1974,
     "end": 1994,
     "code": "unescaped-interpolation",
@@ -727,7 +727,7 @@
    },
    {
     "line": 41,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2124,
     "end": 2130,
     "code": "unsafe-interpolation",
@@ -738,7 +738,7 @@
   "D_EveryPosition.kt": [
    {
     "line": 35,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 1542,
     "end": 1548,
     "code": "unescaped-interpolation",
@@ -747,7 +747,7 @@
    },
    {
     "line": 55,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2192,
     "end": 2198,
     "code": "unescaped-interpolation",
@@ -756,7 +756,7 @@
    },
    {
     "line": 59,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 2327,
     "end": 2332,
     "code": "unescaped-interpolation",
@@ -765,7 +765,7 @@
    },
    {
     "line": 75,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 2849,
     "end": 2855,
     "code": "unescaped-interpolation",
@@ -774,7 +774,7 @@
    },
    {
     "line": 79,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 2984,
     "end": 2989,
     "code": "unescaped-interpolation",
@@ -783,7 +783,7 @@
    },
    {
     "line": 95,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 3513,
     "end": 3519,
     "code": "unescaped-interpolation",
@@ -792,7 +792,7 @@
    },
    {
     "line": 99,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 3711,
     "end": 3716,
     "code": "unescaped-interpolation",
@@ -801,7 +801,7 @@
    },
    {
     "line": 115,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 4279,
     "end": 4285,
     "code": "unescaped-interpolation",
@@ -810,7 +810,7 @@
    },
    {
     "line": 119,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 4426,
     "end": 4431,
     "code": "unescaped-interpolation",
@@ -819,7 +819,7 @@
    },
    {
     "line": 135,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 4977,
     "end": 4983,
     "code": "unescaped-interpolation",
@@ -828,7 +828,7 @@
    },
    {
     "line": 139,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 5116,
     "end": 5121,
     "code": "unescaped-interpolation",
@@ -837,7 +837,7 @@
    },
    {
     "line": 155,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 5662,
     "end": 5668,
     "code": "unescaped-interpolation",
@@ -846,7 +846,7 @@
    },
    {
     "line": 159,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 5809,
     "end": 5814,
     "code": "unescaped-interpolation",
@@ -855,7 +855,7 @@
    },
    {
     "line": 175,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 6377,
     "end": 6383,
     "code": "unescaped-interpolation",
@@ -864,7 +864,7 @@
    },
    {
     "line": 179,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 6592,
     "end": 6597,
     "code": "unescaped-interpolation",
@@ -873,7 +873,7 @@
    },
    {
     "line": 195,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 7226,
     "end": 7232,
     "code": "unsafe-interpolation",
@@ -882,7 +882,7 @@
    },
    {
     "line": 199,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 7361,
     "end": 7366,
     "code": "unsafe-interpolation",
@@ -891,7 +891,7 @@
    },
    {
     "line": 215,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 7904,
     "end": 7910,
     "code": "unsafe-interpolation",
@@ -900,7 +900,7 @@
    },
    {
     "line": 219,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 8055,
     "end": 8060,
     "code": "unsafe-interpolation",
@@ -909,7 +909,7 @@
    },
    {
     "line": 235,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 8610,
     "end": 8616,
     "code": "unsafe-interpolation",
@@ -918,7 +918,7 @@
    },
    {
     "line": 239,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 8749,
     "end": 8754,
     "code": "unsafe-interpolation",
@@ -927,7 +927,7 @@
    },
    {
     "line": 255,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 9311,
     "end": 9317,
     "code": "unsafe-interpolation",
@@ -936,7 +936,7 @@
    },
    {
     "line": 259,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 9470,
     "end": 9475,
     "code": "unsafe-interpolation",
@@ -945,7 +945,7 @@
    },
    {
     "line": 276,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 10160,
     "end": 10166,
     "code": "unsafe-interpolation",
@@ -954,7 +954,7 @@
    },
    {
     "line": 280,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 10395,
     "end": 10400,
     "code": "unsafe-interpolation",
@@ -963,7 +963,7 @@
    },
    {
     "line": 283,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 10581,
     "end": 10587,
     "code": "unsafe-interpolation",
@@ -972,7 +972,7 @@
    },
    {
     "line": 297,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 11039,
     "end": 11045,
     "code": "unsafe-interpolation",
@@ -981,7 +981,7 @@
    },
    {
     "line": 301,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 11242,
     "end": 11247,
     "code": "unsafe-interpolation",
@@ -990,7 +990,7 @@
    },
    {
     "line": 317,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 11815,
     "end": 11821,
     "code": "unsafe-interpolation",
@@ -999,7 +999,7 @@
    },
    {
     "line": 321,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 12070,
     "end": 12075,
     "code": "unsafe-interpolation",
@@ -1008,7 +1008,7 @@
    },
    {
     "line": 337,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 12770,
     "end": 12776,
     "code": "unsafe-interpolation",
@@ -1017,7 +1017,7 @@
    },
    {
     "line": 339,
-    "hole": "${maybe}",
+    "placeholder": "${maybe}",
     "start": 12854,
     "end": 12862,
     "code": "unsafe-interpolation",
@@ -1026,7 +1026,7 @@
    },
    {
     "line": 341,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 12941,
     "end": 12946,
     "code": "unsafe-interpolation",
@@ -1035,7 +1035,7 @@
    },
    {
     "line": 357,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 13721,
     "end": 13727,
     "code": "kotlin-interpolation",
@@ -1044,7 +1044,7 @@
    },
    {
     "line": 358,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 13760,
     "end": 13762,
     "code": "kotlin-interpolation",
@@ -1053,7 +1053,7 @@
    },
    {
     "line": 359,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 13795,
     "end": 13801,
     "code": "kotlin-interpolation",
@@ -1062,7 +1062,7 @@
    },
    {
     "line": 360,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 13834,
     "end": 13839,
     "code": "kotlin-interpolation",
@@ -1071,7 +1071,7 @@
    },
    {
     "line": 361,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 13872,
     "end": 13877,
     "code": "kotlin-interpolation",
@@ -1080,7 +1080,7 @@
    },
    {
     "line": 362,
-    "hole": "$variant",
+    "placeholder": "$variant",
     "start": 13910,
     "end": 13918,
     "code": "kotlin-interpolation",
@@ -1089,7 +1089,7 @@
    },
    {
     "line": 377,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 14646,
     "end": 14652,
     "code": "kotlin-interpolation",
@@ -1098,7 +1098,7 @@
    },
    {
     "line": 378,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 14691,
     "end": 14693,
     "code": "kotlin-interpolation",
@@ -1107,7 +1107,7 @@
    },
    {
     "line": 379,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 14730,
     "end": 14736,
     "code": "kotlin-interpolation",
@@ -1116,7 +1116,7 @@
    },
    {
     "line": 380,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 14774,
     "end": 14779,
     "code": "kotlin-interpolation",
@@ -1125,7 +1125,7 @@
    },
    {
     "line": 381,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 14812,
     "end": 14817,
     "code": "kotlin-interpolation",
@@ -1134,7 +1134,7 @@
    },
    {
     "line": 382,
-    "hole": "$variant",
+    "placeholder": "$variant",
     "start": 14856,
     "end": 14864,
     "code": "kotlin-interpolation",
@@ -1143,7 +1143,7 @@
    },
    {
     "line": 397,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 15454,
     "end": 15460,
     "code": "unsafe-interpolation",
@@ -1152,7 +1152,7 @@
    },
    {
     "line": 399,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 15576,
     "end": 15582,
     "code": "unsafe-interpolation",
@@ -1161,7 +1161,7 @@
    },
    {
     "line": 401,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 15701,
     "end": 15706,
     "code": "unsafe-interpolation",
@@ -1170,7 +1170,7 @@
    },
    {
     "line": 417,
-    "hole": "${query}",
+    "placeholder": "${query}",
     "start": 16312,
     "end": 16320,
     "code": "unsafe-interpolation",
@@ -1179,7 +1179,7 @@
    },
    {
     "line": 419,
-    "hole": "${maybe}",
+    "placeholder": "${maybe}",
     "start": 16390,
     "end": 16398,
     "code": "unsafe-interpolation",
@@ -1188,7 +1188,7 @@
    },
    {
     "line": 421,
-    "hole": "${html}",
+    "placeholder": "${html}",
     "start": 16471,
     "end": 16478,
     "code": "unsafe-interpolation",
@@ -1197,7 +1197,7 @@
    },
    {
     "line": 437,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 17070,
     "end": 17076,
     "code": "unsafe-interpolation",
@@ -1206,7 +1206,7 @@
    },
    {
     "line": 439,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 17144,
     "end": 17150,
     "code": "unsafe-interpolation",
@@ -1215,7 +1215,7 @@
    },
    {
     "line": 441,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 17221,
     "end": 17226,
     "code": "unsafe-interpolation",
@@ -1224,7 +1224,7 @@
    },
    {
     "line": 457,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 17758,
     "end": 17764,
     "code": "unsafe-interpolation",
@@ -1233,7 +1233,7 @@
    },
    {
     "line": 459,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 17830,
     "end": 17836,
     "code": "unsafe-interpolation",
@@ -1242,7 +1242,7 @@
    },
    {
     "line": 461,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 17905,
     "end": 17910,
     "code": "unsafe-interpolation",
@@ -1251,7 +1251,7 @@
    },
    {
     "line": 477,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 18456,
     "end": 18462,
     "code": "unsafe-interpolation",
@@ -1260,7 +1260,7 @@
    },
    {
     "line": 479,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 18540,
     "end": 18546,
     "code": "unsafe-interpolation",
@@ -1269,7 +1269,7 @@
    },
    {
     "line": 481,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 18627,
     "end": 18632,
     "code": "unsafe-interpolation",
@@ -1278,7 +1278,7 @@
    },
    {
     "line": 498,
-    "hole": "${query}",
+    "placeholder": "${query}",
     "start": 19331,
     "end": 19339,
     "code": "unsafe-interpolation",
@@ -1287,7 +1287,7 @@
    },
    {
     "line": 500,
-    "hole": "${maybe}",
+    "placeholder": "${maybe}",
     "start": 19425,
     "end": 19433,
     "code": "unsafe-interpolation",
@@ -1296,7 +1296,7 @@
    },
    {
     "line": 502,
-    "hole": "${html}",
+    "placeholder": "${html}",
     "start": 19522,
     "end": 19529,
     "code": "unsafe-interpolation",
@@ -1305,7 +1305,7 @@
    },
    {
     "line": 505,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 19670,
     "end": 19672,
     "code": "kotlin-interpolation",
@@ -1314,7 +1314,7 @@
    },
    {
     "line": 519,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 20202,
     "end": 20208,
     "code": "unsafe-interpolation",
@@ -1323,7 +1323,7 @@
    },
    {
     "line": 521,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 20326,
     "end": 20332,
     "code": "unsafe-interpolation",
@@ -1332,7 +1332,7 @@
    },
    {
     "line": 523,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 20453,
     "end": 20458,
     "code": "unsafe-interpolation",
@@ -1341,7 +1341,7 @@
    },
    {
     "line": 539,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 21177,
     "end": 21183,
     "code": "unsafe-interpolation",
@@ -1350,7 +1350,7 @@
    },
    {
     "line": 540,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 21239,
     "end": 21241,
     "code": "unsafe-interpolation",
@@ -1359,7 +1359,7 @@
    },
    {
     "line": 541,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 21297,
     "end": 21303,
     "code": "unsafe-interpolation",
@@ -1368,7 +1368,7 @@
    },
    {
     "line": 542,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 21359,
     "end": 21364,
     "code": "unsafe-interpolation",
@@ -1377,7 +1377,7 @@
    },
    {
     "line": 543,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 21417,
     "end": 21422,
     "code": "unsafe-interpolation",
@@ -1386,7 +1386,7 @@
    },
    {
     "line": 559,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 22021,
     "end": 22027,
     "code": "unsafe-interpolation",
@@ -1395,7 +1395,7 @@
    },
    {
     "line": 563,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 22138,
     "end": 22143,
     "code": "unsafe-interpolation",
@@ -1404,7 +1404,7 @@
    },
    {
     "line": 579,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 22667,
     "end": 22673,
     "code": "unsafe-interpolation",
@@ -1413,7 +1413,7 @@
    },
    {
     "line": 583,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 22805,
     "end": 22810,
     "code": "unsafe-interpolation",
@@ -1422,7 +1422,7 @@
    },
    {
     "line": 599,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 23358,
     "end": 23364,
     "code": "unsafe-interpolation",
@@ -1431,7 +1431,7 @@
    },
    {
     "line": 603,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 23575,
     "end": 23580,
     "code": "unsafe-interpolation",
@@ -1440,7 +1440,7 @@
    },
    {
     "line": 619,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 24236,
     "end": 24242,
     "code": "unsafe-interpolation",
@@ -1449,7 +1449,7 @@
    },
    {
     "line": 623,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 24440,
     "end": 24445,
     "code": "unsafe-interpolation",
@@ -1458,7 +1458,7 @@
    },
    {
     "line": 639,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 25202,
     "end": 25208,
     "code": "unsafe-interpolation",
@@ -1467,7 +1467,7 @@
    },
    {
     "line": 640,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 25235,
     "end": 25237,
     "code": "unsafe-interpolation",
@@ -1476,7 +1476,7 @@
    },
    {
     "line": 641,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 25264,
     "end": 25270,
     "code": "unsafe-interpolation",
@@ -1485,7 +1485,7 @@
    },
    {
     "line": 642,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 25297,
     "end": 25302,
     "code": "unsafe-interpolation",
@@ -1494,7 +1494,7 @@
    },
    {
     "line": 643,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 25329,
     "end": 25334,
     "code": "unsafe-interpolation",
@@ -1503,7 +1503,7 @@
    },
    {
     "line": 659,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 25958,
     "end": 25964,
     "code": "unsafe-interpolation",
@@ -1512,7 +1512,7 @@
    },
    {
     "line": 660,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 25990,
     "end": 25992,
     "code": "unsafe-interpolation",
@@ -1521,7 +1521,7 @@
    },
    {
     "line": 661,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 26015,
     "end": 26021,
     "code": "unsafe-interpolation",
@@ -1530,7 +1530,7 @@
    },
    {
     "line": 662,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 26049,
     "end": 26054,
     "code": "unsafe-interpolation",
@@ -1539,7 +1539,7 @@
    },
    {
     "line": 663,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 26080,
     "end": 26085,
     "code": "unsafe-interpolation",
@@ -1548,7 +1548,7 @@
    },
    {
     "line": 679,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 26666,
     "end": 26672,
     "code": "unsafe-interpolation",
@@ -1557,7 +1557,7 @@
    },
    {
     "line": 680,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 26693,
     "end": 26695,
     "code": "unsafe-interpolation",
@@ -1566,7 +1566,7 @@
    },
    {
     "line": 681,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 26716,
     "end": 26722,
     "code": "unsafe-interpolation",
@@ -1575,7 +1575,7 @@
    },
    {
     "line": 682,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 26744,
     "end": 26749,
     "code": "unsafe-interpolation",
@@ -1584,7 +1584,7 @@
    },
    {
     "line": 683,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 26769,
     "end": 26774,
     "code": "unsafe-interpolation",
@@ -1593,7 +1593,7 @@
    },
    {
     "line": 699,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 27304,
     "end": 27310,
     "code": "unsafe-interpolation",
@@ -1602,7 +1602,7 @@
    },
    {
     "line": 700,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 27336,
     "end": 27338,
     "code": "unsafe-interpolation",
@@ -1611,7 +1611,7 @@
    },
    {
     "line": 701,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 27364,
     "end": 27370,
     "code": "unsafe-interpolation",
@@ -1620,7 +1620,7 @@
    },
    {
     "line": 702,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 27396,
     "end": 27401,
     "code": "unsafe-interpolation",
@@ -1629,7 +1629,7 @@
    },
    {
     "line": 703,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 27426,
     "end": 27431,
     "code": "unsafe-interpolation",
@@ -1638,7 +1638,7 @@
    },
    {
     "line": 719,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 27990,
     "end": 27996,
     "code": "unsafe-interpolation",
@@ -1647,7 +1647,7 @@
    },
    {
     "line": 720,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 28027,
     "end": 28029,
     "code": "unsafe-interpolation",
@@ -1656,7 +1656,7 @@
    },
    {
     "line": 721,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 28060,
     "end": 28066,
     "code": "unsafe-interpolation",
@@ -1665,7 +1665,7 @@
    },
    {
     "line": 722,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 28097,
     "end": 28102,
     "code": "unsafe-interpolation",
@@ -1674,7 +1674,7 @@
    },
    {
     "line": 723,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 28132,
     "end": 28137,
     "code": "unsafe-interpolation",
@@ -1683,7 +1683,7 @@
    },
    {
     "line": 739,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 28695,
     "end": 28701,
     "code": "unsafe-interpolation",
@@ -1692,7 +1692,7 @@
    },
    {
     "line": 740,
-    "hole": "$n",
+    "placeholder": "$n",
     "start": 28722,
     "end": 28724,
     "code": "unsafe-interpolation",
@@ -1701,7 +1701,7 @@
    },
    {
     "line": 741,
-    "hole": "$maybe",
+    "placeholder": "$maybe",
     "start": 28745,
     "end": 28751,
     "code": "unsafe-interpolation",
@@ -1710,7 +1710,7 @@
    },
    {
     "line": 742,
-    "hole": "$flag",
+    "placeholder": "$flag",
     "start": 28772,
     "end": 28777,
     "code": "unsafe-interpolation",
@@ -1719,7 +1719,7 @@
    },
    {
     "line": 743,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 28798,
     "end": 28803,
     "code": "unsafe-interpolation",
@@ -1728,7 +1728,7 @@
    },
    {
     "line": 759,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 29362,
     "end": 29368,
     "code": "unescaped-interpolation",
@@ -1737,7 +1737,7 @@
    },
    {
     "line": 779,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 29937,
     "end": 29943,
     "code": "unescaped-interpolation",
@@ -1746,7 +1746,7 @@
    },
    {
     "line": 799,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 30586,
     "end": 30592,
     "code": "unescaped-interpolation",
@@ -1755,7 +1755,7 @@
    },
    {
     "line": 822,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 31507,
     "end": 31513,
     "code": "unescaped-interpolation",
@@ -1764,7 +1764,7 @@
    },
    {
     "line": 823,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 31555,
     "end": 31561,
     "code": "unescaped-interpolation",
@@ -1773,7 +1773,7 @@
    },
    {
     "line": 824,
-    "hole": "${query}",
+    "placeholder": "${query}",
     "start": 31618,
     "end": 31626,
     "code": "unsafe-interpolation",
@@ -1782,7 +1782,7 @@
    },
    {
     "line": 826,
-    "hole": "${maybe}",
+    "placeholder": "${maybe}",
     "start": 31744,
     "end": 31752,
     "code": "unsafe-interpolation",
@@ -1791,7 +1791,7 @@
    },
    {
     "line": 828,
-    "hole": "$html",
+    "placeholder": "$html",
     "start": 31869,
     "end": 31874,
     "code": "unescaped-interpolation",
@@ -1800,7 +1800,7 @@
    },
    {
     "line": 847,
-    "hole": "$$query",
+    "placeholder": "$$query",
     "start": 32630,
     "end": 32637,
     "code": "unescaped-interpolation",
@@ -1809,7 +1809,7 @@
    },
    {
     "line": 854,
-    "hole": "$$query",
+    "placeholder": "$$query",
     "start": 32837,
     "end": 32844,
     "code": "unsafe-interpolation",
@@ -1818,7 +1818,7 @@
    },
    {
     "line": 870,
-    "hole": "query",
+    "placeholder": "query",
     "start": 33372,
     "end": 33377,
     "code": "unescaped-interpolation",
@@ -1827,7 +1827,7 @@
    },
    {
     "line": 877,
-    "hole": "query",
+    "placeholder": "query",
     "start": 33635,
     "end": 33640,
     "code": "unsafe-interpolation",
@@ -1836,7 +1836,7 @@
    },
    {
     "line": 878,
-    "hole": "maybe",
+    "placeholder": "maybe",
     "start": 33689,
     "end": 33694,
     "code": "unsafe-interpolation",
@@ -1845,7 +1845,7 @@
    },
    {
     "line": 894,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 34422,
     "end": 34428,
     "code": "unescaped-interpolation",
@@ -1854,7 +1854,7 @@
    },
    {
     "line": 901,
-    "hole": "${if (flag) \"<b>$query</b>\" else \"\"}",
+    "placeholder": "${if (flag) \"<b>$query</b>\" else \"\"}",
     "start": 34757,
     "end": 34793,
     "code": "unescaped-interpolation",
@@ -1863,7 +1863,7 @@
    },
    {
     "line": 901,
-    "hole": "$query",
+    "placeholder": "$query",
     "start": 34773,
     "end": 34779,
     "code": "unescaped-interpolation",
@@ -1872,7 +1872,7 @@
    },
    {
     "line": 921,
-    "hole": "${Trusted(query)}",
+    "placeholder": "${Trusted(query)}",
     "start": 35720,
     "end": 35737,
     "code": "unescaped-interpolation",
@@ -1881,7 +1881,7 @@
    },
    {
     "line": 922,
-    "hole": "${interpolate(\"<b>%s</b>\", query)}",
+    "placeholder": "${interpolate(\"<b>%s</b>\", query)}",
     "start": 35766,
     "end": 35800,
     "code": "unescaped-interpolation",
@@ -1890,7 +1890,7 @@
    },
    {
     "line": 923,
-    "hole": "${html.text}",
+    "placeholder": "${html.text}",
     "start": 35829,
     "end": 35841,
     "code": "unescaped-interpolation",
@@ -1899,7 +1899,7 @@
    },
    {
     "line": 924,
-    "hole": "${Trusted(query)}",
+    "placeholder": "${Trusted(query)}",
     "start": 35874,
     "end": 35891,
     "code": "unsafe-interpolation",
@@ -1908,7 +1908,7 @@
    },
    {
     "line": 925,
-    "hole": "${interpolate(\"<b>%s</b>\", n)}",
+    "placeholder": "${interpolate(\"<b>%s</b>\", n)}",
     "start": 35929,
     "end": 35959,
     "code": "unsafe-interpolation",
@@ -1917,7 +1917,7 @@
    },
    {
     "line": 939,
-    "hole": "${if (flag) \"nothing\" else query}",
+    "placeholder": "${if (flag) \"nothing\" else query}",
     "start": 36698,
     "end": 36731,
     "code": "unescaped-interpolation",
@@ -1926,7 +1926,7 @@
    },
    {
     "line": 940,
-    "hole": "${if (flag) \"red\" else query}",
+    "placeholder": "${if (flag) \"red\" else query}",
     "start": 36765,
     "end": 36794,
     "code": "unsafe-interpolation",
@@ -1935,7 +1935,7 @@
    },
    {
     "line": 944,
-    "hole": "${if (flag) maybe else 0}",
+    "placeholder": "${if (flag) maybe else 0}",
     "start": 36975,
     "end": 37000,
     "code": "unsafe-interpolation",
@@ -1944,7 +1944,7 @@
    },
    {
     "line": 946,
-    "hole": "${if (flag) html else \"\"}",
+    "placeholder": "${if (flag) html else \"\"}",
     "start": 37076,
     "end": 37101,
     "code": "unescaped-interpolation",
@@ -1953,7 +1953,7 @@
    },
    {
     "line": 959,
-    "hole": "${when (n) { 0 -> \"none\"; else -> query }}",
+    "placeholder": "${when (n) { 0 -> \"none\"; else -> query }}",
     "start": 37744,
     "end": 37786,
     "code": "unescaped-interpolation",
@@ -1962,7 +1962,7 @@
    },
    {
     "line": 960,
-    "hole": "${when (n) { 0 -> \"red\"; else -> query }}",
+    "placeholder": "${when (n) { 0 -> \"red\"; else -> query }}",
     "start": 37820,
     "end": 37861,
     "code": "unsafe-interpolation",
@@ -1971,7 +1971,7 @@
    },
    {
     "line": 962,
-    "hole": "${when (n) { 0 -> 1; else -> maybe }}",
+    "placeholder": "${when (n) { 0 -> 1; else -> maybe }}",
     "start": 37968,
     "end": 38005,
     "code": "unsafe-interpolation",
@@ -1982,144 +1982,144 @@
   "E_Interpolate.kt": [
    {
     "line": 18,
-    "hole": "$query",
-    "start": 819,
-    "end": 825,
+    "placeholder": "$query",
+    "start": 833,
+    "end": 839,
     "code": "interpolate-template",
     "severity": "warning",
     "message": "Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."
    },
    {
     "line": 23,
-    "hole": "${applicant.name}",
-    "start": 1131,
-    "end": 1148,
+    "placeholder": "${applicant.name}",
+    "start": 1173,
+    "end": 1190,
     "code": "interpolate-template",
     "severity": "warning",
     "message": "Kotlin fills in ${applicant.name} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."
    },
    {
     "line": 28,
-    "hole": "${query}",
-    "start": 1455,
-    "end": 1463,
+    "placeholder": "${query}",
+    "start": 1504,
+    "end": 1512,
     "code": "interpolate-template",
     "severity": "warning",
     "message": "Kotlin fills in ${query} before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in data-on:click, which Datastar runs as an expression or follows as a signal path. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
    },
    {
     "line": 33,
-    "hole": "$count",
-    "start": 1747,
-    "end": 1753,
+    "placeholder": "$count",
+    "start": 1796,
+    "end": 1802,
     "code": "kotlin-interpolation",
     "severity": "warning",
     "message": "Kotlin interpolates $count here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $count, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}count."
    },
    {
     "line": 37,
-    "hole": "interpolate",
-    "start": 1912,
-    "end": 1923,
+    "placeholder": "interpolate",
+    "start": 1982,
+    "end": 1993,
     "code": "interpolate-placeholders",
     "severity": "error",
     "message": "interpolate throws IllegalArgumentException here: the markup has 2 %s placeholders and 1 value is given. Write %% for a per cent sign that is not a placeholder."
    },
    {
     "line": 41,
-    "hole": "interpolate",
-    "start": 2133,
-    "end": 2144,
+    "placeholder": "interpolate",
+    "start": 2224,
+    "end": 2235,
     "code": "interpolate-placeholders",
     "severity": "error",
     "message": "interpolate throws IllegalArgumentException here: the markup has 1 %s placeholder and 2 values are given. Write %% for a per cent sign that is not a placeholder."
    },
    {
     "line": 45,
-    "hole": "interpolate",
-    "start": 2370,
-    "end": 2381,
+    "placeholder": "interpolate",
+    "start": 2489,
+    "end": 2500,
     "code": "interpolate-placeholders",
     "severity": "error",
     "message": "interpolate throws IllegalArgumentException here: the markup has 0 %s placeholders and 1 value is given. Write %% for a per cent sign that is not a placeholder."
    },
    {
     "line": 49,
-    "hole": "%s",
-    "start": 2646,
-    "end": 2648,
+    "placeholder": "%s",
+    "start": 2765,
+    "end": 2767,
     "code": "unsafe-interpolation",
     "severity": "error",
     "message": "interpolate always throws here: query lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
    },
    {
     "line": 53,
-    "hole": "%s",
-    "start": 2903,
-    "end": 2905,
+    "placeholder": "%s",
+    "start": 3022,
+    "end": 3024,
     "code": "unsafe-interpolation",
     "severity": "warning",
     "message": "interpolate throws here unless applicant.name is a number or a boolean: it lands in data-text, which Datastar runs as an expression or follows as a signal path. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
    },
    {
     "line": 59,
-    "hole": "%s",
-    "start": 3185,
-    "end": 3187,
+    "placeholder": "%s",
+    "start": 3304,
+    "end": 3306,
     "code": "unsafe-interpolation",
     "severity": "error",
     "message": "interpolate always throws here: hidden lands in style, which is read as CSS, and only a number is let in there. Pass a number and write the unit in the markup, or choose between classes."
    },
    {
     "line": 64,
-    "hole": "%s",
-    "start": 3393,
-    "end": 3395,
+    "placeholder": "%s",
+    "start": 3512,
+    "end": 3514,
     "code": "unsafe-interpolation",
     "severity": "error",
     "message": "interpolate always throws here: query lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
    },
    {
     "line": 64,
-    "hole": "%s",
-    "start": 3402,
-    "end": 3404,
+    "placeholder": "%s",
+    "start": 3521,
+    "end": 3523,
     "code": "unsafe-interpolation",
     "severity": "error",
     "message": "interpolate always throws here: query lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
    },
    {
     "line": 68,
-    "hole": "%s",
-    "start": 3606,
-    "end": 3608,
+    "placeholder": "%s",
+    "start": 3725,
+    "end": 3727,
     "code": "unsafe-interpolation",
     "severity": "error",
     "message": "interpolate always throws here: query lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
    },
    {
     "line": 72,
-    "hole": "%s",
-    "start": 3848,
-    "end": 3850,
+    "placeholder": "%s",
+    "start": 3967,
+    "end": 3969,
     "code": "unsafe-interpolation",
     "severity": "error",
     "message": "interpolate always throws here: interpolate(\"<b>%s</b>\", quer… lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
    },
    {
     "line": 86,
-    "hole": "${applicant.errors.joinToString(\", \")}",
-    "start": 4620,
-    "end": 4658,
+    "placeholder": "${applicant.errors.joinToString(\", \")}",
+    "start": 4760,
+    "end": 4798,
     "code": "interpolate-template",
     "severity": "warning",
     "message": "Kotlin fills in ${applicant.errors.joinToString…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate."
    },
    {
     "line": 98,
-    "hole": "$inner",
-    "start": 5208,
-    "end": 5214,
+    "placeholder": "$inner",
+    "start": 5362,
+    "end": 5368,
     "code": "interpolate-template",
     "severity": "warning",
     "message": "Kotlin fills in $inner before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."

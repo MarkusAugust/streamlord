@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /**
  * The files of the interpolation test project, and what the analysis must say about each
- * hole in them.
+ * placeholder in them.
  */
 class InterpolationProjectTest {
     private val analyzer = Analyzer()
@@ -33,7 +33,7 @@ class InterpolationProjectTest {
     }
 
     @Test
-    fun `judges every hole of the project as expected json says`() {
+    fun `judges every placeholder of the project as expected json says`() {
         val expected = JsonParser.parseObject(fixtureText("$dir/expected.json"))
         val constants = expected.array("constants")!!.strings().toSet()
         val files = expected.obj("files")!!

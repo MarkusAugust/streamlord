@@ -21,22 +21,22 @@
  },
  "drawn/kotlin/interpolate-placeholders-1.kt": {
   "corpus": "kotlin-interpolate.json",
-  "case": "a hole and no value"
+  "case": "a placeholder and no value"
  },
  "drawn/kotlin/interpolate-placeholders-2.kt": {
   "corpus": "kotlin-review.json",
-  "case": "a format specifier other than %s is not a hole"
+  "case": "a format specifier other than %s is not a placeholder"
  },
  "drawn/kotlin/interpolate-placeholders-3.kt": {
   "corpus": "kotlin-interpolate.json",
-  "case": "%%s is a per cent sign and an s, not a hole"
+  "case": "%%s is a per cent sign and an s, not a placeholder"
  },
  "drawn/kotlin/interpolate-template-1.kt": {
   "corpus": "kotlin-interpolate.json",
   "case": "a template in the format is filled before interpolate sees it"
  },
  "drawn/kotlin/interpolate-template-2.kt": {
-  "corpus": "kotlin-round4.json",
+  "corpus": "kotlin-markup-strings.json",
   "case": "a val set to elements { } is markup held as a String"
  },
  "drawn/kotlin/interpolate-template-3.kt": {
@@ -108,7 +108,7 @@
   "case": "without that import the rewrite to interpolate is offered"
  },
  "drawn/kotlin/unescaped-interpolation-3.kt": {
-  "corpus": "kotlin-round3.json",
+  "corpus": "kotlin-values.json",
   "case": "a value of a type parameter may be null: no rewrite to interpolate"
  },
  "drawn/kotlin/unknown-action-1.kt": {
@@ -117,7 +117,7 @@
  },
  "drawn/kotlin/unknown-action-2.kt": {
   "corpus": "kotlin-interpolate.json",
-  "case": "<%s is a tag whose name is a hole, not a template tag"
+  "case": "<%s is a tag whose name is a placeholder, not a template tag"
  },
  "drawn/kotlin/unknown-action-3.kt": {
   "corpus": "kotlin-interpolate.json",
@@ -144,11 +144,11 @@
   "case": "a number in an unquoted value is a hint with the same fix"
  },
  "drawn/kotlin/unsafe-interpolation-2.kt": {
-  "corpus": "kotlin-round5b.json",
+  "corpus": "kotlin-trusted.json",
   "case": "a val set to a literal Trusted is read with its text"
  },
  "drawn/kotlin/unsafe-interpolation-3.kt": {
-  "corpus": "kotlin-round3.json",
+  "corpus": "kotlin-tags.json",
   "case": "a template in an end tag's name is the structure"
  },
  "drawn/html/computed-value-1.html": {
@@ -320,7 +320,7 @@
   "case": "a Trusted with a line comment after it is let into a script"
  },
  "drawn/kotlin/silent-8.kt": {
-  "corpus": "kotlin-round4.json",
+  "corpus": "kotlin-markup-strings.json",
   "case": "a val set to elements { } is markup in a Kotlin template"
  },
  "drawn/kotlin/silent-9.kt": {
@@ -336,7 +336,7 @@
   "case": "a val set to Streamlord's interpolate under another name is markup beside another package's"
  },
  "drawn/kotlin/silent-12.kt": {
-  "corpus": "kotlin-round5.json",
+  "corpus": "kotlin-trusted.json",
   "case": "a local val set to Trusted is Trusted"
  },
  "drawn/html/silent-2.html": {

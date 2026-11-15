@@ -11,13 +11,13 @@ import kotlin.test.assertEquals
 
 /**
  * Every place a Kotlin value can land, every kind of value and every way to write the literal,
- * against `cases/hole-matrix.json`. The suite reaches core, so it also holds the table to what
+ * against `cases/value-matrix.json`. The suite reaches core, so it also holds the table to what
  * `interpolate` does with each value at run time. What each fix leaves is compiled and run by the
  * rewrite-probes project, for every cell.
  */
-class HoleMatrixTest {
+class ValueMatrixTest {
     private val analyzer = Analyzer()
-    private val matrix = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/cases/hole-matrix.json"))
+    private val matrix = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/cases/value-matrix.json"))
     private val places = matrix.array("places")!!.objects()
     private val values = matrix.array("values")!!.objects()
     private val forms = matrix.array("forms")!!.objects()
@@ -41,7 +41,7 @@ class HoleMatrixTest {
         init {
             val imports = listOf("$DOMAIN.Trusted", "$DOMAIN.interpolate") + value.array("imports")?.strings().orEmpty()
             val markup = place.string("markup")!!.let { if (form.boolean("escaped") == true) it.replace("\"", "\\\"") else it }
-            val literal = form.string("open") + markup.replace("§", form.string("hole")!!) + form.string("close")
+            val literal = form.string("open") + markup.replace("§", form.string("placeholder")!!) + form.string("close")
             val parameter = value.string("type")?.let { "v: $it" }.orEmpty()
             source =
                 imports.joinToString("") { "import $it\n" } + "\n" + value.string("declares").orEmpty() + "fun f($parameter) = $literal"

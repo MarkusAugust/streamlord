@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core
 
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.core.json.decimal
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals

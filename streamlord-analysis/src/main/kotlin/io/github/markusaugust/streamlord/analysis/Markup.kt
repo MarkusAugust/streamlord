@@ -7,7 +7,6 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.radixDouble
 import io.github.markusaugust.streamlord.core.client.regex
-import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.MarkupVisitor
@@ -148,8 +147,11 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
     if (v.isEmpty()) return false
-    if (NUMBER.matchEntire(v) != null || v in NO_FUNCTION_WORDS) return true
     val regions = jsRegions(v)
+    // A comment around a number is space, but for a line comment at the end, which may run past the end of the value.
+    val ends = v.lastIndexOf("//").let { it >= 0 && regions[it] == Region.COMMENT && '\n' !in v.substring(it) }
+    val bare = CharArray(v.length) { if (regions[it] == Region.COMMENT && !ends) ' ' else v[it] }.concatToString().trim()
+    if (NUMBER.matchEntire(bare) != null || bare in NO_FUNCTION_WORDS) return true
     var depth = 0
     var binary = false
     var unary = false

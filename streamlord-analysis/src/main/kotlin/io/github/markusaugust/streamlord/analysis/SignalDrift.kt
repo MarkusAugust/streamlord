@@ -267,6 +267,26 @@ public data class SignalDriftReport(
 )
 
 /**
+ * The signals read in the file whose facts are [own] that neither it nor any of [others] declares:
+ * that file's part of [signalDrift]. A file with no signals class and no lookup can report
+ * nothing, so [others] is read only for one that has.
+ */
+internal fun signalDriftIn(
+    own: SignalFacts,
+    others: () -> Iterable<SignalFacts>,
+): List<Issue> {
+    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
+    val facts = HashMap<String, SignalFacts>()
+    // Only this file's issues are asked for, so another file's lookups play no part.
+    others().forEachIndexed { i, o -> facts["$i"] = o.copy(lookups = emptyList()) }
+    facts[OWN_FILE] = own
+    return signalDrift(facts).issues[OWN_FILE].orEmpty()
+}
+
+/** The key of the file [signalDriftIn] judges, which no index of the others is. */
+private const val OWN_FILE = ""
+
+/**
  * Signals read in one file that nothing in [facts] declares.
  *
  * [facts] is every file of the project, keyed by whatever the caller calls a file: the union of
@@ -344,4 +364,34 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         if (issues.isNotEmpty()) out[file] = issues
     }
     return SignalDriftReport(out, declared, read, byCodec)
+}
+
+/**
+ * What the project knows about signals, which an editor's index holds: the driven port of
+ * [projectSignalIssues], which asks each question only where its answer is needed.
+ */
+public interface ProjectSignals {
+    /** Every signal the project defines, or null where that is not known. */
+    public fun defined(): Set<String>?
+
+    /** What the file asked about says about signals, or null where that is not known. */
+    public fun own(): SignalFacts?
+
+    /** What every other file says about signals. */
+    public fun others(): Iterable<SignalFacts>
+}
+
+/**
+ * What the [project] says of the signals one file in [language] reads, the one entry both editors
+ * ask: each of [refs] that reads a signal the project does not define, and in a Kotlin file each
+ * signal it reads through a signals class or a lookup that no file declares.
+ */
+public fun projectSignalIssues(
+    language: SourceLanguage,
+    refs: List<SignalReference>,
+    project: ProjectSignals,
+): List<Issue> {
+    val defined = if (refs.isEmpty()) null else project.defined()
+    val own = if (language == SourceLanguage.KOTLIN) project.own() else null
+    return defined?.let { unknownSignalIssues(refs, it) }.orEmpty() + own?.let { signalDriftIn(it, project::others) }.orEmpty()
 }

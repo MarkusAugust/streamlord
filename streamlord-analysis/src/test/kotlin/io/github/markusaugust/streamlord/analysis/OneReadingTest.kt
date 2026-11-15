@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  */
 class OneReadingTest {
     private val markups: List<Pair<String, String>> =
-        sharedCases("hole-landings.json").map { it.string("name")!! to it.string("markup")!! } +
+        sharedCases("value-landings.json").map { it.string("name")!! to it.string("markup")!! } +
             sharedCases("completion-contexts.json").map { it.string("name")!! to it.string("before")!! + it.string("after")!! } +
             listOf("markup.json", "html.json").flatMap { file ->
                 JsonParser

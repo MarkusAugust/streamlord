@@ -1158,6 +1158,25 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals("""{"a":[7,2],"b":1,"d":3}""", JsonParser.parse(store.text).toJson())
     }
 
+    // The client nests as deep as a stream says, and the VS Code inspector folds such a patch (port.test.ts).
+    fun `test a patch nested deeper than the SDK reads from a request is folded as the client folds it`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+        val deep = "{\"a\":".repeat(200) + "1" + "}".repeat(200)
+        apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to deep), "", 0L))
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).singleOrNull { it.text.startsWith("{\n") }
+        assertEquals(JsonParser.parse(deep, Int.MAX_VALUE), store?.text?.let { JsonParser.parse(it, Int.MAX_VALUE) })
+    }
+
+    // Past the depth the inspector folds the store is left as it was, with a word why, and the IDE reports no error.
+    fun `test a patch too deep to fold leaves the store and says so`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+        val deep = "{\"a\":".repeat(200_000) + "1" + "}".repeat(200_000)
+        apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to deep), "", 0L))
+        assertTrue(texts(panel).toString(), texts(panel).any { "the client takes" in it && "left as it was" in it })
+    }
+
     // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.
     fun `test a patch Streamlord refuses on purpose says so`() {
         val panel = InspectorPanel(project, testRootDisposable)
@@ -1180,23 +1199,15 @@ class InspectorTest : BasePlatformTestCase() {
                 "The store shown keeps the keys before it."
         assertTrue(labels().toString(), proto in labels())
         patch("""{"a":{"20000":1}}""")
-        val holes =
+        val slots =
             "Streamlord refuses this signal patch on purpose: Signal patch index 20000 is more than 10000 past the end of an array " +
                 "of 1: the client takes it, and Streamlord does not fill memory with the empty slots. The store shown keeps the keys before it."
-        assertTrue(labels().toString(), holes in labels())
+        assertTrue(labels().toString(), slots in labels())
         assertEquals("""{"a":[1],"b":1,"o":{}}""", JsonParser.parse(store.text).toJson())
     }
 
-    // Measured in headless Chrome for Testing 153 on the 1.0.5 bundle: the characters that may stand on both sides
-    // of `true` in onlyIfMissing and still make it true.
+    // The trim itself is held in streamlord-analysis's RequestsTest; here, that the panel reads onlyIfMissing through it.
     fun `test onlyIfMissing is trimmed as JavaScript trims it`() {
-        val measured =
-            "0009 000a 000b 000c 000d 0020 00a0 1680 2000 2001 2002 2003 2004 2005 2006 2007 2008 2009 200a 2028 2029 202f 205f 3000 feff"
-        val kept = (0..0xFFFF).map { it.toChar() }.filter { InspectorPanel.isStringTrue("${it}true$it") }
-        assertEquals(measured, kept.joinToString(" ") { "%04x".format(it.code) })
-        assertFalse(InspectorPanel.isStringTrue("TRUE"))
-        assertFalse(InspectorPanel.isStringTrue(null))
-
         val panel = InspectorPanel(project, testRootDisposable)
         val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
 

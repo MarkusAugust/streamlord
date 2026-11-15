@@ -81,13 +81,15 @@ class JsonRobustnessTest {
         val obj = JsonParser.parseObject("""{"a":1e2147483648,"b":1e999999999,"c":-0,"d":123456789012345678901234567890,"e":1E400}""")
         assertNull(obj.int("a"))
         assertNull(obj.long("a"))
-        obj.decimal("a")
         assertEquals(Double.POSITIVE_INFINITY, obj.double("a"))
         assertNull(obj.long("b"))
         assertEquals(0L, obj.long("c"))
         assertNull(obj.long("d"))
         assertEquals(Double.POSITIVE_INFINITY, obj.double("e"))
         assertNull(JsonNumber("1e99999999999").toLongOrNull())
+        // A whole number however written is a Long, on the JVM and in JavaScript alike.
+        assertEquals(1000L, JsonNumber("1e3").toKotlin())
+        assertEquals(1L, JsonNumber("1.0").toKotlin())
         // An exponent no decimal can carry has no whole number, even under a zero.
         assertNull(JsonNumber("0e99999999999").toLongOrNull())
         assertNull(JsonNumber("0e-99999999999").toLongOrNull())

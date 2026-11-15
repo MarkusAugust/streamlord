@@ -3,8 +3,15 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SignalsTest {
+    /** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
+    private fun unknown(
+        refs: List<SignalReference>,
+        defined: Set<String>,
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
+
     @Test
     fun `the signals a file declares and defines`() {
         for (case in sharedCases("signals.json")) {
@@ -22,7 +29,11 @@ class SignalsTest {
                 val written = declarations.map { listOf(it.name, src.substring(it.start, it.end)) }
                 assertEquals(expected.map { (it as JsonArray).strings() }, written, name)
             }
-            assertEquals(definitions.filterNot { it == "*" || ':' in it }.toSet(), declarations.map { it.name }.toSet(), name)
+            // Every signal the definitions name is where a declaration names it, and every declaration's name counts as
+            // defined, one Streamlord refuses too, for go to declaration and rename.
+            val declared = declarations.map { it.name }.toSet()
+            assertTrue(declared.containsAll(definitions.filterNot { it == "*" || ':' in it }), name)
+            assertEquals(emptyList(), unknown(declared.map { SignalReference(0, it.length + 1, it) }, definitions), name)
         }
     }
 }

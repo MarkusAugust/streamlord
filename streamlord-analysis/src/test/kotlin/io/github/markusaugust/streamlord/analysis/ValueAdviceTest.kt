@@ -6,15 +6,15 @@ import kotlin.test.assertTrue
 
 /**
  * What the issue of a value written into an HTML string says and offers, against
- * `cases/hole-advice.json`: the parts of a message a rule fixes, where the corpus holds whole
+ * `cases/value-advice.json`: the parts of a message a rule fixes, where the corpus holds whole
  * messages.
  */
-class HoleAdviceTest {
+class ValueAdviceTest {
     private val analyzer = Analyzer()
 
     @Test
     fun `says and offers what the cases say`() {
-        val cases = sharedCases("hole-advice.json")
+        val cases = sharedCases("value-advice.json")
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val name = case.string("name")

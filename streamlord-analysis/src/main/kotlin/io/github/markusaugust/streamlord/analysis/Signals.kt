@@ -3,7 +3,6 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
-import io.github.markusaugust.streamlord.core.client.groupRange
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import kotlin.concurrent.Volatile
@@ -16,14 +15,17 @@ import kotlin.concurrent.Volatile
 public enum class SourceLanguage { KOTLIN, HTML }
 
 // A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
-// refused at runtime (signalNameHyphenIssues) and collected as written. set, setExpr and toggle
-// assign the signal, which creates it.
+// refused at runtime (signalNameHyphenIssues) and collected as written. The helpers that do not
+// only read it, set, setExpr and toggle, assign the signal, which creates it; dataSignals names one
+// only before its expression, its object form being one argument.
+private val NAMING_CALLS =
+    Catalog.default.signalNameHelpers
+        .filterValues { "reads" !in it }
+        .keys + NAMING_HELPERS - KEYED_OR_OBJECT
 private val KOTLIN_PATTERNS =
     listOf(
-        regex(
-            """\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
-        ),
-        regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
+        regex("""\b(?:${NAMING_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)""""),
+        regex("""\b$KEYED_OR_OBJECT\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
@@ -174,7 +176,7 @@ internal fun encodedSignalTypes(
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
-    for (site in findCallSites(src, setOf("dataSignals"), lex)) {
+    for (site in findCallSites(src, setOf(KEYED_OR_OBJECT), lex)) {
         if (foreign(site.name, site.nameStart)) continue
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
@@ -310,6 +312,12 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
 internal const val ENCODED_CLASS: String = "toJsonValue:"
 internal const val READABLE_CLASS: String = "class:"
 
+/**
+ * A name a DSL call or core declares with a hyphen, which Streamlord refuses at render or send time,
+ * so no page has it: it counts as defined, as the call says, and is no name to complete.
+ */
+internal const val REFUSED: String = "refused:"
+
 /** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
 private val PAIR = regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
@@ -438,9 +446,10 @@ internal fun collectDeclaredSignals(
  * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
  * reads, and every signal an expression assigns to.
  *
- * Two kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
- * `class:Form` for a `@Serializable` class whose properties are here, and `toJsonValue:Form` for a
- * class a page is declared from. [isKnownSignal] reads them together.
+ * Three kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
+ * `class:Form` for a `@Serializable` class whose properties are here, `toJsonValue:Form` for a
+ * class a page is declared from, and `refused:is-open` for a name Streamlord refuses. [isKnownSignal]
+ * reads them together.
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
     val foreign = foreignHelpers(source)
@@ -462,7 +471,8 @@ internal fun collectSignalDefinitions(
     val spread = Spread()
     // One reading of a Kotlin file for every call looked for in it.
     val lex = given ?: if (language == SourceLanguage.KOTLIN) lexKotlin(src) else null
-    for (d in definedAt(src, language, spread, foreign, lex, prefix)) out += d.name
+    val refused = HashSet<SignalDeclaration>()
+    for (d in definedAt(src, language, spread, foreign, lex, prefix, refused)) out += if (d in refused) REFUSED + d.name else d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
@@ -565,8 +575,9 @@ private fun definedAt(
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
     lex: KotlinLex? = null,
     prefix: String = CatalogNames.PREFIX,
+    refused: MutableSet<SignalDeclaration>? = null,
 ): List<SignalDeclaration> {
-    val out = ArrayList(declared(src, language, spread, foreign, lex, prefix))
+    val out = ArrayList(declared(src, language, spread, foreign, lex, prefix, refused))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
@@ -595,7 +606,8 @@ private fun definedAt(
 /**
  * The places the markup attributes and the DSL calls of [src] define a signal, which a page puts
  * there: no `@Serializable` property and no assignment. [spread] is set when an object form
- * spreads a variable into itself, which may define any signal.
+ * spreads a variable into itself, which may define any signal. [refused] collects the names a
+ * call writes with a hyphen, which signal-name-hyphen reports.
  */
 private fun declared(
     src: String,
@@ -604,9 +616,15 @@ private fun declared(
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
     given: KotlinLex? = null,
     prefix: String = CatalogNames.PREFIX,
+    refused: MutableSet<SignalDeclaration>? = null,
 ): List<SignalDeclaration> {
     val attributes = declaring(prefix)
     val out = ArrayList<SignalDeclaration>()
+
+    fun named(d: SignalDeclaration) {
+        out += d
+        if ('-' in d.name) refused?.add(d)
+    }
     if (language == SourceLanguage.KOTLIN) {
         val lex = given ?: lexKotlin(src)
         for (site in findCallSites(src, PAIR_CALLS, lex)) {
@@ -616,7 +634,10 @@ private fun declared(
             if (site.name !in Catalog.default.signalCalls && !removes) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
-                for (key in argumentKeys(a.text)) out += key.copy(start = a.start + key.start, end = a.start + key.end)
+                for (key in argumentKeys(a.text)) {
+                    val d = key.copy(start = a.start + key.start, end = a.start + key.end)
+                    if (site.name in PAIR_NAMING || removes) named(d) else out += d
+                }
                 // patchSignals("""{"count": 1}"""): the signals as JSON text.
                 if (site.name in JSON_CALLS) {
                     val s = a.string
@@ -629,16 +650,14 @@ private fun declared(
                     }
                 }
                 // dataSignals("{quests: {urgent: 0}}") writes data-signals="{...}": its keys are the signals.
-                if (site.name == "dataSignals" && idx == 0 &&
-                    positional.getOrNull(1)?.string == null
-                ) {
+                if (site.name == KEYED_OR_OBJECT && idx == 0 && !site.keyed) {
                     a.string?.let { out += objectDeclarations(it, "") }
                 }
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
-                if (removes) out += declarationAt(name, a.start)
-                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
-                    out += declarationAt(name, a.start)
+                if (removes) named(declarationAt(name, a.start))
+                if (site.name == KEYED_OR_OBJECT && idx == 0 && site.keyed) {
+                    named(declarationAt(name, a.start))
                     // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.
                     out += objectDeclarations(positional[1].string!!, "${name.value}.")
                 }
@@ -651,7 +670,7 @@ private fun declared(
                 if (foreign(name, m.range.first)) continue
                 // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
                 if (name in SIGNAL_NAME_HELPERS && onReceiver(src, m.range.first)) continue
-                out += declarationAt(re.groupAt(src, m, 1)!!, 0)
+                named(declarationAt(re.groupAt(src, m, 1)!!, 0))
             }
         }
     }
@@ -987,7 +1006,7 @@ internal fun dataSignalsPairIssues(
     src: String,
     lex: KotlinLex,
 ): List<Issue> {
-    if (site.name != "dataSignals") return emptyList()
+    if (site.name != KEYED_OR_OBJECT) return emptyList()
     return pairKeys(site, src, lex).mapNotNull { key ->
         // A templated name is known only at runtime.
         signalNameRefusal(key.text)?.takeIf { key.interpolations.isEmpty() }?.let { reason ->
@@ -1018,3 +1037,31 @@ internal fun dataSignalsPairIssues(
         )
     }
 }
+
+/** A string a DSL call names a signal with, and the [call]: what a highlighter colours as a signal's name. */
+public class SignalNameString internal constructor(
+    public val string: KotlinString,
+    public val call: CallSite,
+)
+
+/**
+ * The strings the DSL's calls name a signal with in [source]: the first argument of `dataBind`,
+ * `dataRef` and `dataIndicator`, and of `dataSignals` and `dataComputed` where a string expression
+ * follows it. None where the file cannot call the DSL, nor for a call [Source.foreign] says is
+ * somebody else's.
+ */
+public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
+    if (!readsDsl(source)) return emptyList()
+    val src = source.text
+    return findCallSites(src, catalog.signalNameCalls, lex(src)).mapNotNull { site ->
+        val named = (site.name !in catalog.signalPairCalls || site.keyed) && !source.foreign(site.name, site.nameStart)
+        site.positional
+            .firstOrNull()
+            ?.string
+            ?.takeIf { named }
+            ?.let { SignalNameString(it, site) }
+    }
+}
+
+/** Whether a string follows the first argument of a pair call, which makes the first a signal's name: `dataSignals("name", "...")`. */
+internal val CallSite.keyed: Boolean get() = positional.getOrNull(1)?.string != null

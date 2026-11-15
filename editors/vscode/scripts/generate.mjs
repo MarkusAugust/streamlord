@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { domEventsFile, pinnedLibDom } from "./domEvents.mjs";
+import { withExpressionWords } from "./expressionWords.mjs";
 import { htmlElementInjectionGrammar, htmlInjectionGrammar, htmlPlaceholdersGrammar } from "./htmlGrammar.mjs";
 import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar, kotlinTemplateInjectionGrammar } from "./kotlinGrammar.mjs";
 
@@ -84,6 +85,9 @@ writeFileSync(join(root, "syntaxes/html-injection.tmLanguage.json"), grammarText
 writeFileSync(join(root, "syntaxes/html-element-injection.tmLanguage.json"), grammarText(htmlElementInjectionGrammar(htmlInjection)));
 const templateSyntax = JSON.parse(readFileSync(join(root, "../../catalog/template-syntax.json"), "utf8"));
 writeFileSync(join(root, "syntaxes/placeholders-html-injection.tmLanguage.json"), grammarText(htmlPlaceholdersGrammar(templateSyntax)));
+const expressionFile = join(root, "syntaxes/datastar-expression.tmLanguage.json");
+const words = JSON.parse(readFileSync(join(root, "../../catalog/javascript-words.json"), "utf8"));
+writeFileSync(expressionFile, grammarText(withExpressionWords(JSON.parse(readFileSync(expressionFile, "utf8")), words)));
 for (const n of [1, 2, 3]) {
   writeFileSync(join(root, `syntaxes/kotlin-template${n === 1 ? "" : n}-injection.tmLanguage.json`), grammarText(kotlinTemplateInjectionGrammar(n)));
 }

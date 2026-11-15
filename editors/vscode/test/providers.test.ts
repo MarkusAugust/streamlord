@@ -66,6 +66,15 @@ describe("completion provider", () => {
     assert.ok((items[0]?.sortText ?? "") < (items.find((i) => i.label === "$busy")?.sortText ?? ""));
   });
 
+  it("offers no signal another file's DSL call names with a hyphen, which Streamlord refuses, and the one an object keeps", () => {
+    const refused = new FakeIndex()
+      .add("file:///Other.kt", `${DSL}div { dataSignals("is-open" to false); dataBind("first-name") }`, "kotlin")
+      .add("file:///other.html", `<div data-signals='{"hs-key": 1}'></div>`, "html");
+    const html = new MockDocument(`<p data-text="$"></p>`, "html");
+    const labels = complete(html, 0, 15, refused).map((i) => i.label);
+    assert.deepEqual(labels, ["$hs-key"]);
+  });
+
   it("inserts up to the caret and replaces the rest of the word, as the insert mode setting picks", () => {
     const html = new MockDocument(`<div data-on:click="@post('/x', {contentType: 'form'})"></div>`, "html");
     const at = html.getText().indexOf("form'");

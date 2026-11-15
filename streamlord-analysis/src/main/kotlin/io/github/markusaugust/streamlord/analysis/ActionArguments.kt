@@ -24,6 +24,7 @@ internal enum class Written(
     ARRAY("an array"),
     REGEX("a regular expression"),
     FUNCTION("a function"),
+    THROWS("a BigInt under a unary plus, which throws a TypeError before the action is called"),
     EXPRESSION(""),
 }
 
@@ -39,7 +40,7 @@ internal class Value(
 private const val SHORT = 40
 
 private val NUMBER_LITERAL =
-    regex("""[+-]?(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
+    regex("""(?:\+(?!\+)|-(?!-))*(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 
 // What JavaScript's Number reads as a number: white space alone is 0, and a sign is no part of a hexadecimal, octal or binary one.
 private val NUMERIC_STRING =
@@ -68,6 +69,7 @@ private val TAKEN =
         Written.OBJECT to setOf(ArgumentKind.OBJECT, ArgumentKind.OPTIONS, ArgumentKind.FILTER),
         Written.REGEX to setOf(ArgumentKind.PATTERN),
         Written.FUNCTION to setOf(ArgumentKind.FUNCTION),
+        Written.THROWS to emptySet(),
     )
 
 /**
@@ -119,7 +121,22 @@ internal class Brackets(
             templates[i + 1] = seen
         }
         val open = ArrayList<Int>()
+        var skip = -1
         for (i in js.indices) {
+            // A template literal and the code of its `${ }` are brackets too, so that a `}` in the text of one nested
+            // inside closes nothing.
+            if (regions[i] == Region.TEMPLATE) {
+                val inText = open.lastOrNull()?.let { js[it] == '`' } == true
+                if (i == skip) continue
+                if (inText && js[i] == '\\') skip = i + 1
+                if (inText && js.startsWith("\${", i)) skip = (i + 1).also { open += it }
+                if (js[i] == '`' && inText) {
+                    open.removeAt(open.size - 1)
+                } else if (js[i] == '`') {
+                    open += i
+                }
+                if (!inText && js[i] == '}' && open.isNotEmpty()) close[open.removeAt(open.size - 1)] = i
+            }
             if (regions[i] != Region.CODE) continue
             when (js[i]) {
                 '(', '[', '{' -> open += i
@@ -175,7 +192,7 @@ internal class Brackets(
 
                 regions[s] == Region.REGEX && all(Region.REGEX) -> Written.REGEX
 
-                NUMBER_LITERAL.matchEntire(short) != null -> Written.NUMBER
+                NUMBER_LITERAL.matchEntire(short) != null -> if ('+' in short && short.endsWith('n')) Written.THROWS else Written.NUMBER
 
                 short == "true" || short == "false" -> Written.BOOLEAN
 
@@ -308,8 +325,8 @@ private class Judge(
                     ", so $otherwise"
                 }
 
-                // A Pro action's code is not read here, so what it does with the value is not said.
-                !known -> {
+                // A Pro action's code is not read here, so what it does with the value is not said; a value that throws never reaches it.
+                !known || v.written == Written.THROWS -> {
                     ""
                 }
 

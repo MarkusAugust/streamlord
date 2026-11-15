@@ -17,7 +17,8 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Fix
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Severity
-import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import org.jetbrains.kotlin.psi.KtFile
@@ -179,56 +180,56 @@ private val INTERPOLATION_CODES =
  * rewrite of an expression does that JavaScript would not, and `patch` where the attribute does not
  * hand it over.
  */
-class DatastarExpressionInspection :
-    StreamlordInspection(
-        setOf(
-            "expression-syntax",
-            "empty-expression",
-            "unknown-action",
-            "action-space",
-            "pro-action",
-            "signal-kebab",
-            "literal-rewritten",
-            "signal-not-read",
-            "statement-split",
-            "scope-name",
-            "unknown-option",
-            "option-value",
-            "action-arity",
-            "action-argument",
-            "fetch-event-type",
-        ),
+class DatastarExpressionInspection : StreamlordInspection(EXPRESSION_CODES)
+
+private val EXPRESSION_CODES =
+    setOf(
+        "expression-syntax",
+        "empty-expression",
+        "unknown-action",
+        "action-space",
+        "pro-action",
+        "signal-kebab",
+        "literal-rewritten",
+        "signal-not-read",
+        "statement-split",
+        "scope-name",
+        "unknown-option",
+        "option-value",
+        "action-arity",
+        "action-argument",
+        "fetch-event-type",
     )
 
 /**
  * `data-*` attribute names, keys, modifiers and their arguments, values, an indicator with nothing
  * to show or set up too late, signal names the client cannot hold, and the values it evaluates as filters or computeds.
  */
-class DatastarAttributeInspection :
-    StreamlordInspection(
-        setOf(
-            "unknown-attribute",
-            "unknown-modifier",
-            "modifier-args",
-            "missing-key",
-            "unexpected-key",
-            "wrong-element",
-            "signal-name-expected",
-            "unexpected-value",
-            "missing-value",
-            "key-and-value",
-            "missing-key-or-value",
-            "pro-attribute",
-            "prefix-mismatch",
-            "indicator-without-action",
-            "indicator-order",
-            "signal-name",
-            "computed-value",
-            "filter-pattern",
-            "signal-null",
-            "missing-nonce",
-            "invalid-nonce",
-        ),
+class DatastarAttributeInspection : StreamlordInspection(ATTRIBUTE_CODES)
+
+private val ATTRIBUTE_CODES =
+    setOf(
+        "unknown-attribute",
+        "unknown-modifier",
+        "modifier-args",
+        "missing-key",
+        "unexpected-key",
+        "wrong-element",
+        "signal-name-expected",
+        "unexpected-value",
+        "missing-value",
+        "key-and-value",
+        "missing-key-or-value",
+        "pro-attribute",
+        "prefix-mismatch",
+        "indicator-without-action",
+        "indicator-order",
+        "signal-name",
+        "computed-value",
+        "filter-pattern",
+        "signal-null",
+        "missing-nonce",
+        "invalid-nonce",
     )
 
 /**
@@ -253,10 +254,8 @@ class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
                 StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlSignalReferences(file)
                 else -> return null
             }
-        val drift = if (file is KtFile) index.driftIn(file) else emptyList()
-        if (refs.isEmpty()) return drift
-        val defined = index.definitionsSeenFrom(file)
-        return refs.mapNotNull { unknownSignalIssue(it, defined) } + drift
+        val language = if (file is KtFile) SourceLanguage.KOTLIN else SourceLanguage.HTML
+        return projectSignalIssues(language, refs, index.projectSignals(file))
     }
 }
 
@@ -266,80 +265,27 @@ private val UNKNOWN_SIGNAL_CODES = setOf("unknown-signal", "signal-never-declare
  * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
  * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
  */
-class DatastarKeyCaseInspection :
-    StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))
+class DatastarKeyCaseInspection : StreamlordInspection(KEY_CASE_CODES)
+
+private val KEY_CASE_CODES = setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused")
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts, and the arguments core refuses as it runs. */
-class StreamlordMarkupInspection :
-    StreamlordInspection(
-        setOf(
-            "missing-id",
-            "mode-needs-selector",
-            "unclosed",
-            "stray-close",
-            "top-level-text",
-            "blank-selector",
-            "selector-newline",
-            "script-close",
-            "event-refused",
-        ),
+class StreamlordMarkupInspection : StreamlordInspection(MARKUP_CODES)
+
+private val MARKUP_CODES =
+    setOf(
+        "missing-id",
+        "mode-needs-selector",
+        "unclosed",
+        "stray-close",
+        "top-level-text",
+        "blank-selector",
+        "selector-newline",
+        "script-close",
+        "event-refused",
     )
 
 /** Every code an inspection claims, so a test can prove the analysis leaves none unclaimed. */
 object InspectionCodes {
-    val all: Set<String> =
-        INTERPOLATION_CODES +
-            UNKNOWN_SIGNAL_CODES +
-            setOf(
-                "expression-syntax",
-                "empty-expression",
-                "unknown-action",
-                "action-space",
-                "pro-action",
-                "signal-kebab",
-                "literal-rewritten",
-                "signal-not-read",
-                "statement-split",
-                "scope-name",
-                "unknown-option",
-                "option-value",
-                "action-arity",
-                "action-argument",
-                "fetch-event-type",
-            ) +
-            setOf(
-                "unknown-attribute",
-                "unknown-modifier",
-                "modifier-args",
-                "missing-key",
-                "unexpected-key",
-                "wrong-element",
-                "signal-name-expected",
-                "unexpected-value",
-                "missing-value",
-                "key-and-value",
-                "missing-key-or-value",
-                "pro-attribute",
-                "prefix-mismatch",
-                "indicator-without-action",
-                "indicator-order",
-                "signal-name",
-                "computed-value",
-                "filter-pattern",
-                "signal-null",
-                "missing-nonce",
-                "invalid-nonce",
-            ) +
-            setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused") +
-            setOf(
-                "missing-id",
-                "mode-needs-selector",
-                "unclosed",
-                "stray-close",
-                "top-level-text",
-                "blank-selector",
-                "selector-newline",
-                "script-close",
-                "event-refused",
-            )
+    val all: Set<String> = INTERPOLATION_CODES + UNKNOWN_SIGNAL_CODES + EXPRESSION_CODES + ATTRIBUTE_CODES + KEY_CASE_CODES + MARKUP_CODES
 }

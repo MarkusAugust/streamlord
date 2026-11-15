@@ -33,6 +33,7 @@
     {"name":"a path reaches into a defined signal (2)","defined":["user","form.email"],"path":"forms","known":false},
     {"name":"no fix when nothing is close","defined":["teller"],"path":"telefon","nearest":null},
     {"name":"a fix when a name is close","defined":["teller","total"],"path":"telelr","nearest":"teller"},
-    {"name":"of two names as near, the suggestion is the first by name, whatever order the project was read in","defined":["b","count","a"],"path":"s","nearest":"a"}
+    {"name":"of two names as near, the suggestion is the first by name, whatever order the project was read in","defined":["b","count","a"],"path":"s","nearest":"a"},
+    {"name":"no near name a DSL call writes with a hyphen, which Streamlord refuses, so no page has it","language":"kotlin","src":"import io.github.markusaugust.streamlord.html.*\nfun f() = div { dataSignals(\"is-open\" to false); dataText(\"\\$isOpen\") }","unknown":["\\$isOpen"],"fixes":[[]],"messages":["No markup or code in the project defines the signal 'isOpen'."]}
   ]
 }

@@ -14,6 +14,8 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.json.SignalPatchException
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 
 /*
@@ -929,16 +931,23 @@ public object Requests {
 
     private val OPEN_VARIABLE = regex("""\{\{\s*([A-Za-z]*)$""")
 
-    /** The variables to offer after `{{` at [caret]: those the field takes and the file sets. */
+    /**
+     * The variables to offer after `{{` at [caret]: those the [field] takes and the file sets; a field
+     * none of the three, null, takes what the URL takes but `baseUrl`: the params.
+     */
     public fun variableCompletions(
         text: String,
         caret: Int,
-        field: Field,
+        field: Field?,
         vars: List<Variable>,
     ): Completion? {
         val m = OPEN_VARIABLE.find(text.substring(0, caret)) ?: return null
         val prefix = m.groupValues[1].lowercase()
-        val items = vars.filter { belongsIn(it.name, field) && it.name.lowercase().startsWith(prefix) }
+        val items =
+            vars.filter {
+                (if (field == null) it.name != "baseUrl" && belongsIn(it.name, Field.URL) else belongsIn(it.name, field)) &&
+                    it.name.lowercase().startsWith(prefix)
+            }
         if (items.isEmpty()) return null
         return Completion(m.range.first, if (text.startsWith("}}", caret)) caret + 2 else caret, items)
     }
@@ -964,6 +973,50 @@ public object Requests {
         }
         return out
     }
+
+    /**
+     * The store after the client applies [patch], a `datastar-patch-signals` frame's `signals`, to
+     * [store] (see [mergePatchAsClient]), with [onlyIfMissing] read as the client reads it: `"true"`
+     * after JavaScript's trim (patchSignals.ts:16, text.ts:24 in 1.0.5). Null where the patch is no
+     * JSON, which the frame shows as it is. The client nests as deep as a stream says and takes a
+     * number however long; a patch past [FOLD_DEPTH] or the parser's number length leaves the store
+     * as it was, since folding it would spend an editor's stack. [PatchedStore.message] says so, as it
+     * says where the client throws or Streamlord refuses the patch.
+     */
+    public fun patchedStore(
+        store: JsonObject,
+        patch: String,
+        onlyIfMissing: String?,
+    ): PatchedStore? {
+        val parsed =
+            try {
+                JsonParser.parse(patch, FOLD_DEPTH)
+            } catch (e: JsonParseException) {
+                if (!e.limit) return null
+                return PatchedStore(
+                    store,
+                    "The inspector does not fold this patch, which the client takes: ${e.message}. The store shown is left as it was.",
+                )
+            }
+        return try {
+            PatchedStore(mergePatchAsClient(store, parsed, onlyIfMissing?.trim(::isJsSpace) == "true"), null)
+        } catch (e: SignalPatchException) {
+            // The client keeps the keys it set before the one it failed on, and so does the store. A throw also leaves its
+            // update batch open (signals.ts:747-762), so the bindings on the page stop redrawing.
+            val message =
+                if (e.refused) {
+                    "Streamlord refuses this signal patch on purpose: ${e.message}. The store shown keeps the keys before it."
+                } else {
+                    "The signal store cannot take this patch: ${e.message}. Datastar's client throws on it too, and the bindings " +
+                        "already on the page then stop redrawing until it is reloaded, though the signals still change, element " +
+                        "patches still land and new bindings show the current value."
+                }
+            PatchedStore(e.store, message)
+        }
+    }
+
+    /** How deep a patch the inspector folds into its store, far deeper than any page's signals. */
+    internal const val FOLD_DEPTH: Int = 1000
 
     /**
      * The signals as compact JSON; text that is not JSON is passed through trimmed.
@@ -1473,3 +1526,9 @@ public object Requests {
             }
         }
 }
+
+/** A signal store after a patch: the [store] shown, and what the inspector says of the patch where it is not folded whole. */
+public class PatchedStore internal constructor(
+    public val store: JsonObject,
+    public val message: String?,
+)

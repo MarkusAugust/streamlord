@@ -19,6 +19,7 @@ import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import io.github.markusaugust.streamlord.core.json.toBigDecimalOrNull
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
@@ -79,7 +80,7 @@ public class DatastarEvents(
         store
     }
 
-    /** The client's merge, with the hole limit of the core function turned into the assertion it is here. */
+    /** The client's merge, with the empty slot limit of the core function turned into the assertion it is here. */
     private fun fold(
         target: JsonObject,
         patch: JsonObject,

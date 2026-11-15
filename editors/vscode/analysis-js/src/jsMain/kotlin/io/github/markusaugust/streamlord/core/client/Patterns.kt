@@ -35,26 +35,6 @@ public actual fun regex(
     return JavaScriptPattern(pattern, options.toSet()).regex().also { cache[key] = it }
 }
 
-private val indexed = HashMap<Regex, dynamic>()
-
-/** Runs the pattern again at the match with the `d` flag, which is where JavaScript says where a group stands. */
-@InternalStreamlordApi
-public actual fun Regex.groupRange(
-    input: CharSequence,
-    match: MatchResult,
-    group: Int,
-): IntRange? {
-    if (indexed.size >= 4096) indexed.clear()
-    val again =
-        indexed.getOrPut(this) {
-            js("RegExp")(pattern, if (RegexOption.IGNORE_CASE in options) "duyi" else "duy")
-        }
-    again.lastIndex = match.range.first
-    val found = again.exec(input.toString()) ?: return null
-    val at = found.indices[group] ?: return null
-    return (at[0] as Int) until (at[1] as Int)
-}
-
 internal class JavaScriptPattern(
     private val source: String,
     options: Set<RegexOption>,

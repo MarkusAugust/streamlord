@@ -8,6 +8,17 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- streamlord-analysis: `analyzeProject` and `failures()` are declared beside `ProjectIssue`, on the
+  JVM alone: `analyzer.analyzeProject(root)` is written as before, with
+  `io.github.markusaugust.streamlord.analysis.analyzeProject` imported where the package is not.
+- streamlord-analysis: `unknownSignalIssue(ref, defined)` is gone: `projectSignalIssues(language,
+  refs, project)` answers for every read of a file at once, and for the signals a Kotlin file reads
+  that no file declares, asking `project`, a `ProjectSignals`, what the project knows. For Java,
+  `declaredNames` and `projectConstants` are in `KotlinDeclarationsKt`, where they were in
+  `InterpolationsKt`.
+- streamlord-core: `JsonObject.decimal`, `JsonNumber.toBigDecimal` and `JsonNumber.toBigDecimalOrNull`
+  are extension functions in the same package, which Kotlin calls as before once they are imported,
+  and Java as `JsonDecimals.decimal(object, key)`.
 - `interpolate` refuses a value in `data-match-media` and throws, where it escaped one: the
   reference writes the query as a string literal, so Datastar Pro may run it. Write the query into
   the format, `interpolate("<p data-match-media:dark=\"'$DARK'\">...", ...)` with a constant of
@@ -207,6 +218,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- streamlord-analysis: what both editors call, so that neither keeps a rule of its own:
+  `projectSignalIssues` and `ProjectSignals`, what the project says of the signals one file reads;
+  `Requests.patchedStore(store, patch, onlyIfMissing)` and `PatchedStore`, a signal store after a
+  patch as the client holds it; `signalNameStrings(source)` and `SignalNameString`, the strings the
+  DSL's calls name a signal with. streamlord-core's `JsonParseException.limit` says the text is JSON
+  past one of the parser's limits.
 - `datastarEvents(body, header)` in streamlord-test reads an answer that is no stream, by its
   content type and its `datastar-*` headers, as Datastar's client reads it, into the same
   `DatastarEvents`: `datastarEvents(response.bodyAsText(), response.headers::get)` on Ktor,
@@ -336,6 +353,21 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- Both editors read a few Datastar values as the client does where they misjudged them:
+  `@get(+-1)` is a number, and `@get(+1n)` throws a TypeError before the action is called; a comma
+  inside a template literal's `${a, b}` is no comma of `postExpr`'s value, a nested template's text
+  included; and a comment around a value in `data-computed`, `/*c*/ 1`, leaves it a value and no
+  function. Reading the event types of a long datastar-fetch handler takes time in step with its
+  length, where it grew with the square of it.
+- IntelliJ's inspector folds a signal patch nested deeper than 64 levels into the store, as the
+  client and the VS Code inspector do, where it showed it raw. In both editors a patch nested more
+  than 1000 levels deep, or with a number of more than 1000 digits, leaves the store as it was and
+  says why, where IntelliJ reported an error of its own and VS Code said nothing.
+- Signal completion in both editors no longer offers a name a DSL or core call writes with a
+  hyphen, `dataSignals("is-open" to false)`, which Streamlord refuses, so no page has it. A key the
+  client keeps as written, `data-signals='{"hs-key": 1}'`, is still offered as `$hs-key`, which
+  Datastar reads as that one signal. Nor does an unknown signal's warning suggest such a name:
+  `$isOpen` beside `dataSignals("is-open" to false)` no longer says "Did you mean $is-open?".
 - VS Code: in a `$$"""` raw string that opens on the next line, `$$count` and `$${id}` are Kotlin's
   templates again, not Datastar signals, as in a one-line string.
 - VS Code colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor files, where their extension

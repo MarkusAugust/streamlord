@@ -114,10 +114,10 @@ class AsTheBrowserHoldsItTest {
         stream(PatchElements("<p id=\"a\">one\r\ntwo</p>")).assertPatchElements(elements = "<p id=\"a\">one\r\ntwo</p>")
     }
 
-    // signals.ts mergeInner: an index past the end extends the array, and null leaves a hole.
-    // The client reads a hole, and a null it holds, as an empty string: that is what `$list[1]` gives and what `@post` sends.
+    // signals.ts mergeInner: an index past the end extends the array, and null leaves an empty slot.
+    // The client reads an empty slot, and a null it holds, as an empty string: that is what `$list[1]` gives and what `@post` sends.
     @Test
-    fun `a patch onto an array extends it, and a hole reads as an empty string as it does in the client`() {
+    fun `a patch onto an array extends it, and an empty slot reads as an empty string as it does in the client`() {
         val events =
             stream(
                 PatchSignals("""{"list":["a","b","c"]}"""),

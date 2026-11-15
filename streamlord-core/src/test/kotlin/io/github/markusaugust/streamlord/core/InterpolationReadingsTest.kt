@@ -282,13 +282,13 @@ class InterpolationReadingsTest {
 
     // A patch with the svg namespace is parsed inside an svg, where a title is an HTML integration point.
     @Test
-    fun `a hole is judged as an svg patch reads it`() {
+    fun `a placeholder is judged as an svg patch reads it`() {
         assertEquals(Position.CODE, refused("""<title><xmp><!--</xmp><img src=x onerror="%s">""", code).position)
     }
 
     // And one with the MathML namespace inside a math, where an mi is one.
     @Test
-    fun `a hole is judged as a math patch reads it`() {
+    fun `a placeholder is judged as a math patch reads it`() {
         assertEquals(Position.CODE, refused("""<textarea><mi><xmp><!--</xmp><img src=x onerror="%s">""", code).position)
     }
 
@@ -356,7 +356,7 @@ class InterpolationReadingsTest {
     }
 
     @Test
-    fun `a Trusted value in a URL does not waive the check for the other holes there`() {
+    fun `a Trusted value in a URL does not waive the check for the other placeholders there`() {
         assertEquals(1, refused("""<a href="%s%s">x</a>""", Trusted(""), "javascript:alert(1)").index)
         assertEquals(1, refused("""<a href="%s%s">x</a>""", Trusted("javascript:"), "alert(1)").index)
         assertEquals(

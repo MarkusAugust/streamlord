@@ -105,7 +105,7 @@ public object JsonParser {
         }
 
         private fun parseObject(depth: Int): JsonObject {
-            if (depth > maxDepth) fail("Nesting deeper than $maxDepth levels")
+            if (depth > maxDepth) fail("Nesting deeper than $maxDepth levels", limit = true)
             expect('{')
             val fields = LinkedHashMap<String, JsonValue>()
             skipWhitespace()
@@ -149,7 +149,7 @@ public object JsonParser {
         }
 
         private fun parseArray(depth: Int): JsonArray {
-            if (depth > maxDepth) fail("Nesting deeper than $maxDepth levels")
+            if (depth > maxDepth) fail("Nesting deeper than $maxDepth levels", limit = true)
             expect('[')
             val items = ArrayList<JsonValue>()
             skipWhitespace()
@@ -248,7 +248,7 @@ public object JsonParser {
             }
             if (i - start > MAX_NUMBER_LENGTH) {
                 i = start
-                fail("Number longer than $MAX_NUMBER_LENGTH characters")
+                fail("Number longer than $MAX_NUMBER_LENGTH characters", limit = true)
             }
             return JsonNumber(s.substring(start, i))
         }
@@ -289,6 +289,9 @@ public object JsonParser {
             return s.substring(start, i)
         }
 
-        private fun fail(message: String): Nothing = throw JsonParseException(message, i)
+        private fun fail(
+            message: String,
+            limit: Boolean = false,
+        ): Nothing = throw JsonParseException(message, i, limit)
     }
 }

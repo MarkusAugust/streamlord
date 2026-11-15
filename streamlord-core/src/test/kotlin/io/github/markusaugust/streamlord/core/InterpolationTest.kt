@@ -214,7 +214,7 @@ class InterpolationTest {
     }
 
     @Test
-    fun `a miscounted hole fails here rather than quietly`() {
+    fun `a miscounted placeholder fails here rather than quietly`() {
         assertFailsWith<IllegalArgumentException> { render("<li>%s</li>") }
         assertFailsWith<IllegalArgumentException> { render("<li>%s</li>", "a", "b") }
         assertTrue(
@@ -237,7 +237,7 @@ class InterpolationTest {
     }
 
     @Test
-    fun `only a per cent and an s is a hole, so css and escaped urls need no ceremony`() {
+    fun `only a per cent and an s is a placeholder, so css and escaped urls need no ceremony`() {
         assertEquals("""<div style="width: 50%">x</div>""", render("""<div style="width: 50%">%s</div>""", "x"))
         assertEquals("""<a href="/a%20b">x</a>""", render("""<a href="/a%20b">%s</a>""", "x"))
     }
@@ -254,7 +254,7 @@ class InterpolationTest {
     }
 
     @Test
-    fun `markup with no holes is returned as it stands`() {
+    fun `markup with no placeholders is returned as it stands`() {
         assertEquals("<li>x</li>", render("<li>x</li>"))
         assertEquals("", render(""))
     }
@@ -338,7 +338,7 @@ class InterpolationTest {
                 """<svg><script href="%s"></script></svg>""",
             )
         for (f in loaders) {
-            // The literal before the hole settles the host: a path, a full origin, a same document.
+            // The literal before the placeholder settles the host: a path, a full origin, a same document.
             render(f.replace("""="%s"""", """="https://cdn.example/%s""""), "x")
             render(f.replace("""="%s"""", """="/app/%s""""), "x")
             render(f.replace("""="%s"""", """="#%s""""), "x")
@@ -355,7 +355,7 @@ class InterpolationTest {
 
     // The markup already chose where the URL points; the value only fills in a part of it.
     @Test
-    fun `a hole further into a url is an ordinary attribute`() {
+    fun `a placeholder further into a url is an ordinary attribute`() {
         assertEquals("""<a href="/heads/javascript:1">x</a>""", render("""<a href="/heads/%s">x</a>""", "javascript:1"))
     }
 
@@ -373,10 +373,10 @@ class InterpolationTest {
     }
 
     // Inside <svg>, a <![CDATA[ is a section the browser reads as text; once </svg> returns to
-    // HTML, the same bytes are a bogus comment the first > ends, and a hole after it is a live tag.
+    // HTML, the same bytes are a bogus comment the first > ends, and a placeholder after it is a live tag.
     // No one fixed reading of the markup sees both, so the scanner follows the element stack.
     @Test
-    fun `a hole the browser reaches only after svg closes is refused`() {
+    fun `a placeholder the browser reaches only after svg closes is refused`() {
         val e =
             assertFailsWith<UnsafeInterpolationException> {
                 render("<svg><![CDATA[><!--]]></svg><![CDATA[><img %s>-->]]>", "src=x onerror=alert(1)")

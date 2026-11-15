@@ -2204,6 +2204,102 @@
         "returnsValue": true,
         "js": "return ();",
         "compiles": false
+      },
+      {
+        "expression": "'$a-b' + `$c-d ${$e-f}`",
+        "returnsValue": false,
+        "js": "'$a-b' + `$c-d ${$['e-f']}`",
+        "compiles": true
+      },
+      {
+        "expression": "'$a-b' + `$c-d ${$e-f}`",
+        "returnsValue": true,
+        "js": "return ('$a-b' + `$c-d ${$['e-f']}`);",
+        "compiles": true
+      },
+      {
+        "expression": "\"$x\" + $y",
+        "returnsValue": false,
+        "js": "\"$x\" + $['y']",
+        "compiles": true
+      },
+      {
+        "expression": "\"$x\" + $y",
+        "returnsValue": true,
+        "js": "return (\"$x\" + $['y']);",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.0.name + $['x']",
+        "returnsValue": false,
+        "js": "$['foo']['0']['name'] + $['x']",
+        "compiles": true
+      },
+      {
+        "expression": "$foo.0.name + $['x']",
+        "returnsValue": true,
+        "js": "return ($['foo']['0']['name'] + $['x']);",
+        "compiles": true
+      },
+      {
+        "expression": "`${$a} and ${$b}` + `${ {a:1}.a }`",
+        "returnsValue": false,
+        "js": "`${$['a']} and ${$['b']}` + `${ {a:1}.a }`",
+        "compiles": true
+      },
+      {
+        "expression": "`${$a} and ${$b}` + `${ {a:1}.a }`",
+        "returnsValue": true,
+        "js": "return (`${$['a']} and ${$['b']}` + `${ {a:1}.a }`);",
+        "compiles": true
+      },
+      {
+        "expression": "`total: $total ${$a}`",
+        "returnsValue": false,
+        "js": "`total: $total ${$['a']}`",
+        "compiles": true
+      },
+      {
+        "expression": "`total: $total ${$a}`",
+        "returnsValue": true,
+        "js": "return (`total: $total ${$['a']}`);",
+        "compiles": true
+      },
+      {
+        "expression": "`mail @home(x) ${$a}`",
+        "returnsValue": false,
+        "js": "`mail @home(x) ${$['a']}`",
+        "compiles": true
+      },
+      {
+        "expression": "`mail @home(x) ${$a}`",
+        "returnsValue": true,
+        "js": "return (`mail @home(x) ${$['a']}`);",
+        "compiles": true
+      },
+      {
+        "expression": "`total: $total ${ {a: 1}.a }`",
+        "returnsValue": false,
+        "js": "`total: $['total'] ${ {a: 1}.a }`",
+        "compiles": true
+      },
+      {
+        "expression": "`total: $total ${ {a: 1}.a }`",
+        "returnsValue": true,
+        "js": "return (`total: $['total'] ${ {a: 1}.a }`);",
+        "compiles": true
+      },
+      {
+        "expression": "$a@get('/x')",
+        "returnsValue": false,
+        "js": "$['a']__action(\"get\",evt,'/x')",
+        "compiles": false
+      },
+      {
+        "expression": "$a@get('/x')",
+        "returnsValue": true,
+        "js": "return ($['a']__action(\"get\",evt,'/x'));",
+        "compiles": false
       }
     ]
   }

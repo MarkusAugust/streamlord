@@ -1,20 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import java.io.File
-
 // What the analysis asks of its platform, in JavaScript: the declarations of PlatformJvm.kt in streamlord-analysis.
-
-public actual class ProjectIssue private constructor() {
-    public actual val fails: Boolean get() = false
-}
-
-/** The editor hands the analysis text, never a folder. */
-@Suppress("UNUSED_PARAMETER", "UnusedReceiverParameter")
-internal actual fun Analyzer.issuesUnder(
-    root: File,
-    prefix: String,
-    skipped: Set<String>,
-): List<ProjectIssue> = emptyList()
 
 internal actual fun <K : Any, V : Any> sharedMap(): MutableMap<K, V> = HashMap()
 
@@ -36,3 +22,22 @@ private val ID_CONTINUE: dynamic = js("/^\\p{ID_Continue}$/u")
 internal actual fun startsName(codePoint: Int): Boolean = ID_START.test(js("String").fromCodePoint(codePoint)) as Boolean
 
 internal actual fun continuesName(codePoint: Int): Boolean = ID_CONTINUE.test(js("String").fromCodePoint(codePoint)) as Boolean
+
+private val indexed = HashMap<Regex, dynamic>()
+
+/** Runs the pattern again at the match with the `d` flag, which is where JavaScript says where a group stands. */
+internal actual fun Regex.groupRange(
+    input: CharSequence,
+    match: MatchResult,
+    group: Int,
+): IntRange? {
+    if (indexed.size >= 4096) indexed.clear()
+    val again =
+        indexed.getOrPut(this) {
+            js("RegExp")(pattern, if (RegexOption.IGNORE_CASE in options) "duyi" else "duy")
+        }
+    again.lastIndex = match.range.first
+    val found = again.exec(input.toString()) ?: return null
+    val at = found.indices[group] ?: return null
+    return (at[0] as Int) until (at[1] as Int)
+}

@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.DeclaredNames
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
+import io.github.markusaugust.streamlord.analysis.ProjectSignals
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalProperty
 import io.github.markusaugust.streamlord.analysis.SignalReference
@@ -23,12 +24,11 @@ import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.projectConstants
+import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
-import io.github.markusaugust.streamlord.analysis.signalDrift
 import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
-import io.github.markusaugust.streamlord.analysis.unknownSignalIssue
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.analysis.Fix as AnalysedFix
 import io.github.markusaugust.streamlord.analysis.Issue as AnalysedIssue
@@ -181,42 +181,33 @@ fun diagnose(
 ): Array<Issue> {
     val file = source(src, kotlin, prefix, constants, engineOf(languageId))
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
-    val known = defined?.let(::setOf)
-    val unknown = if (known == null) emptyList() else analyzer.signalReferences(file).mapNotNull { unknownSignalIssue(it, known) }
-    val drift = if (others == null || !kotlin) emptyList() else drift(src, others)
-    return (found + unknown + drift).map(::plain).toTypedArray()
+    val workspace =
+        object : ProjectSignals {
+            override fun defined() = defined?.let(::setOf)
+
+            override fun own() = others?.let { collectSignalFacts(source(src, true)) }
+
+            override fun others() = facts(others ?: emptyArray())
+        }
+    val project = projectSignalIssues(file.language, analyzer.signalReferences(file), workspace)
+    return (found + project).map(::plain).toTypedArray()
 }
 
-/** The reads of signals in the Kotlin file [src] that neither it nor [others] declares. */
-private fun drift(
-    src: String,
-    others: Array<DriftFacts>,
-): List<AnalysedIssue> {
-    // A file with no signals class and no lookup can report nothing, whatever the others say.
-    val own = collectSignalFacts(source(src, true))
-    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
-    // Only this file's issues are asked for, so another file's reads and offsets play no part.
-    val facts = HashMap<String, SignalFacts>()
-    others.forEachIndexed { i, o ->
+/** What the workspace's other files say about signals, as the analysis holds it. */
+private fun facts(others: Array<DriftFacts>): List<SignalFacts> =
+    others.map { o ->
         val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
-        facts["$i"] =
-            SignalFacts(
-                o.declared.toSet(),
-                o.readInto.toSet(),
-                classes,
-                emptyList(),
-                o.encoded.toSet(),
-                o.patched.toSet(),
-                o.packageName,
-                o.imports.toSet(),
-            )
+        SignalFacts(
+            o.declared.toSet(),
+            o.readInto.toSet(),
+            classes,
+            emptyList(),
+            o.encoded.toSet(),
+            o.patched.toSet(),
+            o.packageName,
+            o.imports.toSet(),
+        )
     }
-    facts[THIS_FILE] = own
-    return signalDrift(facts).issues[THIS_FILE].orEmpty()
-}
-
-/** The key of the file being diagnosed among the others, which are keyed by their index. */
-private const val THIS_FILE = "this"
 
 // The Kotlin file analysed last: the lightbulb asks about the text the diagnostics were just made for.
 private var lastSites: Pair<Source, List<SiteIssues>>? = null

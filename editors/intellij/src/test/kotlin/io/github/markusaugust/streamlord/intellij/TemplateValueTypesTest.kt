@@ -13,8 +13,8 @@ import com.intellij.psi.PsiDocumentManager
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import io.github.markusaugust.streamlord.intellij.analysis.HoleFacts
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
+import io.github.markusaugust.streamlord.intellij.analysis.ValueFacts
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.inspections.PreferredReplaceTextFix
 import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
@@ -22,14 +22,14 @@ import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
 
 /**
- * The interpolation test project with the Kotlin plugin's types: what IntelliJ says of each hole
+ * The interpolation test project with the Kotlin plugin's types: what IntelliJ says of each placeholder
  * beyond the text alone, which expected.json gives for both analyses.
  */
-class HoleTypesTest : StreamlordTestCase() {
+class TemplateValueTypesTest : StreamlordTestCase() {
     private val dir = File(System.getProperty("streamlord.repo"), "editors/vscode/test/fixtures/interpolationtests")
 
     /**
-     * Where the types change the verdict of expected.json, by hole and code: null is silent. A
+     * Where the types change the verdict of expected.json, by placeholder and code: null is silent. A
      * number in the text is safe, and a value typed String, inferred or written, is a warning
      * rather than a hint: `everything` among them, since one of the pages it joins adds a
      * value to its markup with `+`.
@@ -70,10 +70,10 @@ class HoleTypesTest : StreamlordTestCase() {
                     .map { "${it.startOffset}-${it.endOffset} ${it.text} ${severity(it.severity)}" }
             val wanted =
                 (issues as JsonArray).objects().mapNotNull {
-                    val hole = it.string("hole")!!
-                    val key = hole to it.string("code")!!
+                    val placeholder = it.string("placeholder")!!
+                    val key = placeholder to it.string("code")!!
                     val severity = if (key in withTypes) withTypes[key] else it.string("severity")
-                    severity?.let { s -> "${it.int("start")}-${it.int("end")} $hole $s" }
+                    severity?.let { s -> "${it.int("start")}-${it.int("end")} $placeholder $s" }
                 }
             assertEquals(name, wanted.joinToString("\n"), seen.joinToString("\n"))
         }
@@ -102,7 +102,7 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(emptyList<String>(), seen)
     }
 
-    fun `test a hole is markup only when its whole value is`() {
+    fun `test a placeholder is markup only when its whole value is`() {
         val facts = facts(MARKUP_PAGE)
         val wanted =
             mapOf(
@@ -174,7 +174,7 @@ class HoleTypesTest : StreamlordTestCase() {
                     "fun f(u: U, m: Map<String, Int>, a: IntArray, s: Set<String>, rows: List<Html>) = " +
                     "\"<style>\${u.tags} \$m \$a \$s</style><ul>\$rows</ul>\"",
             )
-        for (hole in listOf("\${u.tags}", "\$m", "\$a", "\$s")) assertEquals(hole, ValueFact.COLLECTION, facts[hole])
+        for (placeholder in listOf("\${u.tags}", "\$m", "\$a", "\$s")) assertEquals(placeholder, ValueFact.COLLECTION, facts[placeholder])
         assertEquals(ValueFact.MARKUP, facts["\$rows"])
         // No Trusted vouches for a collection, which a template writes in brackets.
         myFixture.doHighlighting()
@@ -331,7 +331,7 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(listOf("unescaped-interpolation"), string.map { it.code })
     }
 
-    fun `test an edit in another file types the holes again but does not run the analysis again`() {
+    fun `test an edit in another file types the placeholders again but does not run the analysis again`() {
         val text =
             buildString {
                 append("package big\n")
@@ -360,10 +360,10 @@ class HoleTypesTest : StreamlordTestCase() {
             .executeOnPooledThread<T> { ReadAction.nonBlocking<T>(block).executeSynchronously() }
             .get()
 
-    /** The facts of a page, by the text of each hole. */
+    /** The facts of a page, by the text of each placeholder. */
     private fun facts(text: String): Map<String, ValueFact> {
         val file = myFixture.configureByText("Page.kt", text) as KtFile
-        return background { HoleFacts.of(file) }.mapKeys { (range, _) -> range.substring(file.text) }
+        return background { ValueFacts.of(file) }.mapKeys { (range, _) -> range.substring(file.text) }
     }
 
     private fun severity(s: HighlightSeverity): String =

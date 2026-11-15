@@ -756,16 +756,6 @@ describe("the lists both editors share", () => {
     assert.deepEqual(names(kt.repository["expression-call-second-arg"].patterns[0].begin), at((a) => a === 1 || a === "last"));
     assert.deepEqual(names(kt.repository["expression-call-lone-object"].patterns[0].begin), at((a) => a === "last"));
   });
-
-  it("knows the same globals and keywords as the analysis", () => {
-    const tokensKt = readFileSync(new URL("../../streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Tokens.kt", root), "utf8");
-    const set = (name: string) => [...new RegExp(`val ${name}[^=]*=\\s*setOf\\(([^)]*)\\)`).exec(tokensKt)![1]!.matchAll(/"(\w+)"/g)].map((m) => m[1]!).sort();
-    const expr = JSON.parse(readFileSync(new URL("syntaxes/datastar-expression.tmLanguage.json", root), "utf8"));
-    const words = (pattern: string) => /\\b\((?:\?:)?([\w|]+)\)\\b/.exec(pattern)![1]!.split("|");
-    assert.deepEqual(words(expr.repository.globals.match).sort(), set("JS_GLOBALS"));
-    const keywords = (expr.repository.keywords.patterns as { match: string }[]).flatMap((p) => words(p.match));
-    assert.deepEqual([...keywords, ...words(expr.repository.constants.match)].sort(), set("JS_KEYWORDS"));
-  });
 });
 
 describe("what is not Datastar's", () => {

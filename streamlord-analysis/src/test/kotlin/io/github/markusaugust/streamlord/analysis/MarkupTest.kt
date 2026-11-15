@@ -43,7 +43,7 @@ class MarkupTest {
 
     @Test
     fun `tells template syntax from the template literals of JavaScript in linear time`() {
-        assertGrowsLinearly("template literals in one value", 300, { "`\${a}`".repeat(it) }) { hasTemplateSyntax(it) }
+        grows("template literals in one value", 300) { n -> "<div data-text=\"" + "`\${a}`".repeat(n) + "\"></div>" }
     }
 
     /** `conformance/dom/comment-ends.json`: where a comment ends, as the browser's parser reads it. */

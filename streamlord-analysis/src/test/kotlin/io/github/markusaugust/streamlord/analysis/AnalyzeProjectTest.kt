@@ -88,6 +88,14 @@ class AnalyzeProjectTest {
     }
 
     @Test
+    fun `places an issue by line and column from 1, a CRLF line ending being one line break`() {
+        write("A.kt", swallowed)
+        write("B.kt", "package p\r\n\r\n$swallowed")
+        val found = analyzer.analyzeProject(root).failures().map { Triple(it.file.name, it.line, it.column) }
+        assertEquals(listOf(Triple("A.kt", 1, 24), Triple("B.kt", 3, 24)), found)
+    }
+
+    @Test
     fun `judges the interpolation test project as the VS Code index does`() {
         val dir = File("../editors/vscode/test/fixtures/interpolationtests")
         val codes =

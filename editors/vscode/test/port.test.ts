@@ -16,12 +16,10 @@ import {
   signalsOf,
   StreamReader,
   streamRequest,
-  unreachableHint,
   variableCompletions,
   type DriftFacts,
   type Fix,
   type Issue,
-  type Variable,
 } from "../src/analysis.ts";
 
 /**
@@ -198,10 +196,11 @@ describe("what crosses the port", () => {
     assert.equal(event?.frame?.event, "datastar-patch-signals");
     assert.equal(event?.frame?.id, null);
     assert.equal(typeof event?.frame?.receivedAt, "number");
-    const patched = applySignalPatch(`{"b":2}`, event?.frame?.args.signals, false);
-    assert.deepEqual({ ...patched, store: JSON.parse(patched.store) }, { store: { b: 2, a: 1 }, refused: false });
-    const refused = applySignalPatch(`{"b":2}`, `{"a":1,"__proto__":{"x":1}}`, false);
-    assert.deepEqual([JSON.parse(refused.store), refused.refused, typeof refused.error], [{ b: 2, a: 1 }, true, "string"]);
+    const patched = applySignalPatch(`{"b":2}`, event?.frame?.args.signals, null);
+    assert.deepEqual({ ...patched, store: JSON.parse(patched.store) }, { store: { b: 2, a: 1 } });
+    const refused = applySignalPatch(`{"b":2}`, `{"a":1,"__proto__":{"x":1}}`, null);
+    assert.deepEqual(JSON.parse(refused.store), { b: 2, a: 1 });
+    assert.match(refused.message ?? "", /^Streamlord refuses this signal patch on purpose: .* The store shown keeps the keys before it\.$/);
   });
   it("keeps a header whatever it is named", () => {
     const headers = parseHeaderLines("__proto__: a\nconstructor: b\ntoString: c\nX-Token: d");
@@ -210,22 +209,25 @@ describe("what crosses the port", () => {
     assert.deepEqual([sent["__proto__"], sent["constructor"], sent["toString"], sent["X-Token"]], ["a", "b", "c", "d"]);
   });
 
-  it("answers for a variable source and a field it does not know, as for none of those it knows", () => {
+  it("answers for a field it does not know as for none of those it knows", () => {
     const vars = environment(`{"baseUrl":"http://localhost:1","params":{"token":"t"}}`, "http://localhost:8080", undefined, undefined).vars;
-    const odd: Variable[] = vars.map((v) => ({ ...v, source: "elsewhere" }) as unknown as Variable);
     // A field that is none of the three takes the params, and none of the variables with a field of their own.
     assert.deepEqual(variableCompletions("{{", 2, "nowhere", vars)?.items.map((v) => v.name), ["token"]);
     assert.equal(variableCompletions("{{b", 3, "nowhere", vars), null);
-    // A source that is none of the three is no default and no running server, and not the file's either.
-    assert.equal(unreachableHint("{{baseUrl}}/x", odd, undefined, undefined), unreachableHint("{{baseUrl}}/x", vars, undefined, undefined));
     assert.equal(baseUrlSuggestion(vars, "http://localhost:2", "demo"), "http://localhost:2");
-    assert.equal(baseUrlSuggestion(odd, "http://localhost:2", "demo"), null);
   });
   it("folds a patch nested deeper than the SDK reads from a request, as the client does", () => {
     const deep = '{"a":'.repeat(200) + "1" + "}".repeat(200);
-    const patched = applySignalPatch(`{"b":2}`, deep, false);
-    assert.deepEqual([patched.store, patched.error, patched.refused], [`{"b":2,"a":${deep.slice(5, -1)}}`, undefined, false]);
+    const patched = applySignalPatch(`{"b":2}`, deep, null);
+    assert.deepEqual([patched.store, patched.message], [`{"b":2,"a":${deep.slice(5, -1)}}`, undefined]);
     // And once more into the store that now holds it.
-    assert.equal(applySignalPatch(patched.store, deep, false).store, patched.store);
+    assert.equal(applySignalPatch(patched.store, deep, null).store, patched.store);
+  });
+  it("leaves the store as it was for a patch too deep or too long to fold, and says so", () => {
+    for (const patch of ['{"a":'.repeat(200_000) + "1" + "}".repeat(200_000), '{"a":1' + "0".repeat(1000) + "}"]) {
+      const patched = applySignalPatch(`{"b":2}`, patch, null);
+      assert.equal(patched.store, `{"b":2}`);
+      assert.match(patched.message ?? "", /the client takes.*left as it was/);
+    }
   });
 });

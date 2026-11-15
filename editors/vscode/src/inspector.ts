@@ -31,9 +31,6 @@ const ENV_FILE = inspectorFiles().env;
 /** How long a failed request waits for the server to finish logging why. */
 const LOG_GRACE_MS = 400;
 
-const CLIENT_THROWS =
-  "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is reloaded, though the signals still change, element patches still land and new bindings show the current value.";
-const REFUSED = "The store shown keeps the keys before it.";
 
 export class Inspector {
   private panel: vscode.WebviewPanel | null = null;
@@ -254,30 +251,14 @@ export class Inspector {
     );
   }
 
-  /** The store as the client would hold it after this frame, see `mergePatchAsClient`; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.5). */
+  /** The store as the client would hold it after this frame, see `Requests.patchedStore`; a patch that is no JSON leaves it as it was and is shown raw in the frame. */
   private applyFrame(frame: DatastarFrame): void {
     if (frame.event !== "datastar-patch-signals" || !frame.args.signals) return;
-    try {
-      JSON.parse(frame.args.signals);
-    } catch {
-      // invalid JSON in the stream is shown raw; the frame itself is still posted
-      return;
-    }
-    try {
-      const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, (frame.args.onlyIfMissing ?? "").trim() === "true");
-      // The client keeps the keys it set before the one it failed on, and so does the store shown. A
-      // throw also leaves its update batch open (signals.ts:747-762), so the bindings on the page stop
-      // redrawing.
-      this.signals = JSON.parse(patched.store);
-      this.post({ type: "signals", signals: this.signals });
-      if (!patched.error) return;
-      const message = patched.refused
-        ? `Streamlord refuses this signal patch on purpose: ${patched.error}. ${REFUSED}`
-        : `The signal store cannot take this patch: ${patched.error}. ${CLIENT_THROWS}`;
-      this.post({ type: "error", message });
-    } catch (e) {
-      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
-    }
+    // The analysis says why where it leaves the store as it was.
+    const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, frame.args.onlyIfMissing ?? null);
+    this.signals = JSON.parse(patched.store);
+    this.post({ type: "signals", signals: this.signals });
+    if (patched.message) this.post({ type: "error", message: patched.message });
   }
 }
 

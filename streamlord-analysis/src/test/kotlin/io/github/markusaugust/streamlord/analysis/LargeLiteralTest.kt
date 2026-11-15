@@ -6,13 +6,13 @@ import kotlin.test.assertTrue
 import kotlin.time.TimeSource
 
 /**
- * One literal with thousands of holes is judged in time that grows with the literal, not with its
+ * One literal with thousands of placeholders is judged in time that grows with the literal, not with its
  * square: a fix that rewrites the whole literal is made only when it is applied, and once for all
- * the holes that offer it.
+ * the placeholders that offer it.
  */
 class LargeLiteralTest {
     @Test
-    fun `a literal with thousands of holes is judged in a few seconds at most, its fixes made only when applied`() {
+    fun `a literal with thousands of placeholders is judged in a few seconds at most, its fixes made only when applied`() {
         val rows = (0 until 1000).joinToString("") { "<p title=\"\$q\" data-text=\"\$k\" class=\"\${q.trim()}\">\$q</p>\n" }
         val src = "fun f(q: String, k: Int): String {\n    // language=HTML\n    return \"\"\"<div>$rows</div>\"\"\"\n}\n"
         val started = TimeSource.Monotonic.markNow()

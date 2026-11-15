@@ -11,8 +11,7 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
-private val OPERATOR_BEFORE = regex("""(?:===?|!==?)\s*$""")
-private val SWITCH_BEFORE = regex("""(?<![\w$.])switch\s*\(\s*$""")
+private val OPERATORS = listOf("!==", "===", "!=", "==")
 private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
 private val CASE = regex("""(?<![\w$.])case\s*""")
 
@@ -40,11 +39,12 @@ internal fun fetchTypeIssues(
         if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
         val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
         val left =
-            OPERATOR_BEFORE.find(text.substring(0, at).trimEnd())?.let { op ->
-                var close = op.range.first - 1
+            operatorBefore(text, at).takeIf { it >= 0 }?.let { op ->
+                var close = op - 1
                 while (close >= 0 && isJsSpace(text[close])) close--
                 val q = text.getOrNull(close)
-                val open = if (q == null) -1 else text.lastIndexOf(q, close - 1)
+                // Only a quote can open the literal: looking back for any other character would cost the text before it.
+                val open = if (q == null || q !in "'\"`") -1 else text.lastIndexOf(q, close - 1)
                 if (open >= 0) literal(open)?.takeIf { it.last == close } else null
             }
         for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
@@ -88,7 +88,7 @@ private fun switchCases(
     end: Int,
     literal: (Int) -> IntRange?,
 ): List<IntRange> {
-    if (SWITCH_BEFORE.find(text.substring(0, at)) == null) return emptyList()
+    if (!switchBefore(text, at)) return emptyList()
     val open = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
     val out = ArrayList<IntRange>()
     var depth = 0
@@ -112,4 +112,35 @@ private fun switchCases(
         i++
     }
     return out
+}
+
+/*
+ * The two readings back from a match, each costing what lies between it and what it reads, where a pattern run on all the
+ * text before cost that text at each match.
+ */
+
+/** Where the `===`, `==`, `!==` or `!=` that ends the text before [at], but for white space, starts; -1 for none. */
+private fun operatorBefore(
+    text: String,
+    at: Int,
+): Int {
+    var end = at
+    while (end > 0 && text[end - 1].isWhitespace()) end--
+    return OPERATORS.firstOrNull { end >= it.length && text.startsWith(it, end - it.length) }?.let { end - it.length } ?: -1
+}
+
+/** Whether `switch (` ends the text before [at], but for ASCII white space, and stands on its own, as no property. */
+private fun switchBefore(
+    text: String,
+    at: Int,
+): Boolean {
+    fun space(c: Char) = c == ' ' || c in '\t'..'\r'
+    var i = at
+    while (i > 0 && space(text[i - 1])) i--
+    if (i == 0 || text[i - 1] != '(') return false
+    i--
+    while (i > 0 && space(text[i - 1])) i--
+    if (i < 6 || !text.startsWith("switch", i - 6)) return false
+    val c = text.getOrNull(i - 7) ?: return true
+    return !(c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '_' || c == '$' || c == '.')
 }

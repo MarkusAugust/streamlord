@@ -65,7 +65,7 @@ private fun probes(file: File): List<Case> =
         )
     }
 
-/** Every cell of the matrix, built as HoleMatrixTest builds it. */
+/** Every cell of the matrix, built as ValueMatrixTest builds it. */
 private fun matrix(file: File): List<Case> {
     val m = JsonParser.parseObject(file.readText())
     val out = ArrayList<Case>()
@@ -79,7 +79,7 @@ private fun matrix(file: File): List<Case> {
                         listOf("$DOMAIN.Trusted", "$DOMAIN.interpolate") + value.array("imports")?.strings().orEmpty(),
                         value.string("declares").orEmpty(),
                         value.string("type")?.let { "v: $it" }.orEmpty(),
-                        form.string("open") + markup.replace("§", form.string("hole")!!) + form.string("close"),
+                        form.string("open") + markup.replace("§", form.string("placeholder")!!) + form.string("close"),
                         (value.string("kotlinFact") ?: value.string("fact"))?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) },
                         setOf("\${v}", "\$\${v}", "v"),
                         null,
@@ -153,7 +153,7 @@ fun main(args: Array<String>) {
     val out = File(args[1], PACKAGE.replace('.', '/'))
     out.deleteRecursively()
     out.mkdirs()
-    val all = probes(File(cases, "rewrite-probes.json")) + matrix(File(cases, "hole-matrix.json"))
+    val all = probes(File(cases, "rewrite-probes.json")) + matrix(File(cases, "value-matrix.json"))
     // One file for the cases that import alike, since an import is the file's.
     val files = all.withIndex().groupBy { it.value.imports }
     files.entries.forEachIndexed { k, (imports, group) ->

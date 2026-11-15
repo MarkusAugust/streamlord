@@ -7,6 +7,9 @@ public abstract interface annotation class io/github/markusaugust/streamlord/cor
 
 public final class io/github/markusaugust/streamlord/core/JsonParseException : io/github/markusaugust/streamlord/core/StreamlordException {
 	public fun <init> (Ljava/lang/String;I)V
+	public fun <init> (Ljava/lang/String;IZ)V
+	public synthetic fun <init> (Ljava/lang/String;IZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getLimit ()Z
 	public final fun getPosition ()I
 }
 
@@ -167,7 +170,6 @@ public final class io/github/markusaugust/streamlord/core/client/DecodedValue {
 
 public final class io/github/markusaugust/streamlord/core/client/PlatformJvmKt {
 	public static final fun formEncoded (Ljava/lang/String;)Ljava/lang/String;
-	public static final fun groupRange (Lkotlin/text/Regex;Ljava/lang/CharSequence;Lkotlin/text/MatchResult;I)Lkotlin/ranges/IntRange;
 	public static final fun radixDouble (Ljava/lang/String;I)Ljava/lang/Double;
 	public static final fun regex (Ljava/lang/String;[Lkotlin/text/RegexOption;)Lkotlin/text/Regex;
 }
@@ -368,18 +370,6 @@ public final class io/github/markusaugust/streamlord/core/domain/ExpressionGuard
 	public final fun check (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 }
 
-public final class io/github/markusaugust/streamlord/core/domain/HoleLanding {
-	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIZ)V
-	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getAttribute ()Ljava/lang/String;
-	public final fun getLoadsCode ()Z
-	public final fun getMarkupInPlace ()Z
-	public final fun getNameStart ()I
-	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
-	public final fun getTagStart ()I
-	public final fun getValueStart ()I
-}
-
 public final class io/github/markusaugust/streamlord/core/domain/Html {
 	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/Html;
 	public static fun constructor-impl (Ljava/lang/String;)Ljava/lang/String;
@@ -402,17 +392,17 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExp
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
-	public static final fun holeLandings (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;)Ljava/util/List;
-	public static synthetic fun holeLandings$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Ljava/util/List;
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/util/List;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
-	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
-	public static synthetic fun landingAsParsed$default (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/HoleLanding;
+	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/core/domain/ValueLanding;
+	public static synthetic fun landingAsParsed$default (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;ZILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/ValueLanding;
 	public static final fun refusedUrlScheme (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun urlHostFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
+	public static final fun valueLandings (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;)Ljava/util/List;
+	public static synthetic fun valueLandings$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MarkupScanKt {
@@ -610,6 +600,18 @@ public final class io/github/markusaugust/streamlord/core/domain/UnsafeInterpola
 	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
 }
 
+public final class io/github/markusaugust/streamlord/core/domain/ValueLanding {
+	public fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIZ)V
+	public synthetic fun <init> (Lio/github/markusaugust/streamlord/core/domain/Position;Ljava/lang/String;IZIIZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAttribute ()Ljava/lang/String;
+	public final fun getLoadsCode ()Z
+	public final fun getMarkupInPlace ()Z
+	public final fun getNameStart ()I
+	public final fun getPosition ()Lio/github/markusaugust/streamlord/core/domain/Position;
+	public final fun getTagStart ()I
+	public final fun getValueStart ()I
+}
+
 public final class io/github/markusaugust/streamlord/core/domain/Wire {
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/core/domain/Wire;
 	public final fun attributeName (Ljava/lang/String;)Ljava/lang/String;
@@ -687,6 +689,12 @@ public final class io/github/markusaugust/streamlord/core/json/JsonBoolean$Compa
 	public final fun getTRUE ()Lio/github/markusaugust/streamlord/core/json/JsonBoolean;
 }
 
+public final class io/github/markusaugust/streamlord/core/json/JsonDecimals {
+	public static final fun decimal (Lio/github/markusaugust/streamlord/core/json/JsonObject;Ljava/lang/String;)Ljava/math/BigDecimal;
+	public static final fun toBigDecimal (Lio/github/markusaugust/streamlord/core/json/JsonNumber;)Ljava/math/BigDecimal;
+	public static final fun toBigDecimalOrNull (Lio/github/markusaugust/streamlord/core/json/JsonNumber;)Ljava/math/BigDecimal;
+}
+
 public final class io/github/markusaugust/streamlord/core/json/JsonMergeKt {
 	public static final fun mergePatch (Lio/github/markusaugust/streamlord/core/json/JsonValue;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
 	public static final fun mergePatchAsClient (Lio/github/markusaugust/streamlord/core/json/JsonObject;Lio/github/markusaugust/streamlord/core/json/JsonValue;ZI)Lio/github/markusaugust/streamlord/core/json/JsonObject;
@@ -709,8 +717,6 @@ public final class io/github/markusaugust/streamlord/core/json/JsonNumber : io/g
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getText ()Ljava/lang/String;
 	public fun hashCode ()I
-	public final fun toBigDecimal ()Ljava/math/BigDecimal;
-	public final fun toBigDecimalOrNull ()Ljava/math/BigDecimal;
 	public final fun toDouble ()D
 	public final fun toIntOrNull ()Ljava/lang/Integer;
 	public fun toJson ()Ljava/lang/String;
@@ -736,7 +742,6 @@ public final class io/github/markusaugust/streamlord/core/json/JsonObject : io/g
 	public fun containsKey (Ljava/lang/String;)Z
 	public fun containsValue (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Z
 	public final fun containsValue (Ljava/lang/Object;)Z
-	public final fun decimal (Ljava/lang/String;)Ljava/math/BigDecimal;
 	public final fun double (Ljava/lang/String;)Ljava/lang/Double;
 	public final fun entrySet ()Ljava/util/Set;
 	public fun equals (Ljava/lang/Object;)Z

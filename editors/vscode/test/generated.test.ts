@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { htmlElementInjectionGrammar, htmlInjectionGrammar, htmlPlaceholdersGrammar } from "../scripts/htmlGrammar.mjs";
 import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar, kotlinTemplateInjectionGrammar } from "../scripts/kotlinGrammar.mjs";
+import { withExpressionWords } from "../scripts/expressionWords.mjs";
 
 /** What `npm run build` writes from the catalog for VS Code's own HTML service and its snippets. */
 describe("generated files", () => {
@@ -33,6 +34,9 @@ describe("generated files", () => {
     assert.equal(readFileSync(new URL("../syntaxes/html-element-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(htmlElementInjectionGrammar(htmlInjectionGrammar(catalog))));
     const syntax = JSON.parse(readFileSync(new URL("../../../catalog/template-syntax.json", import.meta.url), "utf8"));
     assert.equal(readFileSync(new URL("../syntaxes/placeholders-html-injection.tmLanguage.json", import.meta.url), "utf8"), grammarText(htmlPlaceholdersGrammar(syntax)));
+    const expression = readFileSync(new URL("../syntaxes/datastar-expression.tmLanguage.json", import.meta.url), "utf8");
+    const words = JSON.parse(readFileSync(new URL("../../../catalog/javascript-words.json", import.meta.url), "utf8"));
+    assert.equal(expression, grammarText(withExpressionWords(JSON.parse(expression), words)), "the expression grammar's words");
     for (const n of [1, 2, 3] as const) {
       const file = `../syntaxes/kotlin-template${n === 1 ? "" : n}-injection.tmLanguage.json`;
       assert.equal(readFileSync(new URL(file, import.meta.url), "utf8"), grammarText(kotlinTemplateInjectionGrammar(n)), file);

@@ -1,9 +1,5 @@
 package io.github.markusaugust.streamlord.core.json
 
-import io.github.markusaugust.streamlord.core.decimalOrNull
-import io.github.markusaugust.streamlord.core.exactLongOrNull
-import java.math.BigDecimal
-
 /**
  * A JSON value as the built-in parser sees it. Immutable and dependency-free.
  *
@@ -57,8 +53,6 @@ public class JsonObject(
     public fun long(key: String): Long? = (this[key] as? JsonNumber)?.toLongOrNull()
 
     public fun double(key: String): Double? = (this[key] as? JsonNumber)?.toDouble()
-
-    public fun decimal(key: String): BigDecimal? = (this[key] as? JsonNumber)?.toBigDecimalOrNull()
 
     public fun obj(key: String): JsonObject? = this[key] as? JsonObject
 
@@ -141,10 +135,6 @@ public data class JsonNumber(
 
     public fun toDouble(): Double = text.toDouble()
 
-    public fun toBigDecimalOrNull(): BigDecimal? = decimalOrNull(text)
-
-    public fun toBigDecimal(): BigDecimal = toBigDecimalOrNull() ?: throw ArithmeticException("Number '$text' is outside BigDecimal range")
-
     /** A `Long` when the number is integral and fits, otherwise a `Double`; a negative zero, which a `Long` cannot carry, as `-0.0`. */
     override fun toKotlin(): Number = if (text.startsWith('-') && toDouble() == 0.0) -0.0 else toLongOrNull() ?: toDouble()
 }
@@ -164,4 +154,34 @@ public object JsonNull : JsonValue {
     override fun toKotlin(): Nothing? = null
 
     override fun toString(): String = "null"
+}
+
+/**
+ * The whole number a JSON number is when it has one that fits a `Long`, whatever way it is written:
+ * `1e3` is 1000 and `1.0` is 1; `1.5` and `1e30` have none.
+ */
+private fun exactLongOrNull(text: String): Long? {
+    val negative = text.startsWith('-')
+    val unsigned = if (negative) text.substring(1) else text
+    val e = unsigned.indexOfFirst { it == 'e' || it == 'E' }
+    val mantissa = if (e < 0) unsigned else unsigned.substring(0, e)
+    // As BigDecimal reads it: no exponent of more than ten digits and no scale past an Int, whatever the number.
+    val written = if (e < 0) "" else unsigned.substring(e + 1)
+    if (written.trimStart('+', '-').trimStart('0').length > 10) return null
+    val exponent = if (e < 0) 0 else written.toLong()
+    val whole = mantissa.substringBefore('.')
+    val fraction = mantissa.substringAfter('.', "")
+    val digits = (whole + fraction).trimStart('0')
+    // The digits are the number times ten to the power of [scale].
+    val scale = fraction.length.toLong() - exponent
+    if (scale < Int.MIN_VALUE || scale > Int.MAX_VALUE) return null
+    if (digits.isEmpty()) return 0
+    val wholeDigits =
+        when {
+            scale <= 0 -> if (digits.length - scale > 19) return null else digits + "0".repeat((-scale).toInt())
+            scale >= digits.length -> return null
+            digits.takeLast(scale.toInt()).any { it != '0' } -> return null
+            else -> digits.dropLast(scale.toInt())
+        }
+    return ((if (negative) "-" else "") + wholeDigits).toLongOrNull()
 }

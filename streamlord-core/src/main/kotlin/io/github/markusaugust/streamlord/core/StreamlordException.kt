@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core
 
+import kotlin.jvm.JvmOverloads
+
 /**
  * The root of every curse Streamlord may lay upon you.
  *
@@ -86,13 +88,17 @@ public class SignalsTooLargeException(
 ) : StreamlordException("Incoming signals are $actualSize in size; the limit is $maxSize")
 
 /**
- * Raised by the built-in JSON parser when the text is not valid JSON. [position] is the
- * zero-based character offset at which the parser lost faith.
+ * Raised by the built-in JSON parser when the text is not valid JSON, or is JSON past one of its
+ * limits, a nesting depth or a number's length, which [limit] says. [position] is the zero-based
+ * character offset at which the parser lost faith.
  */
-public class JsonParseException(
-    message: String,
-    public val position: Int,
-) : StreamlordException("$message (at position $position)")
+public class JsonParseException
+    @JvmOverloads
+    constructor(
+        message: String,
+        public val position: Int,
+        public val limit: Boolean = false,
+    ) : StreamlordException("$message (at position $position)")
 
 /**
  * Raised inside a stream when a [io.github.markusaugust.streamlord.core.application.StreamAuthorisation]

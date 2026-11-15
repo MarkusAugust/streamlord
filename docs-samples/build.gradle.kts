@@ -54,7 +54,7 @@ dependencies {
  * catches a renamed function or a changed parameter on a page that still shows the old call.
  *
  * The marker is mandatory. A block without `sample=` fails the build rather than being
- * skipped quietly, because a net with holes you cannot see is worse than no net at all.
+ * skipped quietly, because a net with gaps you cannot see is worse than no net at all.
  */
 abstract class ExtractDocSamples : DefaultTask() {
     @get:InputDirectory

@@ -1,93 +1,81 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class CompletionContextsTest {
-    @Test
-    fun `which attribute value a caret stands in`() {
-        for (case in sharedCases("completion-contexts.json")) {
+    private val analyzer = Analyzer()
+    private val workspace = Workspace(listOf("count"), emptyList(), emptyList(), called = "workspace")
+
+    /** The source a case describes and its caret: an HTML string in Kotlin where it reads markup without templates. */
+    private fun asked(
+        case: JsonObject,
+        before: String = case.string("before")!!,
+        after: String = case.string("after") ?: "",
+    ): Pair<Source, Int> {
+        val prefix = case.string("prefix") ?: "data-"
+        if (case.boolean("templates") == false) {
+            val head = "val p = \"\"\""
+            return Source(head + before + after + "\"\"\"", SourceLanguage.KOTLIN, prefix) to head.length + before.length
+        }
+        val language = if (case.boolean("kotlin") == true) SourceLanguage.KOTLIN else SourceLanguage.HTML
+        return Source(before + after, language, prefix) to before.length
+    }
+
+    /** What completion offers at the caret of [case], and the signature help there where the case says. */
+    private fun offered(
+        file: String,
+        ask: (JsonObject) -> Pair<Source, Int> = { asked(it) },
+    ) {
+        for (case in sharedCases(file)) {
             val name = case.string("name")
-            val before = case.string("before")!!
-            val markup = before + case.string("after")!!
-            val prefix = case.string("prefix") ?: "data-"
-            val at = valueAtCaret(markup, before.length, prefix, case.boolean("templates") ?: true)
-            assertEquals(case.string("attribute"), at?.attribute, name)
-            if (at != null) assertEquals(case.string("value"), at.before, name)
+            val (source, at) = ask(case)
+            val found = analyzer.complete(source, at, workspace)
+            assertEquals(case.array("labels")!!.strings(), found.items.map { it.label }, name)
+            assertEquals(case.boolean("alone"), found.alone, name)
+            if (!case.containsKey("signature")) continue
+            val help = analyzer.signatureHelp(source, at)
+            val expected = case.obj("signature")
+            assertEquals(expected?.string("label") to expected?.int("active"), help?.label to help?.active, name)
         }
     }
 
     @Test
-    fun `which attribute name a caret stands on`() {
-        val cases = sharedCases("completion-contexts.json").filter { it.containsKey("nameAt") }
-        assertTrue(cases.isNotEmpty())
-        for (case in cases) {
-            val before = case.string("before")!!
-            val name =
-                nameAtCaret(
-                    before + case.string("after")!!,
-                    before.length,
-                    case.string("prefix") ?: "data-",
-                    case.boolean("templates") ?: true,
-                )
-            val expected = case.obj("nameAt")
-            assertEquals(expected?.let { it.string("tag") to it.string("typed") }, name?.let { it.tag to it.typed }, before)
+    fun `what a caret in markup stands in, a value, a name or neither`() = offered("completion-contexts.json")
+
+    @Test
+    fun `which Datastar expression a caret stands in`() = offered("expressions-at-caret.json")
+
+    @Test
+    fun `which action call a caret stands in`() =
+        offered("action-calls.json") { asked(it, "<div data-on:click=\"" + it.string("before")!!, "\"></div>") }
+
+    // An attribute only the html element takes is offered in its tag, which escaped quotes and a > in a value do not hide.
+    @Test
+    fun `the tag of a name in a Kotlin string is read from its opening bracket`() {
+        fun names(tag: String): List<String> {
+            val src = "val x = \"<$tag data-show=\\\"\\\$a > 1\\\" data-\""
+            val offset = src.lastIndexOf("data-") + "data-".length
+            return analyzer.complete(Source(src, SourceLanguage.KOTLIN), offset, workspace).items.map { it.label }
         }
+        assertTrue("data-nonce" in names("html"), names("html").toString())
+        assertTrue("data-nonce" !in names("div"), names("div").toString())
     }
 
     @Test
     fun `the name in a Kotlin string is read decoded, in its tag from its opening bracket`() {
-        // The caret just after `data-on:click__` in the string of the source.
-        fun at(src: String): Pair<String, String>? {
+        // The caret just after `data-on:click__` in the string of the source: its modifiers are offered.
+        fun at(src: String): List<String> {
             val offset = src.indexOf("data-on:click__") + "data-on:click__".length
-            return nameAtCaret(lexKotlin(src).stringAt(offset)!!, offset, "data-")?.let { it.tag to it.typed }
+            return analyzer.complete(Source(src, SourceLanguage.KOTLIN), offset, workspace).items.map { it.label }
         }
-        assertEquals(
-            "div" to "data-on:click__",
-            at("val x = \"<div data-show=\\\"\\\$a > 1\\\" data-on:click__\""),
-            "escaped quotes around a value holding >",
-        )
-        assertEquals(
-            "div" to "data-on:click__",
-            at("fun side() = \"\"\"\n<div class=\"card\"\n     data-on:click__\n\"\"\""),
-            "a raw string over two lines",
-        )
-    }
-
-    @Test
-    fun `which Datastar expression a caret stands in`() {
-        val analyzer = Analyzer()
-        for (case in sharedCases("expressions-at-caret.json")) {
-            val name = case.string("name")
-            val before = case.string("before")!!
-            val at =
-                analyzer.expressionAtCaret(
-                    before + case.string("after")!!,
-                    before.length,
-                    case.boolean("kotlin")!!,
-                    case.string("prefix") ?: "data-",
-                )
-            val expected = case.obj("expression")
-            assertEquals(expected?.string("before"), at?.before, name)
-            if (expected == null) continue
-            assertEquals(expected.boolean("allowActions"), at?.allowActions, name)
-            assertEquals(expected.boolean("patchInScope"), at?.patchInScope, name)
-        }
-    }
-
-    @Test
-    fun `which action call a caret stands in`() {
-        for (case in sharedCases("action-calls.json")) {
-            val name = case.string("name")
-            val before = case.string("before")!!
-            val call = actionCallAt(before, before.length)
-            assertEquals(case.string("action"), call?.action, name)
-            if (call == null) continue
-            assertEquals(case.int("argument"), call.argument, name)
-            val option = case.obj("option")
-            assertEquals(option?.string("typed"), call.option?.typed, name)
-            assertEquals(option?.array("written")?.strings(), call.option?.written, name)
+        for (src in listOf(
+            "val x = \"<div data-show=\\\"\\\$a > 1\\\" data-on:click__\"",
+            "fun side() = \"\"\"\n<div class=\"card\"\n     data-on:click__\n\"\"\"",
+        )) {
+            assertTrue("debounce" in at(src), src)
         }
     }
 

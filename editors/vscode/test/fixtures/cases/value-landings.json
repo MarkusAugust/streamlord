@@ -1,5 +1,5 @@
 {
- "$comment": "Where a hole lands, by holeLandings in streamlord-core Interpolation.kt, which interpolate calls. Each %s in markup is a hole; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, those two again with no HTML element opened from the svg or math left open, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. HoleLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. known, where a case has it, gives the text of holes by index whose content is known markup, as a Trusted value is: the markup is read with that text in place of the hole, the hole itself is not judged and lands as TEXT, and HoleLandingsTest passes it to interpolate as Trusted. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
+ "$comment": "Where a placeholder lands, by valueLandings in streamlord-core Interpolation.kt, which interpolate calls. Each %s in markup is a placeholder; position is the strictest of the readings (HTML, svg or math, svg or math with CDATA as text, and the ones that follow the element stack from HTML, from inside an svg and from inside a math, those two again with no HTML element opened from the svg or math left open, each with scripting off and, where a noscript stands, on), attribute the quoted attribute it landed in, or null, and loadsCode, false where it is left out, whether that attribute loads what the browser runs, so that its host must be fixed (urlHostFixedBy) rather than its scheme. ValueLandingsTest also holds every case to interpolate itself: a String is refused where the position refuses one, a Number where it refuses that, and anything but Trusted in a loadsCode attribute whose literal start does not fix the host. known, where a case has it, gives the text of placeholders by index whose content is known markup, as a Trusted value is: the markup is read with that text in place of the placeholder, the placeholder itself is not judged and lands as TEXT, and ValueLandingsTest passes it to interpolate as Trusted. urls: whether the literal start of a URL attribute's value, prefix, already settles the scheme (urlSchemeFixedBy).",
  "cases": [
   {
    "name": "a style, an annotation-xml that holds HTML and a math end tag before it: code, the strictest reading",
@@ -356,7 +356,7 @@
    ]
   },
   {
-   "name": "two holes, two places",
+   "name": "two placeholders, two places",
    "markup": "<a href=\"/x/%s\" title=\"%s\">%s</a>",
    "landings": [
     {
@@ -374,7 +374,7 @@
    ]
   },
   {
-   "name": "a hole after a quoted attribute in the same tag",
+   "name": "a placeholder after a quoted attribute in the same tag",
    "markup": "<p class=\"a\" %s>x</p>",
    "landings": [
     {
@@ -384,7 +384,7 @@
    ]
   },
   {
-   "name": "a hole that is part of an attribute name",
+   "name": "a placeholder that is part of an attribute name",
    "markup": "<p data-%s=\"x\">y</p>",
    "landings": [
     {
@@ -514,7 +514,7 @@
    ]
   },
   {
-   "name": "a hole inside the double-escaped part is code",
+   "name": "a placeholder inside the double-escaped part is code",
    "markup": "<script><!--<script>%s</script>x</script>",
    "landings": [
     {

@@ -14,6 +14,12 @@ import kotlin.test.assertTrue
  * described in each file.
  */
 class CorpusTest {
+    /** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
+    private fun unknown(
+        refs: List<SignalReference>,
+        defined: Set<String>,
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
+
     private val analyzer = Analyzer()
     private val files = fixtureNames("editors/vscode/test/fixtures/corpus").filter { it.endsWith(".json") }
 
@@ -57,13 +63,13 @@ class CorpusTest {
             // The signals the source reads that it does not itself declare.
             "references" -> {
                 val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
-                analyzer.signalReferences(read(SourceLanguage.HTML)).mapNotNull { unknownSignalIssue(it, defined) }
+                unknown(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
             }
 
             // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
             "kotlin-references" -> {
                 val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
-                analyzer.signalReferences(read(SourceLanguage.KOTLIN)).mapNotNull { unknownSignalIssue(it, defined) }
+                unknown(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
             }
 
             else -> {
@@ -82,7 +88,7 @@ class CorpusTest {
         shift: Int = 0,
         depth: Int = 0,
     ): List<Int> {
-        val lex = lexKotlin(text)
+        val lex = analyzer.lex(text)
         val out = findCallSites(text, names, lex).mapTo(ArrayList()) { it.nameStart + shift }
         if (depth >= 4) return out
         for (s in lex.strings) {
@@ -118,7 +124,7 @@ class CorpusTest {
             for (case in corpus.array("cases")!!.objects()) {
                 for (issue in run("kotlin", case)) {
                     val advises = "build the string with interpolate(...)" in issue.message
-                    val offered = issue.fixes.any { it.title.startsWith(REWRITE_TITLE) }
+                    val offered = issue.fixes.any { it.title.startsWith("Build this string with interpolate(...)") }
                     val why =
                         "interpolate(...) is not offered here" in issue.message ||
                             "interpolate(...) cannot take this string" in issue.message

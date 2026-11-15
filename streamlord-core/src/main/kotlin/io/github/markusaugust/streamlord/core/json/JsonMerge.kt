@@ -253,7 +253,7 @@ private class ClientMerge(
         items[index.toInt()] = value
     }
 
-    // `delete` leaves a hole, read as ""; deleting an array's length is a TypeError in the client's strict-mode code.
+    // `delete` leaves an empty slot, read as ""; deleting an array's length is a TypeError in the client's strict-mode code.
     private fun delete(
         parent: Any,
         key: String,

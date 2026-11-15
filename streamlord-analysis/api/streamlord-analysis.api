@@ -7,8 +7,6 @@ public final class io/github/markusaugust/streamlord/analysis/Analyzer {
 	public final fun analyzeKotlin (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
 	public final fun analyzeKotlin (Ljava/lang/String;)Ljava/util/List;
 	public final fun analyzeKotlinSites (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
-	public final fun analyzeProject (Ljava/io/File;Ljava/lang/String;)Ljava/util/List;
-	public static synthetic fun analyzeProject$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
 	public final fun attributesIndexes (Ljava/lang/String;)Ljava/util/List;
 	public final fun expressionOptions (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/KotlinLex;)Ljava/util/List;
 	public static synthetic fun expressionOptions$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/KotlinLex;ILjava/lang/Object;)Ljava/util/List;
@@ -399,11 +397,6 @@ public final class io/github/markusaugust/streamlord/analysis/InterpolationKind 
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/InterpolationKind;
 }
 
-public final class io/github/markusaugust/streamlord/analysis/InterpolationsKt {
-	public static final fun declaredNames (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/DeclaredNames;
-	public static final fun projectConstants (Ljava/lang/Iterable;)Ljava/util/Set;
-}
-
 public final class io/github/markusaugust/streamlord/analysis/Issue {
 	public fun <init> (IILjava/lang/String;Lio/github/markusaugust/streamlord/analysis/Severity;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
 	public synthetic fun <init> (IILjava/lang/String;Lio/github/markusaugust/streamlord/analysis/Severity;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -429,10 +422,6 @@ public final class io/github/markusaugust/streamlord/analysis/Issue {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/markusaugust/streamlord/analysis/IssueKt {
-	public static final fun failures (Ljava/util/List;)Ljava/util/List;
-}
-
 public final class io/github/markusaugust/streamlord/analysis/KeyCase : java/lang/Enum {
 	public static final field CAMEL Lio/github/markusaugust/streamlord/analysis/KeyCase;
 	public static final field KEBAB Lio/github/markusaugust/streamlord/analysis/KeyCase;
@@ -440,6 +429,11 @@ public final class io/github/markusaugust/streamlord/analysis/KeyCase : java/lan
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/KeyCase;
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/KeyCase;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/KotlinDeclarationsKt {
+	public static final fun declaredNames (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/DeclaredNames;
+	public static final fun projectConstants (Ljava/lang/Iterable;)Ljava/util/Set;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/KotlinLex {
@@ -653,10 +647,21 @@ public final class io/github/markusaugust/streamlord/analysis/ParsedModifier {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/analysis/PatchedStore {
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getStore ()Lio/github/markusaugust/streamlord/core/json/JsonObject;
+}
+
 public final class io/github/markusaugust/streamlord/analysis/Place {
 	public final fun getChoices ()Ljava/util/List;
 	public final fun getEnd ()I
 	public final fun getStart ()I
+}
+
+public final class io/github/markusaugust/streamlord/analysis/PlatformJvmKt {
+	public static final fun analyzeProject (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun analyzeProject$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public static final fun failures (Ljava/util/List;)Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {
@@ -685,6 +690,12 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectIssue {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/markusaugust/streamlord/analysis/ProjectSignals {
+	public abstract fun defined ()Ljava/util/Set;
+	public abstract fun others ()Ljava/lang/Iterable;
+	public abstract fun own ()Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+}
+
 public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public static final field ENV_FILE Ljava/lang/String;
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/Requests;
@@ -703,6 +714,7 @@ public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public final fun parseHeaderLines (Ljava/lang/String;)Ljava/util/Map;
 	public final fun parseRequestsFile (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/RequestsFile;
 	public static synthetic fun parseRequestsFile$default (Lio/github/markusaugust/streamlord/analysis/Requests;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/RequestsFile;
+	public final fun patchedStore (Lio/github/markusaugust/streamlord/core/json/JsonObject;Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/PatchedStore;
 	public final fun previewUrl (Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
 	public final fun pushRecent (Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/SavedRequest;)Ljava/util/List;
 	public final fun readsAsStream (ILjava/lang/String;)Z
@@ -1028,6 +1040,7 @@ public final class io/github/markusaugust/streamlord/analysis/SignalDeclaration$
 
 public final class io/github/markusaugust/streamlord/analysis/SignalDriftKt {
 	public static final fun collectSignalFacts (Lio/github/markusaugust/streamlord/analysis/Source;)Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+	public static final fun projectSignalIssues (Lio/github/markusaugust/streamlord/analysis/SourceLanguage;Ljava/util/List;Lio/github/markusaugust/streamlord/analysis/ProjectSignals;)Ljava/util/List;
 	public static final fun signalDrift (Ljava/util/Map;)Lio/github/markusaugust/streamlord/analysis/SignalDriftReport;
 }
 
@@ -1073,6 +1086,11 @@ public final class io/github/markusaugust/streamlord/analysis/SignalFacts {
 	public final fun getSignalTypes ()Ljava/util/Set;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/SignalNameString {
+	public final fun getCall ()Lio/github/markusaugust/streamlord/analysis/CallSite;
+	public final fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/SignalProperty {
@@ -1123,10 +1141,6 @@ public final class io/github/markusaugust/streamlord/analysis/SignalReference {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/markusaugust/streamlord/analysis/SignalReferencesKt {
-	public static final fun unknownSignalIssue (Lio/github/markusaugust/streamlord/analysis/SignalReference;Ljava/util/Set;)Lio/github/markusaugust/streamlord/analysis/Issue;
-}
-
 public final class io/github/markusaugust/streamlord/analysis/SignalSite {
 	public fun <init> (IILjava/lang/String;Lio/github/markusaugust/streamlord/analysis/SignalDeclaration;)V
 	public synthetic fun <init> (IILjava/lang/String;Lio/github/markusaugust/streamlord/analysis/SignalDeclaration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -1158,6 +1172,7 @@ public final class io/github/markusaugust/streamlord/analysis/SignalsKt {
 	public static final fun collectSignalDefinitions (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/Set;
 	public static final fun collectSignals (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/Set;
 	public static final fun signalDeclarations (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
+	public static final fun signalNameStrings (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
 	public static final fun signalReadRenameText (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
 	public static final fun signalRenameText (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SignalDeclaration;Ljava/lang/String;)Ljava/lang/String;
 }

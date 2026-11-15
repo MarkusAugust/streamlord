@@ -16,13 +16,13 @@ class DeclaredTypeTest : StreamlordTestCase() {
         myFixture.enableInspections(KotlinInterpolationInspection())
     }
 
-    /** Whether the inspection asks for `interpolate` around the value `hole` in [text]. */
+    /** Whether the inspection asks for `interpolate` around the value `placeholder` in [text]. */
     private fun hinted(
         text: String,
-        hole: String,
+        placeholder: String,
     ): Boolean {
         myFixture.configureByText("Page.kt", text)
-        return myFixture.doHighlighting().any { it.text == hole && it.inspectionToolId == "KotlinInterpolationInspection" }
+        return myFixture.doHighlighting().any { it.text == placeholder && it.inspectionToolId == "KotlinInterpolationInspection" }
     }
 
     fun `test Streamlord's Html is markup`() {

@@ -15,6 +15,8 @@ import io.github.markusaugust.streamlord.analysis.ExpressionOption
 import io.github.markusaugust.streamlord.analysis.KotlinString
 import io.github.markusaugust.streamlord.analysis.NameToken
 import io.github.markusaugust.streamlord.analysis.PLACEHOLDER
+import io.github.markusaugust.streamlord.analysis.SignalNameString
+import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.Token
@@ -22,6 +24,7 @@ import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.analysis.htmlStringAt
 import io.github.markusaugust.streamlord.analysis.readsDsl
+import io.github.markusaugust.streamlord.analysis.signalNameStrings
 import io.github.markusaugust.streamlord.analysis.templatePlaceholders
 import io.github.markusaugust.streamlord.analysis.tokenize
 import io.github.markusaugust.streamlord.analysis.tokenizeAttributeName
@@ -102,18 +105,10 @@ class KotlinDatastarAnnotator : Annotator {
         }
         // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
         if (!analysis.analyzer.readsDsl(source)) return
-        val named =
-            findCallSites(src, SIGNAL_NAME_CALLS, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen }
-        if (named != null && named.positional
-                .firstOrNull()
-                ?.string
-                ?.start == s.start
-        ) {
-            val pair = named.name in PAIR_CALLS
-            if ((!pair || named.positional.getOrNull(1)?.string != null) && analysis.foreignAmong(file, listOf(named)).isEmpty()) {
-                if (PLACEHOLDER !in s.text) paintDecoded(holder, s, 0, tokenizeSignalName(s.text))
-                return
-            }
+        val named = signalNameStrings(file, analysis, source).firstOrNull { it.string.start == s.start }
+        if (named != null && analysis.foreignAmong(file, listOf(named.call)).isEmpty()) {
+            if (PLACEHOLDER !in s.text) paintDecoded(holder, s, 0, tokenizeSignalName(s.text))
+            return
         }
         // An option of a backend action's FetchOptions that takes an expression: payloadExpr = "...".
         if (expressionOptions(file, analysis).any { it.value.start == s.start }) {
@@ -131,6 +126,16 @@ class KotlinDatastarAnnotator : Annotator {
         if (site.expressionStrings(spec).none { it.start == s.start } || analysis.foreignAmong(file, listOf(site)).isNotEmpty()) return
         paintExpression(holder, src, s, 0, s.text.length)
     }
+
+    /** The strings of [file] a DSL call names a signal with, found once for each version of it. */
+    private fun signalNameStrings(
+        file: KtFile,
+        analysis: StreamlordAnalysis,
+        source: Source,
+    ): List<SignalNameString> =
+        CachedValuesManager.getCachedValue(file) {
+            CachedValueProvider.Result.create(analysis.analyzer.signalNameStrings(source), file)
+        }
 
     /** The options of [file] set to an expression, found once for each version of it. */
     private fun expressionOptions(
@@ -257,10 +262,6 @@ class TemplateTextAnnotator : Annotator {
         }
     }
 }
-
-/** The DSL's calls whose first argument names a signal: alone, or as the key of a pair with an expression. */
-private val SIGNAL_NAME_CALLS = setOf("dataBind", "dataRef", "dataIndicator", "dataSignals", "dataComputed")
-private val PAIR_CALLS = setOf("dataSignals", "dataComputed")
 
 /**
  * The spec and the coloured parts of [name] when it is one of the catalog's attributes, under the

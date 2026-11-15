@@ -44,11 +44,11 @@ import org.jetbrains.kotlin.psi.KtWhenExpression
 
 /**
  * What the Kotlin plugin knows of each value joined into an HTML string, for the analysis to
- * judge the hole by: a constant, markup, a number or a boolean, or a string, by the types the
- * Analysis API gives. The analysis takes these over what the text shows, so markup is only a hole
+ * judge the placeholder by: a constant, markup, a number or a boolean, or a string, by the types the
+ * Analysis API gives. The analysis takes these over what the text shows, so markup is only a placeholder
  * whose whole value is markup. Plain values out, so nothing of an analysis session outlives the call.
  */
-object HoleFacts {
+object ValueFacts {
     private val HTML_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Html")
     private val TRUSTED_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Trusted")
     private val NUMBER_CLASS = ClassId.fromString("kotlin/Number")
@@ -89,14 +89,14 @@ object HoleFacts {
     /** How many calls deep a function's body is read for the markup it returns. */
     private const val CALL_DEPTH = 3
 
-    /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its hole. */
+    /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its placeholder. */
     fun of(file: KtFile): Map<TextRange, ValueFact> {
-        val holes = holes(file)
+        val placeholders = placeholders(file)
         val arguments = interpolateArguments(file)
-        if (holes.isEmpty() && arguments.isEmpty()) return emptyMap()
+        if (placeholders.isEmpty() && arguments.isEmpty()) return emptyMap()
         return analyze(file) {
             judge(
-                holes,
+                placeholders,
                 { it.evaluate() != null || enumEntry(it) },
                 { typeFact(it.expressionType) },
                 { markupElements(it.expressionType) },
@@ -129,11 +129,11 @@ object HoleFacts {
     }
 
     /**
-     * Each hole by what [constant] and [typed] say of it, and what its source shows: a constant, a
+     * Each placeholder by what [constant] and [typed] say of it, and what its source shows: a constant, a
      * call to a helper with the author's own arguments, markup, a literal only, or its type.
      */
     private fun judge(
-        holes: List<Pair<TextRange, KtExpression>>,
+        placeholders: List<Pair<TextRange, KtExpression>>,
         constant: (KtExpression) -> Boolean,
         typed: (KtExpression) -> ValueFact?,
         markupElements: (KtExpression) -> Boolean,
@@ -141,7 +141,7 @@ object HoleFacts {
     ): Map<TextRange, ValueFact> {
         val facts = HashMap<TextRange, ValueFact>()
         val markup = Markup(markupElements, markupType)
-        for ((range, expr) in holes) {
+        for ((range, expr) in placeholders) {
             if (constant(expr)) {
                 facts[range] = ValueFact.CONSTANT
                 continue
@@ -223,7 +223,7 @@ object HoleFacts {
      * `$x` and `${...}` by the entry's range, and each operand of `+` that is not a literal by its
      * own, in the strings that may be HTML: a literal with a `<`, or one handed straight to a call.
      */
-    private fun holes(file: KtFile): List<Pair<TextRange, KtExpression>> {
+    private fun placeholders(file: KtFile): List<Pair<TextRange, KtExpression>> {
         val out = ArrayList<Pair<TextRange, KtExpression>>()
         val chained = HashSet<KtStringTemplateExpression>()
         for (plus in PsiTreeUtil.collectElementsOfType(file, KtBinaryExpression::class.java)) {
@@ -432,7 +432,7 @@ object HoleFacts {
 
                 is KtBinaryExpression -> {
                     when (e.operationToken) {
-                        // `"<p>" + body + "</p>"`: markup with literals around it; a literal's own holes are judged apart.
+                        // `"<p>" + body + "</p>"`: markup with literals around it; a literal's own placeholders are judged apart.
                         KtTokens.PLUS -> {
                             val parts = ArrayList<KtExpression>().also { flatten(e, it) }
                             val markup = parts.map { isMarkup(it, depth) }

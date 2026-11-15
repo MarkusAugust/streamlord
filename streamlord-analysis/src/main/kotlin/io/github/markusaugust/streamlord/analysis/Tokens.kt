@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonParser
 
 /*
  * Syntax highlighting of a Datastar expression and of a `data-*` attribute name. Every token gets
@@ -87,77 +89,19 @@ private val OPTION_KEYS =
         .toSet() +
         setOf("include", "exclude")
 
-// The VS Code grammar's keywords and constants; grammar.test.ts holds the two to this list.
+/** catalog/javascript-words.json, which the VS Code grammar's keywords, constants and globals are written from. */
+private val JS_WORDS = JsonParser.parseObject(CatalogText.JAVASCRIPT_WORDS)
+private val JS_CONSTANTS = JS_WORDS.array("constants")!!.strings().toSet()
 private val JS_KEYWORDS =
-    setOf(
-        "if",
-        "else",
-        "return",
-        "await",
-        "async",
-        "new",
-        "typeof",
-        "instanceof",
-        "in",
-        "of",
-        "for",
-        "while",
-        "do",
-        "switch",
-        "case",
-        "break",
-        "continue",
-        "throw",
-        "try",
-        "catch",
-        "finally",
-        "void",
-        "delete",
-        "function",
-        "let",
-        "const",
-        "var",
-        "this",
-        "yield",
-        "class",
-        "true",
-        "false",
-        "null",
-        "undefined",
-        "NaN",
-        "Infinity",
-    )
-
-// The VS Code grammar's globals; grammar.test.ts holds the two to this list.
-private val JS_GLOBALS =
-    setOf(
-        "window",
-        "document",
-        "console",
-        "Math",
-        "JSON",
-        "Date",
-        "Intl",
-        "navigator",
-        "location",
-        "history",
-        "localStorage",
-        "sessionStorage",
-        "fetch",
-        "setTimeout",
-        "setInterval",
-        "clearTimeout",
-        "clearInterval",
-        "Promise",
-        "Array",
-        "Object",
-        "String",
-        "Number",
-        "Boolean",
-    )
+    JS_WORDS
+        .obj("keywords")!!
+        .values
+        .flatMap { (it as JsonArray).strings() }
+        .toSet() + JS_CONSTANTS
+private val JS_GLOBALS = JS_WORDS.array("globals")!!.strings().toSet()
 
 /** The words after which a value follows, as after a name: a slash then divides. */
-private val VALUE_WORDS = setOf("this", "true", "false", "null", "undefined", "NaN", "Infinity")
+private val VALUE_WORDS = JS_CONSTANTS + "this"
 
 /** JavaScript's operators, the longest first so that each is read whole. */
 private val OPERATORS =
