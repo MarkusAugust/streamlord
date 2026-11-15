@@ -311,6 +311,20 @@
     {"name":"data-on:click: @get(/,/, ‸","attribute":"data-on:click","caret":"@get(/,/, ‸","labels":[],"signature":{"label":"@get(uri, options?)","active":1}},
     {"name":"data-on:click: @fit(1, 2, ‸","attribute":"data-on:click","caret":"@fit(1, 2, ‸","labels":[],"signature":{"label":"@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp?, shouldRound?)","active":2}},
     {"name":"data-on:click: @fit(1, (2, 3), ‸","attribute":"data-on:click","caret":"@fit(1, (2, 3), ‸","labels":[],"signature":{"label":"@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp?, shouldRound?)","active":2}},
-    {"name":"data-on:click: @get('/x', {‸, retry: 1, retry: 2","attribute":"data-on:click","caret":"@get('/x', {‸, retry: 1, retry: 2","labels":["contentType","filterSignals","headers","openWhenHidden","payload","requestCancellation","retry","retryInterval","retryMaxCount","retryMaxWait","retryScaler","selector"],"signature":{"label":"@get(uri, options?)","active":1}}
+    {"name":"data-on:click: @get('/x', {‸, retry: 1, retry: 2","attribute":"data-on:click","caret":"@get('/x', {‸, retry: 1, retry: 2","labels":["contentType","filterSignals","headers","openWhenHidden","payload","requestCancellation","retry","retryInterval","retryMaxCount","retryMaxWait","retryScaler","selector"],"signature":{"label":"@get(uri, options?)","active":1}},
+    {"name":"data-on:datastar-fetch: switch (evt.detail.type) { case 'nope' /*c*/ : 1 }","attribute":"data-on:datastar-fetch","value":"switch (evt.detail.type) { case 'nope' /*c*/ : 1 }","issues":["fetch-event-type 61-67"]},
+    {"name":"data-on:datastar-fetch: switch (evt.detail.type) { case 'nope' // c\n: 1 }","attribute":"data-on:datastar-fetch","value":"switch (evt.detail.type) { case 'nope' // c\n: 1 }","issues":["fetch-event-type 61-67"]},
+    {"name":"data-on:datastar-fetch: switch (evt.detail.type) { case 'nope'/**/: 1 }","attribute":"data-on:datastar-fetch","value":"switch (evt.detail.type) { case 'nope'/**/: 1 }","issues":["fetch-event-type 61-67"]},
+    {"name":"data-on:datastar-fetch: 'x' + 'nope' === evt.detail.type","attribute":"data-on:datastar-fetch","value":"'x' + 'nope' === evt.detail.type","issues":[]},
+    {"name":"data-on:datastar-fetch: evt.detail.type === 'nope' + 'x'","attribute":"data-on:datastar-fetch","value":"evt.detail.type === 'nope' + 'x'","issues":[]},
+    {"name":"data-on:click: @get(function(){}.bind(null))","attribute":"data-on:click","value":"@get(function(){}.bind(null))","issues":["action-argument 25-48"]},
+    {"name":"data-on:click: @get(function(){} + '')","attribute":"data-on:click","value":"@get(function(){} + '')","issues":[]},
+    {"name":"data-on:click: @get(function(){ return '/x' }.call())","attribute":"data-on:click","value":"@get(function(){ return '/x' }.call())","issues":[]},
+    {"name":"data-on:click: @get(function(){}())","attribute":"data-on:click","value":"@get(function(){}())","issues":[]},
+    {"name":"data-on:click: @get('/x', {headers: function(){ return {} }()})","attribute":"data-on:click","value":"@get('/x', {headers: function(){ return {} }()})","issues":[]},
+    {"name":"data-on:click: @get('/x', {retry: function(){ return 'auto' }()})","attribute":"data-on:click","value":"@get('/x', {retry: function(){ return 'auto' }()})","issues":[]},
+    {"name":"data-computed: 1 /*c*/","attribute":"data-computed","value":"1 /*c*/","issues":["computed-value 20-27"]},
+    {"name":"data-computed: /*c*/ 1 /*d*/","attribute":"data-computed","value":"/*c*/ 1 /*d*/","issues":["computed-value 20-33"]},
+    {"name":"dataOnClick(postExpr(\"`${'$'}{`x}`, b}`\"))","kotlin":"dataOnClick(postExpr(\"`${'$'}{`x}`, b}`\"))","issues":[]}
   ]
 }

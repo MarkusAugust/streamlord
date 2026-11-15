@@ -24,6 +24,7 @@ internal enum class Written(
     ARRAY("an array"),
     REGEX("a regular expression"),
     FUNCTION("a function"),
+    THROWS("a BigInt under a unary plus, which throws a TypeError before the action is called"),
     EXPRESSION(""),
 }
 
@@ -37,6 +38,8 @@ internal class Value(
 
 /** The longest number literal read. */
 private const val SHORT = 40
+
+private val BOUND = regex("""\s*\.\s*bind\s*\(""")
 
 private val NUMBER_LITERAL =
     regex("""(?:\+(?!\+)|-(?!-))*(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
@@ -68,6 +71,7 @@ private val TAKEN =
         Written.OBJECT to setOf(ArgumentKind.OBJECT, ArgumentKind.OPTIONS, ArgumentKind.FILTER),
         Written.REGEX to setOf(ArgumentKind.PATTERN),
         Written.FUNCTION to setOf(ArgumentKind.FUNCTION),
+        Written.THROWS to emptySet(),
     )
 
 /**
@@ -119,11 +123,21 @@ internal class Brackets(
             templates[i + 1] = seen
         }
         val open = ArrayList<Int>()
+        var skip = -1
         for (i in js.indices) {
+            // A template literal and the code of its `${ }` are brackets too, so that a `}` in the text of one nested
+            // inside closes nothing.
             if (regions[i] == Region.TEMPLATE) {
-                // The code of a template's `${ }` is bracketed by that `{` and `}`, which are the template's.
-                if (js[i] == '{' && js.getOrNull(i - 1) == '$' && js.getOrNull(i - 2) != '\\') open += i
-                if (js[i] == '}' && open.lastOrNull()?.let { regions[it] } == Region.TEMPLATE) close[open.removeAt(open.size - 1)] = i
+                val inText = open.lastOrNull()?.let { js[it] == '`' } == true
+                if (i == skip) continue
+                if (inText && js[i] == '\\') skip = i + 1
+                if (inText && js.startsWith("\${", i)) skip = (i + 1).also { open += it }
+                if (js[i] == '`' && inText) {
+                    open.removeAt(open.size - 1)
+                } else if (js[i] == '`') {
+                    open += i
+                }
+                if (!inText && js[i] == '}' && open.isNotEmpty()) close[open.removeAt(open.size - 1)] = i
             }
             if (regions[i] != Region.CODE) continue
             when (js[i]) {
@@ -180,7 +194,7 @@ internal class Brackets(
 
                 regions[s] == Region.REGEX && all(Region.REGEX) -> Written.REGEX
 
-                NUMBER_LITERAL.matchEntire(short) != null -> Written.NUMBER
+                NUMBER_LITERAL.matchEntire(short) != null -> if ('+' in short && short.endsWith('n')) Written.THROWS else Written.NUMBER
 
                 short == "true" || short == "false" -> Written.BOOLEAN
 
@@ -202,7 +216,7 @@ internal class Brackets(
         return Value(s, e, written, content)
     }
 
-    /** `function ...` ending at its body, maybe after `async`, or an arrow: a name or a parenthesised list, maybe after `async`, then `=>`. */
+    /** `function ...` ending at its body or `.bind(...)`, or an arrow: a name or a parenthesised list, then `=>`; either maybe after `async`. */
     private fun isFunction(
         s: Int,
         e: Int,
@@ -218,7 +232,10 @@ internal class Brackets(
             at += 5
             space()
         }
-        if (word("function")) return js[e - 1] == '}'
+        if (word("function")) {
+            val body = js.indexOf('{', at).takeIf { it in at until e && close[it] in at until e } ?: return false
+            return close[body] == e - 1 || BOUND.matchAt(js, close[body] + 1)?.let { close[it.range.last] == e - 1 } == true
+        }
         if (at < e && js[at] == '(') {
             val c = close[at]
             if (c !in at until e) return false
@@ -313,8 +330,8 @@ private class Judge(
                     ", so $otherwise"
                 }
 
-                // A Pro action's code is not read here, so what it does with the value is not said.
-                !known -> {
+                // A Pro action's code is not read here, so what it does with the value is not said; a value that throws never reaches it.
+                !known || v.written == Written.THROWS -> {
                     ""
                 }
 

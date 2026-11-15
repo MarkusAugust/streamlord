@@ -12,11 +12,13 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
 private val OPERATORS = listOf("!==", "===", "!=", "==")
+
+// What may stand before and after a literal compared on its own, the comparison binding tighter: `'a' + 'b' === evt.detail.type`
+// compares with what the sum gives, and so does `case 'a' + 'b':`.
+private const val STARTS = "([{},;?:&|=>"
+private const val ENDS = ")]},;?:&|"
 private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
 private val CASE = regex("""(?<![\w$.])case\s*""")
-
-// More of the case's expression after its first literal, as the `+ 'b'` of `case 'a' + 'b':`.
-private val MORE_AFTER = regex("""\s*[^\s:}]""")
 
 /** The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched with. */
 internal fun fetchTypeIssues(
@@ -37,19 +39,34 @@ internal fun fetchTypeIssues(
         // A Kotlin template there is the code's value, not written.
         return if ('\\' in content || "\${" in content || PLACEHOLDER in content) null else open..close
     }
+
+    /** Whether the text from [from], a [step] of 1 or -1 at a time past space and comments, ends or goes on with one of [chars]. */
+    fun alone(
+        from: Int,
+        step: Int,
+        chars: String,
+    ): Boolean {
+        var i = from
+        while (i in text.indices && (regions[i] == Region.COMMENT || isJsSpace(text[i]))) i += step
+        return i !in text.indices || text[i] in chars
+    }
     for (m in DETAIL_TYPE.findAll(text)) {
         val at = m.range.first
         if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
-        val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
+        val right =
+            OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { op ->
+                literal(op.range.last + 1)?.takeIf { alone(it.last + 1, 1, ENDS) }
+            }
         val opEnd = spaceBefore(text, at)
         val left =
             OPERATORS.firstOrNull { opEnd >= it.length && text.startsWith(it, opEnd - it.length) }?.let { op ->
                 val close = spaceBefore(text, opEnd - op.length) - 1
                 val q = text.getOrNull(close)
                 val open = if (q == null || q !in "'\"`") -1 else text.lastIndexOf(q, close - 1)
-                if (open >= 0) literal(open)?.takeIf { it.last == close } else null
+                if (open >= 0) literal(open)?.takeIf { it.last == close && alone(it.first - 1, -1, STARTS) } else null
             }
-        for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
+        val cases = switchCases(text, regions, at, m.range.last + 1, ::literal).filter { alone(it.last + 1, 1, ":}") }
+        for (range in listOfNotNull(left, right) + cases) {
             val type = text.substring(range.first + 1, range.last)
             if (type in catalog.fetchEvents || type.startsWith("datastar")) continue
             val near =
@@ -110,8 +127,7 @@ private fun switchCases(
                 }
 
                 'c' -> {
-                    val case = if (depth == 1) CASE.matchAt(text, i)?.let { literal(it.range.last + 1) } else null
-                    if (case != null && MORE_AFTER.matchAt(text, case.last + 1) == null) out += case
+                    if (depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { out += it } }
                 }
             }
         }
