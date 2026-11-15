@@ -6,715 +6,461 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
-### Changed
+## [0.22.0] - 2026-11-15
 
-- streamlord-analysis: `analyzeProject` and `failures()` are declared beside `ProjectIssue`, on the
-  JVM alone: `analyzer.analyzeProject(root)` is written as before, with
-  `io.github.markusaugust.streamlord.analysis.analyzeProject` imported where the package is not.
-- streamlord-analysis: `ExpressionValidator.validate` takes `prefix`, the attribute prefix its
-  messages name attributes with.
-- streamlord-analysis: `unknownSignalIssue(ref, defined)` is gone: `projectSignalIssues(language,
-  refs, project)` answers for every read of a file at once, and for the signals a Kotlin file reads
-  that no file declares, asking `project`, a `ProjectSignals`, what the project knows. For Java,
-  `declaredNames` and `projectConstants` are in `KotlinDeclarationsKt`, where they were in
-  `InterpolationsKt`.
-- streamlord-core: `JsonObject.decimal`, `JsonNumber.toBigDecimal` and `JsonNumber.toBigDecimalOrNull`
-  are extension functions in the same package, which Kotlin calls as before once they are imported,
-  and Java as `JsonDecimals.decimal(object, key)`.
-- `interpolate` refuses a value in `data-match-media` and throws, where it escaped one: the
-  reference writes the query as a string literal, so Datastar Pro may run it. Write the query into
-  the format, `interpolate("<p data-match-media:dark=\"'$DARK'\">...", ...)` with a constant of
-  yours as a Kotlin template, or set it with the DSL's `dataMatchMedia`. The editors warn of a value
-  there, say so, and no longer offer the rewrite to `interpolate`.
-- streamlord-analysis describes a file one way, `Source`, and every entry takes it. `AnalyzeOptions`
-  is gone: write `analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`
-  where you wrote `analyzer.analyzeKotlin(text, AnalyzeOptions(prefix, constants = names))`, and
-  likewise for `analyzeHtml` and `analyzeKotlinSites`; `analyzeKotlin(text)` and `analyzeHtml(text)`
-  stay for a file of which nothing more is known. `foreignCalls`, a set of offsets, is
-  `Source.foreign`, a function of a call's name and where it starts, and `checkHtmlAttributes` is
-  gone, with no replacement. `analyzeProject` takes the prefix in place of options.
-- What a host knows of the modules is one value, `Source.modules`, in place of `core`, `htmlDsl` and
-  `coreHtml`: `Modules.known(core, htmlDsl, coreHtml)` where it sees the classpath,
-  `Modules.UNKNOWN` where it cannot tell (the default, and what null meant), and
-  `Modules.FROM_IMPORTS` for a host that never sees one, which reads a Kotlin file's imports.
-  `streamlordCallNames(core, htmlDsl)` is gone, and `htmlStringAt(text, offset, core)` is
-  `htmlStringAt(source, offset)`; whether a file may call the DSL is `readsDsl(source)`.
-- `Source.engine` names the template engine whose rules are its own, `TemplateEngine.JTE`,
-  `FREEMARKER`, `VELOCITY` or `RAZOR`, which each editor sets from its own file type or language
-  id; `templatePlaceholders` takes it as its second argument. The constructs every engine shares
-  are one list, `catalog/template-syntax.json`, which the analysis compiles in and the VS Code
-  grammar for an HTML file is written from.
-- `signalReferencesInKotlin` and `signalReferencesInHtml` are `signalReferences(source)`.
-  `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and `collectSignalFacts` take a
-  `Source`, read its attributes under `Source.prefix` as `signalReferences` does, and leave out the
-  DSL's short helpers for `Modules.known(true, false)`, where you passed `foreignHelpers(htmlDsl =
-  false)`, which is gone. `constantNames` and `otherDeclaredNames` are one `declaredNames(text)`,
-  and `projectConstants` takes what it gives for each file: `projectConstants(texts.map(::declaredNames))`.
-- `Requests.streamRequest` (sent or refused), `Requests.signalsProblem` and `Requests.environment`
-  are new: the request and the variables both editors send. Signals that are no JSON object are
-  refused, and both editors judge them with the SDK's reader, so VS Code now refuses signals nested
-  deeper than 64 or with a number longer than 1000 digits, as IntelliJ did, and says why in the
-  same words. `Requests.parseRequestsFile` takes null for a file that is not there. The folders a
-  project walk leaves out and the extensions read as markup are `ProjectFiles`.
-- streamlord-analysis shows only what the editors call; the rest is internal. In place of
-  `sourcePosition`, `SourcePosition` and `Issue.position`, call `Issue.format(file, source)`; in place
-  of `Requests.parseEnv`, `mergeVariables`, `substitute` and `Env`, call `Requests.environment` and
-  `Requests.resolveRequest`; in place of `sendableUrl`, `SendableUrl`, `requestUrl` and
-  `ENV_KEYS`, call `Requests.streamRequest`; in place of `collectDeclaredSignals`, read
-  `collectSignalFacts(source).declared`; in place of `Catalog.attributesByName`, call
-  `Catalog.parseAttributeName`. `Catalog`'s other tables (`actions`, `actionsByName`, `ActionSpec`,
-  `attributesByKotlin`, `domEvents`, `DomEvent`, `fetchEvents`, `fetchOptions`, `backendActions`,
-  `compiledParameters`, `patchModes`, `scopeNames`, `namingHelpers`, `signalKeyAttributes`,
-  `allCallSiteNames`, `htmlCallSites`, `scriptCallSites`, `selectorCallSites`) have no replacement:
-  they are what completion and the checks read, so ask `complete`, `hover` and `signatureHelp`. With no replacement either, as internal machinery: `distance`, `Docs`,
-  `JsParser`, `JsSyntaxError`, `KeyKind`, `keyKind`, `keyReading`, `rawKeyNote`, `wireKey`,
-  `TEMPLATE_SYNTAX`, `hasTemplateSyntax`, `lexKotlin` (call `analyzer.lex`), `findKotlinStrings`
-  (`analyzer.lex(text).strings`), `KotlinLex.stringAt`, `isStringStart`, `readKotlinStringAt`,
-  `isKnownSignal`, `nearestSignal`, `isMarkupCollection`, `ValueFact.ofTypeName`,
-  `Analyzer.callSiteNames`, `dslNames`, `validateExpression` (`analyzeHtml` judges an attribute's
-  expression), `Requests.lineAndColumn`, `requestKey` and `serializeRequestsFile` (`saveRequest`
-  and `removeRequest` write the file).
-- The VS Code extension finds the signals of `.tmpl`, `.gotmpl` and `.gohtml` files too, which the
-  IntelliJ plugin reads as markup by default: both editors read one list.
-- `ExpressionValidator.validate` in streamlord-analysis takes a fifth parameter, `event`, the event a
-  `data-on` listens for, after `attribute`. Source that names its arguments, or passes four or fewer,
-  compiles as before; code compiled against the old signature needs a rebuild.
-- The editors say a mode that needs a selector, and a blank or multi-line selector of
-  `removeElements`, in core's words, `patchElements throws: Patch mode 'inner' requires a selector.`,
-  where they had words of their own.
-- An action's hover in the editors names each parameter with what it takes and what it is, as the
-  reference has it, and links the action's place in the reference, where it gave the signature and a line.
-- `fit` in streamlord-html-pro names its flags `shouldClamp` and `shouldRound`, as the reference
-  does, where it named them `clamp` and `round`. A call that names them needs the new names.
-- `TokenKind` and `NamePart` in streamlord-analysis have more values, `tokenizeExpression` takes
-  the ranges a template owns, and `tokenizeSignalName` and `templatePlaceholders` are new. A
-  `when` over either enum needs the new branches. In the catalog, a DSL expression may be passed
-  by its parameter's name, and `dataAnimate`'s is its last argument.
-- The VS Code extension now runs the same analysis as the IntelliJ plugin, compiled from Kotlin.
-- Streamlord speaks Datastar 1.0.5, where it spoke 1.0.4. The catalog is
-  `catalog/datastar-1.0.5.json`, the conformance fixtures are read from the 1.0.5 client, and
-  `DatastarProtocol.VERSION` is `1.0.5`. A page that still loads the 1.0.4 bundle works as before,
-  but the editors now judge an expression as 1.0.5 compiles it. The documentation site and the
-  demo load the 1.0.5 bundle.
-- `ElementsResponse` has a sixth value, `viewTransitionSelector`, and `respondElements` in
-  streamlord-ktor, `datastarElements` in streamlord-spring and `elementsResponse` in streamlord-html
-  take it after `useViewTransition`. Kotlin source that names its arguments compiles as before; a
-  call that passes what comes after `useViewTransition` by position, and code compiled against the
-  old signatures, needs a change or a rebuild.
-- `FetchOptions.responseOverrides` and the class `ResponseOverrides` in streamlord-html are gone,
-  and the editors no longer offer `responseOverrides` among a backend action's options. Datastar's
-  client never read the option, so it changed nothing on the page. Say it on the response instead:
-  `respondElements` and `datastarElements` take the selector, the mode, the namespace and the view
-  transition, and `respondSignals` and `datastarSignals` take `onlyIfMissing`.
-- `ClientRewrite.runs` in streamlord-core (internal API) is a list of `Run`, each with where its
-  string or template literal opens, where it was a list of ranges.
-- `AnalyzeOptions` and `MarkupOptions` in streamlord-analysis have one more value, `prefixSetting`:
-  how the editor names its attribute prefix setting, which the warning about an aliased attribute
-  points to. `Markup.validateAttributes` takes it last. Each has a default, the IntelliJ plugin's
-  words, but code compiled against the old constructors needs a rebuild.
-- `AnalyzeOptions` in streamlord-analysis has one more value, `coreHtml`, last: `false` says the
-  project's core has no `Html` (it came in 0.16.0), and the advice for a value in an HTML string
-  then names `Trusted(...)` alone. `SiteIssues` has a fourth value, `rewrite`, and
-  `analyzeKotlinSites` now also lists an HTML string that has no issue and can be rewritten.
-  `KotlinString` has two more values, `literals` and `called`: the literals a `+` chain joins, and
-  whether a call or an index follows one of them. Code compiled against the old constructors needs
-  a rebuild.
-- Completion, hover and signature help in streamlord-analysis are three functions both editors
-  call, `complete`, `hover` and `signatureHelp`, with `offers` for the quick question an editor
-  asks as a character is typed, over a `Source` (the text, its language, the prefix and what the
-  editor knows of the module) and, for completion, a `Workspace` (the signals, ids and classes
-  defined elsewhere, and what the editor calls it). An item's snippet is its text and the places
-  to fill. The caret readings they replace are internal now: `expressionAtCaret`, `actionCallAt`,
-  `signalPrefixAt`, `actionPrefixAt`, `valueAtCaret`, `attributeDoc`, `actionDoc`,
-  `fetchOptionDoc`, `modifierForm`, `casingNote` and their result types; `tagBeforeCaret` is gone.
-  `landingAsParsed` in streamlord-core also says where the attribute name at the place asked
-  about starts, `nameStart`.
-- In IntelliJ the events after `data-on:` are listed by their names, `click`, as in VS Code, where
-  they were `data-on:click`. An attribute that needs a key, `data-on`, is written
-  `data-on:key=""` with `key` selected and the tab moving on to the value, in both editors.
-- Completion after `$` offers the signals some markup or code defines, and no longer every name
-  that is only read somewhere, a misspelt one among them; a signal is "this file"'s where this
-  file defines it.
-- In VS Code an option of a backend action shows its default after its name, as in IntelliJ.
-- `ValueFact` in streamlord-analysis has one more value, `TRUSTED`: core's `Trusted`, which
-  `ofTypeName` now gives for that type where it gave `MARKUP`. It is judged as `MARKUP` is, and
-  `isMarkup()` holds for both. The IntelliJ plugin gives it from the resolved type, so also for a
-  value the file does not declare, `user.badge`. In a call to `interpolate`, a value the plugin
-  resolves to a `Trusted` is let in wherever it lands, as core lets it.
-- In both editors, the fix that rewrites an HTML string to `interpolate(...)` is titled
-  "Build this string with interpolate(...)", where it was "Build it with interpolate(...)". It is
-  now offered for a value that may be null, and not as the preferred fix: a template writes `null`
-  for it and `interpolate` nothing. Under `.trimIndent()` it is not preferred either, since the
-  trim then runs before the values go in. The warning of a `Trusted` in an attribute or at the
-  start of a URL no longer offers it, since `interpolate` writes a `Trusted` as it is.
-- A warning about a Kotlin value in element text, an attribute, a URL, `style`, a script or the
-  markup's structure links to [the page on HTML strings](https://streamlord-docs.netlify.app/strings/),
-  `Docs.STRINGS`, where it linked to Datastar's guide to expressions. One about a `data-*`
-  expression links there as before. No message for a value in a Datastar expression, a script or
-  an event handler advises a signal any longer: each says to put the value in an attribute of its
-  own and read it with `el.dataset`.
-- `interpolate(format, values: List<Any?>, prefixes)` in streamlord-core is gone. The values of
-  `interpolate(format, vararg values)` are always the values: a `List`, a `Set` or an array handed
-  over as one of them is one value, written in brackets, `[a, b]`, and escaped. An array is
-  written so too, where a Kotlin template writes its class and hash.
-  Until now a `List` passed alone was silently taken for the list of values, so
-  `interpolate("<p>%s</p>", tags)` threw for two tags and wrote the one for one. To pass the
-  elements of a collection, spread it: `interpolate(format, *values.toTypedArray())`; where that was
-  meant and the count no longer fits, the exception says so. The prefixes of an aliased bundle now
-  come first: `interpolate(prefixes, format, vararg values)`. Both editors count a list as one value,
-  and give a hint where a `listOf(...)`, `setOf(...)` or `arrayOf(...)` is handed over, with a fix
-  that writes its elements out as the values.
-- The message `interpolate` throws for a `String` in a `data-*` expression advises an attribute of
-  its own read with `el.dataset`, where it advised a signal, since a `String` written into
-  `data-signals` is refused by the same rule.
-- With `guardElements` on, a `data-*` name with a key or a modifier and two letters swapped,
-  `data-no:click`, throws `MistypedAttributeException`, as one with a letter added, left out or
-  changed already did. Both editors warn about it. A bare name is judged as before.
-- The IntelliJ plugin runs only with the Kotlin plugin in K2 mode, the default. K1 is gone from
-  IntelliJ 2026.2, and an IntelliJ 2026.1 with K1 turned on no longer loads the plugin.
-- `PatchElements.remove` and `removeElements` take `viewTransitionSelector` after
-  `useViewTransition`, as `patchElements` does, so a removal can run its view transition on one
-  element. A call that passes `eventId` or `retry` by position needs them named, and code compiled
-  against the old signatures needs a rebuild.
-- `PatchElements` and `ElementsResponse` throw `DatastarEventValidationException` for markup in the
-  wrong namespace, which the client never patches as written: an HTML element such as `<div>` in
-  the `svg` or `mathml` namespace, where the client parses the patch inside an `<svg>` or a
-  `<math>` that the HTML element closes, so it and all after it are dropped; and an SVG or MathML
-  element such as `<circle>` in the `html` namespace outside its own root, which the browser makes
-  an HTML element that draws nothing. Put HTML in a `<foreignObject>`, or send shapes with
+This release brings Datastar 1.0.5 support to both editors. They check the attributes, the Pro
+attributes and actions, every action's arguments and options, the casing of names and events, the
+aliased prefix and the expressions as the 1.0.5 client compiles them, with fixes and links to the
+reference. They flag what core refuses in an SSE call or an answer, in core's own words, and the
+DSL now takes an expression wherever the client does. The hints and fixes for a Kotlin value in an
+HTML string now say what `interpolate` really does. Highlighting covers all three markup styles:
+the kotlinx.html DSL, HTML in Kotlin strings, and HTML files and templates. The default CSP policy
+now requires Trusted Types. Several signatures changed: read Breaking changes first.
+
+### Breaking changes
+
+- streamlord-core: `interpolate(format, values: List<Any?>, prefixes)` is gone, and a `List`, `Set`
+  or array handed to `interpolate` is one value, written in brackets and escaped, where a lone
+  `List` was taken for the values. Spread it to pass its elements,
+  `interpolate(format, *values.toTypedArray())`, and put an aliased bundle's prefixes first,
+  `interpolate(prefixes, format, vararg values)`.
+- streamlord-core: `interpolate` throws for a value in `data-match-media`, where it escaped one,
+  since Datastar Pro may run the query. Write the query into the format, or use `dataMatchMedia`.
+- streamlord-core: `PatchElements` and `ElementsResponse` throw `DatastarEventValidationException`
+  for an HTML element in the `svg` or `mathml` namespace, and for an SVG or MathML element in `html`
+  outside its root. Put HTML in a `<foreignObject>`, or send shapes with
   `namespace = ElementNamespace.SVG` or inside an `<svg>`.
-- With `guardElements` on, a patch without a selector in `outer` or `replace` mode whose top-level
-  element has no id throws `DatastarEventValidationException`: the client looks each one up by its
-  id and skips one without, with only a console warning. Without the guard such a patch is sent as
-  before, since the SDK specification's own tests send `<div>Merge</div>` that way.
-- `CspNonce.starterPolicy`, the default of `CspNoncePlugin` and `CspNonceFilter`, requires Trusted
-  Types: it ends in `require-trusted-types-for 'script'; trusted-types datastar`, allowing the one
-  policy Datastar's client creates in CSP mode, now named by `CspNonce.TRUSTED_TYPES_POLICY`. Any
-  other code that writes a string into the DOM as markup or a script is refused by the browser, and
-  so is a patch that morphs in an inline `on*` attribute or a `<script src>`. A page that needs either, or a
-  library that creates a policy of its own, sets its own policy; the one before is
-  `install(CspNoncePlugin) { policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" } }`,
-  or the same lambda as `CspNonceFilter(policy = ...)` on Spring.
-- `assertPatchElements` and `assertNoPatchElements` in streamlord-test match `namespace`,
-  `useViewTransition`, `viewTransitionSelector`, `eventId` and `retry` too, after `containing`, and
-  `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`, which breaks a call
-  that passes `timeout` by position: name it, `timeout = 5.seconds`. Code compiled against the old
-  signatures needs a rebuild.
-- `datastarSignals` of a value in streamlord-spring takes the bean last, as `datastarElements` does:
-  `datastarSignals(value, onlyIfMissing, streamlord)`. A call that passed the bean second by
-  position no longer compiles; one that names its arguments compiles as before.
-- In the catalog, core's SSE calls and answers are one list, `kotlinCallSites.events`, with what each
-  takes and its flags, in place of the lists `html`, `script` and `selector` and core's entries of
-  `signals`. The list names every call of the public API that sends an event or answers, `ScriptResponse`,
-  `PatchSignals`, `SignalsResponse` and the companions' functions among them, and every check of
-  both editors reads it: VS Code colours the JavaScript of `ScriptResponse("...")`, and both editors
-  read the keys of `PatchSignals` and `SignalsResponse` as the signals they declare.
-  `CallSiteSpec` has no `selectorArg` and `modeArg`, which no list set any more, so code that names
-  them no longer compiles.
-- `PatchSignals` and `SignalsResponse` refuse JSON that is no object for what the client makes of
-  it, `signals must be one JSON object, not an array: the client patches its items as signals named
-  0, 1 and on`, where they said that the client runs it as JavaScript, and `SseDecoder` says the
-  same of such a frame. A selector over two data lines, which the client joins with a line break,
-  is told as the stream wrote it, where the decoder gave the rule for building an event.
-- The editors name a companion's function as it is called: `ExecuteScript.redirect throws: ...`.
+  See [SVG and MathML](https://streamlord-docs.netlify.app/protocol/#svg-and-mathml).
+- streamlord-core: with `guardElements` on, a patch without a selector in `outer` or `replace` mode
+  whose top-level element has no id throws `DatastarEventValidationException` (the client skips
+  it), and a `data-*` name with a key or a modifier and two letters swapped, `data-no:click`, throws
+  `MistypedAttributeException`.
+- streamlord-core: `CspNonce.starterPolicy`, the default of `CspNoncePlugin` (streamlord-ktor) and
+  `CspNonceFilter` (streamlord-spring), requires Trusted Types and allows only Datastar's policy,
+  `CspNonce.TRUSTED_TYPES_POLICY`. Other code that writes into the DOM as markup or a script is
+  refused, and so is a patch with an inline `on*` attribute or a `<script src>`. A page that needs
+  either, or a library that creates a policy of its own, sets its own policy.
+  See [the policy is yours](https://streamlord-docs.netlify.app/security/#the-policy-is-yours).
+- `ElementsResponse`, `respondElements` (Ktor), `datastarElements` (Spring), `elementsResponse`
+  (streamlord-html), `PatchElements.remove` and `removeElements` take `viewTransitionSelector` after
+  `useViewTransition`. Name the arguments that follow it (`eventId` and `retry` of a removal, the
+  `streamlord` bean of `datastarElements`), and rebuild code compiled against the old signatures.
+- streamlord-html: `FetchOptions.responseOverrides` and `ResponseOverrides` are gone, since the
+  client never read the option, and the editors no longer offer it. Set the selector, the mode, the
+  namespace and the view transition on `respondElements` or `datastarElements`, and `onlyIfMissing`
+  on `respondSignals` or `datastarSignals`.
+- streamlord-html: `SignalFilter` has three more values after `include` and `exclude`, so code
+  compiled against its constructor or `copy` needs a rebuild. Source that names `include` and
+  `exclude`, or passes them in that order, stays as it is.
+- streamlord-html-pro: `fit` names its flags `shouldClamp` and `shouldRound`, as the reference does,
+  where they were `clamp` and `round`.
+- streamlord-spring: `datastarSignals(value, onlyIfMissing, streamlord)` takes the bean last, as
+  `datastarElements` does. A call that passed the bean second by position no longer compiles.
+- streamlord-test: `assertPatchElements` and `assertNoPatchElements` also match `namespace`,
+  `useViewTransition`, `viewTransitionSelector`, `eventId` and `retry`, after `containing`, and
+  `awaitPatchElements` takes them before `timeout`: name it, `timeout = 5.seconds`.
+- streamlord-core: `JsonObject.decimal`, `JsonNumber.toBigDecimal` and `toBigDecimalOrNull` are
+  extension functions. Import them in Kotlin; from Java call `JsonDecimals.decimal(object, key)`.
+- streamlord-core: `CatalogNames.attributes`, the other attribute sets of core's catalog and
+  `CatalogNames.VERSION` are internal. The version is `DatastarProtocol.VERSION`.
+- streamlord-core: `landingAsParsed` (internal API) returns a `ValueLanding`, which has `nameStart`,
+  as `valueLandings` lists them. Code compiled against it needs a rebuild.
+- IntelliJ: the plugin runs only with the Kotlin plugin in K2 mode, the default. An IntelliJ 2026.1
+  with K1 turned on no longer loads it.
+- streamlord-analysis: every entry takes a `Source`, and `AnalyzeOptions` is gone. Write
+  `analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`, and the
+  same for `analyzeHtml` and `analyzeKotlinSites`; `analyzeKotlin(text)` and `analyzeHtml(text)`
+  stay. `analyzeProject` takes the prefix in place of options.
+- streamlord-analysis: `AnalyzeOptions.foreignCalls` is `Source.foreign`, a function of a call's name
+  and where it starts. `AnalyzeOptions.checkHtmlAttributes` is gone, with no replacement.
+- streamlord-analysis: `Source.modules` replaces `AnalyzeOptions.core` and `htmlDsl`:
+  `Modules.known(core, htmlDsl, coreHtml)`, `Modules.UNKNOWN` (the default, what null meant) or
+  `Modules.FROM_IMPORTS`. Beside `analyzer.htmlStringAt(text, offset)`, `htmlStringAt(source,
+  offset)` and `readsDsl(source)`, whether a file may call the DSL, are new.
+- streamlord-analysis: `signalReferencesInKotlin` and `signalReferencesInHtml` are
+  `signalReferences(source)`. `collectSignals`, `collectSignalDefinitions`, `signalDeclarations` and
+  `collectSignalFacts` take a `Source` and read under `Source.prefix`, and leave out the DSL's short
+  helpers for `Modules.known(true, false)`.
+- streamlord-analysis: `constantNames` and `otherDeclaredNames` are one `declaredNames(text)`:
+  `projectConstants(texts.map(::declaredNames))`. Both are in `KotlinDeclarationsKt`, where
+  `projectConstants` was in `InterpolationsKt`, so code compiled against it needs a rebuild.
+- streamlord-analysis: `unknownSignalIssue(ref, defined)` is gone. Call
+  `projectSignalIssues(language, refs, project)`, which answers for every read of a file at once.
+- streamlord-analysis: `analyzeProject` and `failures()` are declared beside `ProjectIssue`, on the
+  JVM alone. Import `io.github.markusaugust.streamlord.analysis.analyzeProject` outside the package;
+  from Java both are in `PlatformJvmKt`.
+- streamlord-analysis: `ExpressionValidator.validate` takes `event`, the event a `data-on` listens
+  for, and `prefix`, the prefix its messages name attributes with, after `attribute`. Rebuild.
+- streamlord-analysis: only what the editors call is public. In place of what is now internal:
+  - `sourcePosition`, `SourcePosition` and `Issue.position`: call `Issue.format(file, source)`.
+  - `Requests.parseEnv`, `mergeVariables`, `substitute`, `Requests.Substituted` and `Env`:
+    `Requests.environment` and
+    `Requests.resolveRequest`. `sendableUrl`, `SendableUrl`, `requestUrl` and `ENV_KEYS`:
+    `Requests.streamRequest`. `requestKey` and `serializeRequestsFile`: `saveRequest` and
+    `removeRequest`.
+  - `collectDeclaredSignals`: `collectSignalFacts(source).declared`. `Catalog.attributesByName`:
+    `Catalog.parseAttributeName`. `lexKotlin`: `analyzer.lex`. `findKotlinStrings`:
+    `analyzer.lex(text).strings`. `validateExpression`: `analyzeHtml`.
+  - `expressionAtCaret`, `actionCallAt`, `signalPrefixAt`, `actionPrefixAt`, `valueAtCaret`,
+    `attributeDoc`, `actionDoc`, `fetchOptionDoc`, `modifierForm`, `casingNote` and their result
+    types: `complete`, `hover` and `signatureHelp`. `tagBeforeCaret` is gone.
+  - With no replacement: `Catalog`'s other tables (`actions`, `actionsByName`, `ActionSpec`,
+    `attributesByKotlin`, `domEvents`, `DomEvent`, `fetchEvents`, `fetchOptions`, `backendActions`,
+    `compiledParameters`, `patchModes`, `scopeNames`, `namingHelpers`, `signalKeyAttributes`,
+    `allCallSiteNames`, `htmlCallSites`, `scriptCallSites`, `selectorCallSites`), and `distance`,
+    `Docs`, `JsParser`, `JsSyntaxError`, `KeyKind`, `keyKind`, `keyReading`, `rawKeyNote`,
+    `wireKey`, `TEMPLATE_SYNTAX`, `hasTemplateSyntax`, `KotlinLex.stringAt`, `isStringStart`,
+    `readKotlinStringAt`, `isKnownSignal`, `nearestSignal`, `isMarkupCollection`,
+    `ValueFact.ofTypeName`, `Analyzer.callSiteNames`, `dslNames` and `Requests.lineAndColumn`.
+- streamlord-analysis: `TokenKind`, `NamePart` and `ValueFact` have more values, so a `when` over
+  them needs the new branches. `tokenizeExpression` takes the ranges a template owns.
+- streamlord-analysis: in the catalog, core's SSE calls and answers are one list,
+  `kotlinCallSites.events`, in place of `html`, `script`, `selector` and core's entries of
+  `signals`. `CallSiteSpec` has no `selectorArg` and `modeArg`.
+- streamlord-analysis: code compiled against the old constructors of `CallSiteSpec` (now with
+  `more` and `oneValue`, also `copy`), `AttributeSpec` (`reference`), `Modifier` (`doc`, `flagDocs`,
+  `suggest`), `SiteIssues` (`rewrite`), `KotlinString` (`literals`, `called`), `Interpolation`
+  (`unread`), `SignalFacts` (`patchedTypes`, `imports`, `packageName`) and `MarkupOptions`
+  (`prefixSetting`) needs a rebuild, and so does code that calls `MarkupValidator.validateAttributes`.
 
-### Added
+### Editors
 
-- streamlord-analysis: what both editors call, so that neither keeps a rule of its own:
-  `projectSignalIssues` and `ProjectSignals`, what the project says of the signals one file reads;
-  `Requests.patchedStore(store, patch, onlyIfMissing)` and `PatchedStore`, a signal store after a
-  patch as the client holds it; `signalNameStrings(source)` and `SignalNameString`, the strings the
-  DSL's calls name a signal with. streamlord-core's `JsonParseException.limit` says the text is JSON
-  past one of the parser's limits.
-- `datastarEvents(body, header)` in streamlord-test reads an answer that is no stream, by its
-  content type and its `datastar-*` headers, as Datastar's client reads it, into the same
-  `DatastarEvents`: `datastarEvents(response.bodyAsText(), response.headers::get)` on Ktor,
-  `response::getHeader` on Spring's `MockHttpServletResponse`. Any other answer is read as a stream.
-  [Testing](https://streamlord-docs.netlify.app/testing/#an-answer-that-is-no-stream) shows how.
-- [Spring WebFlux](https://streamlord-docs.netlify.app/spring-webflux/#heartbeats) says that a flow
-  has no heartbeat, whatever the bean says, and shows the ticker that keeps it from being silent.
-  [Security](https://streamlord-docs.netlify.app/security/) says that a relative URL may lead to
-  another host, and [Strings](https://streamlord-docs.netlify.app/strings/) names every URL
-  attribute `interpolate` holds to a safe scheme, `formaction` and `xlink:href` among them.
-- The editors flag a literal argument of an SSE call or an answer that core refuses as it runs, in
-  core's own words: an empty or non-ASCII `eventId`, a `retry` of no time, less or a fraction of a
+- VS Code now runs IntelliJ's analysis, compiled from Kotlin to JavaScript, not a TypeScript copy.
+
+**Attributes**
+- Both editors: a bare `data-*` name one edit from a Datastar attribute, `data-persits`, gets a
+  hint and a fix where its value or form says Datastar was meant. `data-test` says nothing.
+- Both editors give `data-text-foo`, `data-show-more` and the like, a key on an attribute that takes
+  none, the same hint where the value reads as Datastar's, and warn of `data-no:click`.
+- Both editors: with the aliased prefix set, a plain `data-*` Datastar attribute with a key, a
+  modifier or a Datastar value is a warning with a fix that writes the alias. Knockout's
+  `data-bind="text: $data.name"` says nothing.
+  See [the aliased bundle](https://streamlord-docs.netlify.app/html-dsl/#the-aliased-bundle).
+- Both editors read a page with the prefix you set throughout: `data-ds-signals:my-value__case.kebab`
+  defines `$my-value`, and completion and messages use it. VS Code takes a blank prefix as `data-`.
+- Both editors leave `data-star-rating` and other `data-star-*` names that are no Datastar attribute
+  alone under the default prefix.
+- Both editors leave markup under `data-ignore` (`data-star-ignore` under an alias), or on an
+  element with `data-ignore__self`, unchecked, and its signals count as none. So does `dataIgnore()`.
+- Both editors say that `data-ignore`, or an aliased bundle, keeps Datastar off a value another
+  library reads, `data-bind="text: name"` or a share button's `data-text="Check this out"`.
+- Both editors give `data-on:keyDown` and `Data-On:Click` a hint to write the event in lower case,
+  where the fix wrote `key-down__case.camel`. `dataOn("keyDown", ...)` is a warning.
+- Both editors keep the case of the prefixed events: `data-on:webkitAnimationEnd` gets the fix
+  `webkit-animation-end__case.camel`, and `data-on:webkitanimationend` is a warning.
+- IntelliJ no longer calls `DATA-TEXT` or `Data-On:Click` an attribute that is not allowed here, and
+  shows a weaker problem inside an error, with its fixes, as VS Code does.
+- Both editors warn of `data-indicator` after a `data-init` that sends a request on the same
+  element, in markup or the DSL, with a fix that moves it first. An init with a modifier is fine.
+- Both editors warn of `data-computed` that changes a signal or calls an action other than `@peek`
+  and the Pro formatters. A function it holds and never calls is left alone.
+- Both editors hold `data-json-signals` and `data-on-signal-patch-filter` to `include` and `exclude`
+  patterns, as `filterSignals` is held.
+- Both editors warn of `data-on-signal-patch-filter` without `data-on-signal-patch` on the element,
+  and of `data-attr:view-box` on an SVG element, with a fix to the object form.
+- Both editors read the value of `data-match-media` as a media query, with or without parentheses
+  and quotes, and no longer as an expression with a syntax error.
+- Both editors call a value of only spaces, `data-on:click="  "`, or an empty one an empty
+  expression in HTML and Kotlin strings, as in the DSL. In the DSL `dataShow("")` is an error.
+- Both editors link an issue on `data-nonce`, and VS Code's HTML data for it, to the security page
+  of the Datastar reference.
+- Both editors: the pre-1.0 fix needs a key after the dash, so a half typed `data-on-` stays.
+
+**Modifiers**
+- Both editors judge modifier arguments as the client reads them: `__case.snake.pascal` is no error,
+  `__debounce` with no duration waits 0 ms (a warning), `__threshold.0.5` reads 0 (fix:
+  `__threshold.50`), and a modifier written twice is read from the last.
+- Both editors say what the client ignores or does with `__document` and `__window`, `__window` and
+  `__outside`, and `data-on-interval` with no duration. Unlisted Pro modifiers are not judged.
+- Both editors read the modifier lambda of a DSL call for what the DSL refuses as it renders: an
+  unset duration flag, `half`, `full` and `threshold` together, a threshold outside 0 to 100, and an
+  interval of no time.
+- Both editors accept the modifiers of `data-on-raf`, `data-on-resize` and `data-animate` the
+  reference does not list, but no longer offer or document them.
+
+**Actions and options**
+- Both editors check every action's arguments: too few, too many, or a literal of the wrong kind is
+  a warning, and a signal filter is held to `include` and `exclude`.
+- Both editors judge the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds the reference
+  declares, where they counted arguments alone. A number where a string goes is let be.
+- Both editors judge a backend action's options as the client reads them: `contentTyp` gets the near
+  name as a fix, and a literal of the wrong kind or value, `retry: 'sometimes'`, is a warning.
+  Only a value written as a literal is judged.
+- Both editors say what Datastar does with an option of the wrong kind (`retryMaxCount: true` counts
+  as 1) and that a `contentType` it cannot read fails with FetchFailed. `@get(['/a'])` is no error.
+- Both editors offer the types of `@intl` as its first argument and warn of one the reference does
+  not name, with a fix for one in another case. `@gett` is offered `@get`.
+- Both editors offer and check the types of `datastar-fetch` after `evt.detail.type ===` and in
+  `switch` cases, so `'start'` for `'started'` is a warning with the fix.
+- Both editors: a Kotlin template or a `%s` in an action call no longer turns off the checks of the
+  rest, and `@${name}('/x')` is no longer an unknown action.
+- Both editors check, complete, hover and colour the expressions of the DSL's `...Expr` helpers and
+  options, also one handed to another call, and warn of a top-level comma in one, as JavaScript
+  keeps only what follows it.
+- Both editors, the DSL and the operations page document `retry`, `retryInterval` and
+  `retryMaxCount` as 1.0.5 runs them.
+  See [reconnects](https://streamlord-docs.netlify.app/operations/#when-datastar-reconnects-and-when-it-does-not).
+
+**Expressions**
+- Both editors judge an expression as Datastar 1.0.5 compiles it: a template literal's text is no
+  longer said to be rewritten unless its `${...}` holds a brace, and `return ...` is not split at `;`.
+- Both editors no longer call an action after a template literal, `` `${$a}` + @peek(() => $b) ``,
+  a syntax error, and say `Unexpected end of input` for a value that stops short, `data-text="1 +"`.
+- VS Code says `Unexpected end of input` for an expression that stops short, `$count +` or
+  `@post('/x'`, as IntelliJ does, where it said `Unexpected token`.
+- Both editors warn of `evt.type` outside `data-on`, which throws, and of `$$count`, with a fix.
+  `await @post(...)` is an error on `await`, with why.
+- Both editors read `@get(+-1)` as a number, `@get(+1n)` as a TypeError, `${a, b}` in a template
+  literal as no comma of `postExpr`'s value, and `/*c*/ 1` in `data-computed` as a value.
+- Both editors read in time that grows with the length, where it grew with its square: a long
+  datastar-fetch handler, many signal filters, and in VS Code a line of many attributes.
+- IntelliJ: completion no longer slows down on a Kotlin file of thousands of DSL calls.
+- Both editors: `dataAttr(name = "tab-index".uppercase(), expression = "0")` no longer stops the
+  analysis of the whole file.
+
+**Signals**
+- Both editors warn on a signal the server reads, through `Signals` or a `@Serializable` class, that
+  no page declares: `signal-never-declared`.
+  See [the analysis](https://streamlord-docs.netlify.app/analysis/#signals-the-pages-never-declare).
+- IntelliJ: the inspection "Signal no file defines" is "Unknown signals", as the VS Code setting
+  `streamlord.diagnostics.unknownSignals` is. Both turn this warning and the unknown-signal warning
+  on and off. The inspection's settings in a profile are kept.
+- Both editors take the keys of an object a signal is given as signals, `hero.strength` from
+  `data-signals:hero="{strength: 1}"`, and rename an object signal without writing its keys over.
+- Both editors: `$tick++`, `--$n` and `$total += 1` define their signal; a plain read does not.
+  A Kotlin template before an `=` in a string, `"<p $name=\"x\">"`, defines none.
+- Both editors read the keys of `PatchSignals` and `SignalsResponse` as the signals they declare.
+- Both editors offer after `$` the signals markup or code defines, not every name read somewhere,
+  and no name a DSL or core call writes with a hyphen. `data-signals='{"hs-key": 1}'` still is.
+- Both editors no longer suggest such a name for an unknown signal: `$isOpen` beside
+  `dataSignals("is-open" to false)` no longer says "Did you mean $is-open?".
+- Both editors offer a `$name` a `$$"..."` literal leaves as text, keep a `@Serializable` class's
+  signals while it is typed, and suggest the first by name of two equally near signals.
+- VS Code finds the signals of `.tmpl`, `.gotmpl` and `.gohtml` files, as IntelliJ does, and of a
+  file outside the workspace folders when it is opened, so navigation and rename work from it.
+
+**SSE calls and answers**
+- Both editors flag a literal argument of an SSE call or an answer that core refuses, in core's
+  words: `patchElements throws: Patch mode 'inner' requires a selector.`
+- That covers an empty or non-ASCII `eventId`, a `retry` of no time, less or a fraction of a
   millisecond, a blank or multi-line selector or `viewTransitionSelector`, signals that are not one
-  JSON object, a blank script, a `javascript:` redirect, elements that are only white space, and a
-  selector a response header cannot carry. The rules live once, in core's `EventRules`. A call is
-  judged in a file that imports Streamlord and neither declares the name nor imports it from
-  elsewhere, made without a receiver, on `this`, on one of core's companions, on a receiver named
-  as a stream (`sse`, `stream`, `datastar`), or on `call` for Ktor's `respond*`. They flag as well
-  an attribute of a script that HTML cannot name, the effect attribute beside `autoRemove`, a line
-  break in an attribute of `respondScript`, `ScriptResponse` or `datastarScript`, a blank selector
-  of `PatchElements.remove`, a signal name core cannot remove, `removeSignals("a..b")`, judged with
-  the names removed beside it as core takes them, a hyphen in
-  `PatchSignals.remove` with the fix `removeSignals` has, and an SVG or
-  MathML element outside its root, or HTML in a patch in the svg or mathml namespace.
-- The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
-  dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
-  there that the client never dispatches, `'start'` for `'started'`, is warned of, with the fix.
-- The backend actions of streamlord-html take expressions where the client does: `getExpr`,
-  `postExpr`, `putExpr`, `patchExpr`, `deleteExpr` and `queryExpr` take the address as an
-  expression, `headerExprs` takes header values as expressions, `requestCancellationExpr` takes an
-  `AbortController`, and `setAllExpr` takes the value of `@setAll` as an expression. In
-  streamlord-html-pro, `fitExpr` takes the ends of the ranges as expressions. Each expression is
-  written in parentheses, so one that holds a comma or a brace stays one value, or fails as a syntax
-  error, and never opens options of its own. `payloadExpr` and `clipboardExpr` are written so too,
-  and refuse a blank expression. A header named twice, in `headers` and `headerExprs` or
-  in either, in any case (`Authorization` and `authorization`), is refused, as is
-  `requestCancellationExpr` set with `requestCancellation`.
-- An answer of elements that is not a stream can name the element its view transition runs on:
-  `viewTransitionSelector`, sent as the header `datastar-view-transition-selector`, which
-  Datastar 1.0.5 reads. It is sent only with `useViewTransition`, as in a stream.
-  `DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR` names it.
-- In both editors, the rewrite of an HTML string to `interpolate(...)` is a context action for a
-  caret or a selection anywhere in a string that has a value to escape and whose values
-  `interpolate` accepts: among the intentions in IntelliJ, as a refactoring in VS Code.
-  streamlord-analysis has `rewriteAt` for it.
-- In both editors, a bare `data-*` name one edit from a Datastar attribute (a letter added, left
-  out, changed, or two swapped) gets a hint with the fix, where something says Datastar was meant:
-  the value reads a signal or calls an action where an expression could start, or the attribute
-  stands without a value as that Datastar attribute is written, as `data-persits` does.
-  `data-test`, `data-kind` and `data-unit` say nothing, as before, and neither does
-  `data-test="costs $5"` or a value with a template of its own.
-- The project `rewrite-probes` compiles HTML strings as they are written and as each fix of the
-  analysis leaves them, against core, and runs both: every cell of the editors' matrix of values,
-  and the cases in `rewrite-probes.json`.
-- VS Code and IntelliJ warn on a signal the server reads, through a `Signals` lookup or a
-  `@Serializable` class, that no page in the project declares: the `signal-never-declared`
-  warning, which `signalDrift` gives in your own tests. It goes with the unknown-signal check, the
-  setting `streamlord.diagnostics.unknownSignals` in VS Code and the inspection Signal no file
-  defines in IntelliJ.
-- In both editors, the options of a backend action are judged as the client reads them: an option
-  it has none of, such as `contentTyp`, is a warning with the near name as a fix where there is
-  one, and so is a value of the wrong kind or one it does not know, such as `retry: 'sometimes'`,
-  `contentType: 'xml'`, `openWhenHidden: 'yes'`, `retryInterval: '1s'` or `filterSignals: null`.
-  Only a value written as a literal is judged; one an expression or a Kotlin template computes is
-  left alone.
-- In both editors, every action is given the arguments it takes: too few or too many is a warning,
-  and so is a literal of the wrong kind, such as a string or null where `@get` takes its options or
-  `@setAll` its filter. A signal filter, in `filterSignals`, `@setAll` or `@toggleAll`, is held to
-  `include` and `exclude`. A Pro action is judged by the number of its arguments alone.
-- Completion offers the values an option takes after `retry:`, `contentType:` and
-  `requestCancellation:`, and `include` and `exclude` in a signal filter. A string it writes takes
-  the quote the attribute around it leaves free.
-- The catalog gives each action the kinds of its arguments and each option its kind and the values
-  it takes, and `conformance/client/actions.json` records what the client declares, which the
-  tests hold the catalog to.
-- In both editors, `data-indicator` after a `data-init` that sends a request on the same element
-  is a warning, with a fix that moves it first: the client applies an element's attributes in
-  their order and the init's request starts before the indicator exists, so the signal stays
-  false. An init with a modifier waits and is left alone, and so is a request sent later, from a
-  function the init hands on, `setTimeout(() => @get('/x'))`.
-- In both editors, with the aliased prefix set, a plain `data-*` Datastar attribute with a key, a
-  modifier or a value that reads as Datastar's is a warning, with a fix that writes the alias: the
-  aliased client ignores it. For `data-bind`, `data-indicator` and `data-ref` that value is a bare
-  signal name. A plain name another library uses, such as Knockout's
-  `data-bind="text: $data.name"`, says nothing.
-- In both editors, `data-text-foo`, `data-show-more` and the like, a key after a hyphen on an
-  attribute that takes none, get the hint and fix a near name gets, where the value reads as
-  Datastar's.
-- In both editors, `data-computed` that changes a signal or calls an action other than `@peek`
-  and the Pro formatters is a warning, as the reference says a computed must do neither. A
-  function the computed holds and never calls is left alone.
-- In both editors, the value of `data-json-signals` and `data-on-signal-patch-filter` is held to
-  what `filtered` reads, as `filterSignals` is: a key other than `include` and `exclude`, a value
-  of either that is no pattern, and a value that is no object.
-- In both editors, the lambda of modifiers of a DSL call is read for what the DSL refuses as it
-  renders: a flag of a duration that is not set, `half`, `full` and `threshold` together, a
-  threshold outside 0 to 100, and an interval of no time. A line in a comment sets nothing. The
-  DSL and the analysis take these rules from one place, `ModifierRules` in streamlord-core
-  (internal API).
-- Hover on a modifier or one of its tags shows the modifier's own documentation, its tags and
-  that a duration's flags come after it, where it showed the whole attribute's. Hover on `el`,
-  `evt`, `patch` and a signal in an expression says what each is, a signal as the path the client
-  reads, `$['cart']['items']['length']`.
-- The modifiers of `data-on-raf`, `data-on-resize` and `data-animate` that the reference does not
-  list are still accepted, and no longer offered in completion, documented on hover or listed in
-  the attribute's documentation.
-- Completion offers the values after `__threshold.`, `__prop.` and `__event.`, offers a flag of a
-  duration once, and offers the defined signals in the value of `data-bind`, `data-indicator` and
-  `data-ref`.
-- The catalog gives each modifier its documentation from the reference, the documentation of
-  each flag of a duration, and the values completion offers. `Modifier` in streamlord-analysis
-  has three more values, `doc`, `flagDocs` and `suggest`, last, each with a default; code compiled
-  against the old constructor needs a rebuild.
-- Every modifier property of the DSL has KDoc.
-- WebFlux reads signals from the exchange, as WebMVC reads them from the request:
-  `exchange.readSignals()`, `readSignals<T>()`, `readSignalsOr(default)` and `readSignalsJson()`,
-  each `suspend`, with the limits and the `Content-Type` check of the others, and
-  `WebFluxIncomingRequest` and `exchange.isDatastarRequest`. streamlord-spring takes reactor-core
-  `compileOnly`, which every WebFlux application already has.
-- `ExecuteScript.redirect`, `ExecuteScript.replaceUrl`, `ExecuteScript.pushUrl` and
-  `PatchSignals.remove` build the events `redirect`, `replaceUrl`, `pushUrl` and `removeSignals`
-  send on a stream, for a `Flow` of events on WebFlux or `respondDatastar(flow)` on Ktor.
-- [Security](https://streamlord-docs.netlify.app/security/) says that CSP mode does not make an
-  expression safe, that a page without it needs `'unsafe-eval'`, that the aliased bundle reads
-  `data-star-nonce`, and that signals are the reader's to read and change, so they hold nothing
-  secret and are checked on the server.
+  JSON object, a blank script,
+  a `javascript:` redirect, elements of only white space, and a selector no header can carry.
+- It also covers a script attribute HTML cannot name, the effect attribute beside `autoRemove`, a
+  line break in an attribute of `respondScript`, a blank selector of `PatchElements.remove`, a
+  signal name core cannot remove, and an element in the wrong namespace.
+- Both editors offer the fix `removeSignals` has for a hyphen in `PatchSignals.remove`, and name a
+  companion's function as it is called: `ExecuteScript.redirect throws: ...`.
+- Both editors judge a call in a file that imports Streamlord, on no receiver, `this`, core's
+  companions, Ktor's `call`, or a stream: a receiver declared as one under any name, or, with no
+  type in sight, one named `sse`, `stream` or `datastar`. `doc: Document` is not one.
+- Both editors no longer warn that Streamlord escapes `</script` in `respondScript`,
+  `ScriptResponse` or `datastarScript`: an answer sends its script as written.
 
-### Fixed
-
-- Both editors read a page with the attribute prefix you set throughout: a kebab-case signal
-  declared under it, `data-ds-signals:my-value__case.kebab`, is the one `$my-value` reads, where it
-  was a false `signal-kebab`; completion calls a signal the file declares under it this file's; and
-  messages name attributes with it. VS Code takes a blank prefix as `data-`, as IntelliJ does.
-- Both editors read a few Datastar values as the client does where they misjudged them:
-  `@get(+-1)` is a number, and `@get(+1n)` throws a TypeError before the action is called; a comma
-  inside a template literal's `${a, b}` is no comma of `postExpr`'s value, a nested template's text
-  included; and a comment around a value in `data-computed`, `/*c*/ 1`, leaves it a value and no
-  function. Reading the event types of a long datastar-fetch handler takes time in step with its
-  length, where it grew with the square of it.
-- IntelliJ's inspector folds a signal patch nested deeper than 64 levels into the store, as the
-  client and the VS Code inspector do, where it showed it raw. In both editors a patch nested more
-  than 1000 levels deep, or with a number of more than 1000 digits, leaves the store as it was and
-  says why, where IntelliJ reported an error of its own and VS Code said nothing.
-- IntelliJ's inspector shows the first 10,000 characters of a line, in an event, a response and the
-  signal store, and says it is cut, where a line of a megabyte froze the IDE for most of a minute.
-- Signal completion in both editors no longer offers a name a DSL or core call writes with a
-  hyphen, `dataSignals("is-open" to false)`, which Streamlord refuses, so no page has it. A key the
-  client keeps as written, `data-signals='{"hs-key": 1}'`, is still offered as `$hs-key`, which
-  Datastar reads as that one signal. Nor does an unknown signal's warning suggest such a name:
-  `$isOpen` beside `dataSignals("is-open" to false)` no longer says "Did you mean $is-open?".
-- VS Code: in a `$$"""` raw string that opens on the next line, `$$count` and `$${id}` are Kotlin's
-  templates again, not Datastar signals, as in a one-line string.
-- VS Code colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor files, where their extension
-  or VS Code's own grammar reads them, and leaves each engine's placeholders to the engine. The
-  `streamlord.languages` default names FreeMarker by its language id, `freemarker`, where it said
-  `ftl`, so diagnostics, completion and hover reach `.ftl` files too.
-- VS Code: an unclosed `'`, `` ` `` or `/*` in a value, as you type it, colours that value alone,
-  not the rest of the file, and so does `@post([[@{/save}]])` in Thymeleaf.
-- VS Code: `{{ user.name }}`, `{% if %}` and `${...}` in a value in an HTML file are the engine's
-  and get no Datastar colour, and Thymeleaf's `th:attr="data-signals=${x}"` is Thymeleaf's own.
-- VS Code colours the expression of `dataOn(event = "input", expression = "...")`,
-  `dataSignals(name = ..., expression = ...)`, `dataComputed`, `dataClass` and `dataAttr` with named
-  arguments, in any order.
-- VS Code colours HTML in a string under `@Language("HTML")`, in `interpolate("Hello <b ...>")` and
-  in a `trimMargin` raw string whose lines start with `|`, however the string opens. IntelliJ
-  colours `interpolate`'s format however it opens too.
-- VS Code: an ordinary attribute in escaped quotes in a plain Kotlin string,
-  `"<div class=\"btn\">"`, is a string, not an error.
-- IntelliJ: JSON in escaped quotes in a plain Kotlin string, `data-signals='{\"count\": 0}'`, has
-  its keys and values coloured, as in VS Code, where it was one string.
-- `${...}` in a value of a jte, kte, FreeMarker or Velocity file is the engine's inside a JavaScript
-  template too: IntelliJ no longer colours it as Datastar, and neither editor reports
-  `${user.name!'x'}` there as an expression error, while the rest of the value is still checked.
-- FreeMarker's `<#if>` and `<@macro>` and PHP's `<?= ?>` in a value are the engine's, and no
-  expression error. In Razor every `@` is Razor's, and `@@post(...)` is read and coloured as the
-  `@post(...)` it writes.
-- IntelliJ: an action such as `@post` has a colour again in the classic Default scheme, a global such
-  as `Math` has one in Darcula and the New UI's Dark, and the parts of an attribute's name have the
-  colour of an HTML attribute's name in every bundled scheme, as in VS Code.
-- A quoted object key, `{'text-red-500': $err}` as `data-class` writes one, is coloured as a key
-  and its colon as the key's, in both editors.
-- `${'$'}{${'$'}b}` in a JavaScript template in a Kotlin raw string is the template's `${` and the
-  signal `$b`, in both editors.
-- `{{#flag}}$a{{/flag}}`: IntelliJ colours `$a` beside the placeholder. VS Code colours `evt?.target`
-  as a property, as IntelliJ does, and gives a value's quotes the string colour.
-- VS Code reads a line of many Datastar attributes in time that grows with its length, where it
-  grew with its square: 400 attributes take a quarter of the time they did.
-- VS Code no longer flags a blank selector of `removeElements`, or a mode without a selector of
-  `patchElements`, on a call that is not Streamlord's: in a file that imports nothing of Streamlord,
-  or on a receiver the file declares with a type other than a stream, `doc: Document` with
-  `doc.removeElements("")`; IntelliJ did not. The same holds for a hyphen in `removeSignals`, and a
-  stream is judged under any name, `s.removeElements("")` among them.
-- The editors no longer warn that Streamlord escapes `</script` in the script of `respondScript`,
-  `ScriptResponse` or `datastarScript`: an answer sends its script as written, and the client sets
-  it as the element's text, so it does no harm there.
-- `payload = null` in the options of a backend action is written as `payload: null`, and the client
-  sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the
-  body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the
-  empty object, `readSignalsJson()` and a typed `readSignals<T>()` give `null`, and
-  `readSignalsOr(default)` the default, in core, Ktor, Spring WebMvc and WebFlux alike, where it threw.
-- Both editors colour every part of a Datastar expression and attribute name as the same kind of
-  thing, with keys and scopes the user's theme colours: object keys, properties, calls, globals,
-  operators, comments, every keyword, numbers such as `.5`, `10n` and `1_000`, and the parts of a
-  template literal. A slash after a value divides, and `&quot;x&quot;` is a string.
-- A `$name` in an ordinary Kotlin string, and a `$${id}` in a `$$` string, is Kotlin's template and
-  no longer coloured as a signal; `\$name` and `${'$'}name` still are.
-- The value of `data-bind`, `data-indicator` and `data-ref`, and the name `dataBind`,
-  `dataSignals("name", ...)` and friends take, is coloured as a signal; a filter's
-  `{include: /x/}` as an object.
-- VS Code colours Datastar in Handlebars, jte and Mustache, on SVG and MathML elements, in an unquoted value,
-  after a modifier with an argument, in a DSL expression on the next line, in a raw string, passed
-  by name or as a lone object, after a receiver, and in a raw string whose HTML starts on the next
-  line. The recommended colours, which stay opt in, now follow the theme's kind.
-- IntelliJ's Datastar colours fall back to other standard keys of your scheme, so they look
-  different in Default and Darcula: an attribute's plugin name (`on`), its prefix, the `:` and `__`
-  and its key now take the HTML attribute colour (they were a keyword, a line comment and a class
-  name); actions take the function declaration colour (they were a keyword and a function call); a
-  modifier's argument takes the constant colour (it was a class name). The colour settings page
-  shows every key in its preview.
-- IntelliJ colours the `data-star-` prefix, a name in capitals, a value around a template
-  placeholder and `.hbs` files, and no longer colours a name that is not Datastar's in a template.
-- `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
-  the reference allows, and no longer an expression with a syntax error.
-- The rewrite to `interpolate` passes a value in the body of a `<style>` that is not shown to be a
-  String, a class of yours that writes CSS, as `Trusted("$v")`, which compiles with no warning, where it
-  wrote `Trusted(v)`; a String it passes as `Trusted(v)`. A `List`, a `Set`, a `Map` or an array,
-  which a template writes in brackets, it does not vouch for, so no rewrite is offered for the string.
-- A value after a scheme the markup writes that does more than navigate, `href="javascript:${v}"`
-  or `data:text/html,`, is said to be in a URL that runs whatever it holds, and the rewrite to
-  `interpolate`, which threw for every value there, is no longer offered for the string. In a call
-  to `interpolate` such a placeholder is an error, as `interpolate` throws for every value.
-- The `html` of a `Trusted`, `${t.html}`, and a name for a `List<Html>` are markup you built, as
-  the `text` of an `Html` is: nothing is said of them in element text, and no rewrite to
-  `interpolate` escapes them there, where both editors offered one first.
-- In a call to `interpolate`, the fix that makes a Kotlin template a `%s` placeholder is not put
-  first under `.trimIndent()`, as the docs say, nor for a `String?`, whose `null` it writes as
-  nothing: it is offered for one now, and the message says so. It is offered for a format passed
-  by name too, and its title says truly that `interpolate` writes a `Trusted` as it is and escapes an
-  `Html` in a `<textarea>` or a `<title>`. Its issues link to the strings page, as the other issues
-  of a value do, and to Datastar's guide where Datastar runs the value.
-- The rewrite to `interpolate` keeps a value of yours, a constant, an enum entry or `${"$"}`, as a
-  template in the format where `interpolate` would refuse it or might escape markup it holds, so a
-  route constant in `data-on:click="@post('${SAVE}')"` or a constant of another file no longer
-  keeps the rewrite from every other value of the string; one the file shows with a `%` is not kept.
-- The rewrite to `interpolate` of a string with a value that may be null says that `interpolate`
-  writes nothing for it where a template writes `null`, in the message of every value that offers it.
-- A string marked `@org.intellij.lang.annotations.Language("HTML")`, the annotation by its
-  qualified name, and one handed straight to a parameter that carries the annotation, of a function
-  of the same file the call means (no receiver, a member of the class the call is in first), are read as HTML and their values judged, as one marked
-  `@Language("HTML")` or `// language=HTML` was. VS Code colours one marked by the qualified name too.
-- A literal in a value joined into a `+` chain, `"<ul>" + tags.map { "<li>$it</li>" }.joinToString("") + "</ul>"`,
-  or in a template of one of its literals, is judged as a string of its own, where it was passed over.
-- A number, a boolean or a nullable one in a `<script>`, a `<style>` or an event handler, and a
-  boolean in `style`, is no longer a warning: digits, `true`, `false` and `null` cannot end them. A
-  `kotlin.Number`, which a class of any text may be, still is in code.
-  The rewrite to `interpolate` keeps such a value a template in the format, so it no longer keeps
-  the rewrite from the other values. A String in the body of a `<style>` is said to be read as CSS,
-  with advice for CSS, where it was told to move into a `data-*` attribute.
-- VS Code reads a comparison as a Boolean, arithmetic of numbers the file declares,
-  `style="width: ${n * 2}px"` or `${n + 1}`, as a number, and `${Tab.HOME.name}` of an enum the
-  file shows as the author's own, as IntelliJ does: none of them is warned of where it is safe, nor keeps the rewrite from the
-  other values.
-- The rewrite to `interpolate` has one title wherever it is offered, on each value's warning and as
-  a context action: "...with ${css} as Trusted(...)" where it vouches for a value in a `<style>`,
-  "...which refuses a URL that runs" where a value starts a URL, where one value's fix and the
-  context action named the same edit differently.
-- "Quote the value" on a value without quotes is put first only for a number or a boolean, which
-  the quotes are all it needs; for any other value it is a step, and the message says that the
+**Kotlin values in HTML**
+- Both editors link a warning about a Kotlin value in HTML to the page on HTML strings, and advise
+  an attribute of its own read with `el.dataset` where they advised a signal.
+  See [Strings](https://streamlord-docs.netlify.app/strings/).
+- Both editors title the rewrite "Build this string with interpolate(...)", the same wherever it is
+  offered, naming a value it passes as `Trusted(...)`, a URL it refuses, or the inner string.
+- Both editors offer the rewrite as a context action anywhere in a string with a value to escape: an
+  intention in IntelliJ, a refactoring in VS Code.
+- Both editors offer the rewrite for a literal with `.trimIndent()` or `.trimMargin()`, a `$$"..."`
+  literal, and literals joined with `+`, and keep each form. A `trimMargin` string is read as HTML.
+- Both editors do not put the rewrite first under `.trimIndent()` or for a value that may be null,
+  which `interpolate` writes as nothing where a template writes `null`, and the message says so.
+- Both editors offer no rewrite where it would change the page: a call after a literal of a `+`
+  chain, a string in an annotation or a `const val`, a `List`, `Set`, `Map` or array value.
+- Both editors call a value after `javascript:` or `data:text/html,` a URL that runs whatever it
+  holds, offer no rewrite there, and make such a placeholder in `interpolate` an error.
+- Both editors no longer offer the rewrite for a `Trusted` in an attribute or a URL, and let a
+  `Trusted` in `interpolate` land anywhere. IntelliJ knows one by its type, `user.badge` too.
+- Both editors: when a value keeps the rewrite from the string, each other value's message names it
+  and where it stands. A constant, an enum entry or `${"$"}` stays a template and blocks nothing.
+- Both editors pass CSS of yours in a `<style>` as `Trusted("$v")` and a String as `Trusted(v)`,
+  and say a String there is read as CSS.
+- Both editors: a number, a boolean or a nullable one in a script, a style or a handler, and a
+  boolean in `style`, is no warning. A `kotlin.Number` still is.
+- Both editors give a value shaped as a number, `${xs.size}` or `${a * 2}`, the rewrite in place of
+  "Mark … as markup". VS Code reads comparisons, arithmetic and an enum's `name` as IntelliJ does.
+- Both editors say nothing of the `html` of a `Trusted`, a `List<Html>`, or a value that opens a `+`
+  chain, `w + "<p>...</p>"`, which are markup you built.
+- Both editors put "Quote the value" first only for a number or a boolean, and otherwise say the
   quoted value is still to be escaped.
-- A value that opens a `+` chain, `w + "<p>...</p>"`, is no longer told to be declared `Html` or
-  wrapped in `Trusted(...)`, which have no plus to join the rest with: markup you built there is fine.
-- The rewrite of a string inside a template of another names that string in its title,
-  `...which escapes the values: "<li>$v</li>"`, so it no longer stands beside the outer string's
-  rewrite under the same title at one caret.
-- A completion replaces the rest of the word the caret stands in, where the editor replaces: in
-  VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
-  `'¦form'` gave `'jsonform'` even then.
-- An action whose name holds a Kotlin template, `@${name}('/x')`, is no longer an unknown action.
-- An expression with many signal filters is judged in time that grows with its length, where it
-  grew with its square.
+- Both editors judge a string marked by the qualified `@Language("HTML")` or passed to an annotated
+  parameter in the same file, and a literal inside a `+` chain or one of its templates.
+- Both editors judge a value joined before the first literal, after a comment or to a literal with a
+  call after it, a name in backticks, and the URL of a `<meta>` refresh as a URL.
+- Both editors trim only the literal a trim call follows in a `+` chain, as Kotlin binds it, and
+  mark a value they cannot read to its end only where it certainly is.
+- Both editors check a call to `interpolate` with a trim call after its format, a format passed by
+  name, or prefixes, `interpolate(listOf("data-x-"), format, ...)`.
+- Both editors no longer put the `%s` placeholder fix first under `.trimIndent()` or for a
+  `String?`, and its title says how `interpolate` writes a `Trusted` and an `Html`.
+- Both editors count a list handed to `interpolate` as one value, with a hint and a fix that writes
+  out the elements of a `listOf(...)`, `setOf(...)` or `arrayOf(...)`.
+- Both editors warn of a value in `data-match-media` and no longer offer the rewrite for it.
+- Both editors show a value of a `$$"..."` literal in a `+` chain as `$${name}`, and "Mark … as
+  markup" writes both dollars. In a raw literal it is quoted without a backslash.
+- Both editors read a `val` set to `interpolate(...)`, or its `.text`, however many blanks precede it.
 
-- `signalDrift` counts a class a handler patches, `patchSignals(Form(...))`,
-  `call.respondSignals(form)` or `datastarSignals(Form())`, as declaring its properties; reads a
-  `readSignals<Form>()` written in a comment or a string as no read; and judges the class a read
-  names by the reading file's imports and package, so another `Form` elsewhere in the project is
-  not warned on, and a name that could mean two classes is not judged.
-- The keys of an object a signal is given are signals, as the client merges them in:
-  `data-signals:hero="{strength: 1}"`, `dataSignals("hero", "{strength: 1}")` and
-  `dataSignals("{quests: {urgent: 0}}")` define `hero.strength` and `quests.urgent`. Both editors
-  offer them, go to them and rename them, and no longer report them as defined nowhere.
-- `$tick++`, `--$n`, `$total += 1` and the other assignments define their signal, as the client's
-  store creates it, so the warning that no markup or code defines it goes. A plain read still
-  defines nothing, so a misspelt one is still reported.
-- Renaming an object signal no longer writes each key inside the object over itself.
-- In both editors the key of `attributes["data-..."]` completes the attribute names, the events
-  after `data-on:` and the modifiers, and VS Code documents the attribute named there on hover.
-- After an equals sign and white space, `<div a= data-`, and after a no-break space, completion
-  offers no attribute names: the browser reads a value and a tag's name there.
-- In IntelliJ completion and the autopopup no longer slow down on a Kotlin file of thousands of
-  DSL calls; on one of 2,000 they took 8 s.
-- In both editors, the rewrite of an HTML string to `interpolate(...)` is offered for a literal
-  with `.trimIndent()` or `.trimMargin()` after it, which stays on the format inside the call; for
-  a `$$"..."` literal, which keeps its prefix; and for literals joined to values with `+`, which
-  become one format, or each keep their own form where they are written differently. None of
-  them was offered it. A string written with `.trimMargin()`, each line after its margin, is read
-  as HTML, so its values are judged at all.
-- In both editors, a value joined before the first literal, `name + "<p>"` or `greet(name) + "<p>"`, one after a comment,
-  one joined to a literal with a call after it, and a name in backticks, `` $`my name` ``, are
-  judged; none was. The URL of a `<meta>` refresh is judged as a URL.
-- In both editors, a helper of the DSL whose attribute name is given by name and is no plain
-  literal, `dataAttr(name = "tab-index".uppercase(), expression = "0")`, no longer stops the
-  analysis of the whole file, as it did in the released editors too.
-- In both editors, a trim call after one literal of a `+` chain trims that literal alone, as Kotlin
-  binds it: a value after `"""…""".trimMargin() + name` is judged where the page has it, a URL in
-  `href` as a URL, and a `|` in a literal before the trimmed one stays the character it is.
-- In both editors, a `+` chain with a call or an index after one of its literals,
-  `"<p>" + name + "</p>".uppercase()`, gets no rewrite, since the call is that literal's alone and
-  the rewrite moved it to the whole string. Nor does a string in an annotation's argument or a
-  `const val`, where no call compiles.
-- In both editors, a Kotlin template before an equals sign in a string, `"<p $name=\"x\">"` or
-  `println("$key=$value")`, no longer defines a signal of that name. It was read as an assignment
-  to a signal, so the name was offered after `$` everywhere and a misspelt signal of that name got
-  no warning. An escaped dollar, `\$count = 1`, assigns as before.
-- In both editors, a value in a `$$"..."` literal that is joined to other literals with `+` is
-  shown as written, `$${name}`, and "Mark … as markup" writes it with both dollars, where it wrote
-  one and left text. A value in a raw literal of such a chain is quoted without a backslash.
-- In both editors, one value `interpolate` refuses no longer silently removes the rewrite from
-  the others: the message of each other value names the value in the way and where it stands, and
-  says likewise when a value may be markup the rewrite would escape, when a call follows a literal
-  of a chain, and when a trim call cannot be kept. A `Trusted` is in nobody's way, since
-  `interpolate` accepts it wherever it lands. CSS in the body of a `<style>` can be passed as
-  `Trusted(...)`: the fix is on that value, the rewrite then covers the whole string, and the
-  other values say that the fix passes it so.
-- In both editors, a call to `interpolate` whose format has a trim call after it is checked as
-  any other. Nothing in it was.
-- In both editors, a value whose shape says it is a number or a boolean, `${n.dec()}`,
-  `${xs.size}` or `${a * 2}`, gets the rewrite to `interpolate(...)` and is no longer offered
-  "Mark … as markup", whose `Trusted(...)` takes a String and did not compile. A value that may be
-  markup and is alone in the way of the rewrite says so in its message.
-- In both editors, a value joined with `+` that the analysis cannot read to its end is marked
-  only where it certainly is, and its message says that it cannot be read as a whole.
-- In both editors, a call `interpolate(listOf("data-x-"), format, ...)` is judged with the
-  prefixes it is given, as `interpolate` judges it, so a value it refuses in `data-x-text` is an
-  error.
-- In both editors, a `$name` a `$$"..."` literal leaves as text is offered after `$` like any
-  other signal the project reads.
+**Completion and hover**
+- IntelliJ lists the events after `data-on:` by their names, `click`, as VS Code does. In both, an
+  attribute that needs a key is written `data-on:key=""`, with `key` selected.
+- Both editors complete option values after `retry:`, `contentType:` and `requestCancellation:`,
+  `true` and `false` for a boolean, and `include` and `exclude` in a filter, in the free quote.
+- Both editors complete the values after `__threshold.`, `__prop.` and `__event.`, a duration flag
+  once, and the defined signals in `data-bind`, `data-indicator` and `data-ref`.
+- Both editors leave out the keys an options object has, and offer the members of the event after
+  `evt.` in `data-on`.
+- Both editors complete the key of `attributes["data-..."]`, and VS Code hovers it. After
+  `<div a= data-` or a no-break space no attribute names are offered.
+- Both editors replace the rest of the word with a completion: in VS Code as its insert mode
+  setting says, in IntelliJ with Tab.
+- Both editors' hover on an action names each parameter as the reference has it and links its place
+  in the reference. Signature help says what each parameter is.
+- Both editors' hover on a modifier shows its own documentation and tags. On `el`, `evt`, `patch`
+  and a signal it says what each is, a signal as the path the client reads.
+- Both editors document filter keys, option values, the `datastar-fetch` types and the Datastar
+  events, and VS Code the DSL's `...Expr` helpers.
+- Both editors show hover on the first character of a word, and on a signal written with `${'$'}`.
+- IntelliJ no longer lists `datastar-fetch` twice, offers the file's words after `__`, or offers to
+  import `CatalogNames.attributes`. VS Code no longer shows two hovers on `data-text`.
+- VS Code shows an option's default after its name, as IntelliJ does.
 
-- In both editors, the text of a template literal is no longer said to be rewritten by Datastar:
-  1.0.5 matches a template literal whole and rewrites only inside its `${...}`, so
-  `` `total: $total ${$a}` `` shows `$total` as written. The warning stays for a literal whose
-  `${...}` holds a brace, which the client still reads as code, and says so.
-- In both editors, an expression that opens with `return` is no longer split at its `;`, as 1.0.5
-  compiles it whole, so `return ((n) => { const y = n * 2; return y })($a)` is no longer an error
-  or said to lose its value. An action after a template literal, as in
-  `` `${$a}` + @peek(() => $b) ``, is no longer a syntax error.
-- The documentation of `retry`, `retryInterval` and `retryMaxCount`, in the editors' hovers, in
-  the DSL and on the operations page, says what 1.0.5 does: `'never'` retries nothing, where
-  1.0.4 retried a request that failed on the network; `retryMaxCount` counts the retries of the
-  whole action, where a 200 answer started the count again; and the wait goes back to
-  `retryInterval` only after a stream that ended.
-- In VS Code, an expression that stops short, `$count +` or `@post('/x'`, is said to hold an
-  `Unexpected end of input`, as the IntelliJ plugin says, where the extension said
-  `Unexpected token` of a place that holds none.
-- In both editors, a value that stops short, `data-text="1 +"`, is said to hold an
-  `Unexpected end of input` as well, where the parenthesis Datastar closes a value with was called
-  an `Unexpected token`.
-- In both editors, the signals of a `@Serializable` class stay known while the class is being
-  typed and its parenthesis is still open.
-- In both editors, where two defined signals are as near a misspelt one, the one suggested is the
-  first by name, where it could change with the order the project's files were read in.
-- In VS Code, a file the analysis fails on, one with templates nested thousands deep say, gets no
-  diagnostics and a line in the Streamlord output channel, and no longer keeps the other open
-  files from being checked.
-- In VS Code, a file in no folder of the workspace, and any file in a window without a folder, is
-  read for its signals when it is opened. Go to definition and find references answered nothing
-  from a place such a file defines a signal, and a rename there was offered and wrote nothing,
-  unless the file also read a signal and the unknown-signal check was on.
-- VS Code works in a `.kt` file with Streamlord alone: the extension declares the Kotlin language
-  itself, where it did nothing until some other extension declared it.
-- The Open in Stream Inspector lens and IntelliJ's route marker no longer stand on a DSL action
-  handed to an attribute, `dataInit(get("/quests"))`, and a Ktor `sse("/feed") { }` route gets one.
-- An attribute value of nothing but spaces, `data-on:click="  "`, is reported as an empty
-  expression in HTML and in a Kotlin HTML string, as it is in the DSL, and an empty value gets the
-  same verdict as a blank one: `data-signals=""` is an empty expression, and `data-bind="  "`
-  names a signal no expression can read.
-- A Ktor route whose arguments hold a lambda or a call, `sse("/t", serialize = { ... }) { }`,
-  gets its lens and gutter marker.
-- IntelliJ no longer offers to import `CatalogNames.attributes` or the other attribute sets of
-  streamlord-core's catalog for a name it cannot resolve: they are internal now.
-- `SseDecoder`, and with it `datastarEvents` and `LiveDatastarStream` in streamlord-test, read
-  signals written as a JavaScript object literal of plain values, `{foo: 1, bar: 2}` as Datastar's
-  reference writes them, as the JSON they stand for, where they threw. The client runs signals
-  that `JSON.parse` refuses as JavaScript, so it takes them. Signals that would be computed,
-  `{a: 1 + 1}`, still throw `DatastarEventValidationException`, and so do signals that are no
-  object, a top-level `[1,2]` or `null`, as before. Sending signals still takes JSON.
-- The `415` that `readSignals` answers a form with says what to do: Datastar's
-  `contentType: 'form'` sends the form's fields and no signals, so read them as form parameters.
-  [Signals](https://streamlord-docs.netlify.app/signals/#a-form) shows how on Ktor and Spring.
-- A `val` set to `interpolate(...)`, or to its `.text`, is read as the whole of what follows on the
-  line says, however many blanks come before it, where eight or more made it markup or a String.
-- The `SignalsCodecException` for a value JSON cannot hold names its class by its simple name,
-  `JSON cannot hold Sorcerer.`, where it gave the qualified name, and `null` for a local class.
-- The editors judge the arguments of the Pro actions `@clipboard`, `@fit` and `@intl` by the kinds
-  the reference declares, as they judge the free ones, `@fit('a', 0, 1, 0, 10)` among them, and
-  their hover says what each parameter takes; they judged the number of arguments alone. A number
-  where one takes a string is let be, as the browser turns it into one: `@clipboard(1)` copies `1`.
-- IntelliJ's inspection "Signal no file defines" is now called "Unknown signals", as the VS Code setting
-  `streamlord.diagnostics.unknownSignals` that turns the same two warnings on and off is. Its
-  settings in an inspection profile are kept.
-- The expressions handed to the DSL's expression helpers, `getExpr`, `postExpr`, `putExpr`,
-  `patchExpr`, `deleteExpr`, `queryExpr`, `setAllExpr`, `clipboardExpr` and every argument of
-  `fitExpr`, and the options `payloadExpr`, `requestCancellationExpr` and the values of
-  `headerExprs` in the options of a backend action, are checked, completed, hovered and coloured in
-  both editors, as the expression of `dataText` is. A helper handed to another call, `dataOnClick(getExpr("..."))`, is read as its own.
-  In the catalog, an expression call site may name the parameters after it that take an expression
-  too, `more`, and `expressionOptions` lists the options; `CallSiteSpec` has one more value, `more`,
-  last, and code compiled against the old constructor needs a rebuild.
-- Markup under `data-ignore`, and an element with `data-ignore__self`, is no longer checked in either
-  editor, and a signal declared there is not counted as declared, as the client applies nothing there.
-  Under an alias the same holds for `data-star-ignore`.
-- `data-on:keyDown` and `Data-On:Click` work, as the browser hands the client `keydown` and `click`:
-  they get a hint to write the event in lower case, where the fix wrote `key-down__case.camel`, an
-  event no element fires. `dataOn("keyDown", ...)` is a warning, since the DSL writes `keyDown`.
-- Modifier arguments are judged as the client reads them: `__case.snake.pascal` applies both values
-  and is no error; `__debounce` without a duration, or with `.abc`, waits 0 ms and is a warning, not
-  an error; `data-on-interval` with no duration or `__duration.0ms` runs as often as the browser
-  allows, which is said; `__threshold.0.5` reads 0, with a fix to `__threshold.50`; a modifier
-  written twice is read from the last; `__document` with `__window`, and `__window` with
-  `__outside`, is ignored, which is said. A Pro modifier its reference does not list, such as
-  `data-on-raf__debounce`, is not judged, as what the Pro plugin reads of it is not known.
-- `data-star-rating` and other `data-star-*` names that are no Datastar attribute are left alone
-  under the default prefix, where they were called aliased Datastar attributes.
-- An issue on `data-nonce`, and VS Code's HTML data for it, links to the security page of the
-  Datastar reference, where the attribute is described.
-- `evt.type` outside `data-on` is a warning: the client hands the event to `data-on` alone, and
-  reading from it elsewhere throws. `$$count` is a warning with a fix, as the browser reads `$$`.
-  `await @post(...)` is an error on `await`, with why, where it was one on `@`.
-  `data-on-signal-patch-filter` without `data-on-signal-patch` on the element is a warning, and so
-  is `data-attr:view-box` on an SVG element, which sets `view-box`, with a fix to the object form.
-- The prefixed events keep the case the browser fires them in: `data-on:webkitAnimationEnd` gets the
-  fix `webkit-animation-end__case.camel`, completion writes it so, and `data-on:webkitanimationend`,
-  which no browser fires, is a warning. `catalog/dom-events.json` names the four as the browser does.
-- In the DSL, `dataIgnore()` keeps the checks off the element and what its block holds, as
-  `data-ignore` does in markup, and the signals declared there count as none; what Kotlin writes
-  and what the DSL refuses as the page renders is still said.
-- Knockout's `data-bind="text: name"`, a share button's `data-text="Check this out"` and other
-  values another library reads say that `data-ignore`, or an aliased bundle, keeps Datastar off them.
-- In the DSL, `dataIndicator` after a `dataInit` that sends at once in the same element gets the
-  order warning HTML gets, and an empty expression, `dataShow("")`, is the error it throws as the
-  page renders, where it was a warning.
-- IntelliJ no longer calls `DATA-TEXT` or `Data-On:Click` an attribute that is not allowed here,
-  and a weaker problem inside an error, such as the Pro hint under a missing key, which IntelliJ
-  does not draw, is said with the error and its fixes are offered there, as VS Code shows both.
-- Hover no longer fails in IntelliJ on the first character of a word in an expression, VS Code
-  shows it there too, and both show the signal written with Kotlin's `${'$'}` in an HTML string, a
-  DSL string and `interpolate`.
-- Hover and completion document the keys of a signal filter, an option's values, the types
-  `datastar-fetch` is dispatched with, the Datastar events as the key of `data-on`, and in VS Code
-  the DSL's `...Expr` helpers. Signature help says what each parameter is.
-- Option completion leaves out the keys the object already has, offers `true` and `false` for an
-  option that takes a boolean, and after `evt.` in `data-on` offers the members of the event it
-  listens for. IntelliJ no longer lists `datastar-fetch` twice or offers the file's words after
-  `__`, and VS Code no longer shows two hovers on `data-text` and the others its HTML data documents.
-- The pre-1.0 fix needs a key after the dash, so a half typed `data-on-` is no longer changed to
-  `data-on:` with an empty key.
-- A Kotlin template or a `%s` in an action call no longer turns off the checks of the rest of the
-  call: `@get('/a/$id', {retyr: 'never'})` is told of `retyr`, in an HTML string, a DSL string and
-  `interpolate`.
-- `@intl` warns of a type the reference does not name, with a fix for one written in another case.
-  `@gett` is offered `@get`, and the cases of `switch (evt.detail.type)` are held to the types
-  `datastar-fetch` is dispatched with, as `===` is.
-- An option of the wrong kind says what Datastar does with it, `retryMaxCount: true` counts as 1;
-  `@get(['/a'])`, which the client sends, is no longer reported; a `contentType` the client cannot
-  read is said to fail the action with FetchFailed. `filterSignals` is shown as `RegExp | string`.
-- In the DSL, `peek` writes its expression in parentheses, so `peek("{a: \$a}")` returns the
-  object, and `fit` and `intl` write their value as one argument. A comma at the top of an
-  expression the DSL writes in parentheses, `postExpr("'/a', {retyr: 1}")`, is a warning, as
-  JavaScript keeps only what follows it.
-- Every option of a backend action has an `...Expr` twin that takes an expression, a
-  `SignalFilter` can be an expression or hold expressions (`includeExpr`, `excludeExpr`,
-  `filterExpr`), and `peekExpr` hands `@peek` a function the page has. `SignalFilter` has three more
-  values after `include` and `exclude`, so code compiled against it, its `copy` or its constructor,
-  needs a rebuild; source that names `include` and `exclude`, or passes them in that order, stays as it is.
-- In the catalog an expression call site may say the DSL writes its expression as one value,
-  `oneValue`; `CallSiteSpec` has `more` and `oneValue` last, so code compiled against its
-  constructor or `copy` needs a rebuild, and source that names its values stays as it is.
-- In the catalog, an attribute may name the page of the reference that describes it, `reference`;
-  `AttributeSpec` has one more value, `reference`, last, and code compiled against the old
-  constructor needs a rebuild.
+**Highlighting**
+- Both editors colour every part of an expression and attribute name with keys the theme colours:
+  keys, properties, calls, globals, operators, comments, keywords, numbers and template literals.
+- Both editors colour a quoted key, `{'text-red-500': $err}`, and its colon as a key, a slash after
+  a value as a division, and `&quot;x&quot;` as a string.
+- Both editors colour the value of `data-bind`, `data-indicator` and `data-ref`, and the name
+  `dataBind` and `dataSignals("name", ...)` take, as a signal, and `{include: /x/}` as an object.
+- Both editors colour `$name` in an ordinary Kotlin string and `$${id}` in a `$$` string as Kotlin's
+  templates; `\$name`, `${'$'}name` and `${'$'}{${'$'}b}` still read as Datastar's.
+- VS Code gives `{{ user.name }}`, `{% if %}` and `${...}` in a value in an HTML file, and
+  Thymeleaf's `th:attr="data-signals=${x}"`, no Datastar colour: they are the engine's.
+- Both editors leave `${...}` in a value of a jte, kte, FreeMarker or Velocity file, also inside a
+  JavaScript template, FreeMarker's `<#if>` and `<@macro>` and PHP's `<?= ?>` to the engine, with no
+  expression error. In Razor every `@` is Razor's, and `@@post(...)` reads as `@post(...)`.
+  See [templates](https://streamlord-docs.netlify.app/templates/).
+- IntelliJ's colours fall back to standard keys of your scheme: an attribute name takes the HTML
+  attribute colour, an action the function declaration's, a modifier argument the constant's.
+- IntelliJ colours actions in the classic Default scheme and globals in Darcula and the New UI's
+  Dark, and its colour settings page shows every key.
+- IntelliJ colours the `data-star-` prefix, a name in capitals, a value around a template
+  placeholder, `$a` beside `{{#flag}}`, `.hbs` files, and JSON in escaped quotes.
+- IntelliJ colours `interpolate`'s format however it opens, and no longer colours a name that is not
+  Datastar's in a template.
+- VS Code colours Datastar in Handlebars, jte, Mustache, FreeMarker, Velocity, Twig, PHP and Razor,
+  on SVG and MathML elements, in an unquoted value and after a modifier with an argument.
+- VS Code: the `streamlord.languages` default names FreeMarker `freemarker`, where it said `ftl`, so
+  `.ftl` files get diagnostics, completion and hover.
+- VS Code colours DSL expressions passed by name in any order, on the next line, as a lone object or
+  after a receiver, and the JavaScript of `ScriptResponse("...")`.
+- VS Code colours HTML under `@Language("HTML")`, also by its qualified name, in
+  `interpolate(...)` and in a `trimMargin` string, however the string opens.
+- VS Code reads `$$count` and `$${id}` in a `$$"""` string that opens on the next line as Kotlin's.
+- VS Code colours an unclosed quote or `/*`, and `@post([[@{/save}]])` in Thymeleaf, as the value
+  alone, `"<div class=\"btn\">"` and a value's quotes as a string, `evt?.target` as a property.
+- VS Code: the recommended colours, still opt in, follow the theme's kind.
+
+**Inspector, routes and files**
+- IntelliJ's inspector folds a signal patch deeper than 64 levels into the store, as VS Code does.
+  In both, one deeper than 1000 levels, or with a number of more than 1000 digits, leaves the store
+  as it was and says why.
+- Both editors judge a saved request's signals with the SDK's reader, so VS Code now refuses ones
+  nested deeper than 64 or with a number longer than 1000 digits, as IntelliJ did, in its words.
+- IntelliJ's inspector shows the first 10,000 characters of a line and says it is cut, where a line
+  of a megabyte froze the IDE.
+- Both editors: VS Code's Open in Stream Inspector lens and IntelliJ's route marker no longer stand
+  on a DSL action handed to an attribute, and a Ktor `sse("/feed") { }` route gets one, also one
+  whose arguments hold a lambda or a call.
+- VS Code works in a `.kt` file with Streamlord alone, as it declares the Kotlin language itself.
+  A file the analysis fails on gets a line in the output channel and no longer stops the others.
+
+### SDK
+
+- Streamlord speaks Datastar 1.0.5: `DatastarProtocol.VERSION` is `1.0.5`, the catalog is
+  `catalog/datastar-1.0.5.json`, and the docs and the demo load 1.0.5. A 1.0.4 page works as before.
+- streamlord-core: `ExecuteScript.redirect`, `replaceUrl`, `pushUrl` and `PatchSignals.remove` build
+  the events for a `Flow` on WebFlux or `respondDatastar(flow)` on Ktor.
+  See [Spring WebFlux](https://streamlord-docs.netlify.app/spring-webflux/#redirects-the-address-bar-and-removing-signals).
+- streamlord-core: an answer of elements that is no stream can name `viewTransitionSelector`, sent
+  with `useViewTransition` as `DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR`.
+  See [view transitions](https://streamlord-docs.netlify.app/protocol/#view-transitions).
+- streamlord-spring: WebFlux reads signals with `exchange.readSignals()`, `readSignals<T>()`,
+  `readSignalsOr(default)` and `readSignalsJson()`, each `suspend`, with the limits and checks of
+  the others, and has `WebFluxIncomingRequest` and `exchange.isDatastarRequest`.
+  See [reading signals](https://streamlord-docs.netlify.app/spring-webflux/#reading-signals).
+- streamlord-spring takes reactor-core as `compileOnly`, which every WebFlux application has.
+- streamlord-html: the backend actions take expressions: `getExpr`, `postExpr`, `putExpr`,
+  `patchExpr`, `deleteExpr`, `queryExpr`, `headerExprs`, `requestCancellationExpr` and `setAllExpr`.
+- streamlord-html: every option of a backend action has an `...Expr` twin, a `SignalFilter` holds
+  expressions (`includeExpr`, `excludeExpr`, `filterExpr`), and `peekExpr` hands `@peek` a function.
+  In streamlord-html-pro, `fitExpr` takes the ends of the ranges as expressions.
+- streamlord-html: each expression is written in parentheses, so a comma or a brace in it never
+  opens options of its own. `payloadExpr` and `clipboardExpr` refuse a blank one.
+- streamlord-html refuses a header named twice, in any case, and `requestCancellationExpr` set with
+  `requestCancellation`.
+- streamlord-html: `peek` writes its expression in parentheses, so `peek("{a: \$a}")` returns the
+  object, and `fit` and `intl` write their value as one argument.
+- streamlord-html: `payload = null` is written as `payload: null`, so the client sends `null` where
+  it sent the signals.
+- core, Ktor, Spring WebMvc and WebFlux read a `null` body or `?datastar=null` as no signals, where
+  they threw: `readSignals()` gives `{}`, `readSignalsJson()` and `readSignals<T>()` give `null`,
+  and `readSignalsOr(default)` the default.
+- streamlord-html: every modifier property of the DSL has KDoc.
+- streamlord-core: `interpolate`'s message for a `String` in a `data-*` expression advises an
+  attribute read with `el.dataset`, where it advised a signal.
+- streamlord-core: `PatchSignals` and `SignalsResponse` still refuse JSON that is no object, now
+  saying why: `the client patches its items as signals named 0, 1 and on`, where they said the
+  client runs it as JavaScript. `SseDecoder` says the same of such a frame, and tells a selector
+  over two data lines as the stream wrote it.
+- streamlord-core: `SseDecoder`, so `datastarEvents` and `LiveDatastarStream` too, reads signals
+  written as an object literal of plain values, `{foo: 1, bar: 2}`, where it threw. Computed ones,
+  `{a: 1 + 1}`, still throw, and sending still takes JSON.
+- streamlord-core: `SignalsCodecException` names a class by its simple name, `JSON cannot hold
+  Sorcerer.`, where it gave the qualified name, and `null` for a local class.
+- streamlord-core: `JsonParseException.limit` says the text is JSON past one of the parser's limits.
+- The `415` that `readSignals` answers a form with says to read the fields as form parameters.
+  See [a form](https://streamlord-docs.netlify.app/signals/#a-form).
+- streamlord-test: `datastarEvents(body, header)` reads an answer that is no stream, by its content
+  type and headers.
+  See [Testing](https://streamlord-docs.netlify.app/testing/#an-answer-that-is-no-stream).
+- Docs: [Spring WebFlux](https://streamlord-docs.netlify.app/spring-webflux/#heartbeats) says a flow
+  has no heartbeat, whatever the bean says, and shows the ticker that keeps it from being silent.
+- Docs: [Security](https://streamlord-docs.netlify.app/security/) says that a relative URL may lead
+  to another host, that CSP mode does not make an expression safe and a page without it needs
+  `'unsafe-eval'`, that the aliased bundle reads `data-star-nonce`, and that signals hold no secret.
+- Docs: [Strings](https://streamlord-docs.netlify.app/strings/) names every URL attribute
+  `interpolate` holds to a safe scheme, `formaction` and `xlink:href` among them.
+
+### Analysis API
+
+- `complete`, `hover`, `signatureHelp` and `offers` are what both editors call for completion,
+  hover and signature help, over a `Source` and, for completion, a `Workspace` (the signals, ids and
+  classes defined elsewhere). An item's snippet is its text and the places to fill.
+- `Source` holds the text, its language, the prefix, `modules`, `constants`, `valueFact`,
+  `foreign`, `prefixSetting` (the setting the aliased attribute warning names) and `engine`.
+- `Source.engine` is `TemplateEngine.JTE`, `FREEMARKER`, `VELOCITY` or `RAZOR`, and
+  `templatePlaceholders` takes it second. What all engines share is `catalog/template-syntax.json`.
+- `Modules.known(core, htmlDsl, coreHtml)` with `coreHtml` false, a core without `Html`, makes the
+  advice for a value in an HTML string name `Trusted(...)` alone.
+- New: `projectSignalIssues` and `ProjectSignals`, `signalNameStrings` and `SignalNameString`,
+  `rewriteAt`, `tokenizeSignalName` and `templatePlaceholders`.
+- New in `Requests`: `streamRequest`, `signalsProblem`, `environment`, and `patchedStore` with
+  `PatchedStore`. `parseRequestsFile` takes null for a file that is not there.
+- `ProjectFiles` holds the folders a project walk leaves out and the extensions read as markup.
+- `analyzeKotlinSites` also lists an HTML string with no issue that can be rewritten,
+  `SiteIssues.rewrite`. `KotlinString` has `literals` and `called`.
+- `ValueFact.TRUSTED` is core's `Trusted`, judged as `MARKUP` is; `isMarkup()` holds for both.
+- `signalDrift` counts a class a handler patches as declaring its properties, takes no read from a
+  comment or a string, and judges a class by the reading file's imports and package.
+- The catalog gives each action the kinds of its arguments, each option its kind and values, each
+  modifier its documentation and suggestions, and an attribute its `reference` page.
+- In the catalog, an expression call site may name more expression parameters, `more`, and say the
+  DSL writes its expression as one value, `oneValue`; `expressionOptions` lists the options. A DSL
+  expression may be passed by its parameter's name, and `dataAnimate`'s is its last argument.
 
 ## [0.21.0] - 2026-11-11
 
