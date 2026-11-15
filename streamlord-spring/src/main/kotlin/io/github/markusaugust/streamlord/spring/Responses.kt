@@ -72,11 +72,15 @@ public fun datastarSignals(
     onlyIfMissing: Boolean = false,
 ): ResponseEntity<String> = SignalsResponse(signals, onlyIfMissing).toResponseEntity()
 
-/** Any value the codec can encode, to be patched as signals. Always `200 OK`, as [datastarElements]. */
+/**
+ * Any value the codec can encode, to be patched as signals. Always `200 OK`, as [datastarElements].
+ *
+ * @param streamlord The configured instance, whose codec encodes [value].
+ */
 public inline fun <reified T> datastarSignals(
     value: T,
-    streamlord: Streamlord = Streamlord.Default,
     onlyIfMissing: Boolean = false,
+    streamlord: Streamlord = Streamlord.Default,
 ): ResponseEntity<String> = datastarSignals(streamlord.codec.encode(value, typeOf<T>()), onlyIfMissing)
 
 /** JavaScript to execute, without opening a stream. Always `200 OK`, as [datastarElements]. */

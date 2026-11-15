@@ -273,7 +273,7 @@ class SignalDriftTest {
             "suspend fun f() = call.respondSignals(Form(\"\", 1))",
             "suspend fun f() = sse.patchSignals(Form(query = \"\"), onlyIfMissing = true)",
             "fun f() = datastarSignals(Form())",
-            "fun f(form: Form) = datastarSignals(form, streamlord)",
+            "fun f(form: Form) = datastarSignals(form, streamlord = streamlord)",
             "suspend fun f() { val form = Form(); stream.patchSignals(form) }",
             "suspend fun f() = sse.patchSignals(codec.toJsonValue(Form()))",
             "suspend fun f() = sse.patchSignals(mapOf(\"query\" to \"\", \"page\" to 1))",
