@@ -179,56 +179,56 @@ private val INTERPOLATION_CODES =
  * rewrite of an expression does that JavaScript would not, and `patch` where the attribute does not
  * hand it over.
  */
-class DatastarExpressionInspection :
-    StreamlordInspection(
-        setOf(
-            "expression-syntax",
-            "empty-expression",
-            "unknown-action",
-            "action-space",
-            "pro-action",
-            "signal-kebab",
-            "literal-rewritten",
-            "signal-not-read",
-            "statement-split",
-            "scope-name",
-            "unknown-option",
-            "option-value",
-            "action-arity",
-            "action-argument",
-            "fetch-event-type",
-        ),
+class DatastarExpressionInspection : StreamlordInspection(EXPRESSION_CODES)
+
+private val EXPRESSION_CODES =
+    setOf(
+        "expression-syntax",
+        "empty-expression",
+        "unknown-action",
+        "action-space",
+        "pro-action",
+        "signal-kebab",
+        "literal-rewritten",
+        "signal-not-read",
+        "statement-split",
+        "scope-name",
+        "unknown-option",
+        "option-value",
+        "action-arity",
+        "action-argument",
+        "fetch-event-type",
     )
 
 /**
  * `data-*` attribute names, keys, modifiers and their arguments, values, an indicator with nothing
  * to show or set up too late, signal names the client cannot hold, and the values it evaluates as filters or computeds.
  */
-class DatastarAttributeInspection :
-    StreamlordInspection(
-        setOf(
-            "unknown-attribute",
-            "unknown-modifier",
-            "modifier-args",
-            "missing-key",
-            "unexpected-key",
-            "wrong-element",
-            "signal-name-expected",
-            "unexpected-value",
-            "missing-value",
-            "key-and-value",
-            "missing-key-or-value",
-            "pro-attribute",
-            "prefix-mismatch",
-            "indicator-without-action",
-            "indicator-order",
-            "signal-name",
-            "computed-value",
-            "filter-pattern",
-            "signal-null",
-            "missing-nonce",
-            "invalid-nonce",
-        ),
+class DatastarAttributeInspection : StreamlordInspection(ATTRIBUTE_CODES)
+
+private val ATTRIBUTE_CODES =
+    setOf(
+        "unknown-attribute",
+        "unknown-modifier",
+        "modifier-args",
+        "missing-key",
+        "unexpected-key",
+        "wrong-element",
+        "signal-name-expected",
+        "unexpected-value",
+        "missing-value",
+        "key-and-value",
+        "missing-key-or-value",
+        "pro-attribute",
+        "prefix-mismatch",
+        "indicator-without-action",
+        "indicator-order",
+        "signal-name",
+        "computed-value",
+        "filter-pattern",
+        "signal-null",
+        "missing-nonce",
+        "invalid-nonce",
     )
 
 /**
@@ -266,80 +266,27 @@ private val UNKNOWN_SIGNAL_CODES = setOf("unknown-signal", "signal-never-declare
  * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
  * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
  */
-class DatastarKeyCaseInspection :
-    StreamlordInspection(setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused"))
+class DatastarKeyCaseInspection : StreamlordInspection(KEY_CASE_CODES)
+
+private val KEY_CASE_CODES = setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused")
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts, and the arguments core refuses as it runs. */
-class StreamlordMarkupInspection :
-    StreamlordInspection(
-        setOf(
-            "missing-id",
-            "mode-needs-selector",
-            "unclosed",
-            "stray-close",
-            "top-level-text",
-            "blank-selector",
-            "selector-newline",
-            "script-close",
-            "event-refused",
-        ),
+class StreamlordMarkupInspection : StreamlordInspection(MARKUP_CODES)
+
+private val MARKUP_CODES =
+    setOf(
+        "missing-id",
+        "mode-needs-selector",
+        "unclosed",
+        "stray-close",
+        "top-level-text",
+        "blank-selector",
+        "selector-newline",
+        "script-close",
+        "event-refused",
     )
 
 /** Every code an inspection claims, so a test can prove the analysis leaves none unclaimed. */
 object InspectionCodes {
-    val all: Set<String> =
-        INTERPOLATION_CODES +
-            UNKNOWN_SIGNAL_CODES +
-            setOf(
-                "expression-syntax",
-                "empty-expression",
-                "unknown-action",
-                "action-space",
-                "pro-action",
-                "signal-kebab",
-                "literal-rewritten",
-                "signal-not-read",
-                "statement-split",
-                "scope-name",
-                "unknown-option",
-                "option-value",
-                "action-arity",
-                "action-argument",
-                "fetch-event-type",
-            ) +
-            setOf(
-                "unknown-attribute",
-                "unknown-modifier",
-                "modifier-args",
-                "missing-key",
-                "unexpected-key",
-                "wrong-element",
-                "signal-name-expected",
-                "unexpected-value",
-                "missing-value",
-                "key-and-value",
-                "missing-key-or-value",
-                "pro-attribute",
-                "prefix-mismatch",
-                "indicator-without-action",
-                "indicator-order",
-                "signal-name",
-                "computed-value",
-                "filter-pattern",
-                "signal-null",
-                "missing-nonce",
-                "invalid-nonce",
-            ) +
-            setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused") +
-            setOf(
-                "missing-id",
-                "mode-needs-selector",
-                "unclosed",
-                "stray-close",
-                "top-level-text",
-                "blank-selector",
-                "selector-newline",
-                "script-close",
-                "event-refused",
-            )
+    val all: Set<String> = INTERPOLATION_CODES + UNKNOWN_SIGNAL_CODES + EXPRESSION_CODES + ATTRIBUTE_CODES + KEY_CASE_CODES + MARKUP_CODES
 }
