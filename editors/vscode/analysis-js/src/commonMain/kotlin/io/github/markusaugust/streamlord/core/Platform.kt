@@ -2,8 +2,6 @@ package io.github.markusaugust.streamlord.core
 
 // What core asks of its platform. On the JVM these are the declarations of PlatformJvm.kt in streamlord-core.
 
-internal expect fun exactLongOrNull(text: String): Long?
-
 internal expect fun bigNumberText(
     n: Number,
     plainScale: Int,
