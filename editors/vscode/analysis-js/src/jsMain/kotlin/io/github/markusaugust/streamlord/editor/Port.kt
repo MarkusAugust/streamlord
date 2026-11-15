@@ -185,7 +185,7 @@ fun diagnose(
         object : ProjectSignals {
             override fun defined() = defined?.let(::setOf)
 
-            override fun own() = others?.let { collectSignalFacts(source(src, true)) }
+            override fun own() = others?.let { collectSignalFacts(file) }
 
             override fun others() = facts(others ?: emptyArray())
         }

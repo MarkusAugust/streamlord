@@ -353,6 +353,9 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- VS Code reads what a Kotlin file itself declares with the attribute prefix you set, as IntelliJ
+  does, so with a prefix of your own a read of `query` beside `<input data-ds-bind:query>` in the
+  same file no longer gets a false `signal-never-declared`.
 - Both editors read a few Datastar values as the client does where they misjudged them:
   `@get(+-1)` is a number, and `@get(+1n)` throws a TypeError before the action is called; a comma
   inside a template literal's `${a, b}` is no comma of `postExpr`'s value, a nested template's text
