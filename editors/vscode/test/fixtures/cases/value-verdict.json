@@ -4,6 +4,7 @@
     {"name":"a constant the author wrote","fact":"constant","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"SAFE","STRUCTURE":"SAFE"}},
     {"name":"a number","fact":"number","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"SAFE","STRUCTURE":"UNSAFE"}},
     {"name":"a boolean","fact":"boolean","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"SAFE","STRUCTURE":"UNSAFE"}},
+    {"name":"a kotlin.Number, open to classes whose text may be anything","fact":"open-number","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"SAFE","DATASTAR":"SAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},
     {"name":"an unsigned number","fact":"unsigned","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"DIGITS","DATASTAR":"DIGITS","CODE":"SAFE","STRUCTURE":"UNSAFE"}},
     {"name":"a number or a boolean that may be null","fact":"nullable","verdicts":{"TEXT":"SAFE","ATTRIBUTE":"SAFE","URL":"SAFE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"SAFE","STRUCTURE":"UNSAFE"}},
     {"name":"a string","fact":"string","verdicts":{"TEXT":"ESCAPE","ATTRIBUTE":"ESCAPE","URL":"ESCAPE","STYLE":"UNSAFE","DATASTAR":"UNSAFE","CODE":"UNSAFE","STRUCTURE":"UNSAFE"}},

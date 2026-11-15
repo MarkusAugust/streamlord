@@ -220,7 +220,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 "\${u}" to ValueFact.UNSIGNED,
                 "\${w}" to ValueFact.UNSIGNED,
                 "\${maybe}" to ValueFact.NULLABLE,
-                "\${n}" to ValueFact.NUMBER,
+                "\${n}" to ValueFact.OPEN_NUMBER,
                 "\${rows.joinToString(\"\")}" to ValueFact.MARKUP,
                 "\${built.joinToString(\"\")}" to ValueFact.MARKUP,
                 "\${trusted.joinToString(\"\")}" to ValueFact.MARKUP,

@@ -31,7 +31,7 @@ class RewriteProbesTest {
     private fun plain(type: String): Any? =
         when (type.removeSuffix("?")) {
             "String", "Any" -> "Ann"
-            "Int" -> 3
+            "Int", "Number" -> 3
             "Boolean" -> true
             "Html" -> interpolate("%s", "x")
             "Trusted", "Badge" -> Trusted("<b title=\"x\">y</b>")
