@@ -229,6 +229,12 @@ class HighlightingTest : StreamlordTestCase() {
         )
     }
 
+    fun `test the dsl's signal names keep their colour after an edit above them`() {
+        painted("View.kt", "<caret>fun FlowContent.f() {\n    input { dataBind(\"name\") }\n}")
+        myFixture.type("// typed\n")
+        assertEquals(listOf("name" to DatastarColors.SIGNAL), painted())
+    }
+
     // As VS Code colours them: the expression of each helper that takes one, every end of fitExpr's, and the options that take one.
     fun `test the dsl's expression helpers and the expression options of a backend action`() {
         val calls =

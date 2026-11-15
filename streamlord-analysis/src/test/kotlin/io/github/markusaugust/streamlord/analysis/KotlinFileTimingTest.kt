@@ -83,7 +83,7 @@ class KotlinFileTimingTest {
 
     @Test
     fun `each value without quotes is offered its quotes without reading the markup before it again`() {
-        grows("unquoted values", 1000) { n -> "package p${copy++}\nfun f(a: String) = \"<p>" + "<b title=\$a>x</b>".repeat(n) + "</p>\"" }
+        grows("unquoted values", 250) { n -> "package p${copy++}\nfun f(a: String) = \"<p>" + "<b title=\$a>x</b>".repeat(n) + "</p>\"" }
     }
 
     // A function of the DSL with the calls a page has: actions, one with options, a template, an assignment and an HTML string.

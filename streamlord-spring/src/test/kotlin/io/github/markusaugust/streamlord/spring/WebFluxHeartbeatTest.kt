@@ -14,14 +14,16 @@ import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.ServerSentEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 
 /** What the WebFlux page says of heartbeats, held to it: the bean's writes none, and the page's ticker does. */
 class WebFluxHeartbeatTest {
-    private fun quiet() =
+    private fun quiet(gap: Duration = 300.milliseconds) =
         flow<DatastarEvent> {
             emit(PatchSignals("""{"n":1}"""))
-            delay(300.milliseconds)
+            delay(gap)
             emit(PatchSignals("""{"n":2}"""))
         }
 
@@ -43,7 +45,8 @@ class WebFluxHeartbeatTest {
                         emit(ServerSentEvent.builder<String>().comment("keep-alive").build())
                     }
                 }
-            val response = quiet().asDatastarResponse()
+            // A gap no busy machine outlasts: three ticks come first, and taking four ends the flow.
+            val response = quiet(gap = 1.minutes).asDatastarResponse()
             val merged = ResponseEntity.ok().headers(response.headers).body(merge(response.body!!, keepAlive))
             assertEquals(MediaType.TEXT_EVENT_STREAM, merged.headers.contentType)
             assertEquals("no", merged.headers.getFirst("X-Accel-Buffering"))

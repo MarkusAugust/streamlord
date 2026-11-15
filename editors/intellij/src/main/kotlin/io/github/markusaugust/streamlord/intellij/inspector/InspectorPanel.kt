@@ -802,7 +802,7 @@ class InspectorPanel(
         val text = frame.args["signals"] ?: return
         val patched = Requests.patchedStore(signals, text, frame.args["onlyIfMissing"]) ?: return
         signals = patched.store
-        storeView.text = pretty(signals)
+        storeView.text = cut(pretty(signals))
         patched.message?.let(::error)
     }
 
@@ -994,7 +994,7 @@ class InspectorPanel(
                 for ((k, v) in rows) {
                     row(k) {
                         cell(
-                            JBTextArea(v).mono().apply {
+                            JBTextArea(cut(v)).mono().apply {
                                 isEditable = false
                                 isOpaque = false
                                 border = JBUI.Borders.empty()
@@ -1008,6 +1008,14 @@ class InspectorPanel(
         card.add(body, BorderLayout.CENTER)
         return card
     }
+
+    /** [value] with each line cut at [MAX_SHOWN] characters: Swing wraps a line by measuring it, and a line of 1.2 MB held the IDE for 45 seconds. */
+    private fun cut(value: String): String =
+        if (value.length <= MAX_SHOWN) {
+            value
+        } else {
+            value.split('\n').joinToString("\n") { if (it.length <= MAX_SHOWN) it else it.take(MAX_SHOWN) + CUT }
+        }
 
     /**
      * Swing renders a label whose text starts with `<html>` as HTML, images and all. Event names,
@@ -1026,6 +1034,8 @@ class InspectorPanel(
 
     companion object {
         private const val MAX_FRAMES = 500
+        private const val MAX_SHOWN = 10_000
+        private const val CUT = "\n\n(cut at 10,000 characters)"
         private const val MODIFIED = "● modified"
 
         /** What a field of the form asks for; each is given the width there is, and asks for little so a narrow panel can hold it. */

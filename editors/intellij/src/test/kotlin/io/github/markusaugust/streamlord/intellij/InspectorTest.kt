@@ -1487,6 +1487,21 @@ class InspectorTest : BasePlatformTestCase() {
         }
     }
 
+    fun `test a long line is shown cut, in the event and in the signal store`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val long = "{\"html\":\"" + "x".repeat(1_200_000) + "\"}"
+        val frame = DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to long), "", 0L)
+        for (step in listOf("applyFrame", "addFrame")) {
+            panel.javaClass
+                .getDeclaredMethod(step, DatastarFrame::class.java)
+                .apply { isAccessible = true }
+                .invoke(panel, frame)
+        }
+        assertEquals(1, areas(panel).count { it.text == long.take(10_000) + "\n\n(cut at 10,000 characters)" })
+        val store = areas(panel).single { it.text.startsWith("{\n") }.text
+        assertTrue(store.take(200), store.length < 20_000 && "\n\n(cut at 10,000 characters)\n}" in store)
+    }
+
     fun `test every line of the event list starts at its left edge`() {
         val panel = InspectorPanel(project, testRootDisposable)
         val events = events(panel)
