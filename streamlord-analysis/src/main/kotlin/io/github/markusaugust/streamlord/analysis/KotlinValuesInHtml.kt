@@ -1,25 +1,16 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
-import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.DecodedValue
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
-import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.client.regex
-import io.github.markusaugust.streamlord.core.domain.AttributeKeys
-import io.github.markusaugust.streamlord.core.domain.CspNonce
-import io.github.markusaugust.streamlord.core.domain.ElementNamespace
-import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
-import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.core.domain.Position
 import io.github.markusaugust.streamlord.core.domain.ValueLanding
 import io.github.markusaugust.streamlord.core.domain.refusedUrlScheme
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.domain.valueLandings
-import kotlin.concurrent.Volatile
-import kotlin.time.Duration
 
 /*
  * A Kotlin value written into HTML, and calls to interpolate: where each value lands as core reads

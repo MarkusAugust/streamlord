@@ -1,8 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.client.groupRange
 import io.github.markusaugust.streamlord.core.client.regex
-import kotlin.concurrent.Volatile
 
 /*
  * What the text shows a Kotlin value written into HTML to be: the author's own, a String, a number,
