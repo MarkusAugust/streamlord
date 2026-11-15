@@ -311,8 +311,21 @@ class RequestsTest {
         for (patch in listOf("{\"a\":".repeat(200_000) + "1" + "}".repeat(200_000), "{\"a\":1" + "0".repeat(1000) + "}")) {
             val patched = Requests.patchedStore(store, patch, null)
             assertEquals(store, patched?.store)
-            assertTrue(patched?.refused == true && patched.error != null, patched?.error)
+            // The client takes it, and the store shown is the one before it: so the inspector says, and nothing else.
+            val said = patched?.message.orEmpty()
+            assertTrue("the client takes" in said && "left as it was" in said && "keeps the keys" !in said, said)
         }
         assertEquals(null, Requests.patchedStore(store, "{a:1}", null), "no JSON, which the frame shows as it is")
+    }
+
+    // Each refusal is one sentence the analysis writes, which both inspectors show as it is.
+    @Test
+    fun `a patch the client fails on, or Streamlord refuses, says so as the inspector shows it`() {
+        val store = JsonParser.parseObject("""{"a":[1,2]}""")
+        val refused = Requests.patchedStore(store, """{"o":{"__proto__":{"x":1}}}""", null)!!.message.orEmpty()
+        assertTrue(refused.startsWith("Streamlord refuses this signal patch on purpose: ") && refused.endsWith("The store shown keeps the keys before it."), refused)
+        val throws = Requests.patchedStore(store, """{"a":{"0":7,"length":-1}}""", null)!!.message.orEmpty()
+        assertTrue(throws.startsWith("The signal store cannot take this patch: ") && "Datastar's client throws on it too" in throws, throws)
+        assertEquals(null, Requests.patchedStore(store, """{"b":1}""", null)!!.message)
     }
 }

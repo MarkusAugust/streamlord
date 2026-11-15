@@ -43,5 +43,6 @@ class JudgedValuesTest {
     }
 
     @Test
-    fun `each reader says of each value what the cases hold`() = eachCase(sharedCases("judged-values.json"), { it.string("name")!! }, ::check)
+    fun `each reader says of each value what the cases hold`() =
+        eachCase(sharedCases("judged-values.json"), { it.string("name")!! }, ::check)
 }

@@ -56,7 +56,10 @@ class ExpressionTimingTest {
         assertGrowsLinearly(
             "switches over evt.detail.type",
             20,
-            { n -> "<div data-on:datastar-fetch=\"" + (0 until n).joinToString("; ") { "switch (evt.detail.type) { case 'nope$it': 1 }" } + "\"></div>" },
+            { n ->
+                "<div data-on:datastar-fetch=\"" + (0 until n).joinToString("; ") { "switch (evt.detail.type) { case 'nope$it': 1 }" } +
+                    "\"></div>"
+            },
         ) { analyzer.analyzeHtml(it) }
     }
 

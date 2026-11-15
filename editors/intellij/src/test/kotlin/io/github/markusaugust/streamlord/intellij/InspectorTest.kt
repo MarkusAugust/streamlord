@@ -1174,7 +1174,7 @@ class InspectorTest : BasePlatformTestCase() {
         val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
         val deep = "{\"a\":".repeat(200_000) + "1" + "}".repeat(200_000)
         apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to deep), "", 0L))
-        assertTrue(texts(panel).toString(), texts(panel).any { it.startsWith("Streamlord refuses this signal patch on purpose") })
+        assertTrue(texts(panel).toString(), texts(panel).any { "the client takes" in it && "left as it was" in it })
     }
 
     // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.

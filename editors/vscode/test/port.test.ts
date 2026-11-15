@@ -199,9 +199,10 @@ describe("what crosses the port", () => {
     assert.equal(event?.frame?.id, null);
     assert.equal(typeof event?.frame?.receivedAt, "number");
     const patched = applySignalPatch(`{"b":2}`, event?.frame?.args.signals, null);
-    assert.deepEqual({ ...patched, store: JSON.parse(patched.store) }, { store: { b: 2, a: 1 }, refused: false });
+    assert.deepEqual({ ...patched, store: JSON.parse(patched.store) }, { store: { b: 2, a: 1 } });
     const refused = applySignalPatch(`{"b":2}`, `{"a":1,"__proto__":{"x":1}}`, null);
-    assert.deepEqual([JSON.parse(refused.store), refused.refused, typeof refused.error], [{ b: 2, a: 1 }, true, "string"]);
+    assert.deepEqual(JSON.parse(refused.store), { b: 2, a: 1 });
+    assert.match(refused.message ?? "", /^Streamlord refuses this signal patch on purpose: .* The store shown keeps the keys before it\.$/);
   });
   it("keeps a header whatever it is named", () => {
     const headers = parseHeaderLines("__proto__: a\nconstructor: b\ntoString: c\nX-Token: d");
@@ -224,7 +225,7 @@ describe("what crosses the port", () => {
   it("folds a patch nested deeper than the SDK reads from a request, as the client does", () => {
     const deep = '{"a":'.repeat(200) + "1" + "}".repeat(200);
     const patched = applySignalPatch(`{"b":2}`, deep, null);
-    assert.deepEqual([patched.store, patched.error, patched.refused], [`{"b":2,"a":${deep.slice(5, -1)}}`, undefined, false]);
+    assert.deepEqual([patched.store, patched.message], [`{"b":2,"a":${deep.slice(5, -1)}}`, undefined]);
     // And once more into the store that now holds it.
     assert.equal(applySignalPatch(patched.store, deep, null).store, patched.store);
   });
@@ -232,8 +233,7 @@ describe("what crosses the port", () => {
     for (const patch of ['{"a":'.repeat(200_000) + "1" + "}".repeat(200_000), '{"a":1' + "0".repeat(1000) + "}"]) {
       const patched = applySignalPatch(`{"b":2}`, patch, null);
       assert.equal(patched.store, `{"b":2}`);
-      assert.equal(patched.refused, true);
-      assert.ok(patched.error);
+      assert.match(patched.message ?? "", /the client takes.*left as it was/);
     }
   });
 });
