@@ -65,7 +65,35 @@ class DatastarAnswerTest {
         read(ScriptResponse("go()", mapOf("type" to "module"))).assertExactly(
             PatchElements("""<script type="module">go()</script>""", selector = "head", mode = ElementPatchMode.APPEND),
         )
-        read(ScriptResponse("if (a < b) go('</script>')")).assertPatchElements(selector = "head", containing = "go('</script>')")
+        // The script element as core writes one, whose end its text cannot close early.
+        read(ScriptResponse("go('</script>')")).assertExactly(
+            PatchElements("""<script>go('<\/script>')</script>""", selector = "head", mode = ElementPatchMode.APPEND),
+        )
+    }
+
+    // Measured against the 1.0.5 client: Object.entries of what JSON.parse gives, and setAttribute, which
+    // lowercases a name on an HTML element and makes each value the string JavaScript's String() makes.
+    @Test
+    fun `the script's attributes are what the client sets from its header`() {
+        fun tag(header: String) =
+            read("go()", mapOf("Content-Type" to "text/javascript", "datastar-script-attributes" to header))
+                .assertPatchElements(selector = "head")
+                .elements
+        assertEquals("<script>go()</script>", tag("1"))
+        assertEquals("<script>go()</script>", tag("[]"))
+        assertEquals("""<script type="module">go()</script>""", tag("""{"Type":"module"}"""))
+        assertEquals(
+            """<script data-a="[object Object]" data-b="1,,x" data-c="1.5" data-d="true" data-e="null" data-f="1e-7">go()</script>""",
+            tag("""{"data-a":{"x":1},"data-b":[1,null,"x"],"data-c":1.50,"data-d":true,"data-e":null,"data-f":0.0000001}"""),
+        )
+        for (refused in listOf("null", "\"ab\"", "[1]", "{")) {
+            assertFailsWith<DatastarEventValidationException>(refused) { tag(refused) }
+        }
+    }
+
+    @Test
+    fun `a script of nothing but white space runs nothing`() {
+        read("  ", mapOf("Content-Type" to "text/javascript")).assertNoEvents()
     }
 
     @Test
