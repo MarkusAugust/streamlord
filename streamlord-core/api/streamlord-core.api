@@ -687,6 +687,12 @@ public final class io/github/markusaugust/streamlord/core/json/JsonBoolean$Compa
 	public final fun getTRUE ()Lio/github/markusaugust/streamlord/core/json/JsonBoolean;
 }
 
+public final class io/github/markusaugust/streamlord/core/json/JsonDecimals {
+	public static final fun decimal (Lio/github/markusaugust/streamlord/core/json/JsonObject;Ljava/lang/String;)Ljava/math/BigDecimal;
+	public static final fun toBigDecimal (Lio/github/markusaugust/streamlord/core/json/JsonNumber;)Ljava/math/BigDecimal;
+	public static final fun toBigDecimalOrNull (Lio/github/markusaugust/streamlord/core/json/JsonNumber;)Ljava/math/BigDecimal;
+}
+
 public final class io/github/markusaugust/streamlord/core/json/JsonMergeKt {
 	public static final fun mergePatch (Lio/github/markusaugust/streamlord/core/json/JsonValue;Lio/github/markusaugust/streamlord/core/json/JsonValue;)Lio/github/markusaugust/streamlord/core/json/JsonValue;
 	public static final fun mergePatchAsClient (Lio/github/markusaugust/streamlord/core/json/JsonObject;Lio/github/markusaugust/streamlord/core/json/JsonValue;ZI)Lio/github/markusaugust/streamlord/core/json/JsonObject;
@@ -709,8 +715,6 @@ public final class io/github/markusaugust/streamlord/core/json/JsonNumber : io/g
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getText ()Ljava/lang/String;
 	public fun hashCode ()I
-	public final fun toBigDecimal ()Ljava/math/BigDecimal;
-	public final fun toBigDecimalOrNull ()Ljava/math/BigDecimal;
 	public final fun toDouble ()D
 	public final fun toIntOrNull ()Ljava/lang/Integer;
 	public fun toJson ()Ljava/lang/String;
@@ -736,7 +740,6 @@ public final class io/github/markusaugust/streamlord/core/json/JsonObject : io/g
 	public fun containsKey (Ljava/lang/String;)Z
 	public fun containsValue (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Z
 	public final fun containsValue (Ljava/lang/Object;)Z
-	public final fun decimal (Ljava/lang/String;)Ljava/math/BigDecimal;
 	public final fun double (Ljava/lang/String;)Ljava/lang/Double;
 	public final fun entrySet ()Ljava/util/Set;
 	public fun equals (Ljava/lang/Object;)Z

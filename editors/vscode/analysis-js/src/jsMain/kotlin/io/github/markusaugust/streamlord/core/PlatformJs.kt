@@ -1,12 +1,8 @@
 package io.github.markusaugust.streamlord.core
 
-import java.math.BigDecimal
-
 // What core asks of its platform, in JavaScript: the declarations of PlatformJvm.kt in streamlord-core.
 
-internal actual fun decimalOrNull(text: String): BigDecimal? = null
-
-/** As [decimalOrNull]: an exponent or a fraction takes an exact decimal, and nothing the editor runs reads a whole number so written. */
+/** An exponent or a fraction takes an exact decimal, which JavaScript has none of, and nothing the editor runs reads a whole number so written. */
 internal actual fun exactLongOrNull(text: String): Long? = null
 
 @Suppress("UNUSED_PARAMETER")

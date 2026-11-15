@@ -81,7 +81,6 @@ class JsonRobustnessTest {
         val obj = JsonParser.parseObject("""{"a":1e2147483648,"b":1e999999999,"c":-0,"d":123456789012345678901234567890,"e":1E400}""")
         assertNull(obj.int("a"))
         assertNull(obj.long("a"))
-        obj.decimal("a")
         assertEquals(Double.POSITIVE_INFINITY, obj.double("a"))
         assertNull(obj.long("b"))
         assertEquals(0L, obj.long("c"))

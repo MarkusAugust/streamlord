@@ -13,6 +13,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `io.github.markusaugust.streamlord.analysis.analyzeProject` imported where the package is not.
   In the internal API of streamlord-core, `HoleLanding` is `ValueLanding` and `holeLandings` is
   `valueLandings`.
+- streamlord-core: `JsonObject.decimal`, `JsonNumber.toBigDecimal` and `JsonNumber.toBigDecimalOrNull`
+  are extension functions in the same package, which Kotlin calls as before once they are imported,
+  and Java as `JsonDecimals.decimal(object, key)`.
 - `interpolate` refuses a value in `data-match-media` and throws, where it escaped one: the
   reference writes the query as a string literal, so Datastar Pro may run it. Write the query into
   the format, `interpolate("<p data-match-media:dark=\"'$DARK'\">...", ...)` with a constant of

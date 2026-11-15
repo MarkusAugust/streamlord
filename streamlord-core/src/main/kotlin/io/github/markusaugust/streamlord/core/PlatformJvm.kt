@@ -10,8 +10,6 @@ import java.util.Base64
  * its own, editors/vscode/analysis-js, with the same declarations.
  */
 
-internal fun decimalOrNull(text: String): BigDecimal? = runCatching { BigDecimal(text) }.getOrNull()
-
 /** The whole number a JSON number is when it has one that fits a `Long`, however it is written: `1e3` is 1000, `1.5` has none. */
 internal fun exactLongOrNull(text: String): Long? = runCatching { BigDecimal(text).longValueExact() }.getOrNull()
 
