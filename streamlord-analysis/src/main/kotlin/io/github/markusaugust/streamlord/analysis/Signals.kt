@@ -16,14 +16,17 @@ import kotlin.concurrent.Volatile
 public enum class SourceLanguage { KOTLIN, HTML }
 
 // A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
-// refused at runtime (signalNameHyphenIssues) and collected as written. set, setExpr and toggle
-// assign the signal, which creates it.
+// refused at runtime (signalNameHyphenIssues) and collected as written. The helpers that do not
+// only read it, set, setExpr and toggle, assign the signal, which creates it; dataSignals names one
+// only before its expression, its object form being one argument.
+private val NAMING_CALLS =
+    Catalog.default.signalNameHelpers
+        .filterValues { "reads" !in it }
+        .keys + NAMING_HELPERS - KEYED_OR_OBJECT
 private val KOTLIN_PATTERNS =
     listOf(
-        regex(
-            """\b(?:set|setExpr|toggle|dataBind|dataIndicator|dataRef|dataComputed|dataMatchMedia)\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"""",
-        ),
-        regex("""\bdataSignals\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
+        regex("""\b(?:${NAMING_CALLS.joinToString("|")})\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)""""),
+        regex("""\b$KEYED_OR_OBJECT\(\s*"([A-Za-z_][A-Za-z0-9_.-]*)"\s*,"""),
     )
 
 /** A dollar escaped in a Kotlin string: a signal read, which completion offers and a definition is not. */
@@ -1034,5 +1037,33 @@ internal fun dataSignalsPairIssues(
             code = "signal-null",
             link = Docs.SIGNALS,
         )
+    }
+}
+
+/** A string a DSL call names a signal with, and the [call]: what a highlighter colours as a signal's name. */
+public class SignalNameString(
+    public val string: KotlinString,
+    public val call: CallSite,
+)
+
+/**
+ * The strings the DSL's calls name a signal with in [source]: the first argument of `dataBind`,
+ * `dataRef` and `dataIndicator`, and of `dataSignals` and `dataComputed` where a string expression
+ * follows it. None where the file cannot call the DSL, nor for a call [Source.foreign] says is
+ * somebody else's.
+ */
+public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
+    if (!readsDsl(source)) return emptyList()
+    val src = source.text
+    return findCallSites(src, catalog.signalNameCalls, lex(src)).mapNotNull { site ->
+        val s = site.positional.firstOrNull()?.string ?: return@mapNotNull null
+        val pair = site.name in catalog.signalPairCalls
+        if ((pair && site.positional.getOrNull(1)?.string == null) ||
+            source.foreign(site.name, site.nameStart)
+        ) {
+            null
+        } else {
+            SignalNameString(s, site)
+        }
     }
 }

@@ -18,7 +18,7 @@ internal val NAMING_HELPERS: Set<String> = Catalog.default.namingHelpers
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
  * as well as the expression of the keyed form. `dataComputed` takes an expression second or nothing.
  */
-private const val KEYED_OR_OBJECT = "dataSignals"
+internal const val KEYED_OR_OBJECT = "dataSignals"
 
 /** The helper with an object form of one argument and a keyed form of two. */
 private const val COMPUTED = "dataComputed"
