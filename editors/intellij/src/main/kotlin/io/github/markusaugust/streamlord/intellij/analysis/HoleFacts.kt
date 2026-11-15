@@ -62,8 +62,23 @@ object HoleFacts {
     /** The collections a template writes in brackets, by their qualified names, Java's that Kotlin's aliases expand to among them. */
     private val COLLECTIONS: Set<String> =
         (
-            listOf("List", "Set", "Map", "Collection", "Iterable").flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
-                listOf("ArrayList", "HashSet", "LinkedHashSet", "HashMap", "LinkedHashMap", "TreeMap", "TreeSet", "LinkedList").map { "java.util.$it" } +
+            listOf(
+                "List",
+                "Set",
+                "Map",
+                "Collection",
+                "Iterable",
+            ).flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
+                listOf(
+                    "ArrayList",
+                    "HashSet",
+                    "LinkedHashSet",
+                    "HashMap",
+                    "LinkedHashMap",
+                    "TreeMap",
+                    "TreeSet",
+                    "LinkedList",
+                ).map { "java.util.$it" } +
                 listOf("", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char").map { "kotlin.${it}Array" } +
                 "kotlin.sequences.Sequence"
         ).toSet()

@@ -1198,7 +1198,17 @@ public class Analyzer(
             issues +=
                 when {
                     kind == ArgKind.UNSIGNED && arg != null && numbersOnly -> {
-                        val message = if (uncertain) uncertainMessage(shown, landing, false, null) else unsignedRefusedMessage(shown, landing)
+                        val message =
+                            if (uncertain) {
+                                uncertainMessage(
+                                    shown,
+                                    landing,
+                                    false,
+                                    null,
+                                )
+                            } else {
+                                unsignedRefusedMessage(shown, landing)
+                            }
                         refused(message, !uncertain, listOf(toLongFix(arg)))
                     }
 
@@ -1207,7 +1217,10 @@ public class Analyzer(
                     }
 
                     else -> {
-                        refused(refusedMessage(shown, landing, kind != null, endTag, rawElement(view, landing, d)), kind != null && !uncertain)
+                        refused(
+                            refusedMessage(shown, landing, kind != null, endTag, rawElement(view, landing, d)),
+                            kind != null && !uncertain,
+                        )
                     }
                 }
         }
@@ -1302,7 +1315,8 @@ public class Analyzer(
             }
 
             Position.CODE if landing.attribute == null && element == "style" -> {
-                "a <style>, where it is read as CSS" to "Choose between classes, or write a number; wrap CSS you wrote yourself in Trusted(...)."
+                "a <style>, where it is read as CSS" to
+                    "Choose between classes, or write a number; wrap CSS you wrote yourself in Trusted(...)."
             }
 
             Position.CODE -> {

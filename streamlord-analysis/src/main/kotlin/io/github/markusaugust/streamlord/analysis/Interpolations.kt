@@ -2568,7 +2568,12 @@ internal fun shownType(
     if (IDENT.matchEntire(t) != null) return declarationOf(src, t, at)?.type
     if (PROPERTY_CHAIN.matchEntire(t) == null || '.' !in t) return null
     val name = t.substringAfterLast('.').removeSuffix("!!").trim()
-    val types = fileFacts(src).names[name].orEmpty().filter { it.shared }.map { it.type }
+    val types =
+        fileFacts(src)
+            .names[name]
+            .orEmpty()
+            .filter { it.shared }
+            .map { it.type }
     return types.firstOrNull()?.takeIf { first -> types.all { it == first } }
 }
 
@@ -2590,18 +2595,39 @@ internal fun collectionShown(
             val sum = splitTop(t, "+")
             val call = lastCall(t)
             when {
-                cast != null -> COLLECTION_TYPE.matchEntire(cast.groupValues[1]) != null
-                sum.size > 1 -> collectionShown(src, sum[0], at, depth + 1)
-                shownType(src, t, at) != null -> COLLECTION_TYPE.matchEntire(shownType(src, t, at)!!) != null
+                cast != null -> {
+                    COLLECTION_TYPE.matchEntire(cast.groupValues[1]) != null
+                }
+
+                sum.size > 1 -> {
+                    collectionShown(src, sum[0], at, depth + 1)
+                }
+
+                shownType(src, t, at) != null -> {
+                    COLLECTION_TYPE.matchEntire(shownType(src, t, at)!!) != null
+                }
+
                 IDENT.matchEntire(t) != null -> {
                     val d = declarationOf(src, t, at)
                     val init = d?.let { initialiser(src, it) }
                     init != null && collectionShown(src, init, d.at, depth + 1)
                 }
-                call == null -> false
-                call.receiver == null -> call.name in COLLECTION_MAKERS
-                call.name in LIST_RESULTS -> true
-                else -> call.name in COLLECTION_KEPT && collectionShown(src, call.receiver, at, depth + 1)
+
+                call == null -> {
+                    false
+                }
+
+                call.receiver == null -> {
+                    call.name in COLLECTION_MAKERS
+                }
+
+                call.name in LIST_RESULTS -> {
+                    true
+                }
+
+                else -> {
+                    call.name in COLLECTION_KEPT && collectionShown(src, call.receiver, at, depth + 1)
+                }
             }
         }
 
