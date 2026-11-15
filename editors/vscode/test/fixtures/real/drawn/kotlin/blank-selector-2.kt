@@ -1,3 +1,4 @@
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 
       patchElements("""<div>no id</div>""")
       patchElements("<li>x</li>", selector = "#list", mode = ElementPatchMode.APPEND)
