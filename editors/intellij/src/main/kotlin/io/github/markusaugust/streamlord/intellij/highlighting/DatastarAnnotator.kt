@@ -130,8 +130,9 @@ class KotlinDatastarAnnotator : Annotator {
     }
 
     /**
-     * The strings of [file] a DSL call names a signal with, found once for each version of it. The text is read inside: the
-     * platform computes a stale value again with the first provider it was given, so a text it captured would stay the first.
+     * The strings of [file] a DSL call names a signal with, found once for each version of it, of the settings and of the
+     * project's modules. The provider reads the text itself: the platform keeps the first provider it is given and calls it
+     * again when the value is stale.
      */
     private fun signalNameStrings(
         file: KtFile,

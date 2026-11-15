@@ -149,9 +149,10 @@ alone: an attribute value that contains it cannot be judged before rendering.
 **Stream Inspector** (the Streamlord tool window): connect to a running endpoint with a method,
 signals and headers; every SSE event arrives decoded, and the signal store is kept exactly as
 the client would keep it.
+A line longer than 10,000 characters is shown cut, in an event and in the store.
 It asks as Datastar's client does, with the same `Accept`, and reads what the client reads: a
 200 that is not HTML, JSON or JavaScript is decoded as a stream, whatever its `Content-Type`. Any
-other response is shown with its `datastar-*` headers and up to 1 MiB of its body; a
+other response is shown with its `datastar-*` headers and its body, of which 1 MiB is read; a
 `text/event-stream` response with any status but 200 is not read, as the client reads none.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the project, the same file the VS

@@ -53,7 +53,7 @@ public data class RequestsEdit(
 )
 
 public object Requests {
-    /** How much of a response without a stream the inspector reads and shows. */
+    /** How much of a response without a stream the inspector reads. */
     public const val NON_STREAM_LIMIT: Int = 1024 * 1024
 
     /** What ends a body cut at [NON_STREAM_LIMIT]. */

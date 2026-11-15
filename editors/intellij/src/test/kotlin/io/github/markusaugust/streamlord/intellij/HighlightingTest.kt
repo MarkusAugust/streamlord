@@ -1,14 +1,11 @@
 package io.github.markusaugust.streamlord.intellij
 
-import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.XmlHighlighterColors
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.JDOMUtil
-import com.intellij.psi.PsiDocumentManager
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 
 /**
@@ -232,14 +229,9 @@ class HighlightingTest : StreamlordTestCase() {
         )
     }
 
-    // A file changed on disk while it is open, by git or a formatter, is read again with the offsets it has now.
-    fun `test the dsl's signal names keep their colour after the file changes on disk`() {
-        val text = "fun FlowContent.f() {\n    input { dataBind(\"name\") }\n}"
-        painted("View.kt", text)
-        val file = myFixture.file.virtualFile
-        WriteAction.runAndWait<Throwable> { file.setBinaryContent(("// changed on disk\n" + text).toByteArray()) }
-        FileDocumentManager.getInstance().reloadFiles(file)
-        PsiDocumentManager.getInstance(project).commitAllDocuments()
+    fun `test the dsl's signal names keep their colour after an edit above them`() {
+        painted("View.kt", "<caret>fun FlowContent.f() {\n    input { dataBind(\"name\") }\n}")
+        myFixture.type("// typed\n")
         assertEquals(listOf("name" to DatastarColors.SIGNAL), painted())
     }
 
