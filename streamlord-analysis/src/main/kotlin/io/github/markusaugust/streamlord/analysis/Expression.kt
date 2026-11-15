@@ -131,9 +131,6 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
-/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
-private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
-
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
 // on either side, any character beyond ASCII counted as one.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
@@ -937,7 +934,8 @@ public class ExpressionValidator(
                 )
         }
 
-        val parseError = JsParser.error(rewritten.js)
+        val parsed = JsParser.read(rewritten.js)
+        val parseError = parsed.error
         // Without a known attribute an expression may also be an object literal, which a script reads as a block.
         val err = if (returnsValue == null) parseError?.takeUnless { objectLiteralParses(rewritten.js) } else parseError
         if (err != null) {
@@ -949,12 +947,7 @@ public class ExpressionValidator(
             val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
             val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
             // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
-            val awaitAt =
-                AWAIT_BEFORE
-                    .find(rewritten.js.substring(0, err.pos))
-                    ?.range
-                    ?.first
-                    ?.let(::toText)
+            val awaitAt = err.awaitAt.takeIf { it >= 0 }?.let(::toText)
             if (awaitAt != null) {
                 val message =
                     "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
@@ -965,7 +958,7 @@ public class ExpressionValidator(
             }
         }
 
-        if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
+        if (err == null) issues += actionArgumentIssues(catalog, js, rewritten, parsed.calls, ::span)
 
         val starts by lazy { stringStarts(regions) }
         val templates by lazy { TemplateReasons(js, rewritten.runs) }

@@ -446,19 +446,44 @@ private class Asked(
 
     /**
      * The keys of the object the caret names a key of that are written after the key at the caret:
-     * the text after the caret read as the rest of that object, split at its commas, each key before
-     * its colon.
+     * the text after the caret, read up to where that object closes, each key before its colon at the
+     * object's own depth. Half typed, it is no script the parser reads, so it is read here by its brackets.
      */
     private fun keysAfter(after: String): Set<String> {
-        val js = "{" + after
-        val brackets = Brackets(js, jsRegions(js))
-        val colons = brackets.colons(0)
-        return brackets
-            .pieces(0)
-            .drop(1)
-            .mapNotNull { piece -> colons.firstOrNull { it in piece }?.let { js.substring(piece.first, it).trim() } }
-            .filter { OPTION_WORD.matchEntire(it) != null }
-            .toSet()
+        val regions = jsRegions(after)
+        val out = HashSet<String>()
+        var depth = 0
+        // Where the piece after the last comma at the object's depth starts; the first piece is the key at the caret.
+        var piece = -1
+        for (i in after.indices) {
+            if (regions[i] != Region.CODE) continue
+            when (after[i]) {
+                '(', '[', '{' -> {
+                    depth++
+                }
+
+                ')', ']', '}' -> {
+                    if (depth-- == 0) break
+                }
+
+                ',' -> {
+                    if (depth == 0) piece = i + 1
+                }
+
+                ':' -> {
+                    if (depth == 0 &&
+                        piece >= 0
+                    ) {
+                        after
+                            .substring(piece, i)
+                            .trim()
+                            .takeIf { OPTION_WORD.matchEntire(it) != null }
+                            ?.let { out += it }
+                    }
+                }
+            }
+        }
+        return out
     }
 
     /**

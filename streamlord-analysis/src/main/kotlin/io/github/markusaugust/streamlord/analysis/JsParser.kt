@@ -19,6 +19,8 @@ internal class JsSyntaxError(
     public val pos: Int,
     /** Offset just past it. */
     public val raisedAt: Int,
+    /** Where a name `await` stands right before the offending token, which the browser refuses as such; -1 otherwise. */
+    public val awaitAt: Int = -1,
 ) : RuntimeException(message)
 
 internal object JsParser {
@@ -32,14 +34,104 @@ internal object JsParser {
     }
 
     /** The error for [source], or null when it parses. */
-    public fun error(source: String): JsSyntaxError? =
-        try {
-            check(source)
-            null
+    public fun error(source: String): JsSyntaxError? = read(source).error
+
+    /** [source] parsed as a script: its first error, or the calls it makes, in the order they close. */
+    public fun read(source: String): JsRead {
+        val parser = Parser(source)
+        return try {
+            parser.parseProgram()
+            JsRead(null, parser.calls, parser.switches)
+        } catch (_: StackExhausted) {
+            JsRead(JsSyntaxError("Not enough stack space to parse input", 0, source.length), emptyList())
         } catch (e: JsSyntaxError) {
-            e
+            JsRead(e, emptyList())
+        }
+    }
+
+    /** [source] read as one expression, as the client evaluates a value with `return (value)`, or null where it is none. */
+    public fun value(source: String): JsValue? =
+        try {
+            Parser(source).parseValue()
+        } catch (_: StackExhausted) {
+            null
+        } catch (_: JsSyntaxError) {
+            null
         }
 }
+
+/** A script as [JsParser.read] read it: its first [error], or the [calls] it makes and its [switches]. */
+internal class JsRead(
+    val error: JsSyntaxError?,
+    val calls: List<JsCall>,
+    val switches: List<JsSwitch> = emptyList(),
+)
+
+/** A `switch`: what it compares, from [subjectStart] to [subjectEnd], and the value of each of its [cases]. */
+internal class JsSwitch(
+    val subjectStart: Int,
+    val subjectEnd: Int,
+    val cases: List<JsValue>,
+)
+
+/**
+ * What a value is, as the readers of an argument or an option ask: a literal of each kind, an
+ * object, an array, a function, an operation, which gives a number, a string or a boolean and never
+ * a function, a name, a spread, one in parentheses, or anything else.
+ */
+internal enum class JsKind {
+    STRING,
+    TEMPLATE,
+    NUMBER,
+    BOOLEAN,
+    NULL,
+    REGEX,
+    OBJECT,
+    ARRAY,
+    FUNCTION,
+    OPERATION,
+    NAME,
+    SPREAD,
+    PARENTHESISED,
+    OTHER,
+}
+
+/**
+ * One value of a parsed script, from [start] to [end] without the white space and comments around
+ * it: what it is, whether a template holds a `${...}` ([code]), an array's [items] (null for an
+ * empty slot), an object's [properties], and where the first comma of a comma operator stands.
+ */
+internal class JsValue(
+    val start: Int,
+    val end: Int,
+    val kind: JsKind,
+    val code: Boolean = false,
+    val items: List<JsValue?> = emptyList(),
+    val properties: List<JsProperty> = emptyList(),
+    val comma: Int = -1,
+)
+
+/**
+ * A property of an object literal: its key from [keyStart] to [keyEnd], [quoted] where it is a
+ * string, and its [value], none for a shorthand. [named] is false for a computed or a number key, a
+ * method and an accessor, whose names the readers leave alone, and for a [spread].
+ */
+internal class JsProperty(
+    val keyStart: Int,
+    val keyEnd: Int,
+    val quoted: Boolean,
+    val named: Boolean,
+    val value: JsValue?,
+    val spread: Boolean = false,
+)
+
+/** A call: the [callee] where it is a name, from [start] to [end], just past its closing parenthesis, and its [arguments]. */
+internal class JsCall(
+    val callee: String?,
+    val start: Int,
+    val end: Int,
+    val arguments: List<JsValue>,
+)
 
 private enum class T { NAME, KEYWORD, NUM, STRING, TEMPLATE, REGEX, PUNCT, PRIVATE_NAME, EOF }
 
@@ -207,6 +299,14 @@ private class Node(
 
     /** A property written `key: value`, the only kind that can redefine `__proto__`. */
     var plain = false
+
+    /** What the readers of a value ask of it ([JsValue]): its kind, a template's code, an array's items, an object's properties. */
+    var kind = JsKind.OTHER
+    var code = false
+    var comma = -1
+    var values: List<JsValue?> = emptyList()
+    var property: JsProperty? = null
+    var properties: List<JsProperty> = emptyList()
 }
 
 private class ClassMember(
@@ -236,6 +336,8 @@ private class Parser(
     private var tok: JsToken = JsToken(T.EOF, "", 0, 0, false)
     private var lastTokStart = 0
     private var lastTokEnd = 0
+    private var lastTokValue = ""
+    private var lastAwait = -1
     private var containsEsc = false
     private var inTemplateElement = false
     private var strict = false
@@ -252,6 +354,10 @@ private class Parser(
     private val scopeStack = ArrayList<Scope>()
     private val privateNameStack = ArrayList<PrivateNames>()
 
+    /** Every call and switch parsed, for [JsParser.read]. */
+    val calls = ArrayList<JsCall>()
+    val switches = ArrayList<JsSwitch>()
+
     fun parseProgram() {
         strict = strictDirective(0)
         enterScope(SCOPE_TOP)
@@ -259,12 +365,38 @@ private class Parser(
         while (tok.type != T.EOF) parseStatement(null, topLevel = true)
     }
 
+    fun parseValue(): JsValue {
+        enterScope(SCOPE_TOP)
+        tok = readToken()
+        val start = tok.start
+        val value = slot(start, parseExpression())
+        if (tok.type != T.EOF) unexpected()
+        return value
+    }
+
+    /** The value [node] parsed from [start] to the end of the last token: one that starts further in stands in parentheses. */
+    private fun slot(
+        start: Int,
+        node: Node,
+    ): JsValue {
+        val kind =
+            when {
+                node.start != start -> JsKind.PARENTHESISED
+                node.type == N.ARRAY -> JsKind.ARRAY
+                node.type == N.OBJECT -> JsKind.OBJECT
+                node.type == N.ARROW -> JsKind.FUNCTION
+                node.type == N.IDENT -> JsKind.NAME
+                else -> node.kind
+            }
+        return JsValue(start, lastTokEnd, kind, node.code, node.values, node.properties, node.comma)
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
 
     private fun raise(
         at: Int,
         message: String,
-    ): Nothing = throw JsSyntaxError(message, at, pos)
+    ): Nothing = throw JsSyntaxError(message, at, pos, if (lastAwait >= 0 && at >= lastTokEnd) lastAwait else -1)
 
     private fun unexpected(at: Int = tok.start): Nothing {
         if (at == tok.start) {
@@ -953,7 +1085,12 @@ private class Parser(
 
     private fun parseSwitch() {
         next()
-        parseParenExpression()
+        expect("(")
+        val subjectStart = tok.start
+        parseExpression()
+        val subjectEnd = lastTokEnd
+        expect(")")
+        val cases = ArrayList<JsValue>()
         expect("{")
         labels += Label(null, "switch")
         enterScope(SCOPE_SWITCH)
@@ -965,7 +1102,8 @@ private class Parser(
                 sawCase = true
                 next()
                 if (isCase) {
-                    parseExpression()
+                    val caseStart = tok.start
+                    cases += slot(caseStart, parseExpression())
                 } else {
                     if (sawDefault) raise(lastTokStart, "Multiple default clauses")
                     sawDefault = true
@@ -979,6 +1117,7 @@ private class Parser(
         exitScope()
         next()
         labels.removeAt(labels.lastIndex)
+        switches += JsSwitch(subjectStart, subjectEnd, cases)
     }
 
     private fun parseFunction(
@@ -1413,8 +1552,9 @@ private class Parser(
         val start = tok.start
         val expr = parseMaybeAssign(forInit, ref)
         if (!isPunct(",")) return expr
+        val comma = tok.start
         while (eat(",")) parseMaybeAssign(forInit, ref)
-        return Node(N.OTHER, start)
+        return Node(N.OTHER, start).also { it.comma = comma }
     }
 
     private fun parseMaybeAssign(
@@ -1522,7 +1662,9 @@ private class Parser(
         if ((logical && isPunct("??")) || (coalesce && (isPunct("||") || isPunct("&&")))) {
             raise(tok.start, "Logical expressions and coalesce expressions cannot be mixed. Wrap either by parentheses")
         }
-        return parseExprOp(Node(N.OTHER, leftStart), leftStart, minPrec, forInit)
+        // `||`, `&&` and `??` give one of their sides, any other operator a number, a string or a boolean.
+        val node = Node(N.OTHER, leftStart).also { it.kind = if (logical || coalesce) JsKind.OTHER else JsKind.OPERATION }
+        return parseExprOp(node, leftStart, minPrec, forInit)
     }
 
     private fun parseMaybeUnary(
@@ -1555,7 +1697,9 @@ private class Parser(
             } else {
                 sawUnary = true
             }
-            expr = Node(N.OTHER, start)
+            // A sign written right before a number is part of it, as a reader of a literal takes it.
+            val signed = (op == "-" || op == "+") && argument.kind == JsKind.NUMBER && argument.start == start + 1
+            expr = Node(N.OTHER, start).also { it.kind = if (signed) JsKind.NUMBER else JsKind.OPERATION }
         } else if (!sawUnary && tok.type == T.PRIVATE_NAME) {
             // `#x in obj`, inside the class that declares `#x`.
             if (forInit != 0 || privateNameStack.isEmpty()) unexpected()
@@ -1567,14 +1711,14 @@ private class Parser(
             while ((isPunct("++") || isPunct("--")) && !canInsertSemicolon()) {
                 checkLValSimple(operand)
                 next()
-                operand = Node(N.OTHER, start)
+                operand = Node(N.OTHER, start).also { it.kind = JsKind.OPERATION }
             }
             expr = operand
         }
         if (!incDec && !(expr.type == N.ARROW && expr.start == start) && eat("**")) {
             if (sawUnary) raise(lastTokStart, "Unary operator used immediately before exponentiation expression")
             parseMaybeUnary(null, false, false, forInit)
-            return Node(N.OTHER, start)
+            return Node(N.OTHER, start).also { it.kind = JsKind.OPERATION }
         }
         return expr
     }
@@ -1660,7 +1804,8 @@ private class Parser(
             yieldPos = 0
             awaitPos = 0
             awaitIdentPos = 0
-            val arguments = parseExprList(")", allowTrailingComma = true, allowEmpty = false, ref = ref)
+            val values = ArrayList<JsValue?>()
+            val arguments = parseExprList(")", allowTrailingComma = true, allowEmpty = false, ref = ref, values = values)
             if (maybeAsyncArrow && !optional && !canInsertSemicolon() && eat("=>")) {
                 // `async (a, b) => ...`: what looked like a call was a parameter list.
                 checkPatternErrors(ref, false)
@@ -1677,6 +1822,7 @@ private class Parser(
             if (oldAwaitIdentPos != 0) awaitIdentPos = oldAwaitIdentPos
             val node = Node(N.OTHER, start)
             node.optional = optional
+            calls += JsCall(base.name.takeIf { base.type == N.IDENT }, start, lastTokEnd, values.filterNotNull())
             return node
         }
         if (tok.type == T.TEMPLATE) {
@@ -1712,8 +1858,14 @@ private class Parser(
             }
 
             T.NUM, T.STRING, T.REGEX -> {
+                val kind =
+                    when (tok.type) {
+                        T.NUM -> JsKind.NUMBER
+                        T.STRING -> JsKind.STRING
+                        else -> JsKind.REGEX
+                    }
                 next()
-                Node(N.OTHER, start)
+                Node(N.OTHER, start).also { it.kind = kind }
             }
 
             T.TEMPLATE -> {
@@ -1735,7 +1887,9 @@ private class Parser(
                     "[" -> {
                         val node = Node(N.ARRAY, start)
                         next()
-                        node.items = parseExprList("]", allowTrailingComma = true, allowEmpty = true, ref = ref)
+                        val values = ArrayList<JsValue?>()
+                        node.items = parseExprList("]", allowTrailingComma = true, allowEmpty = true, ref = ref, values = values)
+                        node.values = values
                         node
                     }
 
@@ -1773,13 +1927,19 @@ private class Parser(
             }
 
             "this", "null", "true", "false" -> {
+                val kind =
+                    when (tok.value) {
+                        "null" -> JsKind.NULL
+                        "this" -> JsKind.OTHER
+                        else -> JsKind.BOOLEAN
+                    }
                 next()
-                return Node(N.OTHER, start)
+                return Node(N.OTHER, start).also { it.kind = kind }
             }
 
             "function" -> {
                 next()
-                return parseFunction(start, 0, isAsync = false)
+                return parseFunction(start, 0, isAsync = false).also { it.kind = JsKind.FUNCTION }
             }
 
             "class" -> {
@@ -1813,7 +1973,7 @@ private class Parser(
         val escaped = tok.escaped
         val id = parseIdent()
         if (!escaped && id.name == "async" && !canInsertSemicolon() && eatKeyword("function")) {
-            return parseFunction(start, 0, isAsync = true, forInit = forInit)
+            return parseFunction(start, 0, isAsync = true, forInit = forInit).also { it.kind = JsKind.FUNCTION }
         }
         if (canBeArrow && !canInsertSemicolon()) {
             if (eat("=>")) return parseArrowExpression(start, listOf(id), false, forInit)
@@ -1917,9 +2077,11 @@ private class Parser(
      */
     private fun parseTemplate(isTagged: Boolean): Node {
         val start = tok.start
+        var code = false
         while (true) {
             if (pos >= src.length) raise(pos, "Unterminated template literal")
             if (readTemplateChunk(isTagged)) break
+            code = true
             tok = JsToken(T.PUNCT, "\${", pos, pos + 2, false)
             pos += 2
             next()
@@ -1929,7 +2091,10 @@ private class Parser(
         tok = JsToken(T.TEMPLATE, "`", pos, pos + 1, false)
         pos++
         next()
-        return Node(N.OTHER, start)
+        return Node(N.OTHER, start).also {
+            it.kind = JsKind.TEMPLATE
+            it.code = code
+        }
     }
 
     /** Reads template text up to the closing backquote (true) or the next `${` (false). */
@@ -1986,6 +2151,7 @@ private class Parser(
             properties += prop
         }
         node.items = properties
+        node.properties = properties.mapNotNull { it?.property }
         return node
     }
 
@@ -2003,6 +2169,7 @@ private class Parser(
             }
             val spread = Node(N.SPREAD, start)
             spread.inner = parseMaybeAssign(0, ref)
+            spread.property = JsProperty(start, start, quoted = false, named = false, value = null, spread = true)
             if (isPunct(",") && ref != null && ref.trailingComma < 0) ref.trailingComma = tok.start
             return spread
         }
@@ -2010,19 +2177,27 @@ private class Parser(
         var isGenerator = !isPattern && eat("*")
         var isAsync = false
         val escaped = tok.escaped
+        var keyStart = tok.start
+        var quoted = tok.type == T.STRING
         var key = parsePropertyName()
         if (!isPattern && !escaped && !isGenerator && isAsyncProp(key)) {
             isAsync = true
             isGenerator = eat("*")
+            keyStart = tok.start
+            quoted = tok.type == T.STRING
             key = parsePropertyName()
         }
+        val keyEnd = lastTokEnd
+        val named = !key.computed && (key.isIdent || quoted) && !isGenerator && !isAsync
         prop.key = key
         prop.name = "init"
         if ((isGenerator || isAsync) && isPunct(":")) unexpected()
         val accessor = !isPattern && !escaped && !key.computed && key.isIdent && (key.name == "get" || key.name == "set")
         if (eat(":")) {
+            val valueStart = tok.start
             prop.inner = if (isPattern) parseMaybeDefault(tok.start, null) else parseMaybeAssign(0, ref)
             prop.plain = true
+            prop.property = JsProperty(keyStart, keyEnd, quoted, named, slot(valueStart, prop.inner!!))
         } else if (isPunct("(")) {
             if (isPattern) unexpected()
             prop.inner = Node(N.OTHER, tok.start)
@@ -2050,9 +2225,11 @@ private class Parser(
             } else {
                 prop.inner = id
             }
+            prop.property = JsProperty(keyStart, keyEnd, quoted = false, named = true, value = null)
         } else {
             unexpected()
         }
+        if (prop.property == null) prop.property = JsProperty(keyStart, keyEnd, quoted, named = false, value = null)
         return prop
     }
 
@@ -2122,11 +2299,13 @@ private class Parser(
         return Node(N.ARROW, start)
     }
 
+    /** The elements up to [close]; [values] gets each as a [JsValue], a hole as null. */
     private fun parseExprList(
         close: String,
         allowTrailingComma: Boolean,
         allowEmpty: Boolean,
         ref: DestructuringErrors?,
+        values: MutableList<JsValue?>? = null,
     ): List<Node?> {
         val elements = ArrayList<Node?>()
         var first = true
@@ -2137,16 +2316,21 @@ private class Parser(
                 expect(",")
                 if (allowTrailingComma && eat(close)) break
             }
+            val start = tok.start
             if (allowEmpty && isPunct(",")) {
                 elements += null
+                values?.add(null)
             } else if (isPunct("...")) {
                 val spread = Node(N.SPREAD, tok.start)
                 next()
                 spread.inner = parseMaybeAssign(0, ref)
                 elements += spread
+                values?.add(JsValue(start, lastTokEnd, JsKind.SPREAD))
                 if (ref != null && isPunct(",") && ref.trailingComma < 0) ref.trailingComma = tok.start
             } else {
-                elements += parseMaybeAssign(0, ref)
+                val element = parseMaybeAssign(0, ref)
+                elements += element
+                values?.add(slot(start, element))
             }
         }
         return elements
@@ -2216,6 +2400,9 @@ private class Parser(
 
     private fun next(ignoreEscapedKeyword: Boolean = false) {
         if (!ignoreEscapedKeyword && tok.type == T.KEYWORD && tok.escaped) raise(tok.start, "Escape sequence in keyword ${tok.value}")
+        // A name await, not a property of that name, which the error after it is about.
+        lastAwait = if (tok.type == T.NAME && tok.value == "await" && lastTokValue != "." && lastTokValue != "?.") tok.start else -1
+        lastTokValue = tok.value
         lastTokStart = tok.start
         lastTokEnd = tok.end
         tok = readToken()

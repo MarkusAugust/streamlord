@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
-import io.github.markusaugust.streamlord.core.client.Rewrite
+import io.github.markusaugust.streamlord.core.client.ClientRewrite
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
@@ -27,19 +27,17 @@ internal enum class Written(
     EXPRESSION(""),
 }
 
-/** A value from [start] to [end] of the script: what it is, and a string's text where it has no escape. */
+/** A value from [start] to [end] of the script: what it is, a string's text where it has no escape, and what the parser read of it. */
 internal class Value(
     val start: Int,
     val end: Int,
     val written: Written,
     val text: String?,
+    val parsed: JsValue? = null,
 )
 
 /** The longest number literal read. */
 private const val SHORT = 40
-
-private val NUMBER_LITERAL =
-    regex("""[+-]?(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 
 // What JavaScript's Number reads as a number: white space alone is 0, and a sign is no part of a hexadecimal, octal or binary one.
 private val NUMERIC_STRING =
@@ -84,23 +82,72 @@ private fun ArgumentKind.takes(value: Value): Boolean {
         )
 }
 
-/** Where [Brackets] files the commas outside every bracket. */
-private const val TOP = -1
+/**
+ * What [v], a value [JsParser] read, is, with its offsets in the script: [at] maps an offset of the
+ * text the parser read back to it. A long number is not judged, nor anything a Kotlin template
+ * computes.
+ */
+private fun Judge.value(v: JsValue): Value {
+    val s = at(v.start)
+    val e = at(v.end)
+    if (s >= e) return Value(s, e, Written.EXPRESSION, null)
+    val short = e - s <= SHORT
+    val written =
+        when (v.kind) {
+            JsKind.STRING -> Written.STRING
+
+            // A template literal with a ${...} holds code.
+            JsKind.TEMPLATE -> if (v.code) Written.EXPRESSION else Written.STRING
+
+            JsKind.REGEX -> Written.REGEX
+
+            JsKind.NUMBER -> if (short) Written.NUMBER else Written.EXPRESSION
+
+            JsKind.BOOLEAN -> Written.BOOLEAN
+
+            JsKind.NULL -> Written.NULL
+
+            JsKind.NAME -> if (js.substring(s, e) == "undefined") Written.UNDEFINED else Written.EXPRESSION
+
+            JsKind.OBJECT -> Written.OBJECT
+
+            JsKind.ARRAY -> Written.ARRAY
+
+            JsKind.FUNCTION -> Written.FUNCTION
+
+            else -> Written.EXPRESSION
+        }
+    // An object or an array literal is written whatever a template inside it computes: each of its values is judged on its own.
+    if (written != Written.OBJECT && written != Written.ARRAY && computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
+    val content = if (written == Written.STRING) js.substring(s + 1, e - 1).takeIf { '\\' !in it } else null
+    return Value(s, e, written, content, v)
+}
 
 /**
- * The brackets of [js] in code, read in one pass: where each closes, and the commas and colons
- * at its own depth.
+ * The judging of the literals of one script, [js]: [at] maps an offset of the text the parser read
+ * to one of [js], and [span] a stretch of [js] back to the text.
  */
-internal class Brackets(
+private class Judge(
+    val catalog: Catalog,
     val js: String,
-    val regions: ByteArray,
+    val at: (Int) -> Int,
+    val span: (Int, Int) -> Pair<Int, Int>,
 ) {
-    val close = IntArray(js.length) { -1 }
-    private val commas = HashMap<Int, MutableList<Int>>()
-    private val colons = HashMap<Int, MutableList<Int>>()
+    val out = ArrayList<Issue>()
 
     /** How many of the places a Kotlin template was read at start before each offset. */
-    private val templates = IntArray(js.length + 1)
+    private val templates =
+        IntArray(js.length + 1).also { counts ->
+            var next = js.indexOf(PLACEHOLDER)
+            var seen = 0
+            for (i in js.indices) {
+                if (i == next) {
+                    seen++
+                    next = js.indexOf(PLACEHOLDER, i + 1)
+                }
+                counts[i + 1] = seen
+            }
+        }
 
     /** Whether a Kotlin template was read somewhere from [from] until [to]: the value is the code's, not written. */
     fun computed(
@@ -108,133 +155,6 @@ internal class Brackets(
         to: Int,
     ): Boolean = to - from >= PLACEHOLDER.length && templates[to - PLACEHOLDER.length + 1] > templates[from]
 
-    init {
-        var at = js.indexOf(PLACEHOLDER)
-        var seen = 0
-        for (i in js.indices) {
-            if (i == at) {
-                seen++
-                at = js.indexOf(PLACEHOLDER, i + 1)
-            }
-            templates[i + 1] = seen
-        }
-        val open = ArrayList<Int>()
-        for (i in js.indices) {
-            if (regions[i] != Region.CODE) continue
-            when (js[i]) {
-                '(', '[', '{' -> open += i
-                ')', ']', '}' -> open.removeLastOrNull()?.let { close[it] = i }
-                ',' -> commas.getOrPut(open.lastOrNull() ?: TOP) { ArrayList() } += i
-                ':' -> open.lastOrNull()?.let { colons.getOrPut(it) { ArrayList() } += i }
-            }
-        }
-    }
-
-    /** The pieces between the bracket at [open] and its close, split at its commas, each trimmed; an empty last one is left out. */
-    fun pieces(open: Int): List<IntRange> {
-        val end = close[open]
-        if (end < 0) return emptyList()
-        val cuts = listOf(open) + (commas[open] ?: emptyList()) + end
-        val out = cuts.zipWithNext().map { (a, b) -> trim(a + 1, b) }
-        return if (out.last().isEmpty()) out.dropLast(1) else out
-    }
-
-    /** The commas outside every bracket, in order. */
-    val topCommas: List<Int> get() = commas[TOP] ?: emptyList()
-
-    /** The colons of the bracket at [open] at its own depth, in order. */
-    fun colons(open: Int): List<Int> = colons[open] ?: emptyList()
-
-    /** [from] until [to] without the white space and comments at either end. */
-    fun trim(
-        from: Int,
-        to: Int,
-    ): IntRange {
-        var a = from
-        var b = to
-        while (a < b && (isJsSpace(js[a]) || regions[a] == Region.COMMENT)) a++
-        while (b > a && (isJsSpace(js[b - 1]) || regions[b - 1] == Region.COMMENT)) b--
-        return a until b
-    }
-
-    /** What [piece] is, read from its first characters: a long one is read whole only where it is a string. */
-    fun value(piece: IntRange): Value {
-        val s = piece.first
-        val e = piece.last + 1
-        if (s >= e) return Value(s, e, Written.EXPRESSION, null)
-        val first = js[s]
-
-        fun all(region: Byte) = (s until e).all { regions[it] == region }
-        val short = if (e - s <= SHORT) js.substring(s, e) else ""
-        val written =
-            when {
-                (first == '\'' || first == '"') && e - s >= 2 && js[e - 1] == first && all(Region.STRING) -> Written.STRING
-
-                // A template literal with a ${...} holds code, which is no part of its region.
-                first == '`' && e - s >= 2 && js[e - 1] == '`' && all(Region.TEMPLATE) -> Written.STRING
-
-                regions[s] == Region.REGEX && all(Region.REGEX) -> Written.REGEX
-
-                NUMBER_LITERAL.matchEntire(short) != null -> Written.NUMBER
-
-                short == "true" || short == "false" -> Written.BOOLEAN
-
-                short == "null" -> Written.NULL
-
-                short == "undefined" -> Written.UNDEFINED
-
-                first == '{' && close[s] == e - 1 -> Written.OBJECT
-
-                first == '[' && close[s] == e - 1 -> Written.ARRAY
-
-                isFunction(s, e) -> Written.FUNCTION
-
-                else -> Written.EXPRESSION
-            }
-        // An object or an array literal is written whatever a template inside it computes: each of its values is judged on its own.
-        if (written != Written.OBJECT && written != Written.ARRAY && computed(s, e)) return Value(s, e, Written.EXPRESSION, null)
-        val content = if (written == Written.STRING) js.substring(s + 1, e - 1).takeIf { '\\' !in it } else null
-        return Value(s, e, written, content)
-    }
-
-    /** `function ...`, maybe after `async`, or an arrow: a name or a parenthesised list, maybe after `async`, then `=>`. */
-    private fun isFunction(
-        s: Int,
-        e: Int,
-    ): Boolean {
-        var at = s
-
-        fun word(w: String) = js.startsWith(w, at) && !js.getOrNull(at + w.length).isJsNamePart()
-
-        fun space() {
-            while (at < e && isJsSpace(js[at])) at++
-        }
-        if (word("async")) {
-            at += 5
-            space()
-        }
-        if (word("function")) return true
-        if (at < e && js[at] == '(') {
-            val c = close[at]
-            if (c !in at until e) return false
-            at = c + 1
-        } else {
-            at = (IDENTIFIER.matchAt(js, at) ?: return false).range.last + 1
-        }
-        space()
-        return js.startsWith("=>", at)
-    }
-}
-
-/** The judging of the literals of one script, [js], whose characters are [regions]; [span] maps a stretch of it back to the text. */
-private class Judge(
-    val catalog: Catalog,
-    val js: String,
-    regions: ByteArray,
-    val span: (Int, Int) -> Pair<Int, Int>,
-) {
-    val brackets = Brackets(js, regions)
-    val out = ArrayList<Issue>()
     val filterKey = { key: String ->
         "A signal filter has only ${catalog.filterFields.joinToString(" and ") { it.name }}, so Datastar ignores $key."
     }
@@ -364,29 +284,24 @@ private class Judge(
         return "${shown(v)} is $what$then."
     }
 
-    /** The keys of the object literal opening at [open], held to [fields]; [unknown] says what Datastar does with a key that is none. */
+    /** The keys of the object literal [o], held to [fields]; [unknown] says what Datastar does with a key that is none. */
     fun judgeObject(
-        open: Int,
+        o: JsValue,
         fields: List<ValueField>,
         unknown: (String) -> String,
         link: String,
     ) {
         val byName = fields.associateBy { it.name }
-        val colons = brackets.colons(open)
-        var c = 0
-        for (piece in brackets.pieces(open)) {
-            // The pieces and the colons both run in order, so one pass over each finds a piece's first colon.
-            while (c < colons.size && colons[c] < piece.first) c++
-            val colon = colons.getOrNull(c)?.takeIf { it <= piece.last } ?: -1
-            if (piece.isEmpty() || js.startsWith("...", piece.first)) continue
-            val keyRange = if (colon < 0) piece else brackets.trim(piece.first, colon)
-            if (keyRange.isEmpty() || keyRange.last - keyRange.first >= SHORT) continue
-            val keyText = js.substring(keyRange.first, keyRange.last + 1)
-            val quoted = keyText.length >= 2 && (keyText[0] == '\'' || keyText[0] == '"') && keyText.last() == keyText[0]
-            val key = if (quoted) keyText.substring(1, keyText.length - 1) else keyText
-            // A computed key, a method, a shorthand that is no name and a key the code writes are not judged.
-            val written = if (quoted) '\\' !in key && key.none { it == keyText[0] } else IDENTIFIER.matchEntire(key) != null
-            if (!written || (colon < 0 && quoted) || PLACEHOLDER in key) continue
+        for (p in o.properties) {
+            if (!p.named) continue
+            val keyStart = at(p.keyStart)
+            val keyEnd = at(p.keyEnd)
+            if (keyEnd - keyStart > SHORT) continue
+            val keyText = js.substring(keyStart, keyEnd)
+            val key = if (p.quoted) keyText.substring(1, keyText.length - 1) else keyText
+            // A key with an escape or a quote in it, one not written as a plain name and one the code writes are not judged.
+            val written = if (p.quoted) '\\' !in key && key.none { it == keyText[0] } else IDENTIFIER.matchEntire(key) != null
+            if (!written || PLACEHOLDER in key) continue
             val field = byName[key]
             if (field == null) {
                 val near =
@@ -394,10 +309,10 @@ private class Judge(
                         ElementsGuard.oneEditAway(key, it, swaps = true) ||
                             it.equals(key, ignoreCase = true)
                     }
-                val inner = if (quoted) keyRange.first + 1 else keyRange.first
+                val inner = if (p.quoted) keyStart + 1 else keyStart
                 issue(
-                    keyRange.first,
-                    keyRange.last + 1,
+                    keyStart,
+                    keyEnd,
                     unknown(key) + (near?.let { " Did you mean $it?" } ?: ""),
                     "unknown-option",
                     link,
@@ -405,8 +320,7 @@ private class Judge(
                 )
                 continue
             }
-            if (colon < 0) continue
-            val v = brackets.value(brackets.trim(colon + 1, piece.last + 1))
+            val v = value(p.value ?: continue)
             val enum = field.values.isNotEmpty()
             when {
                 // The client compares the option with each of its strings, so any other literal takes the branch of a string it never compares with.
@@ -428,49 +342,56 @@ private class Judge(
                 }
 
                 field.kind == ArgumentKind.FILTER && v.written == Written.OBJECT -> {
-                    judgeObject(v.start, catalog.filterFields, filterKey, link)
+                    judgeObject(v.parsed!!, catalog.filterFields, filterKey, link)
                 }
             }
         }
     }
 }
 
-/** The warnings for the arguments of every action called in [js], whose characters are [regions]; [span] maps a stretch of it back to the text. */
+/**
+ * The warnings for the arguments of every action called in [js], read from [calls], the calls
+ * [JsParser] read in [rewritten], the script as the client compiles it: each action is a call of
+ * its dispatcher there, `__action("name",evt,...)`. [span] maps a stretch of [js] back to the text.
+ */
 @OptIn(InternalStreamlordApi::class)
 internal fun actionArgumentIssues(
     catalog: Catalog,
     js: String,
-    regions: ByteArray,
-    rewrites: List<Rewrite>,
+    rewritten: ClientRewrite,
+    calls: List<JsCall>,
     span: (Int, Int) -> Pair<Int, Int>,
 ): List<Issue> {
-    val calls = rewrites.filter { !it.signal && regions[it.start] == Region.CODE && catalog.actionKinds[it.name]?.isNotEmpty() == true }
-    if (calls.isEmpty()) return emptyList()
-    val judge = Judge(catalog, js, regions, span)
+    val actions = rewritten.rewrites.filter { !it.signal && catalog.actionKinds[it.name]?.isNotEmpty() == true }.associateBy { it.start }
+    if (actions.isEmpty()) return emptyList()
+    // An offset of the rewritten script, each character of a rewrite standing for where it began, and an end for the end.
+    val at = { offset: Int -> if (offset >= rewritten.js.length) js.length else rewritten.toExpression(offset) }
+    val judge = Judge(catalog, js, at, span)
     with(judge) {
-        for (r in calls) {
+        for (call in calls) {
+            if (call.callee != DISPATCHER) continue
+            val r = actions[at(call.start)] ?: continue
             val spec = catalog.actionsByName.getValue(r.name)
             val kinds = catalog.actionKinds.getValue(r.name)
             val values = catalog.actionValues[r.name].orEmpty()
-            val open = r.end - 1
-            if (js.getOrNull(open) != '(' || brackets.close[open] < 0) continue
             val link = "${Docs.ACTIONS}#${spec.name.lowercase()}"
             val parameters = spec.parameters
-            val pieces = brackets.pieces(open)
-            if (pieces.any { js.startsWith("...", it.first) }) continue
+            // The dispatcher is handed the action's name and the event before the action's own arguments.
+            val pieces = call.arguments.drop(2)
+            if (pieces.any { it.kind == JsKind.SPREAD }) continue
             val required = parameters.count { !it.endsWith("?") }
             if (pieces.size < required) {
                 issue(
                     r.start,
-                    brackets.close[open] + 1,
+                    at(call.end),
                     "@${spec.name} needs ${count(required)}, as in ${spec.signature}, and is given ${pieces.size}.",
                     "action-arity",
                     link,
                 )
             } else if (pieces.size > parameters.size) {
                 issue(
-                    pieces[parameters.size].first,
-                    pieces.last().last + 1,
+                    at(pieces[parameters.size].start),
+                    at(pieces.last().end),
                     "@${spec.name} takes at most ${count(parameters.size)}, as in ${spec.signature}, and Datastar ignores the rest.",
                     "action-arity",
                     link,
@@ -479,7 +400,7 @@ internal fun actionArgumentIssues(
             for ((n, piece) in pieces.withIndex()) {
                 val kind = kinds.getOrNull(n) ?: break
                 if (kind == ArgumentKind.ANY) continue
-                val v = brackets.value(piece)
+                val v = value(piece)
                 // A Pro action's string is what the browser makes of a number, which it takes whole.
                 if (spec.pro && kind == ArgumentKind.STRING && v.written == Written.NUMBER) continue
                 val parameter = parameters[n].removeSuffix("?")
@@ -526,7 +447,7 @@ internal fun actionArgumentIssues(
 
                     kind == ArgumentKind.OPTIONS && v.written == Written.OBJECT -> {
                         judgeObject(
-                            v.start,
+                            v.parsed!!,
                             catalog.optionFields,
                             { "@${spec.name} has no option $it, so Datastar ignores it." },
                             "${Docs.ACTIONS}#options",
@@ -534,7 +455,7 @@ internal fun actionArgumentIssues(
                     }
 
                     kind == ArgumentKind.FILTER && v.written == Written.OBJECT -> {
-                        judgeObject(v.start, catalog.filterFields, filterKey, link)
+                        judgeObject(v.parsed!!, catalog.filterFields, filterKey, link)
                     }
                 }
             }
@@ -543,6 +464,9 @@ internal fun actionArgumentIssues(
     return judge.out
 }
 
+/** The function the client calls every action through. */
+private const val DISPATCHER = "__action"
+
 /**
  * The warnings for [js], the value of the attribute [name] that the client hands to `filtered`, judged as a signal filter is
  * in `filterSignals`; [link] is the attribute's documentation.
@@ -550,20 +474,20 @@ internal fun actionArgumentIssues(
 internal fun filterValueIssues(
     catalog: Catalog,
     js: String,
-    regions: ByteArray,
     span: (Int, Int) -> Pair<Int, Int>,
     name: String,
     link: String,
 ): List<Issue> {
-    val judge = Judge(catalog, js, regions, span)
+    val parsed = JsParser.value(js) ?: return emptyList()
+    val judge = Judge(catalog, js, { it }, span)
     with(judge) {
-        val v = brackets.value(brackets.trim(0, js.length))
+        val v = value(parsed)
         if (!ArgumentKind.FILTER.takes(v) || v.written == Written.NULL) {
             wrong(ArgumentKind.FILTER, v, "", filterChanges = false, url = false)?.let {
                 issue(v.start, v.end, "$name takes ${ArgumentKind.FILTER.phrase()}, and $it", "option-value", link)
             }
         } else if (v.written == Written.OBJECT) {
-            judgeObject(v.start, catalog.filterFields, filterKey, link)
+            judgeObject(parsed, catalog.filterFields, filterKey, link)
         }
     }
     return judge.out

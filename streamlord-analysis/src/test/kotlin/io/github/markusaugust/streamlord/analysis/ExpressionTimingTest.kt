@@ -16,6 +16,41 @@ class ExpressionTimingTest {
         ) { analyzer.validateExpression(it) }
     }
 
+    // The parser reads the arguments, the options and the values below: each grows with its text.
+    @Test
+    fun `an action call with many arguments and an options object of many keys`() {
+        assertGrowsLinearly(
+            "arguments and option keys",
+            20,
+            { n -> "<div data-on:click=\"@post('/x', {" + (0 until n).joinToString(", ") { "retry$it: [1, {a: 'b'}]" } + "})\"></div>" },
+        ) { analyzer.analyzeHtml(it) }
+    }
+
+    @Test
+    fun `a computed object of many values and a filter of many keys`() {
+        assertGrowsLinearly(
+            "computed values and filter keys",
+            20,
+            { n ->
+                "<div data-computed=\"{" + (0 until n).joinToString(", ") { "v$it: [1, 2 + \$a]" } + "}\" data-json-signals=\"{" +
+                    (0 until n).joinToString(", ") { "include$it: /a/" } + "}\"></div>"
+            },
+        ) { analyzer.analyzeHtml(it) }
+    }
+
+    @Test
+    fun `an expression written as one value with many commas`() {
+        assertGrowsLinearly(
+            "comma operator",
+            20,
+            { n ->
+                "import io.github.markusaugust.streamlord.html.*\nfun f() = div { dataOnClick(postExpr(\"'/a', " +
+                    (0 until n).joinToString(", ") { "\$x$it" } +
+                    "\")) }"
+            },
+        ) { analyzer.analyzeKotlin(it) }
+    }
+
     @Test
     fun `an expression of many action calls with options`() {
         assertGrowsLinearly(
