@@ -21,15 +21,15 @@
  },
  "drawn/kotlin/interpolate-placeholders-1.kt": {
   "corpus": "kotlin-interpolate.json",
-  "case": "a hole and no value"
+  "case": "a placeholder and no value"
  },
  "drawn/kotlin/interpolate-placeholders-2.kt": {
   "corpus": "kotlin-review.json",
-  "case": "a format specifier other than %s is not a hole"
+  "case": "a format specifier other than %s is not a placeholder"
  },
  "drawn/kotlin/interpolate-placeholders-3.kt": {
   "corpus": "kotlin-interpolate.json",
-  "case": "%%s is a per cent sign and an s, not a hole"
+  "case": "%%s is a per cent sign and an s, not a placeholder"
  },
  "drawn/kotlin/interpolate-template-1.kt": {
   "corpus": "kotlin-interpolate.json",
@@ -117,7 +117,7 @@
  },
  "drawn/kotlin/unknown-action-2.kt": {
   "corpus": "kotlin-interpolate.json",
-  "case": "<%s is a tag whose name is a hole, not a template tag"
+  "case": "<%s is a tag whose name is a placeholder, not a template tag"
  },
  "drawn/kotlin/unknown-action-3.kt": {
   "corpus": "kotlin-interpolate.json",

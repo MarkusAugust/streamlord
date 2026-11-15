@@ -147,21 +147,21 @@ private fun nullableTypeParameter(
     return known[type] == true
 }
 
-/** One value a hole can result in, and whether it stands left of `?:`, which never gives null. */
-internal class HoleValue(
+/** One value a placeholder can result in, and whether it stands left of `?:`, which never gives null. */
+internal class TemplateValue(
     val text: String,
     val nonNull: Boolean,
 )
 
-/** The values a hole can result in: each branch of an `if` or a `when`, each side of `?:`. */
-internal fun holeValues(expr: String): List<HoleValue> {
+/** The values a placeholder can result in: each branch of an `if` or a `when`, each side of `?:`. */
+internal fun templateValues(expr: String): List<TemplateValue> {
     val t = unparen(expr)
-    branches(t)?.let { b -> return b.flatMap { holeValues(it) } }
+    branches(t)?.let { b -> return b.flatMap { templateValues(it) } }
     val sides = splitTop(t, "?:")
     if (sides.size > 1) {
-        return sides.flatMapIndexed { k, v -> holeValues(v).map { HoleValue(it.text, it.nonNull || k < sides.size - 1) } }
+        return sides.flatMapIndexed { k, v -> templateValues(v).map { TemplateValue(it.text, it.nonNull || k < sides.size - 1) } }
     }
-    return listOf(HoleValue(t, false))
+    return listOf(TemplateValue(t, false))
 }
 
 /** The expression without the brackets around all of it. */
@@ -206,8 +206,8 @@ internal fun splitTop(
 
 private val CALL_START = regex("""^([\p{L}_][\p{L}\p{Nd}_]*)\s*\(""")
 
-/** The calls of Streamlord's DSL that a hole may hold: `signal("count")`, `post("/x")`, each returning an expression the author wrote. */
-private val HOLE_HELPERS: Set<String> =
+/** The calls of Streamlord's DSL that a placeholder may hold: `signal("count")`, `post("/x")`, each returning an expression the author wrote. */
+private val VALUE_HELPERS: Set<String> =
     EXPRESSION_HELPERS +
         Catalog.default.actions
             .map { it.kotlin }
@@ -226,7 +226,7 @@ private fun helperArguments(
     val name = m.groupValues[1]
     val facts = fileFacts(src)
     if (!(sdk.htmlDsl ?: facts.usesDsl)) return null
-    val helpers = facts.helpers ?: unshadowed(src, HOLE_HELPERS).also { facts.helpers = it }
+    val helpers = facts.helpers ?: unshadowed(src, VALUE_HELPERS).also { facts.helpers = it }
     if (name !in helpers || !wholeCall(t, name)) return null
     val args = t.substring(m.value.length, t.length - 1)
     return if (args.isBlank()) emptyList() else splitTop(args, ",")
@@ -249,7 +249,7 @@ private fun ownArgument(
 ): Boolean {
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
-    val kind = weakest(holeValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk) })
+    val kind = weakest(templateValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk) })
     return kind.writesItself()
 }
 
@@ -297,8 +297,8 @@ private fun enumEntryShown(
 }
 
 /**
- * What the text shows of one value, a branch of an `if` or a `when` or a whole hole: a literal or
- * a constant, the author's own; a string template, as weak as its weakest hole; a call to one of
+ * What the text shows of one value, a branch of an `if` or a `when` or a whole placeholder: a literal or
+ * a constant, the author's own; a string template, as weak as its weakest placeholder; a call to one of
  * Streamlord's expression helpers, the author's code when its arguments are the author's own and
  * a String otherwise; or what the name's declaration says. Null where it shows nothing.
  */
@@ -319,7 +319,7 @@ internal fun valueKind(
     stringLiteral(t)?.let { literal ->
         return weakest(
             literal.interpolations.flatMap { ip ->
-                val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
+                val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(TemplateValue(ip.text, false)) else templateValues(ip.text)
                 values.map { valueKind(src, it.text, at, constants, it.nonNull, sdk) }
             },
         )
@@ -525,7 +525,7 @@ private fun namedLambda(
 }
 
 /**
- * Whether a hole's whole result is markup the author built, which escaping would print as tags:
+ * Whether a placeholder's whole result is markup the author built, which escaping would print as tags:
  * an HTML literal, trimmed or not, or a `+` chain that opens with one; a call to `interpolate` or
  * `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
  * kotlinx.html's `createHTML()`, `appendHTML()` in `buildString`, or Streamlord's `elements { }`;
@@ -539,7 +539,7 @@ internal fun markupValue(
     depth: Int = 0,
     sdk: FileModules = FileModules.DEFAULT,
 ): Boolean {
-    val values = holeValues(value)
+    val values = templateValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
     if (values.size > 1) {
         val markup = values.map { markupValue(src, it.text, at, depth, sdk) }
@@ -667,7 +667,7 @@ internal fun initialiser(
     return src.substring(d.valueAt, k).trim().takeIf { it.isNotEmpty() }
 }
 
-/** Whether a hole's value is markup the author built; see [markupValue]. */
+/** Whether a placeholder's value is markup the author built; see [markupValue]. */
 internal fun isMarkup(
     src: String,
     s: KotlinString,
@@ -812,7 +812,7 @@ internal fun mayHoldMarkup(
     at: Int,
     constants: Set<String>,
 ): Boolean =
-    holeValues(value).any { v ->
+    templateValues(value).any { v ->
         val t = v.text
         when {
             LITERAL.matchEntire(t) != null || CHAR_LITERAL.matchEntire(t) != null || numberShaped(t) -> {
@@ -860,7 +860,7 @@ internal fun mayHoldMarkup(
     }
 
 /**
- * Whether markup in a hole is a value `interpolate` writes as it stands in element text, an
+ * Whether markup in a placeholder is a value `interpolate` writes as it stands in element text, an
  * `Html` or a `Trusted`, rather than a String it would escape.
  */
 internal fun markupValued(
@@ -895,7 +895,7 @@ internal fun markupHeldAsString(
     at: Int,
 ): Boolean {
     // A literal is text the author chose to have escaped, `"<the oath>"`, whatever it looks like.
-    if (holeValues(value).all {
+    if (templateValues(value).all {
             htmlLiteral(it.text) || stringLiteral(it.text) != null || LITERAL.matchEntire(it.text) != null ||
                 CHAR_LITERAL.matchEntire(it.text) != null
         }
@@ -916,12 +916,12 @@ private fun markupText(
         (KOTLIN_NAME.matchEntire(of) != null && declaredKind(src, of, declarationOf(src, name, at)!!.at).isMarkup())
 }
 
-/** Whether every value a hole can give is a name set to the `.text` of an Html: markup held as a String. */
+/** Whether every value a placeholder can give is a name set to the `.text` of an Html: markup held as a String. */
 internal fun markupTextValue(
     src: String,
     value: String,
     at: Int,
-): Boolean = holeValues(value).all { KOTLIN_NAME.matchEntire(it.text) != null && markupText(src, it.text, at) }
+): Boolean = templateValues(value).all { KOTLIN_NAME.matchEntire(it.text) != null && markupText(src, it.text, at) }
 
 /**
  * Where the unquoted attribute value that runs up to [end] starts, after its `=` and any white space,

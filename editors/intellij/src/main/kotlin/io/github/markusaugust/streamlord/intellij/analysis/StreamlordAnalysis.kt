@@ -65,7 +65,7 @@ class StreamlordAnalysis(
      * The issues of a Kotlin file, by call site or HTML string, each value joined into an HTML string judged by what the Kotlin
      * plugin knows of its type. A call that resolves to something other than Streamlord is read as any call is, its HTML string
      * a free one. The text is judged again when the file, the settings or the project's modules change; an edit elsewhere types
-     * the holes again, and judges them again only when a fact comes out different.
+     * the placeholders again, and judges them again only when a fact comes out different.
      */
     fun kotlinIssues(file: KtFile): List<SiteIssues> {
         val judged = judgedText(file)
@@ -83,7 +83,7 @@ class StreamlordAnalysis(
 
     /** The issues of the text alone, as the facts and the modules the file can use give them. */
     private fun judgedText(file: KtFile): Judged {
-        val facts = holeFacts(file)
+        val facts = valueFacts(file)
         val source = source(file.text, SourceLanguage.KOTLIN, file)
         val memo =
             CachedValuesManager.getCachedValue(
@@ -217,11 +217,11 @@ class StreamlordAnalysis(
     /** How many calls have been resolved, for a test to see that an edit elsewhere resolves none again. */
     internal val resolves = AtomicInteger()
 
-    /** The facts of a file's holes; what a value's type is can change with any file in the project. None while the IDE indexes. */
-    internal fun holeFacts(file: KtFile): Map<TextRange, ValueFact> =
+    /** The facts of a file's placeholders; what a value's type is can change with any file in the project. None while the IDE indexes. */
+    internal fun valueFacts(file: KtFile): Map<TextRange, ValueFact> =
         CachedValuesManager.getCachedValue(file) {
             val dumb = DumbService.getInstance(project)
-            val facts = if (dumb.isDumb) emptyMap() else HoleFacts.of(file)
+            val facts = if (dumb.isDumb) emptyMap() else ValueFacts.of(file)
             CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
 

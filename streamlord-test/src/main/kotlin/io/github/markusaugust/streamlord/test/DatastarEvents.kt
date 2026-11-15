@@ -79,7 +79,7 @@ public class DatastarEvents(
         store
     }
 
-    /** The client's merge, with the hole limit of the core function turned into the assertion it is here. */
+    /** The client's merge, with the empty slot limit of the core function turned into the assertion it is here. */
     private fun fold(
         target: JsonObject,
         patch: JsonObject,

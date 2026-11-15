@@ -7,7 +7,7 @@ public enum class Severity { ERROR, WARNING, INFO, HINT }
  * A quick fix: replace `[start, end)` with [text]. Offsets are in the same space as the issue's.
  *
  * The text of a fix that rewrites a whole literal is made only when it is asked for, so a literal
- * with thousands of holes does not build a rewrite for each.
+ * with thousands of placeholders does not build a rewrite for each.
  */
 public class Fix private constructor(
     public val title: String,

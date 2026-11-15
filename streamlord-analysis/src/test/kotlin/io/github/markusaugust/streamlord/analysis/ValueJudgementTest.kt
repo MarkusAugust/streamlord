@@ -6,10 +6,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * What the corpus cannot hold: the editor's own facts about a hole, and the time a large file
+ * What the corpus cannot hold: the editor's own facts about a placeholder, and the time a large file
  * takes.
  */
-class HoleJudgementTest {
+class ValueJudgementTest {
     private val analyzer = Analyzer()
 
     private fun interpolation(

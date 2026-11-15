@@ -151,7 +151,7 @@ private val WEAKEST_FIRST =
         ValueFact.CONSTANT,
     )
 
-/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
+/** Of the kinds a placeholder's values have, the one safe in the fewest places; one not known stands between a String and markup. */
 internal fun weakest(kinds: List<ValueFact?>): ValueFact? {
     val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
     return WEAKEST_FIRST[worst]

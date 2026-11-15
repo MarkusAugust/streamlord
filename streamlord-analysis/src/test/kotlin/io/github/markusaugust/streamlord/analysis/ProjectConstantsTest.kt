@@ -56,7 +56,7 @@ class ProjectConstantsTest {
     }
 
     @Test
-    fun `warns on a hole that names a private constant in one file and a getter in another`() {
+    fun `warns on a placeholder that names a private constant in one file and a getter in another`() {
         val a = "private const val title = \"Home\""
         val b = "val title get() = call.request.queryParameters[\"title\"]"
         val c = "import org.intellij.lang.annotations.Language\n\n@Language(\"html\")\nfun page() = \"\"\"<h1>\$title</h1>\"\"\""

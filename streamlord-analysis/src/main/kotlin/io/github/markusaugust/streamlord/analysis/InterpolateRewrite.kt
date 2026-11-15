@@ -14,10 +14,10 @@ private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 /** How every title of the rewrite to `interpolate` starts. */
 internal const val REWRITE_TITLE = "Build this string with interpolate(...)"
 
-/** The title of the rewrite to `interpolate` where the hole is a value it escapes. */
+/** The title of the rewrite to `interpolate` where the placeholder is a value it escapes. */
 internal const val ESCAPES_TITLE = "$REWRITE_TITLE, which escapes the values"
 
-/** Its title where the hole starts a URL, which escaping does not help but interpolate refuses when it would run. */
+/** Its title where the placeholder starts a URL, which escaping does not help but interpolate refuses when it would run. */
 internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that runs"
 
 /**
@@ -35,7 +35,7 @@ internal fun interpolateFix(
     trusted: Map<Int, Boolean>,
     kept: Set<Int> = emptySet(),
 ): Fix {
-    val named = trusted.keys.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
+    val named = trusted.keys.joinToString(" and ") { valueShown(s.interpolations[it]) }
     val title = if (trusted.isEmpty()) ESCAPES_TITLE else "$REWRITE_TITLE, with $named as Trusted(...)"
     val imports = coreImports(src, listOfNotNull("Trusted".takeIf { trusted.isNotEmpty() }, "interpolate"))
     return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted, kept) }
@@ -103,15 +103,15 @@ private fun formatBody(
     // Where the literal writes a per cent sign, and how many characters of source spell it.
     val percents = HashMap<Int, Int>()
     for (i in literal.text.indices) if (literal.text[i] == '%') percents[literal.map[i]] = literal.map[i + 1] - literal.map[i]
-    val holes = literal.interpolations.associateBy { it.start }
+    val placeholders = literal.interpolations.associateBy { it.start }
     val out = StringBuilder()
     var k = literal.contentStart
     while (k < literal.contentEnd) {
-        val hole = holes[k]
+        val placeholder = placeholders[k]
         val n = percents[k] ?: 0
-        if (hole != null) {
-            out.append(if (k in stays) src.substring(k, hole.end) else "%s")
-            k = hole.end
+        if (placeholder != null) {
+            out.append(if (k in stays) src.substring(k, placeholder.end) else "%s")
+            k = placeholder.end
         } else if (n > 0) {
             out.append(src, k, k + n).append(src, k, k + n)
             k += n
@@ -358,7 +358,7 @@ private fun coreImports(
 }
 
 /**
- * The hole made a `Trusted` value, `${Trusted(body)}`: markup the author vouches for, which the
+ * The placeholder made a `Trusted` value, `${Trusted(body)}`: markup the author vouches for, which the
  * analysis then reads as the author's own. With the import, when the file has none. Never
  * preferred: whether the value is markup only the author knows.
  */
@@ -400,8 +400,8 @@ private val COLLECTION_TYPE =
 /** A cast at the end of a value, `v as List<*>`, and the type it names. */
 private val CAST = regex("""\sas\??\s+([\p{L}_][\p{L}\p{Nd}_.]*)\s*(?:<.*>)?\??$""")
 
-/** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
-internal fun callResult(value: String): Boolean = holeValues(value).all { lastCall(it.text) != null }
+/** Whether every value a placeholder can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
+internal fun callResult(value: String): Boolean = templateValues(value).all { lastCall(it.text) != null }
 
 /** Whether a constant's text, as the file shows it, holds a per cent sign: in the value as written, or in the `const val` it names. */
 internal fun constantPercent(
@@ -436,7 +436,7 @@ internal fun shownType(
 }
 
 /**
- * Whether the text shows every value a hole can give to be a collection, a List, a Set, a Map or
+ * Whether the text shows every value a placeholder can give to be a collection, a List, a Set, a Map or
  * an array: declared one, set to one, made by a call that makes one, or cast to one. A template
  * writes it in brackets, which no CSS is.
  */
@@ -447,7 +447,7 @@ internal fun collectionShown(
     depth: Int = 0,
 ): Boolean =
     depth < VALUE_DEPTH &&
-        holeValues(value).all { v ->
+        templateValues(value).all { v ->
             val t = unparen(v.text)
             val cast = CAST.find(t)
             val sum = splitTop(t, "+")
@@ -653,8 +653,8 @@ private fun annotationEnd(
     return k
 }
 
-/** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a hole. */
-internal fun percentHoles(text: String): List<Int> {
+/** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a placeholder. */
+internal fun percentPlaceholders(text: String): List<Int> {
     val found = ArrayList<Int>()
     var i = 0
     while (i < text.length - 1) {
@@ -669,18 +669,18 @@ internal fun percentHoles(text: String): List<Int> {
 }
 
 /**
- * The format with each `%s` read as a hole like a Kotlin template, [PLACEHOLDER], mapped back to
- * the source, and where each `%s` now starts. `<%s` is then a tag whose name is a hole, not a
+ * The format with each `%s` read as a placeholder like a Kotlin template, [PLACEHOLDER], mapped back to
+ * the source, and where each `%s` now starts. `<%s` is then a tag whose name is a placeholder, not a
  * template engine's `<%`.
  */
-internal fun withPercentHoles(
+internal fun withPercentPlaceholders(
     s: KotlinString,
-    holes: List<Int>,
+    placeholders: List<Int>,
 ): Pair<KotlinString, List<Int>> {
     val text = StringBuilder()
     val map = ArrayList<Int>()
     val at = ArrayList<Int>()
-    val set = holes.toHashSet()
+    val set = placeholders.toHashSet()
     var i = 0
     while (i < s.text.length) {
         if (i in set) {
@@ -696,7 +696,7 @@ internal fun withPercentHoles(
     }
     map += s.map[s.text.length]
 
-    fun shift(d: Int) = d + (PLACEHOLDER.length - 2) * countBelow(holes, d)
+    fun shift(d: Int) = d + (PLACEHOLDER.length - 2) * countBelow(placeholders, d)
     val format =
         s.copy(
             text = text.toString(),

@@ -8,7 +8,7 @@ import kotlin.concurrent.Volatile
  * The pieces of the interpolation judgement that are about Kotlin rather than about Datastar:
  * which values are joined into an HTML string, which of them the analysis can see are safe or
  * are markup themselves, what the text looks like once `trimMargin` has run, and the rewrite to
- * `interpolate`. Where a placeholder lands is core's `holeLandings`.
+ * `interpolate`. Where a placeholder lands is core's `valueLandings`.
  */
 
 // A trim call, read to its end where it has no argument or a margin written as a literal, by position or by name.
@@ -41,8 +41,8 @@ internal val Interpolation.dollars: Int
             InterpolationKind.OPERAND -> 0
         }
 
-/** How a hole is named in a message, as it is written: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
-internal fun holeDisplay(ip: Interpolation): String {
+/** How a placeholder is named in a message, as it is written: `$name`, `${expr}` shortened, or an operand of `+` as the value it is. */
+internal fun valueShown(ip: Interpolation): String {
     if (ip.kind == InterpolationKind.SIMPLE) return "$".repeat(ip.dollars) + ip.text
     if (ip.unread) return "a value joined with + that cannot be read as a whole"
     if (ip.kind == InterpolationKind.OPERAND) return "the value `${shortened(ip.text)}`"
@@ -302,7 +302,7 @@ internal fun branches(expr: String): List<String>? {
 }
 
 /**
- * The `+` chain the literal [first] stands in, read as one string: each literal's text, and a hole
+ * The `+` chain the literal [first] stands in, read as one string: each literal's text, and a placeholder
  * for each value joined to them, mapped back to the source. The values are read as Kotlin has
  * them ([Operands]): what is joined before the first literal is one value, a chain in brackets
  * that starts with a literal is read through, and an `if` goes on to the end of the expression.

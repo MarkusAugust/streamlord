@@ -11,13 +11,13 @@ import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
-import io.github.markusaugust.streamlord.core.domain.HoleLanding
 import io.github.markusaugust.streamlord.core.domain.ModifierRules
 import io.github.markusaugust.streamlord.core.domain.Position
-import io.github.markusaugust.streamlord.core.domain.holeLandings
+import io.github.markusaugust.streamlord.core.domain.ValueLanding
 import io.github.markusaugust.streamlord.core.domain.refusedUrlScheme
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
+import io.github.markusaugust.streamlord.core.domain.valueLandings
 import java.io.File
 import kotlin.concurrent.Volatile
 import kotlin.time.Duration
@@ -314,7 +314,7 @@ public class Analyzer(
             val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null, o.name)
             if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
         }
-        // A literal joined to values with `+` is read as one string with a hole for each value.
+        // A literal joined to values with `+` is read as one string with a placeholder for each value.
         val chained = HashSet<Int>()
         val topLevel = lex.strings.mapTo(HashSet()) { it.start }
         for (s in withNested(lex.strings)) {
@@ -597,9 +597,9 @@ public class Analyzer(
         val kind = catalog.parseAttributeName(name.asciiLowercase(), opts.prefix)?.spec?.valueKind
         if (value != null && kind == ValueKind.EXPRESSION) {
             // kotlinx.html's own form: a helper is offered only where the file can call it.
-            issues += expressionHoles(value, src, opts, name, helpers)
+            issues += expressionTemplates(value, src, opts, name, helpers)
         }
-        if (value != null && kind == ValueKind.SIGNAL) issues += signalNameHoles(value, src, opts, name)
+        if (value != null && kind == ValueKind.SIGNAL) issues += signalNameTemplates(value, src, opts, name)
 
         // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
         fun range(
@@ -639,7 +639,7 @@ public class Analyzer(
      * there is a Kotlin value, and the name is written without the dollar. Any other template
      * writes a Kotlin value into the signal path, as in markup.
      */
-    private fun signalNameHoles(
+    private fun signalNameTemplates(
         s: KotlinString,
         src: String,
         opts: Reading,
@@ -648,7 +648,7 @@ public class Analyzer(
         val out = ArrayList<Issue>()
         for (ip in s.interpolations) {
             // A constant or a number the author wrote is the name, as it is in markup.
-            val fact = holeFact(s, src, opts, ip).plain()
+            val fact = factOf(s, src, opts, ip).plain()
             if (fact.writesItself()) continue
             if (ip.kind == InterpolationKind.SIMPLE && ip.dollars == 1) {
                 // The literal without the dollar, as written: what the fix writes and the message shows.
@@ -953,7 +953,7 @@ public class Analyzer(
     ): List<Issue> {
         if (s.unterminated) return emptyList()
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
-        val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
+        val issues = ArrayList(expressionTemplates(s, src, opts, named, helpers))
         oneValue?.let { commaOperatorIssue(s, it) }?.let { issues += it }
         val judged = expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event)
         val simple = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE }.mapTo(HashSet()) { it.decodedStart }
@@ -969,7 +969,7 @@ public class Analyzer(
      * from outside ends the string and the rest runs. A number or a boolean is safe there, as
      * `interpolate` lets in.
      */
-    private fun expressionHoles(
+    private fun expressionTemplates(
         s: KotlinString,
         src: String,
         opts: Reading,
@@ -985,7 +985,7 @@ public class Analyzer(
                 out += trap
                 continue
             }
-            val fact = holeFact(s, src, opts, ip).plain()
+            val fact = factOf(s, src, opts, ip).plain()
             // Kotlin writes the digits of an unsigned number; it is interpolate that would refuse it.
             if (fact.writesItself()) continue
             out += datastarIssue(ip, attribute)
@@ -1031,7 +1031,7 @@ public class Analyzer(
                     }
                 }?.takeIf { it in catalog.patchModes }
         val view = s?.let { markupView(src, it) } ?: ""
-        val judged = s?.let { judgeHoles(it, src, opts, view) }
+        val judged = s?.let { judgeValues(it, src, opts, view) }
         val issues = ArrayList(judged?.issues.orEmpty())
         val modeKnown = if (modeArg == null) ElementPatchMode.DEFAULT else mode?.let { ElementPatchMode.fromWire(it) }
         // A mode without a selector is judged on a receiver of any name, as it always was.

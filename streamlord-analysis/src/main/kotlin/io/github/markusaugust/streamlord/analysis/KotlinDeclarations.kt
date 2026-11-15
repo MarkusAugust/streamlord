@@ -81,7 +81,7 @@ internal class FileFacts(
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
     val importEdits: MutableMap<String, List<Edit>> = sharedMap()
 
-    /** The helpers a hole may call that no import from elsewhere shadows, whether or not the file uses the DSL. */
+    /** The helpers a placeholder may call that no import from elsewhere shadows, whether or not the file uses the DSL. */
     @Volatile
     var helpers: Set<String>? = null
 
@@ -115,7 +115,7 @@ internal class FunctionDeclaration(
 @Volatile
 private var lastFacts: FileFacts? = null
 
-/** The facts of [src], kept for the last file read: every hole of a file asks for them. */
+/** The facts of [src], kept for the last file read: every placeholder of a file asks for them. */
 internal fun fileFacts(
     src: String,
     lex: KotlinLex? = null,

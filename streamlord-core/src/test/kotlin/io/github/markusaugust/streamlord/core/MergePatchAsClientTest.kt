@@ -143,7 +143,7 @@ class MergePatchAsClientTest {
     @Test
     fun `refuses what the client cannot hold`() {
         val store = JsonParser.parseObject("""{"a":[1]}""")
-        // The client takes these as holes; the fold refuses on purpose.
+        // The client takes these as empty slots; the fold refuses on purpose.
         for (patch in listOf("""{"a":{"20000":1}}""", """{"a":{"length":20000}}""")) {
             assertTrue(assertFailsWith<SignalPatchException>(patch) { mergePatchAsClient(store, JsonParser.parse(patch)) }.refused)
         }

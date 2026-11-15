@@ -13,7 +13,7 @@ dependencies {
 kotlin.compilerOptions.optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
 
 /*
- * The cases are text: rewrite-probes.json, and every cell of hole-matrix.json. The generator asks
+ * The cases are text: rewrite-probes.json, and every cell of value-matrix.json. The generator asks
  * the analysis for each fix and each context action, and writes the function before and after each
  * as Kotlin, which the test source set compiles against core. A fix that leaves code the compiler
  * refuses fails the build there, with the case named in the file.
@@ -26,7 +26,7 @@ val generateProbes =
         group = "build"
         classpath = generator.runtimeClasspath
         mainClass.set("io.github.markusaugust.streamlord.probes.GenerateKt")
-        inputs.files(cases.file("rewrite-probes.json"), cases.file("hole-matrix.json")).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs.files(cases.file("rewrite-probes.json"), cases.file("value-matrix.json")).withPathSensitivity(PathSensitivity.RELATIVE)
         outputs.dir(probes)
         args(cases.asFile.path, probes.get().asFile.path)
     }
