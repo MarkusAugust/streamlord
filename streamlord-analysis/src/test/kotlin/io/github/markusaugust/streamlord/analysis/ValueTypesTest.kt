@@ -25,10 +25,16 @@ class ValueTypesTest {
         }
     }
 
+    // A collection of markup joined in element text is markup, and says nothing; any other is text written as it is.
     @Test
     fun `whether a type is a collection of markup`() {
+        val analyzer = Analyzer()
         for (c in cases.filter { it.string("collection") != null }) {
-            assertEquals(c.boolean("markup"), isMarkupCollection(c.string("collection")!!), c.string("name"))
+            val src =
+                "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\n" +
+                    "import io.github.markusaugust.streamlord.core.domain.interpolate\n" +
+                    "fun f(xs: ${c.string("collection")}) = \"<p>\${xs.joinToString(\"\")}</p>\""
+            assertEquals(c.boolean("markup"), analyzer.analyzeKotlin(src).isEmpty(), c.string("name"))
         }
     }
 

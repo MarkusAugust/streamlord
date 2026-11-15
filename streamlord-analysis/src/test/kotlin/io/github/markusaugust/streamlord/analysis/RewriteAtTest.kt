@@ -6,6 +6,9 @@ import kotlin.test.assertNull
 
 /** The rewrite to `interpolate` an editor offers for a caret or a selection as a context action: `rewriteAt` over the analysed file. */
 class RewriteAtTest {
+    // The title of the rewrite where the string holds a URL, as the editor shows it.
+    private val refusesUrl = "Build this string with interpolate(...), which refuses a URL that runs"
+
     private val analyzer = Analyzer()
     private val import = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
 
@@ -34,8 +37,8 @@ class RewriteAtTest {
     fun `it has the title of the fix the issues offer, one for the one edit`() {
         val link = "fun link(url: String, name: String) = \"<a href=\\\"\$url\\\">\$name</a>\""
         val titles = analyzer.analyzeKotlin(link).flatMap { i -> i.fixes.map { it.title } }.filter { it.startsWith("Build") }
-        assertEquals(listOf(REFUSES_URL_TITLE, REFUSES_URL_TITLE), titles)
-        assertEquals(REFUSES_URL_TITLE, offered(link, "<a")?.title)
+        assertEquals(listOf(refusesUrl, refusesUrl), titles)
+        assertEquals(refusesUrl, offered(link, "<a")?.title)
     }
 
     @Test

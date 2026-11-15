@@ -48,7 +48,7 @@ class AnalyzerTest {
         val source = case.string("source") ?: ""
         return when (val kind = case.string("kind")) {
             "kotlin-string" -> {
-                mapOf("string" to literal(readKotlinStringAt(source, case.int("at")!!)))
+                mapOf("string" to literal(analyzer.lex(source).strings.firstOrNull { it.start == case.int("at")!! }))
             }
 
             "call-sites" -> {
@@ -66,7 +66,7 @@ class AnalyzerTest {
             }
 
             "kotlin-strings" -> {
-                mapOf("texts" to findKotlinStrings(source).map { it.text })
+                mapOf("texts" to analyzer.lex(source).strings.map { it.text })
             }
 
             "html-string-at" -> {
@@ -115,22 +115,19 @@ class AnalyzerTest {
 
     @Test
     fun `documents attributes and actions`() {
-        val on = analyzer.catalog.attributesByName["on"]!!
-        val doc = attributeDoc(on)
+        // As a hover shows them.
+        fun doc(html: String) = analyzer.hover(Source(html, SourceLanguage.HTML), html.indexOf("data-") + 6)!!.markdown
+        val doc = doc("<div data-on:click__debounce.500ms=\"x()\"></div>")
         assertContains(doc, "**data-on**")
         assertContains(doc, "__debounce.500ms")
         assertContains(doc, "**Key casing:**")
-        assertContains(actionDoc(analyzer.catalog.actionsByName["post"]!!), "@post(uri, options?)")
+        val post = "<div data-on:click=\"@post('/x')\"></div>"
+        assertContains(analyzer.hover(Source(post, SourceLanguage.HTML), post.indexOf("post"))!!.markdown, "@post(uri, options?)")
         assertContains(markdownToHtml("**a** `b` _c_"), "<b>a</b> <code>b</code> <i>c</i>")
         assertEquals("<p><code>__once</code>, <code>__exit</code> <i>Pro</i></p>", markdownToHtml("`__once`, `__exit` _Pro_"))
         // A DOM event's documentation is a link to MDN, whose underscores are the address's.
         assertEquals("<p><a href=\"https://x.dev/click_event\">MDN</a></p>", markdownToHtml("[MDN](https://x.dev/click_event)"))
-        assertFalse(
-            analyzer.catalog.attributesByName["persist"]!!
-                .let { attributeDoc(it) }
-                .contains("**Key casing:**")
-                .not(),
-        )
+        assertContains(doc("<div data-persist:x></div>"), "**Key casing:**")
         assertNotNull(analyzer.catalog.parseAttributeName("data-on:click__debounce.500ms", "data-"))
     }
 

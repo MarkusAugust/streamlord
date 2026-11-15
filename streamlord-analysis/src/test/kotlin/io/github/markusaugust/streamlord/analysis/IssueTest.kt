@@ -4,30 +4,36 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class IssueTest {
+    /** Where an issue at [offset] of [text] stands, as an editor or a build shows it. */
+    private fun at(
+        text: String,
+        offset: Int,
+    ) = Issue(offset, offset + 1, "", Severity.WARNING).position(text)
+
     @Test
     fun `the first character is line 1, column 1`() {
-        assertEquals(SourcePosition(1, 1), sourcePosition("abc", 0))
+        assertEquals(SourcePosition(1, 1), at("abc", 0))
     }
 
     @Test
     fun `a position after a line break starts the next line`() {
         val source = "one\ntwo\nthree"
 
-        assertEquals(SourcePosition(2, 1), sourcePosition(source, source.indexOf("two")))
-        assertEquals(SourcePosition(3, 3), sourcePosition(source, source.indexOf("ree")))
+        assertEquals(SourcePosition(2, 1), at(source, source.indexOf("two")))
+        assertEquals(SourcePosition(3, 3), at(source, source.indexOf("ree")))
     }
 
     @Test
     fun `a CRLF line ending is one line break`() {
         val source = "one\r\ntwo"
 
-        assertEquals(SourcePosition(2, 1), sourcePosition(source, source.indexOf("two")))
+        assertEquals(SourcePosition(2, 1), at(source, source.indexOf("two")))
     }
 
     @Test
     fun `an offset outside the text is held to its ends`() {
-        assertEquals(SourcePosition(1, 1), sourcePosition("ab\ncd", -4))
-        assertEquals(SourcePosition(2, 3), sourcePosition("ab\ncd", 99))
+        assertEquals(SourcePosition(1, 1), at("ab\ncd", -4))
+        assertEquals(SourcePosition(2, 3), at("ab\ncd", 99))
     }
 
     @Test

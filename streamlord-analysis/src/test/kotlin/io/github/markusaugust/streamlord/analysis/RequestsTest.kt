@@ -46,8 +46,16 @@ class RequestsTest {
 
     private fun running(c: JsonObject) = c.obj("running")?.let { RunningServer(it.string("url")!!, it.string("name")!!) }
 
-    private fun variables(c: JsonObject) =
-        Requests.mergeVariables(c.string("defaultUrl")!!, Requests.parseEnv(c.string("env")!!), running(c))
+    private fun variables(c: JsonObject) = Requests.environment(c.string("env")!!, c.string("defaultUrl")!!, running(c)).vars
+
+    /** A requests file holding [requests], as saving each in turn writes it. */
+    private fun written(requests: List<SavedRequest>): String =
+        requests.fold(null as String?) { text, r -> Requests.saveRequest(text, r).text } ?: Requests.saveRequest(null, request(null)).let {
+            Requests.removeRequest(it.text, "counter").text!!
+        }
+
+    /** What [url] is sent to, as the stream client sends a request whose signals go in its body. */
+    private fun sent(url: String) = Requests.streamRequest(url, "POST", "{}", emptyMap())
 
     private fun edit(e: RequestsEdit) = mapOf("text" to e.text, "error" to e.error)
 
@@ -60,7 +68,9 @@ class RequestsTest {
                 val file =
                     c.string("path")?.let { Requests.parseRequestsFile(c.string("text")!!, it) }
                         ?: Requests.parseRequestsFile(c.string("text")!!)
-                val again = Requests.parseRequestsFile(Requests.serializeRequestsFile(file)).requests
+                // Saving each request read back into the file's own text leaves what it reads.
+                val saved = file.requests.fold(c.string("text")!!) { text, r -> Requests.saveRequest(text, r).text ?: text }
+                val again = Requests.parseRequestsFile(saved).requests
                 val expected = c.obj("expected")!!
                 buildMap {
                     put("requests", file.requests.map(::shown))
@@ -86,7 +96,7 @@ class RequestsTest {
                 )
             },
             "serializeRequestsFile" to { c ->
-                Requests.serializeRequestsFile(RequestsFile(c.array("requests")!!.objects().map(::request)))
+                written(c.array("requests")!!.objects().map(::request))
             },
             "upsert" to { c ->
                 // Through the edits of the file's text, as a store saves and deletes.
@@ -103,15 +113,17 @@ class RequestsTest {
                     .map { listOf(it.name, it.url) }
             },
             "substitute" to { c ->
-                val r = Requests.substitute(c.string("text")!!, c.obj("vars")!!.mapValues { (it.value as JsonString).value })
-                mapOf("text" to r.text, "missing" to r.missing)
+                // As a request's address is filled in.
+                val vars = c.obj("vars")!!.map { (k, v) -> Requests.Variable(k, (v as JsonString).value, Requests.VariableSource.ENV) }
+                val r = Requests.resolveRequest(SavedRequest("x", c.string("text")!!), vars)
+                mapOf("text" to r.request.url, "missing" to r.unset)
             },
             "toCurl" to { c -> Requests.toCurl(request(c.obj("request"))) },
             "sendableUrl" to { c ->
-                val r = Requests.sendableUrl(c.string("url")!!)
-                mapOf("url" to r.url, "error" to r.error)
+                val r = sent(c.string("url")!!)
+                mapOf("url" to (r as? Requests.StreamRequest.Sent)?.url, "error" to (r as? Requests.StreamRequest.Refused)?.error)
             },
-            "sends" to { c -> Requests.sendableUrl(c.string("url")!!).url != null },
+            "sends" to { c -> sent(c.string("url")!!) is Requests.StreamRequest.Sent },
             "signalsRefused" to { c -> Requests.signalsProblem(c.string("signals")!!) != null },
             "readsAsStream" to { c -> Requests.readsAsStream(c.int("status")!!, c.string("contentType")) },
             "emptyBodyHint" to { c -> Requests.emptyBodyHint(c.int("status")!!, c.string("body")!!) },
@@ -124,14 +136,18 @@ class RequestsTest {
             // The two older messages say "project" here and "workspace" in the extension, so a case names the part they share.
             "requestsPathProblemSays" to { c -> Requests.requestsPathProblem(c.string("path")!!)?.contains(c.string("says")!!) ?: false },
             "newRequestLabel" to { c -> Requests.newRequestLabel(c.int("saved")!!, c.int("recent")!!) },
-            "lineAndColumn" to { c -> Requests.lineAndColumn(c.string("text")!!, c.int("position")!!) },
             "parseEnv" to { c ->
-                val env = Requests.parseEnv(c.string("text")!!)
+                // As the variables a request may name: the file's own, each by its key.
+                val env = Requests.environment(c.string("text")!!, "http://default", null)
+                val own = env.vars.filter { it.source == Requests.VariableSource.ENV }
+                fun named(key: String) = own.firstOrNull { it.name == key }?.value
+                val headers = named("headers")?.lines()?.map { listOf(it.substringBefore(": "), it.substringAfter(": ")) }
+                val params = own.filter { it.name !in setOf("baseUrl", "signals", "headers") }.map { listOf(it.name, it.value) }
                 mapOf(
-                    "baseUrl" to env.baseUrl,
-                    "signals" to env.signals,
-                    "headers" to pairs(env.headers),
-                    "params" to pairs(env.params),
+                    "baseUrl" to named("baseUrl"),
+                    "signals" to named("signals"),
+                    "headers" to headers,
+                    "params" to params.ifEmpty { null },
                     "errors" to env.errors,
                 )
             },
@@ -206,7 +222,7 @@ class RequestsTest {
             RequestsFile(emptyList(), ".streamlord/inspector.json is not valid JSON at line 1, column 1."),
             Requests.parseRequestsFile("not json"),
         )
-        assertEquals(listOf(".streamlord/env.json is not valid JSON at line 1, column 1."), Requests.parseEnv("not json").errors)
+        assertEquals(listOf(".streamlord/env.json is not valid JSON at line 1, column 1."), Requests.environment("not json", "http://default", null).errors)
         val broken = Requests.parseRequestsFile("{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"},]}", "req.json")
         assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
     }

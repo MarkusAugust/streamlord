@@ -82,7 +82,7 @@ class CorpusTest {
         shift: Int = 0,
         depth: Int = 0,
     ): List<Int> {
-        val lex = lexKotlin(text)
+        val lex = analyzer.lex(text)
         val out = findCallSites(text, names, lex).mapTo(ArrayList()) { it.nameStart + shift }
         if (depth >= 4) return out
         for (s in lex.strings) {
@@ -118,7 +118,7 @@ class CorpusTest {
             for (case in corpus.array("cases")!!.objects()) {
                 for (issue in run("kotlin", case)) {
                     val advises = "build the string with interpolate(...)" in issue.message
-                    val offered = issue.fixes.any { it.title.startsWith(REWRITE_TITLE) }
+                    val offered = issue.fixes.any { it.title.startsWith("Build this string with interpolate(...)") }
                     val why =
                         "interpolate(...) is not offered here" in issue.message ||
                             "interpolate(...) cannot take this string" in issue.message

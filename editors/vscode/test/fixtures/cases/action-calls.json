@@ -1,21 +1,210 @@
 {
-  "$comment": "Which action call a caret stands in, in a Datastar expression (actionCallAt): the caret is at the end of before, and only the text before it is read. action is the innermost @name( still open around the caret, or null; argument counts from 0. option is set when the caret is where a key of a backend action's options object goes: typed is what is written of the key so far, written the keys already in the object. Read by CompletionContextsTest.kt.",
+  "$comment": "Which action call a caret stands in, in a Datastar expression: the expression is before, the caret at its end, written in a data-on:click. signature is the action's signature help with the parameter the caret is at (from 0), null outside a call; labels are the completion items there, the options of a backend action's options object less those written already.",
   "cases": [
-    { "name": "the first argument", "before": "@get(", "action": "get", "argument": 0, "option": null },
-    { "name": "the second argument, before its object", "before": "@get('/x', ", "action": "get", "argument": 1, "option": null },
-    { "name": "a key of the options object", "before": "@get('/x', {ret", "action": "get", "argument": 1, "option": { "typed": "ret", "written": [] } },
-    { "name": "the keys already written", "before": "@post('/x', {retry: 'never', selector: '#a', ", "action": "post", "argument": 1, "option": { "typed": "", "written": ["retry", "selector"] } },
-    { "name": "a value in the options object is no key", "before": "@post('/x', {retry: ", "action": "post", "argument": 1, "option": null },
-    { "name": "an object inside an option is not the options object", "before": "@post('/x', {headers: {", "action": "post", "argument": 1, "option": null },
-    { "name": "a comma in a string counts for nothing", "before": "@get('/x, {", "action": "get", "argument": 0, "option": null },
-    { "name": "a template literal with code in it", "before": "@get(`/x/${$id}`, {", "action": "get", "argument": 1, "option": { "typed": "", "written": [] } },
-    { "name": "a comma in a nested call counts for nothing", "before": "@fit(Math.max($a, $b), 0, 100, ", "action": "fit", "argument": 3, "option": null },
-    { "name": "a signals action", "before": "$a = 1; @setAll(", "action": "setAll", "argument": 0, "option": null },
-    { "name": "only a backend action has the options object", "before": "@intl('number', $n, {", "action": "intl", "argument": 2, "option": null },
-    { "name": "a closed call", "before": "@get('/x', {retry: 'never'}); $b", "action": null },
-    { "name": "an action handed to a call that is no action", "before": "foo(@get('/a'), ", "action": null },
-    { "name": "an action in a comment", "before": "$a++ // @get(", "action": null },
-    { "name": "an action name without its parenthesis", "before": "@get", "action": null },
-    { "name": "the innermost action", "before": "@post('/x', {payload: @peek(() => ", "action": "peek", "argument": 0, "option": null }
+    {
+      "name": "the first argument",
+      "before": "@get(",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 0
+      }
+    },
+    {
+      "name": "the second argument, before its object",
+      "before": "@get('/x', ",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "a key of the options object",
+      "before": "@get('/x', {ret",
+      "labels": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ],
+      "alone": true,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "the keys already written",
+      "before": "@post('/x', {retry: 'never', selector: '#a', ",
+      "labels": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler"
+      ],
+      "alone": true,
+      "signature": {
+        "label": "@post(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "a value in the options object is no key",
+      "before": "@post('/x', {retry: ",
+      "labels": [
+        "'auto'",
+        "'error'",
+        "'always'",
+        "'never'"
+      ],
+      "alone": true,
+      "signature": {
+        "label": "@post(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "an object inside an option is not the options object",
+      "before": "@post('/x', {headers: {",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@post(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "a comma in a string counts for nothing",
+      "before": "@get('/x, {",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 0
+      }
+    },
+    {
+      "name": "a template literal with code in it",
+      "before": "@get(`/x/${$id}`, {",
+      "labels": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ],
+      "alone": true,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "a comma in a nested call counts for nothing",
+      "before": "@fit(Math.max($a, $b), 0, 100, ",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp?, shouldRound?)",
+        "active": 3
+      }
+    },
+    {
+      "name": "a signals action",
+      "before": "$a = 1; @setAll(",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@setAll(value, filter?)",
+        "active": 0
+      }
+    },
+    {
+      "name": "only a backend action has the options object",
+      "before": "@intl('number', $n, {",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@intl(type, value, options?, locale?)",
+        "active": 2
+      }
+    },
+    {
+      "name": "a closed call",
+      "before": "@get('/x', {retry: 'never'}); $b",
+      "labels": [
+        "$count"
+      ],
+      "alone": true,
+      "signature": null
+    },
+    {
+      "name": "an action handed to a call that is no action",
+      "before": "foo(@get('/a'), ",
+      "labels": [],
+      "alone": false,
+      "signature": null
+    },
+    {
+      "name": "an action in a comment",
+      "before": "$a++ // @get(",
+      "labels": [],
+      "alone": false,
+      "signature": null
+    },
+    {
+      "name": "an action name without its parenthesis",
+      "before": "@get",
+      "labels": [
+        "@delete",
+        "@get",
+        "@patch",
+        "@peek",
+        "@post",
+        "@put",
+        "@query",
+        "@setAll",
+        "@toggleAll",
+        "@clipboard",
+        "@fit",
+        "@intl"
+      ],
+      "alone": true,
+      "signature": null
+    },
+    {
+      "name": "the innermost action",
+      "before": "@post('/x', {payload: @peek(() => ",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@peek(() => expr)",
+        "active": 0
+      }
+    }
   ]
 }

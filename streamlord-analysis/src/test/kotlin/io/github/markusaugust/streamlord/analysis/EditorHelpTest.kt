@@ -178,7 +178,8 @@ class EditorHelpTest {
             val text = "<div data-on:click=\"@${action.name}("
             val help = analyzer.signatureHelp(Source(text, SourceLanguage.HTML), text.length)!!
             assertEquals(action.parameters.size, help.parameterDocs.size, action.name)
-            val hover = actionDoc(action, catalog = analyzer.catalog)
+            val call = "<div data-on:click=\"@${action.name}()\"></div>"
+            val hover = analyzer.hover(Source(call, SourceLanguage.HTML), call.indexOf(action.name))!!.markdown
             for ((n, doc) in help.parameterDocs.withIndex()) assertTrue("`${action.parameters[n]}`: $doc" in hover, "${action.name}: $doc")
         }
     }
