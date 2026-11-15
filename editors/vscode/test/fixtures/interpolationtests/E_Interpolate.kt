@@ -6,7 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.interpolate
 
 /*
  * Way 5: the string goes to Streamlord's `interpolate`, which escapes each
- * `%s` hole and refuses the positions escaping cannot make safe.
+ * `%s` placeholder and refuses the positions escaping cannot make safe.
  *
  * Each mistake below compiles. The comment above it says what the editor must
  * say; the correct uses at the end must stay silent.
@@ -14,16 +14,16 @@ import io.github.markusaugust.streamlord.core.domain.interpolate
 object InterpolateCalls {
     // 1. A Kotlin template in the format.
     // interpolate-template, warning, on $query: Kotlin fills it in before
-    // interpolate sees the markup. Fix: make it a %s hole and pass query.
+    // interpolate sees the markup. Fix: make it a %s placeholder and pass query.
     fun templateInText(query: String): Html = interpolate("<p class=\"lt-paragraph\">You searched for $query</p>")
 
-    // 2. A template beside a hole.
-    // interpolate-template, warning, on ${applicant.name}. Fix: a %s hole,
-    // applicant.name passed after query, since it comes after query's hole.
-    fun templateBesideHole(query: String): Html = interpolate("<p class=\"lt-paragraph\" title=\"%s\">Hello, ${applicant.name}</p>", query)
+    // 2. A template beside a placeholder.
+    // interpolate-template, warning, on ${applicant.name}. Fix: a %s placeholder,
+    // applicant.name passed after query, since it comes after query's placeholder.
+    fun templateBesidePlaceholder(query: String): Html = interpolate("<p class=\"lt-paragraph\" title=\"%s\">Hello, ${applicant.name}</p>", query)
 
     // 3. A template in a Datastar expression.
-    // interpolate-template, warning, on ${query}, no fix: as a %s hole
+    // interpolate-template, warning, on ${query}, no fix: as a %s placeholder
     // interpolate would refuse a String there.
     fun templateInExpression(query: String): Html = interpolate("<button class=\"lt-button\" data-on:click=\"@get('/search?q=${query}')\">Search</button>")
 
@@ -32,17 +32,17 @@ object InterpolateCalls {
     // Fixes: a $$ literal, or ${'$'}count.
     fun signalByMistake(): Html = interpolate("<p class=\"lt-paragraph\" data-text=\"$count\"></p>")
 
-    // 5. More holes than values.
-    // interpolate-holes, error, on interpolate: 2 holes and 1 value.
+    // 5. More placeholders than values.
+    // interpolate-placeholders, error, on interpolate: 2 placeholders and 1 value.
     fun tooFewValues(query: String): Html = interpolate("<p class=\"lt-paragraph\">%s searched for %s</p>", query)
 
-    // 6. More values than holes.
-    // interpolate-holes, error, on interpolate: 1 hole and 2 values.
+    // 6. More values than placeholders.
+    // interpolate-placeholders, error, on interpolate: 1 placeholder and 2 values.
     fun tooManyValues(query: String): Html = interpolate("<p class=\"lt-paragraph\">%s</p>", query, count)
 
-    // 7. %%s is a per cent sign and an s, not a hole.
-    // interpolate-holes, error, on interpolate: 0 holes and 1 value.
-    fun percentIsNotAHole(query: String): Html = interpolate("<p class=\"lt-paragraph\">100%%s</p>", query)
+    // 7. %%s is a per cent sign and an s, not a placeholder.
+    // interpolate-placeholders, error, on interpolate: 0 placeholders and 1 value.
+    fun percentIsNotAPlaceholder(query: String): Html = interpolate("<p class=\"lt-paragraph\">100%%s</p>", query)
 
     // 8. A String in a Datastar expression.
     // unsafe-interpolation, error, on %s: interpolate always throws.
@@ -75,11 +75,11 @@ object InterpolateCalls {
     // unknown-action, warning, on @pots, in both: <%s is a tag, not a template tag.
     fun formatIsHtml(query: String): Html = interpolate("<button class=\"lt-button\" data-on:click=\"@pots('/x')\">%s</button>", query)
 
-    fun tagFromAHole(): Html = interpolate("<%s class=\"lt-button\" data-on:click=\"@pots('/y')\">Go</%s>", Trusted("button"), Trusted("button"))
+    fun tagFromAPlaceholder(): Html = interpolate("<%s class=\"lt-button\" data-on:click=\"@pots('/y')\">Go</%s>", Trusted("button"), Trusted("button"))
 
-    // 15. A template in a raw format, before a hole.
+    // 15. A template in a raw format, before a placeholder.
     // interpolate-template, warning, on ${applicant.errors.joinToString(", ")}.
-    // Fix: a %s hole, the expression passed before query.
+    // Fix: a %s placeholder, the expression passed before query.
     fun templateInRawFormat(query: String): Html =
         interpolate(
             """
@@ -91,8 +91,8 @@ object InterpolateCalls {
 
     // 16. Markup a Kotlin template writes into the format.
     // interpolate-template, warning, on $inner: interpolate reads the Html as
-    // format too, so a %s or %% in it is a hole or a per cent sign. Fix: make
-    // it a %s hole and pass inner, which interpolate writes as it is.
+    // format too, so a %s or %% in it is a placeholder or a per cent sign. Fix: make
+    // it a %s placeholder and pass inner, which interpolate writes as it is.
     fun markupInText(query: String): Html {
         val inner: Html = interpolate("<b>%s</b>", query)
         return interpolate("<div class=\"lt-card\">$inner</div>")
