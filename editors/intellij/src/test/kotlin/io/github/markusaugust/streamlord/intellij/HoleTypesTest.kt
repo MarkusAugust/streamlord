@@ -166,6 +166,21 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(ValueFact.STRING, facts["\${p.html}"])
     }
 
+    fun `test a collection is one by its type, and a collection of Html is markup`() {
+        myFixture.addFileToProject("Users.kt", "package users\nclass U(val tags: List<String>)")
+        val facts =
+            facts(
+                "import io.github.markusaugust.streamlord.core.domain.Html\nimport users.U\n" +
+                    "fun f(u: U, m: Map<String, Int>, a: IntArray, s: Set<String>, l: ArrayList<String>, rows: List<Html>) = " +
+                    "\"<style>\${u.tags} \$m \$a \$s \$l</style><ul>\$rows</ul>\"",
+            )
+        for (hole in listOf("\${u.tags}", "\$m", "\$a", "\$s", "\$l")) assertEquals(hole, ValueFact.COLLECTION, facts[hole])
+        assertEquals(ValueFact.MARKUP, facts["\$rows"])
+        // No Trusted vouches for a collection, which a template writes in brackets.
+        myFixture.doHighlighting()
+        assertEmpty(myFixture.getAllQuickFixes().mapNotNull { (QuickFixWrapper.unwrap(it) as? ReplaceTextFix)?.familyName })
+    }
+
     fun `test a margin is passed over only where trimMargin is called on the literal`() {
         val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
         assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
