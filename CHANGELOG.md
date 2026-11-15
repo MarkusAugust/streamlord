@@ -227,7 +227,8 @@ All notable changes to Streamlord are recorded here. The format follows
   as a stream (`sse`, `stream`, `datastar`), or on `call` for Ktor's `respond*`. They flag as well
   an attribute of a script that HTML cannot name, the effect attribute beside `autoRemove`, a line
   break in an attribute of `respondScript`, `ScriptResponse` or `datastarScript`, a blank selector
-  of `PatchElements.remove`, a signal name with a hyphen in `PatchSignals.remove`, and an SVG or
+  of `PatchElements.remove`, a signal name core cannot remove, `removeSignals("a..b")`, a hyphen in
+  `PatchSignals.remove` with the fix `removeSignals` has, and an SVG or
   MathML element outside its root, or HTML in a patch in the svg or mathml namespace.
 - The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
   dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
@@ -373,7 +374,11 @@ All notable changes to Streamlord are recorded here. The format follows
   grew with its square: 400 attributes take a quarter of the time they did.
 - VS Code no longer flags a blank selector of `removeElements`, or a mode without a selector of
   `patchElements`, on a call that is not Streamlord's: in a file that imports nothing of Streamlord,
-  or on a class of the file's own, `o.removeElements("")`; IntelliJ did not.
+  or on a class of the file's own, `o.removeElements("")`; IntelliJ did not. The same holds for a
+  hyphen in `removeSignals`.
+- The editors no longer warn that Streamlord escapes `</script` in the script of `respondScript`,
+  `ScriptResponse` or `datastarScript`: an answer sends its script as written, and the client sets
+  it as the element's text, so it does no harm there.
 - `payload = null` in the options of a backend action is written as `payload: null`, and the client
   sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the
   body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the
