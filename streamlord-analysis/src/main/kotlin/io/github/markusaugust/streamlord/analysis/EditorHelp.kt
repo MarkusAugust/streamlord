@@ -85,7 +85,11 @@ public class Completion internal constructor(
         Completion(label, kind, replaceFrom, insert, snippet, detail, tail, doc, filter, key, end)
 }
 
-/** The items at a caret, in the order shown, and whether nothing else belongs there: a signal, an action, an option or a selector is being named. */
+/**
+ * The items at a caret, in the order shown, and whether nothing else belongs there: a signal, an
+ * action, an option, a selector, a modifier or its value is being named, or an event where the
+ * DOM's are offered too.
+ */
 public class Completions internal constructor(
     public val items: List<Completion>,
     public val alone: Boolean,
@@ -98,12 +102,16 @@ public class Hover internal constructor(
     public val markdown: String,
 )
 
-/** The action a caret stands in the arguments of: its signature, what it does, where each parameter stands in [label], and which is at the caret. */
+/**
+ * The action a caret stands in the arguments of: its signature, what it does, where each parameter
+ * stands in [label] and what each is, in Markdown, and which is at the caret.
+ */
 public class SignatureHelp internal constructor(
     public val label: String,
     public val doc: String,
     public val parameters: List<IntRange>,
     public val active: Int,
+    public val parameterDocs: List<String>,
 )
 
 /**
@@ -154,7 +162,8 @@ public fun Analyzer.signatureHelp(
             from = at + name.length
             at until at + name.length
         }
-    return SignatureHelp(action.signature, action.doc, parameters, minOf(call.argument, maxOf(0, parameters.size - 1)))
+    val active = minOf(call.argument, maxOf(0, parameters.size - 1))
+    return SignatureHelp(action.signature, action.doc, parameters, active, parameterDocs(action, catalog))
 }
 
 private val NOTHING = Completions(emptyList(), alone = false)
@@ -172,6 +181,7 @@ private fun Char.continues(kind: CompletionKind): Boolean =
         }
 
 private val DURATIONS = listOf("500ms", "1s", "300ms", "100ms")
+private val BOOLEANS = listOf("true", "false")
 private val SIGNAL_NAME_TYPED = regex("""\s*([\w.]*)""")
 private val SIGNAL_NAME = regex("""\w+(?:[.-]\w+)*""")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
@@ -180,7 +190,18 @@ private val ACTION_WORD = regex("""@[A-Za-z_][A-Za-z0-9_]*""")
 private val OPTION_WORD = regex("""[A-Za-z_$][\w$]*""")
 private val ATTRIBUTE_WORD = regex("""[A-Za-z][A-Za-z0-9_:.-]*""")
 private val KOTLIN_WORD = regex("""[A-Za-z_][A-Za-z0-9_]*""")
+private val VALUE_WORD = regex("""[\w-]+""")
+
 private val STRING_OPENED = regex("""['"`]([\w-]*)""")
+
+/** Kotlin's dollar in a string, which writes the `$` a signal is read after. */
+private const val KOTLIN_DOLLAR = "\${'$'}"
+
+/** A signal written after Kotlin's dollar, either way of writing it: `${'$'}count`, `${"$"}user.name`. */
+private val KOTLIN_DOLLAR_SIGNAL = regex("""\$\{(?:'\$'|"\$")\}\w+(?:[.-]\w+)*""")
+
+/** `evt.` at the end of the text, standing on its own, with the start of a member's name typed after it. */
+private val EVT_MEMBER = regex("""(?:^|[^\w$.])evt\s*\.\s*([A-Za-z_]\w*)?$""")
 
 /** `evt.detail.type ===` at the end of the text, maybe with a string opened after it: what is written after the operator. */
 private val FETCH_TYPE_COMPARED = regex("""(?:^|[^\w$.])evt\s*\.\s*detail\s*\.\s*type\s*(?:===?|!==?)\s*((?:['"`][\w-]*)?)$""")
@@ -234,12 +255,10 @@ private class Asked(
             val before = e.before
             if (signalPrefixAt(before, before.length) != null) return true
             if (!e.allowActions) return false
+            if (e.evtInScope && EVT_MEMBER.containsMatchIn(before)) return true
             val call = actionCallAt(before, before.length)
-            return call?.option != null || call
-                ?.value
-                ?.field
-                ?.values
-                ?.isNotEmpty() == true ||
+            val field = call?.value?.field
+            return call?.option != null || field?.values?.isNotEmpty() == true || field?.kind == ArgumentKind.BOOLEAN ||
                 actionPrefixAt(before, before.length) != null || scopeWord(before).isNotEmpty()
         }
         if (!names) return false
@@ -332,6 +351,11 @@ private class Asked(
             // The dollar is replaced too where the source writes it plainly, and left as written otherwise (\$, ${'$'}).
             return signals(typed, if (text.getOrNull(offset - typed.length - 1) == '$') "$" else "")
         }
+        if (expression.evtInScope) {
+            EVT_MEMBER.find(before)?.takeIf { jsRegions(before)[it.range.first + it.value.indexOf("evt")] == Region.CODE }?.let { m ->
+                return eventMembers(expression.event, m.groupValues[1])
+            }
+        }
         // A value that is a signal's name, data-bind="query": the name as written, without a dollar.
         if (!expression.allowActions) return SIGNAL_NAME_TYPED.matchEntire(before)?.let { signals(it.groupValues[1], null) } ?: NOTHING
         // A string is quoted with the quote the attribute around it leaves free, escaped where the Kotlin string needs it.
@@ -340,8 +364,9 @@ private class Asked(
         call?.option?.let { option ->
             // The colon is written only where none follows yet, after the rest of the name, which the item replaces.
             val colon = if (text.substring(wordEnd(CompletionKind.OPTION)).trimStart().startsWith(":")) "" else ": "
+            val after = keysAfter(expression.after)
             val items =
-                option.fields.map { it.option }.filter { it.name !in option.written }.map {
+                option.fields.map { it.option }.filter { it.name !in option.written && it.name !in after }.map {
                     Completion(
                         it.name,
                         CompletionKind.OPTION,
@@ -354,27 +379,39 @@ private class Asked(
                 }
             return ordered(items, alone = true)
         }
+        call?.value?.takeIf { it.field.kind == ArgumentKind.BOOLEAN && !it.quoted }?.let { value ->
+            // A signal or any expression may stand there too, so the two are not offered alone.
+            val items = BOOLEANS.mapIndexed { n, v -> Completion(v, CompletionKind.VALUE, offset - value.typed.length, key = "$n") }
+            return ordered(items, alone = false)
+        }
         call?.value?.let { value ->
             // In a string already opened the value is written bare, and quoted otherwise, as an action's path is.
             val items =
                 value.field.values.mapIndexed { n, v ->
                     val label = if (value.quoted) v else "${expression.quote}$v${expression.quote}"
                     val insert = if (value.quoted) null else "$q$v$q".takeIf { it != label }
-                    Completion(label, CompletionKind.VALUE, offset - value.typed.length, insert, key = n.toString().padStart(3, '0'))
+                    Completion(
+                        label,
+                        CompletionKind.VALUE,
+                        offset - value.typed.length,
+                        insert,
+                        doc = optionValueDoc(value.field.option, v),
+                        key = n.toString().padStart(3, '0'),
+                    )
                 }
             if (items.isNotEmpty() || value.quoted) return ordered(items, alone = items.isNotEmpty())
         }
         // The strings an argument takes, the types of @intl, or those datastar-fetch is dispatched with, after evt.detail.type ===.
-        val strings =
-            call?.takeIf { it.option == null && it.value == null && it.argumentStart >= 0 }?.let { c ->
-                catalog.actionValues[c.action]?.getOrNull(c.argument)?.let { it to before.substring(c.argumentStart) }
-            } ?: catalog.fetchEvents.takeIf { expression.event == DATASTAR_FETCH }?.let { types ->
-                FETCH_TYPE_COMPARED.find(before)?.let { m ->
-                    val written = m.groupValues[1]
-                    types.takeIf { jsRegions(before)[before.length - written.length - 1] == Region.CODE }?.let { it to written }
-                }
+        call?.takeIf { it.option == null && it.value == null && it.argumentStart >= 0 }?.let { c ->
+            val values = catalog.actionValues[c.action]?.getOrNull(c.argument) ?: return@let
+            stringItems(values, before.substring(c.argumentStart), expression.quote, q) { null }?.let { return it }
+        }
+        if (expression.event == DATASTAR_FETCH) {
+            val written = FETCH_TYPE_COMPARED.find(before)?.groupValues?.get(1)
+            if (written != null && jsRegions(before)[before.length - written.length - 1] == Region.CODE) {
+                stringItems(catalog.fetchEvents, written, expression.quote, q) { fetchTypeDoc(it, catalog) }?.let { return it }
             }
-        strings?.let { (values, written) -> stringItems(values, written, expression.quote, q)?.let { return it } }
+        }
         actionPrefixAt(before, before.length)?.let { typed ->
             val items =
                 catalog.actions.map {
@@ -406,6 +443,23 @@ private class Asked(
     }
 
     /**
+     * The keys of the object the caret names a key of that are written after the key at the caret:
+     * the text after the caret read as the rest of that object, split at its commas, each key before
+     * its colon.
+     */
+    private fun keysAfter(after: String): Set<String> {
+        val js = "{" + after
+        val brackets = Brackets(js, jsRegions(js))
+        val colons = brackets.colons(0)
+        return brackets
+            .pieces(0)
+            .drop(1)
+            .mapNotNull { piece -> colons.firstOrNull { it in piece }?.let { js.substring(piece.first, it).trim() } }
+            .filter { OPTION_WORD.matchEntire(it) != null }
+            .toSet()
+    }
+
+    /**
      * [values] for an argument [written] up to the caret: quoted with [quote], and written as [q], where
      * nothing is written yet, and bare in a string just opened with only a name typed in it; null otherwise.
      */
@@ -414,6 +468,7 @@ private class Asked(
         written: String,
         quote: Char,
         q: String,
+        doc: (String) -> String?,
     ): Completions? {
         val typed = written.trimStart()
         val opened = STRING_OPENED.matchEntire(typed)
@@ -423,8 +478,39 @@ private class Asked(
             values.mapIndexed { n, v ->
                 val label = if (opened != null) v else "$quote$v$quote"
                 val insert = if (opened != null) null else "$q$v$q".takeIf { it != label }
-                Completion(label, CompletionKind.VALUE, offset - name.length, insert, key = n.toString().padStart(3, '0'))
+                Completion(label, CompletionKind.VALUE, offset - name.length, insert, doc = doc(v), key = n.toString().padStart(3, '0'))
             }
+        return ordered(items, alone = true)
+    }
+
+    /**
+     * The members of the event a data-on listens for, after `evt.` with [typed] of a name after it:
+     * those of the interface lib.dom.d.ts hands its listener, then those of each it extends. An event
+     * the DOM does not dispatch, Datastar's or the page's own, is a CustomEvent; one not known is an Event.
+     */
+    private fun eventMembers(
+        event: String?,
+        typed: String,
+    ): Completions {
+        val interfaces = catalog.eventInterfaces
+        var type = interfaces[if (event == null) "Event" else catalog.domEvents.firstOrNull { it.name == event }?.type ?: "CustomEvent"]
+        val items = ArrayList<Completion>()
+        while (type != null) {
+            for (m in type.members) {
+                val label = if (m.method) "${m.name}()" else m.name
+                val doc = m.mdn?.let { "[MDN]($it)" }
+                items +=
+                    Completion(
+                        label,
+                        CompletionKind.OPTION,
+                        offset - typed.length,
+                        detail = type.name,
+                        doc = doc,
+                        key = items.size.toString().padStart(3, '0'),
+                    )
+            }
+            type = type.extends?.let { interfaces[it] }
+        }
         return ordered(items, alone = true)
     }
 
@@ -492,7 +578,7 @@ private class Asked(
                         else -> if (tags.size > 1) emptyList() else modifier.suggest
                     }.filter { it !in tags.dropLast(1) }
                 val from = offset - (current.length - current.lastIndexOf('.') - 1)
-                return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = false)
+                return Completions(values.map { Completion(it, CompletionKind.VALUE, from) }, alone = true)
             }
             val items =
                 spec.modifiers.filter { it.listed }.map {
@@ -520,7 +606,7 @@ private class Asked(
                         detail = "__${it.name}$form",
                     )
                 }
-            return ordered(items, alone = false)
+            return ordered(items, alone = true)
         }
 
         /** The event of `data-on:`, Datastar's own first, then the DOM's; with [value], a value is opened where none follows yet. */
@@ -537,7 +623,9 @@ private class Asked(
                 doc: String?,
                 rank: Int,
             ): Completion {
-                val snippet = if (opens) Snip().text("$name=\"").place().text("\"") else Snip().text(name)
+                // The browser lowercases the key, so webkitAnimationEnd is written as the key Datastar reads it back from.
+                val key = wireKey(name, KeyCase.KEBAB, null) ?: name
+                val snippet = if (opens) Snip().text("$key=\"").place().text("\"") else Snip().text(key)
                 return Completion(
                     name,
                     CompletionKind.EVENT,
@@ -567,7 +655,8 @@ private class Asked(
                 } else {
                     emptyList()
                 }
-            return ordered(datastar + dom, alone = false)
+            // With the DOM's events in the list, every event the editor knows is there.
+            return ordered(datastar + dom, alone = domEvents)
         }
     }
 
@@ -580,13 +669,13 @@ private class Asked(
             if (action != null && !foreign) return Hover(range, actionDoc(action, withKotlin, catalog))
         }
         wordAt(OPTION_WORD)?.let { range ->
-            val word = text.substring(range.first, range.last + 1)
-            val option = catalog.fetchOptions.firstOrNull { it.name == word }
-            // The key it is when the caret stands at its end.
-            val expression = option?.let { expression(range.last + 1) }?.takeIf { it.allowActions }
-            val typed = expression?.let { actionCallAt(it.before, it.before.length)?.option?.typed }
-            if (option != null && typed == word) return Hover(range, fetchOptionDoc(option))
+            val word = text.substring(range)
+            // The key it is when the caret stands at its end: an option of a backend action, or a key of a signal filter.
+            val key = expression(range.last + 1)?.takeIf { it.allowActions }?.let { actionCallAt(it.before, it.before.length)?.option }
+            val field = key?.takeIf { it.typed == word }?.fields?.firstOrNull { it.name == word }
+            if (field != null) return Hover(range, fetchOptionDoc(field.option))
         }
+        stringValue()?.let { return it }
         expression(offset)?.let { e -> codeWord(e)?.let { return it } }
         if (!kotlin || analyzer.htmlStringAt(text, offset, modules) != null || inAttributesKey()) {
             val range = wordAt(ATTRIBUTE_WORD) ?: return null
@@ -599,6 +688,12 @@ private class Asked(
                 val modifier = spec.modifiers.firstOrNull { it.name == m.name && it.listed } ?: break
                 return Hover(range.first + m.offset - 2, range.first + m.offset + m.text.length, modifierDoc(modifier, prefix + spec.name))
             }
+            // An event Datastar dispatches, as data-on's key, has documentation of its own.
+            val keyStart = range.first + prefix.length + spec.name.length + 1
+            val event = catalog.datastarEvents.firstOrNull { spec.name == "on" && it.name == parsed.key }
+            if (event != null && offset in keyStart..keyStart + event.name.length) {
+                return Hover(keyStart, keyStart + event.name.length, "**${event.name}**\n\n${event.doc}")
+            }
             return Hover(range, attributeDoc(spec, prefix, withKotlin))
         }
         // The DSL's functions are documented where the file can call them, and a name in a string is none.
@@ -606,9 +701,31 @@ private class Asked(
         val range = wordAt(KOTLIN_WORD) ?: return null
         val word = text.substring(range.first, range.last + 1)
         catalog.attributesByKotlin[word]?.let { return Hover(range, attributeDoc(it, prefix, withKotlin = true)) }
-        val action = catalog.actions.firstOrNull { it.kotlin == word } ?: return null
         val called = '(' in text.substring(range.last + 1, minOf(text.length, range.last + 3)).substringBefore('\n')
-        return if (called) Hover(range, actionDoc(action, withKotlin = false, catalog = catalog)) else null
+        if (!called) return null
+        catalog.actions.firstOrNull { it.kotlin == word }?.let { return Hover(range, actionDoc(it, withKotlin = false, catalog = catalog)) }
+        // getExpr, fitExpr: the action with some of its arguments given as expressions.
+        val spec = catalog.expressionCallSites[word] ?: return null
+        val action = catalog.actions.firstOrNull { it.kotlin + "Expr" == word } ?: return null
+        return Hover(range, expressionHelperDoc(word, action, spec, catalog))
+    }
+
+    /**
+     * A string an option takes, `'never'` in `{retry: 'never'}`, or a type `datastar-fetch` is
+     * dispatched with, compared with `evt.detail.type`, where the caret stands in the word.
+     */
+    private fun stringValue(): Hover? {
+        val range = wordAt(VALUE_WORD) ?: return null
+        val word = text.substring(range)
+        val e = expression(range.last + 1)?.takeIf { it.allowActions } ?: return null
+        val value = actionCallAt(e.before, e.before.length)?.value
+        if (value != null && value.quoted && value.typed == word && word in value.field.values) {
+            return Hover(range, optionValueDoc(value.field.option, word))
+        }
+        if (e.event != DATASTAR_FETCH || word !in catalog.fetchEvents) return null
+        val written = FETCH_TYPE_COMPARED.find(e.before)?.groupValues?.get(1) ?: return null
+        val opened = written.length == word.length + 1 && jsRegions(e.before)[e.before.length - written.length - 1] == Region.CODE
+        return if (opened) Hover(range, fetchTypeDoc(word, catalog)) else null
     }
 
     /**
@@ -616,10 +733,14 @@ private class Asked(
      * code of expression [e]: not in a string, nor a member of something else.
      */
     private fun codeWord(e: ExpressionAtCaret): Hover? {
-        val range = wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
-        val inBefore = e.before.length - (offset - range.first)
-        if (inBefore < 0 || jsRegions(e.before)[inBefore] != Region.CODE || e.before.getOrNull(inBefore - 1) == '.') return null
-        val word = text.substring(range.first, range.last + 1)
+        // Kotlin's own dollar, `${'$'}count`, is the `$` the client reads: the word is read from the name after it.
+        val dollar = if (kotlin) wordAt(KOTLIN_DOLLAR_SIGNAL) else null
+        val range = dollar ?: wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
+        val word = if (dollar != null) "$" + text.substring(range.first + KOTLIN_DOLLAR.length, range.last + 1) else text.substring(range)
+        val read = if (dollar != null) expression(range.first + KOTLIN_DOLLAR.length)?.before?.dropLast(1) ?: return null else e.before
+        val inBefore = if (dollar != null) read.length else e.before.length - (offset - range.first)
+        // With the caret on the word's first character, the text before it ends where the word starts: the word is read after it.
+        if (inBefore < 0 || jsRegions(read + word)[inBefore] != Region.CODE || read.getOrNull(inBefore - 1) == '.') return null
         // A `$` the client reads no name after, as in `$år`, is no signal.
         if (word.startsWith("$")) {
             val name = word.substring(1)

@@ -145,7 +145,14 @@ class CatalogTest {
                 .filter { it.type == String::class.java }
                 .map { it.get(null) as String }
                 .toSet()
-        assertEquals(events, catalog.array("fetchEvents")!!.strings().toSet())
+        assertEquals(
+            events,
+            catalog
+                .array("fetchEvents")!!
+                .objects()
+                .map { it.string("name") }
+                .toSet(),
+        )
         val sse = catalog.obj("sse")!!
         assertEquals(ElementPatchMode.entries.map { it.wire }, sse.array("patchModes")!!.strings())
         assertEquals(ElementNamespace.entries.map { it.wire }, sse.array("namespaces")!!.strings())

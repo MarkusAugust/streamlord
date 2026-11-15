@@ -12,6 +12,9 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
 private val OPERATOR_BEFORE = regex("""(?:===?|!==?)\s*$""")
+private val SWITCH_BEFORE = regex("""(?<![\w$.])switch\s*\(\s*$""")
+private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
+private val CASE = regex("""(?<![\w$.])case\s*""")
 
 /** The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched with. */
 internal fun fetchTypeIssues(
@@ -44,7 +47,7 @@ internal fun fetchTypeIssues(
                 val open = if (q == null) -1 else text.lastIndexOf(q, close - 1)
                 if (open >= 0) literal(open)?.takeIf { it.last == close } else null
             }
-        for (range in listOfNotNull(left, right)) {
+        for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
             val type = text.substring(range.first + 1, range.last)
             if (type in catalog.fetchEvents || type.startsWith("datastar")) continue
             val near =
@@ -69,6 +72,44 @@ internal fun fetchTypeIssues(
                     listOfNotNull(near?.let { Fix("Change to $it", range.first + 1, range.last, it) }),
                 )
         }
+    }
+    return out
+}
+
+/**
+ * The string literals of the cases of `switch (evt.detail.type) { ... }`, where the match from
+ * [at] until [end] is that switch's subject: a switch compares with each case by `===`. A case of
+ * a switch nested inside is that switch's.
+ */
+private fun switchCases(
+    text: String,
+    regions: ByteArray,
+    at: Int,
+    end: Int,
+    literal: (Int) -> IntRange?,
+): List<IntRange> {
+    if (SWITCH_BEFORE.find(text.substring(0, at)) == null) return emptyList()
+    val open = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
+    val out = ArrayList<IntRange>()
+    var depth = 0
+    var i = open
+    while (i < text.length) {
+        if (regions[i] == Region.CODE) {
+            when (text[i]) {
+                '{' -> {
+                    depth++
+                }
+
+                '}' -> {
+                    if (--depth == 0) break
+                }
+
+                'c' -> {
+                    if (depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { out += it } }
+                }
+            }
+        }
+        i++
     }
     return out
 }

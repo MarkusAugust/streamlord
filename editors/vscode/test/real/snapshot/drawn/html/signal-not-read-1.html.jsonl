@@ -3,7 +3,7 @@
 {"what":"diagnostic","code":"signal-not-read","link":"https://data-star.dev/guide/reactive_signals","message":"Datastar reads only ASCII letters, digits and _ after a $, so $år is no signal: the browser looks for a JavaScript variable named $år and fails.","range":"1:37-1:40","severity":"Warning","source":"streamlord"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
 {"what":"hover","at":"1:6-1:19","answers":[{"contents":[{"value":"72a588cb09f2"}],"range":"1:6-1:19"}]}
-{"what":"hover","at":"1:26-1:35","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"1:26-1:35"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"1:26-1:35"}]}
+{"what":"hover","at":"1:26-1:35","answers":[{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"1:26-1:35"}]}
 {"what":"hover","at":"1:44-1:47","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:44-1:47"}]}
 {"what":"definition","at":"1:19-1:21","answers":[{"file":"drawn/html/signal-not-read-1.html","range":"1:19-1:21"}]}
 {"what":"references","at":"1:19-1:21","answers":[{"file":"drawn/html/signal-not-read-1.html","range":"1:19-1:21"}]}

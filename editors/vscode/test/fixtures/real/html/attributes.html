@@ -1,0 +1,16 @@
+<!-- data-ignore: nothing inside is Datastar's, and data-ignore__self leaves the element alone, not its children. -->
+<div data-ignore><p data-bind="text: firstName"></p><span data-on="x" data-text="$ignored +"></span></div>
+<div data-ignore__self data-on="x"><span data-on="y"></span></div>
+<!-- A DOM event in capitals is the event the browser fires once lowercased; a real mixed-case one keeps its case. -->
+<div data-on:keyDown="$n++" Data-On:Click="$n++" data-on:DOMContentLoaded__window="$n++"></div>
+<!-- Modifier arguments as the client reads them. -->
+<div data-on:my-event__case.snake.pascal="$n++" data-on-interval__duration.0ms="$n++"></div>
+<input data-on:input__debounce="$n = 1" data-on:click__debounce.abc="$n = 1">
+<div data-on-intersect__threshold.0.5="$n = 1" data-on:click__debounce.500ms__debounce.1s="$n++"></div>
+<div data-on:click__window__document="$n++" data-on-raf__debounce="$n++"></div>
+<!-- Another library's data-star-* name, a nonce in the wrong place, evt outside data-on. -->
+<div class="rating" data-star-rating="4.5" data-nonce="x" data-text="evt.type"></div>
+<a data-text="Check this out" href="#">Tweet</a>
+<div data-on-signal-patch-filter="{include: /a/}" data-text="$$n"></div>
+<svg data-attr:view-box="'0 0 1 1'"></svg>
+<div data-on:click="await @post('/x')"></div>

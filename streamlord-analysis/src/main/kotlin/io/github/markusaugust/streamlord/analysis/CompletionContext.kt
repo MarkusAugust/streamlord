@@ -10,12 +10,16 @@ import io.github.markusaugust.streamlord.core.domain.landingAsParsed
  * Where a caret stands, for completion, hover and parameter info.
  */
 
-/** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before the caret, decoded. */
+/** The attribute value a caret stands in: the attribute's name as written, where its value starts, and the value before and after the caret, decoded. */
 internal data class ValueAtCaret(
     val attribute: String,
     val valueStart: Int,
     val before: String,
+    val after: String = "",
 )
+
+/** The name data-on hands its expression the event by. */
+private const val EVT = "evt"
 
 /** The character the caret is given in the markup: one that neither closes a value nor starts a reference. */
 private const val CARET = 'x'
@@ -40,7 +44,14 @@ internal fun valueAtCaret(
     val landing = landingAsParsed(probe, offset..offset, listOf(prefix), templates)
     val attribute = landing.attribute ?: return null
     if (landing.valueStart !in 0..offset) return null
-    return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text)
+    // The rest of the value, to where the tokenizer the checks share ends it; none while it is not closed.
+    val end =
+        tokenize(markup, templates)
+            .tags
+            .firstNotNullOfOrNull { t -> t.attributes.firstOrNull { it.valueStart == landing.valueStart }?.valueEnd }
+            ?.takeIf { it >= offset }
+    val after = end?.let { decodeEntities(markup.substring(offset, it)).text }.orEmpty()
+    return ValueAtCaret(attribute, landing.valueStart, decodeEntities(markup.substring(landing.valueStart, offset)).text, after)
 }
 
 /** The attribute name a caret stands on in a tag: the tag's name, lowercased, and the name as written up to the caret. */
@@ -92,6 +103,10 @@ internal data class ExpressionAtCaret(
     val escaped: Boolean = false,
     /** The event a data-on listens for, as the client recases its key, where the expression is one's. */
     val event: String? = null,
+    /** Whether `evt` is the event: in data-on, the one attribute the client hands it to. */
+    val evtInScope: Boolean = false,
+    /** The expression after the caret, decoded as [before] is. */
+    val after: String = "",
 )
 
 /**
@@ -119,6 +134,8 @@ internal fun Analyzer.expressionAtCaret(
             spec.valueKind == ValueKind.EXPRESSION,
             spec.name == "on-signal-patch",
             event = catalog.listensFor(at.name, prefix),
+            evtInScope = EVT in spec.argNames,
+            after = s.text.substring(before.length),
         )
     }
     htmlStringAt(src, offset)?.let { html ->
@@ -128,7 +145,8 @@ internal fun Analyzer.expressionAtCaret(
     expressionOptions(src).firstOrNull { it.value.start < offset && offset <= it.value.end }?.let { o ->
         val s = o.value
         if (offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
-        return ExpressionAtCaret(s.text.substring(0, decodedIndex(s, offset)), allowActions = true, patchInScope = false)
+        val at = decodedIndex(s, offset)
+        return ExpressionAtCaret(s.text.substring(0, at), allowActions = true, patchInScope = false, after = s.text.substring(at))
     }
     // The innermost call: a helper's string handed to another, dataOnClick(getExpr("...")), is the helper's.
     val site =
@@ -142,11 +160,14 @@ internal fun Analyzer.expressionAtCaret(
     if (offset <= s.start || offset > s.contentEnd + (if (s.unterminated) 1 else 0)) return null
     // dataOnSignalPatch also writes the filter, so the call is looked up among the attribute's own names.
     val patch = catalog.attributesByName["on-signal-patch"]?.kotlin?.contains(site.name) == true
+    val at = decodedIndex(s, offset)
     return ExpressionAtCaret(
-        s.text.substring(0, decodedIndex(s, offset)),
+        s.text.substring(0, at),
         allowActions = true,
         patchInScope = patch,
         event = dslEvent(site),
+        evtInScope = catalog.attributesByKotlin[site.name]?.argNames?.contains(EVT) == true,
+        after = s.text.substring(at),
     )
 }
 
@@ -169,6 +190,8 @@ private fun Analyzer.expressionInMarkup(
         quote,
         escaped = quote == '"' && kotlinEscapes,
         event = catalog.listensFor(at.attribute, prefix),
+        evtInScope = EVT in spec.argNames,
+        after = at.after,
     )
 }
 
@@ -210,6 +233,7 @@ private val ACTION_OPEN = regex("""@([A-Za-z_$][\w$]*)\s*\(""")
 private val WRITTEN_KEY = regex("""(?:^|,)\s*([A-Za-z_$][\w$]*)\s*:""")
 private val TYPED_KEY = regex("""\s*([A-Za-z_$][\w$]*)?""")
 private val VALUE_KEY = regex("""\s*([A-Za-z_$][\w$]*)\s*:\s*(#*)""")
+private val BOOLEAN_TYPED = regex("""\s*([A-Za-z_$][\w$]*)\s*:\s*([a-z]+)""")
 
 /** Something the keys of an object hold that is no key: a string, a regular expression, a bracket. */
 private const val OTHER = '#'
@@ -311,7 +335,14 @@ internal fun actionCallAt(
             TYPED_KEY.matchEntire(keys.substringAfterLast(','))?.let { typed ->
                 OptionKeyAt(typed.groupValues[1], WRITTEN_KEY.findAll(keys).map { it.groupValues[1] }.toList(), fields)
             }
-        val value = top.valueKey()?.takeIf { keys.endsWith(OTHER).not() }?.let { OptionValueAt(it, "", quoted = false) }
+        val value =
+            top.valueKey()?.takeIf { keys.endsWith(OTHER).not() }?.let { OptionValueAt(it, "", quoted = false) }
+                // A word typed as the value of a key that takes true or false: what completion offers there.
+                ?: BOOLEAN_TYPED.matchEntire(keys.substringAfterLast(','))?.let { m ->
+                    fields.firstOrNull { it.name == m.groupValues[1] && it.kind == ArgumentKind.BOOLEAN }?.let {
+                        OptionValueAt(it, m.groupValues[2], quoted = false)
+                    }
+                }
         return ActionCall(call.action!!, call.argument, option, value)
     }
     // In a string opened as the value: what is typed since its quote.

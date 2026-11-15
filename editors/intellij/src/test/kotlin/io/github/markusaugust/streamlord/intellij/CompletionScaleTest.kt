@@ -50,5 +50,7 @@ class CompletionScaleTest : StreamlordTestCase() {
         assertEquals(ThreeState.NO, confidence())
         myFixture.configureByText("b.html", "<div data-<caret>></div>")
         assertEquals(ThreeState.UNSURE, confidence())
+        myFixture.configureByText("c.html", "<div data-on:keydown=\"evt.<caret>\"></div>")
+        assertEquals(ThreeState.NO, confidence())
     }
 }

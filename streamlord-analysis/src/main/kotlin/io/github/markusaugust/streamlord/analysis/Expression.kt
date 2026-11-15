@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
@@ -130,6 +131,9 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
+/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
+private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
+
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
 // on either side, any character beyond ASCII counted as one.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
@@ -152,6 +156,22 @@ private class HandedIn(
     val pattern: Regex? =
         attributes.keys.takeIf { it.isNotEmpty() }?.let { names ->
             regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+        }
+
+    /**
+     * The same for a name every expression is compiled with and only some plugins hand a value:
+     * `evt`, which genRx passes as undefined (engine.ts:567) unless the plugin hands the event.
+     */
+    val undefinedElsewhere: Map<String, List<String>> =
+        catalog.attributes
+            .filter { !it.pro }
+            .flatMap { a -> a.argNames.filter { it in catalog.compiledParameters }.map { it to a.name } }
+            .groupBy({ it.first }, { it.second })
+
+    /** One of [undefinedElsewhere] read from: a property or an index of it, `evt.type` or `evt['x']`, not `evt?.x`. */
+    val readFrom: Regex? =
+        undefinedElsewhere.keys.takeIf { it.isNotEmpty() }?.let { names ->
+            regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?=[ \t]*[.\\[])")
         }
 }
 
@@ -190,6 +210,32 @@ private fun scopeNameIssues(
                 message =
                     "${m.value} is not defined in data-${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
                         "so here it throws a ReferenceError.",
+                severity = Severity.WARNING,
+                code = "scope-name",
+                link = Docs.EXPRESSIONS,
+            )
+        }.toList() + undefinedNameIssues(text, spec, handed, regions)
+}
+
+/** `evt.type` in an attribute whose plugin hands no event: [HandedIn.undefinedElsewhere]. */
+private fun undefinedNameIssues(
+    text: String,
+    spec: AttributeSpec,
+    handed: HandedIn,
+    regions: ByteArray,
+): List<Issue> {
+    val names = handed.readFrom ?: return emptyList()
+    return names
+        .findAll(text)
+        .filter { m -> m.value !in spec.argNames && regions[m.range.first] == Region.CODE }
+        .map { m ->
+            val where = handed.undefinedElsewhere[m.value].orEmpty().joinToString(" and ") { "data-$it" }
+            Issue(
+                start = m.range.first,
+                end = m.range.last + 1,
+                message =
+                    "${m.value} is undefined in data-${spec.name}: Datastar hands an expression the event only in $where, " +
+                        "so reading from it throws a TypeError.",
                 severity = Severity.WARNING,
                 code = "scope-name",
                 link = Docs.EXPRESSIONS,
@@ -902,8 +948,21 @@ public class ExpressionValidator(
             val closed = js.endsWith(");") && fromScript(js.length - 1) == fromScript(js.length - 2)
             val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
             val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
-            val message = "Datastar expression: $said"
-            if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
+            val awaitAt =
+                AWAIT_BEFORE
+                    .find(rewritten.js.substring(0, err.pos))
+                    ?.range
+                    ?.first
+                    ?.let(::toText)
+            if (awaitAt != null) {
+                val message =
+                    "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
+                        "An action sends its request without it."
+                issues += Issue(awaitAt, awaitAt + "await".length, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            } else if (pos !in spaced) {
+                issues += Issue(pos, end, "Datastar expression: $said", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            }
         }
 
         if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
@@ -940,7 +999,28 @@ public class ExpressionValidator(
         for (p in js.indices) {
             if (js[p] != '$' || regions[p] != Region.CODE || p in rewrittenAt || js.getOrNull(p - 1).isJsNamePart()) continue
             val next = js.getOrNull(p + 1) ?: continue
-            if (next == '$') continue
+            if (next == '$') {
+                // $$count: the client rewrites the last $count, and the dollars before it make a name the browser does not know.
+                var last = p + 1
+                while (js.getOrNull(last + 1) == '$') last++
+                if (last !in rewrittenAt) continue
+                // A Kotlin template there is the interpolation check's to speak for.
+                val signal = CLIENT_SIGNAL.matchAt(js, last)?.value?.takeUnless { PLACEHOLDER in it } ?: continue
+                val extra = js.substring(p, last)
+                val (start, end) = span(p, last)
+                issues +=
+                    Issue(
+                        start,
+                        end,
+                        "Datastar rewrites $signal and leaves the $extra before it, so the browser reads $extra$ " +
+                            "as a JavaScript variable and throws a ReferenceError.",
+                        Severity.WARNING,
+                        "signal-not-read",
+                        Docs.EXPRESSIONS,
+                        fixes = listOf(Fix("Remove the extra $extra", start, end, "")),
+                    )
+                continue
+            }
             if (WORD_CHAR.matchEntire(next.toString()) != null) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
                 val run = rewritten.runs.firstOrNull { p in it.range }
@@ -1108,7 +1188,10 @@ public class ExpressionValidator(
         val spec = catalog.actionsByName[name]
         val end = start + 1 + name.length
         if (spec == null) {
-            val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
+            val names = catalog.actions.map { it.name }
+            val near =
+                names.firstOrNull { it.equals(name, ignoreCase = true) }
+                    ?: names.singleOrNull { ElementsGuard.oneEditAway(name, it, swaps = true) }
             return listOf(
                 Issue(
                     start = start,

@@ -464,6 +464,78 @@ All notable changes to Streamlord are recorded here. The format follows
   In the catalog, an expression call site may name the parameters after it that take an expression
   too, `more`, and `expressionOptions` lists the options; `CallSiteSpec` has one more value, `more`,
   last, and code compiled against the old constructor needs a rebuild.
+- Markup under `data-ignore`, and an element with `data-ignore__self`, is no longer checked in either
+  editor, and a signal declared there is not counted as declared, as the client applies nothing there.
+  Under an alias the same holds for `data-star-ignore`.
+- `data-on:keyDown` and `Data-On:Click` work, as the browser hands the client `keydown` and `click`:
+  they get a hint to write the event in lower case, where the fix wrote `key-down__case.camel`, an
+  event no element fires. `dataOn("keyDown", ...)` is a warning, since the DSL writes `keyDown`.
+- Modifier arguments are judged as the client reads them: `__case.snake.pascal` applies both values
+  and is no error; `__debounce` without a duration, or with `.abc`, waits 0 ms and is a warning, not
+  an error; `data-on-interval` with no duration or `__duration.0ms` runs as often as the browser
+  allows, which is said; `__threshold.0.5` reads 0, with a fix to `__threshold.50`; a modifier
+  written twice is read from the last; `__document` with `__window`, and `__window` with
+  `__outside`, is ignored, which is said. A Pro modifier its reference does not list, such as
+  `data-on-raf__debounce`, is not judged, as what the Pro plugin reads of it is not known.
+- `data-star-rating` and other `data-star-*` names that are no Datastar attribute are left alone
+  under the default prefix, where they were called aliased Datastar attributes.
+- An issue on `data-nonce`, and VS Code's HTML data for it, links to the security page of the
+  Datastar reference, where the attribute is described.
+- `evt.type` outside `data-on` is a warning: the client hands the event to `data-on` alone, and
+  reading from it elsewhere throws. `$$count` is a warning with a fix, as the browser reads `$$`.
+  `await @post(...)` is an error on `await`, with why, where it was one on `@`.
+  `data-on-signal-patch-filter` without `data-on-signal-patch` on the element is a warning, and so
+  is `data-attr:view-box` on an SVG element, which sets `view-box`, with a fix to the object form.
+- The prefixed events keep the case the browser fires them in: `data-on:webkitAnimationEnd` gets the
+  fix `webkit-animation-end__case.camel`, completion writes it so, and `data-on:webkitanimationend`,
+  which no browser fires, is a warning. `catalog/dom-events.json` names the four as the browser does.
+- In the DSL, `dataIgnore()` keeps the checks off the element and what its block holds, as
+  `data-ignore` does in markup, and the signals declared there count as none; what Kotlin writes
+  and what the DSL refuses as the page renders is still said.
+- Knockout's `data-bind="text: name"`, a share button's `data-text="Check this out"` and other
+  values another library reads say that `data-ignore`, or an aliased bundle, keeps Datastar off them.
+- In the DSL, `dataIndicator` after a `dataInit` that sends at once in the same element gets the
+  order warning HTML gets, and an empty expression, `dataShow("")`, is the error it throws as the
+  page renders, where it was a warning.
+- IntelliJ no longer calls `DATA-TEXT` or `Data-On:Click` an attribute that is not allowed here,
+  and a weaker problem inside an error, such as the Pro hint under a missing key, which IntelliJ
+  does not draw, is said with the error and its fixes are offered there, as VS Code shows both.
+- Hover no longer fails in IntelliJ on the first character of a word in an expression, VS Code
+  shows it there too, and both show the signal written with Kotlin's `${'$'}` in an HTML string, a
+  DSL string and `interpolate`.
+- Hover and completion document the keys of a signal filter, an option's values, the types
+  `datastar-fetch` is dispatched with, the Datastar events as the key of `data-on`, and in VS Code
+  the DSL's `...Expr` helpers. Signature help says what each parameter is.
+- Option completion leaves out the keys the object already has, offers `true` and `false` for an
+  option that takes a boolean, and after `evt.` in `data-on` offers the members of the event it
+  listens for. IntelliJ no longer lists `datastar-fetch` twice or offers the file's words after
+  `__`, and VS Code no longer shows two hovers on `data-text` and the others its HTML data documents.
+- The pre-1.0 fix needs a key after the dash, so a half typed `data-on-` is no longer changed to
+  `data-on:` with an empty key.
+- A Kotlin template or a `%s` in an action call no longer turns off the checks of the rest of the
+  call: `@get('/a/$id', {retyr: 'never'})` is told of `retyr`, in an HTML string, a DSL string and
+  `interpolate`.
+- `@intl` warns of a type the reference does not name, with a fix for one written in another case.
+  `@gett` is offered `@get`, and the cases of `switch (evt.detail.type)` are held to the types
+  `datastar-fetch` is dispatched with, as `===` is.
+- An option of the wrong kind says what Datastar does with it, `retryMaxCount: true` counts as 1;
+  `@get(['/a'])`, which the client sends, is no longer reported; a `contentType` the client cannot
+  read is said to fail the action with FetchFailed. `filterSignals` is shown as `RegExp | string`.
+- In the DSL, `peek` writes its expression in parentheses, so `peek("{a: \$a}")` returns the
+  object, and `fit` and `intl` write their value as one argument. A comma at the top of an
+  expression the DSL writes in parentheses, `postExpr("'/a', {retyr: 1}")`, is a warning, as
+  JavaScript keeps only what follows it.
+- Every option of a backend action has an `...Expr` twin that takes an expression, a
+  `SignalFilter` can be an expression or hold expressions (`includeExpr`, `excludeExpr`,
+  `filterExpr`), and `peekExpr` hands `@peek` a function the page has. `SignalFilter` has three more
+  values after `include` and `exclude`, so code compiled against it, its `copy` or its constructor,
+  needs a rebuild; source that names `include` and `exclude`, or passes them in that order, stays as it is.
+- In the catalog an expression call site may say the DSL writes its expression as one value,
+  `oneValue`; `CallSiteSpec` has `more` and `oneValue` last, so code compiled against its
+  constructor or `copy` needs a rebuild, and source that names its values stays as it is.
+- In the catalog, an attribute may name the page of the reference that describes it, `reference`;
+  `AttributeSpec` has one more value, `reference`, last, and code compiled against the old
+  constructor needs a rebuild.
 
 ## [0.21.0] - 2026-11-11
 

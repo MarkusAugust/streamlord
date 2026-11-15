@@ -1,0 +1,7 @@
+{
+  "$comment": "Cases both editors must judge alike, in the format of html.json: names still being typed.",
+  "kind": "html",
+  "cases": [
+    {"name":"a name typed up to the dash after data-on gets no fix to a key it lacks","source":"<div data-on-=\"$a++\"></div><div data-bind-></div>","issues":[]}
+  ]
+}

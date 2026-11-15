@@ -8,12 +8,12 @@
 {"what":"action","at":"1:33-1:37","n":1,"after":"<div data-text=\"&quot;x&quot; + $a - b\" data-on:click=\"$a &amp;&amp; @GET(&quot;/x&quot;)\"></div>\n","edits":[{"file":"drawn/html/signal-kebab-2.html","range":"1:33-1:37","text":"$a - b"}],"kind":"quickfix","preferred":false,"title":"Write $a - b"}
 {"what":"action","at":"1:68-1:72","n":0,"after":"<div data-text=\"&quot;x&quot; + $a-b\" data-on:click=\"$a &amp;&amp; @get(&quot;/x&quot;)\"></div>\n","edits":[{"file":"drawn/html/signal-kebab-2.html","range":"1:68-1:72","text":"@get"}],"kind":"quickfix","preferred":true,"title":"Change to @get"}
 {"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
-{"what":"hover","at":"1:6-1:15","answers":[{"contents":["**data-text**\n\nSets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n**Kotlin:** `dataText()`"],"range":"1:6-1:15"},{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"1:6-1:15"}]}
+{"what":"hover","at":"1:6-1:15","answers":[{"contents":["Sets the element's text content from an expression.\n\n`data-text=\"expr\"`\n\n[Datastar reference](https://data-star.dev/reference/attributes#data-text)"],"range":"1:6-1:15"}]}
 {"what":"hover","at":"1:18-1:22","answers":[{"contents":["Character entity representing '\"', unicode equivalent 'U+0022'"],"range":"1:18-1:23"}]}
 {"what":"hover","at":"1:25-1:29","answers":[{"contents":["Character entity representing '\"', unicode equivalent 'U+0022'"],"range":"1:25-1:30"}]}
-{"what":"hover","at":"1:34-1:37","answers":[{"contents":["**$a-b**\n\nDatastar reads it as `$['a-b']`, the signal path a-b in its store."],"range":"1:33-1:37"}]}
+{"what":"hover","at":"1:33-1:37","answers":[{"contents":["**$a-b**\n\nDatastar reads it as `$['a-b']`, the signal path a-b in its store."],"range":"1:33-1:37"}]}
 {"what":"hover","at":"1:39-1:52","answers":[{"contents":[{"value":"06eca753cc8c"}],"range":"1:39-1:52"}]}
-{"what":"hover","at":"1:55-1:56","answers":[{"contents":["**$a**\n\nDatastar reads it as `$['a']`, the signal path a in its store."],"range":"1:54-1:56"}]}
+{"what":"hover","at":"1:54-1:56","answers":[{"contents":["**$a**\n\nDatastar reads it as `$['a']`, the signal path a in its store."],"range":"1:54-1:56"}]}
 {"what":"hover","at":"1:58-1:61","answers":[{"contents":["Character entity representing '&', unicode equivalent 'U+0026'"],"range":"1:58-1:62"}]}
 {"what":"hover","at":"1:63-1:66","answers":[{"contents":["Character entity representing '&', unicode equivalent 'U+0026'"],"range":"1:63-1:67"}]}
 {"what":"hover","at":"1:74-1:78","answers":[{"contents":["Character entity representing '\"', unicode equivalent 'U+0022'"],"range":"1:74-1:79"}]}

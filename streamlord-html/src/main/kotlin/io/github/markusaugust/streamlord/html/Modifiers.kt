@@ -51,13 +51,33 @@ public enum class Case(
 public data class SignalFilter(
     val include: Regex? = null,
     val exclude: Regex? = null,
+    /** [include] as a raw JavaScript expression, e.g. a signal or `'^user\.'`: the client takes a RegExp or a string there. */
+    val includeExpr: String? = null,
+    /** [exclude] as a raw JavaScript expression, as [includeExpr]. */
+    val excludeExpr: String? = null,
+    /** The whole filter as a raw JavaScript expression, e.g. a signal that holds one; set with any other, it is refused. */
+    val filterExpr: String? = null,
 ) {
-    /** Render as a JavaScript object literal with regex literals. */
-    public fun toJs(): String =
-        buildList {
-            include?.let { add("include: ${regexLiteral(it)}") }
-            exclude?.let { add("exclude: ${regexLiteral(it)}") }
+    /** Render as a JavaScript object literal with regex literals, an expression in parentheses. */
+    public fun toJs(): String {
+        require(include == null || includeExpr == null) { "include and includeExpr are one key; set one" }
+        require(exclude == null || excludeExpr == null) { "exclude and excludeExpr are one key; set one" }
+        if (filterExpr != null) {
+            require(include == null && exclude == null && includeExpr == null && excludeExpr == null) {
+                "filterExpr is the whole filter; set it alone"
+            }
+            return parenthesized(filterExpr)
+        }
+        return buildList {
+            (include?.let(::regexLiteral) ?: includeExpr?.let(::parenthesized))?.let { add("include: $it") }
+            (exclude?.let(::regexLiteral) ?: excludeExpr?.let(::parenthesized))?.let { add("exclude: $it") }
         }.joinToString(", ", "{", "}")
+    }
+
+    private fun parenthesized(text: String): String {
+        require(text.isNotBlank()) { "an expression must not be blank" }
+        return "($text)"
+    }
 
     override fun toString(): String = toJs()
 

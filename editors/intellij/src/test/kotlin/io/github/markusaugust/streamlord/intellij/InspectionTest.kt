@@ -64,6 +64,27 @@ class InspectionTest : StreamlordTestCase() {
         assertTrue(fixes.toString(), "Use increment(\"count\")" in fixes)
     }
 
+    // IntelliJ draws no weaker problem inside an error's range, so the error says it as well and offers its fixes.
+    fun `test a weaker problem inside an error is said with the error`() {
+        myFixture.configureByText("page.html", "<div data-match-media=\"'x'\"></div><div data-on:click__></div>")
+        val found = myFixture.doHighlighting().mapNotNull { it.description }
+        // Each message keeps its own link.
+        assertTrue(
+            found.toString(),
+            found.any {
+                "needs a key" in it &&
+                    it.endsWith(
+                        "Also: data-match-media is a Datastar Pro attribute; it needs the Pro bundle. " +
+                            "See https://data-star.dev/reference/attributes#data-match-media",
+                    )
+            },
+        )
+        assertTrue(found.toString(), found.any { "needs a value" in it && "Unknown modifier __ on data-on" in it })
+        myFixture.configureByText("page.html", "<div data-on:keyDown></div>")
+        myFixture.doHighlighting()
+        assertContainsElements(myFixture.getAllQuickFixes().map { it.text }, "Change to keydown")
+    }
+
     fun `test html files get the template side`() {
         myFixture.configureByText(
             "page.html",

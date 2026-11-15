@@ -379,6 +379,8 @@ describe("signature help", () => {
     assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
     // Each parameter by where it stands in the signature, as VS Code highlights it.
     assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), [[5, 8], [10, 18]]);
+    // And what each is, from the catalog.
+    assert.match(String((h?.signatures[0]?.parameters[0]?.documentation as unknown as { value: string }).value), /^A string\. The address of the request/);
     assert.equal(h?.activeParameter, 1);
     const src = `${DSL}div { dataOnClick("@post(") }`;
     assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);
@@ -417,6 +419,21 @@ describe("hover provider", () => {
     const value = String((hover.provideHover(kdoc as never, new Position(1, 10) as never)?.contents as unknown as { value: string }).value);
     assert.match(value, /\*\*data-on-signal-patch\*\*/);
     assert.doesNotMatch(value, /data-on-signal-patch-filter/);
+  });
+
+  // VS Code's HTML service shows an attribute's documentation from html-customdata.json where the name is exactly one of its own.
+  it("leaves an attribute html-customdata.json documents in an html file to VS Code's HTML service, and documents it elsewhere", () => {
+    const words = (src: string, language: string, at: string) => {
+      const doc = new MockDocument(src, language);
+      return hover.provideHover(doc as never, doc.positionAt(src.indexOf(at) + 2) as never);
+    };
+    const src = `<div data-text="$a" data-on-signal-patch-filter="{include: /a/}" data-on:click="$a++" data-show__once="$a">`;
+    assert.equal(words(src, "html", "data-text"), null);
+    assert.equal(words(src, "html", "data-on-signal-patch-filter"), null);
+    assert.notEqual(words(src, "html", "data-on:click"), null);
+    assert.notEqual(words(src, "html", "data-show__once"), null);
+    assert.notEqual(words(src, "pebble", "data-text"), null);
+    assert.notEqual(new StreamlordHoverProvider(() => "data-star-").provideHover(new MockDocument(`<div data-star-text="$a">`, "html") as never, new Position(0, 8) as never), null);
   });
 
   it("documents attributes inside html strings in kotlin", () => {

@@ -280,6 +280,18 @@ class ClientOracleTest {
     }
 
     /**
+     * `actions.json`: the type a hover shows for `filterSignals` is the client's SignalFilterOptions,
+     * key by key, and its doc says what each key may be.
+     */
+    @Test
+    fun `shows filterSignals as the signal filter the client takes`() {
+        val filter = fixture("actions.json").obj("signalFilter")!!
+        val option = Catalog.default.fetchOptions.single { it.name == "filterSignals" }
+        assertEquals("{" + filter.keys.joinToString(", ") { "$it?: ${filter.string(it)}" } + "}", option.type)
+        assertTrue("regular expressions or strings" in option.doc, option.doc)
+    }
+
+    /**
      * `actions.json`: each free action of the catalog takes as many arguments as its apply declares,
      * of the kinds its types say, and those the client takes left out are optional in its signature.
      */
@@ -430,7 +442,7 @@ class ClientOracleTest {
         analyzer
             .analyzeHtml("<div data-on:click__$modifiers=\"\$a = 1\"></div>")
             .map { it.message }
-            .firstOrNull { "needs a duration" in it || "reads none and does not wait" in it || readsMs.containsMatchIn(it) }
+            .firstOrNull { "waits 0 ms" in it || "reads none and does not wait" in it || readsMs.containsMatchIn(it) }
 
     /** Tags the client reads through JavaScript's number syntax and the check refuses on purpose. */
     private val jsNumberForms = setOf("debounce.1e3ms")
@@ -454,10 +466,10 @@ class ClientOracleTest {
                 assertEquals(readsMs.find(message)!!.groupValues[1], wait, written)
             }
 
-            // "needs a duration" names no number: it is right where the client reads none or no wait, and for
-            // JavaScript's own number syntax, 1e3ms, which the check refuses on purpose (DURATION takes digits).
+            // "waits 0 ms" is right where the client reads none or no wait, and for JavaScript's own number
+            // syntax, 1e3ms, which the check refuses on purpose (DURATION takes digits).
             else -> {
-                assertContains(message, "needs a duration", message = written)
+                assertContains(message, "waits 0 ms", message = written)
                 val read = wait.toDoubleOrNull()
                 assertTrue(
                     read == null || read.isNaN() || read <= 0.0 || written in jsNumberForms,

@@ -283,7 +283,7 @@
       "references": [
         {
           "name": "Datastar reference",
-          "url": "https://data-star.dev/reference/attributes#data-nonce"
+          "url": "https://data-star.dev/reference/security#content-security-policy"
         }
       ]
     },

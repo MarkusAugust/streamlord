@@ -187,6 +187,15 @@ private val ANNOTATION_BEFORE = regex("""@[\p{L}_][\p{L}\p{Nd}_.:]*\s*\z""")
 private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
+private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
+
+/** The codes of what Kotlin writes into a string, whatever the client then makes of it. */
+private val KOTLIN_OWN =
+    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
+
+/** The words every message of a refusal of the DSL's as the page renders has. */
+private val STREAMLORD_REFUSES = regex("""Streamlord (?:refuses|throws)|as the page renders""")
+
 private val ATTRIBUTES_KEY = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]""")
 private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
@@ -351,6 +360,7 @@ public class Analyzer(
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             val issues = checkNonceSite(site)
@@ -372,7 +382,8 @@ public class Analyzer(
         for (o in expressionOptions(src, lex)) {
             if (foreign(o.name, o.nameStart)) continue
             claimed += o.value.start
-            val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null)
+            // FetchOptions writes each expression option in parentheses.
+            val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null, o.name)
             if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
         }
         // A literal joined to values with `+` is read as one string with a hole for each value.
@@ -388,8 +399,18 @@ public class Analyzer(
             val judged = checkFreeHtmlString(whole, opts, src, hyphenated)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
-        return out
+        val ignored = dslIgnored(src, lex, foreign)
+        return out.mapNotNull { s ->
+            val kept = s.issues.filter { !ignored(it.start) || ownIssue(it) }
+            if (kept.size == s.issues.size) s else s.copy(issues = kept).takeIf { kept.isNotEmpty() || it.rewrite != null }
+        }
     }
+
+    /**
+     * What Kotlin and Streamlord do with a call or a string, which `dataIgnore` does not change: a
+     * template Kotlin writes into the text, and what the DSL refuses as the page renders.
+     */
+    private fun ownIssue(issue: Issue): Boolean = issue.code in KOTLIN_OWN || STREAMLORD_REFUSES.containsMatchIn(issue.message)
 
     /**
      * The strings [site] judges: the markup, the expression, the script or the selector it is handed,
@@ -422,6 +443,59 @@ public class Analyzer(
     /** The DSL helpers that write `data-nonce`: `dataNonce`. */
     private val nonceCalls: Set<String> = catalog.attributesByName["nonce"]?.kotlin?.toSet() ?: emptySet()
 
+    /** The DSL helper of a backend action, `get("/x")`, which a `dataInit` handed it sends at once. */
+    private val backendHelper by lazy(LazyThreadSafetyMode.NONE) {
+        regex("""\s*(?:""" + catalog.actions.filter { it.kind == "backend" }.joinToString("|") { Regex.escape(it.kotlin) } + """)\s*\(""")
+    }
+
+    /**
+     * `dataIndicator` called after a `dataInit` that sends at once, in the same element's block:
+     * the DSL writes the attributes in the order of the calls, and the indicator then comes too
+     * late, as the indicator-order check says of HTML. A dataInit with a lambda of modifiers may
+     * wait, and is left alone.
+     */
+    private fun indicatorOrderIssues(
+        src: String,
+        lex: KotlinLex,
+        foreign: (name: String, nameStart: Int) -> Boolean,
+    ): List<SiteIssues> {
+        val sites = findCallSites(src, INDICATOR_ORDER_CALLS, lex).filter { !foreign(it.name, it.nameStart) }
+        if (sites.none { it.name == "dataInit" } || sites.none { it.name == "dataIndicator" }) return emptyList()
+
+        val blocks = lex.blocks(src)
+
+        fun blockOf(at: Int) = blocks.around(at)
+
+        fun sendsAtOnce(init: CallSite): Boolean {
+            if (init.trailingLambda) return false
+            val arg = init.positional.firstOrNull() ?: init.named("expression") ?: return false
+            val s = arg.string
+            if (s != null) return !s.unterminated && s.interpolations.isEmpty() && markup.sendsAtOnce(s.text)
+            return backendHelper.matchAt(arg.text, 0) != null
+        }
+        val sending = sites.filter { it.name == "dataInit" && sendsAtOnce(it) }.map { blockOf(it.nameStart) to it.nameStart }
+        return sites
+            .filter { it.name == "dataIndicator" }
+            .filter { ind -> blockOf(ind.nameStart).let { b -> b != null && sending.any { it.first == b && it.second < ind.nameStart } } }
+            .map { ind ->
+                SiteIssues(
+                    ind,
+                    null,
+                    listOf(
+                        Issue(
+                            ind.nameStart,
+                            ind.nameStart + ind.name.length,
+                            "dataIndicator comes after dataInit, which starts its request as Datastar applies it, " +
+                                "before the indicator exists, so the signal stays false. Call dataIndicator first.",
+                            Severity.WARNING,
+                            "indicator-order",
+                            Docs.attribute("indicator"),
+                        ),
+                    ),
+                )
+            }
+    }
+
     /** `dataNonce("...")` of a literal it refuses as the page renders, through [CspNonce.checked]: empty, or no base64 value. */
     private fun checkNonceSite(site: CallSite): List<Issue> {
         val s = (site.named("nonce") ?: site.positional.firstOrNull())?.string ?: return emptyList()
@@ -435,7 +509,7 @@ public class Analyzer(
                 message = problem.removeSuffix(".") + ". ${site.name} refuses it as the page renders.",
                 severity = Severity.ERROR,
                 code = if (empty) "missing-nonce" else "invalid-nonce",
-                link = Docs.attribute("nonce"),
+                link = Docs.attribute(catalog.attributesByName.getValue("nonce")),
             ),
         )
     }
@@ -596,8 +670,6 @@ public class Analyzer(
             issues += expressionHoles(value, src, opts, name, helpers)
         }
         if (value != null && kind == ValueKind.SIGNAL) issues += signalNameHoles(value, src, opts, name)
-        // With a template in the value the interpolation issue speaks for it, as at a DSL call.
-        val judgeValue = value != null && !(PLACEHOLDER in value.text && value.interpolations.any { it.kind == InterpolationKind.SIMPLE })
 
         // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
         fun range(
@@ -613,7 +685,7 @@ public class Analyzer(
             }
         for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true, prefixSetting = opts.prefixSetting)) {
             val inName = i.end <= name.length
-            if (!inName && !judgeValue) continue
+            if (!inName && value == null) continue
             val r = range(i.start, i.end)
             val fixes =
                 i.fixes.filter { (it.end <= name.length) == inName }.map { f ->
@@ -736,8 +808,7 @@ public class Analyzer(
         templates: Boolean = true,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
-        for (tag in tokenize(src, templates).tags) {
-            if (tag.closing) continue
+        for (tag in appliedTags(tokenize(src, templates).tags, opts.prefix)) {
             issues +=
                 markup.validateAttributes(
                     tag,
@@ -819,7 +890,8 @@ public class Analyzer(
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
             add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), null)
         }
-        return out
+        val ignored = dslIgnored(src, lex, foreign)
+        return out.filter { !ignored(it.start) }
     }
 
     /** The markup rules of one HTML string handed to a patch, with the id rule on or off. */
@@ -2025,7 +2097,48 @@ public class Analyzer(
         val attribute = catalog.attributesByKotlin[site.name]
         val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
         val strings = listOfNotNull(expressionString(site, spec, src, lex)) + site.moreStrings(spec)
-        return strings.flatMap { expressionIssues(it, src, opts, hyphenated, helpers, named, attribute, dslEvent(site)) }
+        val oneValue = site.name.takeIf { spec.oneValue }
+        return strings.flatMap { s ->
+            // An attribute's expression passes ExpressionGuard as the page renders, which refuses an empty one.
+            if (attribute != null && !s.unterminated && s.interpolations.isEmpty() && s.text.isBlank()) {
+                listOf(
+                    Issue(
+                        s.start,
+                        s.end,
+                        "${site.name} throws as the page renders: Streamlord refuses an empty expression.",
+                        Severity.ERROR,
+                        "empty-expression",
+                        Docs.attribute(attribute),
+                    ),
+                )
+            } else {
+                expressionIssues(s, src, opts, hyphenated, helpers, named, attribute, dslEvent(site), oneValue)
+            }
+        }
+    }
+
+    /**
+     * The first comma at the top of [s], which [function] writes in parentheses as one value: there it
+     * is JavaScript's comma operator, and the value is what follows it. `postExpr("'/a', {retry: 'never'}")`
+     * sends to no address.
+     */
+    private fun commaOperatorIssue(
+        s: KotlinString,
+        function: String,
+    ): Issue? {
+        val at = Brackets(s.text, jsRegions(s.text)).topCommas.firstOrNull() ?: return null
+        val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
+        val r = s.toSource(at, at + 1)
+        return Issue(
+            r.first,
+            r.last + 1,
+            "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
+                "operator and keeps only what follows it." +
+                if (backend) " The options go in the lambda after the call." else "",
+            Severity.WARNING,
+            "one-value",
+            Docs.EXPRESSIONS,
+        )
     }
 
     /** The issues of [s], a literal Datastar runs as an expression: its Kotlin templates, and the expression itself. */
@@ -2038,12 +2151,15 @@ public class Analyzer(
         named: String,
         attribute: AttributeSpec?,
         event: String?,
+        oneValue: String? = null,
     ): List<Issue> {
         if (s.unterminated) return emptyList()
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
         val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
-        if (PLACEHOLDER in s.text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event))
+        oneValue?.let { commaOperatorIssue(s, it) }?.let { issues += it }
+        val judged = expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event)
+        val simple = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE }.mapTo(HashSet()) { it.decodedStart }
+        issues += mapIssues(s, src, aroundPlaceholders(s.text, judged) { it in simple })
         return issues
     }
 
@@ -2208,7 +2324,35 @@ public class Analyzer(
             val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
+        val mixed = if (spec.name == "on" && explicitCase == null && !capital) catalog.mixedCaseDomEvent(name) else null
+        if (mixed != null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message = "${site.name}(\"$name\") listens for $name, which no browser fires: the event is $mixed.",
+                    severity = Severity.WARNING,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec),
+                    fixes = listOf(Fix("Change to $mixed", key.contentStart, key.contentEnd, mixed)),
+                ),
+            )
+        }
         if (!capital) return emptyList()
+        val dom = if (spec.name == "on" && explicitCase == null) catalog.lowercaseDomEvent(name) else null
+        if (dom != null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message = "${site.name}(\"$name\") listens for $name, which no browser fires: the DOM event is $dom.",
+                    severity = Severity.WARNING,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec),
+                    fixes = listOf(Fix("Change to $dom", key.contentStart, key.contentEnd, dom)),
+                ),
+            )
+        }
         if (wire == null) {
             return listOf(
                 Issue(
@@ -2222,7 +2366,7 @@ public class Analyzer(
                             "Write it in one case.",
                     severity = Severity.HINT,
                     code = "key-case-wire",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                 ),
             )
         }
@@ -2238,7 +2382,7 @@ public class Analyzer(
                         rawKeyNote(spec, CatalogNames.PREFIX, name),
                 severity = Severity.HINT,
                 code = "key-case-wire",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
             ),
         )
     }
@@ -2352,7 +2496,7 @@ public class Analyzer(
             message = "Streamlord refuses \"$name\" at runtime: it $reason.",
             severity = Severity.ERROR,
             code = "key-refused",
-            link = Docs.attribute(spec.name),
+            link = Docs.attribute(spec),
         )
 
     /**

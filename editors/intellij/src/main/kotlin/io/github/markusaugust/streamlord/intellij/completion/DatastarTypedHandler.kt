@@ -10,7 +10,7 @@ import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
- * `$`, `@`, `#` and `.` open the completion popup where the contributor has something to say, and
+ * `$`, `@`, `#`, `_`, `:` and `.` open the completion popup where the contributor has something to say, and
  * `(` and `,` in a Datastar expression the parameter info of the action there, as VS Code does.
  */
 class DatastarTypedHandler : TypedHandlerDelegate() {
@@ -37,4 +37,4 @@ class DatastarTypedHandler : TypedHandlerDelegate() {
     }
 }
 
-private val TRIGGERS = setOf('$', '@', '#', '_', ':')
+private val TRIGGERS = setOf('$', '@', '#', '_', ':', '.')

@@ -1,0 +1,6 @@
+<!-- An @intl type, a near action, the cases of a fetch event's type, options of the wrong kind, an array URL. -->
+<button data-on:click="@intl('currency', 1)">a</button>
+<button data-on:click="@gett('/a')">b</button>
+<div data-on:datastar-fetch="switch (evt.detail.type) { case 'start': break }"></div>
+<button data-on:click="@post('/a', {retryMaxCount: true, requestCancellation: 1, contentType: 1, headers: 'x'})">c</button>
+<button data-on:click="@get(['/a'])">d</button>

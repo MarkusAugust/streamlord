@@ -114,5 +114,18 @@
   {"file": "kotlin/RewriteOperands.kt", "at": "${title.esc¦aped()}", "actions": true},
   {"file": "kotlin/InterpolateValues.kt", "at": "listOf(¦a))", "actions": true},
   {"file": "kotlin/InterpolateValues.kt", "at": "listOf(a, ¦b))", "actions": true},
-  {"file": "kotlin/InterpolateValues.kt", "at": "intArrayOf(¦n, 2)", "actions": true}
+  {"file": "kotlin/InterpolateValues.kt", "at": "intArrayOf(¦n, 2)", "actions": true},
+  {"file": "html/help.html", "at": "@intl('number', ¦$count)"},
+  {"file": "html/help.html", "at": "{re¦try: 'never'"},
+  {"file": "html/help.html", "at": "'nev¦er'"},
+  {"file": "html/help.html", "at": "{inc¦lude: /a/}"},
+  {"file": "html/help.html", "at": "{openWhenHidden: ¦}"},
+  {"file": "html/help.html", "at": "data-on:datastar-fe¦tch"},
+  {"file": "html/help.html", "at": "'star¦ted'"},
+  {"file": "html/help.html", "at": "evt.¦\">"},
+  {"file": "html/help.html", "at": "data-te¦xt=\"$count\""},
+  {"file": "html/help.html", "at": "@get(¦'/a'"},
+  {"file": "kotlin/HelpDollar.kt", "at": "${'$'}myCo¦unt"},
+  {"file": "kotlin/HelpDollar.kt", "at": "get¦Expr"},
+  {"file": "html/actions.html", "at": "@post('/a', {¦retryMaxCount"}
 ]

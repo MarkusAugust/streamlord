@@ -430,6 +430,11 @@ The client fills each half of the filter on its own: set only `include`, and the
 `exclude` still keeps the underscored names home. `payloadExpr` sends exactly the expression's
 value, so `readSignals()` on `/rows/delete` sees `ids` and nothing else.
 
+Every option has such a twin whose name ends in `Expr`, for a value the page computes:
+`retryExpr = $$"$mode"`, `contentTypeExpr`, `retryMaxCountExpr` and the rest. A filter's halves
+take one too, `SignalFilter(includeExpr = $$"$pattern")`, and `SignalFilter(filterExpr = ...)`
+is the whole filter as one expression, for `@setAll` and `@toggleAll` as well.
+
 ## The size limit
 
 Incoming signals are capped at 1 MiB by default, and the cap is applied *while reading*. A
