@@ -13,8 +13,20 @@ class SignalReferencesTest {
             case.array("defined")?.let { array ->
                 val defined = array.strings().toSet()
                 val path = case.string("path")!!
-                if (case.has("known")) assertEquals(case.boolean("known"), isKnownSignal(path, defined), name)
-                if (case.has("nearest")) assertEquals(case.string("nearest"), nearestSignal(path, defined), name)
+                // A read of the path alone, as signalReferences gives one: known where no issue is, and the nearest name its fix writes.
+                val issues = unknownSignalIssues(listOf(SignalReference(0, path.length + 1, path)), defined)
+                if (case.has("known")) assertEquals(case.boolean("known"), issues.isEmpty(), name)
+                if (case.has("nearest")) {
+                    assertEquals(
+                        case.string("nearest"),
+                        issues
+                            .singleOrNull()
+                            ?.fixes
+                            ?.singleOrNull()
+                            ?.text,
+                        name,
+                    )
+                }
                 continue
             }
             val src = case.string("src")!!
