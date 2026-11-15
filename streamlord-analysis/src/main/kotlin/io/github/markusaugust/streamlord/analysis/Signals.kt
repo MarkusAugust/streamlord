@@ -47,18 +47,15 @@ private val HELPER_READS = regex("""\b(?:${HELPER_READ_CALLS.joinToString("|")})
 /** The object value of a keyed attribute, after its key: `="{...}"`, `='{...}'`, its quotes escaped in a Kotlin string. */
 private val KEYED_OBJECT = regex("""\s*=\s*(?:\\?"\{([^"]*)\}\\?"|'\{([^']*)\}')""")
 
+/** [prefix] as a pattern: the bundle's own, and the default one read with `data-star-` as well. */
+internal fun prefixPattern(prefix: String): String =
+    if (prefix == CatalogNames.PREFIX) "data-(?:star-)?" else prefix.map { if (it.isLetterOrDigit()) "$it" else "[\\$it]" }.joinToString("")
+
 /** The attributes that declare signals under [prefix], the bundle's; the default one is read with `data-star-` as well. */
 private class DeclaringAttributes(
     val prefix: String,
 ) {
-    private val written =
-        if (prefix ==
-            CatalogNames.PREFIX
-        ) {
-            "data-(?:star-)?"
-        } else {
-            prefix.map { if (it.isLetterOrDigit()) "$it" else "[\\$it]" }.joinToString("")
-        }
+    private val written = prefixPattern(prefix)
 
     /**
      * The key with its modifiers, which may name the casing: `data-signals:my-value__case.snake`. A key
@@ -465,7 +462,7 @@ internal fun collectSignalDefinitions(
     language: SourceLanguage,
     foreign: (name: String, nameStart: Int) -> Boolean,
     given: KotlinLex? = null,
-    prefix: String = CatalogNames.PREFIX,
+    prefix: String,
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val spread = Spread()
@@ -703,7 +700,7 @@ private fun declared(
     // The client applies no attribute of an element data-ignore covers, so it declares nothing there.
     if (language == SourceLanguage.KOTLIN) {
         val lex = given ?: lexKotlin(src)
-        val ignored = dslIgnored(src, lex, foreign)
+        val ignored = dslIgnored(src, lex, foreign, prefix)
         // And in the HTML strings, the elements data-ignore covers, at their offsets in the file.
         val inStrings =
             lex.strings
@@ -1029,7 +1026,7 @@ internal fun dataSignalsPairIssues(
             start = end - 4,
             end = end,
             message =
-                "Datastar's client holds no null: in data-signals a null removes the key, so \"${key.text}\" is not declared, " +
+                "Datastar's client holds no null: a null among the signals removes the key, so \"${key.text}\" is not declared, " +
                     "and an expression that reads it gets \"\". Declare it with the value it starts as, such as \"\".",
             severity = Severity.WARNING,
             code = "signal-null",

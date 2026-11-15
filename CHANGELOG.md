@@ -11,6 +11,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - streamlord-analysis: `analyzeProject` and `failures()` are declared beside `ProjectIssue`, on the
   JVM alone: `analyzer.analyzeProject(root)` is written as before, with
   `io.github.markusaugust.streamlord.analysis.analyzeProject` imported where the package is not.
+- streamlord-analysis: `ExpressionValidator.validate` takes `prefix`, the attribute prefix its
+  messages name attributes with.
 - streamlord-analysis: `unknownSignalIssue(ref, defined)` is gone: `projectSignalIssues(language,
   refs, project)` answers for every read of a file at once, and for the signals a Kotlin file reads
   that no file declares, asking `project`, a `ProjectSignals`, what the project knows. For Java,
@@ -353,6 +355,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- Both editors read a page with the attribute prefix you set throughout: a kebab-case signal
+  declared under it, `data-ds-signals:my-value__case.kebab`, is the one `$my-value` reads, where it
+  was a false `signal-kebab`; completion calls a signal the file declares under it this file's; and
+  messages name attributes with it. VS Code takes a blank prefix as `data-`, as IntelliJ does.
 - Both editors read a few Datastar values as the client does where they misjudged them:
   `@get(+-1)` is a number, and `@get(+1n)` throws a TypeError before the action is called; a comma
   inside a template literal's `${a, b}` is no comma of `postExpr`'s value, a nested template's text

@@ -220,7 +220,7 @@ public class Analyzer(
         val lex = lex(src)
         val facts = fileFacts(src, lex)
         val foreign = foreignCalls(opts)
-        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign, lex)
+        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, opts.prefix, foreign, lex)
         val dsl = opts.modules.htmlDsl
         val eventCalls = EventCalls(src)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
@@ -243,7 +243,7 @@ public class Analyzer(
             ) {
                 issues += eventArgumentIssues(site, null, eventCalls, opts.prefix)
             }
-            issues += checkKeyCaseSite(site, src)
+            issues += checkKeyCaseSite(site, src, opts.prefix)
             issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src, lex)) {
@@ -307,7 +307,7 @@ public class Analyzer(
             val judged = checkFreeHtmlString(whole, opts, src, hyphenated, s.start !in topLevel)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
-        val ignored = dslIgnored(src, lex, foreign)
+        val ignored = dslIgnored(src, lex, foreign, opts.prefix)
         return out.mapNotNull { s ->
             val kept = s.issues.filter { !ignored(it.start) || ownIssue(it) }
             if (kept.size == s.issues.size) s else s.copy(issues = kept).takeIf { kept.isNotEmpty() || it.rewrite != null }
@@ -548,10 +548,11 @@ public class Analyzer(
     private fun hyphenatedSignals(
         src: String,
         language: SourceLanguage,
+        prefix: String,
         foreign: (String, Int) -> Boolean = { _, _ -> false },
         lex: KotlinLex? = null,
     ): Set<String> =
-        collectSignalDefinitions(src, language, foreign, lex).filter { '-' in it }.mapTo(HashSet()) { it.removePrefix(REFUSED) }
+        collectSignalDefinitions(src, language, foreign, lex, prefix).filter { '-' in it }.mapTo(HashSet()) { it.removePrefix(REFUSED) }
 
     /**
      * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
@@ -715,7 +716,7 @@ public class Analyzer(
 
     /** As [analyzeHtml], for markup the host knows more of: its prefix, and how it names the prefix setting. */
     public fun analyzeHtml(source: Source): List<Issue> =
-        analyzeHtml(source.text, Reading(source, settle(source)), hyphenatedSignals(source.text, SourceLanguage.HTML))
+        analyzeHtml(source.text, Reading(source, settle(source)), hyphenatedSignals(source.text, SourceLanguage.HTML, source.prefix))
 
     internal fun analyzeHtml(
         src: String,
@@ -807,7 +808,7 @@ public class Analyzer(
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
             add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), null)
         }
-        val ignored = dslIgnored(src, lex, foreign)
+        val ignored = dslIgnored(src, lex, foreign, opts.prefix)
         return out.filter { !ignored(it.start) }
     }
 
@@ -872,7 +873,7 @@ public class Analyzer(
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
         val attribute = catalog.attributesByKotlin[site.name]
-        val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
+        val named = attribute?.let { opts.prefix + it.name } ?: "the expression of ${site.name}"
         val strings = listOfNotNull(expressionString(site, spec, src, lex)) + site.moreStrings(spec)
         val oneValue = site.name.takeIf { spec.oneValue }
         return strings.flatMap { s ->
@@ -934,7 +935,14 @@ public class Analyzer(
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
         val issues = ArrayList(expressionTemplates(s, src, opts, named, helpers))
         oneValue?.let { commaOperatorIssue(s, it) }?.let { issues += it }
-        val judged = expressions.validate(s.text, hyphenatedSignals = hyphenated, attribute = attribute, event = event)
+        val judged =
+            expressions.validate(
+                s.text,
+                hyphenatedSignals = hyphenated,
+                attribute = attribute,
+                event = event,
+                prefix = opts.prefix,
+            )
         val simple = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE }.mapTo(HashSet()) { it.decodedStart }
         issues += mapIssues(s, src, aroundPlaceholders(s.text, judged) { it in simple })
         return issues
@@ -1077,6 +1085,7 @@ public class Analyzer(
     private fun checkKeyCaseSite(
         site: CallSite,
         src: String,
+        prefix: String,
     ): List<Issue> {
         val spec = catalog.attributesByKotlin[site.name] ?: return emptyList()
         if (site.name in valueNameHelpers) return valueNameIssues(site, spec)
@@ -1174,10 +1183,10 @@ public class Analyzer(
                 start = key.start,
                 end = key.end,
                 message =
-                    "Written on the wire as ${CatalogNames.PREFIX}${spec.name}:$wire, which Datastar reads back as $what: " +
+                    "Written on the wire as $prefix${spec.name}:$wire, which Datastar reads back as $what: " +
                         "the browser lowercases attribute names, so a key is kebab-case. " +
                         "In HTML or a template you write it that way yourself." +
-                        rawKeyNote(spec, CatalogNames.PREFIX, name),
+                        rawKeyNote(spec, prefix, name),
                 severity = Severity.HINT,
                 code = "key-case-wire",
                 link = Docs.attribute(spec),

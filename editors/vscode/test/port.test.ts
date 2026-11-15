@@ -140,6 +140,11 @@ describe("what crosses the port", () => {
     assert.deepEqual(codes([driftFactsOf(`<input data-bind:query>`, false, "data-")]), []);
   });
 
+  it("reads what the file itself declares with the prefix it is given, as IntelliJ does", () => {
+    const file = `fun Route.search() {\n    get("/s") { val q = call.readSignals().string("query") }\n}\nval page = "<input data-ds-bind:query>"`;
+    assert.deepEqual(diagnose(file, true, "data-ds-", [], [], []).map((i) => i.code), []);
+  });
+
   it("reports a property of a class another file reads signals into, which no page declares", () => {
     const form = `import kotlinx.serialization.Serializable\n\n@Serializable\ndata class Form(val query: String, val page: Int)`;
     const reads = driftFactsOf(`fun Route.search() {\n    post("/s") { val form = call.readSignals<Form>() }\n}`, true, "data-");
