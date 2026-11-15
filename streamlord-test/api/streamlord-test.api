@@ -52,6 +52,7 @@ public final class io/github/markusaugust/streamlord/test/DatastarEvents : java/
 
 public final class io/github/markusaugust/streamlord/test/DatastarEventsKt {
 	public static final fun datastarEvents (Ljava/lang/String;)Lio/github/markusaugust/streamlord/test/DatastarEvents;
+	public static final fun datastarEvents (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)Lio/github/markusaugust/streamlord/test/DatastarEvents;
 }
 
 public final class io/github/markusaugust/streamlord/test/LiveDatastarStream : java/lang/AutoCloseable {
