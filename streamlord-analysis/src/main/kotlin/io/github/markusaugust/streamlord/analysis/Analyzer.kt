@@ -1139,11 +1139,34 @@ public class Analyzer(
             val asIs = markupText || told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))
             val fixes =
                 if (fixable) listOf(holeFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed)) else emptyList()
+            val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
             val message =
                 when {
-                    loadsAnywhere -> templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
-                    markupText -> rereadMessage(shown)
-                    else -> templateMessage(shown, landing, endTagAt(view, ip.decodedStart), rawElement(view, landing, ip.decodedStart))
+                    loadsAnywhere -> {
+                        "$base It lands in ${landing.attribute ?: "the URL"}, which loads code from wherever the value points, and the " +
+                            "markup before it does not fix the host. $CODE_URL_ADVICE, and make it a %s placeholder."
+                    }
+
+                    // Markup a Kotlin template writes into the format, which interpolate then reads as format.
+                    markupText -> {
+                        "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
+                            "a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. " +
+                            "Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
+                    }
+
+                    landing.position in ESCAPED_POSITIONS -> {
+                        "$base Make it a %s placeholder and pass the value to interpolate."
+                    }
+
+                    else -> {
+                        val (where, instead) =
+                            landingWords(
+                                landing,
+                                endTagAt(view, ip.decodedStart),
+                                rawElement(view, landing, ip.decodedStart),
+                            )
+                        "$base It lands in $where. $instead"
+                    }
                 } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
             issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", holeLink(landing), fixes)
         }
@@ -1181,7 +1204,26 @@ public class Analyzer(
                     // A template before the hole is filled in first, so what the literal fixes is known only without one.
                     val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
                     val certain = !templated && vouched == null && !uncertain && kind != null
-                    issues += refused(refusedCodeUrlMessage(shown, attribute, certain, vouched != null || uncertain), certain)
+                    val where = "$attribute, which loads code from wherever the value points"
+                    val instead = "$CODE_URL_ADVICE, or wrap a URL you chose yourself in Trusted(...)."
+                    val message =
+                        when {
+                            vouched != null || uncertain -> {
+                                "interpolate throws here unless the Trusted text before $shown fixes the host or $shown is " +
+                                    "Trusted(...): it lands in $where. $instead"
+                            }
+
+                            certain -> {
+                                "interpolate always throws here: $shown lands in $where, and the markup before it does not fix the host. " +
+                                    "Only Trusted(...) is let in there. $instead"
+                            }
+
+                            else -> {
+                                "interpolate throws here unless $shown is Trusted(...): it lands in $where, " +
+                                    "and the markup before it does not fix the host. $instead"
+                            }
+                        }
+                    issues += refused(message, certain)
                     continue
                 }
             }
@@ -1202,7 +1244,10 @@ public class Analyzer(
                 if (landing.position == Position.TEXT && arg != null && kind != ArgKind.MARKUP && kind != ArgKind.TRUSTED &&
                     markupHeldAsString(src, arg.text, s.start)
                 ) {
-                    val message = escapedMarkupMessage(shortened(arg.text))
+                    val message =
+                        "interpolate escapes ${shortened(arg.text)} here, so the tags it holds are printed as text: it is markup held " +
+                            "as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built " +
+                            "yourself in Trusted(...)."
                     issues += Issue(r.first, r.last + 1, message, Severity.WARNING, "interpolate-template", holeLink(landing))
                 }
                 continue
@@ -1214,36 +1259,31 @@ public class Analyzer(
                     else -> emptySet<ArgKind>()
                 }
             if (kind == ArgKind.TRUSTED || kind in allowed) continue
-            val endTag = endTagAt(view, d)
-            val numbersOnly = landing.position == Position.DATASTAR || landing.position == Position.STYLE
-            issues +=
+            val unsigned =
+                kind == ArgKind.UNSIGNED && arg != null && (landing.position == Position.DATASTAR || landing.position == Position.STYLE)
+            val (where, instead) = landingWords(landing, endTagAt(view, d), rawElement(view, landing, d))
+            val letIn = letIn(landing.position)
+            val message =
                 when {
-                    kind == ArgKind.UNSIGNED && arg != null && numbersOnly -> {
-                        val message =
-                            if (uncertain) {
-                                uncertainMessage(
-                                    shown,
-                                    landing,
-                                    false,
-                                    null,
-                                )
-                            } else {
-                                unsignedRefusedMessage(shown, landing)
-                            }
-                        refused(message, !uncertain, listOf(toLongFix(arg)))
+                    uncertain && kind != null -> {
+                        "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
+                            "where only $letIn is let in. $instead"
                     }
 
-                    uncertain && kind != null -> {
-                        refused(uncertainMessage(shown, landing, endTag, rawElement(view, landing, d)), false)
+                    unsigned -> {
+                        "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in " +
+                            "$where, where only $letIn is let in. Convert it with toLong() first."
+                    }
+
+                    kind != null -> {
+                        "interpolate always throws here: $shown lands in $where, and only $letIn is let in there. $instead"
                     }
 
                     else -> {
-                        refused(
-                            refusedMessage(shown, landing, kind != null, endTag, rawElement(view, landing, d)),
-                            kind != null && !uncertain,
-                        )
+                        "interpolate throws here unless $shown is $letIn: it lands in $where. $instead"
                     }
                 }
+            issues += refused(message, kind != null && !uncertain, if (unsigned) listOf(toLongFix(arg!!)) else emptyList())
         }
         issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
         return issues
@@ -1355,24 +1395,6 @@ public class Analyzer(
             }
         }
 
-    /** Markup a Kotlin template writes into the format, which interpolate then reads as format. */
-    private fun rereadMessage(shown: String): String =
-        "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
-            "a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. " +
-            "Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
-
-    private fun templateMessage(
-        shown: String,
-        landing: HoleLanding,
-        endTag: Boolean,
-        element: String?,
-    ): String {
-        val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
-        if (landing.position in ESCAPED_POSITIONS) return "$base Make it a %s placeholder and pass the value to interpolate."
-        val (where, instead) = landingWords(landing, endTag, element)
-        return "$base It lands in $where. $instead"
-    }
-
     /** What interpolate lets in where escaping is not enough. */
     private fun letIn(position: Position): String =
         when (position) {
@@ -1380,52 +1402,6 @@ public class Analyzer(
             Position.STYLE -> "a number"
             else -> "Trusted(...)"
         }
-
-    private fun unsignedRefusedMessage(
-        shown: String,
-        landing: HoleLanding,
-    ): String {
-        val (where, _) = landingWords(landing, false)
-        return "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in $where, " +
-            "where only ${letIn(landing.position)} is let in. Convert it with toLong() first."
-    }
-
-    /** An unsigned number a Kotlin template writes where interpolate would refuse it: its digits are safe as they are. */
-    private fun unsignedWrittenMessage(
-        shown: String,
-        where: String,
-    ): String =
-        "Kotlin writes $shown into $where as digits, which is safe there, but it is an unsigned number, which interpolate refuses there: " +
-            "it is not a kotlin.Number. Convert it with toLong() if you build this with interpolate."
-
-    private fun refusedMessage(
-        shown: String,
-        landing: HoleLanding,
-        certain: Boolean,
-        endTag: Boolean,
-        element: String?,
-    ): String {
-        val allowed = letIn(landing.position)
-        val (where, instead) = landingWords(landing, endTag, element)
-        return if (certain) {
-            "interpolate always throws here: $shown lands in $where, and only $allowed is let in there. $instead"
-        } else {
-            "interpolate throws here unless $shown is $allowed: it lands in $where. $instead"
-        }
-    }
-
-    /** A value interpolate refuses where the markup shows it landing, which a Trusted before it whose text is not known may move. */
-    private fun uncertainMessage(
-        shown: String,
-        landing: HoleLanding,
-        endTag: Boolean,
-        element: String?,
-    ): String {
-        val allowed = letIn(landing.position)
-        val (where, instead) = landingWords(landing, endTag, element)
-        return "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
-            "where only $allowed is let in. $instead"
-    }
 
     /**
      * Whether the hole at [k] is in a URL that loads code, `src` of a script and the like, whose host
@@ -1498,60 +1474,6 @@ public class Analyzer(
         for ((j, l) in reading.landings.withIndex()) if (l.valueStart == landing.valueStart && starts[j] < starts[first]) first = j
         return refusedUrlScheme(attribute, reading.prefix(k, first))
     }
-
-    private fun runningSchemeMessage(
-        shown: String,
-        attribute: String,
-        scheme: String,
-    ): String =
-        "The markup starts $attribute with $scheme:, which is not a scheme that only navigates: the URL can run whatever " +
-            "$shown holds, and escaping does not help, nor would interpolate, which refuses every value there. " +
-            "Start the URL with /, # or https://."
-
-    private fun codeUrlMessage(
-        shown: String,
-        attribute: String,
-    ): String =
-        "Kotlin writes $shown into $attribute, which loads code from wherever the value points, and the markup before it does not fix " +
-            "the host: even an https:// URL can load code from another origin. Escaping does not help. $CODE_URL_ADVICE."
-
-    private fun templateCodeUrlMessage(
-        shown: String,
-        attribute: String,
-    ): String =
-        "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it. " +
-            "It lands in $attribute, which loads code from wherever the value points, and the markup before it does not fix the host. " +
-            "$CODE_URL_ADVICE, and make it a %s placeholder."
-
-    private fun refusedCodeUrlMessage(
-        shown: String,
-        attribute: String,
-        certain: Boolean,
-        vouched: Boolean,
-    ): String {
-        val where = "$attribute, which loads code from wherever the value points"
-        val instead = "$CODE_URL_ADVICE, or wrap a URL you chose yourself in Trusted(...)."
-        return when {
-            vouched -> {
-                "interpolate throws here unless the Trusted text before $shown fixes the host or $shown is Trusted(...): " +
-                    "it lands in $where. $instead"
-            }
-
-            certain -> {
-                "interpolate always throws here: $shown lands in $where, and the markup before it does not fix the host. " +
-                    "Only Trusted(...) is let in there. $instead"
-            }
-
-            else -> {
-                "interpolate throws here unless $shown is Trusted(...): it lands in $where, " +
-                    "and the markup before it does not fix the host. $instead"
-            }
-        }
-    }
-
-    private fun escapedMarkupMessage(shown: String): String =
-        "interpolate escapes $shown here, so the tags it holds are printed as text: it is markup held as a String. " +
-            "Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...)."
 
     /**
      * The whole literal rewritten as a `$$` literal (Kotlin 2.2+): the flagged template becomes a
@@ -1852,7 +1774,16 @@ public class Analyzer(
             }
 
             // Its digits are safe; only interpolate would refuse it, which a project without core has none of.
-            fun unsigned(where: String): Issue? = if (core) issue(unsignedWrittenMessage(shown, where), Severity.HINT) else null
+            fun unsigned(where: String): Issue? =
+                if (!core) {
+                    null
+                } else {
+                    issue(
+                        "Kotlin writes $shown into $where as digits, which is safe there, but it is an unsigned number, which " +
+                            "interpolate refuses there: it is not a kotlin.Number. Convert it with toLong() if you build this with interpolate.",
+                        Severity.HINT,
+                    )
+                }
 
             issues +=
                 when (landing.position) {
@@ -1870,10 +1801,29 @@ public class Analyzer(
                         val prefix = reading.prefix(k, k)
                         val scheme = runningScheme(reading, starts, k)
                         when {
-                            scheme != null -> issue(runningSchemeMessage(shown, attribute, scheme) + rewriteNote())
-                            landing.loadsCode && !urlHostFixedBy(attribute, prefix) -> issue(codeUrlMessage(shown, attribute))
-                            urlSchemeFixedBy(attribute, decodeEntities(prefix).text) -> unescaped()
-                            else -> schemeIssue(attribute)
+                            scheme != null -> {
+                                issue(
+                                    "The markup starts $attribute with $scheme:, which is not a scheme that only navigates: the URL can " +
+                                        "run whatever $shown holds, and escaping does not help, nor would interpolate, which refuses " +
+                                        "every value there. Start the URL with /, # or https://." + rewriteNote(),
+                                )
+                            }
+
+                            landing.loadsCode && !urlHostFixedBy(attribute, prefix) -> {
+                                issue(
+                                    "Kotlin writes $shown into $attribute, which loads code from wherever the value points, and the " +
+                                        "markup before it does not fix the host: even an https:// URL can load code from another " +
+                                        "origin. Escaping does not help. $CODE_URL_ADVICE.",
+                                )
+                            }
+
+                            urlSchemeFixedBy(attribute, decodeEntities(prefix).text) -> {
+                                unescaped()
+                            }
+
+                            else -> {
+                                schemeIssue(attribute)
+                            }
                         }
                     }
 
