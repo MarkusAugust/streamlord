@@ -52,6 +52,18 @@ class CompletionContextsTest {
     fun `which action call a caret stands in`() =
         offered("action-calls.json") { asked(it, "<div data-on:click=\"" + it.string("before")!!, "\"></div>") }
 
+    // An attribute only the html element takes is offered in its tag, which escaped quotes and a > in a value do not hide.
+    @Test
+    fun `the tag of a name in a Kotlin string is read from its opening bracket`() {
+        fun names(tag: String): List<String> {
+            val src = "val x = \"<$tag data-show=\\\"\\\$a > 1\\\" data-\""
+            val offset = src.lastIndexOf("data-") + "data-".length
+            return analyzer.complete(Source(src, SourceLanguage.KOTLIN), offset, workspace).items.map { it.label }
+        }
+        assertTrue("data-nonce" in names("html"), names("html").toString())
+        assertTrue("data-nonce" !in names("div"), names("div").toString())
+    }
+
     @Test
     fun `the name in a Kotlin string is read decoded, in its tag from its opening bracket`() {
         // The caret just after `data-on:click__` in the string of the source: its modifiers are offered.
