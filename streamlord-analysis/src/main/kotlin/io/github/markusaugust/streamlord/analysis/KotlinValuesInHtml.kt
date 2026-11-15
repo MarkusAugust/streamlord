@@ -18,7 +18,6 @@ import io.github.markusaugust.streamlord.core.domain.refusedUrlScheme
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.domain.valueLandings
-import java.io.File
 import kotlin.concurrent.Volatile
 import kotlin.time.Duration
 

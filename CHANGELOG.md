@@ -8,6 +8,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- streamlord-analysis: `analyzeProject` and `failures()` are declared beside `ProjectIssue`, on the
+  JVM alone: `analyzer.analyzeProject(root)` is written as before, with
+  `io.github.markusaugust.streamlord.analysis.analyzeProject` imported where the package is not.
+  In the internal API of streamlord-core, `HoleLanding` is `ValueLanding` and `holeLandings` is
+  `valueLandings`.
 - `interpolate` refuses a value in `data-match-media` and throws, where it escaped one: the
   reference writes the query as a string literal, so Datastar Pro may run it. Write the query into
   the format, `interpolate("<p data-match-media:dark=\"'$DARK'\">...", ...)` with a constant of

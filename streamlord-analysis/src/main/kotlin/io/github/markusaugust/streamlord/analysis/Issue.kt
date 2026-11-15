@@ -116,9 +116,6 @@ public data class Issue(
     }
 }
 
-/** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
-public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }
-
 /**
  * A place in a text as editors count it: [line] and [column] both start at 1, and a column counts
  * UTF-16 characters, as the offsets of an [Issue] do. Only `\n` breaks a line: `\r\n` counts as one

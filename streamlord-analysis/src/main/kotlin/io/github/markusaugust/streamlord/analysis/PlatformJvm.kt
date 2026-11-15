@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,12 +24,21 @@ public data class ProjectIssue(
     public fun format(): String = issue.format(file.path, SourcePosition(line, column))
 }
 
-/** What [Analyzer.analyzeProject] answers: the `.kt` files under [root], less the folders named in [skipped] and the hidden ones, in path order. */
-internal fun Analyzer.issuesUnder(
+/** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
+public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }
+
+/**
+ * Every `.kt` file under [root] that VS Code indexes, read with [prefix] and the constants the
+ * files declare between them ([projectConstants]): the verdict VS Code gives the
+ * same workspace. Below [root], folders named `build`, `node_modules`, `.gradle`, `dist`, `out`
+ * or `target`, and hidden ones, are left out. The issues come in path order, then by offset;
+ * [failures] keeps those that should fail a build. On the JVM alone: an editor hands the analysis text, never a folder.
+ */
+public fun Analyzer.analyzeProject(
     root: File,
-    prefix: String,
-    skipped: Set<String>,
+    prefix: String = CatalogNames.PREFIX,
 ): List<ProjectIssue> {
+    val skipped = ProjectFiles.SKIPPED_FOLDERS
     val files =
         root
             .walkTopDown()

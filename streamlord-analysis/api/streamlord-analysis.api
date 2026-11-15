@@ -7,8 +7,6 @@ public final class io/github/markusaugust/streamlord/analysis/Analyzer {
 	public final fun analyzeKotlin (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
 	public final fun analyzeKotlin (Ljava/lang/String;)Ljava/util/List;
 	public final fun analyzeKotlinSites (Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
-	public final fun analyzeProject (Ljava/io/File;Ljava/lang/String;)Ljava/util/List;
-	public static synthetic fun analyzeProject$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
 	public final fun attributesIndexes (Ljava/lang/String;)Ljava/util/List;
 	public final fun expressionOptions (Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/KotlinLex;)Ljava/util/List;
 	public static synthetic fun expressionOptions$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/KotlinLex;ILjava/lang/Object;)Ljava/util/List;
@@ -426,10 +424,6 @@ public final class io/github/markusaugust/streamlord/analysis/Issue {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class io/github/markusaugust/streamlord/analysis/IssueKt {
-	public static final fun failures (Ljava/util/List;)Ljava/util/List;
-}
-
 public final class io/github/markusaugust/streamlord/analysis/KeyCase : java/lang/Enum {
 	public static final field CAMEL Lio/github/markusaugust/streamlord/analysis/KeyCase;
 	public static final field KEBAB Lio/github/markusaugust/streamlord/analysis/KeyCase;
@@ -659,6 +653,12 @@ public final class io/github/markusaugust/streamlord/analysis/Place {
 	public final fun getChoices ()Ljava/util/List;
 	public final fun getEnd ()I
 	public final fun getStart ()I
+}
+
+public final class io/github/markusaugust/streamlord/analysis/PlatformJvmKt {
+	public static final fun analyzeProject (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;)Ljava/util/List;
+	public static synthetic fun analyzeProject$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
+	public static final fun failures (Ljava/util/List;)Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {

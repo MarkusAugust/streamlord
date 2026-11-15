@@ -18,7 +18,6 @@ import io.github.markusaugust.streamlord.core.domain.refusedUrlScheme
 import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
 import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
 import io.github.markusaugust.streamlord.core.domain.valueLandings
-import java.io.File
 import kotlin.concurrent.Volatile
 import kotlin.time.Duration
 
@@ -219,18 +218,6 @@ public class Analyzer(
     public fun analyzeKotlin(src: String): List<Issue> = analyzeKotlin(Source(src, SourceLanguage.KOTLIN))
 
     public fun analyzeKotlin(source: Source): List<Issue> = analyzeKotlinSites(source).flatMap { it.issues }
-
-    /**
-     * Every `.kt` file under [root] that VS Code indexes, read with [prefix] and the constants the
-     * files declare between them ([projectConstants]): the verdict VS Code gives the
-     * same workspace. Below [root], folders named `build`, `node_modules`, `.gradle`, `dist`, `out`
-     * or `target`, and hidden ones, are left out. The issues come in path order, then by offset;
-     * [failures] keeps those that should fail a build.
-     */
-    public fun analyzeProject(
-        root: File,
-        prefix: String = CatalogNames.PREFIX,
-    ): List<ProjectIssue> = issuesUnder(root, prefix, ProjectFiles.SKIPPED_FOLDERS)
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
     public fun analyzeKotlinSites(source: Source): List<SiteIssues> {
