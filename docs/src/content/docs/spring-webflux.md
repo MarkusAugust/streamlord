@@ -107,6 +107,32 @@ fun save(): ResponseEntity<Flow<ServerSentEvent<String>>> =
 `PatchElements.remove` removes elements, as `removeElements` does on a stream. Each refuses what
 the stream refuses: `redirect` a `javascript:` URL, `remove` a name the client cannot hold.
 
+## Heartbeats
+
+A flow on WebFlux has no heartbeat. The bean's `heartbeat` and `compress` belong to a Streamlord
+stream, and a flow is mapped onto Spring's server-sent events without one, so while the flow is
+quiet nothing is written, whatever the bean says. Behind a proxy that closes a connection silent
+for longer than your quietest stretch, merge a ticker of comments into the flow:
+
+```kotlin sample=spring
+@GetMapping("/feed")
+fun feed(): ResponseEntity<Flow<ServerSentEvent<String>>> {
+    val keepAlive =
+        flow {
+            while (true) {
+                delay(15.seconds)
+                emit(ServerSentEvent.builder<String>().comment("keep-alive").build())
+            }
+        }
+    val response = ticks.map { n -> PatchElements("""<span id="counter">$n</span>""") }.asDatastarResponse()
+    return ResponseEntity.ok().headers(response.headers).body(merge(response.body!!, keepAlive))
+}
+```
+
+The response keeps the headers `asDatastarResponse()` gave it. The merged flow ends when the
+client goes away, not when `ticks` does, which is what a live feed wants. Why fifteen seconds is
+on [Operations](/operations/#heartbeats).
+
 ## Cancellation
 
 When the client goes away, WebFlux cancels the subscription, which cancels the coroutine behind

@@ -108,7 +108,8 @@ private val ASSIGNED_SIGNAL =
 /** A bare `$name` is a signal in markup; in Kotlin it is a template, so it stays out of the Kotlin list. */
 private val BARE_SIGNAL = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
-private val PAIR_CALLS = Catalog.default.signalCalls.keys
+/** The calls whose pairs and names declare signals, by the name they are written with: a companion's `remove` too. */
+private val PAIR_CALLS = Catalog.default.signalCalls.keys + removalCallNames
 
 /** Whether the call whose name starts at [at] is made on a receiver: a `.` before it, past whitespace and line comments. */
 private fun onReceiver(
@@ -191,7 +192,10 @@ internal fun encodedSignalTypes(
 }
 
 /** The calls that patch signals from a value the codec encodes, on a stream and in one response. */
-private val PATCH_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals", "SignalsResponse")
+private val PATCH_CALLS =
+    Catalog.default.signalCalls
+        .filterValues { "value" in it }
+        .keys
 private val CONSTRUCTED = regex("""^\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(""")
 
 /**
@@ -248,7 +252,7 @@ private fun encodedType(
     return declarations.typeOf(id, at)?.takeIf { it in setOf("JsonValue", "JsonObject") }?.let { ANY_SIGNAL }
 }
 
-private val TYPED = regex("""\b([a-z_][A-Za-z0-9_]*)\s*:\s*([A-Z][A-Za-z0-9_]*)""")
+private val TYPED = regex("""\b([a-z_][A-Za-z0-9_]*)\s*:\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)""")
 private val BUILT = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""")
 private val INITIALISED = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
 
@@ -256,7 +260,7 @@ private val INITIALISED = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*(?::[
  * The variables [src] declares, by name, each with where the declaration ends: read once for a
  * file, and asked what a name was last declared as before an offset, at every `dataSignals` call.
  */
-private class Declarations(
+internal class Declarations(
     private val src: String,
 ) {
     private val typed = byName(TYPED.findAll(src))
@@ -310,17 +314,48 @@ internal const val READABLE_CLASS: String = "class:"
 private val PAIR = regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 
-/** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
-private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
+/** The calls that build a map in place, `mapOf("count" to 0)`: handed over as the signals, its own pairs are the keys. */
+internal val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
 private val MAP_CALL = regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
-/** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
-private fun argumentKeys(text: String): List<SignalDeclaration> {
-    PAIR.find(text)?.let { return listOf(declarationAt(PAIR.groupAt(text, it, 1)!!, 0)) }
-    if (!MAP_CALL.containsMatchIn(text)) return emptyList()
-    val map = findCallSites(text, MAP_CALLS).firstOrNull() ?: return emptyList()
-    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(PAIR.groupAt(a.text, it, 1)!!, a.start) } }
+/** A pair written in place, `"key" to value`: its key, and its value where that is one literal, at their offsets in the text read. */
+internal class LiteralPair(
+    val key: KotlinString,
+    val value: KotlinString?,
+)
+
+private val TO_AFTER = regex("""^\s+to\b\s*""")
+
+/** The pairs of [text]: the pair it is, or each pair of the map it builds in place, `mapOf("k" to v)`; nothing inside a value. */
+internal fun literalPairs(text: String): List<LiteralPair> {
+    val lex = lexKotlin(text)
+
+    fun pair(
+        start: Int,
+        end: Int,
+    ): LiteralPair? {
+        val strings = lex.stringsIn(start, end)
+        val key =
+            strings.firstOrNull()?.takeIf { k -> text.substring(start, k.start).all { it.isWhitespace() || it == '(' } } ?: return null
+        val to = TO_AFTER.find(text.substring(key.end, end)) ?: return null
+        val value =
+            strings.getOrNull(1)?.takeIf { v ->
+                v.start == key.end + to.value.length && text.substring(v.end, end).all { it.isWhitespace() || it == ')' }
+            }
+        return LiteralPair(key, value)
+    }
+    if (!MAP_CALL.containsMatchIn(text)) return listOfNotNull(pair(0, text.length))
+    val map = findCallSites(text, MAP_CALLS, lex).firstOrNull() ?: return emptyList()
+    return map.positional.mapNotNull { pair(it.start, it.end) }
 }
+
+/** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
+private fun argumentKeys(text: String): List<SignalDeclaration> =
+    literalPairs(text).mapNotNull { pair ->
+        pair.key
+            .takeIf { k -> !k.raw && NAME.matchEntire(text.substring(k.start, k.end)) != null }
+            ?.let { k -> SignalDeclaration(k.contentStart, k.contentEnd, k.text) }
+    }
 
 /** A group of a match with where it stands, which a `MatchGroup` says on the JVM alone. */
 internal class GroupAt(
@@ -576,6 +611,9 @@ private fun declared(
         val lex = given ?: lexKotlin(src)
         for (site in findCallSites(src, PAIR_CALLS, lex)) {
             if (foreign(site.name, site.nameStart)) continue
+            val removes = removesSignals(src, site)
+            // A companion's removal is called by a name others use, `names.remove(...)`.
+            if (site.name !in Catalog.default.signalCalls && !removes) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
                 for (key in argumentKeys(a.text)) out += key.copy(start = a.start + key.start, end = a.start + key.end)
@@ -598,7 +636,7 @@ private fun declared(
                 }
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
-                if (site.name == "removeSignals") out += declarationAt(name, a.start)
+                if (removes) out += declarationAt(name, a.start)
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
                     out += declarationAt(name, a.start)
                     // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.

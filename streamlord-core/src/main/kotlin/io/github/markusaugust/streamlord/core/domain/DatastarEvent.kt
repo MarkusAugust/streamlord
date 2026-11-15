@@ -76,14 +76,7 @@ public data class PatchElements(
         selector?.let { Wire.selector(it) }
         viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
         if (selector == null) EventRules.modeWithoutSelector(mode)?.let { throw DatastarEventValidationException(it) }
-        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
-        // An inner patch of nothing empties its target, the one way to clear a container.
-        val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
-        if (mode != ElementPatchMode.REMOVE && empty) {
-            throw DatastarEventValidationException(
-                EventRules.missingElements(mode, response = false)!!,
-            )
-        }
+        EventRules.elements(elements, mode, selector, namespace, response = false)?.let { throw DatastarEventValidationException(it) }
     }
 
     public companion object {
@@ -156,10 +149,12 @@ public data class PatchSignals(
             vararg names: String,
             eventId: String? = null,
             retry: Duration? = null,
-        ): PatchSignals {
-            val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
-            return PatchSignals(JsonWriter.write(SignalNames.nested(removed.map { it to null })), eventId = eventId, retry = retry)
-        }
+        ): PatchSignals =
+            PatchSignals(
+                JsonWriter.write(SignalNames.nested(removedNames(names.asList()).map { it to null })),
+                eventId = eventId,
+                retry = retry,
+            )
     }
 }
 
@@ -190,12 +185,7 @@ public data class ExecuteScript(
     init {
         validateCommon(eventId, retry)
         EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
-        attributes.keys.forEach(Wire::attributeName)
-        if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
-            throw DatastarEventValidationException(
-                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false",
-            )
-        }
+        for (name in attributes.keys) EventRules.scriptAttributeName(name, autoRemove)?.let { throw DatastarEventValidationException(it) }
     }
 
     /** The script element exactly as it is sent to the browser. */
@@ -264,3 +254,6 @@ internal fun DatastarEvent.withEventId(id: String?): DatastarEvent =
         is PatchSignals -> copy(eventId = id)
         is ExecuteScript -> copy(eventId = id)
     }
+
+/** The names a removal of [names] removes: each once, and none under another name it removes. */
+internal fun removedNames(names: List<String>): List<String> = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }

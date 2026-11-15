@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import kotlin.time.Duration
 
 /**
@@ -32,26 +33,62 @@ public object EventRules {
 
     public fun redirect(url: String): String? = refusal { ExecuteScript.redirect(url) }
 
+    /**
+     * Why each of [names], removed together, is refused as `removeSignals` and `PatchSignals.remove`
+     * take them, or null for one taken: a name under another one removed is left out, and taken.
+     */
+    public fun removedSignals(names: List<String>): List<String?> {
+        val removed = removedNames(names).toSet()
+        return names.map { if (it in removed) refusal { SignalNames.nested(listOf(it to null)) } else null }
+    }
+
+    /**
+     * An attribute of a script's element named [name]: one HTML can name, and not [effect], the
+     * attribute that removes a script sent with [autoRemove], which the browser would drop for the
+     * caller's own.
+     */
+    public fun scriptAttributeName(
+        name: String,
+        autoRemove: Boolean,
+        effect: String = DatastarAttributes.name("effect"),
+    ): String? =
+        refusal { Wire.attributeName(name) }
+            ?: if (autoRemove && name.equals(effect, ignoreCase = true)) {
+                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false"
+            } else {
+                null
+            }
+
+    /** The value of an attribute of the script an answer that is no stream sends, in a header of one line. */
+    public fun scriptAttributeValue(value: String): String? = refusal { Wire.singleLine(value, "script attribute") }
+
     /** Why a patch in [mode] without a selector is refused, or null where the mode needs none. */
     public fun modeWithoutSelector(mode: ElementPatchMode): String? =
         if (mode.requiresSelector) "Patch mode '${mode.wire}' requires a selector" else null
 
     /**
      * Why [html] is refused as the elements of a patch in [mode] with [selector], by an event or, with
-     * [response], by an answer that is no stream: where core reads it as no elements at all.
+     * [response], by an answer that is no stream: where core reads it as no elements at all, or, in
+     * [namespace] where it is known, as SVG or MathML outside its root or HTML that closes the root
+     * of a patch in the svg or mathml namespace.
      */
     public fun elements(
-        html: String,
+        html: String?,
         mode: ElementPatchMode,
         selector: String?,
+        namespace: ElementNamespace?,
         response: Boolean,
-    ): String? = if (mode == ElementPatchMode.INNER || !Wire.noElements(html, mode, selector)) null else missingElements(mode, response)
+    ): String? {
+        // An inner patch of nothing empties its target, the one way to clear a container.
+        val none = if (mode == ElementPatchMode.INNER) html == null else Wire.noElements(html, mode, selector)
+        return (if (none) missingElements(mode, response) else null) ?: namespace?.let { PatchMarkup.problem(html, selector, mode, it) }
+    }
 
     /**
      * Why a patch in [mode] with no elements is refused, by an event or, with [response], by an answer
      * that is no stream; null in `remove`, and in an answer's `inner`, which empties its target.
      */
-    internal fun missingElements(
+    private fun missingElements(
         mode: ElementPatchMode,
         response: Boolean,
     ): String? =

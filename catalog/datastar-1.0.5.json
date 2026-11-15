@@ -559,7 +559,7 @@
     "dataLines": ["selector", "mode", "namespace", "useViewTransition", "viewTransitionSelector", "elements", "signals", "onlyIfMissing"]
   },
   "kotlinCallSites": {
-    "$comment": "Which Streamlord DSL functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. more: the parameters after it that take an expression too, each by its place or its name. oneValue: the function writes each expression in parentheses, as one value. Used by the editor to know where to validate and complete.",
+    "$comment": "Which Streamlord functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. more: the parameters after it that take an expression too, each by its place or its name. oneValue: the function writes each expression in parentheses, as one value. Used by the editor to know where to validate and complete.",
     "expression": {
       "dataOn": { "arg": 1, "named": "expression" }, "dataOnClick": { "arg": 0, "named": "expression" }, "dataOnSubmit": { "arg": 0, "named": "expression" }, "dataOnChange": { "arg": 0, "named": "expression" },
       "dataOnInput": { "arg": 0, "named": "expression" }, "dataOnKeydown": { "arg": 0, "named": "expression" }, "dataOnFetch": { "arg": 0, "named": "expression" },
@@ -582,26 +582,34 @@
       "contentTypeExpr": {}, "selectorExpr": {}, "openWhenHiddenExpr": {}, "retryExpr": {}, "retryIntervalExpr": {},
       "retryScalerExpr": {}, "retryMaxWaitExpr": {}, "retryMaxCountExpr": {}
     },
-    "html": {
-      "patchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
-      "respondElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
-      "PatchElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
-      "ElementsResponse": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" },
-      "datastarElements": { "arg": 0, "named": "elements", "selectorArg": "selector", "modeArg": "mode" }
-    },
-    "script": {
-      "executeScript": { "arg": 0, "named": "script" }, "ExecuteScript": { "arg": 0, "named": "script" }, "respondScript": { "arg": 0, "named": "script" }, "datastarScript": { "arg": 0, "named": "script" }
-    },
-    "selector": {
-      "removeElements": { "arg": 0, "named": "selector" }
+    "events": {
+      "$comment": "Core's SSE calls and its answers that are no stream, Ktor's and Spring's among them, by the name a call writes, a companion's function as Class.function: every one of the public API, which EventCallsJvmTest holds. takes: the first argument, which core judges as it runs: elements (then selector and mode follow it), selector, signals, signalNames, script or url; none where core judges nothing. stream: it also takes eventId and retry. response: an answer that is no stream, whose selector goes in a header. names: its pairs name signals, which a $ then reads. json: it takes the signals as JSON text. value: it takes any value the codec encodes.",
+      "patchElements": { "takes": "elements", "stream": true },
+      "PatchElements": { "takes": "elements", "stream": true },
+      "respondElements": { "takes": "elements", "response": true },
+      "ElementsResponse": { "takes": "elements", "response": true },
+      "datastarElements": { "takes": "elements", "response": true },
+      "removeElements": { "takes": "selector", "stream": true },
+      "PatchElements.remove": { "takes": "selector", "stream": true },
+      "patchSignals": { "takes": "signals", "stream": true, "names": true, "json": true, "value": true },
+      "PatchSignals": { "takes": "signals", "stream": true, "json": true },
+      "respondSignals": { "takes": "signals", "response": true, "json": true, "value": true },
+      "SignalsResponse": { "takes": "signals", "response": true, "json": true },
+      "datastarSignals": { "takes": "signals", "response": true, "json": true, "value": true },
+      "removeSignals": { "takes": "signalNames", "stream": true },
+      "PatchSignals.remove": { "takes": "signalNames", "stream": true },
+      "executeScript": { "takes": "script", "stream": true },
+      "ExecuteScript": { "takes": "script", "stream": true },
+      "respondScript": { "takes": "script", "response": true },
+      "ScriptResponse": { "takes": "script", "response": true },
+      "datastarScript": { "takes": "script", "response": true },
+      "redirect": { "takes": "url" },
+      "ExecuteScript.redirect": { "takes": "url" },
+      "replaceUrl": {}, "ExecuteScript.replaceUrl": {}, "pushUrl": {}, "ExecuteScript.pushUrl": {}
     },
     "signals": {
-      "$comment": "The calls whose arguments are signals by name, as pairs or names. names: the pair keys are signal names written in code, which a $ then reads. json: the call also takes the signals as JSON text.",
-      "dataSignals": { "names": true },
-      "patchSignals": { "names": true, "json": true },
-      "removeSignals": {},
-      "respondSignals": { "json": true },
-      "datastarSignals": { "json": true }
+      "$comment": "The DSL's calls whose arguments are signals by name, as pairs or names; core's are among the events. names: the pair keys are signal names written in code, which a $ then reads. json: the call also takes the signals as JSON text.",
+      "dataSignals": { "names": true }
     },
     "signalNames": {
       "$comment": "The expression helpers, whose first argument is a signal name written as JavaScript. reads: the helper reads the signal. shared: other APIs use the name in the same scope, so a call counts only inside a DSL call.",

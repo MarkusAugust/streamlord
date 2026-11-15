@@ -120,6 +120,46 @@ class InspectionTest : StreamlordTestCase() {
         assertEquals(1, myFixture.doHighlighting().count { it.description?.contains("has no id") == true })
     }
 
+    // In core's words, the arguments the analysis holds to core; Ktor is not on this project's classpath.
+    fun `test what core refuses in an SSE call is shown, and a look-alike's call is not`() {
+        myFixture.configureByText(
+            "Sse.kt",
+            """
+            import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+            import io.github.markusaugust.streamlord.core.domain.PatchElements
+            import io.github.markusaugust.streamlord.core.domain.PatchSignals
+            import io.github.markusaugust.streamlord.core.domain.ScriptResponse
+            import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
+            class Other { fun removeElements(s: String) = s }
+            suspend fun DatastarStream.f(o: Other) {
+                executeScript("x()", attributes = mapOf("bad name" to "v"))
+                executeScript("x()", attributes = mapOf("data-effect" to "y()"))
+                send(PatchElements.remove(""))
+                send(PatchSignals.remove("first-name"))
+                patchElements("<circle id=\"c\"/>", selector = "#sky", mode = ElementPatchMode.APPEND)
+                val answer = ScriptResponse("x()", attributes = mapOf("type" to "a\nb"))
+                o.removeElements("")
+            }
+            """.trimIndent(),
+        )
+        val shown =
+            myFixture
+                .doHighlighting()
+                .filter { it.description?.let { d -> "throws:" in d || "holds no hyphen" in d } == true }
+                .map { it.text to it.description!!.substringBefore(":") }
+        assertEquals(
+            listOf(
+                "\"bad name\"" to "executeScript throws",
+                "\"data-effect\"" to "executeScript throws",
+                "\"\"" to "PatchElements.remove throws",
+                "\"first-name\"" to "A signal name holds no hyphen",
+                "\"<circle id=\\\"c\\\"/>\"" to "patchElements throws",
+                "\"a\\nb\"" to "ScriptResponse throws",
+            ),
+            shown,
+        )
+    }
+
     // The official Datastar SDK's patchElements is not Streamlord's: its HTML is judged as any HTML string, not as a patch.
     fun `test html handed to the official sdk is judged as a free string`() {
         myFixture.addFileToProject(

@@ -42,7 +42,7 @@ private val PAIR_NAMING =
         .keys
 
 /** Every call this check reads. */
-internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
+internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + removalCallNames
 
 private val OBJECT_START = regex("""^\s*[{\[]""")
 
@@ -93,11 +93,8 @@ internal fun signalNameHyphenIssues(
         if (s != null && hyphenIsTheReason(s)) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
-    if (site.name == "removeSignals") {
-        for (a in positional) {
-            val s = a.string ?: continue
-            if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
-        }
+    if (site.name in removalCallNames) {
+        for ((s, _) in removalRefusals(site)) if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
     if (site.name in PAIR_NAMING) {
@@ -239,6 +236,9 @@ internal fun signalNameHyphenSites(
 ): List<Pair<CallSite, List<Issue>>> {
     val out = ArrayList<Pair<CallSite, List<Issue>>>()
     collectHyphenSites(src, lex, helpers, dslCalls, foreign, enclosed = false, shift = 0, depth = 0, out = out)
+    // A removal by a name others use too, `remove`, or on a class of the file's own, is not core's.
+    val core = EventCalls(src)
+    out.removeAll { (site, _) -> site.name in removalCallNames && !(core.named(site) && removesSignals(src, site)) }
     return out.sortedBy { it.first.nameStart }
 }
 

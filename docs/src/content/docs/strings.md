@@ -116,7 +116,7 @@ What happens to a value is decided by where it landed, not by where it came from
 |---|---|
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
-| A URL attribute: `href`, `src`, `action`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every placeholder filled, is relative, `http`, `https`, `mailto` or `tel` |
+| A URL attribute: `href`, `src`, `action`, `formaction`, `xlink:href`, `poster`, `cite`, `background`, `ping`, `manifest`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every placeholder filled, is relative, `http`, `https`, `mailto` or `tel` |
 | A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the placeholder already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
 | The `content` of a `<meta>` that starts with a time, as `http-equiv="refresh"` reads it | Escaped, and the URL after `url=` **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |

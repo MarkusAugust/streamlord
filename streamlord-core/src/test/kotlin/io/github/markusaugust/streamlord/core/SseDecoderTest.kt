@@ -78,6 +78,29 @@ class SseDecoderTest {
         }
     }
 
+    // Measured against the 1.0.5 client: [1,2] is stored as the signals 0 and 1, and a selector over
+    // two data lines is joined with a line break, which as CSS is a descendant selector.
+    @Test
+    fun `a frame the client acts on but no event can hold is reported for what the stream said`() {
+        val array =
+            assertFailsWith<DatastarEventValidationException> {
+                SseDecoder.decode("event: datastar-patch-signals\ndata: signals [1,2]\n\n")
+            }
+        assertEquals(
+            "Signals that are an array and no JSON object: the client patches its items as signals named 0, 1 and on. The stream sent [1,2]",
+            array.message,
+        )
+        val twoLines =
+            assertFailsWith<DatastarEventValidationException> {
+                SseDecoder.decode("event: datastar-patch-elements\ndata: selector #wrap\ndata: selector #target\ndata: elements z\n\n")
+            }
+        assertEquals(
+            "A selector over 2 data lines, which the client joins with a line break: '#wrap\\n#target'. " +
+                "A PatchElements holds a selector of one line; write it on one",
+            twoLines.message,
+        )
+    }
+
     @Test
     fun `a malformed frame is reported rather than dropped`() {
         assertFailsWith<DatastarEventValidationException> {

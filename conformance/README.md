@@ -157,12 +157,12 @@ header or the SSE text is a red test that names the file.
 One file per case, `wire/<adapter>/<case>.txt`, for the adapters `ktor-cio`, `ktor-netty`,
 `spring-mvc-tomcat` (WebMVC on embedded Tomcat) and `spring-webflux-tomcat` (WebFlux through
 Spring's reactive Tomcat adapter). The same handlers answer on every adapter, so the four files
-of a case read side by side, with three WebFlux exceptions its test states: every WebFlux
+of a case read side by side, with two WebFlux exceptions its test states: every WebFlux
 stream is a flow mapped to Spring's `ServerSentEvent`, which Spring's own writer puts on the wire
 with no space after the field colon and `charset=UTF-8` on the content type, and in
-`stream-sse-fields` with `id:` first and the comment as `:the gate holds`; the `signals-*` cases
-read the request through a test-side `IncomingRequest` over the exchange, since the adapter
-ships none; and `gzip-stream` is plain, since `compress` has no stream to act on there. A
+`stream-sse-fields` with `id:` first and the comment as `:the gate holds`; and `gzip-stream` is
+plain, since `compress` has no stream to act on there. The `signals-*` cases read the request
+with each adapter's own reader, on WebFlux `exchange.readSignalsJson`. A
 chunked body is compared without its chunk boundaries, so how a server splits a stream into
 chunks is not held here.
 

@@ -10,7 +10,7 @@
     {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (2)","src":"dataText(\"\"\"\n  |$a\n\"\"\".trimMargin(\"|\"))","calls":["dataOnClick","dataText"],"sites":[["\n  |__kt__\n"]]},
     {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (3)","src":"dataOnClick(\"x\".trim())","calls":["dataOnClick","dataText"],"sites":[[null]]},
     {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (4)","src":"dataOnClick(\"x\" + y)","calls":["dataOnClick","dataText"],"sites":[[null]]},
-    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (5)","src":"patchElements(\"\"\"<li>x</li>\"\"\".trimIndent(), mode = ElementPatchMode.APPEND)","codes":["mode-needs-selector"]},
+    {"name":"takes a literal followed by trimIndent or trimMargin as the string argument (5)","src":"import io.github.markusaugust.streamlord.core.port.driving.DatastarStream\npatchElements(\"\"\"<li>x</li>\"\"\".trimIndent(), mode = ElementPatchMode.APPEND)","codes":["mode-needs-selector"]},
     {"name":"takes a literal with a comment before or after it as the string argument (1)","src":"dataOnClick(/* why */ \"x\")","calls":["dataOnClick","dataText"],"sites":[["x"]]},
     {"name":"takes a literal with a comment before or after it as the string argument (2)","src":"dataOnClick(\n  // why\n  \"x\",\n)","calls":["dataOnClick","dataText"],"sites":[["x"]]},
     {"name":"takes a literal with a comment before or after it as the string argument (3)","src":"dataText(\"x\" /* after */)","calls":["dataOnClick","dataText"],"sites":[["x"]]},

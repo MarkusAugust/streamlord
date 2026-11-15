@@ -306,7 +306,8 @@ class SpringAdapterTest {
         assertEquals("<li>&lt;b&gt;</li>", built.body)
         assertEquals("#list", built.headers.getFirst("datastar-selector"))
 
-        val sig = datastarSignals(Search("q"), streamlord, onlyIfMissing = true)
+        // The bean goes last, as in datastarElements.
+        val sig = datastarSignals(Search("q"), true, streamlord)
         assertEquals("""{"query":"q","page":1}""", sig.body)
         assertEquals("true", sig.headers.getFirst("datastar-only-if-missing"))
 

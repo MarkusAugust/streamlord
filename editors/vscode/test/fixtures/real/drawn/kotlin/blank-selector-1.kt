@@ -1,3 +1,4 @@
+import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
 
       s.patchElements("""<div>a</div>""")
       s.patchElements("<li>x</li>", mode = ElementPatchMode.APPEND)

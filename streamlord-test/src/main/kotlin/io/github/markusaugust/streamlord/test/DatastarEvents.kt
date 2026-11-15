@@ -1,20 +1,26 @@
 package io.github.markusaugust.streamlord.test
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
@@ -336,6 +342,147 @@ public class DatastarEvents(
  * Read a Datastar response body back into the events it carried.
  *
  * Give it whatever your test host hands you: `client.get("/feed").bodyAsText()` on Ktor,
- * `response.contentAsString` on Spring's `MockHttpServletResponse`.
+ * `response.contentAsString` on Spring's `MockHttpServletResponse`. For an answer that is no
+ * stream, hand over its headers as well, to the other `datastarEvents`.
  */
 public fun datastarEvents(wire: String): DatastarEvents = DatastarEvents(SseDecoder.decode(wire), SseDecoder.messages(wire))
+
+/**
+ * Read any Datastar answer back into the events it carried, a stream or one that is no stream, by
+ * its content type, as Datastar's client reads it. [header] looks a response header up by its
+ * name, without regard to case: `response.headers::get` on Ktor, `response::getHeader` on Spring's
+ * `MockHttpServletResponse`.
+ *
+ * ```kotlin
+ * val response = client.get("/search")
+ * datastarEvents(response.bodyAsText(), response.headers::get).assertPatchElements(selector = "#results")
+ * ```
+ *
+ * `text/html` is one element patch, with the selector, mode, namespace and view transition the
+ * `datastar-*` headers give it, `application/json` one signal patch, with `datastar-only-if-missing`,
+ * and `text/javascript` the `<script>` the client appends to the head, with the attributes of
+ * `datastar-script-attributes`, which comes back as the element patch that does that, as a script
+ * on a stream comes back as the one that appends it to the body. The client finds each type
+ * anywhere in the `Content-Type`, in the case written there, and reads any other answer as a
+ * stream, as [datastarEvents] of the body does; a header with no value is no option. It acts on a
+ * `200` alone, which is the test's to check.
+ *
+ * @throws io.github.markusaugust.streamlord.core.DatastarEventValidationException for an answer the
+ *   client would reject, as [datastarEvents] of a stream does.
+ */
+public fun datastarEvents(
+    body: String,
+    header: (name: String) -> String?,
+): DatastarEvents {
+    val type = header("Content-Type").orEmpty()
+
+    // The data lines a stream would carry for what the headers say, as the client gathers them.
+    fun answer(
+        event: String,
+        content: String,
+        vararg options: Pair<String, String>,
+    ): DatastarEvents {
+        val data = options.mapNotNull { (line, name) -> header(name)?.takeIf { it.isNotEmpty() }?.let { "$line $it" } } + "$content $body"
+        return DatastarEvents(listOfNotNull(SseDecoder.event(SseMessage(event, null, null, data, emptyList()))), emptyList())
+    }
+    return when {
+        "text/html" in type -> {
+            answer(
+                DatastarProtocol.Events.PATCH_ELEMENTS,
+                DataLines.ELEMENTS,
+                DataLines.SELECTOR to DatastarProtocol.Headers.SELECTOR,
+                DataLines.MODE to DatastarProtocol.Headers.MODE,
+                DataLines.NAMESPACE to DatastarProtocol.Headers.NAMESPACE,
+                DataLines.USE_VIEW_TRANSITION to DatastarProtocol.Headers.USE_VIEW_TRANSITION,
+                DataLines.VIEW_TRANSITION_SELECTOR to DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR,
+            )
+        }
+
+        "application/json" in type -> {
+            answer(
+                DatastarProtocol.Events.PATCH_SIGNALS,
+                DataLines.SIGNALS,
+                DataLines.ONLY_IF_MISSING to DatastarProtocol.Headers.ONLY_IF_MISSING,
+            )
+        }
+
+        "text/javascript" in type -> {
+            val header = header(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES)?.takeIf { it.isNotEmpty() }
+            // The client runs nothing for a script of white space alone, and nothing at all when its header throws.
+            if (body.isBlank()) return DatastarEvents(emptyList(), emptyList())
+            val script = ExecuteScript(body, autoRemove = false, attributes = header?.let(::scriptAttributes).orEmpty())
+            DatastarEvents(listOf(PatchElements(script.scriptTag, selector = "head", mode = ElementPatchMode.APPEND)), emptyList())
+        }
+
+        else -> {
+            datastarEvents(body)
+        }
+    }
+}
+
+/**
+ * The attributes the client sets on a script from [header]: each entry `Object.entries` finds in
+ * what `JSON.parse` gives, a name in ASCII lower case, as `setAttribute` makes it on an HTML element, and a value
+ * made the string JavaScript's `String()` makes of it. A number or a boolean has none; anything
+ * else throws in the client, and the script is not run.
+ */
+private fun scriptAttributes(header: String): Map<String, String> {
+    fun refused(): Nothing =
+        throw DatastarEventValidationException("datastar-script-attributes throws in the client, which runs no script: $header")
+    val parsed =
+        try {
+            JsonParser.parse(header)
+        } catch (_: JsonParseException) {
+            refused()
+        }
+    return when (parsed) {
+        is JsonObject -> {
+            parsed.entries.associate { (name, value) ->
+                name.map { if (it in 'A'..'Z') it + 32 else it }.joinToString("") to
+                    jsString(value)
+            }
+        }
+
+        is JsonNumber, is JsonBoolean -> {
+            emptyMap()
+        }
+
+        is JsonArray -> {
+            if (parsed.isEmpty()) emptyMap() else refused()
+        }
+
+        is JsonString -> {
+            if (parsed.value.isEmpty()) emptyMap() else refused()
+        }
+
+        is JsonNull -> {
+            refused()
+        }
+    }
+}
+
+/** What JavaScript's `String()` makes of [value]: an array joined by commas, with null as nothing, an object `[object Object]`. */
+private fun jsString(value: JsonValue): String =
+    when (value) {
+        is JsonString -> value.value
+        is JsonNumber -> jsNumber(value.toDouble())
+        is JsonBoolean -> value.value.toString()
+        is JsonNull -> "null"
+        is JsonArray -> value.joinToString(",") { if (it is JsonNull) "" else jsString(it) }
+        is JsonObject -> "[object Object]"
+    }
+
+/** A number as JavaScript writes it: `1.5`, `100`, `1e-7`, `1e+21`. */
+private fun jsNumber(d: Double): String {
+    if (d == kotlin.math.floor(d) && kotlin.math.abs(d) < 1e21) return java.math.BigDecimal(d).toPlainString()
+    if (kotlin.math.abs(d) >= 1e-6 &&
+        kotlin.math.abs(d) < 1e21
+    ) {
+        return java.math
+            .BigDecimal(d.toString())
+            .stripTrailingZeros()
+            .toPlainString()
+    }
+    val (mantissa, exponent) = d.toString().split('E')
+    return mantissa.removeSuffix(".0") + "e" + (if (exponent.startsWith('-')) "" else "+") + exponent
+}

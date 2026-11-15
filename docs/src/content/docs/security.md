@@ -22,6 +22,10 @@ after `<!--`, which would keep the element open past its end tag. It HTML-escape
 the official SDKs do, and refuses a URL with a scheme that does more than navigate, such as
 `javascript:`, with `IllegalArgumentException`: only a relative URL or an `http`, `https`,
 `mailto` or `tel` one is followed. `replaceUrl()` and `pushUrl()` quote it the same way.
+Relative is not the same as on your site: `//evil.example/x`, and `/\evil.example/x`, which the
+browser reads as the same, are relative and lead to another host, as `https://evil.example/` does.
+A URL taken from the request, a `returnTo` or a `next`, is yours to check against the paths you
+mean to send people to before you redirect to it.
 
 ## JavaScript-safe JSON
 
