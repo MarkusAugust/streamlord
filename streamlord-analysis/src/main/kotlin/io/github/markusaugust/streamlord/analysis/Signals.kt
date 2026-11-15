@@ -109,12 +109,7 @@ private val ASSIGNED_SIGNAL =
 private val BARE_SIGNAL = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)""")
 
 /** The calls whose pairs and names declare signals, by the name they are written with: a companion's `remove` too. */
-private val PAIR_CALLS =
-    Catalog.default.signalCalls.keys +
-        Catalog.default.eventCalls
-            .filterValues { it.takes == "signalNames" }
-            .keys
-            .map { it.substringAfterLast('.') }
+private val PAIR_CALLS = Catalog.default.signalCalls.keys + removalCallNames
 
 /** Whether the call whose name starts at [at] is made on a receiver: a `.` before it, past whitespace and line comments. */
 private fun onReceiver(
@@ -616,7 +611,7 @@ private fun declared(
         val lex = given ?: lexKotlin(src)
         for (site in findCallSites(src, PAIR_CALLS, lex)) {
             if (foreign(site.name, site.nameStart)) continue
-            val removes = eventCallName(src, site)?.let(::eventCallTakes) == "signalNames"
+            val removes = removesSignals(src, site)
             // A companion's removal is called by a name others use, `names.remove(...)`.
             if (site.name !in Catalog.default.signalCalls && !removes) continue
             val positional = site.positional

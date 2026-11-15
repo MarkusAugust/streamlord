@@ -346,9 +346,10 @@ public class Analyzer(
             val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated, eventCalls) }
             html?.let { issues += it.issues }
             // An answer sends its script as it is, and the client sets it as the element's text: only a stream escapes a script end.
-            catalog.scriptCallSites[site.name]?.takeIf { catalog.eventCalls[site.name]?.response != true }?.let {
-                issues +=
-                    checkScriptSite(site, it)
+            if (catalog.eventCalls[site.name]?.response !=
+                true
+            ) {
+                catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             }
             if (site.name in eventCallNames &&
                 site.name !in htmlSiteNames
@@ -2394,25 +2395,25 @@ public class Analyzer(
         val selector = selectorArg?.text?.takeIf { it != "null" }
         val modeArg = argument("mode", 2)
         val mode =
-            modeArg?.let(::constantName)?.lowercase()?.let {
-                if (it ==
-                    "default"
-                ) {
-                    "outer"
-                } else {
-                    it.takeIf { m -> m in catalog.patchModes }
-                }
-            }
+            modeArg
+                ?.let(::constantName)
+                ?.lowercase()
+                ?.let {
+                    if (it ==
+                        "default"
+                    ) {
+                        "outer"
+                    } else {
+                        it
+                    }
+                }?.takeIf { it in catalog.patchModes }
         val view = s?.let { markupView(src, it) } ?: ""
         val judged = s?.let { judgeHoles(it, src, opts, view) }
         val issues = ArrayList(judged?.issues.orEmpty())
         val modeKnown = if (modeArg == null) ElementPatchMode.DEFAULT else mode?.let { ElementPatchMode.fromWire(it) }
         // A mode without a selector is judged on a receiver of any name, as it always was.
-        val needsSelector =
-            modeKnown
-                ?.takeIf {
-                    eventCalls.named(site) && modeArg != null && selector == null
-                }?.let { modeWithoutSelector(site, eventCalls, it) }
+        val unselected = modeArg != null && selector == null && eventCalls.named(site)
+        val needsSelector = modeKnown?.takeIf { unselected }?.let { modeWithoutSelector(site, eventCalls, it) }
         if (modeArg != null && needsSelector != null) {
             val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
@@ -2431,19 +2432,14 @@ public class Analyzer(
         if (s != null && modeKnown != null && eventCalls.ours(site)) {
             // A namespace the code computes is not known here.
             val namespaceArg = argument("namespace", 3)
+            val named = namespaceArg?.let(::constantName)?.let { n -> if (n == "DEFAULT") ElementNamespace.DEFAULT.name else n }
             val namespace =
-                if (namespaceArg == null) {
+                if (namespaceArg ==
+                    null
+                ) {
                     ElementNamespace.DEFAULT
                 } else {
-                    constantName(namespaceArg)?.let { n ->
-                        if (n ==
-                            "DEFAULT"
-                        ) {
-                            ElementNamespace.DEFAULT
-                        } else {
-                            ElementNamespace.entries.firstOrNull { it.name == n }
-                        }
-                    }
+                    ElementNamespace.entries.firstOrNull { it.name == named }
                 }
             elementsIssue(site, eventCalls, s, modeKnown, selectorArg, namespace)?.let { issues += it }
         }

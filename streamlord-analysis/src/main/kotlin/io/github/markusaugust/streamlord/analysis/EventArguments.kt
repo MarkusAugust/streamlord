@@ -132,18 +132,9 @@ internal fun eventArgumentIssues(
             val autoRemove = !call.response && (removes == null || removes.text.trim() == "true")
             val attributes = site.named("attributes") ?: site.positional.getOrNull(if (call.response) 1 else 2)
             val at = attributes?.start ?: 0
+            val effect = prefix + "effect"
             for (pair in attributes?.let { literalPairs(it.text) }.orEmpty()) {
-                plain(pair.key)?.let {
-                    refused(
-                        at + it.start,
-                        at + it.end,
-                        EventRules.scriptAttributeName(
-                            it.text,
-                            autoRemove,
-                            prefix + "effect",
-                        ),
-                    )
-                }
+                plain(pair.key)?.let { refused(at + it.start, at + it.end, EventRules.scriptAttributeName(it.text, autoRemove, effect)) }
                 if (call.response) plain(pair.value)?.let { refused(at + it.start, at + it.end, EventRules.scriptAttributeValue(it.text)) }
             }
         }
@@ -188,9 +179,6 @@ internal fun modeWithoutSelector(
     mode: ElementPatchMode,
 ): String? = EventRules.modeWithoutSelector(mode)?.let { "${calls.nameOf(site) ?: site.name} throws: $it." }
 
-/** The receiver, besides a stream and a companion, whose calls are Streamlord's on any file that imports it. */
-private const val THIS = "this"
-
 /** A receiver named as a stream is: `sse`, `stream`, `datastarStream`. */
 private val STREAM_RECEIVER = regex("""(?i)sse|stream|datastar""")
 private val RECEIVER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*$""")
@@ -218,8 +206,20 @@ internal fun eventCallName(
     return qualified?.takeIf { it in EVENT_CALLS } ?: site.name.takeIf { it in EVENT_CALLS }
 }
 
-/** What core's call [name] takes first, as the catalog says. */
-internal fun eventCallTakes(name: String): String? = EVENT_CALLS[name]?.takes
+/** The names core's removals of signals are written with: `removeSignals`, and the companion's `remove`. */
+internal val removalCallNames: Set<String> =
+    EVENT_CALLS
+        .filter {
+            it.value.takes == "signalNames"
+        }.keys
+        .map { it.substringAfterLast('.') }
+        .toSet()
+
+/** Whether [site] in [src] is, by its name and receiver, core's removal of signals. */
+internal fun removesSignals(
+    src: String,
+    site: CallSite,
+): Boolean = eventCallName(src, site)?.let { EVENT_CALLS[it]?.takes } == "signalNames"
 
 /**
  * Which calls of [src] are Streamlord's SSE calls and answers, read once for the file. A call may be
@@ -268,7 +268,7 @@ internal class EventCalls(
         if (!named(site)) return false
         if ('.' in nameOf(site)!!) return true
         val receiver = receiver(src, site) ?: return false
-        return receiver.isEmpty() || receiver == THIS || STREAM_RECEIVER.containsMatchIn(receiver) ||
+        return receiver.isEmpty() || receiver == "this" || STREAM_RECEIVER.containsMatchIn(receiver) ||
             (receiver == "call" && site.name.startsWith("respond"))
     }
 }
