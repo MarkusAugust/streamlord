@@ -26,12 +26,13 @@ object DatastarColors {
     ) = TextAttributesKey.createTextAttributesKey("STREAMLORD_$name", fallback)
 
     /**
-     * HTML's attribute name, XmlHighlighterColors.HTML_ATTRIBUTE_NAME, found by its name: a key is
-     * one by its name, and XmlHighlighterColors gives it its fallback when the XML module loads it,
-     * before any HTML is painted. The plugin verifier cannot see the XML module of 2026.3, where the
-     * class is there at run time, and reports a reference to it as a missing class.
+     * HTML's attribute name, XmlHighlighterColors.HTML_ATTRIBUTE_NAME, made by its name with the
+     * fallback the platform gives it: a key is one by its name, whichever of the two makes it first.
+     * The plugin verifier cannot see the XML module of 2026.3, where the class is there at run time,
+     * and reports a reference to it as a missing class.
      */
-    private val HTML_ATTRIBUTE_NAME = TextAttributesKey.createTextAttributesKey("HTML_ATTRIBUTE_NAME")
+    private val HTML_ATTRIBUTE_NAME =
+        TextAttributesKey.createTextAttributesKey("HTML_ATTRIBUTE_NAME", DefaultLanguageHighlighterColors.MARKUP_ATTRIBUTE)
     val SIGNAL: TextAttributesKey = key("SIGNAL", DefaultLanguageHighlighterColors.STATIC_FIELD)
     val SIGNAL_PATH: TextAttributesKey = key("SIGNAL_PATH", DefaultLanguageHighlighterColors.INSTANCE_FIELD)
     val ACTION_BACKEND: TextAttributesKey = key("ACTION_BACKEND", DefaultLanguageHighlighterColors.KEYWORD)
