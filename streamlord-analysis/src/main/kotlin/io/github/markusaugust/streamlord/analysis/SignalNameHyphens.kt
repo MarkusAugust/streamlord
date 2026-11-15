@@ -94,10 +94,7 @@ internal fun signalNameHyphenIssues(
     }
 
     if (site.name in removalCallNames) {
-        for (a in positional) {
-            val s = a.string ?: continue
-            if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
-        }
+        for ((s, _) in removalRefusals(site)) if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
     if (site.name in PAIR_NAMING) {

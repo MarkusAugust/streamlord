@@ -33,8 +33,14 @@ public object EventRules {
 
     public fun redirect(url: String): String? = refusal { ExecuteScript.redirect(url) }
 
-    /** A signal named to be removed, as `removeSignals` and `PatchSignals.remove` take it. */
-    public fun removedSignal(name: String): String? = refusal { PatchSignals.remove(name) }
+    /**
+     * Why each of [names], removed together, is refused as `removeSignals` and `PatchSignals.remove`
+     * take them, or null for one taken: a name under another one removed is left out, and taken.
+     */
+    public fun removedSignals(names: List<String>): List<String?> {
+        val removed = removedNames(names).toSet()
+        return names.map { if (it in removed) refusal { SignalNames.nested(listOf(it to null)) } else null }
+    }
 
     /**
      * An attribute of a script's element named [name]: one HTML can name, and not [effect], the

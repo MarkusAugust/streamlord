@@ -149,10 +149,12 @@ public data class PatchSignals(
             vararg names: String,
             eventId: String? = null,
             retry: Duration? = null,
-        ): PatchSignals {
-            val removed = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }
-            return PatchSignals(JsonWriter.write(SignalNames.nested(removed.map { it to null })), eventId = eventId, retry = retry)
-        }
+        ): PatchSignals =
+            PatchSignals(
+                JsonWriter.write(SignalNames.nested(removedNames(names.asList()).map { it to null })),
+                eventId = eventId,
+                retry = retry,
+            )
     }
 }
 
@@ -252,3 +254,6 @@ internal fun DatastarEvent.withEventId(id: String?): DatastarEvent =
         is PatchSignals -> copy(eventId = id)
         is ExecuteScript -> copy(eventId = id)
     }
+
+/** The names a removal of [names] removes: each once, and none under another name it removes. */
+internal fun removedNames(names: List<String>): List<String> = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }

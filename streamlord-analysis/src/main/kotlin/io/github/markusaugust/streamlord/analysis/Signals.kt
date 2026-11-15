@@ -252,7 +252,7 @@ private fun encodedType(
     return declarations.typeOf(id, at)?.takeIf { it in setOf("JsonValue", "JsonObject") }?.let { ANY_SIGNAL }
 }
 
-private val TYPED = regex("""\b([a-z_][A-Za-z0-9_]*)\s*:\s*([A-Z][A-Za-z0-9_]*)""")
+private val TYPED = regex("""\b([a-z_][A-Za-z0-9_]*)\s*:\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)""")
 private val BUILT = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*=\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*\(""")
 private val INITIALISED = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*(?::[^=\n]*)?=\s*([^\n;]+)""")
 
@@ -260,7 +260,7 @@ private val INITIALISED = regex("""\b(?:val|var)\s+([a-z_][A-Za-z0-9_]*)\s*(?::[
  * The variables [src] declares, by name, each with where the declaration ends: read once for a
  * file, and asked what a name was last declared as before an offset, at every `dataSignals` call.
  */
-private class Declarations(
+internal class Declarations(
     private val src: String,
 ) {
     private val typed = byName(TYPED.findAll(src))

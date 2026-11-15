@@ -475,7 +475,14 @@ private fun jsString(value: JsonValue): String =
 /** A number as JavaScript writes it: `1.5`, `100`, `1e-7`, `1e+21`. */
 private fun jsNumber(d: Double): String {
     if (d == kotlin.math.floor(d) && kotlin.math.abs(d) < 1e21) return java.math.BigDecimal(d).toPlainString()
-    if (kotlin.math.abs(d) >= 1e-6 && kotlin.math.abs(d) < 1e21) return java.math.BigDecimal(d.toString()).toPlainString()
+    if (kotlin.math.abs(d) >= 1e-6 &&
+        kotlin.math.abs(d) < 1e21
+    ) {
+        return java.math
+            .BigDecimal(d.toString())
+            .stripTrailingZeros()
+            .toPlainString()
+    }
     val (mantissa, exponent) = d.toString().split('E')
     return mantissa.removeSuffix(".0") + "e" + (if (exponent.startsWith('-')) "" else "+") + exponent
 }

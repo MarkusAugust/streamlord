@@ -322,7 +322,7 @@ public final class io/github/markusaugust/streamlord/core/domain/EventRules {
 	public final fun headerSelector (Ljava/lang/String;)Ljava/lang/String;
 	public final fun modeWithoutSelector (Lio/github/markusaugust/streamlord/core/domain/ElementPatchMode;)Ljava/lang/String;
 	public final fun redirect (Ljava/lang/String;)Ljava/lang/String;
-	public final fun removedSignal (Ljava/lang/String;)Ljava/lang/String;
+	public final fun removedSignals (Ljava/util/List;)Ljava/util/List;
 	public final fun retry-LRDsOJo (J)Ljava/lang/String;
 	public final fun script (Ljava/lang/String;)Ljava/lang/String;
 	public final fun scriptAttributeName (Ljava/lang/String;ZLjava/lang/String;)Ljava/lang/String;

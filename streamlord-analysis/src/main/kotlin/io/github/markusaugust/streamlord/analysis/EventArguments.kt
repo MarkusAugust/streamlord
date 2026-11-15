@@ -5,7 +5,6 @@ import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.EventRules
-import io.github.markusaugust.streamlord.core.domain.SignalNames
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -117,11 +116,7 @@ internal fun eventArgumentIssues(
 
         // A hyphen has an issue of its own, with the name to write instead.
         "signalNames" -> {
-            for (a in site.positional) {
-                literal(a)?.takeIf { SignalNames.hyphenProblem(it.text) == null }?.let {
-                    refused(it.start, it.end, EventRules.removedSignal(it.text))
-                }
-            }
+            for ((s, why) in removalRefusals(site)) if ('-' !in s.text) refused(s.start, s.end, why)
         }
 
         "script" -> {
@@ -183,6 +178,14 @@ internal fun modeWithoutSelector(
 private val STREAM_RECEIVER = regex("""(?i)sse|stream|datastar""")
 private val RECEIVER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*$""")
 private const val STREAMLORD = "io.github.markusaugust.streamlord."
+private const val STREAM_TYPE = "DatastarStream"
+
+/** Ktor's call and its routing call, which `respondElements` and the rest extend. */
+private val KTOR_CALLS = setOf("ApplicationCall", "RoutingCall")
+
+/** A class of the file that implements core's stream: `class Recording : DatastarStream`, after its constructor if any. */
+private val STREAM_CLASS =
+    regex("""\b(?:class|object)\s+([A-Z][A-Za-z0-9_]*)(?:\s*\([^()]*(?:\([^()]*\)[^()]*)*\))?\s*:[^{\n]*\b$STREAM_TYPE\b""")
 
 /** The name written before the `.` of [site] in [src], `PatchElements` of `PatchElements.remove(...)`; "" with no `.`, null with no name. */
 private fun receiver(
@@ -215,6 +218,16 @@ internal val removalCallNames: Set<String> =
         .map { it.substringAfterLast('.') }
         .toSet()
 
+/**
+ * The literal names [site], a removal of signals, hands core, each with why core refuses it as it
+ * takes them together: a name under another one removed is left out.
+ */
+@OptIn(InternalStreamlordApi::class)
+internal fun removalRefusals(site: CallSite): List<Pair<KotlinString, String>> {
+    val names = site.positional.mapNotNull { literal(it) }
+    return names.zip(EventRules.removedSignals(names.map { it.text })).mapNotNull { (s, why) -> why?.let { s to it } }
+}
+
 /** Whether [site] in [src] is, by its name and receiver, core's removal of signals. */
 internal fun removesSignals(
     src: String,
@@ -223,10 +236,11 @@ internal fun removesSignals(
 
 /**
  * Which calls of [src] are Streamlord's SSE calls and answers, read once for the file. A call may be
- * ([named]) when the file imports something of Streamlord's and does not declare the name or import
- * it from elsewhere ([shadowsCore]), the companion's name for a companion's function. It is ([ours])
- * when it also has no receiver, or `this`, a receiver named as a stream (`sse`, `stream`,
- * `datastar` in any case), or `call` for Ktor's `respond*`.
+ * ([named]) when the file imports something of Streamlord's, does not declare the name or import it
+ * from elsewhere ([shadowsCore]), the companion's name for a companion's function, and does not
+ * declare the receiver with a type other than a stream's. It is ([ours]) when the receiver is
+ * declared a stream, or the file declares no type of it and it is none, `this`, a receiver named as
+ * a stream (`sse`, `stream`, `datastar` in any case), or `call` for Ktor's `respond*`.
  */
 internal class EventCalls(
     private val src: String,
@@ -250,25 +264,38 @@ internal class EventCalls(
     fun nameOf(site: CallSite): String? = eventCallName(src, site)
 
     /**
-     * Whether [site] may be core's call, on any receiver: the file imports Streamlord and takes the
-     * name from nowhere else, and on a receiver, no class of the file's own has a function of the name.
+     * Whether [site] may be core's call: the file imports Streamlord and takes the name from nowhere
+     * else, and the receiver, where the file declares its type, is a stream.
      */
     fun named(site: CallSite): Boolean {
         if (!streamlord) return false
-        val name = nameOf(site) ?: return false
-        val declared = name.substringBefore('.')
+        val declared = nameOf(site)?.substringBefore('.') ?: return false
         val elsewhere =
             shadowed.getOrPut(declared) {
                 shadowsCore(src, declared) && imports.none { it.startsWith(STREAMLORD) && it.endsWith(".$declared") }
             }
-        val member = '.' !in name && receiver(src, site) != "" && fileFacts(src).functions[name].orEmpty().any { it.owner != null }
-        return !elsewhere && !member
+        return !elsewhere && streamReceiver(site) != false
+    }
+
+    private val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
+
+    /** Core's stream type, and the classes of the file that implement it, a test's fake among them. */
+    private val streamTypes by lazy(LazyThreadSafetyMode.NONE) { setOf(STREAM_TYPE) + STREAM_CLASS.findAll(src).map { it.groupValues[1] } }
+
+    /**
+     * Whether the receiver of [site] is one core's calls are made on, by the type the file declares it
+     * with: a stream, or Ktor's call for its `respond*`; null where the file declares none.
+     */
+    private fun streamReceiver(site: CallSite): Boolean? {
+        val receiver = receiver(src, site)?.takeIf { it.isNotEmpty() && it != "this" } ?: return null
+        val type = declarations.typeOf(receiver, site.nameStart) ?: return null
+        return type in streamTypes || (site.name.startsWith("respond") && type in KTOR_CALLS)
     }
 
     /** Whether [site] is core's call as far as the text shows: [named], and on a receiver that is a stream's or a companion's. */
     fun ours(site: CallSite): Boolean {
         if (!named(site)) return false
-        if ('.' in nameOf(site)!!) return true
+        if ('.' in nameOf(site)!! || streamReceiver(site) == true) return true
         val receiver = receiver(src, site) ?: return false
         return receiver.isEmpty() || receiver == "this" || STREAM_RECEIVER.containsMatchIn(receiver) ||
             (receiver == "call" && site.name.startsWith("respond"))
