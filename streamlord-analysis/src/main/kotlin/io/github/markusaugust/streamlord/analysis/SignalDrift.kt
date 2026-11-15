@@ -259,7 +259,7 @@ private fun matchingParen(
  *   whose names only the codec knows: a class that is not `@Serializable`, or `*` for a value of no
  *   named class. While it is not empty every read counts as declared, and [issues] stays empty.
  */
-internal data class SignalDriftReport(
+public data class SignalDriftReport(
     val issues: Map<String, List<Issue>>,
     val declared: Set<String>,
     val read: Set<String>,
@@ -297,7 +297,7 @@ private const val OWN_FILE = ""
  * other serializable classes are its own business, and a request body that happens to be one is
  * not a signal.
  */
-internal fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
+public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val declared = facts.values.flatMapTo(LinkedHashSet()) { it.declared }
     val read = LinkedHashSet<String>()
 

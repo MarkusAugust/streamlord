@@ -1038,7 +1038,26 @@ public final class io/github/markusaugust/streamlord/analysis/SignalDeclaration$
 
 public final class io/github/markusaugust/streamlord/analysis/SignalDriftKt {
 	public static final fun collectSignalFacts (Lio/github/markusaugust/streamlord/analysis/Source;)Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+	public static final fun signalDrift (Ljava/util/Map;)Lio/github/markusaugust/streamlord/analysis/SignalDriftReport;
 	public static final fun signalDriftIn (Lio/github/markusaugust/streamlord/analysis/SignalFacts;Lkotlin/jvm/functions/Function0;)Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/SignalDriftReport {
+	public fun <init> (Ljava/util/Map;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;)V
+	public synthetic fun <init> (Ljava/util/Map;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Map;
+	public final fun component2 ()Ljava/util/Set;
+	public final fun component3 ()Ljava/util/Set;
+	public final fun component4 ()Ljava/util/Set;
+	public final fun copy (Ljava/util/Map;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;)Lio/github/markusaugust/streamlord/analysis/SignalDriftReport;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/SignalDriftReport;Ljava/util/Map;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/SignalDriftReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeclared ()Ljava/util/Set;
+	public final fun getDeclaredByCodec ()Ljava/util/Set;
+	public final fun getIssues ()Ljava/util/Map;
+	public final fun getRead ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/SignalFacts {
