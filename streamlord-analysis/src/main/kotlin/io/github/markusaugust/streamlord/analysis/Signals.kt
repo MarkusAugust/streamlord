@@ -323,13 +323,44 @@ private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 internal val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
 private val MAP_CALL = regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
-/** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
-private fun argumentKeys(text: String): List<SignalDeclaration> {
-    PAIR.find(text)?.let { return listOf(declarationAt(PAIR.groupAt(text, it, 1)!!, 0)) }
-    if (!MAP_CALL.containsMatchIn(text)) return emptyList()
-    val map = findCallSites(text, MAP_CALLS).firstOrNull() ?: return emptyList()
-    return map.positional.mapNotNull { a -> PAIR.find(a.text)?.let { declarationAt(PAIR.groupAt(a.text, it, 1)!!, a.start) } }
+/** A pair written in place, `"key" to value`: its key, and its value where that is one literal, at their offsets in the text read. */
+internal class LiteralPair(
+    val key: KotlinString,
+    val value: KotlinString?,
+)
+
+private val TO_AFTER = regex("""^\s+to\b\s*""")
+
+/** The pairs of [text]: the pair it is, or each pair of the map it builds in place, `mapOf("k" to v)`; nothing inside a value. */
+internal fun literalPairs(text: String): List<LiteralPair> {
+    val lex = lexKotlin(text)
+
+    fun pair(
+        start: Int,
+        end: Int,
+    ): LiteralPair? {
+        val strings = lex.stringsIn(start, end)
+        val key =
+            strings.firstOrNull()?.takeIf { k -> text.substring(start, k.start).all { it.isWhitespace() || it == '(' } } ?: return null
+        val to = TO_AFTER.find(text.substring(key.end, end)) ?: return null
+        val value =
+            strings.getOrNull(1)?.takeIf { v ->
+                v.start == key.end + to.value.length && text.substring(v.end, end).all { it.isWhitespace() || it == ')' }
+            }
+        return LiteralPair(key, value)
+    }
+    if (!MAP_CALL.containsMatchIn(text)) return listOfNotNull(pair(0, text.length))
+    val map = findCallSites(text, MAP_CALLS, lex).firstOrNull() ?: return emptyList()
+    return map.positional.mapNotNull { pair(it.start, it.end) }
 }
+
+/** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */
+private fun argumentKeys(text: String): List<SignalDeclaration> =
+    literalPairs(text).mapNotNull { pair ->
+        pair.key
+            .takeIf { k -> !k.raw && NAME.matchEntire(text.substring(k.start, k.end)) != null }
+            ?.let { k -> SignalDeclaration(k.contentStart, k.contentEnd, k.text) }
+    }
 
 /** A group of a match with where it stands, which a `MatchGroup` says on the JVM alone. */
 internal class GroupAt(

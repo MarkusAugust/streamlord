@@ -76,14 +76,7 @@ public data class PatchElements(
         selector?.let { Wire.selector(it) }
         viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
         if (selector == null) EventRules.modeWithoutSelector(mode)?.let { throw DatastarEventValidationException(it) }
-        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
-        // An inner patch of nothing empties its target, the one way to clear a container.
-        val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
-        if (mode != ElementPatchMode.REMOVE && empty) {
-            throw DatastarEventValidationException(
-                EventRules.missingElements(mode, response = false)!!,
-            )
-        }
+        EventRules.elements(elements, mode, selector, namespace, response = false)?.let { throw DatastarEventValidationException(it) }
     }
 
     public companion object {

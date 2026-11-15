@@ -56,36 +56,33 @@ public object EventRules {
     /** The value of an attribute of the script an answer that is no stream sends, in a header of one line. */
     public fun scriptAttributeValue(value: String): String? = refusal { Wire.singleLine(value, "script attribute") }
 
-    /**
-     * Why [html] is refused as the elements of a patch in [namespace]: SVG or MathML outside its
-     * root in HTML, or HTML that closes the root of a patch in the svg or mathml namespace.
-     */
-    public fun markup(
-        html: String,
-        mode: ElementPatchMode,
-        namespace: ElementNamespace,
-    ): String? = PatchMarkup.problem(html, null, mode, namespace)
-
     /** Why a patch in [mode] without a selector is refused, or null where the mode needs none. */
     public fun modeWithoutSelector(mode: ElementPatchMode): String? =
         if (mode.requiresSelector) "Patch mode '${mode.wire}' requires a selector" else null
 
     /**
      * Why [html] is refused as the elements of a patch in [mode] with [selector], by an event or, with
-     * [response], by an answer that is no stream: where core reads it as no elements at all.
+     * [response], by an answer that is no stream: where core reads it as no elements at all, or, in
+     * [namespace] where it is known, as SVG or MathML outside its root or HTML that closes the root
+     * of a patch in the svg or mathml namespace.
      */
     public fun elements(
-        html: String,
+        html: String?,
         mode: ElementPatchMode,
         selector: String?,
+        namespace: ElementNamespace?,
         response: Boolean,
-    ): String? = if (mode == ElementPatchMode.INNER || !Wire.noElements(html, mode, selector)) null else missingElements(mode, response)
+    ): String? {
+        // An inner patch of nothing empties its target, the one way to clear a container.
+        val none = if (mode == ElementPatchMode.INNER) html == null else Wire.noElements(html, mode, selector)
+        return (if (none) missingElements(mode, response) else null) ?: namespace?.let { PatchMarkup.problem(html, selector, mode, it) }
+    }
 
     /**
      * Why a patch in [mode] with no elements is refused, by an event or, with [response], by an answer
      * that is no stream; null in `remove`, and in an answer's `inner`, which empties its target.
      */
-    internal fun missingElements(
+    private fun missingElements(
         mode: ElementPatchMode,
         response: Boolean,
     ): String? =

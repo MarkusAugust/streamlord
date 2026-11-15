@@ -75,7 +75,11 @@ public enum class ValueFact {
     public companion object
 }
 
-private val MODE_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
+private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
+
+/** The constant [arg] names, `APPEND` of `ElementPatchMode.APPEND` or of an imported `APPEND`; null for a value the code computes. */
+private fun constantName(arg: Arg): String? = CONSTANT_NAME.find(arg.text)?.groupValues?.get(1)
+
 private val CASE_ARG = regex("""^\s*Case\.[A-Z]+\s*$""")
 private val CASE_VALUE = regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
@@ -2381,19 +2385,23 @@ public class Analyzer(
         // position. A trailing lambda holds the elements, so the selector comes first.
         val elements =
             if (s == null) -1 else (spec.arg ?: 0).takeIf { spec.named == null || site.named(spec.named) == null }
-        val selectorArg = spec.selectorArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 1) }
+
+        fun argument(
+            name: String,
+            place: Int,
+        ) = site.named(name) ?: elements?.let { site.positional.getOrNull(it + place) }
+        val selectorArg = argument("selector", 1)
         val selector = selectorArg?.text?.takeIf { it != "null" }
-        val modeArg = spec.modeArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 2) }
-        // `ElementPatchMode.APPEND`, or `APPEND` when the constant is imported. Anything else is a value not known here.
+        val modeArg = argument("mode", 2)
         val mode =
-            modeArg?.let { arg ->
-                val name =
-                    MODE_NAME
-                        .find(arg.text)
-                        ?.groupValues
-                        ?.get(1)
-                        ?.lowercase()
-                if (name == "default") "outer" else name?.takeIf { it in catalog.patchModes }
+            modeArg?.let(::constantName)?.lowercase()?.let {
+                if (it ==
+                    "default"
+                ) {
+                    "outer"
+                } else {
+                    it.takeIf { m -> m in catalog.patchModes }
+                }
             }
         val view = s?.let { markupView(src, it) } ?: ""
         val judged = s?.let { judgeHoles(it, src, opts, view) }
@@ -2404,7 +2412,7 @@ public class Analyzer(
             modeKnown
                 ?.takeIf {
                     eventCalls.named(site) && modeArg != null && selector == null
-                }?.let { modeWithoutSelector(site, it) }
+                }?.let { modeWithoutSelector(site, eventCalls, it) }
         if (modeArg != null && needsSelector != null) {
             val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
@@ -2421,17 +2429,23 @@ public class Analyzer(
         }
         issues += eventArgumentIssues(site, selectorArg, eventCalls, opts.prefix)
         if (s != null && modeKnown != null && eventCalls.ours(site)) {
-            // `ElementNamespace.SVG`, or `SVG` when imported; a namespace the code computes is not known here.
-            val namespaceArg = site.named("namespace") ?: elements?.let { site.positional.getOrNull(it + 3) }
+            // A namespace the code computes is not known here.
+            val namespaceArg = argument("namespace", 3)
             val namespace =
                 if (namespaceArg == null) {
                     ElementNamespace.DEFAULT
                 } else {
-                    MODE_NAME.find(namespaceArg.text)?.groupValues?.get(1)?.let { n ->
-                        if (n == "DEFAULT") ElementNamespace.DEFAULT else ElementNamespace.entries.firstOrNull { it.name == n }
+                    constantName(namespaceArg)?.let { n ->
+                        if (n ==
+                            "DEFAULT"
+                        ) {
+                            ElementNamespace.DEFAULT
+                        } else {
+                            ElementNamespace.entries.firstOrNull { it.name == n }
+                        }
                     }
                 }
-            elementsIssue(site, s, modeKnown, selectorArg, namespace)?.let { issues += it }
+            elementsIssue(site, eventCalls, s, modeKnown, selectorArg, namespace)?.let { issues += it }
         }
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")

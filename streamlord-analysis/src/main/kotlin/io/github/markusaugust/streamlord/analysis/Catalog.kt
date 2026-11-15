@@ -97,13 +97,11 @@ internal data class ActionSpec(
                 .filter { it.isNotEmpty() }
 }
 
-/** Which argument of a Streamlord call holds the Datastar string, and where its companions are. */
+/** Which argument of a Streamlord call holds the Datastar string. */
 public data class CallSiteSpec(
     /** A positional index, or `null` for "the last positional string". */
     val arg: Int?,
     val named: String? = null,
-    val selectorArg: String? = null,
-    val modeArg: String? = null,
     val onlyIfStringArgs: Boolean = false,
     /** The parameters after [arg] that take an expression too, each by its place or its name: `fitExpr`'s ends. */
     val more: List<String> = emptyList(),
@@ -330,8 +328,8 @@ public class Catalog private constructor(
             (sites.obj("events") ?: JsonObject.EMPTY)
                 .filterKeys { !it.startsWith("\$") }
                 .mapValues { (_, value) -> EventCallSpec((value as JsonObject).string("takes"), flags(value)) }
-        // Every call that takes elements has them first, and the selector and the mode after; a script or a selector is first too.
-        htmlCallSites = eventsTaking("elements").associateWith { CallSiteSpec(0, "elements", "selector", "mode") }
+        // Each call takes first what it takes, by the parameter of that name.
+        htmlCallSites = eventsTaking("elements").associateWith { CallSiteSpec(0, "elements") }
         scriptCallSites = eventsTaking("script").associateWith { CallSiteSpec(0, "script") }
         selectorCallSites = eventsTaking("selector").associateWith { CallSiteSpec(0, "selector") }
         signalCalls =
@@ -438,8 +436,6 @@ public class Catalog private constructor(
                 CallSiteSpec(
                     arg = spec.int("arg"),
                     named = spec.string("named"),
-                    selectorArg = spec.string("selectorArg"),
-                    modeArg = spec.string("modeArg"),
                     onlyIfStringArgs = spec.boolean("onlyIfStringArgs") ?: false,
                     more = spec.array("more")?.strings() ?: emptyList(),
                     oneValue = spec.boolean("oneValue") ?: false,

@@ -42,17 +42,11 @@ public data class ElementsResponse(
     val viewTransitionSelector: String? = null,
 ) : DatastarResponse {
     init {
-        // An inner patch of nothing empties its target, and a remove needs no elements at all.
-        if (Wire.noElements(elements, mode, selector)) {
-            EventRules.missingElements(mode, response = true)?.let {
-                throw DatastarEventValidationException(it)
-            }
-        }
         selector?.let { Wire.selector(it) }
         viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
         listOfNotNull(selector, viewTransitionSelector).forEach(Wire::headerSelector)
         if (selector == null) EventRules.modeWithoutSelector(mode)?.let { throw DatastarEventValidationException(it) }
-        PatchMarkup.problem(elements, selector, mode, namespace)?.let { throw DatastarEventValidationException(it) }
+        EventRules.elements(elements, mode, selector, namespace, response = true)?.let { throw DatastarEventValidationException(it) }
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_HTML

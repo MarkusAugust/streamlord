@@ -52,8 +52,11 @@ private fun durationLiteral(text: String): Duration? {
     }
 }
 
+/** [s] where it holds no template and is closed. */
+private fun plain(s: KotlinString?): KotlinString? = s?.takeIf { !it.unterminated && it.interpolations.isEmpty() }
+
 /** The string literal [arg] is, where it holds no template and is closed. */
-private fun literal(arg: Arg?): KotlinString? = arg?.string?.takeIf { !it.unterminated && it.interpolations.isEmpty() }
+private fun literal(arg: Arg?): KotlinString? = plain(arg?.string)
 
 /**
  * The issues of the literal arguments of [site], an SSE call or an answer, that core refuses as it
@@ -128,9 +131,20 @@ internal fun eventArgumentIssues(
             val removes = if (call.response) null else site.named("autoRemove") ?: site.positional.getOrNull(1)
             val autoRemove = !call.response && (removes == null || removes.text.trim() == "true")
             val attributes = site.named("attributes") ?: site.positional.getOrNull(if (call.response) 1 else 2)
-            for ((key, value) in attributes?.let(::mapPairs).orEmpty()) {
-                key?.let { refused(it.start, it.end, EventRules.scriptAttributeName(it.text, autoRemove, prefix + "effect")) }
-                if (call.response) value?.let { refused(it.start, it.end, EventRules.scriptAttributeValue(it.text)) }
+            val at = attributes?.start ?: 0
+            for (pair in attributes?.let { literalPairs(it.text) }.orEmpty()) {
+                plain(pair.key)?.let {
+                    refused(
+                        at + it.start,
+                        at + it.end,
+                        EventRules.scriptAttributeName(
+                            it.text,
+                            autoRemove,
+                            prefix + "effect",
+                        ),
+                    )
+                }
+                if (call.response) plain(pair.value)?.let { refused(at + it.start, at + it.end, EventRules.scriptAttributeValue(it.text)) }
             }
         }
     }
@@ -151,68 +165,28 @@ internal fun eventArgumentIssues(
 @OptIn(InternalStreamlordApi::class)
 internal fun elementsIssue(
     site: CallSite,
+    calls: EventCalls,
     elements: KotlinString,
     mode: ElementPatchMode,
     selector: Arg?,
     namespace: ElementNamespace?,
 ): Issue? {
-    val call = EVENT_CALLS[site.name] ?: return null
+    val name = calls.nameOf(site) ?: return null
+    val call = EVENT_CALLS.getValue(name)
     if (elements.unterminated || elements.interpolations.isNotEmpty()) return null
     // A selector the code computes is taken to be one, which judges the fewest elements as none.
     val given = selector?.text?.takeIf { it != "null" }?.let { literal(selector)?.text ?: "#" }
-    val problem =
-        EventRules.elements(elements.text, mode, given, call.response)
-            ?: namespace?.let { EventRules.markup(elements.text, mode, it) }
-            ?: return null
-    return Issue(elements.start, elements.end, "${site.name} throws: $problem.", Severity.ERROR, "event-refused", Docs.SSE)
+    val problem = EventRules.elements(elements.text, mode, given, namespace, call.response) ?: return null
+    return Issue(elements.start, elements.end, "$name throws: $problem.", Severity.ERROR, "event-refused", Docs.SSE)
 }
-
-/** A literal with no template, closed, at its offsets in the file. */
-private class Literal(
-    val start: Int,
-    val end: Int,
-    val text: String,
-)
-
-/**
- * The pairs of [arg] where it is a map built in place, `mapOf("type" to "module")`: each key and
- * value that is a [Literal], or null where it is something else.
- */
-private fun mapPairs(arg: Arg): List<Pair<Literal?, Literal?>> {
-    val text = arg.text
-    val lex = lexKotlin(text)
-    val map = findCallSites(text, MAP_CALLS, lex).firstOrNull()?.takeIf { text.substring(0, it.nameStart).isBlank() } ?: return emptyList()
-
-    fun plain(s: KotlinString?) =
-        s?.takeIf { !it.unterminated && it.interpolations.isEmpty() }?.let {
-            Literal(
-                arg.start + it.start,
-                arg.start + it.end,
-                it.text,
-            )
-        }
-    return map.positional.map { pair ->
-        val strings = lex.stringsIn(pair.start, pair.end)
-        val key = strings.firstOrNull()?.takeIf { text.substring(pair.start, it.start).isBlank() }
-        val value =
-            key?.let { k ->
-                strings.getOrNull(1)?.takeIf {
-                    PAIR_TO.matchEntire(text.substring(k.end, it.start)) != null &&
-                        text.substring(it.end, pair.end).isBlank()
-                }
-            }
-        plain(key) to plain(value)
-    }
-}
-
-private val PAIR_TO = regex("""\s+to\s+""")
 
 /** The message of a patch in [mode] that [site] makes without a selector, in core's words. */
 @OptIn(InternalStreamlordApi::class)
 internal fun modeWithoutSelector(
     site: CallSite,
+    calls: EventCalls,
     mode: ElementPatchMode,
-): String? = EventRules.modeWithoutSelector(mode)?.let { "${site.name} throws: $it." }
+): String? = EventRules.modeWithoutSelector(mode)?.let { "${calls.nameOf(site) ?: site.name} throws: $it." }
 
 /** The receiver, besides a stream and a companion, whose calls are Streamlord's on any file that imports it. */
 private const val THIS = "this"
