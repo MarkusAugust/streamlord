@@ -28,6 +28,12 @@ class HoleAdviceTest {
                             SourceLanguage.KOTLIN,
                             modules =
                                 case.boolean("coreHtml")?.let { Modules.known(true, true, it) } ?: Modules.UNKNOWN,
+                            constants =
+                                case
+                                    .array("constants")
+                                    ?.strings()
+                                    ?.toSet()
+                                    .orEmpty(),
                         ),
                     ).sortedWith(
                         compareBy({
@@ -47,6 +53,7 @@ class HoleAdviceTest {
                 }
                 for (part in e.array("says")?.strings().orEmpty()) assertTrue(part in issue.message, at)
                 e.string("ends")?.let { assertTrue(issue.message.endsWith(it), at) }
+                e.string("link")?.let { assertEquals(it, issue.link, at) }
                 for (part in e.array("silent")?.strings().orEmpty()) assertTrue(part !in issue.message, at)
             }
         }

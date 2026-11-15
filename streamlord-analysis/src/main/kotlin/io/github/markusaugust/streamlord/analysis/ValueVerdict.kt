@@ -34,9 +34,10 @@ internal fun verdict(
             if (plain.scalar()) Verdict.SAFE else Verdict.ESCAPE
         }
 
+        // `true` or `false` is no CSS that does harm.
         Position.STYLE -> {
             when (plain) {
-                ValueFact.NUMBER -> Verdict.SAFE
+                ValueFact.NUMBER, ValueFact.BOOLEAN -> Verdict.SAFE
                 ValueFact.UNSIGNED -> Verdict.DIGITS
                 else -> Verdict.UNSAFE
             }
@@ -50,7 +51,12 @@ internal fun verdict(
             }
         }
 
-        Position.CODE, Position.STRUCTURE -> {
+        // Digits, true, false or null cannot end a script, a style or an event handler; the text of an open Number may.
+        Position.CODE -> {
+            if (plain.scalar() && fact != ValueFact.OPEN_NUMBER) Verdict.SAFE else Verdict.UNSAFE
+        }
+
+        Position.STRUCTURE -> {
             Verdict.UNSAFE
         }
     }
@@ -69,6 +75,7 @@ internal fun ValueFact?.plain(): ValueFact? =
     when (this) {
         ValueFact.NULLABLE_STRING -> ValueFact.STRING
         ValueFact.TRUSTED -> ValueFact.MARKUP
+        ValueFact.OPEN_NUMBER -> ValueFact.NUMBER
         else -> this
     }
 
@@ -101,7 +108,7 @@ internal fun ValueFact.described(): String = if (this == ValueFact.UNSIGNED) "an
 internal fun ValueFact?.argKind(): ArgKind? =
     when (this) {
         ValueFact.STRING, ValueFact.NULLABLE_STRING -> ArgKind.STRING
-        ValueFact.NUMBER -> ArgKind.NUMBER
+        ValueFact.NUMBER, ValueFact.OPEN_NUMBER -> ArgKind.NUMBER
         ValueFact.UNSIGNED -> ArgKind.UNSIGNED
         ValueFact.BOOLEAN -> ArgKind.BOOLEAN
         ValueFact.MARKUP -> ArgKind.MARKUP
@@ -132,11 +139,13 @@ private val WEAKEST_FIRST =
     listOf(
         ValueFact.STRING,
         null,
+        ValueFact.COLLECTION,
         ValueFact.OTHER,
         ValueFact.MARKUP,
         ValueFact.TRUSTED,
         ValueFact.NULLABLE,
         ValueFact.UNSIGNED,
+        ValueFact.OPEN_NUMBER,
         ValueFact.BOOLEAN,
         ValueFact.NUMBER,
         ValueFact.CONSTANT,

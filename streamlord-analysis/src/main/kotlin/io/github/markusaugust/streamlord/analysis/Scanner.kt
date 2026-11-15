@@ -360,20 +360,25 @@ internal fun lexKotlin(src: String): KotlinLex {
 /** Every string literal in the source that is not inside a comment, in order. */
 internal fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
 
-private val HTML_MARKER = regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+/** IntelliJ's injection annotation for HTML, by its short name or its qualified one. */
+internal const val HTML_LANGUAGE = """@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"html"\s*\)"""
+
+private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
 /**
  * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,
  * or when the code just before it carries IntelliJ's injection marker: `@Language("HTML")` on
  * the function or property, or a `// language=HTML` comment. The marker reaches the next
- * string literal only.
+ * string literal only. A literal handed straight to a parameter of the file's own function that
+ * carries the annotation is HTML too.
  */
 public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
     if (textOpensWithTag(markupView(src, s))) return true
+    if (s.start in fileFacts(src).htmlArguments) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
     val after = before.substring(last.range.last + 1)

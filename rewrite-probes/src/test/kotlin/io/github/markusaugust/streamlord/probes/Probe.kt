@@ -54,3 +54,6 @@ class WidgetContext(
 
 /** A Trusted the text of a probe does not show to be one. */
 typealias Badge = Trusted
+
+/** A map, named so that a probe's parameters, split at their commas, keep its type whole. */
+typealias Counts = Map<String, Int>

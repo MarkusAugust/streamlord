@@ -47,19 +47,15 @@ class HoleJudgementTest {
                 "s.length",
                 "xs.count()",
                 "xs.count { it.isEmpty() }",
-                "n * 7 % 13",
-                "a - b",
+                "x * 7 % 13",
                 "-n",
                 "!flag",
-                "a == b",
-                "a < b",
                 "s.isEmpty()",
                 "xs.indexOf(s)",
-                "s in xs",
-                "n.toInt() / 2",
             )
+        val declared = "n: Int, a: Int, b: Int, flag: Boolean, s: String, xs: List<String>, x: Any"
         for (value in values) {
-            val src = "fun f(n: Int, a: Int, b: Int, flag: Boolean, s: String, xs: List<String>) = \"<td>\${$value}</td>\""
+            val src = "fun f($declared) = \"<td>\${$value}</td>\""
             val titles =
                 analyzer
                     .analyzeKotlin(src)
@@ -68,6 +64,10 @@ class HoleJudgementTest {
                     .map { it.title }
             assertTrue(titles.any { it.startsWith("Build this string") }, "$value: $titles")
             assertTrue(titles.none { it.startsWith("Mark") }, "$value: $titles")
+        }
+        // A comparison or a test is a Boolean whatever it compares, and arithmetic of numbers the text shows is a number.
+        for (value in listOf("a == b", "a < b", "s in xs", "n * 7 % 13", "a - b", "n.toInt() / 2")) {
+            assertEquals(emptyList(), analyzer.analyzeKotlin("fun f($declared) = \"<td>\${$value}</td>\""), value)
         }
         // A generic call is no comparison, and a call of the author's may still give markup.
         val generic = "fun <T> foo(a: T) = \"\$a\"\nfun f(a: String) = \"<td>\${foo<String>(a)}</td>\""

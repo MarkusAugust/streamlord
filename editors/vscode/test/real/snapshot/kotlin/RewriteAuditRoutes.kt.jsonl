@@ -1,0 +1,5 @@
+{"what":"file","language":"kotlin"}
+{"what":"rename","at":"1:1-5:1","error":"No signal here to rename."}
+{"what":"scopes","line":1,"tokens":[["package","identifier.kotlin"],[" ",""],["forge","identifier.kotlin"],[".",""],["audit","identifier.kotlin"]]}
+{"what":"scopes","line":3,"tokens":[["// A constant another file means by its bare name, whose text that file does not show.","comment.line.double-slash.kotlin"]]}
+{"what":"scopes","line":4,"tokens":[["const","identifier.kotlin"],[" ",""],["val","keyword.kotlin"],[" ",""],["ROUTE","identifier.kotlin"],[" = ",""],["\"","string.quoted.double.kotlin"],["/route","string.quoted.double.kotlin"],["\"","string.quoted.double.kotlin"]]}

@@ -59,6 +59,30 @@ object HoleFacts {
     private val LISTS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
     private val MARKUP_CALLS = setOf("interpolate", "Trusted")
 
+    /** The collections a template writes in brackets, by their qualified names, Java's that Kotlin's aliases expand to among them. */
+    private val COLLECTIONS: Set<String> =
+        (
+            listOf(
+                "List",
+                "Set",
+                "Map",
+                "Collection",
+                "Iterable",
+            ).flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
+                listOf(
+                    "ArrayList",
+                    "HashSet",
+                    "LinkedHashSet",
+                    "HashMap",
+                    "LinkedHashMap",
+                    "TreeMap",
+                    "TreeSet",
+                    "LinkedList",
+                ).map { "java.util.$it" } +
+                listOf("", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char").map { "kotlin.${it}Array" } +
+                "kotlin.sequences.Sequence"
+        ).toSet()
+
     /** The expression helpers by name, for a call the Kotlin plugin cannot resolve. */
     private val HELPERS: Set<String> = Catalog.default.signalNameHelpers.keys
 
@@ -261,9 +285,13 @@ object HoleFacts {
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
-            lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
-                lower.isClass(NUMBER_CLASS) -> {
+            lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType -> {
                 if (definite) ValueFact.NUMBER else ValueFact.NULLABLE
+            }
+
+            // A Number of no closed type, whose class may write anything; one that may be null is not known.
+            lower.isClass(NUMBER_CLASS) -> {
+                if (definite) ValueFact.OPEN_NUMBER else null
             }
 
             // Digits too, but not a kotlin.Number: interpolate refuses one where only a number is let in.
@@ -273,6 +301,11 @@ object HoleFacts {
 
             lower.isBooleanType -> {
                 if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
+            }
+
+            // A collection of markup is markup the author built; any other a template writes in brackets.
+            classOf(lower) in COLLECTIONS -> {
+                if (markupElements(lower)) ValueFact.MARKUP else ValueFact.COLLECTION
             }
 
             // An Html or a Trusted of another package, which the text alone would take for Streamlord's.
@@ -453,6 +486,9 @@ object HoleFacts {
 
                 // The text of an Html, or of interpolate(...).
                 name == "text" && call == null -> isMarkup(receiver, depth)
+
+                // The html of a Trusted; a property of that name elsewhere is read by its declaration.
+                name == "html" && call == null && isMarkup(receiver, depth) -> true
 
                 // createHTML().div { ... }, and StringBuilder().appendHTML().div { ... }.toString().
                 call != null && isHtmlConsumer(receiver) -> true

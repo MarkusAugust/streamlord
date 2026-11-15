@@ -8,6 +8,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Changed
 
+- `interpolate` refuses a value in `data-match-media` and throws, where it escaped one: the
+  reference writes the query as a string literal, so Datastar Pro may run it. Write the query into
+  the format, `interpolate("<p data-match-media:dark=\"'$DARK'\">...", ...)` with a constant of
+  yours as a Kotlin template, or set it with the DSL's `dataMatchMedia`. The editors warn of a value
+  there, say so, and no longer offer the rewrite to `interpolate`.
 - streamlord-analysis describes a file one way, `Source`, and every entry takes it. `AnalyzeOptions`
   is gone: write `analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`
   where you wrote `analyzer.analyzeKotlin(text, AnalyzeOptions(prefix, constants = names))`, and
@@ -321,6 +326,57 @@ All notable changes to Streamlord are recorded here. The format follows
   placeholder and `.hbs` files, and no longer colours a name that is not Datastar's in a template.
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
+- The rewrite to `interpolate` passes a value in the body of a `<style>` that is not shown to be a
+  String, a class of yours that writes CSS, as `Trusted("$v")`, which compiles with no warning, where it
+  wrote `Trusted(v)`; a String it passes as `Trusted(v)`. A `List`, a `Set`, a `Map` or an array,
+  which a template writes in brackets, it does not vouch for, so no rewrite is offered for the string.
+- A value after a scheme the markup writes that does more than navigate, `href="javascript:${v}"`
+  or `data:text/html,`, is said to be in a URL that runs whatever it holds, and the rewrite to
+  `interpolate`, which threw for every value there, is no longer offered for the string. In a call
+  to `interpolate` such a placeholder is an error, as `interpolate` throws for every value.
+- The `html` of a `Trusted`, `${t.html}`, and a name for a `List<Html>` are markup you built, as
+  the `text` of an `Html` is: nothing is said of them in element text, and no rewrite to
+  `interpolate` escapes them there, where both editors offered one first.
+- In a call to `interpolate`, the fix that makes a Kotlin template a `%s` placeholder is not put
+  first under `.trimIndent()`, as the docs say, nor for a `String?`, whose `null` it writes as
+  nothing: it is offered for one now, and the message says so. It is offered for a format passed
+  by name too, and its title says truly that `interpolate` writes a `Trusted` as it is and escapes an
+  `Html` in a `<textarea>` or a `<title>`. Its issues link to the strings page, as the other issues
+  of a value do, and to Datastar's guide where Datastar runs the value.
+- The rewrite to `interpolate` keeps a value of yours, a constant, an enum entry or `${"$"}`, as a
+  template in the format where `interpolate` would refuse it or might escape markup it holds, so a
+  route constant in `data-on:click="@post('${SAVE}')"` or a constant of another file no longer
+  keeps the rewrite from every other value of the string; one the file shows with a `%` is not kept.
+- The rewrite to `interpolate` of a string with a value that may be null says that `interpolate`
+  writes nothing for it where a template writes `null`, in the message of every value that offers it.
+- A string marked `@org.intellij.lang.annotations.Language("HTML")`, the annotation by its
+  qualified name, and one handed straight to a parameter that carries the annotation, of a function
+  of the same file the call means (no receiver, a member of the class the call is in first), are read as HTML and their values judged, as one marked
+  `@Language("HTML")` or `// language=HTML` was. VS Code colours one marked by the qualified name too.
+- A literal in a value joined into a `+` chain, `"<ul>" + tags.map { "<li>$it</li>" }.joinToString("") + "</ul>"`,
+  or in a template of one of its literals, is judged as a string of its own, where it was passed over.
+- A number, a boolean or a nullable one in a `<script>`, a `<style>` or an event handler, and a
+  boolean in `style`, is no longer a warning: digits, `true`, `false` and `null` cannot end them. A
+  `kotlin.Number`, which a class of any text may be, still is in code.
+  The rewrite to `interpolate` keeps such a value a template in the format, so it no longer keeps
+  the rewrite from the other values. A String in the body of a `<style>` is said to be read as CSS,
+  with advice for CSS, where it was told to move into a `data-*` attribute.
+- VS Code reads a comparison as a Boolean, arithmetic of numbers the file declares,
+  `style="width: ${n * 2}px"` or `${n + 1}`, as a number, and `${Tab.HOME.name}` of an enum the
+  file shows as the author's own, as IntelliJ does: none of them is warned of where it is safe, nor keeps the rewrite from the
+  other values.
+- The rewrite to `interpolate` has one title wherever it is offered, on each value's warning and as
+  a context action: "...with ${css} as Trusted(...)" where it vouches for a value in a `<style>`,
+  "...which refuses a URL that runs" where a value starts a URL, where one value's fix and the
+  context action named the same edit differently.
+- "Quote the value" on a value without quotes is put first only for a number or a boolean, which
+  the quotes are all it needs; for any other value it is a step, and the message says that the
+  quoted value is still to be escaped.
+- A value that opens a `+` chain, `w + "<p>...</p>"`, is no longer told to be declared `Html` or
+  wrapped in `Trusted(...)`, which have no plus to join the rest with: markup you built there is fine.
+- The rewrite of a string inside a template of another names that string in its title,
+  `...which escapes the values: "<li>$v</li>"`, so it no longer stands beside the outer string's
+  rewrite under the same title at one caret.
 - A completion replaces the rest of the word the caret stands in, where the editor replaces: in
   VS Code as its insert mode setting says, in IntelliJ with Tab. Before, picking `json` at
   `'¦form'` gave `'jsonform'` even then.

@@ -127,5 +127,11 @@
   {"file": "html/help.html", "at": "@get(¦'/a'"},
   {"file": "kotlin/HelpDollar.kt", "at": "${'$'}myCo¦unt"},
   {"file": "kotlin/HelpDollar.kt", "at": "get¦Expr"},
-  {"file": "html/actions.html", "at": "@post('/a', {¦retryMaxCount"}
+  {"file": "html/actions.html", "at": "@post('/a', {¦retryMaxCount"},
+  {"file": "kotlin/RewriteAudit.kt", "at": "\"<a href=\\\"$u¦rl\\\">", "actions": true},
+  {"file": "kotlin/RewriteAudit.kt", "at": "\"<a hr¦ef=\\\"$url", "actions": true},
+  {"file": "kotlin/RewriteAudit.kt", "at": "\"<p>${s}</p><p>${RO¦UTE}</p>\"", "actions": true},
+  {"file": "kotlin/RewriteAudit.kt", "at": "\"<p title=\\\"${if (b) \"<li>$¦v</li>\"", "actions": true},
+  {"file": "kotlin/RewriteAudit.kt", "at": "\"<button data-on:click=\\\"@post('${SA¦VE}')", "actions": true},
+  {"file": "kotlin/RewriteAudit.kt", "at": "\"<ul>\" + u.tags.map { \"<li>$i¦t</li>\" }", "actions": true}
 ]

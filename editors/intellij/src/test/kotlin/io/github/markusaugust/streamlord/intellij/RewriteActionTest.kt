@@ -20,7 +20,6 @@ private fun widget(
     "$Q\n    <div id=\"$root\" data-theme=\"light\" data-lt-boundary=\"\">\n        <style>$css</style>\n" +
         "        <div id=\"$content\">\n            $body\n        </div>\n        <div id=\"$events\" hidden></div>\n    </div>\n    $Q.trimIndent()"
 
-private const val ESCAPES = "Build this string with interpolate(...), which escapes the values"
 private const val CSS = "\${customCss.orEmpty()}"
 
 /**
@@ -40,8 +39,9 @@ class RewriteActionTest : StreamlordTestCase() {
         val rewritten =
             IMPORTS + SIGNATURE + "interpolate(" + widget("%s", "%s", "%s", "%s", "%s") +
                 ", k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n"
+        // One edit, one title, from whichever value it is offered.
+        val title = "Build this string with interpolate(...), with $CSS as Trusted(...)"
         for (value in values) {
-            val title = if (value == CSS) "Build this string with interpolate(...), with $CSS as Trusted(...)" else ESCAPES
             // The caret one character into the value; a fresh file each time, since the last one was rewritten.
             val at = source.indexOf(value) + 1
             myFixture.configureByText("Widget${values.indexOf(value)}.kt", source.substring(0, at) + "<caret>" + source.substring(at))

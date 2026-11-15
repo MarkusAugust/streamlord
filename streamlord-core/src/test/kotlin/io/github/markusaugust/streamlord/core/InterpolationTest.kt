@@ -54,6 +54,9 @@ class InterpolationTest {
                 """<li data-bind="%s"></li>""",
                 """<li data-ref="%s"></li>""",
                 """<li data-indicator="%s"></li>""",
+                // Pro's media query, which the reference writes as a string literal: Pro may run it.
+                """<li data-match-media:dark="%s"></li>""",
+                """<li data-match-media:dark="'%s'"></li>""",
             )
 
         for (markup in attributes) {
@@ -61,6 +64,14 @@ class InterpolationTest {
             assertEquals(Position.DATASTAR, failure.position, markup)
             assertTrue("reads as an expression or follows as a signal path" in failure.message!!, failure.message!!)
         }
+    }
+
+    @Test
+    fun `a value refused in a media query is told to be written in the format or set with the DSL`() {
+        val failure = assertFailsWith<UnsafeInterpolationException> { render("""<li data-match-media:dark="'%s'"></li>""", "x") }
+        assertTrue("the query into the markup" in failure.message!!, failure.message!!)
+        assertTrue("dataMatchMedia" in failure.message!!, failure.message!!)
+        assertTrue("data-label" !in failure.message!!, failure.message!!)
     }
 
     // The client reads these as they stand (csp.ts, patchElements.ts, engine.ts), so escaping holds.

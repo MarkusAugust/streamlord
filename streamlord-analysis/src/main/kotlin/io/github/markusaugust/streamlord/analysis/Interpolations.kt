@@ -346,7 +346,30 @@ internal class FileFacts(
     /** `true` where the character is code: outside literals and comments, or in a template's code. */
     val code: BooleanArray,
     val names: Map<String, List<Declaration>>,
+    /** Every function the file declares, by its name. */
+    val functions: Map<String, List<FunctionDeclaration>> = emptyMap(),
 ) {
+    /**
+     * Where each literal starts that the file hands straight to a parameter marked `@Language("HTML")`
+     * of the function the call means, as far as the text tells: one called without a receiver, a
+     * member of the class the call is in before one of the top level.
+     */
+    val htmlArguments: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val marked = functions.filterValues { list -> list.any { it.html.isNotEmpty() } }.keys
+        val out = HashSet<Int>()
+        for (site in if (marked.isEmpty()) emptyList() else findCallSites(src, marked, lexKotlin(src))) {
+            if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+            val candidates = functions[site.name].orEmpty()
+            val meant =
+                candidates.filter { f -> f.owner?.let { site.nameStart in it } == true }.minByOrNull { it.owner!!.last - it.owner.first }
+                    ?: candidates.firstOrNull { it.owner == null }
+                    ?: continue
+            site.positional.forEachIndexed { k, a -> if (k in meant.html) a.string?.let { out += it.start } }
+            for (a in site.args) if (a.named != null && a.named in meant.html) a.string?.let { out += it.start }
+        }
+        out
+    }
+
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
     val importEdits: MutableMap<String, List<Edit>> = sharedMap()
 
@@ -375,6 +398,12 @@ internal class FileFacts(
     var typeParameters: Map<String, Boolean>? = null
 }
 
+/** A function the file declares: the body of the class it is a member of, and its parameters marked `@Language("HTML")`, by place and by name. */
+internal class FunctionDeclaration(
+    val owner: IntRange?,
+    val html: Set<Any>,
+)
+
 @Volatile
 private var lastFacts: FileFacts? = null
 
@@ -386,7 +415,8 @@ internal fun fileFacts(
     lastFacts?.let { if (it.src == src) return it }
     val l = lex ?: lexKotlin(src)
     val code = codeMask(src, l.strings, l.mask)
-    return FileFacts(src, code, declarations(src, code)).also { lastFacts = it }
+    val functions = HashMap<String, MutableList<FunctionDeclaration>>()
+    return FileFacts(src, code, declarations(src, code, functions), functions).also { lastFacts = it }
 }
 
 /** The names a Kotlin file declares that other files can see, as [declaredNames] reads them. */
@@ -476,8 +506,8 @@ private val CONST_BEFORE = regex("""\bconst[ \t]+(?:\p{L}+[ \t]+)*$""")
 private val PRIVATE_BEFORE = regex("""\bprivate[ \t]+(?:\p{L}+[ \t]+)*$""")
 private val PROPERTY_MODIFIERS = regex("""\b(?:val|var)\b""")
 private val PRIVATE_MODIFIER = regex("""\bprivate\b""")
-private val HTML_BEFORE = regex("""@Language\(\s*"html"\s*\)\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
-private val HTML_ANNOTATION = regex("""@Language\(\s*"html"\s*\)""", RegexOption.IGNORE_CASE)
+private val HTML_BEFORE = regex("""$HTML_LANGUAGE\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
+internal val HTML_ANNOTATION = regex(HTML_LANGUAGE, RegexOption.IGNORE_CASE)
 private val VARARG = regex("""\bvararg\b""")
 private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
 private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
@@ -520,6 +550,12 @@ private class ScopeFrame(
 
     /** Whether what this frame declares is out of other files' sight: a private class's body, or a local one's. */
     var hidden = false
+
+    /** For a function's parameters: the class body it is declared in. */
+    var owner: ScopeFrame? = null
+
+    /** Just past the bracket that closes the frame, once it has. */
+    var closeAt = -1
 }
 
 private fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -601,6 +637,41 @@ private fun splitTopLevel(text: String): List<String> {
     return out
 }
 
+private val NAME_BEFORE_BRACKET = regex("""($NAME)\s*$""")
+private val PARAMETER_NAME = regex("""($NAME)\s*:""")
+
+/**
+ * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in,
+ * and each parameter marked `@Language("HTML")`, by place and by name. The parameters are cut at
+ * commas outside brackets, the `<...>` of a type among them and the `->` of a function type not.
+ */
+private fun functionAt(
+    src: String,
+    g: ScopeFrame,
+    close: Int,
+): Triple<String, ScopeFrame?, Set<Any>>? {
+    val name = NAME_BEFORE_BRACKET.find(src.substring(maxOf(0, g.open - 200), g.open))?.groupValues?.get(1) ?: return null
+    val html = HashSet<Any>()
+    var depth = 0
+    var from = g.open + 1
+    var k = 0
+    for (i in g.open + 1..close) {
+        val c = src[i]
+        if (i < close && c in "([{<") depth++
+        if (i < close && (c in ")]}" || (c == '>' && src[i - 1] != '-'))) depth--
+        if (i == close || (c == ',' && depth == 0)) {
+            val parameter = src.substring(from, i)
+            if (HTML_ANNOTATION.containsMatchIn(parameter)) {
+                html += k
+                PARAMETER_NAME.find(parameter.replace(HTML_ANNOTATION, ""))?.let { html += it.groupValues[1] }
+            }
+            from = i + 1
+            k++
+        }
+    }
+    return Triple(name, g.owner, html)
+}
+
 /**
  * Every name the file declares, read from the code alone: a `val` or `var` (destructured too), a
  * parameter of a function, a constructor or a lambda, and a loop variable, each with the stretch
@@ -610,7 +681,10 @@ private fun splitTopLevel(text: String): List<String> {
 private fun declarations(
     src: String,
     code: BooleanArray,
+    functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
+    // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
+    val declared = ArrayList<Triple<String, ScopeFrame?, Set<Any>>>()
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
 
@@ -803,6 +877,7 @@ private fun declarations(
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
+                g.owner = f.takeIf { it.kind == "class" }
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -885,8 +960,10 @@ private fun declarations(
             }
             endPending(g, i + 1)
             for (d in g.ends) d.end = i + 1
+            g.closeAt = i + 1
             if (g.kind == "params") {
                 handOver(PendingScope(parameters(g, i), true))
+                if (functions != null) functionAt(src, g, i)?.let { declared += it }
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer))
             }
@@ -926,6 +1003,10 @@ private fun declarations(
     }
     for (f in stack) endPending(f, src.length)
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
+    for ((name, owner, html) in declared) {
+        val body = owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
+        functions!!.getOrPut(name) { ArrayList() } += FunctionDeclaration(body, html)
+    }
     return names
 }
 
@@ -1262,7 +1343,24 @@ private fun qualifiedConstant(
     if (!holders.last()[0].isUpperCase() || declarationOf(src, holders.first(), at) != null) return false
     val name = m.groupValues[2]
     if (SCREAMING.matchEntire(name) != null) return true
+    // The name of an entry, `Tab.HOME.name`, is the name the author gave it: of an enum the file shows, as `.name` of anything
+    // else may be any text.
+    if (name == "name" && holders.size > 1) return enumEntryShown(src, holders[holders.size - 2], holders.last())
     return name in constants || fileFacts(src).names[name].orEmpty().any { it.constant }
+}
+
+/** Whether the code of the file declares `enum class [type]` with the entry [entry]. */
+private fun enumEntryShown(
+    src: String,
+    type: String,
+    entry: String,
+): Boolean {
+    val code = fileFacts(src).code
+    val m = regex("""\benum\s+class\s+${Regex.escape(type)}\b""").findAll(src).firstOrNull { code[it.range.first] } ?: return false
+    val open = src.indexOf('{', m.range.last)
+    if (open < 0) return false
+    val entries = src.substring(open + 1).substringBefore(';').substringBefore('}')
+    return regex("""(?:^|[\s,])${Regex.escape(entry)}\b""").containsMatchIn(entries)
 }
 
 /**
@@ -1306,6 +1404,7 @@ internal fun valueKind(
     }
     callKind(src, t, at, constants, sdk)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return ValueFact.CONSTANT
+    shapeKind(src, t, at, constants, sdk)?.let { return it }
     if (IDENT.matchEntire(t) == null) return null
     if (constantAt(src, t, at, constants)) return ValueFact.CONSTANT
     return declaredKind(src, t, at, nonNull, sdk.core)
@@ -1333,6 +1432,7 @@ private val STRING_CHANGES =
         "padStart",
         "padEnd",
         "repeat",
+        "orEmpty",
     )
 private val NON_NULL_ASSERTION = regex("""\s*!!$""")
 private val OPERAND_CHAR = regex("""[\p{L}\p{Nd}_.?!()\[\]{}"']""")
@@ -1394,7 +1494,7 @@ private val USES_ELEMENTS =
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.(?:elements|\*)[ \t\r]*(?=\n|(?![\s\S]))|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
-private val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*text$""")
+private val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*(?:text|html)$""")
 private val CREATE_HTML = regex("""^createHTML\s*\(""")
 private val APPEND_HTML = regex("""\bappendHTML\s*\(""")
 private val NAME_AT_END = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
@@ -1522,10 +1622,11 @@ internal fun markupValue(
     if (sum.size > 1) return htmlLiteral(sum[0].trim())
     if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
+    // The text of an Html or the html of a Trusted, the markup each holds; neither has the other.
     if (sdk.core &&
         textOf != null &&
         (
-            coreCall(src, textOf, "interpolate") ||
+            coreCall(src, textOf, "interpolate") || coreCall(src, textOf, "Trusted") ||
                 (IDENT.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
         )
     ) {
@@ -1549,6 +1650,17 @@ internal fun markupValue(
     if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk)
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk)
 }
+
+/**
+ * Whether [value] is a name for a collection of Html or Trusted, `rows: List<Html>`: markup the
+ * author built, which a template writes in brackets and interpolate would escape.
+ */
+internal fun markupCollection(
+    src: String,
+    value: String,
+    at: Int,
+    sdk: FileModules,
+): Boolean = IDENT.matchEntire(value.trim()) != null && markupElements(src, value.trim(), at, 0, sdk)
 
 /** How many names deep a value is followed to what it is set to. */
 private const val VALUE_DEPTH = 4
@@ -1693,6 +1805,45 @@ private val OTHER_OPERATOR = regex("""\?:|\.\.|\s[\p{L}_][\p{L}\p{Nd}_]*\??\s"""
 
 /** Outside brackets: `*`, `/`, `%` or a `-` between operands, which Kotlin defines for numbers. */
 private val ARITHMETIC = regex("""[*/%]|[\p{L}\p{Nd}_)\]]\s*-(?![-=>])""")
+
+/**
+ * What the operators of [value] show it to be: a comparison or a test is a Boolean, whatever is
+ * compared, and arithmetic of numbers alone, each operand a number the text shows or a number
+ * literal, is a number. Null where they show nothing: an operand of another kind may have an
+ * operator of its own.
+ */
+private fun shapeKind(
+    src: String,
+    value: String,
+    at: Int,
+    constants: Set<String>,
+    sdk: FileModules,
+): ValueFact? {
+    val e = unparen(value)
+    val d = depths(e)
+    val top = CharArray(e.length) { if (d[it] == 0) e[it] else ' ' }.concatToString()
+    if (BOOLEAN_OPERATOR.containsMatchIn(top)) return ValueFact.BOOLEAN
+    if (OTHER_OPERATOR.containsMatchIn(top)) return null
+    // Cut at each binary operator: one after an operand, so a sign stays with what it signs.
+    val operands = ArrayList<String>()
+    var from = 0
+    for (k in top.indices) {
+        if (top[k] !in "+-*/%" || top.getOrNull(k + 1).let { it == '=' || it == top[k] }) continue
+        val before = top.substring(from, k).trimEnd()
+        if (before.isEmpty() || (!isWordPart(before.last()) && before.last() != ')' && before.last() != ']')) continue
+        operands += e.substring(from, k)
+        from = k + 1
+    }
+    if (operands.isEmpty()) return null
+    operands += e.substring(from)
+    return ValueFact.NUMBER.takeIf {
+        operands.all { o ->
+            val operand = o.trim()
+            NUMBER_LITERAL.matchEntire(operand.removePrefix("-")) != null ||
+                valueKind(src, operand, at, constants, sdk = sdk) == ValueFact.NUMBER
+        }
+    }
+}
 
 /**
  * Whether the shape of [value] says it is a number or a boolean, whatever its type: arithmetic, a
@@ -2015,19 +2166,21 @@ internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that
  * The rewrite of the literal or `+` chain to a call of `interpolate`, over it and [trim], the trim
  * call after it, with the imports the file lacks. Each value of [trusted], by its place among the
  * values, is passed as `Trusted(...)`, CSS in the body of a `<style>` that the author vouches for,
- * and the title names them. The text is made the first time it is read, and a copy of the fix
- * under another title shares it.
+ * and the title names them; one not known to be a String, by its entry, as a template of it, `"$v"`, the
+ * text a template writes of it. Each template of [kept] stays in the format as it is written. The
+ * text is made the first time it is read, and a copy of the fix under another title shares it.
  */
 internal fun interpolateFix(
     src: String,
     s: KotlinString,
     trim: String,
-    trusted: Set<Int>,
+    trusted: Map<Int, Boolean>,
+    kept: Set<Int> = emptySet(),
 ): Fix {
-    val named = trusted.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
+    val named = trusted.keys.joinToString(" and ") { holeDisplay(s.interpolations[it]) }
     val title = if (trusted.isEmpty()) ESCAPES_TITLE else "$REWRITE_TITLE, with $named as Trusted(...)"
     val imports = coreImports(src, listOfNotNull("Trusted".takeIf { trusted.isNotEmpty() }, "interpolate"))
-    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted) }
+    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted, kept) }
 }
 
 /**
@@ -2041,10 +2194,12 @@ private fun interpolateText(
     src: String,
     s: KotlinString,
     trim: String,
-    trusted: Set<Int>,
+    trusted: Map<Int, Boolean>,
+    kept: Set<Int>,
 ): String {
     val literals = s.literals.ifEmpty { listOf(s) }
-    val bodies = literals.map { StringBuilder(formatBody(src, it)) }
+    val stays = kept.mapTo(HashSet()) { s.interpolations[it].start }
+    val bodies = literals.map { StringBuilder(formatBody(src, it, stays)) }
     for (value in s.interpolations.filter { it.kind == InterpolationKind.OPERAND }) {
         val before = literals.indexOfLast { it.end <= value.start }
         if (before >= 0) bodies[before].append("%s") else bodies[0].insert(0, "%s")
@@ -2061,16 +2216,31 @@ private fun interpolateText(
         format.append(bodies[k]).append(written.second)
         form = written
     }
-    val values = s.interpolations.mapIndexed { k, it -> if (k in trusted) "Trusted(${it.text.trim()})" else it.text.trim() }
+    val values =
+        s.interpolations.mapIndexedNotNull { k, it ->
+            val text = it.text.trim()
+            val vouched = trusted[k]
+            when {
+                k in kept -> null
+
+                vouched == null -> text
+
+                vouched -> "Trusted($text)"
+
+                // The text a template writes of it: a toString() of a value that is a String after all would be a warning.
+                else -> "Trusted(\"" + (if (IDENT.matchEntire(text) != null) "\$$text" else "\${$text}") + "\")"
+            }
+        }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
     // would break whatever took the String.
-    return "interpolate($format$trim, ${values.joinToString(", ")}).text"
+    return "interpolate($format$trim${values.joinToString("") { ", $it" }}).text"
 }
 
-/** What the literal holds, as source, with each template a `%s` and each per cent sign it writes doubled. */
+/** What the literal holds, as source, with each template a `%s`, but one starting at [stays], and each per cent sign it writes doubled. */
 private fun formatBody(
     src: String,
     literal: KotlinString,
+    stays: Set<Int>,
 ): String {
     // Where the literal writes a per cent sign, and how many characters of source spell it.
     val percents = HashMap<Int, Int>()
@@ -2082,7 +2252,7 @@ private fun formatBody(
         val hole = holes[k]
         val n = percents[k] ?: 0
         if (hole != null) {
-            out.append("%s")
+            out.append(if (k in stays) src.substring(k, hole.end) else "%s")
             k = hole.end
         } else if (n > 0) {
             out.append(src, k, k + n).append(src, k, k + n)
@@ -2345,45 +2515,121 @@ internal fun trustedFix(
     return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, DOMAIN, "Trusted"), preferred = false)
 }
 
-/** The calls that make a List, and those whose result is one, whatever they are called on; not those a String has too. */
-private val LIST_MAKERS =
-    setOf("listOf", "mutableListOf", "arrayListOf", "emptyList", "buildList", "listOfNotNull", "List", "MutableList", "ArrayList")
+/** The calls that make a collection, and those whose result is a List, whatever they are called on; not those a String has too. */
+private val COLLECTION_MAKERS =
+    (
+        "listOf mutableListOf arrayListOf emptyList buildList listOfNotNull List MutableList ArrayList " +
+            "setOf mutableSetOf hashSetOf linkedSetOf sortedSetOf emptySet buildSet " +
+            "mapOf mutableMapOf hashMapOf linkedMapOf sortedMapOf emptyMap buildMap " +
+            "arrayOf emptyArray arrayOfNulls intArrayOf longArrayOf doubleArrayOf booleanArrayOf charArrayOf sequenceOf"
+    ).split(" ").toSet()
 private val LIST_RESULTS =
-    setOf(
-        "toList",
-        "toMutableList",
-        "map",
-        "mapNotNull",
-        "mapIndexed",
-        "flatMap",
-        "filterNotNull",
-        "sorted",
-        "sortedBy",
-        "sortedDescending",
-        "sortedWith",
-        "distinct",
-        "chunked",
-        "windowed",
-        "zip",
+    (
+        "toList toMutableList toSet toMutableSet toTypedArray map mapNotNull mapIndexed flatMap filterNotNull " +
+            "sorted sortedBy sortedDescending sortedWith distinct chunked windowed zip"
+    ).split(" ").toSet()
+
+/** The calls whose result is a collection when what they are called on is one. */
+private val COLLECTION_KEPT = setOf("orEmpty", "filter", "filterNot", "take", "drop", "reversed", "plus", "minus")
+
+/** A collection as a declaration reads its type: the name, without what the brackets after it hold. */
+private val COLLECTION_TYPE =
+    regex(
+        """(?:kotlin\.collections\.|java\.util\.)?(?:(?:Mutable)?(?:List|Set|Map|Collection|Iterable)|ArrayList|HashSet|""" +
+            """LinkedHashSet|HashMap|LinkedHashMap|Sequence|(?:Int|Long|Short|Byte|Double|Float|Boolean|Char)?Array)\??""",
     )
 
-/** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
-private val LIST_TYPE = regex("""(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??""")
+/** A cast at the end of a value, `v as List<*>`, and the type it names. */
+private val CAST = regex("""\sas\??\s+([\p{L}_][\p{L}\p{Nd}_.]*)\s*(?:<.*>)?\??$""")
 
 /** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
 internal fun callResult(value: String): Boolean = holeValues(value).all { lastCall(it.text) != null }
 
-/** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
-internal fun visiblyList(
+/** Whether a constant's text, as the file shows it, holds a per cent sign: in the value as written, or in the `const val` it names. */
+internal fun constantPercent(
     src: String,
     value: String,
     at: Int,
 ): Boolean {
     val t = value.trim()
-    if (IDENT.matchEntire(t) != null) return LIST_TYPE.matchEntire(declarationOf(src, t, at)?.type ?: "") != null
-    val call = lastCall(t) ?: return false
-    return if (call.receiver == null) call.name in LIST_MAKERS else call.name in LIST_RESULTS
+    return '%' in t || (IDENT.matchEntire(t) != null && declarationOf(src, t, at)?.text?.contains('%') == true)
 }
+
+/**
+ * The type the file shows [value] to have: a name's declared type, or, for a property reached
+ * through what holds it, `u.tags`, the one type every property of that name the file declares has.
+ */
+internal fun shownType(
+    src: String,
+    value: String,
+    at: Int,
+): String? {
+    val t = value.trim()
+    if (IDENT.matchEntire(t) != null) return declarationOf(src, t, at)?.type
+    if (PROPERTY_CHAIN.matchEntire(t) == null || '.' !in t) return null
+    val name = t.substringAfterLast('.').removeSuffix("!!").trim()
+    val types =
+        fileFacts(src)
+            .names[name]
+            .orEmpty()
+            .filter { it.shared }
+            .map { it.type }
+    return types.firstOrNull()?.takeIf { first -> types.all { it == first } }
+}
+
+/**
+ * Whether the text shows every value a hole can give to be a collection, a List, a Set, a Map or
+ * an array: declared one, set to one, made by a call that makes one, or cast to one. A template
+ * writes it in brackets, which no CSS is.
+ */
+internal fun collectionShown(
+    src: String,
+    value: String,
+    at: Int,
+    depth: Int = 0,
+): Boolean =
+    depth < VALUE_DEPTH &&
+        holeValues(value).all { v ->
+            val t = unparen(v.text)
+            val cast = CAST.find(t)
+            val sum = splitTop(t, "+")
+            val call = lastCall(t)
+            when {
+                cast != null -> {
+                    COLLECTION_TYPE.matchEntire(cast.groupValues[1]) != null
+                }
+
+                sum.size > 1 -> {
+                    collectionShown(src, sum[0], at, depth + 1)
+                }
+
+                shownType(src, t, at) != null -> {
+                    COLLECTION_TYPE.matchEntire(shownType(src, t, at)!!) != null
+                }
+
+                IDENT.matchEntire(t) != null -> {
+                    val d = declarationOf(src, t, at)
+                    val init = d?.let { initialiser(src, it) }
+                    init != null && collectionShown(src, init, d.at, depth + 1)
+                }
+
+                call == null -> {
+                    false
+                }
+
+                call.receiver == null -> {
+                    call.name in COLLECTION_MAKERS
+                }
+
+                call.name in LIST_RESULTS -> {
+                    true
+                }
+
+                else -> {
+                    call.name in COLLECTION_KEPT && collectionShown(src, call.receiver, at, depth + 1)
+                }
+            }
+        }
 
 /** The package of streamlord-html, whose helpers the expression fixes write. */
 internal const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"

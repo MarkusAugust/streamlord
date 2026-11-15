@@ -155,6 +155,32 @@ class HoleTypesTest : StreamlordTestCase() {
         assertEquals(ValueFact.TRUSTED, facts["\${vs.first()}"])
     }
 
+    fun `test the html of a Trusted is markup, as the text of an Html is`() {
+        val facts =
+            facts(
+                "import io.github.markusaugust.streamlord.core.domain.Trusted\n" +
+                    "class Page(val html: String)\n" +
+                    "fun f(t: Trusted, p: Page) = \"<ul>\${t.html}\${p.html}</ul>\"",
+            )
+        assertEquals(ValueFact.MARKUP, facts["\${t.html}"])
+        assertEquals(ValueFact.STRING, facts["\${p.html}"])
+    }
+
+    fun `test a collection is one by its type, and a collection of Html is markup`() {
+        myFixture.addFileToProject("Users.kt", "package users\nclass U(val tags: List<String>)")
+        val facts =
+            facts(
+                "import io.github.markusaugust.streamlord.core.domain.Html\nimport users.U\n" +
+                    "fun f(u: U, m: Map<String, Int>, a: IntArray, s: Set<String>, rows: List<Html>) = " +
+                    "\"<style>\${u.tags} \$m \$a \$s</style><ul>\$rows</ul>\"",
+            )
+        for (hole in listOf("\${u.tags}", "\$m", "\$a", "\$s")) assertEquals(hole, ValueFact.COLLECTION, facts[hole])
+        assertEquals(ValueFact.MARKUP, facts["\$rows"])
+        // No Trusted vouches for a collection, which a template writes in brackets.
+        myFixture.doHighlighting()
+        assertEmpty(myFixture.getAllQuickFixes().mapNotNull { (QuickFixWrapper.unwrap(it) as? ReplaceTextFix)?.familyName })
+    }
+
     fun `test a margin is passed over only where trimMargin is called on the literal`() {
         val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
         assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
@@ -194,7 +220,7 @@ class HoleTypesTest : StreamlordTestCase() {
                 "\${u}" to ValueFact.UNSIGNED,
                 "\${w}" to ValueFact.UNSIGNED,
                 "\${maybe}" to ValueFact.NULLABLE,
-                "\${n}" to ValueFact.NUMBER,
+                "\${n}" to ValueFact.OPEN_NUMBER,
                 "\${rows.joinToString(\"\")}" to ValueFact.MARKUP,
                 "\${built.joinToString(\"\")}" to ValueFact.MARKUP,
                 "\${trusted.joinToString(\"\")}" to ValueFact.MARKUP,

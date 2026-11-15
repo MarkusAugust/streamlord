@@ -97,9 +97,9 @@ public enum class Position {
     /**
      * A `data-*` attribute whose value Datastar evaluates, an expression or a signal filter
      * ([ElementsGuard.evaluatedAttributes]), or follows as a signal path: `data-bind`, `data-ref`
-     * and `data-indicator`, where `__proto__.x` writes into every object of the page. An attribute
-     * the client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an
-     * ordinary one.
+     * and `data-indicator`, where `__proto__.x` writes into every object of the page; and Pro's
+     * `data-match-media`, whose query the reference writes as a string literal. An attribute the
+     * client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an ordinary one.
      */
     DATASTAR,
 
@@ -174,6 +174,11 @@ public class UnsafeInterpolationException(
                 }
             val fix =
                 when (position) {
+                    Position.DATASTAR if attribute?.substringBefore(':')?.endsWith(MATCH_MEDIA) == true -> {
+                        "Write the query into the markup, where a constant of yours may stand as a Kotlin template, " +
+                            "or set it with the DSL's dataMatchMedia."
+                    }
+
                     Position.DATASTAR -> {
                         // A string written into data-signals is refused by this same rule, so no signal is advised.
                         "Put the value in an attribute of its own, such as data-label, and read it in the expression with " +
@@ -309,7 +314,7 @@ private fun interpolated(
         val landing = landingOf(landscapes, hole)
         // Markup interpolate built is markup where it starts and ends in the data state in
         // every reading, so that it cannot move the holes after it; anywhere else it is characters.
-        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text, hole) }) {
+        if (value is Html && landing.markupInPlace && landscapes.all { it.closes(value.text, hole) }) {
             out.append(value.text)
         } else {
             if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
@@ -421,6 +426,13 @@ private fun Position.admits(value: Any?): Boolean =
         Position.STRUCTURE, Position.CODE -> false
     }
 
+/**
+ * Pro's media query, `data-match-media:dark="'(prefers-color-scheme: dark)'"`: the reference writes
+ * it as a string literal, and Pro's source is not here to say it is never run, so a value is
+ * refused there as in an expression.
+ */
+private const val MATCH_MEDIA = "match-media"
+
 private val SCHEME = regex("^([A-Za-z][A-Za-z0-9+.-]*):")
 private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
 
@@ -485,6 +497,9 @@ private fun StringBuilder.escaped(value: Any?) {
  * @property nameStart Where the attribute name it landed on starts in the markup, when it landed on
  *   one; or -1. The name is the browser's: an `=` first in it is part of it, a value after an `=`
  *   and white space is no name.
+ * @property markupInPlace Whether an [Html] that closes what it opens is written there as it
+ *   stands: in element text that is text in every reading, and not the body of a `textarea` or a
+ *   `title`, where interpolate escapes it as it does anywhere else.
  */
 @InternalStreamlordApi
 public class HoleLanding(
@@ -494,6 +509,7 @@ public class HoleLanding(
     public val loadsCode: Boolean,
     public val tagStart: Int = -1,
     public val nameStart: Int = -1,
+    public val markupInPlace: Boolean = false,
 )
 
 /**
@@ -556,6 +572,7 @@ private fun HoleLanding.inSource(written: Written): HoleLanding =
         loadsCode,
         if (tagStart < 0) tagStart else written.sourceOf(tagStart),
         if (nameStart < 0) nameStart else written.sourceOf(nameStart),
+        markupInPlace,
     )
 
 /**
@@ -568,14 +585,32 @@ private fun HoleLanding.inSource(written: Written): HoleLanding =
 public fun urlSchemeFixedBy(
     attribute: String,
     prefix: String,
-): Boolean {
+): Boolean = settledScheme(attribute, prefix)?.let { it.isEmpty() || it in SAFE_SCHEMES } == true
+
+/**
+ * The scheme the start of a URL attribute's value already writes in full when it is one that does
+ * more than navigate, `javascript` of `javascript:`, lowercased: interpolate then refuses every
+ * value written after it. Null where the start settles no scheme or a safe one; read as
+ * [urlSchemeFixedBy] reads.
+ */
+@InternalStreamlordApi
+public fun refusedUrlScheme(
+    attribute: String,
+    prefix: String,
+): String? = settledScheme(attribute, prefix)?.takeIf { it.isNotEmpty() && it !in SAFE_SCHEMES }
+
+/** The scheme [prefix] writes in full, lowercased, empty where a `/`, `?` or `#` comes first; null where it settles none. */
+private fun settledScheme(
+    attribute: String,
+    prefix: String,
+): String? {
     val decoded = decodeEntities(prefix).text
     val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
     val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     for (c in read) {
         when (c) {
             '/', '?', '#' -> {
-                return true
+                return ""
             }
 
             ':' -> {
@@ -583,11 +618,11 @@ public fun urlSchemeFixedBy(
                     .find(read)
                     ?.groupValues
                     ?.get(1)
-                    ?.asciiLowercase() in SAFE_SCHEMES
+                    ?.asciiLowercase()
             }
         }
     }
-    return false
+    return null
 }
 
 /**
@@ -730,13 +765,15 @@ private fun landingOf(
     hole: Int,
 ): HoleLanding {
     val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
+    val position = strictest.positionOf(hole)
     return HoleLanding(
-        strictest.positionOf(hole),
+        position,
         strictest.attributeAt(hole),
         strictest.valueStartAt(hole),
         strictest.loadsCodeAt(hole),
         strictest.tagStartAt(hole),
         strictest.nameStartAt(hole),
+        position == Position.TEXT && landscapes.all { it.inData(hole) },
     )
 }
 
@@ -1103,7 +1140,7 @@ private class Landscape(
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false
         val rest = lower.substring(prefix.length)
         val name = rest.substringBefore(':').substringBefore("__")
-        return name in ElementsGuard.evaluatedAttributes || name in signalPaths
+        return name in ElementsGuard.evaluatedAttributes || name in signalPaths || name == MATCH_MEDIA
     }
 
     /** The span [at] is in, or -1. Spans are found in order and never overlap, so the last to start at or before it is the one. */

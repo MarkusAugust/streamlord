@@ -473,8 +473,9 @@ describe("code action provider", () => {
     const values = ["${k.rootId}", css, "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
     const text = `${head}${widget(...values)}\n`;
     const rewritten = `${head}interpolate(${widget("%s", "%s", "%s", "%s", "%s")}, k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n`;
+    // One edit, one title, from whichever value it is offered.
+    const title = `Build this string with interpolate(...), with ${css} as Trusted(...)`;
     for (const value of values) {
-      const title = value === css ? `Build this string with interpolate(...), with ${css} as Trusted(...)` : ESCAPES;
       const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
       // The diagnostic's quick fix is the rewrite there, so no refactoring stands beside it.
       const rewrites = actions.filter((a) => a.title.startsWith(REWRITE));

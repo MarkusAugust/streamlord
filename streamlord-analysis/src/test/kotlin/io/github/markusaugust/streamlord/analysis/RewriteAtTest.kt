@@ -31,6 +31,14 @@ class RewriteAtTest {
     }
 
     @Test
+    fun `it has the title of the fix the issues offer, one for the one edit`() {
+        val link = "fun link(url: String, name: String) = \"<a href=\\\"\$url\\\">\$name</a>\""
+        val titles = analyzer.analyzeKotlin(link).flatMap { i -> i.fixes.map { it.title } }.filter { it.startsWith("Build") }
+        assertEquals(listOf(REFUSES_URL_TITLE, REFUSES_URL_TITLE), titles)
+        assertEquals(REFUSES_URL_TITLE, offered(link, "<a")?.title)
+    }
+
+    @Test
     fun `it is offered for a selection that lies in one string, and for none that reaches out of it`() {
         assertEquals(offered(card, "class")!!.apply(card), offered(card, "<p", "\\\"x\\\"")?.apply(card))
         assertNull(offered(card, "= \"", "class"))
