@@ -36,7 +36,7 @@ internal val SHARED_NAME_HELPERS: Set<String> =
         .keys
 
 /** The calls whose pairs name signals: on the page, `dataSignals("count" to 0)`, and from the server. */
-private val PAIR_NAMING =
+internal val PAIR_NAMING: Set<String> =
     Catalog.default.signalCalls
         .filterValues { "names" in it }
         .keys

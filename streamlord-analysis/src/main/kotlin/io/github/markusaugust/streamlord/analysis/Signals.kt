@@ -310,6 +310,12 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
 internal const val ENCODED_CLASS: String = "toJsonValue:"
 internal const val READABLE_CLASS: String = "class:"
 
+/**
+ * A name a DSL call or core declares with a hyphen, which Streamlord refuses at render or send time,
+ * so no page has it: it counts as defined, as the call says, and is no name to complete.
+ */
+internal const val REFUSED: String = "refused:"
+
 /** The argument as one pair, in parentheses or not; a `"k" to` further in is a key inside the value. */
 private val PAIR = regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
@@ -462,7 +468,8 @@ internal fun collectSignalDefinitions(
     val spread = Spread()
     // One reading of a Kotlin file for every call looked for in it.
     val lex = given ?: if (language == SourceLanguage.KOTLIN) lexKotlin(src) else null
-    for (d in definedAt(src, language, spread, foreign, lex, prefix)) out += d.name
+    val refused = HashSet<SignalDeclaration>()
+    for (d in definedAt(src, language, spread, foreign, lex, prefix, refused)) out += if (d in refused) REFUSED + d.name else d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
@@ -565,8 +572,9 @@ private fun definedAt(
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
     lex: KotlinLex? = null,
     prefix: String = CatalogNames.PREFIX,
+    refused: MutableSet<SignalDeclaration>? = null,
 ): List<SignalDeclaration> {
-    val out = ArrayList(declared(src, language, spread, foreign, lex, prefix))
+    val out = ArrayList(declared(src, language, spread, foreign, lex, prefix, refused))
     if (language == SourceLanguage.KOTLIN) {
         for (properties in serializableProperties(src).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
@@ -595,7 +603,8 @@ private fun definedAt(
 /**
  * The places the markup attributes and the DSL calls of [src] define a signal, which a page puts
  * there: no `@Serializable` property and no assignment. [spread] is set when an object form
- * spreads a variable into itself, which may define any signal.
+ * spreads a variable into itself, which may define any signal. [refused] collects the names a
+ * call writes with a hyphen, which signal-name-hyphen reports.
  */
 private fun declared(
     src: String,
@@ -604,9 +613,15 @@ private fun declared(
     foreign: (String, Int) -> Boolean = NOT_FOREIGN,
     given: KotlinLex? = null,
     prefix: String = CatalogNames.PREFIX,
+    refused: MutableSet<SignalDeclaration>? = null,
 ): List<SignalDeclaration> {
     val attributes = declaring(prefix)
     val out = ArrayList<SignalDeclaration>()
+
+    fun named(d: SignalDeclaration) {
+        out += d
+        if ('-' in d.name) refused?.add(d)
+    }
     if (language == SourceLanguage.KOTLIN) {
         val lex = given ?: lexKotlin(src)
         for (site in findCallSites(src, PAIR_CALLS, lex)) {
@@ -616,7 +631,10 @@ private fun declared(
             if (site.name !in Catalog.default.signalCalls && !removes) continue
             val positional = site.positional
             positional.forEachIndexed { idx, a ->
-                for (key in argumentKeys(a.text)) out += key.copy(start = a.start + key.start, end = a.start + key.end)
+                for (key in argumentKeys(a.text)) {
+                    val d = key.copy(start = a.start + key.start, end = a.start + key.end)
+                    if (site.name in PAIR_NAMING || removes) named(d) else out += d
+                }
                 // patchSignals("""{"count": 1}"""): the signals as JSON text.
                 if (site.name in JSON_CALLS) {
                     val s = a.string
@@ -636,9 +654,9 @@ private fun declared(
                 }
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
-                if (removes) out += declarationAt(name, a.start)
+                if (removes) named(declarationAt(name, a.start))
                 if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
-                    out += declarationAt(name, a.start)
+                    named(declarationAt(name, a.start))
                     // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.
                     out += objectDeclarations(positional[1].string!!, "${name.value}.")
                 }
@@ -651,7 +669,7 @@ private fun declared(
                 if (foreign(name, m.range.first)) continue
                 // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
                 if (name in SIGNAL_NAME_HELPERS && onReceiver(src, m.range.first)) continue
-                out += declarationAt(re.groupAt(src, m, 1)!!, 0)
+                named(declarationAt(re.groupAt(src, m, 1)!!, 0))
             }
         }
     }

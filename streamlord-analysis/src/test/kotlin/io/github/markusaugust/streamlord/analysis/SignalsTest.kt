@@ -22,7 +22,9 @@ class SignalsTest {
                 val written = declarations.map { listOf(it.name, src.substring(it.start, it.end)) }
                 assertEquals(expected.map { (it as JsonArray).strings() }, written, name)
             }
-            assertEquals(definitions.filterNot { it == "*" || ':' in it }.toSet(), declarations.map { it.name }.toSet(), name)
+            // A name Streamlord refuses is still where the call declares it, for go to declaration and rename.
+            val named = definitions.map { it.removePrefix(REFUSED) }.filterNot { it == "*" || ':' in it }
+            assertEquals(named.toSet(), declarations.map { it.name }.toSet(), name)
         }
     }
 }

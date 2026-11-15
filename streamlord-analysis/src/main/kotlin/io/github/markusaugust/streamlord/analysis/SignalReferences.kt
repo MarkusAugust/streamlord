@@ -130,15 +130,16 @@ internal fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
-    if (path in defined || ANY_SIGNAL in defined) return true
+    fun has(p: String) = p in defined || REFUSED + p in defined
+    if (has(path) || ANY_SIGNAL in defined) return true
     if (defined.any { it.startsWith(ENCODED_CLASS) && READABLE_CLASS + it.removePrefix(ENCODED_CLASS) !in defined }) return true
     var p = path
     while ('.' in p) {
         p = p.substringBeforeLast('.')
-        if (p in defined) return true
+        if (has(p)) return true
     }
     val inside = "$path."
-    return defined.any { it.startsWith(inside) }
+    return defined.any { it.startsWith(inside) || it.startsWith(REFUSED + inside) }
 }
 
 /** The defined signal [name] most likely misspells, or null when none is close. */

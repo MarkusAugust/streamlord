@@ -663,7 +663,8 @@ public class Analyzer(
         language: SourceLanguage,
         foreign: (String, Int) -> Boolean = { _, _ -> false },
         lex: KotlinLex? = null,
-    ): Set<String> = collectSignalDefinitions(src, language, foreign, lex).filterTo(HashSet()) { '-' in it }
+    ): Set<String> =
+        collectSignalDefinitions(src, language, foreign, lex).filter { '-' in it }.mapTo(HashSet()) { it.removePrefix(REFUSED) }
 
     /**
      * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
