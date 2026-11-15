@@ -299,8 +299,8 @@ private fun enumEntryShown(
  * a constant, the author's own; a string template, as weak as its weakest placeholder; a call to one of
  * Streamlord's expression helpers, the author's code when its arguments are the author's own and
  * a String otherwise; or what the name's declaration says. Null where it shows nothing.
- * Not the [ArgKind] `valueKind` in Interpolations.kt, which asks the type interpolate's `admits`
- * sees: this asks whose text a value is, so the two read literals apart and stay two.
+ * Not `argKind` in KotlinValuesInHtml.kt, which asks the type interpolate's `admits` sees: this
+ * asks whose text a value is, so the two read literals apart and stay two.
  */
 internal fun valueKind(
     src: String,

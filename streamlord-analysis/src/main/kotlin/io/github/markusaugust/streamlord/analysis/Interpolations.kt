@@ -425,7 +425,6 @@ internal enum class ArgKind { STRING, NUMBER, UNSIGNED, BOOLEAN, NULL, CHAR, TRU
 
 internal val KOTLIN_NUMBER = regex("""-?(?:0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d+)?)[LlFfDdUu]*""")
 internal val CHAR_LITERAL = regex("""'(?:[^'\\]|\\.[^']*)'""")
-private val IF_START = regex("""^if\s*\(""")
 
 /** Whether [text] is one call to [name] whose argument list closes at its end: `Trusted(x)`, not `Trusted(x).html`. */
 internal fun wholeCall(
@@ -445,35 +444,4 @@ internal fun wholeCall(
         }
     }
     return false
-}
-
-/**
- * The kind of a value handed to `interpolate`: a literal, `Trusted(...)`, a call to
- * `interpolate` (its Html), or a name the enclosing declaration gives a type. Null when the text
- * does not show it. Not the [ValueFact] `valueKind` in ValueKinds.kt, which asks whose text a value
- * is: this asks the type interpolate's `admits` sees, so `1u` is UNSIGNED here and not a literal there.
- */
-internal fun valueKind(
-    src: String,
-    text: String,
-    literal: Boolean,
-    at: Int,
-): ArgKind? {
-    val t = text.trim()
-    if (literal) return ArgKind.STRING
-    if (KOTLIN_NUMBER.matchEntire(t) != null) return if (UNSIGNED_SUFFIX.containsMatchIn(t)) ArgKind.UNSIGNED else ArgKind.NUMBER
-    if (t == "true" || t == "false") return ArgKind.BOOLEAN
-    if (t == "null") return ArgKind.NULL
-    if (CHAR_LITERAL.matchEntire(t) != null) return ArgKind.CHAR
-    if (IF_START.containsMatchIn(t) && literalOnly(t)) return if ('"' in t) ArgKind.STRING else null
-    if (coreCall(src, t, "Trusted") || (KOTLIN_NAME.matchEntire(t) != null && trustedName(src, t, at))) return ArgKind.TRUSTED
-    if (coreCall(src, t, "interpolate")) return ArgKind.MARKUP
-    // The String of the Html: interpolate(...).text.
-    val html = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
-    if (html != null && coreCall(src, html, "interpolate")) return ArgKind.STRING
-    callKind(src, t, at, emptySet())?.argKind()?.let { return it }
-    if (KOTLIN_NAME.matchEntire(t) == null) return null
-    // `val name = "Gorvek"`: a String, though no type is written.
-    val declared = declaredKind(src, t, at) ?: return if (declarationOf(src, t, at)?.string == true) ArgKind.STRING else null
-    return declared.argKind()
 }
