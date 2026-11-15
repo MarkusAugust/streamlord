@@ -1056,11 +1056,13 @@ public class MarkupValidator(
             val parsed = catalog.parseAttributeName(lower, prefix) ?: continue
             val nameEnd = attr.nameEnd
             val spec = parsed.spec
-            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"]: a template construct
+            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"], Razor's data-bind:@Model.Key: a template construct
             // cut the name short or stands in it, so the key, its modifiers and the value that went with
             // the name are not known until the page is rendered.
             val cut = tagSource != null && cutByTemplate(tagSource, nameEnd - tag.start)
-            val templated = cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name))
+            val templated =
+                cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name)) ||
+                    (engine == TemplateEngine.RAZOR && razorConstructs(attr.name).isNotEmpty())
             if (spec == null && templated) continue
             if (spec == null) {
                 // The rule of the runtime guard, which a key or a modifier after the name makes stricter.

@@ -39,7 +39,7 @@ describe("what the analysis finds in the open documents", () => {
     assert.deepEqual(issues("freemarker", `<div data-text="<#if a>$a<#else>$b</#if>"></div>`), [], "a FreeMarker directive");
     assert.deepEqual(issues("php", `<div data-text="<?= htmlspecialchars("a") ?>"></div>`), [], "PHP");
     assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save')" data-text="@Model.Name" data-show="@(Model.A + 1)"></div>`), [], "Razor");
-    assert.deepEqual(issues("razor", `<input data-bind:@Model.Key="x"><div data-signals:@(Model.K)="1"></div>`), [], "Razor in a name");
+    assert.deepEqual(issues("razor", `<input data-bind:@Model.Key><div data-signals:@(Model.K)="1"></div>`), [], "Razor in a name");
     // Razor writes @@ as the @ Datastar reads: the rest is judged.
     assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save'"></div>`), ["expression-syntax"], "Razor's @@post( is Datastar's @post(");
     // Only the engine's placeholder is left out: what is around it is still judged.
