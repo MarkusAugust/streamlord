@@ -3,7 +3,6 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
-import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
@@ -904,10 +903,7 @@ public class Analyzer(
         s: KotlinString,
         function: String,
     ): Issue? {
-        // Read as the client compiles it, so that an action in it is a call.
-        val rewritten = clientRewrite(s.text)
-        val comma = JsParser.valueComma(rewritten.js).takeIf { it >= 0 } ?: return null
-        val at = rewritten.toExpression(comma)
+        val at = Brackets(s.text, jsRegions(s.text)).topCommas.firstOrNull() ?: return null
         val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
         val r = s.toSource(at, at + 1)
         return Issue(

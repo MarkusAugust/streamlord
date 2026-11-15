@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.radixDouble
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.MarkupVisitor
@@ -130,37 +131,168 @@ private val KEY_ESCAPE = regex("""(?s)\\(.)""")
  */
 private fun keyParts(k: ObjectKey): List<String> = k.parts.map { p -> KEY_ESCAPE.replace(p) { it.groupValues[1] } }
 
-/** The names that hold no function, which a script cannot set otherwise. */
-private val NO_FUNCTION_NAMES = setOf("undefined", "NaN", "Infinity")
+/** A number literal, whole. */
+private val NUMBER = regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
+private val NO_FUNCTION_WORDS = setOf("true", "false", "null", "undefined", "NaN", "Infinity")
+private val UNARY_WORDS = setOf("typeof", "void", "delete")
+private val BINARY_WORDS = setOf("in", "instanceof")
+private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
 
 /**
  * Whether the JavaScript expression [value] is sure to give no function: a literal (a number, a
- * string, a template, a regular expression, an array with such an item), or an operation, unary or
- * joining operands by an arithmetic, bitwise or comparison operator. A name, a call, `new`, a value
- * in parentheses, and `?:`, `||`, `&&`, `??`, `=`, `=>` or `,` may give one, and are not judged,
- * nor is a value the client cannot compile.
+ * string, a template, a regular expression, an array with such an item), a unary operation, or
+ * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
+ * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
+ * judged.
  */
 internal fun certainlyNoFunction(value: String): Boolean {
-    // Only a value the client compiles, in the parentheses it writes around it, is judged: `1 // c` is none.
-    if (JsParser.error("($value)") != null) return false
-    return JsParser.value(value)?.let { noFunction(value, it) } ?: false
+    val v = value.trim()
+    if (v.isEmpty()) return false
+    if (NUMBER.matchEntire(v) != null || v in NO_FUNCTION_WORDS) return true
+    val regions = jsRegions(v)
+    var depth = 0
+    var binary = false
+    var unary = false
+    // Whether what came last at the top level ends an operand, and whether anything came yet.
+    var operand = false
+    var started = false
+    // The literals and brackets that open an operand at the top level, and whether a name, an
+    // operator or a member access stands there as well.
+    var groups = 0
+    var code = false
+    var lastRegion = Region.CODE
+    var i = 0
+    while (i < v.length) {
+        val c = v[i]
+        val r = regions[i]
+        val step = i
+        i++
+        when {
+            r == Region.TEMPLATE && c == '$' && v.getOrNull(step + 1) == '{' && v.getOrNull(step - 1) != '\\' -> {
+                depth++
+                i++
+            }
+
+            r == Region.TEMPLATE && c == '}' && depth > 0 && regions[step - 1] == Region.CODE -> {
+                depth--
+            }
+
+            r == Region.CODE && (c == '(' || c == '[' || c == '{') -> {
+                if (depth == 0) {
+                    if (operand) code = true else groups++
+                    started = true
+                    lastRegion = Region.CODE
+                }
+                depth++
+            }
+
+            r == Region.CODE && (c == ')' || c == ']' || c == '}') -> {
+                depth = maxOf(depth - 1, 0)
+                if (depth == 0) operand = true
+            }
+
+            depth > 0 || r == Region.COMMENT -> {}
+
+            r != Region.CODE -> {
+                if (r != lastRegion) {
+                    if (operand) code = true else groups++
+                }
+                lastRegion = r
+                operand = true
+                started = true
+            }
+
+            else -> {
+                lastRegion = Region.CODE
+                val next = v.getOrNull(step + 1)
+                when {
+                    c.isJsWhitespace() -> {}
+
+                    c == '?' || c == ',' || (c == '=' && next == '>') || ((c == '|' || c == '&') && next == c) -> {
+                        return false
+                    }
+
+                    c == '=' && next != '=' && v.getOrNull(step - 1)?.let { it in "=!<>" } != true -> {
+                        return false
+                    }
+
+                    c.isJsNamePart() -> {
+                        var j = step + 1
+                        while (j < v.length && v[j].isJsNamePart()) j++
+                        val word = v.substring(step, j)
+                        i = j
+                        if (operand && word in BINARY_WORDS) {
+                            binary = true
+                            operand = false
+                        } else if (!started && word in UNARY_WORDS) {
+                            unary = true
+                        } else {
+                            operand = true
+                            code = true
+                        }
+                        started = true
+                    }
+
+                    c == '.' -> {
+                        code = true
+                    }
+
+                    c !in OPERATOR_CHARS -> {
+                        return false
+                    }
+
+                    else -> {
+                        if (operand) {
+                            binary = true
+                        } else if (!started) {
+                            unary = true
+                        }
+                        operand = false
+                        code = true
+                        started = true
+                    }
+                }
+            }
+        }
+    }
+    if (depth != 0) return false
+    if (binary || unary) return true
+    if (groups != 1 || code) return false
+    // The client takes the functions out of an array as it does out of an object (`updateLeaves`
+    // in paths.ts), so an array gives no function only where one of its items is sure to give none.
+    if (v[0] == '[') return arrayItems(v, regions).any { certainlyNoFunction(it) }
+    return regions[0] != Region.CODE
 }
 
-private fun noFunction(
-    text: String,
-    v: JsValue,
-): Boolean =
-    when (v.kind) {
-        JsKind.STRING, JsKind.TEMPLATE, JsKind.NUMBER, JsKind.BOOLEAN, JsKind.NULL, JsKind.REGEX, JsKind.OPERATION -> true
+/** The items of the array literal [v], split at the commas of its top level. */
+private fun arrayItems(
+    v: String,
+    regions: ByteArray,
+): List<String> {
+    val items = ArrayList<String>()
+    var depth = 0
+    var from = 1
+    for (i in v.indices) {
+        if (regions[i] != Region.CODE) continue
+        when (v[i]) {
+            '(', '[', '{' -> {
+                depth++
+            }
 
-        JsKind.NAME -> text.substring(v.start, v.end) in NO_FUNCTION_NAMES
+            ')', ']', '}' -> {
+                if (--depth == 0) items += v.substring(from, i)
+            }
 
-        // The client takes the functions out of an array as it does out of an object (`updateLeaves`
-        // in paths.ts), so an array gives no function only where one of its items is sure to give none.
-        JsKind.ARRAY -> v.items.any { it != null && noFunction(text, it) }
-
-        else -> false
+            ',' -> {
+                if (depth == 1) {
+                    items += v.substring(from, i)
+                    from = i + 1
+                }
+            }
+        }
     }
+    return items
+}
 
 /**
  * Whether the JavaScript expression [value] may give an object literal it holds: one that opens the
@@ -1685,7 +1817,7 @@ public class MarkupValidator(
         // The free plugins hand the value to filtered, as a backend action its filterSignals; Pro's are not read here.
         if (!spec.pro) {
             out +=
-                filterValueIssues(catalog, text, ::source, name, link)
+                filterValueIssues(catalog, text, jsRegions(text), ::source, name, link)
         }
         for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
             val (start, end) = source(issue.start, issue.end)

@@ -131,6 +131,9 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
+/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
+private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
+
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
 // on either side, any character beyond ASCII counted as one.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
@@ -934,17 +937,9 @@ public class ExpressionValidator(
                 )
         }
 
-        val read = JsParser.read(rewritten.js)
-        // Without a known attribute an expression may also be an object literal, which a script reads as a block:
-        // read in parentheses, one character on.
-        val asObject =
-            if (returnsValue == null && read.error != null && rewritten.js.trimStart().startsWith("{")) {
-                JsParser.read("(${rewritten.js})").takeIf { it.error == null }
-            } else {
-                null
-            }
-        val parseError = read.error
-        val err = if (asObject != null) null else parseError
+        val parseError = JsParser.error(rewritten.js)
+        // Without a known attribute an expression may also be an object literal, which a script reads as a block.
+        val err = if (returnsValue == null) parseError?.takeUnless { objectLiteralParses(rewritten.js) } else parseError
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
@@ -954,7 +949,12 @@ public class ExpressionValidator(
             val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
             val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
             // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
-            val awaitAt = err.awaitAt.takeIf { it >= 0 }?.let(::toText)
+            val awaitAt =
+                AWAIT_BEFORE
+                    .find(rewritten.js.substring(0, err.pos))
+                    ?.range
+                    ?.first
+                    ?.let(::toText)
             if (awaitAt != null) {
                 val message =
                     "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
@@ -965,9 +965,7 @@ public class ExpressionValidator(
             }
         }
 
-        if (err == null) {
-            issues += actionArgumentIssues(catalog, js, rewritten, asObject?.calls ?: read.calls, ::span, if (asObject != null) 1 else 0)
-        }
+        if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
 
         val starts by lazy { stringStarts(regions) }
         val templates by lazy { TemplateReasons(js, rewritten.runs) }
@@ -1344,6 +1342,13 @@ private fun updatedBefore(
     val before = text.getOrNull(b - 1)
     return !(before.isJsNamePart() || before == ')' || before == ']')
 }
+
+/**
+ * With no attribute to say whether the value is read, an expression that opens with `{` may be an
+ * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
+ * script parse fails, the text is tried once more inside parentheses.
+ */
+private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null
 
 /** The signal name typed so far just before [offset] (`$cou|` gives `cou`, `$|` gives ""), or null when not in a signal. */
 internal fun signalPrefixAt(

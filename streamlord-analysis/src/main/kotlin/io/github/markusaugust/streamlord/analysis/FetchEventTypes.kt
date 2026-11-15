@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
@@ -12,6 +11,10 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
+private val OPERATOR_BEFORE = regex("""(?:===?|!==?)\s*$""")
+private val SWITCH_BEFORE = regex("""(?<![\w$.])switch\s*\(\s*$""")
+private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
+private val CASE = regex("""(?<![\w$.])case\s*""")
 
 /** The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched with. */
 internal fun fetchTypeIssues(
@@ -21,14 +24,6 @@ internal fun fetchTypeIssues(
     if ("detail" !in text) return emptyList()
     val regions = jsRegions(text)
     val out = ArrayList<Issue>()
-    // The switches as the client compiles the text, a rewritten signal standing where it began; none where it does not parse.
-    val rewritten = clientRewrite(text)
-    val at = { o: Int -> if (o >= rewritten.js.length) text.length else rewritten.toExpression(o) }
-    // Each switch by where its subject starts: its subject's end and its cases, at offsets of the text.
-    val switches =
-        JsParser.read(rewritten.js).switches.associate { w ->
-            at(w.subjectStart) to (at(w.subjectEnd) to w.cases.map { at(it.start) until at(it.end) })
-        }
 
     /** The string literal from [open] to its closing quote, without an escape or a template's code in it. */
     fun literal(open: Int): IntRange? {
@@ -45,15 +40,14 @@ internal fun fetchTypeIssues(
         if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
         val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
         val left =
-            operatorBefore(text, at).takeIf { it >= 0 }?.let { op ->
-                var close = op - 1
+            OPERATOR_BEFORE.find(text.substring(0, at).trimEnd())?.let { op ->
+                var close = op.range.first - 1
                 while (close >= 0 && isJsSpace(text[close])) close--
                 val q = text.getOrNull(close)
                 val open = if (q == null) -1 else text.lastIndexOf(q, close - 1)
                 if (open >= 0) literal(open)?.takeIf { it.last == close } else null
             }
-        val cases = switches[at]?.takeIf { it.first == m.range.last + 1 }?.second.orEmpty()
-        for (range in listOfNotNull(left, right) + cases.mapNotNull { c -> literal(c.first)?.takeIf { it.last == c.last } }) {
+        for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
             val type = text.substring(range.first + 1, range.last)
             if (type in catalog.fetchEvents || type.startsWith("datastar")) continue
             val near =
@@ -83,15 +77,39 @@ internal fun fetchTypeIssues(
 }
 
 /**
- * Where the `===`, `==`, `!==` or `!=` that ends [text] before [at], past white space, starts; -1
- * where none does. Read back from [at], so that each comparison costs what it spans.
+ * The string literals of the cases of `switch (evt.detail.type) { ... }`, where the match from
+ * [at] until [end] is that switch's subject: a switch compares with each case by `===`. A case of
+ * a switch nested inside is that switch's.
  */
-private fun operatorBefore(
+private fun switchCases(
     text: String,
+    regions: ByteArray,
     at: Int,
-): Int {
-    var end = at
-    while (end > 0 && text[end - 1].isWhitespace()) end--
-    for (op in listOf("!==", "===", "!=", "==")) if (text.startsWith(op, end - op.length)) return end - op.length
-    return -1
+    end: Int,
+    literal: (Int) -> IntRange?,
+): List<IntRange> {
+    if (SWITCH_BEFORE.find(text.substring(0, at)) == null) return emptyList()
+    val open = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
+    val out = ArrayList<IntRange>()
+    var depth = 0
+    var i = open
+    while (i < text.length) {
+        if (regions[i] == Region.CODE) {
+            when (text[i]) {
+                '{' -> {
+                    depth++
+                }
+
+                '}' -> {
+                    if (--depth == 0) break
+                }
+
+                'c' -> {
+                    if (depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { out += it } }
+                }
+            }
+        }
+        i++
+    }
+    return out
 }
