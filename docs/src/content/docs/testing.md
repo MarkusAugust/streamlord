@@ -187,6 +187,38 @@ The stream carried 3 events:
   event: datastar-patch-signals | data: signals {"heads":13}
 ```
 
+## An answer that is no stream
+
+`respondElements`, `respondSignals` and `respondScript` on Ktor, and `datastarElements`,
+`datastarSignals` and `datastarScript` on Spring, answer with one body and put the options of the
+patch in `datastar-*` headers. Hand `datastarEvents` the headers as well, and it reads the answer
+by its content type, as Datastar's client does:
+
+```kotlin sample=test
+@Test
+fun `the search answers with what it found`() =
+    testApplication {
+        routing {
+            get("/search") {
+                call.respondElements("<li>Ashes</li>", selector = "#results", mode = ElementPatchMode.INNER)
+            }
+        }
+
+        val response = client.get("/search")
+        val events = datastarEvents(response.bodyAsText(), response.headers::get)
+
+        events.assertPatchElements(selector = "#results", mode = ElementPatchMode.INNER, containing = "Ashes")
+    }
+```
+
+Every assertion above works on it. HTML is one element patch with the selector, mode, namespace and
+view transition its headers give it, and JSON one signal patch, which `assertSignal` folds.
+JavaScript is the `<script>` the client appends to the head, with the attributes of its header, and
+comes back as the element patch that appends it, as a script on a stream comes back as the one that
+appends it to the body. An answer of any other type is read as a stream, as the client reads it.
+On Spring, hand over `response::getHeader` of the `MockHttpServletResponse` that `MockMvcTester`
+gives you, or `result.responseHeaders::getFirst` of WebTestClient's result.
+
 ## The same, in Spring WebMVC
 
 No server at all. `MockHttpServletResponse` from `spring-test` takes the `StreamingResponseBody`

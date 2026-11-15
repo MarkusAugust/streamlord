@@ -187,9 +187,34 @@ All notable changes to Streamlord are recorded here. The format follows
   `awaitPatchElements` on `LiveDatastarStream` takes them before `timeout`, which breaks a call
   that passes `timeout` by position: name it, `timeout = 5.seconds`. Code compiled against the old
   signatures needs a rebuild.
+- `datastarSignals` of a value in streamlord-spring takes the bean last, as `datastarElements` does:
+  `datastarSignals(value, onlyIfMissing, streamlord)`. A call that passed the bean second by
+  position no longer compiles; one that names its arguments compiles as before.
+- In the catalog, core's SSE calls and answers are one list, `kotlinCallSites.events`, with what each
+  takes and its flags, in place of the lists `html`, `script` and `selector` and core's entries of
+  `signals`. It names every call of the public API that sends an event or answers, `ScriptResponse`,
+  `PatchSignals`, `SignalsResponse` and the companions' functions among them, and every check of
+  both editors reads it: VS Code colours the JavaScript of `ScriptResponse("...")`, and both editors
+  read the keys of `PatchSignals` and `SignalsResponse` as the signals they declare.
+- `PatchSignals` and `SignalsResponse` refuse JSON that is no object for what the client makes of
+  it, `signals must be one JSON object, not an array: the client patches its items as signals named
+  0, 1 and on`, where they said that the client runs it as JavaScript, and `SseDecoder` says the
+  same of such a frame. A selector over two data lines, which the client joins with a line break,
+  is told as the stream wrote it, where the decoder gave the rule for building an event.
+- The editors name a companion's function as it is called: `ExecuteScript.redirect throws: ...`.
 
 ### Added
 
+- `datastarEvents(body, header)` in streamlord-test reads an answer that is no stream, by its
+  content type and its `datastar-*` headers, as Datastar's client reads it, into the same
+  `DatastarEvents`: `datastarEvents(response.bodyAsText(), response.headers::get)` on Ktor,
+  `response::getHeader` on Spring's `MockHttpServletResponse`. Any other answer is read as a stream.
+  [Testing](https://streamlord-docs.netlify.app/testing/#an-answer-that-is-no-stream) shows how.
+- [Spring WebFlux](https://streamlord-docs.netlify.app/spring-webflux/#heartbeats) says that a flow
+  has no heartbeat, whatever the bean says, and shows the ticker that keeps it from being silent.
+  [Security](https://streamlord-docs.netlify.app/security/) says that a relative URL may lead to
+  another host, and [Strings](https://streamlord-docs.netlify.app/strings/) names every URL
+  attribute `interpolate` holds to a safe scheme, `formaction` and `xlink:href` among them.
 - The editors flag a literal argument of an SSE call or an answer that core refuses as it runs, in
   core's own words: an empty or non-ASCII `eventId`, a `retry` of no time, less or a fraction of a
   millisecond, a blank or multi-line selector or `viewTransitionSelector`, signals that are not one
@@ -197,7 +222,11 @@ All notable changes to Streamlord are recorded here. The format follows
   selector a response header cannot carry. The rules live once, in core's `EventRules`. A call is
   judged in a file that imports Streamlord and neither declares the name nor imports it from
   elsewhere, made without a receiver, on `this`, on one of core's companions, on a receiver named
-  as a stream (`sse`, `stream`, `datastar`), or on `call` for Ktor's `respond*`.
+  as a stream (`sse`, `stream`, `datastar`), or on `call` for Ktor's `respond*`. They flag as well
+  an attribute of a script that HTML cannot name, the effect attribute beside `autoRemove`, a line
+  break in an attribute of `respondScript`, `ScriptResponse` or `datastarScript`, a blank selector
+  of `PatchElements.remove`, a signal name with a hyphen in `PatchSignals.remove`, and an SVG or
+  MathML element outside its root, or HTML in a patch in the svg or mathml namespace.
 - The editors offer the types of `@intl` as its first argument, and the types `datastar-fetch` is
   dispatched with after `evt.detail.type ===` in a `data-on:datastar-fetch` handler. A type compared
   there that the client never dispatches, `'start'` for `'started'`, is warned of, with the fix.
@@ -340,7 +369,9 @@ All notable changes to Streamlord are recorded here. The format follows
   as a property, as IntelliJ does, and gives a value's quotes the string colour.
 - VS Code reads a line of many Datastar attributes in time that grows with its length, where it
   grew with its square: 400 attributes take a quarter of the time they did.
-
+- VS Code no longer flags a blank selector of `removeElements`, or a mode without a selector of
+  `patchElements`, on a call that is not Streamlord's: in a file that imports nothing of Streamlord,
+  or on a class of the file's own, `o.removeElements("")`; IntelliJ did not.
 - `payload = null` in the options of a backend action is written as `payload: null`, and the client
   sends `null`, where it wrote nothing and the signals went. The server reads that `null`, in the
   body or as `?datastar=null`, as no signals, as it reads an absent body: `readSignals()` gives the
