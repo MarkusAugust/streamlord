@@ -270,9 +270,13 @@ object HoleFacts {
             }
 
             // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
-            lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType ||
-                lower.isClass(NUMBER_CLASS) -> {
+            lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType -> {
                 if (definite) ValueFact.NUMBER else ValueFact.NULLABLE
+            }
+
+            // A Number of no closed type, whose class may write anything; one that may be null is not known.
+            lower.isClass(NUMBER_CLASS) -> {
+                if (definite) ValueFact.OPEN_NUMBER else null
             }
 
             // Digits too, but not a kotlin.Number: interpolate refuses one where only a number is let in.

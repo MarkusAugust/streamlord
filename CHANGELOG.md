@@ -356,7 +356,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - A literal in a value joined into a `+` chain, `"<ul>" + tags.map { "<li>$it</li>" }.joinToString("") + "</ul>"`,
   or in a template of one of its literals, is judged as a string of its own, where it was passed over.
 - A number, a boolean or a nullable one in a `<script>`, a `<style>` or an event handler, and a
-  boolean in `style`, is no longer a warning: digits, `true`, `false` and `null` cannot end them.
+  boolean in `style`, is no longer a warning: digits, `true`, `false` and `null` cannot end them. A
+  `kotlin.Number`, which a class of any text may be, still is in code.
   The rewrite to `interpolate` keeps such a value a template in the format, so it no longer keeps
   the rewrite from the other values. A String in the body of a `<style>` is said to be read as CSS,
   with advice for CSS, where it was told to move into a `data-*` attribute.

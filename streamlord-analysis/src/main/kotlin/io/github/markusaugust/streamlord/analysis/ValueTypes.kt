@@ -11,7 +11,10 @@ import io.github.markusaugust.streamlord.core.client.regex
 /** Streamlord's own markup types, bare as an import gives them or written out in full. */
 private const val CORE_DOMAIN = """(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?"""
 
-private val NUMBER_TYPE = regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float|Number)""")
+private val NUMBER_TYPE = regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float)""")
+
+/** A Number of no closed type, whose class may write anything; one that may be null is not known. */
+private val OPEN_NUMBER_TYPE = regex("""(?:kotlin\.)?Number""")
 
 /** Digits, but not a `kotlin.Number`: interpolate refuses one where only a number is let in. */
 private val UNSIGNED_TYPE = regex("""(?:kotlin\.)?(?:UInt|ULong|UShort|UByte)""")
@@ -74,6 +77,8 @@ internal fun ValueFact.Companion.ofTypeName(written: String): ValueFact? {
     val nullable = bare != type
     return when {
         NUMBER_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.NUMBER
+
+        OPEN_NUMBER_TYPE.matchEntire(bare) != null -> if (nullable) null else ValueFact.OPEN_NUMBER
 
         UNSIGNED_TYPE.matchEntire(bare) != null -> if (nullable) ValueFact.NULLABLE else ValueFact.UNSIGNED
 

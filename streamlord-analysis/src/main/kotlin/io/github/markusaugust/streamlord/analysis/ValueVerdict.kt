@@ -51,9 +51,9 @@ internal fun verdict(
             }
         }
 
-        // Digits, true, false or null cannot end a script, a style or an event handler.
+        // Digits, true, false or null cannot end a script, a style or an event handler; the text of an open Number may.
         Position.CODE -> {
-            if (plain.scalar()) Verdict.SAFE else Verdict.UNSAFE
+            if (plain.scalar() && fact != ValueFact.OPEN_NUMBER) Verdict.SAFE else Verdict.UNSAFE
         }
 
         Position.STRUCTURE -> {
@@ -75,6 +75,7 @@ internal fun ValueFact?.plain(): ValueFact? =
     when (this) {
         ValueFact.NULLABLE_STRING -> ValueFact.STRING
         ValueFact.TRUSTED -> ValueFact.MARKUP
+        ValueFact.OPEN_NUMBER -> ValueFact.NUMBER
         else -> this
     }
 
@@ -107,7 +108,7 @@ internal fun ValueFact.described(): String = if (this == ValueFact.UNSIGNED) "an
 internal fun ValueFact?.argKind(): ArgKind? =
     when (this) {
         ValueFact.STRING, ValueFact.NULLABLE_STRING -> ArgKind.STRING
-        ValueFact.NUMBER -> ArgKind.NUMBER
+        ValueFact.NUMBER, ValueFact.OPEN_NUMBER -> ArgKind.NUMBER
         ValueFact.UNSIGNED -> ArgKind.UNSIGNED
         ValueFact.BOOLEAN -> ArgKind.BOOLEAN
         ValueFact.MARKUP -> ArgKind.MARKUP
@@ -144,6 +145,7 @@ private val WEAKEST_FIRST =
         ValueFact.TRUSTED,
         ValueFact.NULLABLE,
         ValueFact.UNSIGNED,
+        ValueFact.OPEN_NUMBER,
         ValueFact.BOOLEAN,
         ValueFact.NUMBER,
         ValueFact.CONSTANT,

@@ -65,6 +65,9 @@ public enum class ValueFact {
 
     /** A List, a Set, a Map or an array, which a template writes in brackets: no CSS, nor anything to vouch for. */
     COLLECTION,
+
+    /** A `kotlin.Number` of no closed type: a number to interpolate, but a class of it may write any text in code. */
+    OPEN_NUMBER,
     ;
 
     /** What [ofTypeName] in ValueTypes.kt hangs on. */
@@ -1735,7 +1738,7 @@ public class Analyzer(
             val landing = landings[k]
             val fact = told[k].plain()
             val shown = holeDisplay(ip)
-            val factSays = verdict(fact, landing.position)
+            val factSays = verdict(told[k], landing.position)
             // In a Datastar expression `$name` may be meant as a signal, whatever the value is.
             if (factSays == Verdict.SAFE && landing.position != Position.DATASTAR) continue
             val severity = if (fact.knownCharacters()) Severity.WARNING else Severity.HINT

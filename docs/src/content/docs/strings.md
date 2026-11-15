@@ -273,8 +273,8 @@ expression, where it runs, so it is judged as the `String` it returns. IntelliJ 
 itself and takes an entry only when the enum does not override `toString`. Any other value is judged by what `interpolate` would let in
 where it lands. A number or a boolean says nothing in text, an attribute, a URL, a `data-*`
 expression or `style`, nor in a `<script>`, a `<style>` or an event handler, which digits, `true` and
-`false` cannot end; one that may be null, an `Int?`, only where escaping is enough and in code, which
-`null` cannot end either. Where `interpolate` would refuse such a value, the rewrite keeps it a
+`false` cannot end, though a `kotlin.Number`, which any class may be, is no digits there; one that may
+be null, an `Int?`, only where escaping is enough and in code, which `null` cannot end either. Where `interpolate` would refuse such a value, the rewrite keeps it a
 template in the format. An unsigned number, a `UInt` or a `3u`, says nothing where escaping is enough and is a hint
 in a `data-*` expression or `style`: Kotlin writes its digits, but `interpolate` would refuse it
 there. A value that is markup you built, as a whole, says nothing in element text and is a warning
@@ -288,7 +288,8 @@ so `${if (blank) "nothing" else query}` is the `String` it may be.
 
 VS Code knows what the file it is in declares, each name in the scope it is declared in, and every
 `const val` in the workspace that the file does not declare as something else; it reads a comparison
-as a Boolean, arithmetic of numbers it knows as a number, and the `name` of an enum entry as yours; IntelliJ also knows
+as a Boolean, arithmetic of numbers it knows as a number, and the `name` of an entry of an enum the
+file shows as yours; IntelliJ also knows
 the types, and what it knows of a value comes before anything the text suggests. Nothing here is an error, because a value the text cannot see into may well
 be a number.
 
