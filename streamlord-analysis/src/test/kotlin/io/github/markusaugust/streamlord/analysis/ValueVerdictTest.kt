@@ -32,8 +32,14 @@ class ValueVerdictTest {
                 markup.replace("\"", "\\\"").replace("§", "\${v}") + "\""
         val issue =
             analyzer
-                .analyzeKotlin(Source(src, SourceLanguage.KOTLIN, valueFact = { s, e -> fact.takeIf { src.substring(s, e).trim() == "\${v}" } }))
-                .singleOrNull()
+                .analyzeKotlin(
+                    Source(src, SourceLanguage.KOTLIN, valueFact = {
+                        s,
+                        e,
+                        ->
+                        fact.takeIf { src.substring(s, e).trim() == "\${v}" }
+                    }),
+                ).singleOrNull()
         return when {
             issue == null -> "SAFE"
             issue.code == "unescaped-interpolation" -> "ESCAPE"

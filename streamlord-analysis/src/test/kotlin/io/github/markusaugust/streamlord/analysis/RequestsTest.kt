@@ -4,7 +4,6 @@ import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
-import io.github.markusaugust.streamlord.core.json.mergePatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -140,6 +139,7 @@ class RequestsTest {
                 // As the variables a request may name: the file's own, each by its key.
                 val env = Requests.environment(c.string("text")!!, "http://default", null)
                 val own = env.vars.filter { it.source == Requests.VariableSource.ENV }
+
                 fun named(key: String) = own.firstOrNull { it.name == key }?.value
                 val headers = named("headers")?.lines()?.map { listOf(it.substringBefore(": "), it.substringAfter(": ")) }
                 val params = own.filter { it.name !in setOf("baseUrl", "signals", "headers") }.map { listOf(it.name, it.value) }
@@ -222,7 +222,10 @@ class RequestsTest {
             RequestsFile(emptyList(), ".streamlord/inspector.json is not valid JSON at line 1, column 1."),
             Requests.parseRequestsFile("not json"),
         )
-        assertEquals(listOf(".streamlord/env.json is not valid JSON at line 1, column 1."), Requests.environment("not json", "http://default", null).errors)
+        assertEquals(
+            listOf(".streamlord/env.json is not valid JSON at line 1, column 1."),
+            Requests.environment("not json", "http://default", null).errors,
+        )
         val broken = Requests.parseRequestsFile("{\"requests\":[{\"name\":\"a\",\"url\":\"/a\"},]}", "req.json")
         assertTrue(broken.error!!.startsWith("req.json is not valid JSON"), broken.error)
     }
