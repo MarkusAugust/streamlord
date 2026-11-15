@@ -148,10 +148,14 @@ async function scopes(files) {
         // The first scope is the file's own, the same on every token.
         return { line: i + 1, tokens: result.tokens.map((t) => [line.slice(t.startIndex, t.endIndex), t.scopes.slice(1).join(" ")]) };
       })
-      .filter((l) => l.tokens.some(([text]) => text.trim() !== ""));
+      // A line without a Streamlord or Datastar scope is the host grammars' alone; one that gains or loses one shows as a difference.
+      .filter((l) => l.tokens.some(([text]) => text.trim() !== "") && l.tokens.some(([, scope]) => OWN_SCOPE.test(scope)));
   }
   return out;
 }
+
+/** A scope the extension's grammars give and no host grammar does: a name that ends in `.datastar` or holds `streamlord`. */
+const OWN_SCOPE = /(?:^|[ .])(?:datastar|streamlord)(?:[ .]|$)/;
 
 /** One line of JSON, keys sorted, with the record's kind and place first. */
 function line(value) {
