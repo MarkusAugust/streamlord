@@ -8,22 +8,25 @@ import kotlin.test.assertTrue
 
 class CspNonceTest {
     @Test
-    fun `a generated nonce is base64 and never repeats`() {
-        val nonces = List(1000) { CspNonce.generate() }
-
-        assertEquals(1000, nonces.toSet().size, "a nonce that repeats is a constant")
-        for (nonce in nonces) {
-            assertEquals(nonce, CspNonce.checked(nonce))
-            assertEquals(24, nonce.length, "16 bytes, base64, padded")
-        }
-    }
-
-    @Test
     fun `the starter policy carries the nonce where script-src looks for it`() {
         val policy = CspNonce.starterPolicy("abc123+/=")
 
         assertTrue(policy.contains("script-src 'self' 'nonce-abc123+/='"), policy)
         assertTrue(policy.contains("default-src 'self'"), policy)
+    }
+
+    /**
+     * In CSP mode Datastar's client creates one Trusted Types policy, `datastar` (engine/csp.ts), and
+     * passes every string it turns into markup or a script through it, so the starter policy can
+     * require Trusted Types and allow that one policy by name.
+     */
+    @Test
+    fun `the starter policy requires Trusted Types and allows the one policy Datastar creates`() {
+        val policy = CspNonce.starterPolicy("abc123+/=")
+
+        assertTrue(policy.contains("require-trusted-types-for 'script'"), policy)
+        assertTrue(policy.contains("trusted-types datastar"), policy)
+        assertEquals("datastar", CspNonce.TRUSTED_TYPES_POLICY)
     }
 
     @Test
@@ -46,6 +49,17 @@ class CspNonceTest {
     fun `a nonce from another generator passes when it is a base64 value`() {
         for (good in listOf("deadbeef", "a-b_c", "QUJD", "QQ==")) {
             assertEquals(good, CspNonce.checked(good))
+        }
+    }
+
+    @Test
+    fun `a generated nonce is base64 and never repeats`() {
+        val nonces = List(1000) { CspNonce.generate() }
+
+        assertEquals(1000, nonces.toSet().size, "a nonce that repeats is a constant")
+        for (nonce in nonces) {
+            assertEquals(nonce, CspNonce.checked(nonce))
+            assertEquals(24, nonce.length, "16 bytes, base64, padded")
         }
     }
 }

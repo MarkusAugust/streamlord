@@ -9,8 +9,10 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureNames
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -19,7 +21,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.4
+ * Holds the core to `conformance/client/signal-store.json`, the output of the Datastar 1.0.5
  * client's `mergePatch` and `filtered` (engine/signals.ts), `pathToObj` (utils/paths.ts) and
  * `isStringTrue` (utils/text.ts) run by `conformance/generate/client.mjs`, and to
  * `conformance/client/expressions.json`, the body `genRx` (engine/engine.ts) compiles.
@@ -27,7 +29,7 @@ import kotlin.test.assertTrue
 class ClientOracleTest {
     private fun group(name: String): List<JsonObject> =
         JsonParser
-            .parseObject(File("../conformance/client/signal-store.json").readText())
+            .parseObject(fixtureText("conformance/client/signal-store.json"))
             .obj("cases")!!
             .array(name)!!
             .objects()
@@ -133,9 +135,24 @@ class ClientOracleTest {
         assertEquals(21, onTheWire)
     }
 
+    /**
+     * Every fixture under `conformance/client` says which client it was read from, and
+     * [DatastarProtocol.VERSION] is the version of the one catalog the build finds, so the two
+     * differ until `catalog/datastar-<version>.json` is the file for the client the fixtures hold.
+     */
+    @Test
+    fun `speaks the version of the client the fixtures were read from`() {
+        val fixtures = fixtureNames("conformance/client").filter { it.endsWith(".json") }
+        assertTrue(fixtures.isNotEmpty())
+        val read = fixtures.map { JsonParser.parseObject(fixtureText("conformance/client/$it")).string("version") }.distinct().single()
+        assertEquals(read, DatastarProtocol.VERSION)
+        val catalogs = fixtureNames("catalog").filter { it.startsWith("datastar-") }
+        assertEquals(listOf("datastar-$read.json"), catalogs)
+    }
+
     private val rewrites: List<JsonObject> =
         JsonParser
-            .parseObject(File("../conformance/client/expressions.json").readText())
+            .parseObject(fixtureText("conformance/client/expressions.json"))
             .obj("cases")!!
             .array("rewrites")!!
             .objects()
@@ -151,7 +168,7 @@ class ClientOracleTest {
     @Test
     fun `finds the references genRx rewrites`() {
         val cases = rewrites.filter { it.boolean("returnsValue") == false }
-        assertEquals(161, cases.size)
+        assertEquals(190, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             assertEquals(case.string("js"), clientRewrite(jsTrim(expression)).js, expression)
@@ -162,13 +179,12 @@ class ClientOracleTest {
      * What [SignalNames.withoutReferenceHyphens] and [SignalNames.referenceAsSubtraction] say of a
      * name, each against the body the client compiles for `$` and that name: the part of it that
      * shows the hyphen is read as a key, as a signal of its own, or as a minus, or is template text.
-     * The table is shared with the editor's clientOracle.test.ts.
      */
     @Test
     fun `reads a reference's hyphens as genRx does`() {
         val names =
             JsonParser
-                .parseObject(File("../editors/vscode/test/fixtures/twins/reference-hyphens.json").readText())
+                .parseObject(fixtureText("editors/vscode/test/fixtures/cases/reference-hyphens.json"))
                 .array("cases")!!
                 .objects()
         assertEquals(20, names.size)

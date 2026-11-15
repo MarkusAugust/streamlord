@@ -1,0 +1,14 @@
+{
+  "$comment": "A Kotlin value in a tag of an HTML string, judged by both editors alike: in an end tag, which takes no attributes, and `<$name`, which is a tag only when what follows the value could go on one.",
+  "kind": "kotlin",
+  "cases": [
+    {"name":"a %s in an end tag is not told to quote","source":"import io.github.markusaugust.streamlord.core.domain.interpolate\nfun f(q: String) = interpolate(\"<p>x</p x=\\\"%s\\\">\", q)","issues":[{"code":"unsafe-interpolation","start":109,"end":111,"severity":"error","message":"interpolate always throws here: q lands in an end tag, which takes no attributes, and only Trusted(...) is let in there. Write the end tag from literals alone."}]},
+    {"name":"a template in an end tag is said to be in one","source":"fun f(q: String) = \"<p>x</p x=\\\"$q\\\">\"","issues":[{"code":"unsafe-interpolation","start":32,"end":34,"severity":"warning","message":"Kotlin writes $q into an end tag, which takes no attributes: the browser drops them, and a value from outside can still end the tag and write markup. Write the end tag from literals alone."}]},
+    {"name":"an unquoted template in an end tag is not told to quote","source":"fun f(q: String) = \"<p>x</p x=$q>\"","issues":[{"code":"unsafe-interpolation","start":30,"end":32,"severity":"warning","message":"Kotlin writes $q into an end tag, which takes no attributes: the browser drops them, and a value from outside can still end the tag and write markup. Write the end tag from literals alone."}]},
+    {"name":"a template in an end tag's name is the structure","source":"fun f(q: String) = \"<p>x</$q>\"","issues":[{"code":"unsafe-interpolation","start":26,"end":28,"severity":"warning","message":"Kotlin writes $q into the markup's own structure: a tag name, an attribute name or a list of attributes. Fine for one chosen in code; a value from outside decides the markup itself, and escaping cannot prevent that."}]},
+    {"name":"<$name before a backslash is a search pattern, not a tag","source":"fun f(tagg: String, html: String) = Regex(\"<$tagg\\\\b[^>]*\").find(html)","issues":[]},
+    {"name":"<$name at the end of a literal is a search pattern, not a tag","source":"fun f(tagg: String, html: String) = html.indexOf(\"<$tagg\")","issues":[]},
+    {"name":"<${name} before another character is not a tag","source":"fun f(tagg: String, html: String) = html.indexOf(\"<${tagg}-x\")","issues":[]},
+    {"name":"<$name before a space is a tag","source":"fun f(tag: String) = \"<$tag class=\\\"x\\\">y</$tag>\"","issues":[{"code":"unsafe-interpolation","start":23,"end":27,"severity":"warning"}]}
+  ]
+}

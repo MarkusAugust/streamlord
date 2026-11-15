@@ -8,7 +8,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -20,7 +20,7 @@ import kotlin.test.fail
 
 /**
  * Holds the analysis to the fixtures under `conformance/client/`, each the output of a function
- * of the Datastar 1.0.4 client run by `conformance/generate/client.mjs`: `casing.json`
+ * of the Datastar client run by `conformance/generate/client.mjs`: `casing.json`
  * (`modifyCasing` in utils/text.ts), `attribute-keys.json` (`parseAttributeKey` in
  * engine/engine.ts), `expressions.json` (the body `genRx` compiles), `tags.json` (`tagToMs` and
  * `modifyTiming`) and `signal-store.json` (`pathToObj` and `filtered`).
@@ -28,7 +28,7 @@ import kotlin.test.fail
 class ClientOracleTest {
     private val analyzer = Analyzer()
 
-    private fun fixture(name: String): JsonObject = JsonParser.parseObject(File("../conformance/client/$name").readText())
+    private fun fixture(name: String): JsonObject = JsonParser.parseObject(fixtureText("conformance/client/$name"))
 
     private fun cases(name: String): List<JsonObject> = fixture(name).array("cases")!!.objects()
 
@@ -118,13 +118,320 @@ class ClientOracleTest {
     @Test
     fun `writes the function body genRx compiles`() {
         val cases = group("expressions.json", "rewrites")
-        assertEquals(322, cases.size)
+        assertEquals(380, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             val returnsValue = case.boolean("returnsValue")!!
             val js = clientRewrite(clientScript(expression, returnsValue).js).js
             assertEquals(case.string("js"), js, "$expression with returnsValue $returnsValue")
         }
+    }
+
+    /** The issues the markup check gives [expression] where its value is used, `data-text`, or where it is only run, `data-on:click`. */
+    private fun judged(
+        expression: String,
+        returnsValue: Boolean,
+    ): Pair<String, List<Issue>> {
+        val attribute = if (returnsValue) "data-text" else "data-on:click"
+        val html = "<div $attribute=\"${expression.replace("&", "&amp;").replace("\"", "&quot;")}\"></div>"
+        return html to analyzer.analyzeHtml(html)
+    }
+
+    /** What the check reports under another code than `expression-syntax`, each with the one it uses. */
+    private val brokenUnderAnotherCode = mapOf("@get ('/x')" to "action-space")
+
+    /**
+     * `expressions.json`: `compiles` says whether JavaScript took the body `genRx` wrote. The check
+     * calls an expression broken exactly there, so an action after a template literal, which the
+     * client rewrites from 1.0.5 on, is not an error.
+     */
+    @Test
+    fun `calls an expression broken where the body genRx writes does not compile, and nowhere else`() {
+        val wrong = ArrayList<String>()
+        for (case in group("expressions.json", "rewrites")) {
+            val expression = case.string("expression")!!
+            val returnsValue = case.boolean("returnsValue")!!
+            val codes = judged(expression, returnsValue).second.map { it.code }
+            val compiles = case.boolean("compiles")!!
+            val other = brokenUnderAnotherCode[expression]
+            if (other != null) {
+                assertEquals(false, compiles, expression)
+                assertContains(codes, other, expression)
+                continue
+            }
+            if (("expression-syntax" in codes) == compiles) {
+                val verdict = if (compiles) "compiles" else "does not compile"
+                wrong += "$expression with returnsValue $returnsValue: the client's body $verdict: ${case.string("js")}"
+            }
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /** `expressions.json`: a reference the check says the client does not read stands in the body as it was written. */
+    @Test
+    fun `says a signal is not read only where genRx leaves it as written`() {
+        val wrong = ArrayList<String>()
+        var said = 0
+        for (case in group("expressions.json", "rewrites")) {
+            val expression = case.string("expression")!!
+            val (html, issues) = judged(expression, case.boolean("returnsValue")!!)
+            for (issue in issues.filter { it.code == "signal-not-read" }) {
+                said++
+                val reference = html.substring(issue.start, issue.end)
+                if (reference !in case.string("js")!!) wrong += "$expression: the client rewrote $reference: ${case.string("js")}"
+            }
+        }
+        assertEquals(emptyList(), wrong)
+        assertTrue(said >= 6, "only $said references said not to be read")
+    }
+
+    /**
+     * `expressions.json`: where the client compiles the same body whether the value is used or not, it
+     * split nothing, as for an expression that starts with `return` from 1.0.5 on, and the check has
+     * no split to warn of.
+     */
+    @Test
+    fun `warns of a value lost at a semicolon only where genRx splits there`() {
+        val cases = group("expressions.json", "rewrites")
+        val run = cases.filter { it.boolean("returnsValue") == false }.associate { it.string("expression")!! to it.string("js")!! }
+        val wrong = ArrayList<String>()
+        var warned = 0
+        for (case in cases.filter { it.boolean("returnsValue") == true }) {
+            val expression = case.string("expression")!!
+            if (judged(expression, true).second.none { it.code == "statement-split" }) continue
+            warned++
+            if (case.string("js") == run.getValue(expression)) wrong += "$expression: the client compiles it whole: ${case.string("js")}"
+        }
+        assertEquals(emptyList(), wrong)
+        assertTrue(warned >= 2, "only $warned expressions warned of")
+    }
+
+    private val dslCases: Map<String, JsonObject> =
+        JsonParser
+            .parseObject(fixtureText("conformance/dsl/free.json"))
+            .array("cases")!!
+            .objects()
+            .associateBy { it.string("name")!! }
+
+    /**
+     * `fetch-options.json`: the catalog lists the options a backend action reads from its
+     * arguments, and no other. A name the client only has in its type is an option that does nothing.
+     */
+    @Test
+    fun `lists the fetch options the client reads and no other`() {
+        val listed = Catalog.default.fetchOptions.map { it.name }
+        assertEquals(listed.distinct(), listed)
+        val wrong = ArrayList<String>()
+        for (case in cases("fetch-options.json")) {
+            val action = case.string("action")!!
+            val read = case.array("options")!!.strings()
+            wrong += (listed - read.toSet()).map { "$it is in the catalog, and @$action never reads it" }
+            wrong += (read - listed.toSet()).map { "@$action reads $it, and the catalog does not list it" }
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * The kind the catalog gives a value of the client's TypeScript type [type], with the strings an
+     * enum takes: an `AbortController` comes only from an expression, which no check judges.
+     */
+    private fun kindOf(type: String): Pair<String, List<String>> {
+        val quoted = type.split("|").map { it.trim() }.filter { it != "AbortController" }
+        if (quoted.all { it.length > 1 && it.startsWith("'") && it.endsWith("'") }) return "string" to quoted.map { it.trim('\'') }
+        val kinds =
+            mapOf(
+                "string" to "string",
+                "number" to "number",
+                "boolean" to "boolean",
+                "any" to "any",
+                "Record<string, string>" to "object",
+                "SignalFilterOptions" to "filter",
+                "FetchArgs" to "options",
+                "() => any" to "function",
+                "RegExp | string" to "pattern",
+                "Record<string, any>" to "object",
+                "string | string[]" to "any",
+            )
+        return (kinds[type] ?: fail("no kind for the client's type $type")) to emptyList()
+    }
+
+    private val rawCatalog = JsonParser.parseObject(fixtureText("catalog/datastar-1.0.5.json"))
+
+    private fun JsonObject.kinded(): Pair<String?, List<String>> = string("kind") to (array("values")?.strings() ?: emptyList())
+
+    /**
+     * `actions.json`: the kind and the values the catalog gives each fetch option and each key of a
+     * signal filter are those of the client's FetchArgs and SignalFilterOptions types.
+     */
+    @Test
+    fun `gives each option the kind the client's type declares`() {
+        val actions = fixture("actions.json")
+        val wrong = ArrayList<String>()
+        for ((table, types) in listOf("fetchOptions" to actions.obj("fetchArgs")!!, "signalFilter" to actions.obj("signalFilter")!!)) {
+            val listed = rawCatalog.array(table)?.objects() ?: fail("the catalog has no $table")
+            for (field in listed) {
+                val name = field.string("name")!!
+                val type = types.string(name) ?: fail("$table: the client's type has no $name")
+                if (field.kinded() != kindOf(type)) wrong += "$table $name: the catalog says ${field.kinded()}, the client's type is $type"
+            }
+            if (table == "signalFilter") assertEquals(types.keys.toList(), listed.map { it.string("name") })
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * `actions.json`: the type a hover shows for `filterSignals` is the client's SignalFilterOptions,
+     * key by key, and its doc says what each key may be.
+     */
+    @Test
+    fun `shows filterSignals as the signal filter the client takes`() {
+        val filter = fixture("actions.json").obj("signalFilter")!!
+        val option = Catalog.default.fetchOptions.single { it.name == "filterSignals" }
+        assertEquals("{" + filter.keys.joinToString(", ") { "$it?: ${filter.string(it)}" } + "}", option.type)
+        assertTrue("regular expressions or strings" in option.doc, option.doc)
+    }
+
+    /**
+     * `actions.json`: each free action of the catalog takes as many arguments as its apply declares,
+     * of the kinds its types say, and those the client takes left out are optional in its signature.
+     */
+    @Test
+    fun `gives each free action the parameters its source declares`() {
+        val declared = cases("actions.json").associateBy { it.string("action")!! }
+        val wrong = ArrayList<String>()
+        for (action in rawCatalog.array("actions")!!.objects().filter { it.boolean("pro") != true }) {
+            val name = action.string("name")!!
+            val parameters = declared[name]?.array("parameters")?.objects() ?: fail("the client has no action $name")
+            val kinds = action.array("kinds")?.strings() ?: fail("@$name has no kinds in the catalog")
+            val signature =
+                Catalog.default.actionsByName
+                    .getValue(name)
+                    .parameters
+            val wanted = parameters.map { kindOf(it.string("type")!!).first }
+            if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the client declares $wanted"
+            val optional = parameters.map { it.boolean("optional") == true }
+            if (signature.map { it.endsWith("?") } !=
+                optional
+            ) {
+                wrong += "@$name: the signature $signature, and the client's defaults $optional"
+            }
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * `conformance/reference/pro-actions.json`: each Pro action of the catalog takes the kinds the
+     * reference page's signature gives it, and those the page lets you leave out are optional.
+     */
+    @Test
+    fun `gives each pro action the parameters the reference page declares`() {
+        val page = JsonParser.parseObject(fixtureText("conformance/reference/pro-actions.json")).obj("signatures")!!
+        val pro = rawCatalog.array("actions")!!.objects().filter { it.boolean("pro") == true }
+        assertEquals(page.keys, pro.map { it.string("name")!! }.toSet())
+        val wrong = ArrayList<String>()
+        for (action in pro) {
+            val name = action.string("name")!!
+            val written = page.string(name)!!
+            // Cut at the commas outside brackets: Record<string, any> is one type.
+            val parameters = written.substringAfter('(').substringBeforeLast(')').split(Regex(""",\s*(?![^<\[]*[>\]])"""))
+            // name: type, name?: type, or name=default, whose type is the default's.
+            val types =
+                parameters.map { p ->
+                    when {
+                        ':' in p -> p.substringAfter(':').trim()
+                        p.substringAfter('=') in setOf("true", "false") -> "boolean"
+                        else -> fail("@$name: no type for $p")
+                    }
+                }
+            val wanted = types.map { kindOf(it).first }
+            val kinds = action.array("kinds")?.strings() ?: fail("@$name has no kinds in the catalog")
+            if (kinds != wanted) wrong += "@$name: the catalog says $kinds, the page declares $wanted in $written"
+            val optional = parameters.map { "?:" in it || '=' in it }
+            val signature =
+                Catalog.default.actionsByName
+                    .getValue(name)
+                    .parameters
+            if (signature.map { it.endsWith("?") } != optional) wrong += "@$name: the signature $signature, and the page $written"
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /**
+     * `fetch-option-values.json`: what the catalog says Datastar does with a value an option of
+     * strings does not take names the branch the client takes for it: the value it acts as, one the
+     * source never compares with, or the error it throws when it compares with every one.
+     */
+    @Test
+    fun `says what the client does with a value an option of strings does not take`() {
+        val otherwise = Catalog.default.optionFields.associate { it.name to it.otherwise }
+        val cases = cases("fetch-option-values.json")
+        val ofStrings = Catalog.default.optionFields.filter { it.values.isNotEmpty() }
+        assertEquals(cases.map { it.string("option") }.toSet(), ofStrings.map { it.name }.toSet())
+        val wrong = ArrayList<String>()
+        for (case in cases) {
+            val option = case.string("option")!!
+            val sentence = otherwise.getValue(option)
+            val alike = case.array("values")!!.strings() - case.array("compared")!!.strings().toSet()
+            val branch = if (alike.isEmpty()) case.array("throws")!!.strings() else alike.map { "'$it'" }
+            if (branch.isEmpty() || branch.any { it !in sentence }) wrong += "$option: \"$sentence\" does not name $branch"
+        }
+        assertEquals(emptyList(), wrong)
+    }
+
+    /** The reading of the case in `conformance/dsl/free.json` whose name starts with [name]. */
+    private fun reading(name: String): JsonObject =
+        dslCases.entries
+            .singleOrNull { it.key.startsWith(name) }
+            ?.value
+            ?.obj("read") ?: fail("no one case in free.json starts with: $name")
+
+    /**
+     * `conformance/dsl/free.json`: what the client did with `retry`, `retryInterval` and
+     * `retryMaxCount`, against what the catalog tells a reader of a hover about them: each claim is
+     * held to the reading named beside it, which shows the client doing what the hover says.
+     */
+    @Test
+    fun `describes the retry options as the client acts on them`() {
+        val doc = Catalog.default.fetchOptions.associate { it.name to it.doc }
+
+        // retry: 'never' sends one request when it fails on the network, and one when its stream breaks.
+        assertEquals(1, reading("get never retried gives up on a request that fails").array("requests")!!.size)
+        assertEquals(1, reading("get never retried gives up on a stream that breaks").array("requests")!!.size)
+        for (claim in listOf("is retried whatever this says", "'auto' and 'never' act alike")) {
+            assertTrue(claim !in doc.getValue("retry"), "retry: the catalog still says \"$claim\"")
+        }
+
+        // retryMaxCount 2 allows two retries over the whole action, though every answer was a 200.
+        for (case in listOf("get retried always stops at retryMaxCount", "get whose stream breaks counts every retry")) {
+            assertEquals(3, reading(case).array("requests")!!.size, case)
+        }
+        for (claim in listOf("in a row", "a 200 answer starts the count again")) {
+            assertTrue(claim !in doc.getValue("retryMaxCount"), "retryMaxCount: the catalog still says \"$claim\"")
+        }
+
+        // The wait grows from 100 to 200 across a 200 answer whose stream breaks, and is 100 again only after a stream that ended.
+        assertEquals(
+            """[["setTimeout",100],["setTimeout",200]]""",
+            reading("get whose stream breaks counts every retry")["timers"]!!.toJson(),
+        )
+        assertEquals(
+            """[["setTimeout",100],["setTimeout",100]]""",
+            reading("get retried always stops at retryMaxCount")["timers"]!!.toJson(),
+        )
+        assertTrue(
+            "set back by a 200 answer" !in doc.getValue("retryInterval"),
+            "retryInterval: the catalog still says a 200 answer sets it back",
+        )
+    }
+
+    /** The catalog is the one for the client the fixtures were read from, and none of its text names another version. */
+    @Test
+    fun `carries the catalog of the client the fixtures were read from`() {
+        val read = fixture("expressions.json").string("version")!!
+        assertEquals(read, JsonParser.parseObject(fixtureText("conformance/dsl/free.json")).string("version"))
+        assertEquals(read, CatalogText.VERSION)
+        val named = Regex("""\b\d+\.\d+\.\d+\b""").findAll(CatalogText.JSON).map { it.value }.toSet()
+        assertEquals(setOf(read), named, "the Datastar versions the catalog's text names")
     }
 
     private val readsMs = Regex("""as (\d+) ms""")
@@ -135,7 +442,7 @@ class ClientOracleTest {
         analyzer
             .analyzeHtml("<div data-on:click__$modifiers=\"\$a = 1\"></div>")
             .map { it.message }
-            .firstOrNull { "needs a duration" in it || "reads none and does not wait" in it || readsMs.containsMatchIn(it) }
+            .firstOrNull { "waits 0 ms" in it || "reads none and does not wait" in it || readsMs.containsMatchIn(it) }
 
     /** Tags the client reads through JavaScript's number syntax and the check refuses on purpose. */
     private val jsNumberForms = setOf("debounce.1e3ms")
@@ -159,10 +466,10 @@ class ClientOracleTest {
                 assertEquals(readsMs.find(message)!!.groupValues[1], wait, written)
             }
 
-            // "needs a duration" names no number: it is right where the client reads none or no wait, and for
-            // JavaScript's own number syntax, 1e3ms, which the check refuses on purpose (DURATION takes digits).
+            // "waits 0 ms" is right where the client reads none or no wait, and for JavaScript's own number
+            // syntax, 1e3ms, which the check refuses on purpose (DURATION takes digits).
             else -> {
-                assertContains(message, "needs a duration", message = written)
+                assertContains(message, "waits 0 ms", message = written)
                 val read = wait.toDoubleOrNull()
                 assertTrue(
                     read == null || read.isNaN() || read <= 0.0 || written in jsNumberForms,
@@ -204,7 +511,7 @@ class ClientOracleTest {
             val ms = case["tagToMs"]
             val wait =
                 when (ms) {
-                    is JsonNumber -> ms.toBigDecimal().stripTrailingZeros().toPlainString()
+                    is JsonNumber -> (ms.toLongOrNull() ?: ms.toDouble()).toString()
                     else -> "NaN"
                 }
             val written = (listOf("debounce") + set).joinToString(".")
@@ -272,7 +579,7 @@ class ClientOracleTest {
     fun `the wire hint names the key the dsl writes and the name the client reads`() {
         var checked = 0
         for (file in listOf("free.json", "pro.json")) {
-            val cases = JsonParser.parseObject(File("../conformance/dsl/$file").readText()).array("cases")!!.objects()
+            val cases = JsonParser.parseObject(fixtureText("conformance/dsl/$file")).array("cases")!!.objects()
             for (case in cases) {
                 val call = case.obj("call")!!
                 // The hint is shown for a key with a capital, the one the DSL rewrites.

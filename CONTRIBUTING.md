@@ -12,12 +12,28 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 |---|---|
 | `streamlord-*` | the ten published modules |
 | `editors/vscode`, `editors/intellij` | the two editor extensions |
-| `catalog/` | `datastar-1.0.4.json`, the source of truth for the names core, the analysis and both editors read |
-| `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.4/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
+| `editors/vscode/analysis-js` | the Gradle project `:analysis-js`: the analysis compiled to JavaScript for the VS Code extension; see below |
+| `catalog/` | `datastar-1.0.5.json`, the source of truth for the names core, the analysis and both editors read |
+| `datastar-reference/` | a local, git-ignored copy of [starfederation/datastar](https://github.com/starfederation/datastar) at the release tag Streamlord speaks, `datastar-reference/datastar-1.0.5/`, fetched by `npm run reference` in `conformance/generate`; the authority for every claim about the client, and what the generators below read |
 | `conformance/` | what the client and the servers actually do, as fixtures the tests hold Streamlord to; see below |
 | `docs/` | this project's documentation site (Astro, LO-TEK, Datastar) |
 | `demo/` | `streamlord-live`, the service behind the site's live examples and search |
+| `rewrite-probes/` | compiles HTML strings as written and as each fix of the editors' analysis leaves them, against core, and runs both; the cases are `editors/vscode/test/fixtures/cases/rewrite-probes.json` and every cell of `value-matrix.json` |
 | `docs-samples/` | compiles every Kotlin example in the documentation, and generates the wire examples the pages show |
+
+## Before calling work done
+
+Run `./check` from the root and have it green before you call a change done or open a pull
+request. It runs the checks of the jobs CI runs on a pull request, the Kotlin SDK build, ktlint, the VS Code
+extension, the IntelliJ plugin and the documentation site, with the same commands in the same
+order, and those jobs call it. It leaves out the streamlord-live image, which CI builds when the
+demo or what it bundles changes, and the jobs that deploy and publish. `./check --changed` runs
+only the parts the change since the newest `origin/release/*` touches, as CI decides them, and
+`./check sdk ktlint` names the parts to run.
+
+Never make it pass by weakening a rule, raising a limit, adding to an exclusion or deleting a
+test. Fix what it found. When an editor changes, also run the check in real VS Code,
+`cd editors/vscode && npm run real -- --check`, which needs a Mac with VS Code and takes minutes.
 
 ## Building and releasing
 
@@ -25,7 +41,7 @@ A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 ./gradlew build
 ```
 
-JDK 21 builds it; the artifacts target JDK 17. `build` also holds the documentation to what
+JDK 21 builds it, with Node 24 for the tests that also run as JavaScript; the artifacts target JDK 17. `build` also holds the documentation to what
 this build actually does. Every Kotlin example is compiled against the modules, and the
 dependency trees the pages print are compared with what the build resolves; a page that has gone
 stale on either turns the build red. The coordinates and the wire transcripts are rewritten in
@@ -42,6 +58,39 @@ Releases go to Maven Central from CI only, from a tag `v<version>` on the releas
 under `io.github.markusaugust.streamlord` through the Central Portal with automatic release.
 The VS Code extension has its own tag, `vscode-v<version>`, and the IntelliJ plugin
 `intellij-v<version>`. [RELEASING.md](RELEASING.md) has the branch model and every step.
+
+## One analysis, two editors
+
+The checks both editors show are `streamlord-analysis`, with the part of `streamlord-core` that
+reads what the client reads. The IntelliJ plugin calls it on the JVM. The VS Code extension runs
+the same sources compiled to JavaScript by `:analysis-js`, an unpublished Kotlin/JS project in
+`editors/vscode/analysis-js`, and reaches it through one driving port, `Port.kt` and
+`InspectorPort.kt` there: text and plain values in, plain objects out, with TypeScript types the
+compiler writes. A check is written and tested once, in Kotlin. Completion and hover are not there
+yet: what to offer and what to say is decided in each editor's adapter, and `nameAtEnd` stands in
+both, in `completion.ts` and in `StreamlordCompletionContributor.kt`.
+
+- **Tests.** `./gradlew build` runs the tests of the analysis and of core's client part twice, on
+  the JVM and on Node, so it needs Node 24 beside JDK 21. A test reads the catalog, `conformance/`
+  and the cases under `editors/vscode/test/fixtures` through `fixtureText` and `fixtureNames`,
+  which each platform has its own few lines of. A test whose subject or oracle is the JVM is named
+  `*JvmTest` and runs there alone. Node and npm are the ones installed; what Kotlin/JS fetches to
+  run the tests is locked in `kotlin-js-store/package-lock.json`, which
+  `./gradlew kotlinUpgradePackageLock` rewrites when a Kotlin upgrade changes it.
+- **What the JVM alone has.** The shared sources use the Kotlin standard library, and of `java.*`
+  only two names their public signatures show, `BigDecimal` and `File`, which `:analysis-js`
+  declares as empty classes. What a module asks of the JVM stands in its `PlatformJvm.kt` (core has
+  a second in `client`, for what the analysis asks too), and `:analysis-js` has the same
+  declarations for JavaScript; a new one is added to both.
+- **Patterns.** Every regular expression is built with `regex(...)`, never `Regex(...)`. On the
+  JVM the two are the same. For JavaScript, `regex` respells the pattern so that it means what
+  java.util.regex means by it, since the engines read `\s`, `$`, `.` and `(?i)` differently, and
+  refuses a construct it has no spelling for. A whole input is asked for with `matchEntire`, never
+  `matches`, which Kotlin/JS answers from the first match alone. `PatternsTest` holds what each
+  construct means, on both engines, and `PatternsInMainTest` that every pattern in the shared
+  sources goes that way.
+- **The extension.** `npm run build`, `npm test` and `npm run typecheck` in `editors/vscode` start
+  with `npm run analysis`, which asks Gradle for the library and is quick when no Kotlin changed.
 
 ## Running the documentation site locally
 
@@ -69,14 +118,15 @@ pages show.
 ## Holding Streamlord to Datastar
 
 Every rule Streamlord has about Datastar is a transcription, and a transcription drifts. The
-tests therefore do not trust a rule written in Kotlin or TypeScript; they compare it with what
+tests therefore do not trust a rule as Streamlord writes it; they compare it with what
 the client itself does, recorded in `conformance/`:
 
 | Path | What it holds | Made by |
 |---|---|---|
-| `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store, and what each attribute plugin declares | `conformance/generate/client.mjs`, from `datastar-reference/` |
+| `conformance/client/` | the client's own functions run over fixed inputs: casing, attribute keys, expression rewriting, modifier tags, the signal store, what each attribute plugin declares, the options each backend action reads, and the parameters and option types each action declares | `conformance/generate/client.mjs`, from `datastar-reference/` |
 | `conformance/dom/` | the client run in a browser-like DOM: what each SSE frame did to a page and its store, what the HTML parser does with a script body and where it ends a comment | `conformance/generate/dom.mjs`, from `datastar-reference/` |
 | `conformance/dsl/` | what the client did with the HTML each DSL call writes: the listeners, timers, store, requests and DOM afterwards, held to what the call means | the HTML by `./gradlew :streamlord-html-pro:updateClientReadings`, the reading by `conformance/generate/dsl.mjs`, from `datastar-reference/` |
+| `conformance/reference/` | what Datastar's reference pages say where no free client says it: the signatures of the Pro actions, as `pro-actions.json`, with the date the page was read | `conformance/generate/pro.mjs`, from https://data-star.dev/reference/actions |
 | `conformance/wire/` | the exact HTTP answer each adapter gives, per server, for a fixed set of requests, and in `kotlin/` the request set and the comparison both adapters' tests compile | the adapter tests, with `./gradlew :streamlord-ktor:updateTranscripts :streamlord-spring:updateTranscripts` |
 
 The generators read the free client in `datastar-reference/datastar-<version>/` and nothing
@@ -88,9 +138,11 @@ the script, and unpacks it there. The repository holds no Datastar code, only th
 the fixtures themselves are committed, and the tests need only them. Datastar Pro is licensed and is never read, copied or generated from; the catalog
 carries only its public names.
 
-The tests run in `./gradlew build` and in the VS Code suite, and cost seconds. The generators
+The tests run in `./gradlew build`, on the JVM and on Node, and cost seconds. The generators
 run by hand, when the reference changes, with `cd conformance/generate && npm install && npm run
-reference && npm run client && npm run dom && npm run dsl`. A change to the DSL that changes what
+reference && npm run client && npm run dom && npm run dsl`. `npm run pro` fetches the reference's actions page and
+rewrites `pro-actions.json`: run it when the reference changes a Pro action's signature or the
+catalog gains one, and commit what it writes. A change to the DSL that changes what
 it writes needs `./gradlew :streamlord-html-pro:updateClientReadings` and then `npm run dsl`; the
 test says so. A transcript that is meant to change is rewritten with the
 `updateTranscripts` tasks and shows up as a diff in the pull request, as `updateKotlinAbi` does
@@ -121,5 +173,5 @@ requests runs the same suite on the newest release.
    change every place that names the file by its version: `grep -rn 'datastar-<old version>'`
    finds them in the two editors' builds and in the documentation.
 5. Run the transcripts and read their diff: `./gradlew :streamlord-ktor:updateTranscripts
-   :streamlord-spring:updateTranscripts`, then `./gradlew build`, the VS Code suite and the docs
-   checks above. Note what changed in `CHANGELOG.md`.
+   :streamlord-spring:updateTranscripts`, then `./gradlew build`, `npm test` in `editors/vscode` and
+   the docs checks above. Note what changed in `CHANGELOG.md`.

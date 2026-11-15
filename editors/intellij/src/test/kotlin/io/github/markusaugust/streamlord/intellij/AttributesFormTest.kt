@@ -25,7 +25,7 @@ abstract class AttributesFormTestCase : BasePlatformTestCase() {
         val keys = colours()
         assertEquals(DatastarColors.ATTRIBUTE_KEY, keys["click"])
         assertEquals(DatastarColors.MODIFIER, keys["debounce"])
-        assertEquals(DatastarColors.MODIFIER_ARG, keys["500ms"])
+        assertEquals(DatastarColors.DURATION, keys["500ms"])
         assertEquals(DatastarColors.KOTLIN_DOLLAR_ESCAPE, keys["\${'\$'}"])
         assertEquals(DatastarColors.SIGNAL, keys["count"])
         assertEquals(DatastarColors.ACTION_BACKEND, keys["@post"])
@@ -152,10 +152,9 @@ class ForeignDslCallTest : StreamlordTestCase() {
     fun `test nothing is resolved on the ui thread`() {
         val file = myFixture.configureByText("Other.kt", onReceiver) as KtFile
         val analysis = StreamlordAnalysis.getInstance(project)
-        val offset = file.text.indexOf("@post") + 2
-        val names = analysis.catalog.expressionCallSites.keys
-        assertFalse(analysis.isForeignCallAt(file, offset, names))
-        assertTrue(inBackground { analysis.isForeignCallAt(file, offset, names) })
+        val at = file.text.indexOf("dataOnClick(\"@post")
+        assertFalse(analysis.isForeign(file, "dataOnClick", at))
+        assertTrue(inBackground { analysis.isForeign(file, "dataOnClick", at) })
     }
 
     /** What [block] gives in a read action off the UI thread, where the platform runs highlighting, hover and spelling. */

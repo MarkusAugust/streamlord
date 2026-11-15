@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-nonce="dGhlIG5vbmNl">
+<head>
+  <meta charset="utf-8">
+  <title>Gorvek's forge</title>
+  <link rel="stylesheet" href="/assets/forge.css">
+  <style>
+    .forge { color: #c0392b; background: rgb(12, 13, 20); }
+  </style>
+  <script type="module" src="/assets/datastar.js"></script>
+</head>
+<body data-signals="{query: '', cart: {items: [], total: 0}, _menuOpen: false}"
+      data-signals:page__ifmissing="1"
+      data-computed:has-items="$cart.items.length > 0"
+      data-init="@get('/cart')">
+  <header id="top" class="forge">
+    <a href="/orders">Orders</a>
+    <a href="https://data-star.dev/reference/attributes">Reference</a>
+    <button id="menu" data-on:click="$_menuOpen = !$_menuOpen" data-class:open="$_menuOpen"
+            data-attr:aria-expanded="$_menuOpen ? 'true' : 'false'">Menu</button>
+    <nav data-show="$_menuOpen" data-style:opacity="$_menuOpen ? 1 : 0.4">
+      <a href="/swords" data-on:click__prevent="@get('/swords', {openWhenHidden: true})">Swords</a>
+    </nav>
+  </header>
+
+  <main id="shop">
+    <form data-on:submit__prevent="@post('/search', {contentType: 'form'})">
+      <input id="q" name="q" type="search" data-bind:query
+             data-on:input__debounce.300ms.leading="@get('/search', {
+               filterSignals: {include: /^query$/, exclude: /^_/},
+               headers: {'X-Forge': 'north'},
+               retry: 'error', retryInterval: 500, retryScaler: 2, retryMaxWait: 8000, retryMaxCount: 3,
+               requestCancellation: 'auto'
+             })"
+             data-on:keydown__window="evt.key === 'Escape' && ($query = '')"
+             data-indicator:searching>
+      <input type="checkbox" data-bind="filters.inStock">
+      <button data-attr:disabled="$searching" data-class="{busy: $searching, idle: !$searching}">Search</button>
+    </form>
+
+    <p data-text="`${$cart.items.length} items for ${$cart.total} silver`"></p>
+    <p data-text="$hasItems ? 'Ready to pay' : 'Nothing yet'" data-show="$query !== ''"></p>
+    <ul id="results" data-on-intersect__once__half="@get('/more?page=' + $page)"
+        data-on-interval__duration.5s.leading="@get('/stock')"
+        data-ignore-morph>
+      <li data-ref="firstRow" data-on:click="@put('/cart/' + el.dataset.id, {payload: {qty: 1}}); $page++">Axe</li>
+      <li data-on:click__once__viewtransition="@patch('/cart/7'); @delete('/cart/8')">Shield</li>
+    </ul>
+
+    <div data-effect="$cart.total = $cart.items.reduce((sum, i) => sum + i.price, 0)"></div>
+    <div data-on-signal-patch="console.log(patch)" data-on-signal-patch-filter="{include: /^cart/}"></div>
+    <div data-on:datastar-fetch="evt.detail.type === 'error' && ($query = '')"></div>
+    <pre data-json-signals="{exclude: /^_/}"></pre>
+    <pre data-json-signals__terse></pre>
+    <div data-ignore><span data-text="$notRead"></span></div>
+    <details data-preserve-attr="open">More</details>
+    <button data-on:click="@setAll(false, {include: /^filters\./}); @toggleAll({include: /^_/})">Reset</button>
+    <span data-text="@peek(() => $page)"></span>
+  </main>
+
+  <aside id="pro" data-persist:forge__session="{include: /^cart/}" data-query-string="{include: /^query$/}"
+         data-replace-url="`/shop?q=${$query}`" data-match-media:narrow="'(max-width: 600px)'">
+    <div data-on-raf__throttle.100ms="$tick++" data-on-resize__debounce.200ms="$width = el.offsetWidth"></div>
+    <div data-scroll-into-view__smooth__vcenter data-view-transition="'card'" data-animate:opacity="$tick % 2"></div>
+    <input data-custom-validity="$query.length < 2 ? 'Two letters at least' : ''">
+    <button data-on:click="@clipboard($query)">Copy</button>
+    <span data-text="@intl('number', $cart.total, {style: 'currency', currency: 'NOK'})"></span>
+    <span data-text="@fit($tick, 0, 100, 0, 1)"></span>
+  </aside>
+</body>
+</html>

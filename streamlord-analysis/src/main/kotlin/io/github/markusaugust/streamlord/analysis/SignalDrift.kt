@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * Signals a handler reads, against signals the pages declare.
  *
@@ -39,6 +41,11 @@ public data class SignalProperty(
  * @property lookups Names read by a `Signals` accessor, such as `signals.string("query")`.
  * @property encodedTypes Classes a page declares its signals from, `dataSignals(codec.toJsonValue(Form()))`,
  *   by simple name, with `*` for a value whose class the file does not name.
+ * @property patchedTypes Classes a server patch sets the signals of, `patchSignals(Form())`, by simple
+ *   name. Unlike a page's, a patch of a class the check cannot read declares nothing: the server
+ *   sends what it sends, and a read only it could set is still worth a look.
+ * @property packageName The file's package, and [imports] what it imports, `app.forms.Form` or
+ *   `app.forms.*`: a simple name above is the class they make it, as Kotlin resolves it.
  */
 public data class SignalFacts(
     val declared: Set<String>,
@@ -46,24 +53,29 @@ public data class SignalFacts(
     val classes: Map<String, List<SignalProperty>>,
     val lookups: List<SignalRead>,
     val encodedTypes: Set<String> = emptySet(),
+    val patchedTypes: Set<String> = emptySet(),
+    val packageName: String = "",
+    val imports: Set<String> = emptySet(),
 )
 
-private val SIGNAL_TYPE_PARAMETER = Regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
-private val SIGNAL_TYPE_DEFAULT = Regex("""\breadSignalsOr\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
+private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
+private val SIGNAL_TYPE_DEFAULT = regex("""\breadSignalsOr\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
 
 // Any modifier may stand between the annotation and `class`: an explicit-API module writes
 // `@Serializable public data class`.
 private val SERIALIZABLE_DECLARATION =
-    Regex(
+    regex(
         """@Serializable\s*(?:\([^)]*\))?\s*(?:(?:public|internal|private|protected|open|final|abstract|sealed|value|inline|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
     )
 
 // `@SerialName` renames the signal, so it is read with whatever annotations and modifiers stand
 // between it and the property.
 private val PROPERTY_NAME =
-    Regex(
+    regex(
         """(?:@SerialName\(\s*(?:value\s*=\s*)?"([^"]*)"\s*\)\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:\w+\s+)*?)?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""",
     )
+
+private val BLANK_LINE = regex("""\n[ \t\r]*\n""")
 
 /** The `Signals` accessors that take a signal name. `path` takes several; its first is the signal. */
 private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decimal", "obj", "array", "has", "path")
@@ -72,12 +84,12 @@ private val LOOKUPS = setOf("string", "boolean", "int", "long", "double", "decim
 // not enough. A lookup counts when it is made on an untyped `readSignals()` call, on a name the
 // file binds to one or declares as `Signals`, or on a name that is plainly `signals`.
 private val SIGNALS_BINDING =
-    Regex(
+    regex(
         """\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*Signals\??\s*)?=[^\n;=]*\breadSignals\s*\([^()\n]*\)\s*$""",
         RegexOption.MULTILINE,
     )
-private val SIGNALS_TYPED = Regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
-private val READ_SIGNALS_BEFORE = Regex("""\breadSignals\s*$""")
+private val SIGNALS_TYPED = regex("""\b([A-Za-z_][A-Za-z0-9_]*)\s*:\s*Signals\b""")
+private val READ_SIGNALS_BEFORE = regex("""\breadSignals\s*$""")
 
 /**
  * Reads [src] for everything the drift check needs.
@@ -85,19 +97,20 @@ private val READ_SIGNALS_BEFORE = Regex("""\breadSignals\s*$""")
  * Declarations are collected the way completion collects them, which is deliberately generous:
  * a name offered twice costs nothing, and a name missed here would become a false warning.
  */
-public fun collectSignalFacts(
-    src: String,
-    language: SourceLanguage,
-): SignalFacts {
+public fun collectSignalFacts(source: Source): SignalFacts {
+    val src = source.text
+    val language = source.language
     if (language == SourceLanguage.HTML) {
-        return SignalFacts(collectDeclaredSignals(src, language), emptySet(), emptyMap(), emptyList())
+        return SignalFacts(collectDeclaredSignals(src, language, source.prefix), emptySet(), emptyMap(), emptyList())
     }
 
     val lex = lexKotlin(src)
 
+    // A read written in a comment or a string is none.
     val types = LinkedHashSet<String>()
-    for (m in SIGNAL_TYPE_PARAMETER.findAll(src)) types += m.groupValues[1]
-    for (m in SIGNAL_TYPE_DEFAULT.findAll(src)) types += m.groupValues[1]
+    for (re in listOf(SIGNAL_TYPE_PARAMETER, SIGNAL_TYPE_DEFAULT)) {
+        for (m in re.findAll(src)) if (lex.mask[m.range.first]) types += m.groupValues[1]
+    }
 
     val bound = hashSetOf("signals")
     for (re in listOf(SIGNALS_BINDING, SIGNALS_TYPED)) {
@@ -111,7 +124,53 @@ public fun collectSignalFacts(
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
 
-    return SignalFacts(collectDeclaredSignals(src, language), types, serializableProperties(src), lookups, encodedSignalTypes(src))
+    val packageName =
+        PACKAGE
+            .findAll(src)
+            .firstOrNull { lex.mask[it.range.first] }
+            ?.groupValues
+            ?.get(1)
+            .orEmpty()
+    val imports = IMPORT.findAll(src).filter { lex.mask[it.range.first] }.mapTo(LinkedHashSet()) { it.groupValues[1] }
+    return SignalFacts(
+        collectDeclaredSignals(src, language, source.prefix),
+        types,
+        serializableProperties(src),
+        lookups,
+        encodedSignalTypes(src, lex = lex),
+        patchedSignalTypes(src, lex),
+        packageName,
+        imports,
+    )
+}
+
+private val PACKAGE = regex("""^[ \t]*package\s+([A-Za-z_][A-Za-z0-9_.]*)""", RegexOption.MULTILINE)
+
+// An import under another name, `import a.Form as F`, is left out: the class is then read by no name the check knows.
+private val IMPORT = regex("""^[ \t]*import\s+([A-Za-z_][A-Za-z0-9_.]*(?:\.\*)?)[ \t]*(?:;|//|/\*|$)""", RegexOption.MULTILINE)
+
+/** A class of the project, by the file that declares it and its package. */
+private class DeclaredClass(
+    val file: String,
+    val packageName: String,
+    val properties: List<SignalProperty>,
+)
+
+/**
+ * The classes of [byName] that the simple name [type] means in [reader], as Kotlin looks it up: an
+ * explicit import first, then the reader's own package, then a star import. More than one is a
+ * name the check cannot settle.
+ */
+private fun resolve(
+    reader: SignalFacts,
+    type: String,
+    byName: Map<String, List<DeclaredClass>>,
+): List<DeclaredClass> {
+    val all = byName[type].orEmpty()
+    // An explicit import of the name decides, even of a class outside the project.
+    if (reader.imports.any { it == type || it.endsWith(".$type") }) return all.filter { "${it.packageName}.$type" in reader.imports }
+    all.filter { it.packageName == reader.packageName }.let { if (it.isNotEmpty()) return it }
+    return all.filter { it.packageName.isNotEmpty() && "${it.packageName}.*" in reader.imports }
 }
 
 /** Whether the accessor whose name starts at [nameStart] is called on something that holds signals. */
@@ -151,12 +210,13 @@ internal fun serializableProperties(src: String): Map<String, List<SignalPropert
         val name = declaration.groupValues[1]
         val open = src.indexOf('(', declaration.range.last)
         if (open < 0) continue
-        val close = matchingParen(src, open)
-        if (close < 0) continue
+        // Still being typed, the list is what stands before the first blank line: the signals stay known meanwhile.
+        val close = matchingParen(src, open).takeIf { it >= 0 } ?: BLANK_LINE.find(src, open)?.range?.first ?: src.length
 
         val properties = ArrayList<SignalProperty>()
-        for (property in PROPERTY_NAME.findAll(src.substring(open, close))) {
-            val group = property.groups[1] ?: property.groups[2] ?: continue
+        val list = src.substring(open, close)
+        for (property in PROPERTY_NAME.findAll(list)) {
+            val group = PROPERTY_NAME.groupAt(list, property, 1) ?: PROPERTY_NAME.groupAt(list, property, 2) ?: continue
             properties += SignalProperty(group.value, open + group.range.first, open + group.range.last + 1)
         }
         out[name] = properties
@@ -207,6 +267,26 @@ public data class SignalDriftReport(
 )
 
 /**
+ * The signals read in the file whose facts are [own] that neither it nor any of [others] declares:
+ * that file's part of [signalDrift]. A file with no signals class and no lookup can report
+ * nothing, so [others] is read only for one that has.
+ */
+internal fun signalDriftIn(
+    own: SignalFacts,
+    others: () -> Iterable<SignalFacts>,
+): List<Issue> {
+    if (own.classes.isEmpty() && own.lookups.isEmpty()) return emptyList()
+    val facts = HashMap<String, SignalFacts>()
+    // Only this file's issues are asked for, so another file's lookups play no part.
+    others().forEachIndexed { i, o -> facts["$i"] = o.copy(lookups = emptyList()) }
+    facts[OWN_FILE] = own
+    return signalDrift(facts).issues[OWN_FILE].orEmpty()
+}
+
+/** The key of the file [signalDriftIn] judges, which no index of the others is. */
+private const val OWN_FILE = ""
+
+/**
  * Signals read in one file that nothing in [facts] declares.
  *
  * [facts] is every file of the project, keyed by whatever the caller calls a file: the union of
@@ -219,15 +299,27 @@ public data class SignalDriftReport(
  */
 public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val declared = facts.values.flatMapTo(LinkedHashSet()) { it.declared }
-    val signalTypes = facts.values.flatMapTo(LinkedHashSet()) { it.signalTypes }
     val read = LinkedHashSet<String>()
 
+    val byName = HashMap<String, MutableList<DeclaredClass>>()
+    for ((file, one) in facts) {
+        for ((type, properties) in one.classes) byName.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
+    }
+
+    // A class is judged where one class alone is what a read names: two the read may mean are left alone.
+    val judged = HashSet<Pair<String, String>>()
     // A page that declares its signals from an encoded class declares that class's properties. A
     // class this check cannot read, a Jackson one or none named, may declare any name.
-    val classes = facts.values.flatMap { it.classes.entries }.associate { it.key to it.value }
-    val encoded = facts.values.flatMapTo(LinkedHashSet()) { it.encodedTypes }
-    for (type in encoded) classes[type]?.forEach { declared += it.name }
-    val byCodec = encoded.filterTo(LinkedHashSet()) { it !in classes }
+    val byCodec = LinkedHashSet<String>()
+    for (one in facts.values) {
+        for (type in one.signalTypes) resolve(one, type, byName).singleOrNull()?.let { judged += it.file to type }
+        for (type in one.encodedTypes) {
+            val found = if (type == ANY_SIGNAL) emptyList() else resolve(one, type, byName)
+            if (found.isEmpty()) byCodec += type
+            for (c in found) c.properties.forEach { declared += it.name }
+        }
+        for (type in one.patchedTypes) for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+    }
     val anyDeclared = byCodec.isNotEmpty()
 
     val out = LinkedHashMap<String, List<Issue>>()
@@ -235,7 +327,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         val issues = ArrayList<Issue>()
 
         for ((type, properties) in one.classes) {
-            if (type !in signalTypes) continue
+            if (file to type !in judged) continue
             for (property in properties) {
                 read += property.name
                 if (property.name in declared || anyDeclared) continue
@@ -272,4 +364,34 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         if (issues.isNotEmpty()) out[file] = issues
     }
     return SignalDriftReport(out, declared, read, byCodec)
+}
+
+/**
+ * What the project knows about signals, which an editor's index holds: the driven port of
+ * [projectSignalIssues], which asks each question only where its answer is needed.
+ */
+public interface ProjectSignals {
+    /** Every signal the project defines, or null where that is not known. */
+    public fun defined(): Set<String>?
+
+    /** What the file asked about says about signals, or null where that is not known. */
+    public fun own(): SignalFacts?
+
+    /** What every other file says about signals. */
+    public fun others(): Iterable<SignalFacts>
+}
+
+/**
+ * What the [project] says of the signals one file in [language] reads, the one entry both editors
+ * ask: each of [refs] that reads a signal the project does not define, and in a Kotlin file each
+ * signal it reads through a signals class or a lookup that no file declares.
+ */
+public fun projectSignalIssues(
+    language: SourceLanguage,
+    refs: List<SignalReference>,
+    project: ProjectSignals,
+): List<Issue> {
+    val defined = if (refs.isEmpty()) null else project.defined()
+    val own = if (language == SourceLanguage.KOTLIN) project.own() else null
+    return defined?.let { unknownSignalIssues(refs, it) }.orEmpty() + own?.let { signalDriftIn(it, project::others) }.orEmpty()
 }

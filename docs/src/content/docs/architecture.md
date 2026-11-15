@@ -62,7 +62,7 @@ hunt the `$` trap, `interpolate` asks where a value landed, and `CspNonce` holds
 Datastar's CSP mode.
 
 **Protocol** (`core.protocol`): `SseEncoder`, which is pure, `SseFrame`, `DatastarAttributes` and
-every constant of Datastar 1.0.4.
+every constant of Datastar 1.0.5.
 
 **Ports** (`core.port`): the driving `DatastarStream`; the driven `SseSink`, `SignalsCodec` and
 `IncomingRequest`.

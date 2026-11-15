@@ -1,11 +1,12 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
+import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * The runes of the Datastar 1.0.4 protocol, transcribed from `datastar-sdk-config-v1.json`
+ * The runes of the Datastar 1.0.5 protocol, transcribed from `datastar-sdk-config-v1.json`
  * and the client source. Nothing here is invented; every constant is a word the browser knows.
  */
 public object DatastarProtocol {
@@ -58,6 +59,9 @@ public object DatastarProtocol {
         public const val NAMESPACE: String = "datastar-namespace"
         public const val USE_VIEW_TRANSITION: String = "datastar-use-view-transition"
 
+        /** Read from Datastar 1.0.5 on; an older client starts the view transition on the whole document. */
+        public const val VIEW_TRANSITION_SELECTOR: String = "datastar-view-transition-selector"
+
         /** Response header read for non-SSE `application/json` replies. */
         public const val ONLY_IF_MISSING: String = "datastar-only-if-missing"
 
@@ -93,7 +97,7 @@ public object DatastarProtocol {
                     .drop(1)
                     .map { it.split('=', limit = 2).map(String::trim) }
                     .firstOrNull { it.size == 2 && it[0].equals("q", ignoreCase = true) }
-                    ?.let { if (QVALUE.matches(it[1])) it[1].toDouble() else 0.0 } ?: 1.0
+                    ?.let { if (QVALUE.matchEntire(it[1]) != null) it[1].toDouble() else 0.0 } ?: 1.0
             when (name) {
                 "gzip", "x-gzip" -> named = (named == true) || weight > 0.0
                 "*" -> star = weight > 0.0
@@ -103,5 +107,5 @@ public object DatastarProtocol {
     }
 
     // RFC 9110's weight: 0 to 1, with at most three decimals. Anything else, Infinity included, is no.
-    private val QVALUE = Regex("""0(\.\d{0,3})?|1(\.0{0,3})?""")
+    private val QVALUE = regex("""0(\.\d{0,3})?|1(\.0{0,3})?""")
 }

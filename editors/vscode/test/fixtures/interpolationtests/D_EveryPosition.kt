@@ -13,7 +13,9 @@ import io.github.markusaugust.streamlord.core.domain.interpolate
  * The rule is interpolate's: element text, a quoted attribute and a URL take
  * anything, a Datastar attribute a number or a boolean, `style` a number, and
  * the structure of the markup and code the browser runs nothing. Null only
- * goes where anything does. A const val and a literal are the author's own and
+ * goes where anything does. Digits, true, false and null cannot end code the
+ * browser runs, and true or false is no CSS that does harm, so the editor says
+ * nothing of them there. A const val and a literal are the author's own and
  * say nothing anywhere; markup is the author's own only in element text.
  *
  * The comment above each line says what the editor must say there: a code and
@@ -326,7 +328,7 @@ object EveryPosition {
         // $query: unsafe-interpolation, warning
         // $n: nothing (a number is all style takes)
         // $maybe: unsafe-interpolation, warning (null is not a number)
-        // $flag: unsafe-interpolation, warning (a boolean is not a number)
+        // $flag: nothing (true or false is no CSS that does harm)
         // $html: unsafe-interpolation, warning
         // $variant: nothing
         // ${"lit"}: nothing
@@ -546,9 +548,9 @@ object EveryPosition {
 
     fun scriptBody(query: String, n: Int, maybe: Int?, flag: Boolean, html: Html): String {
         // $query: unsafe-interpolation, warning
-        // $n: unsafe-interpolation, warning (interpolate takes nothing in a script)
-        // $maybe: unsafe-interpolation, warning
-        // $flag: unsafe-interpolation, warning
+        // $n: nothing (digits cannot end a script)
+        // $maybe: nothing
+        // $flag: nothing
         // $html: unsafe-interpolation, warning
         // $variant: nothing
         // ${"lit"}: nothing
@@ -566,9 +568,9 @@ object EveryPosition {
 
     fun styleBody(query: String, n: Int, maybe: Int?, flag: Boolean, html: Html): String {
         // $query: unsafe-interpolation, warning
-        // $n: unsafe-interpolation, warning
-        // $maybe: unsafe-interpolation, warning
-        // $flag: unsafe-interpolation, warning
+        // $n: nothing (digits cannot end a style)
+        // $maybe: nothing
+        // $flag: nothing
         // $html: unsafe-interpolation, warning
         // $variant: nothing
         // ${"lit"}: nothing
@@ -586,9 +588,9 @@ object EveryPosition {
 
     fun eventHandler(query: String, n: Int, maybe: Int?, flag: Boolean, html: Html): String {
         // $query: unsafe-interpolation, warning
-        // $n: unsafe-interpolation, warning
-        // $maybe: unsafe-interpolation, warning
-        // $flag: unsafe-interpolation, warning
+        // $n: nothing (digits cannot end an event handler)
+        // $maybe: nothing
+        // $flag: nothing
         // $html: unsafe-interpolation, warning
         // $variant: nothing
         // ${"lit"}: nothing

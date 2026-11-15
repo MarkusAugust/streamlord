@@ -1,13 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { MockDocument, Position } from "./vscode-mock.ts";
+import { MockDocument, Position, Range, type CodeAction } from "./vscode-mock.ts";
+import { IssueStore, StreamlordCodeActionProvider } from "../src/codeActions.ts";
 import { StreamlordCompletionProvider } from "../src/completion.ts";
 import { StreamlordHoverProvider } from "../src/hover.ts";
 import { StreamlordSignatureHelpProvider } from "../src/signatureHelp.ts";
-import { analyzeHtml } from "../src/analyze.ts";
-import { collectSelectors } from "../src/selectors.ts";
-import { collectSignals } from "../src/signals.ts";
+import { diagnose, signalsOf } from "../src/analysis.ts";
+import { assertGrowsLinearly } from "./growth.ts";
 
 /** A stand-in for SignalIndex over a fixed set of documents. */
 class FakeIndex {
@@ -16,24 +16,16 @@ class FakeIndex {
     this.files.set(uri, { text, lang });
     return this;
   }
-  all() {
+  allDefinitions() {
     const out = new Set<string>();
-    for (const f of this.files.values()) for (const s of collectSignals(f.text, f.lang)) out.add(s);
-    return out;
-  }
-  forFile(uri: string) {
-    const f = this.files.get(uri);
-    return f ? collectSignals(f.text, f.lang) : new Set<string>();
-  }
-  selectorsForFile(uri: string) {
-    const f = this.files.get(uri);
-    return f ? collectSelectors(f.text) : { ids: new Set<string>(), classes: new Set<string>() };
+    for (const f of this.files.values()) for (const s of signalsOf(f.text, f.lang === "kotlin", "data-").definitions) out.add(s);
+    return [...out];
   }
   allSelectors() {
     const ids = new Set<string>();
     const classes = new Set<string>();
     for (const f of this.files.values()) {
-      const s = collectSelectors(f.text);
+      const s = signalsOf(f.text, f.lang === "kotlin", "data-");
       for (const i of s.ids) ids.add(i);
       for (const c of s.classes) classes.add(c);
     }
@@ -72,6 +64,25 @@ describe("completion provider", () => {
     assert.equal(items[0]?.detail, "signal (this file)");
     assert.equal(items.find((i) => i.label === "$busy")?.detail, "signal (workspace)");
     assert.ok((items[0]?.sortText ?? "") < (items.find((i) => i.label === "$busy")?.sortText ?? ""));
+  });
+
+  it("offers no signal another file's DSL call names with a hyphen, which Streamlord refuses, and the one an object keeps", () => {
+    const refused = new FakeIndex()
+      .add("file:///Other.kt", `${DSL}div { dataSignals("is-open" to false); dataBind("first-name") }`, "kotlin")
+      .add("file:///other.html", `<div data-signals='{"hs-key": 1}'></div>`, "html");
+    const html = new MockDocument(`<p data-text="$"></p>`, "html");
+    const labels = complete(html, 0, 15, refused).map((i) => i.label);
+    assert.deepEqual(labels, ["$hs-key"]);
+  });
+
+  it("inserts up to the caret and replaces the rest of the word, as the insert mode setting picks", () => {
+    const html = new MockDocument(`<div data-on:click="@post('/x', {contentType: 'form'})"></div>`, "html");
+    const at = html.getText().indexOf("form'");
+    const items = complete(html, 0, at, index);
+    const json = items.find((i) => i.label === "json");
+    const range = json?.range as unknown as { inserting: Range; replacing: Range };
+    assert.deepEqual([range.inserting.start.character, range.inserting.end.character], [at, at]);
+    assert.deepEqual([range.replacing.start.character, range.replacing.end.character], [at, at + 4]);
   });
 
   it("offers actions after @ with pro last", () => {
@@ -142,19 +153,21 @@ describe("completion provider", () => {
       `<div id=x title="a b" data-x='c' hidden data-`,
       `<input {% if user.admin == true %}checked{% endif %} data-`,
       `<div {{ a == b ? 'x' : 'y' }} data-`,
-      "<a href=/x?a=b data-attr:title=`x` id= data-",
+      "<a href=/x?a=b data-attr:title=`x` id=y data-",
     ]) {
       assert.ok(complete(pdoc(tag), 0, tag.length, index).some((i) => i.label === "data-on"), tag);
     }
+    // After an equals sign and white space the browser reads a value, not a name.
+    const value = "<a href=/x id= data-";
+    assert.deepEqual(complete(pdoc(value), 0, value.length, index), [], value);
     const escaped = `val html = "<div class=\\"card\\" data-`;
     assert.ok(complete(new MockDocument(escaped, "kotlin"), 0, escaped.length, index).some((i) => i.label === "data-on"), escaped);
-    // CodeQL's input, as long as the 400 characters the provider reads, which never finished
-    // before. It ends on a name the caret completes, so the whole reading is timed.
-    const hostile = "<A " + "!= ".repeat(132) + "data-on:click__";
-    const started = performance.now();
-    const items = complete(pdoc(hostile), 0, hostile.length, index);
-    assert.ok(performance.now() - started < 1000, `${Math.round(performance.now() - started)} ms`);
-    assert.ok(items.some((i) => i.label === "debounce"), "modifiers at the end of the hostile input");
+    // CodeQL's input, which never finished before. It ends on a name the caret completes, so the
+    // whole reading is timed.
+    const hostile = (n: number) => "<A " + "!= ".repeat(n) + "data-on:click__";
+    assertGrowsLinearly("completing after a run of !=", 200, hostile, (src) => {
+      assert.ok(complete(pdoc(src), 0, src.length, index).some((i) => i.label === "debounce"), "modifiers at the end of the hostile input");
+    });
   });
 
   it("offers signals inside html attribute values", () => {
@@ -178,10 +191,13 @@ describe("completion provider", () => {
   });
 });
 
+/** An item's name, whether its label is a string or carries a detail. */
+const name = (i: { label: unknown }) => (typeof i.label === "string" ? i.label : (i.label as { label: string }).label);
+
 describe("help inside an expression", () => {
   const index = new FakeIndex().add("file:///other.html", other, "html");
   /** Where an item's range starts; the provider sets a plain range. */
-  const startOf = (item: { range?: unknown }) => (item.range as { start: Position }).start;
+  const startOf = (item: { range?: unknown }) => (item.range as { inserting: { start: Position } }).inserting.start;
   /** The items at the end of `src`, in a document of `language`. */
   const at = (src: string, language = "html") => {
     const doc = new MockDocument(src, language);
@@ -206,25 +222,27 @@ describe("help inside an expression", () => {
 
   it("offers the options of a backend action not yet written, with what each does", () => {
     const { items } = at(`<div data-on:click="@get('/x', {retry: 'never', re`);
-    const labels = items.map((i) => i.label);
+    const labels = items.map(name);
     assert.ok(labels.includes("retryInterval") && !labels.includes("retry"), labels.join());
-    assert.match(String((items.find((i) => i.label === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
+    // Its default shows after its name, as IntelliJ shows it.
+    assert.deepEqual(items.find((i) => name(i) === "retryInterval")?.label, { label: "retryInterval", detail: " = 1000" });
+    assert.match(String((items.find((i) => name(i) === "retryInterval")?.documentation as { value: string }).value), /\*\*retryInterval\*\*/);
   });
 
   it("offers the options in a template and in a Kotlin DSL string", () => {
-    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => i.label === "retryInterval"), "pebble");
+    assert.ok(at(`<div data-on:click="@get('/x', {ret`, "pebble").items.some((i) => name(i) === "retryInterval"), "pebble");
     const kotlin = new MockDocument(`${DSL}fun f() { dataOnClick("@get('/x', {ret})") }`, "kotlin");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(kotlin as never, kotlin.positionAt(kotlin.text.indexOf("})")) as never);
-    assert.ok(items.some((i) => i.label === "retryInterval"), "kotlin");
+    assert.ok(items.some((i) => name(i) === "retryInterval"), "kotlin");
   });
 
   it("writes the colon after an option only where none follows", () => {
     const doc = new MockDocument(`<div data-on:click="@get('/x', {retr: 'never'})"></div>`, "html");
     const provider = new StreamlordCompletionProvider(index as never, () => "data-");
     const items = provider.provideCompletionItems(doc as never, doc.positionAt(doc.text.indexOf(":", 35)) as never);
-    assert.equal(items.find((i) => i.label === "retry")?.insertText, "retry");
-    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => i.label === "retry")?.insertText, "retry: ");
+    assert.equal(items.find((i) => name(i) === "retry")?.insertText, "retry");
+    assert.equal(at(`<div data-on:click="@get('/x', {retr`).items.find((i) => name(i) === "retry")?.insertText, "retry: ");
   });
 
   it("offers DOM events and Datastar's own after data-on:", () => {
@@ -300,14 +318,11 @@ describe("an attribute on its own line", () => {
   });
 
   it("answers in time on a long document of tags never closed", () => {
-    let hostile = "";
-    while (hostile.length < 50_000) hostile += "<a " + "!= ".repeat(40) + "\n";
-    hostile += "<a " + "!= ".repeat(40) + "data-on:click__";
-    const started = performance.now();
-    const items = labels(hostile, "pebble");
-    const took = performance.now() - started;
-    assert.ok(took < 1000, `${Math.round(took)} ms`);
-    assert.ok(items.includes("debounce"), "modifiers at the end of the long document");
+    const tag = "<a " + "!= ".repeat(40);
+    const hostile = (lines: number) => `${tag}\n`.repeat(lines) + tag + "data-on:click__";
+    assertGrowsLinearly("completing after lines of tags never closed", 6, hostile, (src) => {
+      assert.ok(labels(src, "pebble").includes("debounce"), "modifiers at the end of the long document");
+    });
   });
 
   it("completes after a stray quote elsewhere in the markup", () => {
@@ -371,7 +386,10 @@ describe("signature help", () => {
   it("shows the action's parameters with the one at the caret", () => {
     const h = signature(`<div data-on:click="@get('/x', `, "html");
     assert.equal(h?.signatures[0]?.label, "@get(uri, options?)");
-    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), ["uri", "options?"]);
+    // Each parameter by where it stands in the signature, as VS Code highlights it.
+    assert.deepEqual(h?.signatures[0]?.parameters.map((p) => p.label), [[5, 8], [10, 18]]);
+    // And what each is, from the catalog.
+    assert.match(String((h?.signatures[0]?.parameters[0]?.documentation as unknown as { value: string }).value), /^A string\. The address of the request/);
     assert.equal(h?.activeParameter, 1);
     const src = `${DSL}div { dataOnClick("@post(") }`;
     assert.equal(signature(src, "kotlin", src.indexOf("(\")") + 1)?.activeParameter, 0);
@@ -412,6 +430,21 @@ describe("hover provider", () => {
     assert.doesNotMatch(value, /data-on-signal-patch-filter/);
   });
 
+  // VS Code's HTML service shows an attribute's documentation from html-customdata.json where the name is exactly one of its own.
+  it("leaves an attribute html-customdata.json documents in an html file to VS Code's HTML service, and documents it elsewhere", () => {
+    const words = (src: string, language: string, at: string) => {
+      const doc = new MockDocument(src, language);
+      return hover.provideHover(doc as never, doc.positionAt(src.indexOf(at) + 2) as never);
+    };
+    const src = `<div data-text="$a" data-on-signal-patch-filter="{include: /a/}" data-on:click="$a++" data-show__once="$a">`;
+    assert.equal(words(src, "html", "data-text"), null);
+    assert.equal(words(src, "html", "data-on-signal-patch-filter"), null);
+    assert.notEqual(words(src, "html", "data-on:click"), null);
+    assert.notEqual(words(src, "html", "data-show__once"), null);
+    assert.notEqual(words(src, "pebble", "data-text"), null);
+    assert.notEqual(new StreamlordHoverProvider(() => "data-star-").provideHover(new MockDocument(`<div data-star-text="$a">`, "html") as never, new Position(0, 8) as never), null);
+  });
+
   it("documents attributes inside html strings in kotlin", () => {
     const kdoc = new MockDocument(`val x = """<div data-on-intersect__once="x()">"""`, "kotlin");
     const attr = hover.provideHover(kdoc as never, new Position(0, 20) as never);
@@ -421,10 +454,94 @@ describe("hover provider", () => {
   });
 });
 
+describe("code action provider", () => {
+  /** The actions at `offset` of a Kotlin document linted as the extension lints it, and what applying one leaves. */
+  function actionsAt(text: string, offset: number, end = offset) {
+    const doc = new MockDocument(text, "kotlin");
+    const issues = new IssueStore();
+    issues.set(doc.uri as never, diagnose(text, true, "data-", [], null, null));
+    const range = new Range(doc.positionAt(offset), doc.positionAt(end));
+    const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, range as never, { diagnostics: [] } as never) as unknown as CodeAction[];
+    const applied = (action: CodeAction) =>
+      [...(action.edit?.replacements ?? [])]
+        .sort((a, b) => doc.offsetAt(b.range.start) - doc.offsetAt(a.range.start))
+        .reduce((out, r) => out.slice(0, doc.offsetAt(r.range.start)) + r.text + out.slice(doc.offsetAt(r.range.end)), text);
+    return { actions, applied };
+  }
+
+  const DOMAIN = "io.github.markusaugust.streamlord.core.domain";
+  const head = `import ${DOMAIN}.Trusted\nimport ${DOMAIN}.interpolate\n\nfun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: String): String =\n    `;
+  /** The literal of the case that found the defects, with each value written as given. */
+  const widget = (root: string, css: string, content: string, body: string, events: string) =>
+    `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
+  const REWRITE = "Build this string with interpolate(...)";
+  const ESCAPES = `${REWRITE}, which escapes the values`;
+
+  it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
+    const css = "${customCss.orEmpty()}";
+    const values = ["${k.rootId}", css, "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
+    const text = `${head}${widget(...values)}\n`;
+    const rewritten = `${head}interpolate(${widget("%s", "%s", "%s", "%s", "%s")}, k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n`;
+    // One edit, one title, from whichever value it is offered.
+    const title = `Build this string with interpolate(...), with ${css} as Trusted(...)`;
+    for (const value of values) {
+      const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
+      // The diagnostic's quick fix is the rewrite there, so no refactoring stands beside it.
+      const rewrites = actions.filter((a) => a.title.startsWith(REWRITE));
+      assert.deepEqual(rewrites.map((a) => [a.title, a.kind?.value]), [[title, "quickfix"]], value);
+      assert.equal(applied(rewrites[0] as CodeAction), rewritten, value);
+    }
+  });
+
+  const card = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
+  const carded = `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`;
+
+  it("offers the rewrite once, as a refactoring, at a caret away from the warning", () => {
+    const { actions, applied } = actionsAt(card, card.indexOf("class"));
+    const rewrites = actions.filter((a) => a.title.startsWith(REWRITE));
+    assert.deepEqual(rewrites.map((a) => [a.title, a.kind?.value, a.isPreferred ?? false]), [[ESCAPES, "refactor.rewrite", false]]);
+    assert.equal(applied(rewrites[0] as CodeAction), carded);
+  });
+
+  it("offers it for a selection inside the string, and not for one that reaches out of it", () => {
+    const inside = actionsAt(card, card.indexOf("<p"), card.indexOf("class") + 5);
+    assert.deepEqual(inside.actions.filter((a) => a.title.startsWith(REWRITE)).map((a) => a.kind?.value), ["refactor.rewrite"]);
+    assert.equal(inside.applied(inside.actions[0] as CodeAction), carded);
+    assert.deepEqual(actionsAt(card, card.indexOf("String ="), card.indexOf("class")).actions, []);
+  });
+
+  it("offers every fix of every diagnostic over the whole file, each tied to its own diagnostic", () => {
+    const text = readFileSync(new URL("./fixtures/real/kotlin/ViewMistakes.kt", import.meta.url), "utf8");
+    const doc = new MockDocument(text, "kotlin");
+    const found = diagnose(text, true, "data-", [], null, null);
+    const issues = new IssueStore();
+    issues.set(doc.uri as never, found);
+    // What VS Code hands the provider: every diagnostic the range touches, as the extension made them.
+    const diagnostics = found.map((i) => ({ source: "streamlord", code: i.code, range: new Range(doc.positionAt(i.start), doc.positionAt(i.end)) }));
+    const whole = new Range(doc.positionAt(0), doc.positionAt(text.length));
+    const actions = new StreamlordCodeActionProvider(issues, () => ({ prefix: "data-", constants: [] })).provideCodeActions(doc as never, whole as never, { diagnostics } as never) as unknown as CodeAction[];
+    const got = actions
+      .filter((a) => a.kind?.value === "quickfix")
+      .map((a) => {
+        const [d] = (a.diagnostics ?? []) as typeof diagnostics;
+        return `${d?.code} ${d ? `${doc.offsetAt(d.range.start)}-${doc.offsetAt(d.range.end)}` : "none"} ${a.title}`;
+      });
+    assert.deepEqual(got, found.flatMap((i) => (i.fixes ?? []).map((f) => `${i.code} ${i.start}-${i.end} ${f.title}`)));
+    // Line 8, `dataText("$count")`, has four.
+    const line8 = text.indexOf('dataText("$count")');
+    assert.equal(got.filter((g) => g.startsWith(`kotlin-interpolation ${line8 + 10}-`)).length, 4);
+  });
+
+  it("offers nothing where no value of the string is escaped", () => {
+    const text = 'fun total(count: Int): String = "<p>total $count</p>"';
+    assert.deepEqual(actionsAt(text, text.indexOf("total $")).actions, []);
+  });
+});
+
 describe("playground html template", () => {
   it("matches the expectations written in the file", () => {
     const html = readFileSync(new URL("./fixtures/template.html", import.meta.url), "utf8");
-    const codes = analyzeHtml(html, { prefix: "data-", checkHtmlAttributes: true }).map((i) => i.code);
+    const codes = diagnose(html, false, "data-", [], null, null).map((i) => i.code);
     assert.deepEqual(codes, ["unknown-modifier", "modifier-args", "missing-key", "unknown-attribute", "expression-syntax", "pro-attribute", "pro-attribute", "prefix-mismatch"]);
   });
 });

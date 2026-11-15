@@ -7,7 +7,7 @@ public enum class Severity { ERROR, WARNING, INFO, HINT }
  * A quick fix: replace `[start, end)` with [text]. Offsets are in the same space as the issue's.
  *
  * The text of a fix that rewrites a whole literal is made only when it is asked for, so a literal
- * with thousands of holes does not build a rewrite for each.
+ * with thousands of placeholders does not build a rewrite for each.
  */
 public class Fix private constructor(
     public val title: String,
@@ -59,6 +59,9 @@ public class Fix private constructor(
 
     override fun toString(): String = "Fix(title=$title, start=$start, end=$end, text=$text, edits=$edits, preferred=$preferred)"
 
+    /** Whether this fix and [other] write the same text, made once for both: the rewrite of a literal, of which each value offers a [copy]. */
+    internal fun sharesTextWith(other: Fix): Boolean = made === other.made
+
     internal companion object {
         /** A fix whose text is made the first time it is read. */
         fun later(
@@ -92,7 +95,7 @@ public data class Issue(
     val fixes: List<Fix> = emptyList(),
 ) {
     /** Where [start] falls in [source], the text the issue was found in. */
-    public fun position(source: String): SourcePosition = sourcePosition(source, start)
+    internal fun position(source: String): SourcePosition = sourcePosition(source, start)
 
     /**
      * The issue as one line in the form compilers write and IDEs and CI make clickable:
@@ -113,36 +116,18 @@ public data class Issue(
     }
 }
 
-/** An [Issue] of a project's sources, as [Analyzer.analyzeProject] finds them: the [file], and the [line] and [column] where it starts. */
-public data class ProjectIssue(
-    val file: java.io.File,
-    val line: Int,
-    val column: Int,
-    val issue: Issue,
-) {
-    /** Whether the issue should fail a build: an error, or an `unsafe-interpolation` warning, which escaping cannot save. */
-    public val fails: Boolean
-        get() = issue.severity == Severity.ERROR || (issue.code == "unsafe-interpolation" && issue.severity == Severity.WARNING)
-
-    /** The issue as one line in the form compilers write, as [Issue.format] has it: `src/main/kotlin/Page.kt:12:5: error: ... [code]`. */
-    public fun format(): String = issue.format(file.path, SourcePosition(line, column))
-}
-
-/** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
-public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }
-
 /**
  * A place in a text as editors count it: [line] and [column] both start at 1, and a column counts
  * UTF-16 characters, as the offsets of an [Issue] do. Only `\n` breaks a line: `\r\n` counts as one
  * break, and a lone `\r` as none.
  */
-public data class SourcePosition(
+internal data class SourcePosition(
     val line: Int,
     val column: Int,
 )
 
 /** Where [offset] falls in [source]. An offset outside the text is held to its ends. */
-public fun sourcePosition(
+internal fun sourcePosition(
     source: String,
     offset: Int,
 ): SourcePosition {
@@ -158,8 +143,10 @@ public fun sourcePosition(
     return SourcePosition(line, at - lineStart + 1)
 }
 
-/** Where the diagnostics point in the Datastar reference. */
-public object Docs {
+/** Where the diagnostics point: in the Datastar reference, and for a Kotlin value in an HTML string in Streamlord's own documentation. */
+internal object Docs {
+    /** Streamlord's page on HTML strings and `interpolate`. */
+    public const val STRINGS: String = "https://streamlord-docs.netlify.app/strings/"
     public const val ATTRIBUTES: String = "https://data-star.dev/reference/attributes"
     public const val ACTIONS: String = "https://data-star.dev/reference/actions"
     public const val SSE: String = "https://data-star.dev/reference/sse_events"
@@ -169,4 +156,7 @@ public object Docs {
 
     /** The anchor of one attribute in the reference. */
     public fun attribute(name: String): String = "$ATTRIBUTES#" + if (name.startsWith("data-")) name else "data-$name"
+
+    /** Where the reference describes [spec]: its own page where the catalog names one, its anchor among the attributes otherwise. */
+    public fun attribute(spec: AttributeSpec): String = spec.reference ?: attribute(spec.name)
 }

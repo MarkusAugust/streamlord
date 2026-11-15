@@ -6,7 +6,7 @@
 > Sarn the Faceless
 
 <!-- description -->
-Datastar 1.0.4 as a language in IntelliJ IDEA (Community and Ultimate), 2026.1 and newer. Half of
+Datastar 1.0.5 as a language in IntelliJ IDEA (Community and Ultimate), 2026.1 and newer. Half of
 the [Streamlord](https://github.com/MarkusAugust/streamlord) toolchain, and the half that needs no
 part of the other: it reads your HTML and template files whatever answers them, and your Kotlin
 strings alongside the Streamlord SDK.
@@ -45,8 +45,8 @@ function that returns HTML, a `val` holding a fragment), and in HTML and templat
   or `signal("form.first-name")`, is an error, since the SDK refuses it at runtime, with the
   camelCase fix.
 - What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
-  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
-  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  `@name(` in the text of a template literal whose `${...}` holds a brace, or inside a regular
+  expression, is rewritten there too; a `'` in a comment or a regular expression
   pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
   signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
 - Signal names Datastar's client cannot hold or no `$name` reaches: `__proto__` anywhere in the
@@ -71,7 +71,9 @@ A call the Kotlin plugin resolves to something other than Streamlord is left alo
 `toggle("open")`, a `$$` literal or an escaped `${'$'}count`; `__debunce` becomes `__debounce`,
 `__debounce_150ms` becomes `__debounce.150ms` and `__prevent.stop` becomes `__prevent__stop`;
 `@Post` becomes `@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or
-`selector` is added. Every message links to the matching page of the Datastar reference.
+`selector` is added; an HTML string with Kotlin values in it becomes a call of `interpolate(...)`,
+which is also a context action anywhere in a string that can take it. Every message links to the
+matching page of the Datastar reference, or to Streamlord's page on HTML strings.
 
 **Completion**: `$` offers every signal name declared anywhere in the project (Kotlin DSL calls,
 `@Serializable` classes, HTML strings and templates), this file's first; `@` offers actions;
@@ -116,11 +118,13 @@ template file IntelliJ reads as plain text is still spelled whole.
 **Highlighting** of Datastar expressions inside DSL strings and HTML strings, and of `data-*`
 attributes in HTML: prefix, plugin, key, modifiers and modifier arguments each get their own
 colour, and the attribute value is coloured as a Datastar expression. The plugin brings no colours
-of its own: each token takes the colour your theme gives a standard one, a signal that of a static
-field, a backend action such as `@get` that of a keyword, and any other action that of a function
-call. IntelliJ's own schemes give a function call and a class name no colour, so there an action,
-an attribute key and a modifier argument read as plain text. Settings | Editor | Color Scheme |
-Streamlord lets you give any of them one.
+of its own: each token takes the colour your theme gives a standard one. A signal has that of a
+static field, a property or an object's key that of an instance field, an action such as `@get`
+and a modifier that of a keyword, a global such as `Math` and a modifier's argument that of a
+constant, and the parts of the attribute's name that of an HTML attribute's name. Every one
+of IntelliJ's own schemes, classic Default, Darcula and the New UI's Light, Dark and Islands Dark,
+colours each of them; a name, a call and an operator stay as plain as they are in JavaScript.
+Settings | Editor | Color Scheme | Streamlord lets you give any of them a colour of your own.
 
 **HTML injection** into Kotlin strings that open with a tag but carry no `@Language("HTML")`, so
 tags complete and close as in an HTML file. Streamlord's own parameters carry the annotation
@@ -145,9 +149,10 @@ alone: an attribute value that contains it cannot be judged before rendering.
 **Stream Inspector** (the Streamlord tool window): connect to a running endpoint with a method,
 signals and headers; every SSE event arrives decoded, and the signal store is kept exactly as
 the client would keep it.
+A line longer than 10,000 characters is shown cut, in an event and in the store.
 It asks as Datastar's client does, with the same `Accept`, and reads what the client reads: a
 200 that is not HTML, JSON or JavaScript is decoded as a stream, whatever its `Content-Type`. Any
-other response is shown with its `datastar-*` headers and up to 1 MiB of its body; a
+other response is shown with its `datastar-*` headers and its body, of which 1 MiB is read; a
 `text/event-stream` response with any status but 200 is not read, as the client reads none.
 
 - **Saved requests** live in `.streamlord/inspector.json` in the project, the same file the VS
@@ -234,7 +239,7 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
   you to fill in; the icon names the optional ones, such as `required = false`, which it leaves out.
 - **Copy as curl** puts an equivalent `curl -N ...` command on the clipboard.
 
-Everything the plugin knows comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests
+Everything the plugin knows comes from `catalog/datastar-1.0.5.json`, which the SDK's own tests
 bind to the DSL, through `streamlord-analysis`, the same checks the VS Code extension makes.
 <!-- /description -->
 
@@ -252,10 +257,15 @@ Settings | Tools | Streamlord:
 | Gutter icons on routes | on | "Open in Stream Inspector" on Ktor and Spring routes. |
 
 The inspections are under Settings | Editor | Inspections | Streamlord, one per family
-(interpolation, expression, attribute, signal no file defines, key casing, patch markup), each
+(interpolation, expression, attribute, unknown signals, key casing, patch markup), each
 with its own severity. A severity you set there applies to the issues at the family's own level
 or above, and never raises one below it: setting the interpolation inspection to a warning makes its errors
 warnings and leaves its weak warnings weak.
+The unknown signals inspection is the counterpart of VS Code's setting
+`streamlord.diagnostics.unknownSignals`, and turns the same two warnings on and off: a `$name` no
+file in the project defines, and, in a Kotlin file, a signal the server reads, through a
+`@Serializable` class or a `Signals` lookup, that no page in the project declares
+(`signal-never-declared`).
 
 ## Datastar Pro
 
@@ -273,9 +283,8 @@ you license and load yourself.
 ```
 
 The plugin build includes the SDK build (`includeBuild("../..")`) for `streamlord-analysis`, the
-editor-independent analysis that the VS Code extension mirrors in TypeScript; both are tested
-against the same cases. The analysis module's tests live with the SDK: `../../gradlew
-:streamlord-analysis:test`.
+editor-independent analysis, which the VS Code extension runs too, compiled to JavaScript. The
+analysis module's tests live with the SDK: `../../gradlew :streamlord-analysis:test`.
 
 ### Publishing
 

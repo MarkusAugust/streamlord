@@ -64,6 +64,27 @@ class InspectionTest : StreamlordTestCase() {
         assertTrue(fixes.toString(), "Use increment(\"count\")" in fixes)
     }
 
+    // IntelliJ draws no weaker problem inside an error's range, so the error says it as well and offers its fixes.
+    fun `test a weaker problem inside an error is said with the error`() {
+        myFixture.configureByText("page.html", "<div data-match-media=\"'x'\"></div><div data-on:click__></div>")
+        val found = myFixture.doHighlighting().mapNotNull { it.description }
+        // Each message keeps its own link.
+        assertTrue(
+            found.toString(),
+            found.any {
+                "needs a key" in it &&
+                    it.endsWith(
+                        "Also: data-match-media is a Datastar Pro attribute; it needs the Pro bundle. " +
+                            "See https://data-star.dev/reference/attributes#data-match-media",
+                    )
+            },
+        )
+        assertTrue(found.toString(), found.any { "needs a value" in it && "Unknown modifier __ on data-on" in it })
+        myFixture.configureByText("page.html", "<div data-on:keyDown></div>")
+        myFixture.doHighlighting()
+        assertContainsElements(myFixture.getAllQuickFixes().map { it.text }, "Change to keydown")
+    }
+
     fun `test html files get the template side`() {
         myFixture.configureByText(
             "page.html",
@@ -97,6 +118,46 @@ class InspectionTest : StreamlordTestCase() {
         )
         myFixture.configureByText("Theirs.kt", "fun f() = patchElements(\"<div>no id</div>\")")
         assertEquals(1, myFixture.doHighlighting().count { it.description?.contains("has no id") == true })
+    }
+
+    // In core's words, the arguments the analysis holds to core; Ktor is not on this project's classpath.
+    fun `test what core refuses in an SSE call is shown, and a look-alike's call is not`() {
+        myFixture.configureByText(
+            "Sse.kt",
+            """
+            import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+            import io.github.markusaugust.streamlord.core.domain.PatchElements
+            import io.github.markusaugust.streamlord.core.domain.PatchSignals
+            import io.github.markusaugust.streamlord.core.domain.ScriptResponse
+            import io.github.markusaugust.streamlord.core.port.driving.DatastarStream
+            class Other { fun removeElements(s: String) = s }
+            suspend fun DatastarStream.f(o: Other) {
+                executeScript("x()", attributes = mapOf("bad name" to "v"))
+                executeScript("x()", attributes = mapOf("data-effect" to "y()"))
+                send(PatchElements.remove(""))
+                send(PatchSignals.remove("first-name"))
+                patchElements("<circle id=\"c\"/>", selector = "#sky", mode = ElementPatchMode.APPEND)
+                val answer = ScriptResponse("x()", attributes = mapOf("type" to "a\nb"))
+                o.removeElements("")
+            }
+            """.trimIndent(),
+        )
+        val shown =
+            myFixture
+                .doHighlighting()
+                .filter { it.description?.let { d -> "throws:" in d || "holds no hyphen" in d } == true }
+                .map { it.text to it.description!!.substringBefore(":") }
+        assertEquals(
+            listOf(
+                "\"bad name\"" to "executeScript throws",
+                "\"data-effect\"" to "executeScript throws",
+                "\"\"" to "PatchElements.remove throws",
+                "\"first-name\"" to "A signal name holds no hyphen",
+                "\"<circle id=\\\"c\\\"/>\"" to "patchElements throws",
+                "\"a\\nb\"" to "ScriptResponse throws",
+            ),
+            shown,
+        )
     }
 
     // The official Datastar SDK's patchElements is not Streamlord's: its HTML is judged as any HTML string, not as a patch.
@@ -135,7 +196,7 @@ class InspectionTest : StreamlordTestCase() {
         val q = "\"\"\""
         myFixture.configureByText(
             "Demo.kt",
-            "fun f(): String = \$\$$q<div data-signals:teller=\"0\"><button data-on:click=\"\$telefon++\">x</button>" +
+            "fun f(): String = \$\$$q<div data-signals:teller=\"0\"><button data-on:click=\"\$telefon + 1\">x</button>" +
                 "<span data-text=\"\$teller\"></span></div>$q",
         )
         val highlights = myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }
@@ -202,7 +263,7 @@ class InspectionTest : StreamlordTestCase() {
                 "s.executeScript(\"'</script>'\"); dataSignals(\"fooBar\", \"1\"); s.patchElements(\"text </b>\")",
                 "s.patchElements(\"\"\"<span id=\"busy\" data-indicator:busy></span>\"\"\")",
                 "s.patchElements(\"\"\"<div id=\"n\" data-bind=\"__proto__.x\" data-computed=\"\${'$'}a + 1\" data-json-signals=\"{include: '/a/i'}\"",
-                " data-text=\"`\${'$'}t \${'$'}{1}` + ((n) => { n; return n })(1)\" data-on:click=\"x // '\n\${'$'}b = 'y'\"></div>\"\"\")",
+                " data-text=\"`\${'$'}t \${'$'}{ {a: 1}.a }` + ((n) => { n; return n })(1)\" data-on:click=\"x // '\n\${'$'}b = 'y'\"></div>\"\"\")",
             ).joinToString("\n")
         val codes = analyzer.analyzeKotlin(src).mapNotNull { it.code }.toSet()
         val unclaimed = codes - InspectionCodes.all

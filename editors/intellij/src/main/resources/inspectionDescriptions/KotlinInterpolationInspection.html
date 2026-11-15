@@ -33,8 +33,14 @@ Quick fixes, each offered where the project can use what it writes. The DSL help
 <code>signal("count")</code>, <code>toggle("open")</code>) with its import, where the module has streamlord-html, no import
 from elsewhere takes the helper's name, and the helper says the whole literal. A <code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, and the
 <code>${'$'}count</code> escape, in any project. The literal rewritten as <code>interpolate(...)</code> with its import, where the
-module has Streamlord's core; it is not offered for a value that may be null, which a template writes as <code>null</code> and
-<code>interpolate</code> as nothing. Quotes around an unquoted attribute value, and a template in a format made a
+module has Streamlord's core and <code>interpolate</code> accepts every value in it: a trim call stays on the format, a
+<code>$$"..."</code> literal keeps its prefix, and literals joined with <code>+</code> become one. For a value that may be null,
+which a template writes as <code>null</code> and <code>interpolate</code> as nothing, and under <code>trimIndent</code>, which
+then runs before the values go in, it is offered and not put first. Where no rewrite is offered, the message of each value
+says why: <code>interpolate</code> refuses another value where it stands, another may be markup the rewrite would escape, or a
+call follows one literal of a <code>+</code> chain. CSS in the body of a <code>&lt;style&gt;</code> the rewrite passes as
+<code>Trusted(...)</code>, from that value's own warning. The same rewrite is a context action for the caret or a selection
+anywhere in a string that has a value to escape. Quotes around an unquoted attribute value, and a template in a format made a
 <code>%s</code> placeholder with its value passed in its place. For a <code>String</code> in element text, which may be text from
 outside or markup you built, the rewrite is offered beside "Mark &hellip; as markup", which wraps the value in
 <code>Trusted(...)</code>, again only with core, and neither comes first: which one is right only you know.

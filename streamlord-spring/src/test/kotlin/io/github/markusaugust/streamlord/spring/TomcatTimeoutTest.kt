@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.spring
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.delay
@@ -206,7 +207,7 @@ class TomcatTimeoutTest {
         val response =
             HttpClient
                 .newHttpClient()
-                .send(HttpRequest.newBuilder(URI("http://localhost:$port/too-large")).build(), HttpResponse.BodyHandlers.ofString())
+                .send(HttpRequest.newBuilder(URI("http://$LOOPBACK:$port/too-large")).build(), HttpResponse.BodyHandlers.ofString())
 
         assertEquals(413, response.statusCode(), response.body())
     }

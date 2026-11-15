@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.ktor
 
 import io.github.markusaugust.streamlord.core.application.StreamAuthorisation
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsBytes
@@ -105,31 +106,22 @@ class GzipTest {
     @Test
     fun `heartbeats on a gzipped stream arrive inside the gzip member`() {
         val heard = CompletableDeferred<Unit>()
-        val server =
-            embeddedServer(CIO, port = 0) {
-                install(StreamlordPlugin) {
-                    compress = true
-                    heartbeat = 50.milliseconds
-                }
-                routing {
-                    get("/feed") {
-                        call.respondDatastar {
-                            withTimeout(30.seconds) { heard.await() }
-                            patchSignals("n" to 1)
-                        }
+        serving(CIO, {
+            install(StreamlordPlugin) {
+                compress = true
+                heartbeat = 50.milliseconds
+            }
+            routing {
+                get("/feed") {
+                    call.respondDatastar {
+                        withTimeout(30.seconds) { heard.await() }
+                        patchSignals("n" to 1)
                     }
                 }
-            }.start(wait = false)
-        try {
-            val port =
-                runBlocking {
-                    server.engine
-                        .resolvedConnectors()
-                        .first()
-                        .port
-                }
+            }
+        }) { port ->
             val body =
-                Socket("localhost", port).use { socket ->
+                Socket(LOOPBACK, port).use { socket ->
                     socket.soTimeout = 30_000
                     socket.getOutputStream().write("GET /feed HTTP/1.1\r\nHost: x\r\nAccept-Encoding: gzip\r\n\r\n".toByteArray())
                     val read = StringBuilder()
@@ -146,8 +138,6 @@ class GzipTest {
 
             assertTrue(text.startsWith(": keep-alive\n\n"), text)
             assertEquals("event: datastar-patch-signals\ndata: signals {\"n\":1}\n\n", text.replace(": keep-alive\n\n", ""))
-        } finally {
-            server.stop(100, 500)
         }
     }
 

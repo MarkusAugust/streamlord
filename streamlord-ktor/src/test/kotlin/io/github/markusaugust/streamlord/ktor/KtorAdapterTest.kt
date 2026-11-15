@@ -233,6 +233,7 @@ class KtorAdapterTest {
                     call.respondDatastar { patchSignals(typed ?: Search()) }
                 }
                 get("/none") { call.respond(if (call.readSignals<Search>() == null && call.readSignals().isEmpty()) "none" else "some") }
+                post("/none") { call.respond(if (call.readSignalsJson() == null) "none" else "some") }
             }
             val get = client.get("/s?datastar=%7B%22query%22%3A%22ash%22%2C%22page%22%3A3%7D") { header("Datastar-Request", "true") }
             assertEquals("application/json", get.contentType()?.withoutParameters().toString())
@@ -246,6 +247,16 @@ class KtorAdapterTest {
             assertEquals("event: datastar-patch-signals\ndata: signals {\"query\":\"fire\",\"page\":2}\n\n", post.bodyAsText())
 
             assertEquals("none", client.get("/none").bodyAsText())
+            // payload: null, as the client sends it in the query and in the body.
+            assertEquals("none", client.get("/none?datastar=null").bodyAsText())
+            assertEquals(
+                "none",
+                client
+                    .post("/none") {
+                        contentType(ContentType.Application.Json)
+                        setBody("null")
+                    }.bodyAsText(),
+            )
         }
 
     // Ktor's own RequestAlreadyConsumedException said nothing of where the signals went; Spring says so.

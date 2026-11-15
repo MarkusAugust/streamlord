@@ -5,3 +5,4 @@
 io.github.markusaugust.streamlord::Package 'com\.intellij\.psi\.xml' is not found.*
 io.github.markusaugust.streamlord::Access to unresolved class com\.intellij\.ide\.highlighter\.HtmlFileType.*
 io.github.markusaugust.streamlord::Access to unresolved class com\.intellij\.lang\.html\.HTMLLanguage.*
+io.github.markusaugust.streamlord::Access to unresolved class com\.intellij\.openapi\.editor\.XmlHighlighterColors.*

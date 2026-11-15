@@ -1,11 +1,15 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.ClientScript
 import io.github.markusaugust.streamlord.core.client.Rewrite
+import io.github.markusaugust.streamlord.core.client.Run
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.clientRewrite
+import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 /*
  * Validation of Datastar expressions. A Datastar expression is JavaScript in which `$name` is a
@@ -14,32 +18,49 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
  * pattern does differently from JavaScript, it is told about.
  */
 
-private val SPACED_ACTION = Regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
-private val SIGNAL_PREFIX = Regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
-private val ACTION_PREFIX = Regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
-private val WORD_CHAR = Regex("""\w""")
+private val SPACED_ACTION = regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
+private val SIGNAL_PREFIX = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
+private val ACTION_PREFIX = regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
+private val WORD_CHAR = regex("""\w""")
+
+/** A `${` with a brace inside before it closes: what keeps the client's pattern from taking a template literal whole. */
+private val BRACED_INTERPOLATION = regex("""\$\{[^{}]*\{""")
 
 /** The quote of the single-, double- or backtick-quoted JavaScript string literal the offset is inside, or null. */
 internal fun quoteAt(
     text: String,
     offset: Int,
-): Char? {
-    var quote: Char? = null
-    var i = 0
-    while (i < offset) {
-        val c = text[i]
-        if (c == '\\') {
-            i += 2
-            continue
+): Char? = QuoteScan(text).at(offset)
+
+/** [quoteAt] for offsets asked in order, each read on from where the one before left off. */
+internal class QuoteScan(
+    private val text: String,
+) {
+    private var i = 0
+    private var asked = 0
+    private var quote: Char? = null
+
+    fun at(offset: Int): Char? {
+        if (offset < asked) {
+            i = 0
+            quote = null
         }
-        if (quote != null) {
-            if (c == quote) quote = null
-        } else if (c == '\'' || c == '"' || c == '`') {
-            quote = c
+        asked = offset
+        while (i < offset) {
+            val c = text[i]
+            if (c == '\\') {
+                i += 2
+                continue
+            }
+            if (quote != null) {
+                if (c == quote) quote = null
+            } else if (c == '\'' || c == '"' || c == '`') {
+                quote = c
+            }
+            i++
         }
-        i++
+        return quote
     }
-    return quote
 }
 
 /** What a character of an expression is to JavaScript; see [jsRegions]. */
@@ -111,11 +132,14 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
+/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
+private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
+
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
-// on either side, any character beyond ASCII counted as one, as the editor's twin counts it.
+// on either side, any character beyond ASCII counted as one.
 private val NAME_EDGE = "A-Za-z0-9_$\\x{80}-\\x{10FFFF}"
 
-private val BINDS_NAMES = Regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
+private val BINDS_NAMES = regex("""=>|\bfunction\b|\b(?:let|const|var)\b""")
 
 /**
  * For each name a free attribute's expression is handed and the others are not, the attributes
@@ -132,7 +156,23 @@ private class HandedIn(
 
     val pattern: Regex? =
         attributes.keys.takeIf { it.isNotEmpty() }?.let { names ->
-            Regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+            regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?![$NAME_EDGE])")
+        }
+
+    /**
+     * The same for a name every expression is compiled with and only some plugins hand a value:
+     * `evt`, which genRx passes as undefined (engine.ts:567) unless the plugin hands the event.
+     */
+    val undefinedElsewhere: Map<String, List<String>> =
+        catalog.attributes
+            .filter { !it.pro }
+            .flatMap { a -> a.argNames.filter { it in catalog.compiledParameters }.map { it to a.name } }
+            .groupBy({ it.first }, { it.second })
+
+    /** One of [undefinedElsewhere] read from: a property or an index of it, `evt.type` or `evt['x']`, not `evt?.x`. */
+    val readFrom: Regex? =
+        undefinedElsewhere.keys.takeIf { it.isNotEmpty() }?.let { names ->
+            regex("(?<![$NAME_EDGE.@])(" + names.joinToString("|") { Regex.escape(it) } + ")(?=[ \t]*[.\\[])")
         }
 }
 
@@ -147,6 +187,7 @@ private fun scopeNameIssues(
     text: String,
     spec: AttributeSpec,
     handed: HandedIn,
+    prefix: String,
 ): List<Issue> {
     val names = handed.pattern ?: return emptyList()
     if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || BINDS_NAMES.containsMatchIn(text)) return emptyList()
@@ -164,13 +205,40 @@ private fun scopeNameIssues(
             // A key of an object literal, `{patch: 1}`, names nothing.
             name !in spec.argNames && regions[m.range.first] == Region.CODE && !(after == ':' && (before == '{' || before == ','))
         }.map { m ->
-            val where = handed.attributes[m.value].orEmpty().joinToString(" and ") { "data-$it" }
+            val where = handed.attributes[m.value].orEmpty().joinToString(" and ") { "$prefix$it" }
             Issue(
                 start = m.range.first,
                 end = m.range.last + 1,
                 message =
-                    "${m.value} is not defined in data-${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
+                    "${m.value} is not defined in $prefix${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
                         "so here it throws a ReferenceError.",
+                severity = Severity.WARNING,
+                code = "scope-name",
+                link = Docs.EXPRESSIONS,
+            )
+        }.toList() + undefinedNameIssues(text, spec, handed, regions, prefix)
+}
+
+/** `evt.type` in an attribute whose plugin hands no event: [HandedIn.undefinedElsewhere]. */
+private fun undefinedNameIssues(
+    text: String,
+    spec: AttributeSpec,
+    handed: HandedIn,
+    regions: ByteArray,
+    prefix: String,
+): List<Issue> {
+    val names = handed.readFrom ?: return emptyList()
+    return names
+        .findAll(text)
+        .filter { m -> m.value !in spec.argNames && regions[m.range.first] == Region.CODE }
+        .map { m ->
+            val where = handed.undefinedElsewhere[m.value].orEmpty().joinToString(" and ") { "$prefix$it" }
+            Issue(
+                start = m.range.first,
+                end = m.range.last + 1,
+                message =
+                    "${m.value} is undefined in $prefix${spec.name}: Datastar hands an expression the event only in $where, " +
+                        "so reading from it throws a TypeError.",
                 severity = Severity.WARNING,
                 code = "scope-name",
                 link = Docs.EXPRESSIONS,
@@ -181,8 +249,7 @@ private fun scopeNameIssues(
 /**
  * What each character of an expression is to JavaScript: code, a string, the text of a template
  * literal, a regular expression or a comment. The code of a `${ }` is code. Whether a `/` divides
- * or opens a regular expression is told by what precedes it, as a tokenizer tells it. Shared with
- * the VS Code extension (`jsRegions` in expression.ts), which this follows step by step.
+ * or opens a regular expression is told by what precedes it, as a tokenizer tells it.
  */
 internal fun jsRegions(text: String): ByteArray {
     val kind = ByteArray(text.length)
@@ -353,7 +420,7 @@ private const val JS_SPACE = """[\t\n\u000B\u000C\r \u00A0\u1680\u2000-\u200A\u2
 
 /** The one IIFE shape `genRx` steps over whole: `(function() {...})()` or `(() => ...)()`, no arguments, no nesting. */
 private val IIFE =
-    Regex(
+    regex(
         """\($JS_SPACE*(?:(?:function)$JS_SPACE*\($JS_SPACE*\)|(?:\($JS_SPACE*\))$JS_SPACE*=>)$JS_SPACE*(?:\{[\s\S]*?\}|[^;){]*)$JS_SPACE*\)$JS_SPACE*\($JS_SPACE*\)""",
     )
 
@@ -386,7 +453,7 @@ private fun delimitedEnd(
 
 /**
  * The statements of a value-returning expression, as `statementRe` of Datastar's `genRx` matches
- * them (engine.ts:415-416 in 1.0.4): runs of anything but `;`, where a quoted string, a regex
+ * them (engine.ts in 1.0.5): runs of anything but `;`, where a quoted string, a regex
  * literal and a no-argument IIFE are stepped over whole, `;` and all. Written as a scan rather than
  * the client's one regular expression, which Java's engine recurses on and overflows for a few
  * kilobytes of text; the two agree token for token, since each alternative is tried in the client's
@@ -430,10 +497,17 @@ internal fun clientSignalReads(text: String): List<Rewrite> {
 }
 
 /**
- * The function body Datastar compiles from [text] (engine.ts:385-430 in 1.0.4). The text is
- * trimmed as JavaScript trims. With [returnsValue] it is split into statements, the last of them
- * wrapped in `return (...);` unless it starts with `return`, and the statements joined with `;\n`;
- * the separators and the wrapping map to where the statement started or ended.
+ * Whether [trimmed] opens with `return` and white space, the client's `/^return\s/`: a function
+ * body the author wrote, which `genRx` compiles as it stands and does not split into statements.
+ */
+internal fun opensWithReturn(trimmed: String): Boolean = trimmed.startsWith("return") && trimmed.getOrNull(6)?.isJsWhitespace() == true
+
+/**
+ * The function body Datastar compiles from [text] (engine.ts, `genRx`, in 1.0.5). The text is
+ * trimmed as JavaScript trims. With [returnsValue], unless it opens with `return`, it is split
+ * into statements, the last of them wrapped in `return (...);` unless it starts with `return`, and
+ * the statements joined with `;\n`; the separators and the wrapping map to where the statement
+ * started or ended. A text with no statement in it, only `;`, is compiled as it stands.
  */
 internal fun clientScript(
     text: String,
@@ -463,10 +537,10 @@ internal fun clientScript(
     if (start < 0) return ClientScript("", intArrayOf(text.length))
     val end = text.indexOfLast { !it.isJsWhitespace() } + 1
     val trimmed = text.substring(start, end)
-    if (!returnsValue) {
+    val statements = if (returnsValue && !opensWithReturn(trimmed)) clientStatements(trimmed) else emptyList()
+    if (statements.isEmpty()) {
         append(trimmed, start)
     } else {
-        val statements = clientStatements(trimmed)
         statements.forEachIndexed { i, r ->
             val statement = trimmed.substring(r)
             if (i > 0) synthetic(";\n", start + r.first - 1)
@@ -520,6 +594,49 @@ private fun stringStarts(regions: ByteArray): IntArray {
     return out
 }
 
+/**
+ * Why the client rewrote a reference that JavaScript reads as the text of a template literal. Asked
+ * once for each such reference, so each answer is looked up rather than read from the text again.
+ */
+private class TemplateReasons(
+    private val js: String,
+    runs: List<Run>,
+) {
+    // Between two runs of one literal lies a ${...} of a literal the client took whole: the gaps
+    // sorted by start, each with the furthest end of any gap that starts no later.
+    private val gaps =
+        runs
+            .zipWithNext()
+            .filter { (a, b) -> a.quote == b.quote }
+            .map { (a, b) -> a.range.last to b.range.first }
+            .sortedBy { it.first }
+    private val furthest = gaps.map { it.second }.runningReduce(::maxOf)
+
+    // Where the template literal around each position opens, and whether a ${...} in it holds a brace.
+    private val lastTick = IntArray(js.length).also { for (k in js.indices) it[k] = if (js[k] == '`') k else it.getOrElse(k - 1) { -1 } }
+    private val braced = HashMap<Int, Boolean>()
+
+    fun why(at: Int): String {
+        val before = gaps.binarySearch { if (it.first < at) -1 else 1 }.let { -it - 2 }
+        if (before >= 0 && furthest[before] > at) {
+            return ", because it stands inside a \${...}, where Datastar rewrites the text of an inner template literal too, " +
+                "so the text holds that"
+        }
+        val open = lastTick.getOrElse(at) { -1 }
+        val held =
+            open >= 0 &&
+                braced.getOrPut(open) {
+                    val close = js.indexOf('`', at).let { if (it < 0) js.length else it }
+                    BRACED_INTERPOLATION.containsMatchIn(js.substring(open, close))
+                }
+        return if (held) {
+            ", because a \${...} in the literal holds a brace and Datastar then reads the whole literal as code, so the text holds that"
+        } else {
+            ", because Datastar does not take this template literal whole and reads its text as code, so the text holds that"
+        }
+    }
+}
+
 /** Where a character the client paired as a quote sits, for the message that names it. */
 private fun placeOf(region: Byte): String =
     when (region) {
@@ -531,13 +648,13 @@ private fun placeOf(region: Byte): String =
     }
 
 /** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
-private val STRING_PATTERN_HEAD = Regex("""(["']?)(include|exclude)\1\s*:\s*(["'`])/""")
+private val STRING_PATTERN_HEAD = regex("""(["']?)(include|exclude)\1\s*:\s*(["'`])/""")
 
 /**
  * The flags a filter's pattern may end with. `d` is left out: it changes nothing a filter does, so
  * nobody writes it there, and the tail of a path such as `'/users/id'` is then not read as flags.
  */
-private val REGEX_FLAGS = Regex("""[gimsuyv]+""")
+private val REGEX_FLAGS = regex("""[gimsuyv]+""")
 
 /** A pattern of a filter written as a string with flags after its last slash; see [stringPatterns]. */
 internal data class StringPattern(
@@ -566,12 +683,11 @@ private fun keyOpens(
 
 /**
  * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:752 in 1.0.4) cuts one `/` from
+ * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804 in 1.0.5) cuts one `/` from
  * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
  * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
  * template literal counts when it holds no `${`. A scan rather than one regular expression, which
- * backtracks without end on a run of escapes. Shared with the VS Code extension (`stringPatterns`
- * in expression.ts).
+ * backtracks without end on a run of escapes.
  */
 internal fun stringPatterns(
     text: String,
@@ -580,13 +696,15 @@ internal fun stringPatterns(
     to: Int = text.length,
 ): List<StringPattern> {
     val out = ArrayList<StringPattern>()
-    var m = STRING_PATTERN_HEAD.find(text, from)
-    while (m != null && m.range.first < to) {
+    // Searched within the object alone: a search of the text after it would read the rest of the text for each object.
+    var m = STRING_PATTERN_HEAD.find(text.substring(from, to))
+    while (m != null) {
         val match = m
         m = m.next()
-        if (!keyOpens(text, regions, match.range.first, match.groupValues[1].isNotEmpty())) continue
+        val at = from + match.range.first
+        if (!keyOpens(text, regions, at, match.groupValues[1].isNotEmpty())) continue
         val quote = match.groupValues[3][0]
-        val start = match.range.last - 1
+        val start = from + match.range.last - 1
         var j = start + 1
         while (j < to && text[j] != quote && !(quote == '`' && text.startsWith("\${", j))) j += if (text[j] == '\\') 2 else 1
         if (j >= to || text[j] != quote) continue
@@ -594,7 +712,7 @@ internal fun stringPatterns(
         // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
         val slash = content.lastIndexOf('/')
         val flags = content.substring(slash + 1)
-        if (slash <= 0 || !REGEX_FLAGS.matches(flags)) continue
+        if (slash <= 0 || REGEX_FLAGS.matchEntire(flags) == null) continue
         out += StringPattern(match.groupValues[2], start, j + 1, content.substring(1, slash), flags)
     }
     return out
@@ -621,12 +739,11 @@ private fun literalBody(pattern: String): String {
 }
 
 /** A character that would not stand in a literal as it stands in the string: an escape, a quote, a reference. */
-private val UNFIXABLE_IN_PATTERN = Regex("""[\\'"`&]""")
+private val UNFIXABLE_IN_PATTERN = regex("""[\\'"`&]""")
 
 /**
  * The `filter-pattern` warnings for the string patterns of the object between [from] and [to] in
- * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action. Shared
- * with the VS Code extension (`filterPatternIssues` in expression.ts).
+ * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action.
  */
 internal fun filterPatternIssues(
     text: String,
@@ -670,7 +787,7 @@ internal fun filterPatternIssues(
     }
 
 /** `filterSignals: {` in the options of an action, which the client reads with the same `toRegExp`. */
-private val FILTER_SIGNALS = Regex("""(["']?)filterSignals\1\s*:\s*\{""")
+private val FILTER_SIGNALS = regex("""(["']?)filterSignals\1\s*:\s*\{""")
 
 /** The `filter-pattern` warnings for the `filterSignals` of the actions in [text]. */
 private fun filterSignalsIssues(text: String): List<Issue> {
@@ -716,16 +833,68 @@ public class ExpressionValidator(
      * allowed to open it. A `$my-value` named in [hyphenatedSignals] is a declared signal, not a
      * kebab-case slip. With the [attribute] it is the value of, whose [AttributeSpec.returnsValue]
      * stands in for [returnsValue], a name only another attribute's expression is handed is flagged
-     * too ([scopeNameIssues]).
+     * too ([scopeNameIssues]). With the [event] a data-on listens for, a type compared with
+     * `evt.detail.type` that datastar-fetch never comes with is flagged too ([fetchTypeIssues]).
+     * Messages name attributes with the [prefix] the page is written with.
      */
     public fun validate(
         text: String,
         returnsValue: Boolean? = null,
         hyphenatedSignals: Set<String> = emptySet(),
         attribute: AttributeSpec? = null,
+        event: String? = null,
+        prefix: String = CatalogNames.PREFIX,
     ): List<Issue> =
         validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
-            (attribute?.let { scopeNameIssues(text, it, handed) } ?: emptyList())
+            (attribute?.let { scopeNameIssues(text, it, handed, prefix) + computedSideEffects(text, it, prefix) } ?: emptyList()) +
+            (if (event == DATASTAR_FETCH) fetchTypeIssues(catalog, text) else emptyList())
+
+    /**
+     * A signal changed or an action with a side effect called in `data-computed`, which the
+     * reference says must do neither: the client runs the expression again each time a signal it
+     * reads changes. `@peek` and the Pro formatters only compute a value.
+     */
+    private fun computedSideEffects(
+        text: String,
+        spec: AttributeSpec,
+        prefix: String,
+    ): List<Issue> {
+        if (spec.name != "computed") return emptyList()
+        val regions = jsRegions(text)
+        val inFunctions = functionDepths(text, regions)
+        // The keyed form stores what the expression gives, a function too, which nothing calls; the
+        // object form calls each function it holds, and a function those return is never called.
+        val runs = if (text.trimStart().startsWith("{")) 1 else 0
+        val out = ArrayList<Issue>()
+        for (r in clientRewrite(text).rewrites) {
+            if (regions[r.start] != Region.CODE || inFunctions[r.start] > runs) continue
+            val written = if (r.signal) text.substring(r.start, r.end) else "@${r.name}"
+            val message =
+                when {
+                    r.signal && (ASSIGNS_AFTER.matchAt(text, r.end) != null || updatedBefore(text, r.start)) -> {
+                        "${prefix}computed must not change signals, and this changes $written"
+                    }
+
+                    !r.signal && catalog.actionsByName[r.name]?.let { it.kind == "backend" || it.name in SIDE_EFFECT_ACTIONS } == true -> {
+                        "${prefix}computed must not call actions, and this calls $written"
+                    }
+
+                    else -> {
+                        continue
+                    }
+                }
+            out +=
+                Issue(
+                    r.start,
+                    r.start + written.length,
+                    "$message: Datastar runs it again each time a signal it reads changes. Use ${prefix}effect for a side effect.",
+                    Severity.WARNING,
+                    "computed-value",
+                    Docs.attribute("computed"),
+                )
+        }
+        return out
+    }
 
     private fun validateText(
         text: String,
@@ -780,18 +949,48 @@ public class ExpressionValidator(
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
-            val message = "Datastar expression: ${err.message}"
-            if (pos !in spaced) issues += Issue(pos, end, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            // The `);` the client closes a value with stands at one place of the text and is no token of
+            // it: met there, the parser is asked what it says of the value without it.
+            val closed = js.endsWith(");") && fromScript(js.length - 1) == fromScript(js.length - 2)
+            val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
+            val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
+            // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
+            val awaitAt =
+                AWAIT_BEFORE
+                    .find(rewritten.js.substring(0, err.pos))
+                    ?.range
+                    ?.first
+                    ?.let(::toText)
+            if (awaitAt != null) {
+                val message =
+                    "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
+                        "An action sends its request without it."
+                issues += Issue(awaitAt, awaitAt + "await".length, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            } else if (pos !in spaced) {
+                issues += Issue(pos, end, "Datastar expression: $said", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+            }
         }
 
+        if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
+
         val starts by lazy { stringStarts(regions) }
+        val templates by lazy { TemplateReasons(js, rewritten.runs) }
         for (r in rewritten.rewrites) {
             val region = regions[r.start]
             if (region == Region.COMMENT) continue
             val written = js.substring(r.start, if (r.signal) r.end else r.end - 1)
             val (start, end) = span(r.start, r.start + written.length)
             if (region != Region.CODE) {
-                issues += literalRewritten(r, written, region, js.getOrNull(starts[r.start]), start, end)
+                issues +=
+                    literalRewritten(
+                        r,
+                        written,
+                        region,
+                        js.getOrNull(starts[r.start]),
+                        start,
+                        end,
+                        if (region == Region.TEMPLATE) templates.why(r.start) else "",
+                    )
                 continue
             }
             if (r.signal) {
@@ -806,14 +1005,41 @@ public class ExpressionValidator(
         for (p in js.indices) {
             if (js[p] != '$' || regions[p] != Region.CODE || p in rewrittenAt || js.getOrNull(p - 1).isJsNamePart()) continue
             val next = js.getOrNull(p + 1) ?: continue
-            if (next == '$') continue
-            if (WORD_CHAR.matches(next.toString())) {
+            if (next == '$') {
+                // $$count: the client rewrites the last $count, and the dollars before it make a name the browser does not know.
+                var last = p + 1
+                while (js.getOrNull(last + 1) == '$') last++
+                if (last !in rewrittenAt) continue
+                // A Kotlin template there is the interpolation check's to speak for.
+                val signal = CLIENT_SIGNAL.matchAt(js, last)?.value?.takeUnless { PLACEHOLDER in it } ?: continue
+                val extra = js.substring(p, last)
+                val (start, end) = span(p, last)
+                issues +=
+                    Issue(
+                        start,
+                        end,
+                        "Datastar rewrites $signal and leaves the $extra before it, so the browser reads $extra$ " +
+                            "as a JavaScript variable and throws a ReferenceError.",
+                        Severity.WARNING,
+                        "signal-not-read",
+                        Docs.EXPRESSIONS,
+                        fixes = listOf(Fix("Remove the extra $extra", start, end, "")),
+                    )
+                continue
+            }
+            if (WORD_CHAR.matchEntire(next.toString()) != null) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
-                val run = rewritten.runs.firstOrNull { p in it }
+                val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =
                     run?.let {
-                        val q = js[it.first]
-                        ": its pattern takes the $q${placeOf(regions[it.first])} before it for the start of a string, " +
+                        // A later stretch of a literal the client took whole: JavaScript is still in the ${...} the client ended.
+                        if (it.range.first !=
+                            it.quote
+                        ) {
+                            return@let ": a } before it ends the \${...} for Datastar's pattern, which leaves what follows as written"
+                        }
+                        val q = js[it.quote]
+                        ": its pattern takes the $q${placeOf(regions[it.quote])} before it for the start of a string, " +
                             "and leaves everything up to the next $q as written"
                     } ?: ""
                 val (start, end) = span(p, p + written.length)
@@ -845,7 +1071,7 @@ public class ExpressionValidator(
         }
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
-        if (returnsValue == true && err == null) issues += statementSplitIssue(text)
+        if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
         issues += filterSignalsIssues(text)
         return issues
     }
@@ -857,6 +1083,7 @@ public class ExpressionValidator(
         quote: Char?,
         start: Int,
         end: Int,
+        template: String,
     ): Issue {
         val becomes = if (r.signal) r.written else "${r.written}...)"
         val advice =
@@ -882,7 +1109,7 @@ public class ExpressionValidator(
         val why =
             when {
                 region == Region.TEMPLATE -> {
-                    ", because the literal also holds a \${...}, so the text holds that"
+                    template
                 }
 
                 region == Region.REGEX -> {
@@ -962,10 +1189,15 @@ public class ExpressionValidator(
         name: String,
         start: Int,
     ): List<Issue> {
+        // A name with a Kotlin template in it is one the code writes.
+        if (PLACEHOLDER in name) return emptyList()
         val spec = catalog.actionsByName[name]
         val end = start + 1 + name.length
         if (spec == null) {
-            val near = catalog.actions.map { it.name }.firstOrNull { it.equals(name, ignoreCase = true) }
+            val names = catalog.actions.map { it.name }
+            val near =
+                names.firstOrNull { it.equals(name, ignoreCase = true) }
+                    ?: names.singleOrNull { ElementsGuard.oneEditAway(name, it, swaps = true) }
             return listOf(
                 Issue(
                     start = start,
@@ -1016,6 +1248,108 @@ public class ExpressionValidator(
 }
 
 /**
+ * How many function bodies each character of [text], whose characters are [regions], stands in:
+ * after an `=>` until the `,` or `;` that ends it or the bracket that closes around it, and in the
+ * braces of a `function`. Read in one pass, each body ending as the brackets say.
+ */
+internal fun functionDepths(
+    text: String,
+    regions: ByteArray,
+): IntArray {
+    val change = IntArray(text.length + 1)
+    // The bodies open: where each starts, the bracket depth it lies at, and whether a `,` or `;` there ends it.
+    val starts = ArrayList<Int>()
+    val levels = ArrayList<Int>()
+    val arrows = ArrayList<Boolean>()
+    var depth = 0
+    var function = false
+
+    fun close(at: Int) {
+        change[starts.removeAt(starts.size - 1)]++
+        change[at]--
+        levels.removeAt(levels.size - 1)
+        arrows.removeAt(arrows.size - 1)
+    }
+
+    fun open(
+        at: Int,
+        level: Int,
+        arrow: Boolean,
+    ) {
+        starts += at
+        levels += level
+        arrows += arrow
+    }
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        if (regions[i] != Region.CODE) {
+            i++
+            continue
+        }
+        when {
+            c == '=' && text.getOrNull(i + 1) == '>' -> {
+                open(i + 2, depth, arrow = true)
+                i++
+            }
+
+            c == 'f' &&
+                text.startsWith(
+                    "function",
+                    i,
+                ) && !text.getOrNull(i - 1).isJsNamePart() && !text.getOrNull(i + 8).isJsNamePart() -> {
+                function = true
+                i += 7
+            }
+
+            c == '(' || c == '[' || c == '{' -> {
+                depth++
+                if (c == '{' && function) {
+                    function = false
+                    open(i + 1, depth, arrow = false)
+                }
+            }
+
+            c == ')' || c == ']' || c == '}' -> {
+                depth--
+                while (levels.isNotEmpty() && levels.last() > depth) close(i)
+            }
+
+            c == ',' || c == ';' -> {
+                while (levels.isNotEmpty() && arrows.last() && levels.last() == depth) close(i)
+            }
+        }
+        i++
+    }
+    while (starts.isNotEmpty()) close(text.length)
+    var running = 0
+    return IntArray(text.length) { k ->
+        running += change[k]
+        running
+    }
+}
+
+/** An assignment after a signal, `= 1`, `+= 1`, or its update, `++`: not `==` or `=>`. */
+private val ASSIGNS_AFTER = regex("""\s*(?:(?:[-+*/%&|^]|\*\*|<<|>>>?|&&|\|\||\?\?)?=(?![=>])|\+\+|--)""")
+
+/** The actions besides the backend ones that change something: signals, the clipboard. */
+private val SIDE_EFFECT_ACTIONS = setOf("setAll", "toggleAll", "clipboard")
+
+/** Whether `++` or `--` stands before [at] in [text] as a prefix update, not as the postfix one of what precedes it. */
+private fun updatedBefore(
+    text: String,
+    at: Int,
+): Boolean {
+    var k = at
+    while (k > 0 && text[k - 1].isJsWhitespace()) k--
+    if (k < 2 || !(text.startsWith("++", k - 2) || text.startsWith("--", k - 2))) return false
+    var b = k - 2
+    while (b > 0 && text[b - 1].isJsWhitespace()) b--
+    val before = text.getOrNull(b - 1)
+    return !(before.isJsNamePart() || before == ')' || before == ']')
+}
+
+/**
  * With no attribute to say whether the value is read, an expression that opens with `{` may be an
  * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
  * script parse fails, the text is tried once more inside parentheses.
@@ -1023,13 +1357,13 @@ public class ExpressionValidator(
 private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null
 
 /** The signal name typed so far just before [offset] (`$cou|` gives `cou`, `$|` gives ""), or null when not in a signal. */
-public fun signalPrefixAt(
+internal fun signalPrefixAt(
     text: String,
     offset: Int,
 ): String? = SIGNAL_PREFIX.find(text.substring(0, offset.coerceIn(0, text.length)))?.let { it.groupValues[1] }
 
 /** The action name typed so far just before [offset], or null when not in an action. */
-public fun actionPrefixAt(
+internal fun actionPrefixAt(
     text: String,
     offset: Int,
 ): String? = ACTION_PREFIX.find(text.substring(0, offset.coerceIn(0, text.length)))?.let { it.groupValues[1] }

@@ -54,7 +54,7 @@ tasks.withType<Test>().configureEach {
     inputs.dir(root.dir("conformance/client")).withPropertyName("clientFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs
-        .files(root.file("editors/vscode/test/fixtures/twins/reference-hyphens.json"), root.file("editors/vscode/test/fixtures/twins/request-urls.json"))
+        .files(root.file("editors/vscode/test/fixtures/cases/reference-hyphens.json"), root.file("editors/vscode/test/fixtures/cases/request-urls.json"))
         .withPropertyName("editorFixtures")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
@@ -67,16 +67,23 @@ tasks.withType<Test>().configureEach {
  */
 @CacheableTask
 abstract class GenerateCatalogNames : DefaultTask() {
-    @get:InputFile
+    /**
+     * The catalogs in catalog/, of which there must be one. A file tree, not the file it holds:
+     * the configuration cache keeps a file resolved while the build is configured, and after a
+     * catalog is renamed would hand the task the old path, where a tree is listed again each run.
+     */
+    @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val catalog: RegularFileProperty
+    abstract val catalogs: ConfigurableFileCollection
 
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
     @TaskAction
     fun generate() {
-        val file = catalog.get().asFile
+        val file =
+            catalogs.files.singleOrNull()
+                ?: throw GradleException("catalog/ must hold one datastar-*.json, not ${catalogs.files.map { it.name }}")
         @Suppress("UNCHECKED_CAST")
         val json = groovy.json.JsonSlurper().parse(file) as Map<String, Any?>
         val version = json["version"] as String
@@ -99,11 +106,15 @@ abstract class GenerateCatalogNames : DefaultTask() {
             |
             |import io.github.markusaugust.streamlord.core.InternalStreamlordApi
             |
-            |/** The names in catalog/${file.name} that core reads, in the catalog's order. */
+            |/**
+            | * The names in catalog/${file.name} that core reads, in the catalog's order. Only the two
+            | * prefixes, which the analysis and the editors read, are public; the rest is internal, so
+            | * that an IDE never offers to import a name such as `attributes` into an application.
+            | */
             |@InternalStreamlordApi
             |public object CatalogNames {
             |    /** The Datastar version the catalog describes. */
-            |    public const val VERSION: String = ${literal(version)}
+            |    internal const val VERSION: String = ${literal(version)}
             |
             |    /** The prefix of the standard bundle. */
             |    public const val PREFIX: String = ${literal(json["prefix"] as String)}
@@ -112,16 +123,16 @@ abstract class GenerateCatalogNames : DefaultTask() {
             |    public const val ALIASED_PREFIX: String = ${literal(json["aliasedPrefix"] as String)}
             |
             |    /** Every attribute, free and Pro. */
-            |    public val attributes: Set<String> =${set(names)}
+            |    internal val attributes: Set<String> =${set(names)}
             |
             |    /** The attributes whose value is an expression, `valueKind: "expression"`. */
-            |    public val expressionAttributes: Set<String> =${set(kind("expression"))}
+            |    internal val expressionAttributes: Set<String> =${set(kind("expression"))}
             |
             |    /** The attributes whose value is a signal filter, `valueKind: "filter"`. */
-            |    public val filterAttributes: Set<String> =${set(kind("filter"))}
+            |    internal val filterAttributes: Set<String> =${set(kind("filter"))}
             |
             |    /** The attributes whose value is a signal path, `valueKind: "signal"`. */
-            |    public val signalAttributes: Set<String> =${set(kind("signal"))}
+            |    internal val signalAttributes: Set<String> =${set(kind("signal"))}
             |}
             |
             """.trimMargin()
@@ -134,16 +145,22 @@ abstract class GenerateCatalogNames : DefaultTask() {
 val generateCatalogNames =
     tasks.register<GenerateCatalogNames>("generateCatalogNames") {
         // The one catalog there is; a second version beside it is a decision this build should not guess.
-        catalog.set(
+        catalogs.from(
             rootProject.layout.projectDirectory
                 .dir("catalog")
                 .asFileTree
-                .matching { include("datastar-*.json") }
-                .singleFile,
+                .matching { include("datastar-*.json") },
         )
         output.set(layout.buildDirectory.dir("generated/catalogNames"))
     }
 
 kotlin.sourceSets.main {
     kotlin.srcDir(generateCatalogNames)
+}
+
+// How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript
+// build of the same tests, editors/vscode/analysis-js, brings its own. testCommon runs on both.
+kotlin.sourceSets.test {
+    kotlin.srcDir(layout.projectDirectory.dir("src/testJvm/kotlin"))
+    kotlin.srcDir(layout.projectDirectory.dir("src/testCommon/kotlin"))
 }

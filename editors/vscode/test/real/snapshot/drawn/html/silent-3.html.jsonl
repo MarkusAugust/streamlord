@@ -1,0 +1,4 @@
+{"what":"file","language":"html"}
+{"what":"hover","at":"1:2-1:5","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:2-1:5"}]}
+{"what":"hover","at":"1:252-1:255","answers":[{"contents":[{"value":"4a87e9ccd6f2"}],"range":"1:252-1:255"}]}
+{"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}

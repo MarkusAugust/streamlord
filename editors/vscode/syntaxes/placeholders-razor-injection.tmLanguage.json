@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "streamlord.placeholders.razor.injection",
+  "comment": "Razor reads every @ in a Datastar attribute's value before the browser does, as it reads one in any attribute: a comment, a code block, an explicit or implicit expression get the Razor grammar's own rules and no Datastar scope. Datastar's @post( is written @@post( in Razor, which Razor writes as @post(: the first @ is Razor's escape, the second the action's. grammar.test.ts holds the backend actions to the catalog's.",
+  "injectionSelector": "L:text.html.cshtml meta.value.datastar -meta.expression -meta.comment.razor -meta.structure.razor -source.cs",
+  "patterns": [
+    {
+      "match": "(@)(@)(get|post|put|patch|delete|query)(?=\\s*\\()",
+      "captures": {
+        "1": {
+          "name": "constant.character.escape.razor.transition"
+        },
+        "2": {
+          "name": "entity.name.function.action.backend.datastar punctuation.definition.action.datastar"
+        },
+        "3": {
+          "name": "entity.name.function.action.backend.datastar"
+        }
+      }
+    },
+    {
+      "match": "(@)(@)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+      "captures": {
+        "1": {
+          "name": "constant.character.escape.razor.transition"
+        },
+        "2": {
+          "name": "entity.name.function.action.datastar punctuation.definition.action.datastar"
+        },
+        "3": {
+          "name": "entity.name.function.action.datastar"
+        }
+      }
+    },
+    {
+      "include": "text.html.cshtml#razor-comment"
+    },
+    {
+      "include": "text.html.cshtml#razor-codeblock"
+    },
+    {
+      "include": "text.html.cshtml#escaped-transition"
+    },
+    {
+      "include": "text.html.cshtml#explicit-razor-expression"
+    },
+    {
+      "include": "text.html.cshtml#implicit-expression"
+    }
+  ]
+}

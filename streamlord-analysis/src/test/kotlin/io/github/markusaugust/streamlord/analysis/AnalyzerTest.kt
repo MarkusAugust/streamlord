@@ -2,22 +2,20 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The scanner, the string reader and the collectors against `twins/analyze.json`, which
- * `analyze.test.ts` reads as well; what they report as issues is in the shared corpus.
+ * The scanner, the string reader and the collectors against `cases/analyze.json`; what they
+ * report as issues is in the shared corpus.
  */
 class AnalyzerTest {
     private val analyzer = Analyzer()
-    private val opts = AnalyzeOptions("data-", true)
 
     private fun literal(s: KotlinString?): Map<String, Any?>? =
         s?.let {
@@ -44,12 +42,12 @@ class AnalyzerTest {
             )
         }
 
-    /** What each kind of case expects, in the fields `twins/analyze.json` describes; `analyze.test.ts` projects the same. */
+    /** What each kind of case expects, in the fields `cases/analyze.json` describes. */
     private fun project(case: JsonObject): Map<String, Any?> {
         val source = case.string("source") ?: ""
         return when (val kind = case.string("kind")) {
             "kotlin-string" -> {
-                mapOf("string" to literal(readKotlinStringAt(source, case.int("at")!!)))
+                mapOf("string" to literal(analyzer.lex(source).strings.firstOrNull { it.start == case.int("at")!! }))
             }
 
             "call-sites" -> {
@@ -67,7 +65,7 @@ class AnalyzerTest {
             }
 
             "kotlin-strings" -> {
-                mapOf("texts" to findKotlinStrings(source).map { it.text })
+                mapOf("texts" to analyzer.lex(source).strings.map { it.text })
             }
 
             "html-string-at" -> {
@@ -77,7 +75,7 @@ class AnalyzerTest {
 
             "signals" -> {
                 val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
-                mapOf("signals" to collectSignals(source, language).sorted())
+                mapOf("signals" to collectSignals(Source(source, language)).sorted())
             }
 
             "selectors" -> {
@@ -86,8 +84,16 @@ class AnalyzerTest {
             }
 
             "fixture" -> {
-                val text = File("../editors/vscode/test/fixtures/${case.string("file")}").readText()
-                mapOf("codes" to analyzer.analyzeHtml(text, opts).map { it.code })
+                val file = case.string("file")
+                val text = fixtureText("editors/vscode/test/fixtures/$file")
+                // The engine that writes into the file, as each editor names it from the file's type.
+                val engine =
+                    mapOf(
+                        "jte" to TemplateEngine.JTE,
+                        "ftl" to TemplateEngine.FREEMARKER,
+                        "vm" to TemplateEngine.VELOCITY,
+                    )[file?.substringAfterLast('.')]
+                mapOf("codes" to analyzer.analyzeHtml(Source(text, SourceLanguage.HTML, engine = engine)).map { it.code })
             }
 
             else -> {
@@ -97,8 +103,8 @@ class AnalyzerTest {
     }
 
     @Test
-    fun `holds every twin case of the analysis`() {
-        val cases = twinCases("analyze.json")
+    fun `holds every shared case of the analysis`() {
+        val cases = sharedCases("analyze.json")
         assertTrue(cases.isNotEmpty())
         for (case in cases) {
             val actual = project(case)
@@ -108,22 +114,52 @@ class AnalyzerTest {
 
     @Test
     fun `documents attributes and actions`() {
-        val on = analyzer.catalog.attributesByName["on"]!!
-        val doc = attributeDoc(on)
+        // As a hover shows them.
+        fun doc(html: String) = analyzer.hover(Source(html, SourceLanguage.HTML), html.indexOf("data-") + 6)!!.markdown
+        val doc = doc("<div data-on:click__debounce.500ms=\"x()\"></div>")
         assertContains(doc, "**data-on**")
         assertContains(doc, "__debounce.500ms")
         assertContains(doc, "**Key casing:**")
-        assertContains(actionDoc(analyzer.catalog.actionsByName["post"]!!), "@post(uri, options?)")
+        val post = "<div data-on:click=\"@post('/x')\"></div>"
+        assertContains(analyzer.hover(Source(post, SourceLanguage.HTML), post.indexOf("post"))!!.markdown, "@post(uri, options?)")
         assertContains(markdownToHtml("**a** `b` _c_"), "<b>a</b> <code>b</code> <i>c</i>")
         assertEquals("<p><code>__once</code>, <code>__exit</code> <i>Pro</i></p>", markdownToHtml("`__once`, `__exit` _Pro_"))
-        assertFalse(
-            analyzer.catalog.attributesByName["persist"]!!
-                .let { attributeDoc(it) }
-                .contains("**Key casing:**")
-                .not(),
-        )
+        // A DOM event's documentation is a link to MDN, whose underscores are the address's.
+        assertEquals("<p><a href=\"https://x.dev/click_event\">MDN</a></p>", markdownToHtml("[MDN](https://x.dev/click_event)"))
+        assertContains(doc("<div data-persist:x></div>"), "**Key casing:**")
         assertNotNull(analyzer.catalog.parseAttributeName("data-on:click__debounce.500ms", "data-"))
     }
+
+    @Test
+    fun `an aliased attribute under the default prefix names the setting as the editor names it`() {
+        val said = "This is an aliased Datastar attribute, but the prefix is set to data-. Check"
+        val html = "<div data-star-on:click=\"x()\"></div>"
+        val kotlin = "fun f() = \"\"\"<p data-star-text=\"1\"></p>\"\"\""
+
+        fun message(issues: List<Issue>) = issues.single { it.code == "prefix-mismatch" }.message
+
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeHtml(html)))
+        assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeKotlin(kotlin)))
+        assertEquals(
+            "$said streamlord.attributePrefix.",
+            message(analyzer.analyzeHtml(Source(html, SourceLanguage.HTML, prefixSetting = "streamlord.attributePrefix"))),
+        )
+        assertEquals(
+            "$said streamlord.attributePrefix.",
+            message(analyzer.analyzeKotlin(Source(kotlin, SourceLanguage.KOTLIN, prefixSetting = "streamlord.attributePrefix"))),
+        )
+    }
+
+    /** The reference describes data-nonce on its security page, not among the attributes, where no anchor has it. */
+    @Test
+    fun `an issue on data-nonce links to the security page of the reference`() {
+        val links =
+            analyzer.analyzeHtml("<html data-nonce=\"\"></html><div data-nonce=\"x\"></div>").map { it.link } +
+                analyzer.analyzeKotlin("fun FlowContent.v() = html { dataNonce(\"\") }").map { it.link }
+        assertEquals(listOf(securityCsp, securityCsp, securityCsp), links)
+    }
+
+    private val securityCsp = "https://data-star.dev/reference/security#content-security-policy"
 }
 
 class TokensTest {
@@ -134,14 +170,19 @@ class TokensTest {
         assertEquals(
             listOf(
                 "\$count" to TokenKind.SIGNAL,
+                "++" to TokenKind.OPERATOR,
                 "@post" to TokenKind.ACTION_BACKEND,
                 "'/x'" to TokenKind.STRING,
                 "headers" to TokenKind.OPTION_KEY,
-                "'X-A'" to TokenKind.STRING,
+                "'X-A'" to TokenKind.OBJECT_KEY,
                 "\$token" to TokenKind.SIGNAL,
                 "el" to TokenKind.SCOPE_VARIABLE,
+                "value" to TokenKind.PROPERTY,
                 "/a\\/b/g" to TokenKind.REGEX,
+                "test" to TokenKind.METHOD,
                 "evt" to TokenKind.SCOPE_VARIABLE,
+                "key" to TokenKind.PROPERTY,
+                "&&" to TokenKind.OPERATOR,
                 "\${'\$'}" to TokenKind.KOTLIN_DOLLAR_ESCAPE,
                 "open" to TokenKind.SIGNAL,
             ),
@@ -151,7 +192,9 @@ class TokensTest {
             listOf(
                 "\$user" to TokenKind.SIGNAL,
                 ".name.first" to TokenKind.SIGNAL_PATH,
+                "+" to TokenKind.OPERATOR,
                 "500ms" to TokenKind.DURATION,
+                "+" to TokenKind.OPERATOR,
                 "3" to TokenKind.NUMBER,
             ),
             tokenizeExpression("\$user.name.first + 500ms + 3").let { t ->
@@ -161,7 +204,19 @@ class TokensTest {
                 }
             },
         )
-        assertEquals(listOf(TokenKind.NUMBER, TokenKind.KEYWORD), tokenizeExpression("x = a ? 1 : typeof b").map { it.kind })
+        assertEquals(
+            listOf(
+                TokenKind.IDENTIFIER,
+                TokenKind.OPERATOR,
+                TokenKind.IDENTIFIER,
+                TokenKind.OPERATOR,
+                TokenKind.NUMBER,
+                TokenKind.OPERATOR,
+                TokenKind.KEYWORD,
+                TokenKind.IDENTIFIER,
+            ),
+            tokenizeExpression("x = a ? 1 : typeof b").map { it.kind },
+        )
     }
 
     @Test
@@ -178,7 +233,9 @@ class TokensTest {
         // The signal and its path together cover what the client rewrites.
         for (text in listOf("\$123 + \$foo-bar.baz-qux.0 - \$a-b-1; \$foo. + \$x-", "\$a.b-c.d + \$_1-2_")) {
             val covered =
-                tokenizeExpression(text).fold(ArrayList<IntRange>()) { acc, t ->
+                tokenizeExpression(
+                    text,
+                ).filter { it.kind == TokenKind.SIGNAL || it.kind == TokenKind.SIGNAL_PATH }.fold(ArrayList<IntRange>()) { acc, t ->
                     if (t.kind == TokenKind.SIGNAL_PATH) acc[acc.lastIndex] = acc.last().first until t.end else acc += t.start until t.end
                     acc
                 }
@@ -199,7 +256,7 @@ class TokensTest {
                 "__" to NamePart.MODIFIER_SIGIL,
                 "debounce" to NamePart.MODIFIER,
                 "." to NamePart.MODIFIER_ARG_DOT,
-                "500ms" to NamePart.MODIFIER_ARG,
+                "500ms" to NamePart.MODIFIER_ARG_DURATION,
                 "." to NamePart.MODIFIER_ARG_DOT,
                 "leading" to NamePart.MODIFIER_ARG,
                 "__" to NamePart.MODIFIER_SIGIL,

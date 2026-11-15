@@ -7,7 +7,7 @@ import io.github.markusaugust.streamlord.core.json.PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.STORE_PROTO_REFUSED
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,7 +17,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Each case in `conformance/dom/store-cases.json` is run through the real Datastar 1.0.4
+ * Each case in `conformance/dom/store-cases.json` is run through the real Datastar 1.0.5
  * `mergePatch` (engine/signals.ts, the free bundle in happy-dom, by `conformance/generate/dom.mjs`),
  * and `client` is `JSON.stringify` of its root afterwards. The fold here has to arrive at the same
  * text.
@@ -25,7 +25,7 @@ import kotlin.test.assertTrue
 class MergePatchAsClientTest {
     @Test
     fun `holds what the client holds`() {
-        val cases = JsonParser.parse(File("../conformance/dom/store-cases.json").readText()) as JsonArray
+        val cases = JsonParser.parse(fixtureText("conformance/dom/store-cases.json")) as JsonArray
         assertEquals(27, cases.size)
         for (case in cases.filterIsInstance<JsonObject>()) {
             var store = JsonObject.EMPTY
@@ -37,7 +37,7 @@ class MergePatchAsClientTest {
     }
 
     /**
-     * Each scenario in `conformance/dom/merge-differential.json` is run through the 1.0.4 client's
+     * Each scenario in `conformance/dom/merge-differential.json` is run through the 1.0.5 client's
      * `mergePatch` (engine/signals.ts) in happy-dom by `conformance/generate/dom.mjs`, a fresh store
      * per scenario, and `client` is `JSON.stringify` of the root after each step, or `THROWS` and
      * the root once the step threw. The audit's 317 scenarios (17 by hand, 300 at random with seed 7) plus the cases
@@ -53,7 +53,7 @@ class MergePatchAsClientTest {
      */
     @Test
     fun `folds each step as the client's own mergePatch does`() {
-        val scenarios = JsonParser.parse(File("../conformance/dom/merge-differential.json").readText()) as JsonArray
+        val scenarios = JsonParser.parse(fixtureText("conformance/dom/merge-differential.json")) as JsonArray
         assertEquals(366, scenarios.size)
         for (scenario in scenarios.objects()) {
             var store = scenario.string("store")?.let(JsonParser::parseObject) ?: JsonObject.EMPTY
@@ -75,7 +75,7 @@ class MergePatchAsClientTest {
         }
     }
 
-    // Measured against the 1.0.4 source: the client gives the object a foreign prototype, then
+    // Measured against the 1.0.5 source: the client gives the object a foreign prototype, then
     // throws on some later keys, replaces the object on a later patch, or pollutes String.prototype.
     @Test
     fun `refuses a key __proto__ anywhere in the patch, whatever it holds`() {
@@ -143,7 +143,7 @@ class MergePatchAsClientTest {
     @Test
     fun `refuses what the client cannot hold`() {
         val store = JsonParser.parseObject("""{"a":[1]}""")
-        // The client takes these as holes; the fold refuses on purpose.
+        // The client takes these as empty slots; the fold refuses on purpose.
         for (patch in listOf("""{"a":{"20000":1}}""", """{"a":{"length":20000}}""")) {
             assertTrue(assertFailsWith<SignalPatchException>(patch) { mergePatchAsClient(store, JsonParser.parse(patch)) }.refused)
         }

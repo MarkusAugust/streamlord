@@ -386,7 +386,7 @@ private fun sorted(value: Any?): Any? =
     }
 
 /**
- * Which entries of `catalog/datastar-1.0.4.json` the cases reach, counted from the attributes the
+ * Which entries of `catalog/datastar-1.0.5.json` the cases reach, counted from the attributes the
  * client parsed out of each case's HTML and the action calls in their values, never from a
  * case's name: an attribute in each of its forms, each modifier of it, each tag a duration
  * modifier takes, each value of an enum modifier, each action and each fetch option, and each

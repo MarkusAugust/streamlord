@@ -1,0 +1,10 @@
+@param name: String
+@param price: Int
+
+<tr id="row-${name}" data-signals:qty="1">
+  <td>${name}</td>
+  <td data-text="$qty * ${price}"></td>
+  <td><input type="number" data-bind:qty></td>
+  <td><button data-on:click="@post('/buy/${name}')">Buy</button></td>
+  <td><button data-on:click="@POST('/sell')" data-on:dblclick__debounce="$qty--">Sell</button></td>
+</tr>

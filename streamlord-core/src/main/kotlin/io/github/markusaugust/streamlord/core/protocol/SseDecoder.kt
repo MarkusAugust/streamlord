@@ -1,6 +1,8 @@
 package io.github.markusaugust.streamlord.core.protocol
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
@@ -9,6 +11,8 @@ import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsText
+import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.JsonShape
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -36,7 +40,9 @@ public object SseDecoder {
      * It reads a stream the way Datastar's client does, so that a test cannot pass on a response
      * the client would not act on. A last message with no blank line after it is not an event,
      * mode and namespace tokens are matched exactly as written, and a signal patch needs its
-     * signals. A flag is `true` when it reads `true` once JavaScript's `trim()` is done with it,
+     * signals. Signals written as a JavaScript object literal of plain values, `{foo: 1, bar: 2}` as
+     * the reference writes them, come back as the JSON they stand for, since the client runs what
+     * `JSON.parse` refuses; signals that would be computed, `{a: 1 + 1}`, are refused. A flag is `true` when it reads `true` once JavaScript's `trim()` is done with it,
      * and an empty selector or `viewTransitionSelector` is none. An element patch with no
      * elements, or only white space as HTML counts it (tab, line feed, form feed, carriage return
      * and space), in a mode that needs them is what the client makes of it. `outer` or `replace`
@@ -53,8 +59,9 @@ public object SseDecoder {
      * one that removes the target carries the transition.
      *
      * @throws DatastarEventValidationException if a Datastar frame names a mode or namespace that
-     *   does not exist, has no `signals` where it needs them, or has a data line with no space
-     *   after its key; or if any message, Datastar's or not, finished or not, carries a `retry`
+     *   does not exist, has no `signals` where it needs them, `signals` that are code rather than
+     *   values or JSON that is no object, a selector over more than one data line, which the client
+     *   joins and no event holds, or a data line with no space after its key; or if any message, Datastar's or not, finished or not, carries a `retry`
      *   that is not a whole number of milliseconds or an `id` the client could not send back as
      *   `last-event-id`: the client takes both from every message. A malformed frame is a bug in
      *   whatever wrote it, and reporting it is more use than dropping it.
@@ -127,15 +134,17 @@ public object SseDecoder {
         val id = message.id?.takeIf { it.isNotEmpty() }
         return when (message.event) {
             DatastarProtocol.Events.PATCH_ELEMENTS -> {
-                // An empty selector is none to the client, which then patches by id (patchElements.ts:43);
-                // an empty view transition selector has it run the transition on the document (:71).
-                val selector = args[DataLines.SELECTOR]?.takeIf { it.isNotEmpty() }
+                // An empty selector is none to the client, which then patches by id (patchElements.ts:46);
+                // an empty view transition selector has it run the transition on the document (:74).
+                val selector = oneLine(message.data, DataLines.SELECTOR, args)?.takeIf { it.isNotEmpty() }
                 val mode = args[DataLines.MODE]?.let(::mode) ?: ElementPatchMode.DEFAULT
                 val elements = args[DataLines.ELEMENTS]
                 // The client checks the namespace whatever the elements.
                 val namespace = args[DataLines.NAMESPACE]?.let(::namespace) ?: ElementNamespace.DEFAULT
                 val useViewTransition = isTrue(args[DataLines.USE_VIEW_TRANSITION])
-                val viewTransitionSelector = args[DataLines.VIEW_TRANSITION_SELECTOR]?.takeIf { it.isNotEmpty() }
+                // Read only for a view transition (patchElements.ts:78), so without one it is none.
+                val viewTransitionSelector =
+                    oneLine(message.data, DataLines.VIEW_TRANSITION_SELECTOR, args)?.takeIf { it.isNotEmpty() && useViewTransition }
                 // The client patches in nothing where the elements are missing or only white space:
                 // that empties the target of an inner patch, and removes that of an outer or replace one.
                 // Without a selector, those two take only elements, so text or a comment alone is nothing too.
@@ -178,7 +187,7 @@ public object SseDecoder {
             DatastarProtocol.Events.PATCH_SIGNALS -> {
                 PatchSignals(
                     signals =
-                        args[DataLines.SIGNALS]
+                        args[DataLines.SIGNALS]?.let(::signals)
                             ?: throw DatastarEventValidationException("A signal patch carried no signals line; the client rejects it"),
                     onlyIfMissing = isTrue(args[DataLines.ONLY_IF_MISSING]),
                     eventId = id,
@@ -197,13 +206,45 @@ public object SseDecoder {
     // `<!-->`, `<!--->` and `--!>`. A `</body>`, `</head>` or `</html>`
     // anywhere outside an `<svg>` has the client read the text as a whole document and patch that
     // element of the page (patchElements.ts).
-    private val START_TAG = Regex("<[A-Za-z]")
-    private val COMMENT = Regex("<!--(?:-?>|.*?(?:--!?>|$))", RegexOption.DOT_MATCHES_ALL)
-    private val SVG = Regex("<svg(?:\\s[^>]*>|>).*?</svg>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-    private val DOCUMENT_END = Regex("</(?:body|head|html)>")
+    private val START_TAG = regex("<[A-Za-z]")
+    private val COMMENT = regex("(?s)<!--(?:-?>|.*?(?:--!?>|$))")
+    private val SVG = regex("(?s)<svg(?:\\s[^>]*>|>).*?</svg>", RegexOption.IGNORE_CASE)
+    private val DOCUMENT_END = regex("</(?:body|head|html)>")
 
     private fun holdsElement(elements: String): Boolean =
         DOCUMENT_END.containsMatchIn(elements.replace(SVG, "")) || START_TAG.containsMatchIn(elements.replace(COMMENT, ""))
+
+    // The client runs what JSON.parse refuses as JavaScript (jsStrToObject in utils/text.ts), and the
+    // reference writes signals as a data-signals value; an object literal of plain values is that JSON.
+    private fun signals(text: String): String {
+        if (JsonShape.isObject(text)) return text
+        return try {
+            JsonParser.parseObjectLiteral(text).toJson()
+        } catch (_: JsonParseException) {
+            val said =
+                Wire.notAnObject(text)?.let { (kind, effect) -> "Signals that are $kind and no JSON object: $effect. The stream sent" }
+                    ?: "Signals that are neither JSON nor an object literal of plain values, which Datastar's client runs as JavaScript:"
+            throw DatastarEventValidationException("$said $text")
+        }
+    }
+
+    // The client joins the lines of a key with a line break, where an event holds a selector of one
+    // line, so a selector the stream wrote over several is told as the stream wrote it.
+    private fun oneLine(
+        data: List<String>,
+        key: String,
+        args: Map<String, String>,
+    ): String? {
+        val value = args[key] ?: return null
+        val lines = data.count { it == key || it.startsWith("$key ") }
+        if (lines > 1) {
+            throw DatastarEventValidationException(
+                "A $key over $lines data lines, which the client joins with a line break: '${value.replace("\n", "\\n")}'. " +
+                    "A PatchElements holds a $key of one line; write it on one",
+            )
+        }
+        return value
+    }
 
     // isStringTrue in the client's utils/text.ts, with JavaScript's trim().
     private fun isTrue(value: String?): Boolean = value != null && JsText.trim(value) == "true"

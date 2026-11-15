@@ -81,5 +81,6 @@ public inline fun elementsResponse(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
     block: TagConsumer<*>.() -> Unit,
-): ElementsResponse = ElementsResponse(elements(block), selector, mode, namespace, useViewTransition)
+): ElementsResponse = ElementsResponse(elements(block), selector, mode, namespace, useViewTransition, viewTransitionSelector)

@@ -43,7 +43,7 @@ keywords of JTE and Velocity. Any engine using one of those shapes is covered wh
 called, which is most of them.
 
 For an engine outside all of them, Qute's `{name}`, Closure's `{$name}`, Rocker's `@name`, the
-analysis reads an expression as Datastar 1.0.4 would read the same text unrendered, and is
+analysis reads an expression as Datastar 1.0.5 would read the same text unrendered, and is
 stricter than the client about signal names. Measured in Chrome against the real client:
 
 **None of the three works inside an expression.** Qute's `{count}` is an object literal that

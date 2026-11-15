@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * Finds HTTP routes in Kotlin source for the "Open in Stream Inspector" gutter entry.
  * Ktor: `route("/api") { get("/x") { } }`, verbs without a path inherit the enclosing route.
@@ -30,7 +32,6 @@ public data class RouteParam(
     val required: Boolean,
 )
 
-private val KTOR_VERBS = setOf("get", "post", "put", "patch", "delete")
 private val SPRING_MAPPINGS =
     mapOf(
         "GetMapping" to "GET",
@@ -41,24 +42,23 @@ private val SPRING_MAPPINGS =
         "RequestMapping" to null,
     )
 
-// `map.get("key")` and `client.post("https://...")` have the shape of a route and are none. A verb
-// counts when it is not called on a receiver, and it either takes a lambda or its path starts with
-// a slash. The path may be followed by more arguments: `route("/v1", HttpMethod.Get) { }`.
-private val KTOR_CALL =
-    Regex(
-        """\b(route|get|post|put|patch|delete)\s*(?:\(\s*"([^"\n]*)"\s*(?:,[^(){}\n]*)?\)\s*)?\{|\b(get|post|put|patch|delete)\s*\(\s*"(/[^"\n]*)"\s*\)""",
-    )
+// `map.get("key")` and `client.post("https://...")` have the shape of a route and are none, and
+// neither is the DSL's `post("/x")`, an action handed to an attribute. A verb counts when it is
+// not called on a receiver, stands in no argument list, and takes its handler as a lambda. The
+// path may be followed by more arguments, a lambda among them: `sse("/t", serialize = { }) { }`.
+private val KTOR_VERB = regex("""\b(route|get|post|put|patch|delete|sse)\s*""")
+private val KTOR_PATH = regex("""\(\s*"([^"\n]*)"""")
 private val SPRING_ANNOTATION =
-    Regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
+    regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
 
 private val MODIFIERS = setOf("public", "internal", "private", "protected", "open", "final", "abstract", "sealed", "data", "inner")
 private val DECLARATIONS = setOf("class", "interface", "object", "fun", "val", "var", "typealias")
-private val CLASS_KEYWORD = Regex("""\b(?:class|interface)\b""")
-private val WORD = Regex("""\w+""")
-private val NAMED_PATH = Regex("""(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"""")
-private val POSITIONAL_PATH = Regex("""^\s*(?:\[\s*)?"([^"]*)"""")
-private val REQUEST_METHOD = Regex("""RequestMethod\.([A-Z]+)""")
-private val SLASHES = Regex("""/{2,}""")
+private val CLASS_KEYWORD = regex("""\b(?:class|interface)\b""")
+private val WORD = regex("""\w+""")
+private val NAMED_PATH = regex("""(?:value|path)\s*=\s*(?:\[\s*)?"([^"]*)"""")
+private val POSITIONAL_PATH = regex("""^\s*(?:\[\s*)?"([^"]*)"""")
+private val REQUEST_METHOD = regex("""RequestMethod\.([A-Z]+)""")
+private val SLASHES = regex("""/{2,}""")
 
 public fun findRoutes(src: String): List<Route> = (findKtorRoutes(src) + findSpringRoutes(src)).sortedBy { it.offset }
 
@@ -81,6 +81,8 @@ private fun findKtorRoutes(src: String): List<Route> {
     val routes = ArrayList<Route>()
     val mask = lexKotlin(src).mask
     val stack = ArrayList<Frame>()
+    // The parentheses open in each block: a call inside one is an argument, not a statement.
+    val parens = arrayListOf(0)
     var depth = 0
     var i = 0
     while (i < src.length) {
@@ -89,13 +91,20 @@ private fun findKtorRoutes(src: String): List<Route> {
             i++
             continue
         }
+        if (c == '(' || c == ')') {
+            parens[parens.size - 1] = maxOf(0, parens.last() + if (c == '(') 1 else -1)
+            i++
+            continue
+        }
         if (c == '{') {
             depth++
+            parens += 0
             i++
             continue
         }
         if (c == '}') {
             depth--
+            if (parens.size > 1) parens.removeAt(parens.size - 1)
             while (stack.isNotEmpty() && stack.last().depth > depth) stack.removeAt(stack.size - 1)
             i++
             continue
@@ -104,38 +113,57 @@ private fun findKtorRoutes(src: String): List<Route> {
             i++
             continue
         }
-        val m = KTOR_CALL.matchAt(src, i)
-        if (m == null || hasReceiver(src, i)) {
+        val call = if (parens.last() == 0) ktorCall(src, mask, i) else null
+        if (call == null || hasReceiver(src, i)) {
             i++
             continue
         }
         val prefix = stack.lastOrNull()?.prefix ?: ""
-        if (m.groups[1] != null) {
-            val name = m.groupValues[1]
-            val path = m.groupValues[2]
-            if (name == "route") {
-                stack += Frame(joinPath(prefix, path), depth + 1)
-            } else if (name in KTOR_VERBS && (path.isNotEmpty() || stack.isNotEmpty())) {
-                val full = joinPath(prefix, path)
-                val query = ktorQuery(src, mask, m.range.last, full)
-                routes += Route(name.uppercase(), full, m.range.first, Framework.KTOR, query = query)
-            }
-            depth++
-            i = m.range.last + 1
-            continue
+        val (name, path, open) = call
+        if (name == "route") {
+            stack += Frame(joinPath(prefix, path), depth + 1)
+        } else if (path.isNotEmpty() || stack.isNotEmpty()) {
+            val full = joinPath(prefix, path)
+            val query = ktorQuery(src, mask, open, full)
+            // An SSE route answers a GET.
+            val method = if (name == "sse") "GET" else name.uppercase()
+            routes += Route(method, full, i, Framework.KTOR, query = query)
         }
-        if (m.groups[3] != null) {
-            routes += Route(m.groupValues[3].uppercase(), joinPath(prefix, m.groupValues[4]), m.range.first, Framework.KTOR)
-            i = m.range.last + 1
-            continue
-        }
-        i++
+        depth++
+        parens += 0
+        i = open + 1
     }
     return routes
 }
 
-private val KTOR_QUERY = Regex("""\b(?:queryParameters|parameters)\s*(?:\[\s*"([^"\n]+)"\s*]|\.get\(\s*"([^"\n]+)"\s*\))""")
-private val PATH_NAME = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)""")
+/**
+ * The verb at [at] when it takes a handler: its name, its path, empty when it has none, and where
+ * the handler's `{` stands. The arguments after the path are skipped whole, whatever they hold.
+ */
+private fun ktorCall(
+    src: String,
+    mask: BooleanArray,
+    at: Int,
+): Triple<String, String, Int>? {
+    val verb = KTOR_VERB.matchAt(src, at) ?: return null
+    var k = verb.range.last + 1
+    var path = ""
+    if (k < src.length && src[k] == '(') {
+        path = KTOR_PATH.matchAt(src, k)?.groupValues?.get(1) ?: return null
+        var depth = 0
+        while (k < src.length) {
+            if (mask[k] && src[k] == '(') depth++
+            if (mask[k] && src[k] == ')' && --depth == 0) break
+            k++
+        }
+        k++
+        while (k < src.length && src[k].isWhitespace()) k++
+    }
+    return if (k < src.length && mask[k] && src[k] == '{') Triple(verb.groupValues[1], path, k) else null
+}
+
+private val KTOR_QUERY = regex("""\b(?:queryParameters|parameters)\s*(?:\[\s*"([^"\n]+)"\s*]|\.get\(\s*"([^"\n]+)"\s*\))""")
+private val PATH_NAME = regex("""\{([A-Za-z_][A-Za-z0-9_]*)""")
 
 /**
  * The query parameters read in the handler whose body opens at [open], in the order they are
@@ -367,14 +395,14 @@ private fun handlerParameters(
     return params.map { it.trim() }.filter { it.isNotEmpty() }
 }
 
-private val PARAM_ANNOTATION = Regex("""@(RequestParam|RequestHeader)\b\s*(?:\(([^)]*)\))?""")
-private val ANY_ANNOTATION = Regex("""@[\w.:]+(?:\s*\([^)]*\))?""")
-private val DECLARATION = Regex("""^(?:\w+\s+)*(\w+)\s*:\s*([^=]+?)\s*(?:=.*)?$""", RegexOption.DOT_MATCHES_ALL)
-private val NAMED_ARG = Regex("""(?:value|name)\s*=\s*"([^"]*)"""")
-private val NOT_REQUIRED = Regex("""required\s*=\s*false|defaultValue\s*=""")
+private val PARAM_ANNOTATION = regex("""@(RequestParam|RequestHeader)\b\s*(?:\(([^)]*)\))?""")
+private val ANY_ANNOTATION = regex("""@[\w.:]+(?:\s*\([^)]*\))?""")
+private val DECLARATION = regex("""(?s)^(?:\w+\s+)*(\w+)\s*:\s*([^=]+?)\s*(?:=.*)?$""")
+private val NAMED_ARG = regex("""(?:value|name)\s*=\s*"([^"]*)"""")
+private val NOT_REQUIRED = regex("""required\s*=\s*false|defaultValue\s*=""")
 
 /** Every parameter, in a type that takes them all. */
-private val ALL_OF_THEM = Regex("""^(?:[\w.]*\.)?(?:Map|MultiValueMap|HttpHeaders)\b""")
+private val ALL_OF_THEM = regex("""^(?:[\w.]*\.)?(?:Map|MultiValueMap|HttpHeaders)\b""")
 
 /** A `@RequestParam` or `@RequestHeader` parameter: which of the two, its name on the wire and whether it is required. */
 private fun springParam(text: String): Pair<String, RouteParam>? {

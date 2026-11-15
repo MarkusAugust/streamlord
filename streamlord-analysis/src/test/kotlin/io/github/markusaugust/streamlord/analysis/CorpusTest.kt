@@ -2,19 +2,26 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureNames
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The corpus in the VS Code extension's `test/fixtures/corpus` is read by this suite and by
- * `corpus.test.ts`, so the two editors are held to the same cases. The format is described in
- * each file.
+ * The corpus in the VS Code extension's `test/fixtures/corpus` is read by this suite and by the
+ * extension's `port.test.ts`, so the two editors are held to the same cases. The format is
+ * described in each file.
  */
 class CorpusTest {
+    /** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
+    private fun unknown(
+        refs: List<SignalReference>,
+        defined: Set<String>,
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
+
     private val analyzer = Analyzer()
-    private val files = File("../editors/vscode/test/fixtures/corpus").listFiles { f -> f.extension == "json" }!!.sortedBy { it.name }
+    private val files = fixtureNames("editors/vscode/test/fixtures/corpus").filter { it.endsWith(".json") }
 
     private fun run(
         kind: String,
@@ -25,14 +32,16 @@ class CorpusTest {
         val prefix = case.string("prefix") ?: "data-"
         // A case may give the workspace's `const val` names, which modules the project has, and the calls that are not Streamlord's.
         val foreign = case.array("foreign")?.strings()?.toSet()
-        val opts =
-            AnalyzeOptions(
+        val starts = foreign?.let { callStarts(source, it).toSet() } ?: emptySet()
+
+        fun read(language: SourceLanguage) =
+            Source(
+                source,
+                language,
                 prefix,
-                true,
+                case.modules(Modules.UNKNOWN),
                 constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
-                htmlDsl = case.boolean("htmlDsl"),
-                core = case.boolean("core"),
-                foreignCalls = foreign?.let { callStarts(source, it).toSet() } ?: emptySet(),
+                foreign = { _, at -> at in starts },
             )
         return when (kind) {
             "expression" -> {
@@ -44,23 +53,23 @@ class CorpusTest {
             }
 
             "html" -> {
-                analyzer.analyzeHtml(source, opts)
+                analyzer.analyzeHtml(read(SourceLanguage.HTML))
             }
 
             "kotlin" -> {
-                analyzer.analyzeKotlin(source, opts)
+                analyzer.analyzeKotlin(read(SourceLanguage.KOTLIN))
             }
 
             // The signals the source reads that it does not itself declare.
             "references" -> {
-                val defined = collectSignalDefinitions(source, SourceLanguage.HTML)
-                analyzer.signalReferencesInHtml(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
+                unknown(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
             }
 
             // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
             "kotlin-references" -> {
-                val defined = collectSignalDefinitions(source, SourceLanguage.KOTLIN)
-                analyzer.signalReferencesInKotlin(source, opts).mapNotNull { unknownSignalIssue(it, defined) }
+                val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
+                unknown(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
             }
 
             else -> {
@@ -79,7 +88,7 @@ class CorpusTest {
         shift: Int = 0,
         depth: Int = 0,
     ): List<Int> {
-        val lex = lexKotlin(text)
+        val lex = analyzer.lex(text)
         val out = findCallSites(text, names, lex).mapTo(ArrayList()) { it.nameStart + shift }
         if (depth >= 4) return out
         for (s in lex.strings) {
@@ -107,10 +116,51 @@ class CorpusTest {
         (message?.let { "\n  message: $it" } ?: "") + fixes.joinToString("") { "\n  fix: $it" }
 
     @Test
+    fun `a message that sends the author to interpolate offers the rewrite or says why it does not`() {
+        val failures = ArrayList<String>()
+        for (file in files) {
+            val corpus = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
+            if (corpus.string("kind") != "kotlin") continue
+            for (case in corpus.array("cases")!!.objects()) {
+                for (issue in run("kotlin", case)) {
+                    val advises = "build the string with interpolate(...)" in issue.message
+                    val offered = issue.fixes.any { it.title.startsWith("Build this string with interpolate(...)") }
+                    val why =
+                        "interpolate(...) is not offered here" in issue.message ||
+                            "interpolate(...) cannot take this string" in issue.message
+                    if (advises && !offered && !why) failures += "$file: ${case.string("name")}: ${issue.message}"
+                }
+            }
+        }
+        assertEquals(emptyList(), failures, failures.joinToString("\n"))
+    }
+
+    /** What the analysis reads in place of a Kotlin template is its own, and no message shows it. */
+    @Test
+    fun `no message of the corpus shows the text read in place of a Kotlin template`() {
+        val shown = ArrayList<String>()
+        for (file in files) {
+            val corpus = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
+            for (case in corpus.array("cases")!!.objects()) {
+                val issues = run(corpus.string("kind")!!, case)
+                shown +=
+                    issues
+                        .filter {
+                            PLACEHOLDER in it.message ||
+                                it.fixes.any { f ->
+                                    PLACEHOLDER in f.title
+                                }
+                        }.map { "$file: ${case.string("name")}: ${it.message}" }
+            }
+        }
+        assertEquals(emptyList(), shown)
+    }
+
+    @Test
     fun `judges every case of the shared corpus as written`() {
         assertTrue(files.isNotEmpty())
         for (file in files) {
-            val corpus = JsonParser.parseObject(file.readText())
+            val corpus = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/corpus/$file"))
             for (case in corpus.array("cases")!!.objects()) {
                 val source = case.string("source")!!
                 val expected = case.array("issues")!!.objects()
@@ -138,8 +188,15 @@ class CorpusTest {
                             e.array("fixes")?.strings() ?: emptyList(),
                         )
                     }
-                assertEquals(wanted, seen, "${file.name}: ${case.string("name")}")
+                assertEquals(wanted, seen, "$file: ${case.string("name")}")
             }
         }
     }
+}
+
+/** What a case says of the modules: [otherwise] where it names neither, and both as known where it names one. */
+internal fun JsonObject.modules(otherwise: Modules): Modules {
+    val core = boolean("core")
+    val dsl = boolean("htmlDsl")
+    return if (core == null && dsl == null) otherwise else Modules.known(core ?: true, dsl ?: true)
 }

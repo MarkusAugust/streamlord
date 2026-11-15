@@ -6,6 +6,7 @@ import io.github.markusaugust.streamlord.core.domain.SignalsResponse
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,7 +33,28 @@ class ScriptAndSignalsContextTest {
         )
     }
 
-    // Measured against the 1.0.4 store: __proto__ throws midway through a batch it never closes,
+    // Measured against the 1.0.5 client: JSON.parse takes these, and mergePatch walks them with for-in.
+    @Test
+    fun `JSON that is no object is refused for what the client makes of it, not as JavaScript`() {
+        val said =
+            mapOf(
+                "[1,2]" to "signals must be one JSON object, not an array: the client patches its items as signals named 0, 1 and on",
+                "\"ab\"" to "signals must be one JSON object, not a string: the client patches its characters as signals named 0, 1 and on",
+                "1" to "signals must be one JSON object, not a number: the client patches nothing from it",
+                "true" to "signals must be one JSON object, not a boolean: the client patches nothing from it",
+                " null " to "signals must be one JSON object, not null: the client patches nothing from it",
+            )
+        for ((text, message) in said) {
+            assertEquals(message, assertFailsWith<DatastarEventValidationException>(text) { PatchSignals(text) }.message)
+            assertEquals(message, assertFailsWith<DatastarEventValidationException>(text) { SignalsResponse(text) }.message)
+        }
+        assertEquals(
+            "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
+            assertFailsWith<DatastarEventValidationException> { PatchSignals("[1,") }.message,
+        )
+    }
+
+    // Measured against the 1.0.5 store: __proto__ throws midway through a batch it never closes,
     // constructor with an object under it reaches Object.prototype, and a dotted key is one key
     // that $a.b does not reach and a request drops.
     @Test
@@ -66,38 +88,11 @@ class ScriptAndSignalsContextTest {
     }
 
     // Each key is read once. Read in proportion to the rest of the text, 200 000 keys took nine
-    // seconds; read once, ten milliseconds. A busy machine stretches any time, so the test compares
-    // two texts in the same run that end in the same long string: read once, two thousand keys in
-    // front of it add next to nothing; read to the end, each adds the whole string again.
+    // seconds; read once, ten milliseconds.
     @Test
     fun `checking the keys takes time in proportion to the text`() {
-        val tail = "\"tail\":\"" + "x".repeat(4_000_000) + "\"}"
-        val one = "{\"k\":1,$tail"
-        val many = (1..2_000).joinToString(",", "{", ",") { "\"k$it\":$it" } + tail
-        assertEquals(many, PatchSignals(many).signals)
-
-        fun nanos(text: String): Long {
-            val started = System.nanoTime()
-            PatchSignals(text)
-            return System.nanoTime() - started
-        }
-        // Warmed up, then the fastest of several, taken in turn, so both see the same machine. Read
-        // once, the two come out about even; read to the end, the keys made it some 300 times slower.
-        repeat(3) {
-            nanos(one)
-            nanos(many)
-        }
-        var fastestOne = Long.MAX_VALUE
-        var fastestMany = Long.MAX_VALUE
-        repeat(10) {
-            fastestOne = minOf(fastestOne, nanos(one))
-            fastestMany = minOf(fastestMany, nanos(many))
-        }
-        val ratio = fastestMany.toDouble() / fastestOne
-        // What this does not catch: a cost that grows with the square of the keys alone, each key
-        // checked against those before it, say. Two thousand keys are too few beside the long string
-        // for that to show.
-        assertTrue(ratio < 50, "two thousand keys made it $ratio times slower: $fastestOne ns, then $fastestMany ns")
+        val keys = { n: Int -> (1..n).joinToString(",", "{", "}") { "\"k$it\":\"${"x".repeat(200)}\"" } }
+        assertGrowsLinearly("checking the keys", 150, keys) { text -> assertEquals(text, PatchSignals(text).signals) }
     }
 
     @Test

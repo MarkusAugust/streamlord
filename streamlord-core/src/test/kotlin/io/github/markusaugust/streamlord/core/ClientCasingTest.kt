@@ -4,7 +4,7 @@ import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -12,12 +12,12 @@ import kotlin.test.fail
 
 /**
  * Holds [ClientCasing] to `conformance/client/casing.json` and `attribute-keys.json`, the output
- * of the Datastar 1.0.4 client's `modifyCasing` and `camel` (utils/text.ts) and
+ * of the Datastar 1.0.5 client's `modifyCasing` and `camel` (utils/text.ts) and
  * `parseAttributeKey` (engine/engine.ts) run by `conformance/generate/client.mjs`.
  */
 class ClientCasingTest {
     private fun cases(name: String): List<JsonObject> =
-        JsonParser.parseObject(File("../conformance/client/$name").readText()).array("cases")!!.objects()
+        JsonParser.parseObject(fixtureText("conformance/client/$name")).array("cases")!!.objects()
 
     private val casing = cases("casing.json").associateBy { it.string("key")!! }
 

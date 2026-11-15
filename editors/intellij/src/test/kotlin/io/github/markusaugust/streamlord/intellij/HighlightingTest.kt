@@ -1,0 +1,392 @@
+package io.github.markusaugust.streamlord.intellij
+
+import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
+import com.intellij.openapi.editor.XmlHighlighterColors
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.TextAttributesKey
+import com.intellij.openapi.editor.colors.impl.EditorColorsSchemeImpl
+import com.intellij.openapi.util.JDOMUtil
+import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
+
+/**
+ * Every part of Datastar has the key the VS Code grammar gives the same kind of scope, in each of
+ * the three ways of writing markup, and every key falls back to one of the user's scheme.
+ */
+class HighlightingTest : StreamlordTestCase() {
+    /** The text and key of every colour the plugin paints, in the order of the file. */
+    private fun painted(): List<Pair<String, TextAttributesKey>> =
+        myFixture
+            .doHighlighting()
+            .filter { it.forcedTextAttributesKey?.externalName?.startsWith("STREAMLORD_") == true }
+            .sortedBy { it.startOffset }
+            .map { it.text to it.forcedTextAttributesKey!! }
+
+    private fun painted(
+        name: String,
+        text: String,
+    ): List<Pair<String, TextAttributesKey>> {
+        myFixture.configureByText(name, text)
+        return painted()
+    }
+
+    fun `test each key falls back to the standard key of its kind`() {
+        val expected =
+            mapOf(
+                DatastarColors.SIGNAL to DefaultLanguageHighlighterColors.STATIC_FIELD,
+                DatastarColors.SIGNAL_PATH to DefaultLanguageHighlighterColors.INSTANCE_FIELD,
+                DatastarColors.ACTION_BACKEND to DefaultLanguageHighlighterColors.KEYWORD,
+                DatastarColors.ACTION to DefaultLanguageHighlighterColors.KEYWORD,
+                DatastarColors.SCOPE_VARIABLE to DefaultLanguageHighlighterColors.KEYWORD,
+                DatastarColors.OPTION_KEY to DefaultLanguageHighlighterColors.INSTANCE_FIELD,
+                DatastarColors.OBJECT_KEY to DefaultLanguageHighlighterColors.INSTANCE_FIELD,
+                DatastarColors.PROPERTY to DefaultLanguageHighlighterColors.INSTANCE_FIELD,
+                DatastarColors.METHOD to DefaultLanguageHighlighterColors.FUNCTION_CALL,
+                DatastarColors.GLOBAL to DefaultLanguageHighlighterColors.CONSTANT,
+                DatastarColors.IDENTIFIER to DefaultLanguageHighlighterColors.IDENTIFIER,
+                DatastarColors.OPERATOR to DefaultLanguageHighlighterColors.OPERATION_SIGN,
+                DatastarColors.COMMENT to DefaultLanguageHighlighterColors.BLOCK_COMMENT,
+                DatastarColors.TEMPLATE_PUNCTUATION to DefaultLanguageHighlighterColors.KEYWORD,
+                DatastarColors.DURATION to DefaultLanguageHighlighterColors.NUMBER,
+                DatastarColors.STRING to DefaultLanguageHighlighterColors.STRING,
+                DatastarColors.REGEX to DefaultLanguageHighlighterColors.VALID_STRING_ESCAPE,
+                DatastarColors.KEYWORD to DefaultLanguageHighlighterColors.KEYWORD,
+                DatastarColors.NUMBER to DefaultLanguageHighlighterColors.NUMBER,
+                DatastarColors.KOTLIN_DOLLAR_ESCAPE to DefaultLanguageHighlighterColors.VALID_STRING_ESCAPE,
+                DatastarColors.ATTRIBUTE_PREFIX to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
+                DatastarColors.ATTRIBUTE_PLUGIN to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
+                DatastarColors.ATTRIBUTE_KEY to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
+                DatastarColors.MODIFIER to DefaultLanguageHighlighterColors.KEYWORD,
+                DatastarColors.MODIFIER_SIGIL to XmlHighlighterColors.HTML_ATTRIBUTE_NAME,
+                DatastarColors.MODIFIER_ARG to DefaultLanguageHighlighterColors.CONSTANT,
+            )
+        for ((key, fallback) in expected) assertEquals(key.externalName, fallback, key.fallbackAttributeKey)
+        assertEquals(expected.keys, DatastarColors.ALL.toSet())
+    }
+
+    // An identifier, a call and an operator are what the scheme makes of them, plain text in IntelliJ's
+    // own schemes, as they are in JavaScript; everything Datastar adds has a colour of its own there,
+    // not the text's: in classic Default and Darcula, and in the New UI's Light, Dark and Islands Dark.
+    fun `test every bundled scheme colours every datastar key`() {
+        val plain = setOf(DatastarColors.IDENTIFIER, DatastarColors.METHOD, DatastarColors.OPERATOR)
+        val manager = EditorColorsManager.getInstance()
+
+        fun bundled(name: String) = manager.getScheme(name) ?: manager.allSchemes.first { it.name.contains(name) }
+        val schemes =
+            listOf(bundled("Default"), bundled("Darcula")) +
+                listOf(
+                    "themes/expUI/expUI_lightScheme.xml" to "Default",
+                    "themes/Light.xml" to "Default",
+                    "themes/expUI/expUI_darkScheme.xml" to "Darcula",
+                    "themes/islands/IslandSchemeDark.xml" to "Darcula",
+                ).map { (file, parent) ->
+                    val xml = javaClass.classLoader.getResourceAsStream(file) ?: error("$file is not on the classpath")
+                    EditorColorsSchemeImpl(bundled(parent)).apply { readExternal(JDOMUtil.load(xml)) }
+                }
+        assertEquals(listOf("Light", "IntelliJ Light", "Dark", "Islands Dark"), schemes.drop(2).map { it.name })
+        for (scheme in schemes) {
+            val text = scheme.defaultForeground
+            for (key in DatastarColors.ALL - plain) {
+                val colour = scheme.getAttributes(key)?.foregroundColor
+                assertNotNull("${key.externalName} in ${scheme.name}", colour)
+                assertFalse("${key.externalName} in ${scheme.name} is the text's own $colour", colour == text)
+            }
+        }
+    }
+
+    fun `test every part of an expression in html`() {
+        val page =
+            "<div data-on:click__debounce.500ms__case.kebab=\"foo = {a: Math.max(x.length, .5, 10n)}; " +
+                "@peek(() => \$user.name); `t\${\$n}` /* c */ ~ 1_000\"></div>"
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "on" to DatastarColors.ATTRIBUTE_PLUGIN,
+                ":" to DatastarColors.MODIFIER_SIGIL,
+                "click" to DatastarColors.ATTRIBUTE_KEY,
+                "__" to DatastarColors.MODIFIER_SIGIL,
+                "debounce" to DatastarColors.MODIFIER,
+                "." to DatastarColors.MODIFIER_SIGIL,
+                "500ms" to DatastarColors.DURATION,
+                "__" to DatastarColors.MODIFIER_SIGIL,
+                "case" to DatastarColors.MODIFIER,
+                "." to DatastarColors.MODIFIER_SIGIL,
+                "kebab" to DatastarColors.MODIFIER_ARG,
+                "foo" to DatastarColors.IDENTIFIER,
+                "=" to DatastarColors.OPERATOR,
+                "a" to DatastarColors.OBJECT_KEY,
+                "Math" to DatastarColors.GLOBAL,
+                "max" to DatastarColors.METHOD,
+                "x" to DatastarColors.IDENTIFIER,
+                "length" to DatastarColors.PROPERTY,
+                ".5" to DatastarColors.NUMBER,
+                "10n" to DatastarColors.NUMBER,
+                "@peek" to DatastarColors.ACTION,
+                "=>" to DatastarColors.KEYWORD,
+                "\$user" to DatastarColors.SIGNAL,
+                ".name" to DatastarColors.SIGNAL_PATH,
+                "`t" to DatastarColors.STRING,
+                "\${" to DatastarColors.TEMPLATE_PUNCTUATION,
+                "\$n" to DatastarColors.SIGNAL,
+                "}" to DatastarColors.TEMPLATE_PUNCTUATION,
+                "`" to DatastarColors.STRING,
+                "/* c */" to DatastarColors.COMMENT,
+                "~" to DatastarColors.OPERATOR,
+                "1_000" to DatastarColors.NUMBER,
+            ),
+            painted("page.html", page),
+        )
+    }
+
+    fun `test the aliased prefix, a name in capitals, and an entity quote`() {
+        assertEquals(
+            listOf(
+                "data-star-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "show" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "\$a" to DatastarColors.SIGNAL,
+                "DATA-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "TEXT" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "&quot;x&quot;" to DatastarColors.STRING,
+            ),
+            painted("page.html", "<div data-star-show=\"\$a\" DATA-TEXT=\"&quot;x&quot;\"></div>"),
+        )
+    }
+
+    fun `test a signal name and a filter are read as the client reads them`() {
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "bind" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "user" to DatastarColors.SIGNAL,
+                ".name" to DatastarColors.SIGNAL_PATH,
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "indicator" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "busy" to DatastarColors.SIGNAL,
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "ref" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "box" to DatastarColors.SIGNAL,
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "persist" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "include" to DatastarColors.OPTION_KEY,
+                "/^a/" to DatastarColors.REGEX,
+            ),
+            painted(
+                "page.html",
+                "<input data-bind=\"user.name\" data-indicator=\"busy\" data-ref=\"box\" data-persist=\"{include: /^a/}\">",
+            ),
+        )
+    }
+
+    fun `test a kotlin template is kotlin's, and an escaped dollar is a signal`() {
+        val kt =
+            painted(
+                "View.kt",
+                "fun FlowContent.f(n: Int, id: Int) {\n" +
+                    "    div { dataText(\"\$n + \\\$total\") }\n" +
+                    "    div { dataShow(\$\$\"\$open && \$\${id} > 0\") }\n" +
+                    "}\n" +
+                    "fun g(n: Int) = \"\"\"<p data-text=\"\$n + \${'\$'}m\"></p>\"\"\"",
+            )
+        assertEquals(
+            listOf(
+                "+" to DatastarColors.OPERATOR,
+                "\$total" to DatastarColors.SIGNAL,
+                "\$open" to DatastarColors.SIGNAL,
+                "&&" to DatastarColors.OPERATOR,
+                ">" to DatastarColors.OPERATOR,
+                "0" to DatastarColors.NUMBER,
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "text" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "+" to DatastarColors.OPERATOR,
+                "\${'\$'}" to DatastarColors.KOTLIN_DOLLAR_ESCAPE,
+                "m" to DatastarColors.SIGNAL,
+            ),
+            kt,
+        )
+    }
+
+    fun `test the dsl's signal names, one-argument objects and named expressions`() {
+        val kt =
+            painted(
+                "View.kt",
+                "fun FlowContent.f() {\n" +
+                    "    input { dataBind(\"name\") }\n" +
+                    "    div { dataSignals(\"count\", \"0\") }\n" +
+                    "    div { dataClass(\"{hidden: \\\$a}\") }\n" +
+                    "    div { dataOnClick(expression = \"\\\$b++\") }\n" +
+                    "}",
+            )
+        assertEquals(
+            listOf(
+                "name" to DatastarColors.SIGNAL,
+                "count" to DatastarColors.SIGNAL,
+                "0" to DatastarColors.NUMBER,
+                "hidden" to DatastarColors.OBJECT_KEY,
+                "\$a" to DatastarColors.SIGNAL,
+                "\$b" to DatastarColors.SIGNAL,
+                "++" to DatastarColors.OPERATOR,
+            ),
+            kt,
+        )
+    }
+
+    fun `test the dsl's signal names keep their colour after an edit above them`() {
+        painted("View.kt", "<caret>fun FlowContent.f() {\n    input { dataBind(\"name\") }\n}")
+        myFixture.type("// typed\n")
+        assertEquals(listOf("name" to DatastarColors.SIGNAL), painted())
+    }
+
+    // As VS Code colours them: the expression of each helper that takes one, every end of fitExpr's, and the options that take one.
+    fun `test the dsl's expression helpers and the expression options of a backend action`() {
+        val calls =
+            listOf("getExpr", "postExpr", "putExpr", "patchExpr", "deleteExpr", "queryExpr", "setAllExpr", "clipboardExpr")
+                .map { "div { dataOnClick($it(\"\\\$a\")) }" } +
+                listOf(
+                    "div { dataText(fitExpr(\"\\\$a\", \"0\", \"\\\$a\", \"0\", \"1\")) }",
+                    "div { dataOnClick(post(\"/x\") { payloadExpr = \"\\\$a\" }) }",
+                    "div { dataOnClick(get(\"/x\") { requestCancellationExpr = \"\\\$a\" }) }",
+                    "div { dataOnClick(get(\"/x\") { headerExprs = mapOf(\"X-Id\" to \"\\\$a\") }) }",
+                )
+        val kt = painted("View.kt", "fun FlowContent.f() {\n" + calls.joinToString("\n") + "\n}")
+        // fitExpr's line has two.
+        assertEquals(calls.size + 1, kt.count { it == "\$a" to DatastarColors.SIGNAL })
+    }
+
+    fun `test a template file colours only datastar's names, and around a placeholder`() {
+        for (ext in listOf("jte", "peb", "mustache", "hbs")) {
+            assertEquals(
+                ext,
+                listOf(
+                    "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                    "text" to DatastarColors.ATTRIBUTE_PLUGIN,
+                    "+" to DatastarColors.OPERATOR,
+                    "\$count" to DatastarColors.SIGNAL,
+                ),
+                painted("page.$ext", "<div data-color=\"red\" data-onn:click=\"x\" data-text=\"{{ n }} + \$count\"></div>"),
+            )
+        }
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "text" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "+" to DatastarColors.OPERATOR,
+                "\$count" to DatastarColors.SIGNAL,
+            ),
+            painted("page.html", "<div data-text=\"\${user.name} + \$count\"></div>"),
+        )
+    }
+}
+
+class HighlightingReadsTest : StreamlordTestCase() {
+    private fun painted(
+        name: String,
+        text: String,
+    ): List<Pair<String, TextAttributesKey>> {
+        myFixture.configureByText(name, text)
+        return myFixture
+            .doHighlighting()
+            .filter { it.forcedTextAttributesKey?.externalName?.startsWith("STREAMLORD_") == true }
+            .sortedBy { it.startOffset }
+            .map { it.text to it.forcedTextAttributesKey!! }
+    }
+
+    fun `test interpolate's format is HTML however it opens`() {
+        val kt =
+            painted(
+                "View.kt",
+                "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
+                    "fun f(t: String) = interpolate(\"Hello <b data-text=\\\"\\\$name\\\" data-attr:title=\\\"%s\\\"></b>\", t)\n",
+            )
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "text" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "\$name" to DatastarColors.SIGNAL,
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "attr" to DatastarColors.ATTRIBUTE_PLUGIN,
+                ":" to DatastarColors.MODIFIER_SIGIL,
+                "title" to DatastarColors.ATTRIBUTE_KEY,
+            ),
+            kt.filter { it.second != DatastarColors.OPERATOR && it.second != DatastarColors.IDENTIFIER },
+        )
+    }
+
+    fun `test json in escaped quotes in a plain kotlin string has its keys and values`() {
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "signals" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "\\\"count\\\"" to DatastarColors.OBJECT_KEY,
+                "0" to DatastarColors.NUMBER,
+                "\\\"name\\\"" to DatastarColors.OBJECT_KEY,
+                "\\\"x\\\"" to DatastarColors.STRING,
+            ),
+            painted("View.kt", "fun p() = \"<div data-signals='{\\\"count\\\": 0, \\\"name\\\": \\\"x\\\"}'></div>\"\n"),
+        )
+    }
+
+    fun `test a quoted key is a key`() {
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "class" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "'text-red-500'" to DatastarColors.OBJECT_KEY,
+                "\$err" to DatastarColors.SIGNAL,
+            ),
+            painted("page.html", "<div data-class=\"{'text-red-500': \$err}\"></div>"),
+        )
+    }
+
+    // jte, kte and FreeMarker write ${...} before the browser reads the value, inside a JavaScript template too.
+    fun `test an engine's dollar braces are its own inside a javascript template`() {
+        for (ext in listOf("jte", "kte", "ftl")) {
+            assertEquals(
+                ext,
+                listOf(
+                    "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                    "text" to DatastarColors.ATTRIBUTE_PLUGIN,
+                    "`Hi " to DatastarColors.STRING,
+                    "`" to DatastarColors.STRING,
+                    "+" to DatastarColors.OPERATOR,
+                    "\$a" to DatastarColors.SIGNAL,
+                ),
+                painted("page.$ext", "<div data-text=\"`Hi \${name}` + \$a\"></div>"),
+            )
+        }
+        // In an HTML file it is JavaScript's own.
+        assertTrue(painted("page.html", "<div data-text=\"`Hi \${\$name}`\"></div>").contains("\$name" to DatastarColors.SIGNAL))
+    }
+
+    fun `test a placeholder next to a signal leaves the signal whole`() {
+        assertTrue(painted("page.mustache", "<div data-show=\"{{#flag}}\$a{{/flag}}\"></div>").contains("\$a" to DatastarColors.SIGNAL))
+    }
+
+    fun `test an escaped dollar opens a javascript template's expression in a raw string`() {
+        val kt = painted("View.kt", "fun g() = \"\"\"<p data-text=\"`x \${'\$'}{\${'\$'}b}`\"></p>\"\"\"\n")
+        assertEquals(
+            listOf(
+                "`x " to DatastarColors.STRING,
+                "\${'\$'}{" to DatastarColors.TEMPLATE_PUNCTUATION,
+                "\${'\$'}" to DatastarColors.KOTLIN_DOLLAR_ESCAPE,
+                "b" to DatastarColors.SIGNAL,
+                "}" to DatastarColors.TEMPLATE_PUNCTUATION,
+                "`" to DatastarColors.STRING,
+            ),
+            kt.drop(2),
+        )
+    }
+}
+
+class ColorSettingsDemoTest : com.intellij.testFramework.fixtures.BasePlatformTestCase() {
+    // The page's preview is where a user picks a face: each key the plugin paints is shown there once at least.
+    fun `test the demo shows every key`() {
+        val page =
+            io.github.markusaugust.streamlord.intellij.highlighting
+                .DatastarColorSettingsPage()
+        val tags = page.additionalHighlightingTagToDescriptorMap
+        val used = Regex("<([a-z]+)>").findAll(page.demoText).map { it.groupValues[1] }.toSet()
+        assertEquals("tags the demo never uses", emptySet<String>(), tags.keys - used)
+        assertEquals("tags the page does not know", emptySet<String>(), used - tags.keys)
+        assertEquals(DatastarColors.ALL.toSet(), tags.values.toSet())
+        assertEquals(DatastarColors.ALL.toSet(), page.attributeDescriptors.map { it.key }.toSet())
+    }
+}

@@ -1,6 +1,6 @@
 ---
 title: "The kotlinx.html DSL"
-description: "Every Datastar attribute, action and modifier of 1.0.4, as typed extension functions."
+description: "Every Datastar attribute, action and modifier of 1.0.5, as typed extension functions."
 ---
 
 `streamlord-html` adds one extension function per Datastar attribute to kotlinx.html. You get

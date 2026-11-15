@@ -2,14 +2,21 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.client.ClientRequest
+import io.github.markusaugust.streamlord.core.client.charCount
+import io.github.markusaugust.streamlord.core.client.codePointFrom
+import io.github.markusaugust.streamlord.core.client.codePointString
+import io.github.markusaugust.streamlord.core.client.formEncoded
+import io.github.markusaugust.streamlord.core.client.hex
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.core.json.SignalPatchException
+import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
-import java.net.URLEncoder
 
 /*
  * Saved requests for the Stream Inspector: the file format, variable substitution, the recent
@@ -46,7 +53,7 @@ public data class RequestsEdit(
 )
 
 public object Requests {
-    /** How much of a response without a stream the inspector reads and shows. */
+    /** How much of a response without a stream the inspector reads. */
     public const val NON_STREAM_LIMIT: Int = 1024 * 1024
 
     /** What ends a body cut at [NON_STREAM_LIMIT]. */
@@ -88,11 +95,11 @@ public object Requests {
     /** The methods of the backend actions, in the catalog's order. */
     public val METHODS: List<String> = Catalog.default.backendActions.map { it.uppercase() }
 
-    private val VARIABLE = Regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
-    private val PATH_VARIABLE = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
-    private val OPTIONAL_SEGMENT = Regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
-    private val ABSOLUTE = Regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
-    private val PATH_PARAM_TEXT = Regex("""\{[^{}]*\}""")
+    private val VARIABLE = regex("""\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}""")
+    private val PATH_VARIABLE = regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::[^{}]*)?\}""")
+    private val OPTIONAL_SEGMENT = regex("""/\{([A-Za-z_][A-Za-z0-9_]*)\?\}""")
+    private val ABSOLUTE = regex("""^([A-Za-z][A-Za-z0-9+.-]*)://""")
+    private val PATH_PARAM_TEXT = regex("""\{[^{}]*\}""")
     private const val NOT_SENDABLE = "\"<>\\^`|"
 
     /**
@@ -101,9 +108,9 @@ public object Requests {
      * [RequestsFile.error], so a save does not write over it. An empty file holds no requests.
      */
     public fun parseRequestsFile(
-        text: String,
+        text: String?,
         path: String = REQUESTS_FILE,
-    ): RequestsFile = readRequests(text.removePrefix("\uFEFF"), path).file
+    ): RequestsFile = if (text == null) RequestsFile.EMPTY else readRequests(text.removePrefix("\uFEFF"), path).file
 
     /** Whether a file's text holds nothing: no character but the whitespace JSON allows between values. */
     private fun empty(text: String): Boolean = text.all { it in " \t\n\r" }
@@ -152,10 +159,24 @@ public object Requests {
             list.mapIndexed { index, item ->
                 val missing =
                     when {
-                        item !is JsonObject -> "it is not an object"
-                        item.string("name") == null -> "it has no \"name\""
-                        item.string("url") == null -> "it has no \"url\""
-                        else -> named.putIfAbsent(nameKey(item.string("name")!!), index + 1)?.let { "request $it has its name" }
+                        item !is JsonObject -> {
+                            "it is not an object"
+                        }
+
+                        item.string("name") == null -> {
+                            "it has no \"name\""
+                        }
+
+                        item.string("url") == null -> {
+                            "it has no \"url\""
+                        }
+
+                        else -> {
+                            val key = nameKey(item.string("name")!!)
+                            val first = named[key]
+                            if (first == null) named[key] = index + 1
+                            first?.let { "request $it has its name" }
+                        }
                     }
                 if (missing != null) {
                     skipped += "Request ${index + 1} in $path is not read: $missing."
@@ -200,7 +221,7 @@ public object Requests {
         return ReadRequests(RequestsFile(entries.filterNotNull(), skipped = skipped), entries, raw)
     }
 
-    public fun serializeRequestsFile(file: RequestsFile): String {
+    internal fun serializeRequestsFile(file: RequestsFile): String {
         val sb = StringBuilder("{\n  \"version\": 1,\n  \"requests\": [")
         file.requests.forEachIndexed { i, r ->
             sb.append(if (i == 0) "\n" else ",\n")
@@ -385,7 +406,12 @@ public object Requests {
      */
     private fun nameKey(name: String): String {
         val out = StringBuilder(name.length)
-        name.codePoints().forEach { out.append(Character.toString(it).lowercase()) }
+        var i = 0
+        while (i < name.length) {
+            val cp = name.codePointFrom(i)
+            out.append(codePointString(cp).lowercase())
+            i += charCount(cp)
+        }
         return out.toString()
     }
 
@@ -399,7 +425,7 @@ public object Requests {
     }
 
     /** The variables with a field of their own, in the order the inspector lists them. Every other name is a param. */
-    public val ENV_KEYS: List<String> = listOf("baseUrl", "signals", "headers")
+    internal val ENV_KEYS: List<String> = listOf("baseUrl", "signals", "headers")
 
     /** The key in `.streamlord/env.json` that holds the values of the parameters a route reads. */
     public const val PARAMS: String = "params"
@@ -407,7 +433,7 @@ public object Requests {
     private const val INVALID = "$ENV_FILE is not valid"
 
     /** `.streamlord/env.json` as read: each key that is set and valid, and what is wrong with the rest. */
-    public data class Env(
+    internal data class Env(
         val baseUrl: String?,
         /** Compact JSON, spelled as in the file. */
         val signals: String?,
@@ -422,7 +448,7 @@ public object Requests {
      * `params` (objects of texts) are allowed, and anything else is reported rather than ignored, so
      * a typo does not quietly leave a value unset.
      */
-    public fun parseEnv(rawText: String): Env {
+    internal fun parseEnv(rawText: String): Env {
         val errors = ArrayList<String>()
         val text = rawText.removePrefix("\uFEFF")
         if (empty(text)) return Env(null, null, null, null, emptyList())
@@ -481,7 +507,7 @@ public object Requests {
                                     errors += "$INVALID: \"$name\" cannot be a param; {{$name}} is a variable of its own."
                                 }
 
-                                !PARAM_NAME.matches(name) -> {
+                                PARAM_NAME.matchEntire(name) == null -> {
                                     errors +=
                                         "$INVALID: \"$name\" cannot be a param name; {{$name}} would not be read."
                                 }
@@ -503,10 +529,10 @@ public object Requests {
         return Env(baseUrl, signals, headers, params, errors)
     }
 
-    private val PARAM_NAME = Regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
+    private val PARAM_NAME = regex("""^[A-Za-z_][A-Za-z0-9_.-]*$""")
 
     /** Where [position] falls in [text], as an editor counts it: "at line 3, column 1". */
-    public fun lineAndColumn(
+    internal fun lineAndColumn(
         text: String,
         position: Int,
     ): String {
@@ -514,7 +540,7 @@ public object Requests {
         return "at line $line, column $column"
     }
 
-    private val HTTP = Regex("""^https?://""", RegexOption.IGNORE_CASE)
+    private val HTTP = regex("""^https?://""", RegexOption.IGNORE_CASE)
 
     /** The text of each value of the top-level object, by key as written; [text] is known to parse. */
     private fun topLevelValues(text: String): Map<String, String> =
@@ -598,7 +624,7 @@ public object Requests {
      * then `signals`, `headers` and each param when the file sets them. The file comes first
      * because it is what the user wrote down; a server's log only fills in what they did not.
      */
-    public fun mergeVariables(
+    internal fun mergeVariables(
         defaultUrl: String,
         env: Env,
         running: RunningServer? = null,
@@ -616,6 +642,26 @@ public object Requests {
         return out
     }
 
+    /** The variables a request may name, and what reading the env file found wrong. */
+    public data class Environment(
+        val vars: List<Variable>,
+        val errors: List<String>,
+    )
+
+    /**
+     * The variables of the env file's [text], null where there is none, over [defaultUrl]; a server
+     * the editor saw start, [running], gives `baseUrl` where the file sets none. A file with errors
+     * sets nothing: a request is not sent half filled.
+     */
+    public fun environment(
+        text: String?,
+        defaultUrl: String,
+        running: RunningServer?,
+    ): Environment {
+        val env = parseEnv(text ?: "{}")
+        return Environment(mergeVariables(defaultUrl, if (env.errors.isEmpty()) env else parseEnv("{}"), running), env.errors)
+    }
+
     /** The values by name, for substitution. */
     public fun variableValues(vars: List<Variable>): Map<String, String> = vars.associate { it.name to it.value }
 
@@ -631,13 +677,13 @@ public object Requests {
                 }
         }
 
-    public data class Substituted(
+    internal data class Substituted(
         val text: String,
         val missing: List<String>,
     )
 
     /** Replace `{{name}}` with values; unknown names are left in place and reported. */
-    public fun substitute(
+    internal fun substitute(
         text: String,
         vars: Map<String, String>,
     ): Substituted {
@@ -817,7 +863,7 @@ public object Requests {
         return before + added + text.substring(close)
     }
 
-    private val BASE_URL_VARIABLE = Regex("""\{\{\s*baseUrl\s*\}\}""")
+    private val BASE_URL_VARIABLE = regex("""\{\{\s*baseUrl\s*\}\}""")
 
     /**
      * Where the `{{baseUrl}}` of a URL came from, for a server that could not be reached: a value
@@ -883,24 +929,31 @@ public object Requests {
         val items: List<Variable>,
     )
 
-    private val OPEN_VARIABLE = Regex("""\{\{\s*([A-Za-z]*)$""")
+    private val OPEN_VARIABLE = regex("""\{\{\s*([A-Za-z]*)$""")
 
-    /** The variables to offer after `{{` at [caret]: those the field takes and the file sets. */
+    /**
+     * The variables to offer after `{{` at [caret]: those the [field] takes and the file sets; a field
+     * none of the three, null, takes what the URL takes but `baseUrl`: the params.
+     */
     public fun variableCompletions(
         text: String,
         caret: Int,
-        field: Field,
+        field: Field?,
         vars: List<Variable>,
     ): Completion? {
         val m = OPEN_VARIABLE.find(text.substring(0, caret)) ?: return null
         val prefix = m.groupValues[1].lowercase()
-        val items = vars.filter { belongsIn(it.name, field) && it.name.lowercase().startsWith(prefix) }
+        val items =
+            vars.filter {
+                (if (field == null) it.name != "baseUrl" && belongsIn(it.name, Field.URL) else belongsIn(it.name, field)) &&
+                    it.name.lowercase().startsWith(prefix)
+            }
         if (items.isEmpty()) return null
         return Completion(m.range.first, if (text.startsWith("}}", caret)) caret + 2 else caret, items)
     }
 
     /** The request as the Datastar client would send it, one identity for the recent list. */
-    public fun requestKey(r: SavedRequest): String = "${r.method} ${r.url}\n${r.signals.trim()}\n${r.headers.trim()}"
+    internal fun requestKey(r: SavedRequest): String = "${r.method} ${r.url}\n${r.signals.trim()}\n${r.headers.trim()}"
 
     public fun pushRecent(
         recent: List<SavedRequest>,
@@ -920,6 +973,50 @@ public object Requests {
         }
         return out
     }
+
+    /**
+     * The store after the client applies [patch], a `datastar-patch-signals` frame's `signals`, to
+     * [store] (see [mergePatchAsClient]), with [onlyIfMissing] read as the client reads it: `"true"`
+     * after JavaScript's trim (patchSignals.ts:16, text.ts:24 in 1.0.5). Null where the patch is no
+     * JSON, which the frame shows as it is. The client nests as deep as a stream says and takes a
+     * number however long; a patch past [FOLD_DEPTH] or the parser's number length leaves the store
+     * as it was, since folding it would spend an editor's stack. [PatchedStore.message] says so, as it
+     * says where the client throws or Streamlord refuses the patch.
+     */
+    public fun patchedStore(
+        store: JsonObject,
+        patch: String,
+        onlyIfMissing: String?,
+    ): PatchedStore? {
+        val parsed =
+            try {
+                JsonParser.parse(patch, FOLD_DEPTH)
+            } catch (e: JsonParseException) {
+                if (!e.limit) return null
+                return PatchedStore(
+                    store,
+                    "The inspector does not fold this patch, which the client takes: ${e.message}. The store shown is left as it was.",
+                )
+            }
+        return try {
+            PatchedStore(mergePatchAsClient(store, parsed, onlyIfMissing?.trim(::isJsSpace) == "true"), null)
+        } catch (e: SignalPatchException) {
+            // The client keeps the keys it set before the one it failed on, and so does the store. A throw also leaves its
+            // update batch open (signals.ts:747-762), so the bindings on the page stop redrawing.
+            val message =
+                if (e.refused) {
+                    "Streamlord refuses this signal patch on purpose: ${e.message}. The store shown keeps the keys before it."
+                } else {
+                    "The signal store cannot take this patch: ${e.message}. Datastar's client throws on it too, and the bindings " +
+                        "already on the page then stop redrawing until it is reloaded, though the signals still change, element " +
+                        "patches still land and new bindings show the current value."
+                }
+            PatchedStore(e.store, message)
+        }
+    }
+
+    /** How deep a patch the inspector folds into its store, far deeper than any page's signals. */
+    internal const val FOLD_DEPTH: Int = 1000
 
     /**
      * The signals as compact JSON; text that is not JSON is passed through trimmed.
@@ -954,8 +1051,60 @@ public object Requests {
         return out.toString()
     }
 
+    /**
+     * Why [signals] cannot be sent, judged on the compacted text that goes out by the reader the SDK
+     * reads them with; null when they can. The client's signals are an object.
+     */
+    public fun signalsProblem(signals: String): String? {
+        val read =
+            try {
+                JsonParser.parse(compactSignals(signals))
+            } catch (e: Exception) {
+                return "Signals are not valid JSON: ${e.message}"
+            }
+        return if (read is JsonObject) null else "Signals are a JSON object, as Datastar's client sends them."
+    }
+
+    /** What to send: the request Datastar's client would send, or the error that keeps it from being sent. */
+    public sealed interface StreamRequest {
+        public data class Sent(
+            val url: String,
+            val method: String,
+            val headers: Map<String, String>,
+            val body: String?,
+        ) : StreamRequest
+
+        public data class Refused(
+            val error: String,
+        ) : StreamRequest
+    }
+
+    /**
+     * The request Datastar's client would send: the signals in the query for a GET or a DELETE and
+     * in the body otherwise, its own headers, and [headers], the user's, over them.
+     */
+    public fun streamRequest(
+        url: String,
+        method: String,
+        signals: String,
+        headers: Map<String, String>,
+    ): StreamRequest {
+        // Judged as written, so the message shows the user's URL and not the one with the signals added.
+        sendableUrl(url).error?.let { return StreamRequest.Refused(it) }
+        signalsProblem(signals)?.let { return StreamRequest.Refused(it) }
+        val json = compactSignals(signals)
+        val sendable = sendableUrl(requestUrl(url, method, json))
+        val target = sendable.url ?: return StreamRequest.Refused(sendable.error!!)
+        return StreamRequest.Sent(
+            target,
+            method.uppercase(),
+            requestHeaders(method, headers),
+            if (ClientRequest.bodyless(method)) null else json,
+        )
+    }
+
     /** The URL the Datastar client would open: GET and DELETE carry the signals in the query string. */
-    public fun requestUrl(
+    internal fun requestUrl(
         url: String,
         method: String,
         signalsJson: String,
@@ -964,7 +1113,7 @@ public object Requests {
     private fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
     /** The URL to send, or why it cannot be sent; exactly one of the two is set. */
-    public data class SendableUrl(
+    internal data class SendableUrl(
         val url: String?,
         val error: String?,
     )
@@ -975,7 +1124,7 @@ public object Requests {
      * and a character beyond ASCII is sent as UTF-8 escapes. Anything curl refuses, globs away or
      * java.net.URI rejects is refused here, and the VS Code extension refuses the same URLs.
      */
-    public fun sendableUrl(url: String): SendableUrl {
+    internal fun sendableUrl(url: String): SendableUrl {
         fun refuse(message: String) = SendableUrl(null, message)
         val scheme =
             ABSOLUTE.find(url)?.groupValues?.get(1)
@@ -1012,14 +1161,14 @@ public object Requests {
 
                 c.code > 0x7f -> {
                     val pair = c.isHighSurrogate() && i + 1 < target.length && target[i + 1].isLowSurrogate()
-                    val cp = if (pair) target.codePointAt(i) else c.code
+                    val cp = if (pair) target.codePointFrom(i) else c.code
                     // A surrogate without its partner goes out as U+FFFD, as TextEncoder sends it.
-                    val char = if (Character.isSurrogate(c) && !pair) "\uFFFD" else String(Character.toChars(cp))
+                    val char = if (c.isSurrogate() && !pair) "\uFFFD" else codePointString(cp)
                     if (i < authorityEnd) {
                         return refuse("The host holds $char, which cannot be sent as written. Write the host in its xn-- form.")
                     }
                     out.append(escape(char))
-                    i += Character.charCount(cp)
+                    i += charCount(cp)
                     continue
                 }
 
@@ -1047,9 +1196,9 @@ public object Requests {
             "The server sent no body with this $status, so the reason is in its log."
         }
 
-    private val PORT = Regex("""^:[0-9]*$""")
-    private val IPV4 = Regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
-    private val LABEL = Regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
+    private val PORT = regex("""^:[0-9]*$""")
+    private val IPV4 = regex("""^(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])(\.(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}$""")
+    private val LABEL = regex("""^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$""")
 
     /**
      * Why java.net.URI would read no host in [authority], or null when it reads one.
@@ -1064,12 +1213,12 @@ public object Requests {
         val hostEnd = if (bracketed) hostPort.indexOf(']') + 1 else hostPort.indexOf(':').let { if (it < 0) hostPort.length else it }
         val host = hostPort.substring(0, hostEnd)
         val port = hostPort.substring(hostEnd)
-        if (port.isNotEmpty() && !PORT.matches(port)) {
+        if (port.isNotEmpty() && PORT.matchEntire(port) == null) {
             return "The port in $hostPort is not a number. Is a / missing between the port and the path?"
         }
-        if (bracketed || IPV4.matches(host)) return null
+        if (bracketed || IPV4.matchEntire(host) != null) return null
         val labels = host.removeSuffix(".").split('.')
-        if (labels.all { LABEL.matches(it) } && (labels.size == 1 || labels.last()[0].isLetter())) return null
+        if (labels.all { LABEL.matchEntire(it) != null } && (labels.size == 1 || labels.last()[0].isLetter())) return null
         return "The host $host cannot be sent: " +
             "a host name holds only letters, digits, hyphens and dots, and its last part starts with a letter."
     }
@@ -1077,10 +1226,10 @@ public object Requests {
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
     /** UTF-8 escapes in capitals. */
-    private fun escape(s: String): String = s.toByteArray(Charsets.UTF_8).joinToString("") { "%%%02X".format(it.toInt() and 0xff) }
+    private fun escape(s: String): String = s.encodeToByteArray().joinToString("") { "%" + hex(it.toInt() and 0xff, 2).uppercase() }
 
     /**
-     * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.4), then the user's,
+     * The headers the inspector sends: the client's own (fetch.ts:81-88 in 1.0.5), then the user's,
      * which replace one of the same name. The client's `Object.assign` replaces only the same
      * spelling and `fetch` then joins the two values; the inspector sends the user's alone.
      */
@@ -1114,34 +1263,49 @@ public object Requests {
      * What is wrong with a configured requests-file path, or null: it has to stay inside the
      * project, since the setting may come from a checked-in file.
      */
-    public fun requestsPathProblem(path: String): String? =
+    public fun requestsPathProblem(path: String): String? = requestsPathProblem(path, "project")
+
+    /** The same, with [folder] as what the editor calls the folder the path starts from: a project, a workspace. */
+    public fun requestsPathProblem(
+        path: String,
+        folder: String,
+    ): String? =
         when {
-            empty(path) -> null
+            empty(path) -> {
+                null
+            }
 
-            path.startsWith(
-                "/",
-            ) ||
-                path.startsWith(
-                    "\\",
-                ) || DRIVE.containsMatchIn(path) -> "The requests file $path is not inside the project: use a project-relative path."
+            path.startsWith("/") || path.startsWith("\\") || DRIVE.containsMatchIn(path) -> {
+                "The requests file $path is not inside the $folder: use a $folder-relative path."
+            }
 
-            path.split('/', '\\').any { it == ".." } -> "The requests file $path leaves the project: use a path without .. in it."
+            path.split('/', '\\').any { it == ".." } -> {
+                "The requests file $path leaves the $folder: use a path without .. in it."
+            }
 
-            '\\' in path -> "The requests file $path holds a backslash: write the path with /."
+            '\\' in path -> {
+                "The requests file $path holds a backslash: write the path with /."
+            }
 
-            path.endsWith("/") -> "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+            path.endsWith("/") -> {
+                "The requests file $path names a folder: add a file name, such as ${path}inspector.json."
+            }
 
             path
                 .trim(' ', '\t', '\r', '\n')
                 .split('/')
                 .filter { it.isNotEmpty() && it != "." }
                 .joinToString("/")
-                .lowercase() == ENV_FILE -> "The requests file cannot be $ENV_FILE: that file holds the variables."
+                .lowercase() == ENV_FILE -> {
+                "The requests file cannot be $ENV_FILE: that file holds the variables."
+            }
 
-            else -> null
+            else -> {
+                null
+            }
         }
 
-    private val DRIVE = Regex("""^[A-Za-z]:""")
+    private val DRIVE = regex("""^[A-Za-z]:""")
 
     /**
      * The source text of `requests[index].signals`, or null when the file is not shaped that way.
@@ -1311,14 +1475,14 @@ public object Requests {
         val path = PATH_VARIABLE.replace(OPTIONAL_SEGMENT.replace(route.path, "")) { "{{${it.groupValues[1]}}}" }
         val query =
             route.query
-                .filter { it.required && PARAM_NAME.matches(it.name) }
+                .filter { it.required && PARAM_NAME.matchEntire(it.name) != null }
                 .joinToString("&") { "${encodeSegment(it.name)}={{${it.name}}}" }
         return "{{baseUrl}}$path" + if (query.isEmpty()) "" else "?$query"
     }
 
     /** The headers field for [route]: one `Name: {{Name}}` line per header it requires. */
     public fun routeHeaders(route: Route): String =
-        route.headers.filter { it.required && PARAM_NAME.matches(it.name) }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
+        route.headers.filter { it.required && PARAM_NAME.matchEntire(it.name) != null }.joinToString("\n") { "${it.name}: {{${it.name}}}" }
 
     /** What [routeUrl] and [routeHeaders] leave out because the route can do without it, by name. */
     public fun routeOptional(route: Route): List<String> =
@@ -1328,8 +1492,7 @@ public object Requests {
 
     /** `encodeURIComponent`: percent-encodes everything but the unreserved characters and `!'()*`. */
     private fun encodeSegment(s: String): String =
-        URLEncoder
-            .encode(ClientRequest.wellFormed(s), Charsets.UTF_8)
+        formEncoded(ClientRequest.wellFormed(s))
             .replace("+", "%20")
             .replace("%21", "!")
             .replace("%27", "'")
@@ -1363,3 +1526,9 @@ public object Requests {
             }
         }
 }
+
+/** A signal store after a patch: the [store] shown, and what the inspector says of the patch where it is not folded whole. */
+public class PatchedStore internal constructor(
+    public val store: JsonObject,
+    public val message: String?,
+)

@@ -1,23 +1,32 @@
 package io.github.markusaugust.streamlord.test
 
+import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import io.github.markusaugust.streamlord.core.json.toBigDecimalOrNull
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol.DataLines
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import io.github.markusaugust.streamlord.core.protocol.SseMessage
 import kotlin.reflect.KClass
+import kotlin.time.Duration
 
 /**
  * What a Datastar response said, ready to be asserted on.
@@ -71,7 +80,7 @@ public class DatastarEvents(
         store
     }
 
-    /** The client's merge, with the hole limit of the core function turned into the assertion it is here. */
+    /** The client's merge, with the empty slot limit of the core function turned into the assertion it is here. */
     private fun fold(
         target: JsonObject,
         patch: JsonObject,
@@ -92,6 +101,11 @@ public class DatastarEvents(
      * @param elements The markup, compared whole.
      * @param containing A fragment the markup must contain, for the common case where the whole
      *   of it is not the point.
+     * @param namespace The namespace; a patch sent without one matches [ElementNamespace.HTML].
+     * @param useViewTransition Whether the patch runs in a view transition.
+     * @param viewTransitionSelector The element the view transition runs on.
+     * @param eventId The SSE `id:` the frame carried.
+     * @param retry The SSE `retry:` the frame carried.
      * @return the matching patch, so a test can go on asserting on it with its own tools.
      */
     public fun assertPatchElements(
@@ -99,10 +113,14 @@ public class DatastarEvents(
         mode: ElementPatchMode? = null,
         elements: String? = null,
         containing: String? = null,
+        namespace: ElementNamespace? = null,
+        useViewTransition: Boolean? = null,
+        viewTransitionSelector: String? = null,
+        eventId: String? = null,
+        retry: Duration? = null,
     ): PatchElements {
-        val wanted = elementsWanted(selector, mode, elements, containing)
-        return events.filterIsInstance<PatchElements>().firstOrNull { it.matches(selector, mode, elements, containing) }
-            ?: fail("No element patch with $wanted")
+        val wanted = Wanted(selector, mode, elements, containing, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+        return events.filterIsInstance<PatchElements>().firstOrNull(wanted::matches) ?: fail("No element patch with $wanted")
     }
 
     /**
@@ -118,36 +136,53 @@ public class DatastarEvents(
         mode: ElementPatchMode? = null,
         elements: String? = null,
         containing: String? = null,
+        namespace: ElementNamespace? = null,
+        useViewTransition: Boolean? = null,
+        viewTransitionSelector: String? = null,
+        eventId: String? = null,
+        retry: Duration? = null,
     ) {
-        val found = events.filterIsInstance<PatchElements>().firstOrNull { it.matches(selector, mode, elements, containing) }
-        if (found != null) {
-            fail("Expected no element patch with ${elementsWanted(selector, mode, elements, containing)}, found ${describe(found)}")
-        }
+        val wanted = Wanted(selector, mode, elements, containing, namespace, useViewTransition, viewTransitionSelector, eventId, retry)
+        val found = events.filterIsInstance<PatchElements>().firstOrNull(wanted::matches)
+        if (found != null) fail("Expected no element patch with $wanted, found ${describe(found)}")
     }
 
-    private fun PatchElements.matches(
-        selector: String?,
-        mode: ElementPatchMode?,
-        elements: String?,
-        containing: String?,
-    ): Boolean =
-        (selector == null || this.selector == selector) &&
-            (mode == null || this.mode == mode) &&
-            (elements == null || this.elements == onWire(elements)) &&
-            (containing == null || this.elements?.contains(containing) == true)
+    /** What an element patch is asked to be; `null` asks nothing. */
+    private class Wanted(
+        val selector: String?,
+        val mode: ElementPatchMode?,
+        val elements: String?,
+        val containing: String?,
+        val namespace: ElementNamespace?,
+        val useViewTransition: Boolean?,
+        val viewTransitionSelector: String?,
+        val eventId: String?,
+        val retry: Duration?,
+    ) {
+        fun matches(patch: PatchElements): Boolean =
+            (selector == null || patch.selector == selector) &&
+                (mode == null || patch.mode == mode) &&
+                (elements == null || patch.elements == Wire.lines(elements).joinToString("\n")) &&
+                (containing == null || patch.elements?.contains(containing) == true) &&
+                (namespace == null || patch.namespace == namespace) &&
+                (useViewTransition == null || patch.useViewTransition == useViewTransition) &&
+                (viewTransitionSelector == null || patch.viewTransitionSelector == viewTransitionSelector) &&
+                (eventId == null || patch.eventId == eventId) &&
+                (retry == null || patch.retry == retry)
 
-    private fun elementsWanted(
-        selector: String?,
-        mode: ElementPatchMode?,
-        elements: String?,
-        containing: String?,
-    ): String =
-        listOfNotNull(
-            selector?.let { "selector $it" },
-            mode?.let { "mode ${it.wire}" },
-            elements?.let { "elements exactly $it" },
-            containing?.let { "elements containing $it" },
-        ).ifEmpty { listOf("any shape") }.joinToString(", ")
+        override fun toString(): String =
+            listOfNotNull(
+                selector?.let { "selector $it" },
+                mode?.let { "mode ${it.wire}" },
+                elements?.let { "elements exactly $it" },
+                containing?.let { "elements containing $it" },
+                namespace?.let { "namespace ${it.wire}" },
+                useViewTransition?.let { "useViewTransition $it" },
+                viewTransitionSelector?.let { "viewTransitionSelector $it" },
+                eventId?.let { "event id $it" },
+                retry?.let { "retry $it" },
+            ).ifEmpty { listOf("any shape") }.joinToString(", ")
+    }
 
     /**
      * One signal patch matching every argument given.
@@ -281,9 +316,6 @@ public class DatastarEvents(
             },
         )
 
-    /** Markup as the wire carries it: every kind of line break arrives as `\n`. */
-    private fun onWire(elements: String): String = Wire.lines(elements).joinToString("\n")
-
     /** Every failure prints the stream, because the first question is always what it did send. */
     private fun fail(what: String): Nothing = throw AssertionError(withStream(what))
 
@@ -311,6 +343,147 @@ public class DatastarEvents(
  * Read a Datastar response body back into the events it carried.
  *
  * Give it whatever your test host hands you: `client.get("/feed").bodyAsText()` on Ktor,
- * `response.contentAsString` on Spring's `MockHttpServletResponse`.
+ * `response.contentAsString` on Spring's `MockHttpServletResponse`. For an answer that is no
+ * stream, hand over its headers as well, to the other `datastarEvents`.
  */
 public fun datastarEvents(wire: String): DatastarEvents = DatastarEvents(SseDecoder.decode(wire), SseDecoder.messages(wire))
+
+/**
+ * Read any Datastar answer back into the events it carried, a stream or one that is no stream, by
+ * its content type, as Datastar's client reads it. [header] looks a response header up by its
+ * name, without regard to case: `response.headers::get` on Ktor, `response::getHeader` on Spring's
+ * `MockHttpServletResponse`.
+ *
+ * ```kotlin
+ * val response = client.get("/search")
+ * datastarEvents(response.bodyAsText(), response.headers::get).assertPatchElements(selector = "#results")
+ * ```
+ *
+ * `text/html` is one element patch, with the selector, mode, namespace and view transition the
+ * `datastar-*` headers give it, `application/json` one signal patch, with `datastar-only-if-missing`,
+ * and `text/javascript` the `<script>` the client appends to the head, with the attributes of
+ * `datastar-script-attributes`, which comes back as the element patch that does that, as a script
+ * on a stream comes back as the one that appends it to the body. The client finds each type
+ * anywhere in the `Content-Type`, in the case written there, and reads any other answer as a
+ * stream, as [datastarEvents] of the body does; a header with no value is no option. It acts on a
+ * `200` alone, which is the test's to check.
+ *
+ * @throws io.github.markusaugust.streamlord.core.DatastarEventValidationException for an answer the
+ *   client would reject, as [datastarEvents] of a stream does.
+ */
+public fun datastarEvents(
+    body: String,
+    header: (name: String) -> String?,
+): DatastarEvents {
+    val type = header("Content-Type").orEmpty()
+
+    // The data lines a stream would carry for what the headers say, as the client gathers them.
+    fun answer(
+        event: String,
+        content: String,
+        vararg options: Pair<String, String>,
+    ): DatastarEvents {
+        val data = options.mapNotNull { (line, name) -> header(name)?.takeIf { it.isNotEmpty() }?.let { "$line $it" } } + "$content $body"
+        return DatastarEvents(listOfNotNull(SseDecoder.event(SseMessage(event, null, null, data, emptyList()))), emptyList())
+    }
+    return when {
+        "text/html" in type -> {
+            answer(
+                DatastarProtocol.Events.PATCH_ELEMENTS,
+                DataLines.ELEMENTS,
+                DataLines.SELECTOR to DatastarProtocol.Headers.SELECTOR,
+                DataLines.MODE to DatastarProtocol.Headers.MODE,
+                DataLines.NAMESPACE to DatastarProtocol.Headers.NAMESPACE,
+                DataLines.USE_VIEW_TRANSITION to DatastarProtocol.Headers.USE_VIEW_TRANSITION,
+                DataLines.VIEW_TRANSITION_SELECTOR to DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR,
+            )
+        }
+
+        "application/json" in type -> {
+            answer(
+                DatastarProtocol.Events.PATCH_SIGNALS,
+                DataLines.SIGNALS,
+                DataLines.ONLY_IF_MISSING to DatastarProtocol.Headers.ONLY_IF_MISSING,
+            )
+        }
+
+        "text/javascript" in type -> {
+            val header = header(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES)?.takeIf { it.isNotEmpty() }
+            // The client runs nothing for a script of white space alone, and nothing at all when its header throws.
+            if (body.isBlank()) return DatastarEvents(emptyList(), emptyList())
+            val script = ExecuteScript(body, autoRemove = false, attributes = header?.let(::scriptAttributes).orEmpty())
+            DatastarEvents(listOf(PatchElements(script.scriptTag, selector = "head", mode = ElementPatchMode.APPEND)), emptyList())
+        }
+
+        else -> {
+            datastarEvents(body)
+        }
+    }
+}
+
+/**
+ * The attributes the client sets on a script from [header]: each entry `Object.entries` finds in
+ * what `JSON.parse` gives, a name in ASCII lower case, as `setAttribute` makes it on an HTML element, and a value
+ * made the string JavaScript's `String()` makes of it. A number or a boolean has none; anything
+ * else throws in the client, and the script is not run.
+ */
+private fun scriptAttributes(header: String): Map<String, String> {
+    fun refused(): Nothing =
+        throw DatastarEventValidationException("datastar-script-attributes throws in the client, which runs no script: $header")
+    val parsed =
+        try {
+            JsonParser.parse(header)
+        } catch (_: JsonParseException) {
+            refused()
+        }
+    return when (parsed) {
+        is JsonObject -> {
+            parsed.entries.associate { (name, value) ->
+                name.map { if (it in 'A'..'Z') it + 32 else it }.joinToString("") to
+                    jsString(value)
+            }
+        }
+
+        is JsonNumber, is JsonBoolean -> {
+            emptyMap()
+        }
+
+        is JsonArray -> {
+            if (parsed.isEmpty()) emptyMap() else refused()
+        }
+
+        is JsonString -> {
+            if (parsed.value.isEmpty()) emptyMap() else refused()
+        }
+
+        is JsonNull -> {
+            refused()
+        }
+    }
+}
+
+/** What JavaScript's `String()` makes of [value]: an array joined by commas, with null as nothing, an object `[object Object]`. */
+private fun jsString(value: JsonValue): String =
+    when (value) {
+        is JsonString -> value.value
+        is JsonNumber -> jsNumber(value.toDouble())
+        is JsonBoolean -> value.value.toString()
+        is JsonNull -> "null"
+        is JsonArray -> value.joinToString(",") { if (it is JsonNull) "" else jsString(it) }
+        is JsonObject -> "[object Object]"
+    }
+
+/** A number as JavaScript writes it: `1.5`, `100`, `1e-7`, `1e+21`. */
+private fun jsNumber(d: Double): String {
+    if (d == kotlin.math.floor(d) && kotlin.math.abs(d) < 1e21) return java.math.BigDecimal(d).toPlainString()
+    if (kotlin.math.abs(d) >= 1e-6 &&
+        kotlin.math.abs(d) < 1e21
+    ) {
+        return java.math
+            .BigDecimal(d.toString())
+            .stripTrailingZeros()
+            .toPlainString()
+    }
+    val (mantissa, exponent) = d.toString().split('E')
+    return mantissa.removeSuffix(".0") + "e" + (if (exponent.startsWith('-')) "" else "+") + exponent
+}

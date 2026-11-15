@@ -12,6 +12,7 @@
   </#list>
   <@lib.knapp data-on:click="x()" />                                 <#-- ingen markering (makrokall er ikke et element) -->
   [#if x]<i data-text="[=count]"></i>[/#if]                          <#-- ingen markering (klammesyntaks) -->
+  <span data-text="`Hei ${sak.navn!'ukjent'}`"></span>              <#-- ingen markering (FreeMarker skriver ${} før nettleseren, også i en JavaScript-malstreng) -->
   <div data-signal:foo="1"></div>                                    <#-- GUL: did you mean data-signals -->
   <div data-on="x()"></div>                                          <#-- RØD: data-on trenger nøkkel -->
 </div>

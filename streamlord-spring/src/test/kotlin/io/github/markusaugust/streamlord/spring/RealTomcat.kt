@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.spring
 
+import io.github.markusaugust.streamlord.wire.LOOPBACK
+import io.github.markusaugust.streamlord.wire.boundPort
 import jakarta.servlet.Filter
 import org.apache.catalina.startup.Tomcat
 import org.apache.coyote.http2.Http2Protocol
@@ -30,6 +32,8 @@ class RealTomcat(
     init {
         tomcat.setBaseDir(baseDir.toString())
         tomcat.setPort(0)
+        // On the loopback address alone, which the tests read from; Loopback.kt in conformance/wire has why.
+        tomcat.connector.setProperty("address", LOOPBACK)
         // HTTP/2 over plain HTTP, reached by an upgrade from HTTP/1.1, as Java's client asks for it.
         if (http2) tomcat.connector.addUpgradeProtocol(Http2Protocol())
         val context = tomcat.addContext("", null)
@@ -59,14 +63,14 @@ class RealTomcat(
             )
         }
         tomcat.start()
-        port = tomcat.connector.localPort
+        port = boundPort(tomcat.connector.localPort, "Tomcat")
     }
 
     /** The response to a GET of [path], its body as lines, read as they arrive. */
     fun get(path: String): HttpResponse<java.util.stream.Stream<String>> =
         HttpClient
             .newHttpClient()
-            .send(HttpRequest.newBuilder(URI("http://localhost:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
+            .send(HttpRequest.newBuilder(URI("http://$LOOPBACK:$port$path")).build(), HttpResponse.BodyHandlers.ofLines())
 
     /**
      * The lines of the body of [path] until it ends. A stream that Spring's timeout cuts can end

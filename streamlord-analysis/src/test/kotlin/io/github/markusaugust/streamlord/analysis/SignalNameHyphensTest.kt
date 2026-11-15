@@ -9,7 +9,7 @@ class SignalNameHyphensTest {
 
     @Test
     fun `a hyphen in a signal name`() {
-        for (case in twinCases("signal-name-hyphens.json")) {
+        for (case in sharedCases("signal-name-hyphens.json")) {
             val name = case.string("name")
             val src = case.string("src")!!
             val issues = analyzer.analyzeKotlin(src).filter { it.code == "signal-name-hyphen" }

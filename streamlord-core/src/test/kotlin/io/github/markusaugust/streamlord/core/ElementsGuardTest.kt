@@ -83,6 +83,10 @@ class ElementsGuardTest {
                 """<div data-star-shw:x="1"></div>""" to ("data-star-shw:x" to "data-star-show:x"),
                 """<div data-star-shw="1"></div>""" to null,
                 """<div data-Bind="x"></div>""" to null,
+                // Two letters swapped is one slip too, where a key says Datastar was meant; a bare name is left to the author.
+                """<div data-no:click="x()"></div>""" to ("data-no:click" to "data-on:click"),
+                """<div data-shwo__once="x"></div>""" to ("data-shwo__once" to "data-show__once"),
+                """<div data-persits data-shwo="x"></div>""" to null,
             )
         for ((html, expected) in typos) {
             if (expected == null) {
@@ -127,8 +131,8 @@ class ElementsGuardTest {
         val aliased = listOf("data-ds-") + ElementsGuard.defaultPrefixes
         assertFailsWith<InterpolatedExpressionException> { ElementsGuard.check("""<div data-ds-text=""></div>""", aliased) }
         val guarded = Streamlord(guardElements = true, attributePrefixes = aliased)
-        assertFailsWith<InterpolatedExpressionException> { guarded.guard(PatchElements("""<div data-ds-text=""></div>""")) }
-        Streamlord(guardElements = true).guard(PatchElements("""<div data-ds-text=""></div>"""))
+        assertFailsWith<InterpolatedExpressionException> { guarded.guard(PatchElements("""<div id="a" data-ds-text=""></div>""")) }
+        Streamlord(guardElements = true).guard(PatchElements("""<div id="a" data-ds-text=""></div>"""))
     }
 
     @Test

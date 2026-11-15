@@ -8,7 +8,6 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonWriter
-import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -98,13 +97,12 @@ class JsonTest {
                     "list" to listOf(1, "two"),
                     "arr" to intArrayOf(3),
                     "map" to mapOf("k" to "v"),
-                    "enum" to Thread.State.NEW,
-                    "dec" to BigDecimal("1.10"),
+                    "enum" to RegexOption.MULTILINE,
                     "c" to 'c',
                 ),
             )
         assertEquals(
-            """{"s":"x","i":1,"l":2,"d":1.5,"b":true,"n":null,"list":[1,"two"],"arr":[3],"map":{"k":"v"},"enum":"NEW","dec":1.10,"c":"c"}""",
+            """{"s":"x","i":1,"l":2,"d":1.5,"b":true,"n":null,"list":[1,"two"],"arr":[3],"map":{"k":"v"},"enum":"MULTILINE","c":"c"}""",
             json,
         )
     }
@@ -137,6 +135,20 @@ class JsonTest {
         )
         assertFailsWith<SignalsCodecException> { JsonWriter.write(Sorcerer("x")) }
         assertFailsWith<SignalsCodecException> { JsonWriter.write(Double.NaN) }
+    }
+
+    /** The class is named alike on every platform, a local one too, where the JVM has no qualified name. */
+    @Test
+    fun `the refusal names the class it cannot hold by its simple name`() {
+        class Sorcerer(
+            val name: String,
+        )
+        val instead = "Use a Map, or configure a SignalsCodec adapter (streamlord-json-kotlinx or streamlord-json-jackson)."
+        assertEquals(
+            "JSON cannot hold Sorcerer. $instead",
+            assertFailsWith<SignalsCodecException> { JsonWriter.write(Sorcerer("x")) }.message,
+        )
+        assertEquals("JSON cannot hold Pair. $instead", assertFailsWith<SignalsCodecException> { JsonWriter.write(1 to 2) }.message)
     }
 
     @Test

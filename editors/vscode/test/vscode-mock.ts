@@ -31,7 +31,7 @@ export const CompletionItemKind = {
 } as const;
 
 export class CompletionItem {
-  label: string;
+  label: string | { label: string; detail?: string; description?: string };
   kind?: number;
   detail?: string;
   documentation?: unknown;
@@ -39,7 +39,7 @@ export class CompletionItem {
   insertText?: unknown;
   sortText?: string;
   filterText?: string;
-  constructor(label: string, kind?: number) {
+  constructor(label: string | { label: string; detail?: string; description?: string }, kind?: number) {
     this.label = label;
     this.kind = kind;
   }
@@ -61,8 +61,10 @@ export class MarkdownString {
 
 export class ParameterInformation {
   label: string | [number, number];
-  constructor(label: string | [number, number]) {
+  documentation?: string | MarkdownString;
+  constructor(label: string | [number, number], documentation?: string | MarkdownString) {
     this.label = label;
+    this.documentation = documentation;
   }
 }
 
@@ -195,12 +197,33 @@ export class WorkspaceEdit {
   }
 }
 
+/** The kinds a code action provider names: a quick fix on a diagnostic, and the refactorings a caret is offered without one. */
+export const CodeActionKind = {
+  Empty: { value: "" },
+  QuickFix: { value: "quickfix" },
+  Refactor: { value: "refactor" },
+  RefactorRewrite: { value: "refactor.rewrite" },
+} as const;
+
+export class CodeAction {
+  title: string;
+  kind?: { value: string };
+  edit?: WorkspaceEdit;
+  diagnostics?: unknown[];
+  isPreferred?: boolean;
+  constructor(title: string, kind?: { value: string }) {
+    this.title = title;
+    this.kind = kind;
+  }
+}
+
 export const workspace = {
   onDidSaveTextDocument: noop,
   onDidChangeTextDocument: noop,
   onDidDeleteFiles: noop,
   onDidRenameFiles: noop,
   onDidCloseTextDocument: noop,
+  onDidOpenTextDocument: noop,
   onDidChangeConfiguration: noop,
   createFileSystemWatcher: () => ({ onDidChange: noop, onDidCreate: noop, onDidDelete: noop, dispose: () => {} }),
   findFiles: async (): Promise<MockUri[]> => [],

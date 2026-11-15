@@ -54,7 +54,7 @@ dependencies {
  * catches a renamed function or a changed parameter on a page that still shows the old call.
  *
  * The marker is mandatory. A block without `sample=` fails the build rather than being
- * skipped quietly, because a net with holes you cannot see is worse than no net at all.
+ * skipped quietly, because a net with gaps you cannot see is worse than no net at all.
  */
 abstract class ExtractDocSamples : DefaultTask() {
     @get:InputDirectory
@@ -119,7 +119,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         when (context) {
             "ktor-routing" ->
                 "import io.ktor.http.*\nimport io.ktor.server.application.*\nimport io.ktor.server.http.*\nimport io.ktor.server.routing.*\n" +
-                    "import io.ktor.server.response.*\nimport io.ktor.utils.io.*\n$imports\n\n" +
+                    "import io.ktor.server.response.*\nimport io.ktor.server.request.receiveParameters\nimport io.ktor.utils.io.*\n$imports\n\n" +
                     "fun io.ktor.server.routing.Route.$name() {\n$body\n}\n"
             "ktor-application" ->
                 "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
@@ -130,6 +130,7 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import org.springframework.http.ResponseEntity\n" +
                     "import org.springframework.http.codec.ServerSentEvent\n" +
                     "import org.springframework.context.annotation.*\n" +
+                    "import org.springframework.web.server.ServerWebExchange\n" +
                     "import jakarta.servlet.http.HttpServletRequest\n" +
                     "import jakarta.servlet.http.HttpServletResponse\n$imports\n\n" +
                     "class $name {\n$body\n}\n"
@@ -815,6 +816,7 @@ val checkKotlinFloor =
                     "-jvm-target",
                     "17",
                     "-Xjsr305=strict",
+                    "-Werror",
                     "-Xplugin=" + plugins.singleFile.absolutePath,
                     "-classpath",
                     compileClasspath.asPath,

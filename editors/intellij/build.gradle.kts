@@ -123,8 +123,6 @@ intellijPlatform {
 tasks {
     test {
         useJUnit()
-        // `-PkotlinK1` runs the tests with the Kotlin plugin in K1 mode, which reads types its own way.
-        if (providers.gradleProperty("kotlinK1").isPresent) systemProperty("idea.kotlin.plugin.use.k1", "true")
         testLogging {
             events("failed", "skipped")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
@@ -306,6 +304,11 @@ val generateHtmlLiveTemplates = tasks.register("generateHtmlLiveTemplates") {
         f.parentFile.mkdirs()
         f.writeText(sb.toString())
     }
+}
+
+// assertGrowsLinearly, which the SDK's tests use too.
+sourceSets.test {
+    kotlin.srcDir(layout.projectDirectory.dir("../../streamlord-core/src/testCommon/kotlin"))
 }
 
 sourceSets.main {

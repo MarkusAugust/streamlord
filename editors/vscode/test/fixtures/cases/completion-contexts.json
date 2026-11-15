@@ -1,0 +1,289 @@
+{
+  "$comment": "What completion offers where a caret stands in markup, read as the browser reads it: the markup is before + after, the caret between them, prefix the attribute prefix (data- when left out), and a workspace that defines the signal count. A quoted attribute value is an expression to complete in, element text, a comment, raw text and the space between attributes are not, and an attribute name gets its modifiers from the tag it stands in. templates false reads the markup as an HTML string in Kotlin does, without template comments. labels are the items in order, alone whether no other completion belongs there.",
+  "cases": [
+    {
+      "name": "a value over several lines",
+      "before": "<div data-signals=\"{\n  user: {name: '',\n    age: $",
+      "after": "}}\"></div>",
+      "labels": [
+        "$user",
+        "$user.age",
+        "$user.name",
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a value in single quotes",
+      "before": "<div data-text='$cou",
+      "after": "'></div>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "character references are decoded",
+      "before": "<div data-show=\"$a &amp;&amp; $",
+      "after": "\"></div>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "the attribute the caret is in, not the first",
+      "before": "<div data-text=\"$count\" data-on:click=\"@get('/x', {ret",
+      "after": "})\"></div>",
+      "labels": [
+        "contentType",
+        "filterSignals",
+        "headers",
+        "openWhenHidden",
+        "payload",
+        "requestCancellation",
+        "retry",
+        "retryInterval",
+        "retryMaxCount",
+        "retryMaxWait",
+        "retryScaler",
+        "selector"
+      ],
+      "alone": true,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 1
+      }
+    },
+    {
+      "name": "a value the markup does not close yet",
+      "before": "<div data-text=\"$cou",
+      "after": "",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "template syntax in the value stays in it",
+      "before": "<div data-text=\"{{ x }} $c",
+      "after": "\"></div>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "any attribute is named, Datastar's or not",
+      "before": "<a href=\"/x",
+      "after": "\">",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "the aliased prefix",
+      "prefix": "data-star-",
+      "before": "<div data-star-text=\"$c",
+      "after": "\"></div>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "element text is no value",
+      "before": "<div data-text=\"$count\">$",
+      "after": "</div>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "between two attributes is no value",
+      "before": "<div data-text=\"$count\" ",
+      "after": "></div>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "markup in a script is text of the script",
+      "before": "<script>let a = '<div data-text=\"$x",
+      "after": "\"></div>'\n</script>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "markup in a comment is no markup",
+      "before": "<!-- <div data-text=\"$c",
+      "after": "\"></div> -->",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a textarea's content is text, not markup",
+      "before": "<textarea><i data-text=\"1 + $",
+      "after": "\"></i></textarea>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a title's content is text, not markup",
+      "before": "<title><i data-text=\"$",
+      "after": "\"></i></title>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "in an svg a textarea is svg's, and an i after it is HTML again",
+      "before": "<svg><textarea><i data-text=\"$",
+      "after": "\"></i></textarea></svg>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a value after a closed textarea is markup again",
+      "before": "<textarea></textarea><i data-text=\"$",
+      "after": "\"></i>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a value after a closed title is markup again",
+      "before": "<title>x</title><i data-text=\"$",
+      "after": "\"></i>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a textarea in capitals is a textarea",
+      "before": "<TEXTAREA><i data-text=\"$",
+      "after": "\"></i></TEXTAREA>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a noscript holds elements, as a patch is parsed with scripting off",
+      "before": "<noscript><i data-text=\"$",
+      "after": "\"></i></noscript>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "in an svg a title is svg's, and an i after it is HTML again",
+      "before": "<svg><title><i data-text=\"$",
+      "after": "\"></i></title></svg>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "the tag of a name over three lines",
+      "before": "<input\n  type=\"search\"\n  data-bind:query\n  data-on:input__",
+      "after": ">",
+      "labels": [
+        "capture",
+        "case",
+        "debounce",
+        "delay",
+        "document",
+        "once",
+        "outside",
+        "passive",
+        "prevent",
+        "stop",
+        "throttle",
+        "viewtransition",
+        "window"
+      ],
+      "alone": true
+    },
+    {
+      "name": "no tag in a quoted value",
+      "before": "<div data-text=\"$a",
+      "after": "\"></div>",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "no tag in text",
+      "before": "<p>x</p> data-on:click__",
+      "after": "",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "no tag in a comment",
+      "before": "<!-- <div data-on:click__",
+      "after": " -->",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "no tag in a script's text",
+      "before": "<script>if (a<b && data-on:click__",
+      "after": "</script>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "the tag after a textarea holding <b",
+      "before": "<textarea><b</textarea>\n<div data-on:click__",
+      "after": "></div>",
+      "labels": [
+        "capture",
+        "case",
+        "debounce",
+        "delay",
+        "document",
+        "once",
+        "outside",
+        "passive",
+        "prevent",
+        "stop",
+        "throttle",
+        "viewtransition",
+        "window"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a template comment is skipped with templates",
+      "before": "{{!-- <i --}}<div data-on:click__",
+      "after": "></div>",
+      "labels": [
+        "capture",
+        "case",
+        "debounce",
+        "delay",
+        "document",
+        "once",
+        "outside",
+        "passive",
+        "prevent",
+        "stop",
+        "throttle",
+        "viewtransition",
+        "window"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a template comment opens a tag without templates",
+      "templates": false,
+      "before": "{{!-- <i --}}<div data-on:click__",
+      "after": "></div>",
+      "labels": [],
+      "alone": false
+    }
+  ]
+}

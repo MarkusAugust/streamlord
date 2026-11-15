@@ -41,10 +41,7 @@ import io.github.markusaugust.streamlord.analysis.RequestsFile
 import io.github.markusaugust.streamlord.analysis.SavedRequest
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
-import io.github.markusaugust.streamlord.core.json.SignalPatchException
-import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -90,7 +87,7 @@ class InspectorPanel(
     private val client = StreamClient(scope)
 
     /** The variables as last read, off the UI thread; what the form shows. Connect and the curl export read them again first. */
-    private var environment = RequestStore.Environment(emptyList(), emptyList())
+    private var environment = Requests.Environment(emptyList(), emptyList())
 
     /** The request to select once the list is read again, and the read under way. */
     private var selecting: SavedRequest? = null
@@ -544,7 +541,7 @@ class InspectorPanel(
 
     private fun show(
         file: RequestsFile,
-        env: RequestStore.Environment,
+        env: Requests.Environment,
         pathProblem: String?,
     ) {
         val saved = file.requests
@@ -677,10 +674,8 @@ class InspectorPanel(
 
     private fun send(raw: SavedRequest) {
         val (request, vars) = resolve(raw, sending = true) ?: return
-        try {
-            JsonParser.parse(Requests.compactSignals(request.signals))
-        } catch (e: Exception) {
-            failed(request.url, "Signals are not valid JSON: ${e.message}")
+        Requests.signalsProblem(request.signals)?.let {
+            failed(request.url, it)
             return
         }
         store.addRecent(raw)
@@ -801,32 +796,14 @@ class InspectorPanel(
         ToolWindowManager.getInstance(project).invokeLater(block)
     }
 
-    /** The store as the client would hold it after this frame, see [mergePatchAsClient]; `onlyIfMissing` is read as the client reads it (patchSignals.ts:16, text.ts:24 in 1.0.4). */
+    /** The store as the client would hold it after this frame, see [Requests.patchedStore]; a patch that is no JSON is shown raw in the frame itself. */
     private fun applyFrame(frame: DatastarFrame) {
         if (frame.event != "datastar-patch-signals") return
         val text = frame.args["signals"] ?: return
-        val patch =
-            try {
-                JsonParser.parse(text)
-            } catch (_: Exception) {
-                // invalid JSON in the stream is shown raw in the frame itself
-                return
-            }
-        try {
-            signals = mergePatchAsClient(signals, patch, isStringTrue(frame.args["onlyIfMissing"]))
-            storeView.text = pretty(signals)
-        } catch (e: SignalPatchException) {
-            // The client keeps the keys it set before the one it failed on, and so does the store
-            // shown. A throw also leaves its update batch open (signals.ts:695-708), so the bindings
-            // on the page stop redrawing.
-            signals = e.store
-            storeView.text = pretty(signals)
-            if (e.refused) {
-                error("Streamlord refuses this signal patch on purpose: ${e.message}. $REFUSED")
-            } else {
-                error("The signal store cannot take this patch: ${e.message}. $CLIENT_THROWS")
-            }
-        }
+        val patched = Requests.patchedStore(signals, text, frame.args["onlyIfMissing"]) ?: return
+        signals = patched.store
+        storeView.text = cut(pretty(signals))
+        patched.message?.let(::error)
     }
 
     // ---- rendering -----------------------------------------------------------------------------
@@ -1017,7 +994,7 @@ class InspectorPanel(
                 for ((k, v) in rows) {
                     row(k) {
                         cell(
-                            JBTextArea(v).mono().apply {
+                            JBTextArea(cut(v)).mono().apply {
                                 isEditable = false
                                 isOpaque = false
                                 border = JBUI.Borders.empty()
@@ -1031,6 +1008,14 @@ class InspectorPanel(
         card.add(body, BorderLayout.CENTER)
         return card
     }
+
+    /** [value] with each line cut at [MAX_SHOWN] characters: Swing wraps a line by measuring it, and a line of 1.2 MB held the IDE for 45 seconds. */
+    private fun cut(value: String): String =
+        if (value.length <= MAX_SHOWN) {
+            value
+        } else {
+            value.split('\n').joinToString("\n") { if (it.length <= MAX_SHOWN) it else it.take(MAX_SHOWN) + CUT }
+        }
 
     /**
      * Swing renders a label whose text starts with `<html>` as HTML, images and all. Event names,
@@ -1049,6 +1034,8 @@ class InspectorPanel(
 
     companion object {
         private const val MAX_FRAMES = 500
+        private const val MAX_SHOWN = 10_000
+        private const val CUT = "\n\n(cut at 10,000 characters)"
         private const val MODIFIED = "● modified"
 
         /** What a field of the form asks for; each is given the width there is, and asks for little so a narrow panel can hold it. */
@@ -1061,26 +1048,12 @@ class InspectorPanel(
         private const val LOG_GRACE_MS = 400L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
 
-        private const val CLIENT_THROWS =
-            "Datastar's client throws on it too, and the bindings already on the page then stop redrawing until it is " +
-                "reloaded, though the signals still change, element patches still land and new bindings show the current value."
-        private const val REFUSED = "The store shown keeps the keys before it."
-
         fun time(at: Long): String = TIME.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 
         fun suggestName(r: SavedRequest): String =
             runCatching {
                 "${r.method} ${java.net.URI(r.url.replace(Regex("""\{\{[^}]+\}\}"""), "http://x")).path}"
             }.getOrDefault("${r.method} ${r.url}")
-
-        /**
-         * `isStringTrue` in the client's utils/text.ts: `"true"` after JavaScript's `trim()`, which
-         * also takes U+FEFF and, unlike Kotlin's, leaves U+001C to U+001F.
-         */
-        fun isStringTrue(value: String?): Boolean = value != null && value.trim(::isJsSpace) == "true"
-
-        private fun isJsSpace(c: Char): Boolean =
-            c in "\t\n\u000B\u000C\r\uFEFF\u2028\u2029" || Character.getType(c) == Character.SPACE_SEPARATOR.toInt()
 
         /** Two-space indented JSON, as the VS Code inspector shows it. */
         fun pretty(

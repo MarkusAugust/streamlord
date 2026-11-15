@@ -54,6 +54,9 @@ class InterpolationTest {
                 """<li data-bind="%s"></li>""",
                 """<li data-ref="%s"></li>""",
                 """<li data-indicator="%s"></li>""",
+                // Pro's media query, which the reference writes as a string literal: Pro may run it.
+                """<li data-match-media:dark="%s"></li>""",
+                """<li data-match-media:dark="'%s'"></li>""",
             )
 
         for (markup in attributes) {
@@ -61,6 +64,14 @@ class InterpolationTest {
             assertEquals(Position.DATASTAR, failure.position, markup)
             assertTrue("reads as an expression or follows as a signal path" in failure.message!!, failure.message!!)
         }
+    }
+
+    @Test
+    fun `a value refused in a media query is told to be written in the format or set with the DSL`() {
+        val failure = assertFailsWith<UnsafeInterpolationException> { render("""<li data-match-media:dark="'%s'"></li>""", "x") }
+        assertTrue("the query into the markup" in failure.message!!, failure.message!!)
+        assertTrue("dataMatchMedia" in failure.message!!, failure.message!!)
+        assertTrue("data-label" !in failure.message!!, failure.message!!)
     }
 
     // The client reads these as they stand (csp.ts, patchElements.ts, engine.ts), so escaping holds.
@@ -147,6 +158,52 @@ class InterpolationTest {
     }
 
     @Test
+    fun `the message for a Datastar expression advises only what interpolate takes`() {
+        val message = assertFailsWith<UnsafeInterpolationException> { render("""<li data-text="%s"></li>""", "x") }.message!!
+
+        assertTrue("data-" in message && "el.dataset" in message, message)
+        // A string written into data-signals is refused by the same rule, so that way is none.
+        assertFailsWith<UnsafeInterpolationException> { render("""<li data-signals="{label: '%s'}"></li>""", "x") }
+        // Each way the message may name, by the words that name it, built as it says.
+        val ways =
+            mapOf<String, () -> String>(
+                "el.dataset" to { render("""<li data-label="%s" data-text="el.dataset.label"></li>""", "x") },
+                "in a signal" to { render("""<li data-signals="{label: '%s'}" data-text="${'$'}label"></li>""", "x") },
+                "signal name" to { render("""<li data-label="%s" data-text="${'$'}label"></li>""", "x") },
+                "Number" to { render("""<li data-text="%s"></li>""", 3) },
+                "Boolean" to { render("""<li data-text="%s"></li>""", true) },
+            )
+        for ((words, way) in ways) if (words in message) way()
+    }
+
+    @Test
+    fun `a value that is a list or an array is one value, written in brackets with each element escaped`() {
+        val two = listOf("a", "<b>")
+        assertEquals("<p>[a, &lt;b&gt;]</p>", interpolate("<p>%s</p>", two).text)
+        assertEquals("<p>[x]</p>", interpolate("<p>%s</p>", listOf("x")).text)
+        assertEquals("<p>[]</p>", interpolate("<p>%s</p>", emptyList<String>()).text)
+        assertEquals("<p>[1, 2]</p>", interpolate("<p>%s</p>", setOf(1, 2)).text)
+        val array = arrayOf("a", "b")
+        // A template writes an array as its class and hash; interpolate writes it as it writes a list.
+        assertEquals("<p>[a, b]</p>", interpolate("<p>%s</p>", array as Any?).text)
+        assertEquals("<p>[&lt;b&gt;]</p>", interpolate("<p>%s</p>", arrayOf("<b>") as Any?).text)
+        assertEquals("<p title=\"[1, 2]\">[true]</p>", interpolate("<p title=\"%s\">%s</p>", intArrayOf(1, 2), booleanArrayOf(true)).text)
+        assertEquals("<p>[[a], [1]] [a]</p>", interpolate("<p>%s %s</p>", arrayOf<Any>(arrayOf("a"), intArrayOf(1)), charArrayOf('a')).text)
+        // Spread, its elements are the values.
+        assertEquals("<p>a b</p>", interpolate("<p>%s %s</p>", *array).text)
+        assertEquals("<p>a &lt;b&gt;</p>", interpolate("<p>%s %s</p>", *two.toTypedArray()).text)
+    }
+
+    @Test
+    fun `a list handed over for several placeholders is said to be one value, to be spread`() {
+        val failure = assertFailsWith<IllegalArgumentException> { interpolate("<p>%s %s</p>", listOf("a", "b")) }
+        assertTrue("2 %s placeholders and 1 value" in failure.message!!, failure.message!!)
+        assertTrue("*values.toTypedArray()" in failure.message!!, failure.message!!)
+        val plain = assertFailsWith<IllegalArgumentException> { interpolate("<p>%s %s</p>", "a") }
+        assertTrue("toTypedArray" !in plain.message!!, plain.message!!)
+    }
+
+    @Test
     fun `the index names which value was refused`() {
         val failure =
             assertFailsWith<UnsafeInterpolationException> {
@@ -157,7 +214,7 @@ class InterpolationTest {
     }
 
     @Test
-    fun `a miscounted hole fails here rather than quietly`() {
+    fun `a miscounted placeholder fails here rather than quietly`() {
         assertFailsWith<IllegalArgumentException> { render("<li>%s</li>") }
         assertFailsWith<IllegalArgumentException> { render("<li>%s</li>", "a", "b") }
         assertTrue(
@@ -180,7 +237,7 @@ class InterpolationTest {
     }
 
     @Test
-    fun `only a per cent and an s is a hole, so css and escaped urls need no ceremony`() {
+    fun `only a per cent and an s is a placeholder, so css and escaped urls need no ceremony`() {
         assertEquals("""<div style="width: 50%">x</div>""", render("""<div style="width: 50%">%s</div>""", "x"))
         assertEquals("""<a href="/a%20b">x</a>""", render("""<a href="/a%20b">%s</a>""", "x"))
     }
@@ -197,7 +254,7 @@ class InterpolationTest {
     }
 
     @Test
-    fun `markup with no holes is returned as it stands`() {
+    fun `markup with no placeholders is returned as it stands`() {
         assertEquals("<li>x</li>", render("<li>x</li>"))
         assertEquals("", render(""))
     }
@@ -281,7 +338,7 @@ class InterpolationTest {
                 """<svg><script href="%s"></script></svg>""",
             )
         for (f in loaders) {
-            // The literal before the hole settles the host: a path, a full origin, a same document.
+            // The literal before the placeholder settles the host: a path, a full origin, a same document.
             render(f.replace("""="%s"""", """="https://cdn.example/%s""""), "x")
             render(f.replace("""="%s"""", """="/app/%s""""), "x")
             render(f.replace("""="%s"""", """="#%s""""), "x")
@@ -298,7 +355,7 @@ class InterpolationTest {
 
     // The markup already chose where the URL points; the value only fills in a part of it.
     @Test
-    fun `a hole further into a url is an ordinary attribute`() {
+    fun `a placeholder further into a url is an ordinary attribute`() {
         assertEquals("""<a href="/heads/javascript:1">x</a>""", render("""<a href="/heads/%s">x</a>""", "javascript:1"))
     }
 
@@ -316,10 +373,10 @@ class InterpolationTest {
     }
 
     // Inside <svg>, a <![CDATA[ is a section the browser reads as text; once </svg> returns to
-    // HTML, the same bytes are a bogus comment the first > ends, and a hole after it is a live tag.
+    // HTML, the same bytes are a bogus comment the first > ends, and a placeholder after it is a live tag.
     // No one fixed reading of the markup sees both, so the scanner follows the element stack.
     @Test
-    fun `a hole the browser reaches only after svg closes is refused`() {
+    fun `a placeholder the browser reaches only after svg closes is refused`() {
         val e =
             assertFailsWith<UnsafeInterpolationException> {
                 render("<svg><![CDATA[><!--]]></svg><![CDATA[><img %s>-->]]>", "src=x onerror=alert(1)")
@@ -439,4 +496,4 @@ private fun render(
     format: String,
     values: List<Any?>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
-): String = interpolate(format, values, prefixes).text
+): String = interpolate(prefixes, format, *values.toTypedArray()).text

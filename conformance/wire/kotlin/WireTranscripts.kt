@@ -131,6 +131,7 @@ object WireCases {
             mode = ElementPatchMode.APPEND,
             namespace = ElementNamespace.SVG,
             useViewTransition = true,
+            viewTransitionSelector = "#sky",
         )
 
     val signalsResponse = SignalsResponse("""{"hp":100}""", onlyIfMissing = true)

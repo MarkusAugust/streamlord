@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.html.pro
 
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
@@ -20,6 +21,7 @@ import kotlinx.html.div
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -63,6 +65,13 @@ class CatalogTest {
                 if (pro) assertTrue(fn !in freeAttributeFns, "pro attribute function $fn must not exist in the free module")
             }
         }
+    }
+
+    @Test
+    fun `the types of intl are the catalog's, in its order`() {
+        val intl = catalog.array("actions")!!.objects().single { it.string("name") == "intl" }
+        val types = (intl.array("values")!!.first() as JsonArray).strings()
+        assertEquals(types, IntlType.entries.map { it.wire })
     }
 
     @Test
@@ -136,7 +145,14 @@ class CatalogTest {
                 .filter { it.type == String::class.java }
                 .map { it.get(null) as String }
                 .toSet()
-        assertEquals(events, catalog.array("fetchEvents")!!.strings().toSet())
+        assertEquals(
+            events,
+            catalog
+                .array("fetchEvents")!!
+                .objects()
+                .map { it.string("name") }
+                .toSet(),
+        )
         val sse = catalog.obj("sse")!!
         assertEquals(ElementPatchMode.entries.map { it.wire }, sse.array("patchModes")!!.strings())
         assertEquals(ElementNamespace.entries.map { it.wire }, sse.array("namespaces")!!.strings())
@@ -209,30 +225,54 @@ class CatalogTest {
         assertEquals("foo-bar", Casing.plainKey("fooBar"))
     }
 
+    // The SSE calls, core's events, the analysis's EventCallsJvmTest holds to the API dumps.
     @Test
     fun `every kotlin call site the editor validates exists`() {
         val sites = catalog.obj("kotlinCallSites")!!
         val known =
             freeAttributeFns + proAttributeFns + freeActionFns + proActionFns + expressionFns +
-                methods("io.github.markusaugust.streamlord.html.ElementsKt") +
-                methods("io.github.markusaugust.streamlord.core.port.driving.DatastarStream") +
-                setOf(
-                    "PatchElements",
-                    "ElementsResponse",
-                    "ExecuteScript",
-                    "respondElements",
-                    "respondScript",
-                    "datastarElements",
-                    "datastarScript",
-                    // The adapters' own, which this module does not see: Ktor's and Spring's.
-                    "respondSignals",
-                    "datastarSignals",
-                )
-        for (group in listOf("expression", "html", "script", "selector", "signals", "signalNames")) {
+                methods("io.github.markusaugust.streamlord.html.ElementsKt")
+        for (group in listOf("expression", "signals", "signalNames")) {
             for (fn in sites.obj(group)!!.keys.filter { !it.startsWith("$") }) {
                 assertTrue(fn in known, "call site $fn in group $group does not exist in the SDK")
             }
         }
+    }
+
+    /**
+     * Every helper of the DSL whose name says it takes an expression, `getExpr` and the rest, is an
+     * expression call site, with each of its String parameters the expression the editors read; and
+     * every option of FetchOptions that does is one of the expression options.
+     */
+    @Test
+    fun `every expression helper and expression option of the dsl is where the editors read an expression`() {
+        val expression = catalog.obj("kotlinCallSites")!!.obj("expression")!!
+        val helpers =
+            listOf("io.github.markusaugust.streamlord.html.ActionsKt", "io.github.markusaugust.streamlord.html.pro.ProActionsKt")
+                .flatMap { Class.forName(it).methods.toList() }
+                .filter {
+                    it.name.endsWith("Expr") &&
+                        java.lang.reflect.Modifier
+                            .isStatic(it.modifiers)
+                }
+        assertTrue(helpers.size >= 9, "found ${helpers.map { it.name }}")
+        for (fn in helpers) {
+            val spec = assertNotNull(expression.obj(fn.name), "${fn.name} is no expression call site")
+            val strings = fn.parameters.count { it.type == String::class.java }
+            assertEquals(strings, 1 + (spec.array("more")?.size ?: 0), "${fn.name}: how many of its parameters are expressions")
+        }
+        val options =
+            FetchOptions::class.java.methods
+                .map { it.name }
+                .filter { it.startsWith("set") && it.contains("Expr") }
+                .map { it.removePrefix("set").replaceFirstChar(Char::lowercaseChar) }
+        val listed =
+            catalog
+                .obj("kotlinCallSites")!!
+                .obj("expressionOptions")!!
+                .keys
+                .filter { !it.startsWith("$") }
+        assertEquals(options.sorted(), listed.sorted())
     }
 
     /** `keyIsAttributeName` is the flag of exactly the raw-key helpers that refuse a capital, as an HTML attribute name has none. */

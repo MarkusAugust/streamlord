@@ -9,11 +9,11 @@ class KotlinStringsTest {
 
     @Test
     fun `the string literals and call sites of Kotlin source`() {
-        for (case in twinCases("kotlin-strings.json")) {
+        for (case in sharedCases("kotlin-strings.json")) {
             val name = case.string("name")
             val src = case.string("src")!!
             case.int("at")?.let { at ->
-                val s = assertNotNull(readKotlinStringAt(src, at), name)
+                val s = assertNotNull(analyzer.lex(src).strings.firstOrNull { it.start == at }, name)
                 case.string("text")?.let { assertEquals(it, s.text, name) }
                 case["interpolations"]?.let {
                     assertEquals(it.toKotlin(), s.interpolations.map { i -> listOf(i.kind.name.lowercase(), i.text) }, name)

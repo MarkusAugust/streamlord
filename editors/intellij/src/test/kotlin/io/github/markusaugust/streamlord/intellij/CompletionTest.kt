@@ -1,8 +1,10 @@
 package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.lookup.Lookup
+import com.intellij.codeInsight.template.impl.TemplateManagerImpl
 import com.intellij.lang.html.HTMLLanguage
 import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.statistics.StatisticsManager
 import com.intellij.psi.statistics.impl.StatisticsManagerImpl
 
@@ -31,6 +33,15 @@ class CompletionTest : StreamlordTestCase() {
         myFixture.configureByText("Feed.kt", "fun f() { dataSignals(\"count\" to 0); dataOnClick(\"\$<caret>\") }")
         val items = myFixture.completeBasic()!!.map { it.lookupString }
         assertTrue(items.toString(), "\$count" in items && "\$busy" in items)
+    }
+
+    fun `test no signal a DSL call names with a hyphen, which Streamlord refuses, and the one an object keeps`() {
+        myFixture.addFileToProject("Other.kt", "fun g() { div { dataSignals(\"is-open\" to false); dataBind(\"first-name\") } }")
+        myFixture.addFileToProject("other.html", "<div data-signals='{\"hs-key\": 1}'></div>")
+        myFixture.configureByText("Feed.kt", "fun f() { dataSignals(\"count\" to 0, \"my-x\" to 1); dataOnClick(\"\$<caret>\") }")
+        val items = myFixture.completeBasic()!!.map { it.lookupString }
+        assertTrue(items.toString(), "\$count" in items && "\$hs-key" in items)
+        assertTrue(items.toString(), items.none { it in setOf("\$is-open", "\$first-name", "\$my-x") })
     }
 
     fun `test actions after an at sign`() {
@@ -79,6 +90,22 @@ class CompletionTest : StreamlordTestCase() {
         myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
     }
 
+    fun `test tab replaces the rest of the word the analysis names, enter inserts as the platform does`() {
+        val source = "<div data-signals=\"{user: {name: ''}}\"></div><p data-text=\"\$us<caret>er.name\"></p>"
+        for ((char, wanted) in listOf(Lookup.REPLACE_SELECT_CHAR to "\$user.name\"", Lookup.NORMAL_SELECT_CHAR to "\$user.nameer.name\"")) {
+            myFixture.configureByText("word.html", source)
+            myFixture.completeBasic()
+            val lookup = myFixture.lookup!!
+            lookup.currentItem = lookup.items.first { it.lookupString == "\$user.name" }
+            myFixture.finishLookup(char)
+            assertTrue(
+                myFixture.editor.document.text,
+                myFixture.editor.document.text
+                    .contains("data-text=\"$wanted"),
+            )
+        }
+    }
+
     fun `test ids and classes in a selector argument`() {
         myFixture.addFileToProject("other.html", "<div id=\"feed\" class=\"card\"></div>")
         myFixture.configureByText(
@@ -104,6 +131,23 @@ class CompletionTest : StreamlordTestCase() {
         myFixture.configureByText("page3.html", "<div data-on:click__debounce.<caret>")
         val values = myFixture.completeBasic()!!.map { it.lookupString }
         assertEquals(listOf("500ms", "1s", "300ms", "100ms"), values)
+    }
+
+    fun `test an attribute that needs a key is written with its key and value, each a place the tab moves to`() {
+        TemplateManagerImpl.setTemplateTesting(testRootDisposable)
+        myFixture.configureByText("tabs.html", "<div data-<caret>></div>")
+        myFixture.completeBasic()
+        myFixture.lookup.currentItem = myFixture.lookupElements!!.first { it.lookupString == "data-on" }
+        myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR)
+        assertEquals("<div data-on:key=\"\"></div>", myFixture.editor.document.text)
+        assertEquals("key", myFixture.editor.selectionModel.selectedText)
+        val template = TemplateManagerImpl.getTemplateState(myFixture.editor)!!
+        WriteCommandAction.runWriteCommandAction(project) { template.nextTab() }
+        assertEquals(
+            myFixture.editor.document.text
+                .indexOf("\"\"") + 1,
+            myFixture.caretOffset,
+        )
     }
 
     fun `test no attribute names in a textarea's text`() {

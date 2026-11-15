@@ -13,6 +13,7 @@ import io.github.markusaugust.streamlord.core.protocol.SseEncoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -28,7 +29,7 @@ class SseEncoderTest {
         val out =
             SseEncoder.encode(
                 PatchElements(
-                    elements = "<div>\n  <span>1</span>\n</div>",
+                    elements = "<g>\n  <text>1</text>\n</g>",
                     selector = "#feed",
                     mode = ElementPatchMode.INNER,
                     namespace = ElementNamespace.SVG,
@@ -48,9 +49,9 @@ class SseEncoderTest {
             |data: useViewTransition true
             |data: viewTransitionSelector #main
             |data: namespace svg
-            |data: elements <div>
-            |data: elements   <span>1</span>
-            |data: elements </div>
+            |data: elements <g>
+            |data: elements   <text>1</text>
+            |data: elements </g>
             |
             |
             """.trimMargin(),
@@ -65,12 +66,6 @@ class SseEncoderTest {
     }
 
     @Test
-    fun `viewTransitionSelector is ignored without useViewTransition`() {
-        val out = SseEncoder.encode(PatchElements("<div id=\"a\"></div>", viewTransitionSelector = "#x"))
-        assertEquals("event: datastar-patch-elements\ndata: elements <div id=\"a\"></div>\n\n", out)
-    }
-
-    @Test
     fun `windows line endings become separate data lines`() {
         val out = SseEncoder.encode(PatchElements("<div>\r\n</div>"))
         assertEquals("event: datastar-patch-elements\ndata: elements <div>\ndata: elements </div>\n\n", out)
@@ -80,6 +75,31 @@ class SseEncoderTest {
     fun `remove needs no elements`() {
         val out = SseEncoder.encode(PatchElements.remove("#a, #b"))
         assertEquals("event: datastar-patch-elements\ndata: selector #a, #b\ndata: mode remove\n\n", out)
+    }
+
+    /** The client reads useViewTransition and viewTransitionSelector for every mode, remove too (patchElements.ts). */
+    @Test
+    fun `a remove can run in a view transition on the element it names`() {
+        val out = SseEncoder.encode(PatchElements.remove("#a", useViewTransition = true, viewTransitionSelector = "#list"))
+        assertEquals(
+            "event: datastar-patch-elements\ndata: selector #a\ndata: mode remove\n" +
+                "data: useViewTransition true\ndata: viewTransitionSelector #list\n\n",
+            out,
+        )
+    }
+
+    /**
+     * Without useViewTransition the client never reads the selector (patchElements.ts:78), so it is
+     * left off the wire, and `useViewTransition = animate` with a fixed selector works either way.
+     */
+    @Test
+    fun `a view transition selector without a view transition is left off the wire`() {
+        for (animate in listOf(false, true)) {
+            val out = SseEncoder.encode(PatchElements("<p id=\"a\">x</p>", useViewTransition = animate, viewTransitionSelector = "#list"))
+            assertEquals(animate, "viewTransitionSelector #list" in out, out)
+            val removed = SseEncoder.encode(PatchElements.remove("#a", useViewTransition = animate, viewTransitionSelector = "#list"))
+            assertEquals(animate, "viewTransitionSelector #list" in removed, removed)
+        }
     }
 
     @Test

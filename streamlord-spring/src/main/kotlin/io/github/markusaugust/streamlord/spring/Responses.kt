@@ -49,8 +49,10 @@ public fun datastarElements(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
     streamlord: Streamlord = Streamlord.Default,
-): ResponseEntity<String> = ElementsResponse(elements, selector, mode, namespace, useViewTransition).toResponseEntity(streamlord)
+): ResponseEntity<String> =
+    ElementsResponse(elements, selector, mode, namespace, useViewTransition, viewTransitionSelector).toResponseEntity(streamlord)
 
 /** [datastarElements] for markup [io.github.markusaugust.streamlord.core.domain.interpolate] built. */
 public fun datastarElements(
@@ -59,8 +61,10 @@ public fun datastarElements(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
+    viewTransitionSelector: String? = null,
     streamlord: Streamlord = Streamlord.Default,
-): ResponseEntity<String> = datastarElements(elements.text, selector, mode, namespace, useViewTransition, streamlord)
+): ResponseEntity<String> =
+    datastarElements(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector, streamlord)
 
 /** A JSON object to be patched as signals, without opening a stream. Always `200 OK`, as [datastarElements]. */
 public fun datastarSignals(
@@ -68,11 +72,15 @@ public fun datastarSignals(
     onlyIfMissing: Boolean = false,
 ): ResponseEntity<String> = SignalsResponse(signals, onlyIfMissing).toResponseEntity()
 
-/** Any value the codec can encode, to be patched as signals. Always `200 OK`, as [datastarElements]. */
+/**
+ * Any value the codec can encode, to be patched as signals. Always `200 OK`, as [datastarElements].
+ *
+ * @param streamlord The configured instance, whose codec encodes [value].
+ */
 public inline fun <reified T> datastarSignals(
     value: T,
-    streamlord: Streamlord = Streamlord.Default,
     onlyIfMissing: Boolean = false,
+    streamlord: Streamlord = Streamlord.Default,
 ): ResponseEntity<String> = datastarSignals(streamlord.codec.encode(value, typeOf<T>()), onlyIfMissing)
 
 /** JavaScript to execute, without opening a stream. Always `200 OK`, as [datastarElements]. */

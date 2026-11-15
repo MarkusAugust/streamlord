@@ -45,36 +45,28 @@ abstract class KtorWireTranscriptTest<E : ApplicationEngine, C : ApplicationEngi
     private val adapter: String,
     private val engine: ApplicationEngineFactory<E, C>,
 ) {
-    private lateinit var plain: EmbeddedServer<E, C>
-    private lateinit var compressing: EmbeddedServer<E, C>
+    private lateinit var plain: Pair<EmbeddedServer<E, C>, Int>
+    private lateinit var compressing: Pair<EmbeddedServer<E, C>, Int>
 
     @BeforeAll
     fun start() {
-        plain = embeddedServer(engine, port = 0, host = "127.0.0.1") { transcriptApplication(compress = false) }.start()
-        compressing = embeddedServer(engine, port = 0, host = "127.0.0.1") { transcriptApplication(compress = true) }.start()
+        plain = startOnLoopback(engine, { transcriptApplication(compress = false) })
+        compressing = startOnLoopback(engine, { transcriptApplication(compress = true) })
     }
 
     @AfterAll
     fun stop() {
-        plain.stop(100, 500)
-        compressing.stop(100, 500)
+        plain.first.stop(100, 500)
+        compressing.first.stop(100, 500)
     }
 
     @TestFactory
     fun transcripts(): List<DynamicTest> =
         WireCases.all.map { case ->
             DynamicTest.dynamicTest(case.name) {
-                val port = portOf(if (case.compressed) compressing else plain)
+                val port = (if (case.compressed) compressing else plain).second
                 WireTranscript.verify(adapter, case, port, "streamlord-ktor", "KtorWireTranscriptTest")
             }
-        }
-
-    private fun portOf(server: EmbeddedServer<E, C>): Int =
-        runBlocking {
-            server.engine
-                .resolvedConnectors()
-                .first()
-                .port
         }
 }
 

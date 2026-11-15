@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.decodeEntities
+import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the
@@ -22,7 +23,7 @@ public data class SignalReference(
 
 /**
  * The signals an expression reads, with offsets relative to [text]: what the client rewrites as a
- * signal where JavaScript runs it (see [clientSignalReads]), shared with `signalReferences.ts`. A
+ * signal where JavaScript runs it (see [clientSignalReads]). A
  * `$foo-bar` is left to the `signal-kebab` check. A name opening with a digit, which the client
  * reads and `data-signals:123` declares, is left out too: no check of this module is written
  * for one.
@@ -43,26 +44,26 @@ internal val HELPER_READ_CALLS: Set<String> =
  * refuses (see [signalNameHyphenIssues]), or brackets, whose key a plain name would not replace
  * as written.
  */
-private val PLAIN_HELPER_NAME = Regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+private val PLAIN_HELPER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
  * `not("error")`, is somebody else's. A line starts after `\n` alone and is indented with spaces
- * and tabs, as `USES_HTML_DSL` in signalNameHyphens.ts reads it.
+ * and tabs.
  */
 internal val USES_HTML_DSL =
-    Regex(
+    regex(
         """(?:^|(?<=\n))[ \t]*(?:import[ \t]+io\.github\.markusaugust\.streamlord\.html\.|""" +
             """package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_]))""",
     )
 
 /** An import of a name from outside the DSL: `import org.hamcrest.Matchers.not`, or `.*` of Hamcrest's matchers. Lines as in [USES_HTML_DSL]. */
 private val FOREIGN_IMPORT =
-    Regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
+    regex("""(?:^|(?<=\n))[ \t]*import[ \t]+(?!io\.github\.markusaugust\.streamlord\.html\.)([A-Za-z_][\w.]*)\.(\w+|\*)""")
 
 /**
  * The helpers of [names] that [src] reads as the DSL's: those no import from elsewhere puts in their
- * place. [htmlDsl] is whether streamlord-html is on the classpath, as [AnalyzeOptions.htmlDsl]
+ * place. [htmlDsl] is whether streamlord-html is on the classpath, as [Source.htmlDsl]
  * says; when that is not known, a file that imports nothing of the DSL has none.
  */
 internal fun dslHelpers(
@@ -94,7 +95,7 @@ internal fun unshadowed(
 
 /** The signal the literal first argument of a helper in [HELPER_READ_CALLS] reads, with offsets relative to its text. */
 internal fun helperSignalReference(text: String): SignalReference? =
-    if (PLAIN_HELPER_NAME.matches(text) && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
+    if (PLAIN_HELPER_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
 
 /** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
 internal fun markupSignalReferences(
@@ -104,8 +105,7 @@ internal fun markupSignalReferences(
     templates: Boolean = true,
 ): List<SignalReference> {
     val out = ArrayList<SignalReference>()
-    for (tag in tokenize(html, templates).tags) {
-        if (tag.closing) continue
+    for (tag in appliedTags(tokenize(html, templates).tags, prefix)) {
         for (attr in tag.attributes) {
             val spec = catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
             val value = attr.value ?: continue
@@ -126,23 +126,24 @@ internal fun markupSignalReferences(
  * `{...init}`, may declare any signal, written `*`, and so may a page declared from a class only
  * its codec can name.
  */
-public fun isKnownSignal(
+internal fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
-    if (path in defined || ANY_SIGNAL in defined) return true
+    fun has(p: String) = p in defined || REFUSED + p in defined
+    if (has(path) || ANY_SIGNAL in defined) return true
     if (defined.any { it.startsWith(ENCODED_CLASS) && READABLE_CLASS + it.removePrefix(ENCODED_CLASS) !in defined }) return true
     var p = path
     while ('.' in p) {
         p = p.substringBeforeLast('.')
-        if (p in defined) return true
+        if (has(p)) return true
     }
     val inside = "$path."
-    return defined.any { it.startsWith(inside) }
+    return defined.any { it.startsWith(inside) || it.startsWith(REFUSED + inside) }
 }
 
 /** The defined signal [name] most likely misspells, or null when none is close. */
-public fun nearestSignal(
+internal fun nearestSignal(
     name: String,
     defined: Set<String>,
 ): String? {
@@ -152,12 +153,18 @@ public fun nearestSignal(
         .filter { it != name && it != ANY_SIGNAL && ':' !in it }
         .map { it to distance(name.lowercase(), it.lowercase()) }
         .filter { it.second <= limit }
-        .minByOrNull { it.second }
+        // By name where two are as near: the set comes in the order the project happened to be read in.
+        .minWithOrNull(compareBy({ it.second }, { it.first }))
         ?.first
 }
 
-/** The warning for a signal the project never defines, or null when it does. */
-public fun unknownSignalIssue(
+/** A warning for each of [refs] that reads a signal the project never defines, [defined] being those it does. */
+internal fun unknownSignalIssues(
+    refs: List<SignalReference>,
+    defined: Set<String>,
+): List<Issue> = refs.mapNotNull { unknownSignalIssue(it, defined) }
+
+private fun unknownSignalIssue(
     ref: SignalReference,
     defined: Set<String>,
 ): Issue? {
@@ -168,7 +175,7 @@ public fun unknownSignalIssue(
     val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
     // A helper writes its name as it stands, and only a plain name goes back into one.
-    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matches(it) }
+    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matchEntire(it) != null }
     val nameStart = ref.end - ref.name.length
     return Issue(
         start = ref.start,

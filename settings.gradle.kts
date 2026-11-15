@@ -16,6 +16,7 @@ rootProject.name = "streamlord"
 include(
     "demo",
     "docs-samples",
+    "rewrite-probes",
     "streamlord-core",
     "streamlord-analysis",
     "streamlord-html",
@@ -27,5 +28,9 @@ include(
     "streamlord-spring",
     "streamlord-test",
 )
+
+// The analysis compiled to JavaScript for the VS Code extension. Never published.
+include("analysis-js")
+project(":analysis-js").projectDir = file("editors/vscode/analysis-js")
 
 apply(from = "gradle/build-tool-floors.settings.gradle.kts")

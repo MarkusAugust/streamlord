@@ -2,7 +2,7 @@
   "name": "streamlord",
   "displayName": "Streamlord",
   "description": "Datastar as a language in your editor: expression and markup diagnostics with quick fixes, completion, hover docs and a live SSE stream inspector, in HTML, template files and Kotlin strings. Half of the Streamlord toolchain, and it needs no part of the other.",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "publisher": "MarkusAugust",
   "license": "MIT",
   "private": true,
@@ -84,7 +84,7 @@
         "streamlord.diagnostics.unknownSignals": {
           "type": "boolean",
           "default": true,
-          "description": "Warn on a $name that no Kotlin or HTML file in the workspace defines, such as a misspelt signal. A signal set only from a script is reported too."
+          "description": "Warn on a $name that no Kotlin or HTML file in the workspace defines, such as a misspelt signal, and on a signal the server reads, through a Signals lookup or a @Serializable class, that no page declares. A signal set only from a script, by a server patch whose class or keys the file does not write down, or by pages outside the workspace is reported too."
         },
         "streamlord.attributePrefix": {
           "type": "string",
@@ -119,7 +119,7 @@
             "html",
             "jte",
             "kte",
-            "ftl",
+            "freemarker",
             "velocity",
             "mustache",
             "pebble",
@@ -141,7 +141,7 @@
             "vue",
             "gotemplate"
           ],
-          "description": "Language ids that get Datastar attribute diagnostics, completion and hover on the HTML side: HTML itself (which is what Thymeleaf files are), JTE/kte, FreeMarker (ftl), Velocity, Mustache, Pebble and the rest. Kotlin is always included. Reload the window after changing."
+          "description": "Language ids that get Datastar attribute diagnostics, completion and hover on the HTML side: HTML itself (which is what Thymeleaf files are), JTE/kte, FreeMarker (freemarker), Velocity, Mustache, Pebble and the rest. Kotlin is always included. Reload the window after changing."
         }
       }
     },
@@ -181,14 +181,125 @@
         "injectTo": [
           "text.html.basic",
           "text.html.derivative",
+          "text.html.handlebars",
+          "text.html.jte",
+          "text.html.ftl",
+          "text.html.velocity",
+          "text.html.twig",
+          "text.html.php",
+          "text.html.cshtml",
+          "source.mustache",
           "source.kotlin"
         ],
         "embeddedLanguages": {
           "meta.embedded.inline.datastar": "datastar-expression"
         }
+      },
+      {
+        "scopeName": "streamlord.kotlin.template3.injection",
+        "path": "./syntaxes/kotlin-template3-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.mustache.injection",
+        "path": "./syntaxes/placeholders-mustache-injection.tmLanguage.json",
+        "injectTo": [
+          "source.mustache"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.handlebars.injection",
+        "path": "./syntaxes/placeholders-handlebars-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.handlebars"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.jte.injection",
+        "path": "./syntaxes/placeholders-jte-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.jte"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.html.injection",
+        "path": "./syntaxes/placeholders-html-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.basic",
+          "text.html.derivative"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.freemarker.injection",
+        "path": "./syntaxes/placeholders-freemarker-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.ftl"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.velocity.injection",
+        "path": "./syntaxes/placeholders-velocity-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.velocity"
+        ]
+      },
+      {
+        "scopeName": "streamlord.placeholders.razor.injection",
+        "path": "./syntaxes/placeholders-razor-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.cshtml"
+        ]
+      },
+      {
+        "scopeName": "streamlord.html.element.injection",
+        "path": "./syntaxes/html-element-injection.tmLanguage.json",
+        "injectTo": [
+          "text.html.basic",
+          "text.html.derivative",
+          "text.html.handlebars",
+          "text.html.jte",
+          "text.html.ftl",
+          "text.html.velocity",
+          "text.html.twig",
+          "text.html.php",
+          "text.html.cshtml",
+          "source.mustache",
+          "source.kotlin"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.inline.datastar": "datastar-expression"
+        }
+      },
+      {
+        "scopeName": "streamlord.kotlin.template2.injection",
+        "path": "./syntaxes/kotlin-template2-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
+      },
+      {
+        "scopeName": "streamlord.kotlin.template.injection",
+        "path": "./syntaxes/kotlin-template-injection.tmLanguage.json",
+        "injectTo": [
+          "source.kotlin"
+        ]
       }
     ],
     "languages": [
+      {
+        "id": "kotlin",
+        "aliases": [
+          "Kotlin",
+          "kotlin"
+        ],
+        "extensions": [
+          ".kt",
+          ".kts"
+        ],
+        "configuration": "./kotlin-language-configuration.json"
+      },
       {
         "id": "datastar-expression",
         "aliases": [
@@ -224,17 +335,16 @@
     ]
   },
   "scripts": {
-    "build": "node scripts/generate.mjs && node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
+    "analysis": "node scripts/analysis.mjs",
+    "build": "node scripts/generate.mjs && npm run analysis && node esbuild.mjs",
+    "watch": "npm run analysis && node esbuild.mjs --watch",
+    "typecheck": "npm run analysis && tsc --noEmit",
+    "test": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test 'test/**/*.test.ts'",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies",
     "vscode:prepublish": "npm run build",
-    "test:live": "node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
-    "generate": "node scripts/generate.mjs"
-  },
-  "dependencies": {
-    "acorn": "8.19.0"
+    "test:live": "npm run analysis && node --experimental-transform-types --import ./test/hooks.mjs --test test/live/*.live.ts",
+    "generate": "node scripts/generate.mjs",
+    "real": "node test/real/real.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

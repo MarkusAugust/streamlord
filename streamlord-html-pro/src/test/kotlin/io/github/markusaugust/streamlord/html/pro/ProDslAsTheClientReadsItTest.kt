@@ -200,7 +200,7 @@ class ProDslAsTheClientReadsItTest {
                 listens("button", "click")
                 heard("button", "click", 1)
                 probes = listOf(listOf("pro-action", "fit", 5, 0, 10, 0, 1.5, true, true))
-            }) { button { dataOnClick(fit("5", 0, 10, 0, 1.5, clamp = true, round = true)) } },
+            }) { button { dataOnClick(fit("5", 0, 10, 0, 1.5, shouldClamp = true, shouldRound = true)) } },
             dslCase("intl", "intl", probe = mapOf("rounds" to 1), expect = {
                 listens("button", "click")
                 heard("button", "click", 1)
@@ -211,6 +211,15 @@ class ProDslAsTheClientReadsItTest {
                 heard("button", "click", 1)
                 probes = listOf(listOf("pro-action", "intl", "relativeTime", -1, emptyMap<String, Any?>(), listOf("nb", "en")))
             }) { button { dataOnClick(intl(IntlType.RELATIVE_TIME, "-1", emptyMap(), "nb", "en")) } },
+            dslCase("fit and intl hand their value on as one argument", "fit", probe = mapOf("rounds" to 1), expect = {
+                listens("button", "click")
+                heard("button", "click", 2)
+                probes =
+                    listOf(
+                        listOf("pro-action", "fit", 5, 0, 10, 0, 1),
+                        listOf("pro-action", "intl", "number", 3),
+                    )
+            }) { button { dataOnClick(fit("1, 5", 0, 10, 0, 1) + "; " + intl(IntlType.NUMBER, "2, 3")) } },
             dslCase("a Pro attribute in a form", "dataCustomValidity", expect = { pro("custom-validity", null, "''") }) {
                 form { input { dataCustomValidity("''") } }
             },

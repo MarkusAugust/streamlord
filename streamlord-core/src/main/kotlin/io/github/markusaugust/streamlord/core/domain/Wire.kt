@@ -1,8 +1,18 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonBoolean
+import io.github.markusaugust.streamlord.core.json.JsonNull
+import io.github.markusaugust.streamlord.core.json.JsonNumber
+import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonShape
+import io.github.markusaugust.streamlord.core.json.JsonString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -14,24 +24,24 @@ import kotlin.time.Duration.Companion.milliseconds
  * elements nobody asked for. Everything that becomes a single wire line passes through here.
  */
 public object Wire {
-    private val LINE_BREAKS = Regex("\r\n|\r|\n")
-    private val ATTRIBUTE_NAME = Regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
+    private val LINE_BREAKS = regex("\r\n|\r|\n")
+    private val ATTRIBUTE_NAME = regex("[A-Za-z_:][A-Za-z0-9_:.-]*")
 
     // The end tag that closes the element early, in any case, and the three Datastar's client takes
     // for a whole document, which drops the script or appends a second html element: those it
     // tests in lower case only (patchElements.ts), so `</BODY>` is left as written.
-    private val END_TAGS = Regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
+    private val END_TAGS = regex("</(?:[sS][cC][rR][iI][pP][tT]|body|head|html)")
 
     // After <!--, a <script that a name boundary follows sends the tokenizer into a state where
     // </script> no longer ends the element.
-    private val OPEN_SCRIPT = Regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
+    private val OPEN_SCRIPT = regex("<([sS])(?=[cC][rR][iI][pP][tT][\\t\\n\\u000C\\r />])")
 
     /**
      * [json] with each surrogate that lacks its other half written as a `\uXXXX` escape, which is
      * how the built-in writer and `JSON.stringify` keep one: UTF-8 cannot carry it, and the bytes
      * would otherwise read `?`. In valid JSON such a surrogate can only stand inside a string.
      */
-    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u%04x".format(it.code) }
+    internal fun loneSurrogatesEscaped(json: String): String = mapLoneSurrogates(json) { "\\u" + hex(it.code, 4) }
 
     /**
      * [html] with each surrogate that lacks its other half as U+FFFD, the replacement character the
@@ -117,12 +127,37 @@ public object Wire {
             }
         if (!shaped) {
             throw DatastarEventValidationException(
-                "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
+                notAnObject(value)?.let { (kind, effect) -> "signals must be one JSON object, not $kind: $effect" }
+                    ?: "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
             )
         }
         refused?.let { throw DatastarEventValidationException(it) }
         return value
     }
+
+    /**
+     * What [value] is, where it is JSON and no object, and what the client makes of it: `JSON.parse`
+     * takes it, and the patch walks it with `for...in`, which finds an array's indexes and a
+     * string's, and nothing in a number, a boolean or null. Null where it is not JSON, or an object.
+     */
+    internal fun notAnObject(value: String): Pair<String, String>? =
+        when (
+            val parsed =
+                try {
+                    JsonParser.parse(value)
+                } catch (_: JsonParseException) {
+                    return null
+                }
+        ) {
+            is JsonObject -> null
+            is JsonArray -> "an array" to "the client patches its items as signals named 0, 1 and on"
+            is JsonString -> "a string" to "the client patches its characters as signals named 0, 1 and on"
+            is JsonNumber -> "a number" to NOTHING_PATCHED
+            is JsonBoolean -> "a boolean" to NOTHING_PATCHED
+            is JsonNull -> "null" to NOTHING_PATCHED
+        }
+
+    private const val NOTHING_PATCHED = "the client patches nothing from it"
 
     /**
      * Reject an event id that would not come back as it was written. It returns as the
@@ -136,7 +171,7 @@ public object Wire {
         if (value.isEmpty()) throw DatastarEventValidationException("eventId must not be empty")
         value.firstOrNull { it !in ' '..'~' }?.let {
             throw DatastarEventValidationException(
-                "eventId must be printable ASCII, not U+%04X: it goes back as the last-event-id header".format(it.code),
+                "eventId must be printable ASCII, not U+${hex(it.code, 4).uppercase()}: it goes back as the last-event-id header",
             )
         }
         if (value.first() == ' ' || value.last() == ' ') {
@@ -171,9 +206,26 @@ public object Wire {
         return singleLine(value, field)
     }
 
+    /**
+     * Reject a selector an answer that is no stream sends as a header. A header travels as Latin-1 to
+     * the client, which reads it so, and some servers send UTF-8 and others drop what Latin-1 lacks:
+     * only printable ASCII arrives as written.
+     */
+    internal fun headerSelector(value: String): String {
+        value.firstOrNull { it !in ' '..'~' }?.let {
+            throw DatastarEventValidationException(
+                "A selector in a response header must be printable ASCII, not U+${hex(
+                    it.code,
+                    4,
+                ).uppercase()}; send it in a stream instead",
+            )
+        }
+        return value
+    }
+
     /** Reject anything that is not a syntactically sane HTML attribute name. */
     public fun attributeName(name: String): String {
-        if (!ATTRIBUTE_NAME.matches(name)) {
+        if (ATTRIBUTE_NAME.matchEntire(name) == null) {
             throw DatastarEventValidationException("'$name' is not a valid HTML attribute name")
         }
         return name
@@ -208,6 +260,6 @@ public object Wire {
         val comment = ended.indexOf("<!--")
         if (comment < 0) return ended
         return ended.substring(0, comment) +
-            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x%02x".format(it.groupValues[1][0].code) }
+            ended.substring(comment).replace(OPEN_SCRIPT) { "<\\x" + hex(it.groupValues[1][0].code, 2) }
     }
 }

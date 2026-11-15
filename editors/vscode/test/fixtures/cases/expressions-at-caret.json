@@ -1,0 +1,267 @@
+{
+  "$comment": "What completion offers where a caret stands in a Datastar expression, or none: the source is before + after with the caret between them, read as Kotlin when kotlin is true and as markup otherwise, with prefix the attribute prefix (data- when left out), and a workspace that defines the signal count. labels are the items in order, alone whether no other completion belongs there.",
+  "cases": [
+    {
+      "name": "an expression inside a Pebble comment in a Kotlin string, which the browser reads as text",
+      "kotlin": true,
+      "before": "val page = \"<p>{# <b data-text=\\\"1 + ",
+      "after": "\\\"></b> #}</p>\"",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "an expression in a tag whose name is a Kotlin template",
+      "kotlin": true,
+      "before": "val page = \"<$t data-text=\\\"1 + ",
+      "after": "\\\"></$t>\"",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "an expression attribute in markup",
+      "kotlin": false,
+      "before": "<div data-on:click=\"@get(",
+      "after": "\"></div>",
+      "labels": [],
+      "alone": false,
+      "signature": {
+        "label": "@get(uri, options?)",
+        "active": 0
+      }
+    },
+    {
+      "name": "a signal-name attribute takes no actions",
+      "kotlin": false,
+      "before": "<input data-bind=\"us",
+      "after": "\">",
+      "labels": [
+        "count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "patch is in scope in data-on-signal-patch",
+      "kotlin": false,
+      "before": "<div data-on-signal-patch=\"pat",
+      "after": "\"></div>",
+      "labels": [
+        "el",
+        "evt",
+        "patch"
+      ],
+      "alone": false
+    },
+    {
+      "name": "an attribute that is no Datastar one",
+      "kotlin": false,
+      "before": "<a href=\"/x",
+      "after": "\">",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a DSL string with an escaped dollar",
+      "kotlin": true,
+      "before": "fun f() { dataOnClick(\"\\$cou",
+      "after": "\") }",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a DSL string with a templated dollar",
+      "kotlin": true,
+      "before": "fun f() { dataOnClick(\"${'$'}cou",
+      "after": "\") }",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a DSL string with escaped quotes",
+      "kotlin": true,
+      "before": "fun f() { dataOnClick(\"a = \\\"x\\\"; \\$n",
+      "after": "\") }",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "dataOnSignalPatch has patch in scope",
+      "kotlin": true,
+      "before": "fun f() { dataOnSignalPatch(\"pat",
+      "after": "\") }",
+      "labels": [
+        "el",
+        "evt",
+        "patch"
+      ],
+      "alone": false
+    },
+    {
+      "name": "an HTML string with escapes",
+      "kotlin": true,
+      "before": "val x = \"<div data-text=\\\"\\$bu",
+      "after": "\\\"></div>\"",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "a raw HTML string over several lines",
+      "kotlin": true,
+      "before": "fun f() = \"\"\"<div data-signals=\"{\n  a: $",
+      "after": "}\"></div>\"\"\"",
+      "labels": [
+        "$a",
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "Kotlin code is no expression",
+      "kotlin": true,
+      "before": "val x = 1",
+      "after": "",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "the value of an attributes index",
+      "kotlin": true,
+      "before": "fun FlowContent.f() { button { attributes[\"data-on:click\"] = \"@po",
+      "after": "\" } }",
+      "labels": [
+        "@delete",
+        "@get",
+        "@patch",
+        "@peek",
+        "@post",
+        "@put",
+        "@query",
+        "@setAll",
+        "@toggleAll",
+        "@clipboard",
+        "@fit",
+        "@intl"
+      ],
+      "alone": true
+    },
+    {
+      "name": "an attributes index with an escaped dollar",
+      "kotlin": true,
+      "before": "fun FlowContent.f() { span { attributes[\"data-text\"] = \"\\$cou",
+      "after": "\" } }",
+      "labels": [
+        "$count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "an attributes index for a signal name takes no actions",
+      "kotlin": true,
+      "before": "fun FlowContent.f() { input { attributes[\"data-bind\"] = \"us",
+      "after": "\" } }",
+      "labels": [
+        "count"
+      ],
+      "alone": true
+    },
+    {
+      "name": "an attributes index whose value is still typed",
+      "kotlin": true,
+      "before": "fun FlowContent.f() { div { attributes[\"data-on-signal-patch\"] = \"pa",
+      "after": "",
+      "labels": [
+        "el",
+        "evt",
+        "patch"
+      ],
+      "alone": false
+    },
+    {
+      "name": "the name of an attributes index is no expression",
+      "kotlin": true,
+      "before": "fun FlowContent.f() { div { attributes[\"data-te",
+      "after": "xt\"] = \"$x\" } }",
+      "labels": [
+        "data-attr",
+        "data-bind",
+        "data-class",
+        "data-computed",
+        "data-effect",
+        "data-ignore",
+        "data-ignore-morph",
+        "data-indicator",
+        "data-init",
+        "data-json-signals",
+        "data-on",
+        "data-on-intersect",
+        "data-on-interval",
+        "data-on-signal-patch",
+        "data-on-signal-patch-filter",
+        "data-preserve-attr",
+        "data-ref",
+        "data-show",
+        "data-signals",
+        "data-style",
+        "data-text",
+        "data-animate",
+        "data-custom-validity",
+        "data-match-media",
+        "data-on-raf",
+        "data-on-resize",
+        "data-persist",
+        "data-query-string",
+        "data-replace-url",
+        "data-scroll-into-view",
+        "data-view-transition"
+      ],
+      "alone": false
+    },
+    {
+      "name": "an attributes index for a non-expression attribute",
+      "kotlin": true,
+      "before": "fun FlowContent.f() { div { attributes[\"data-ignore-morph\"] = \"tr",
+      "after": "ue\" } }",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "an attributes index inside a string is text",
+      "kotlin": true,
+      "before": "val s = \"\"\"attributes[\"data-text\"] = \"$co",
+      "after": " x\"\"\"",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a textarea's content is text, in markup",
+      "kotlin": false,
+      "before": "<textarea><i data-text=\"1 + ",
+      "after": "\"></i></textarea>",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a textarea's content is text, in a Kotlin string",
+      "kotlin": true,
+      "before": "val page = \"\"\"<textarea><i data-text=\"1 + ",
+      "after": "\"></i></textarea>\"\"\"",
+      "labels": [],
+      "alone": false
+    },
+    {
+      "name": "a textarea's content is text, past a template in a Kotlin string",
+      "kotlin": true,
+      "before": "val page = \"\"\"<textarea>${x}<i data-text=\"1 + ",
+      "after": "\"></i></textarea>\"\"\"",
+      "labels": [],
+      "alone": false
+    }
+  ]
+}

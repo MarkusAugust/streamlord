@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import org.intellij.lang.annotations.Language
@@ -26,30 +27,26 @@ public sealed interface DatastarResponse {
     public val headers: Map<String, String>
 }
 
-/** A `text/html` body patched as elements. Mirrors [PatchElements]. */
+/**
+ * A `text/html` body patched as elements. Mirrors [PatchElements].
+ *
+ * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
+ *   document when `null`. Sent only with [useViewTransition], as in [PatchElements].
+ */
 public data class ElementsResponse(
     @Language("HTML") val elements: String,
     val selector: String? = null,
     val mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     val namespace: ElementNamespace = ElementNamespace.DEFAULT,
     val useViewTransition: Boolean = false,
+    val viewTransitionSelector: String? = null,
 ) : DatastarResponse {
     init {
-        // An inner patch of nothing empties its target, and a remove needs no elements at all.
-        if (Wire.noElements(elements, mode, selector) && mode != ElementPatchMode.INNER && mode != ElementPatchMode.REMOVE) {
-            throw DatastarEventValidationException("elements must not be blank")
-        }
         selector?.let { Wire.selector(it) }
-        // A header travels as Latin-1 to the client, which reads it so, and some servers send UTF-8
-        // and others drop what Latin-1 lacks: only printable ASCII arrives as written.
-        selector?.firstOrNull { it !in ' '..'~' }?.let {
-            throw DatastarEventValidationException(
-                "A selector in a response header must be printable ASCII, not U+%04X; send it in a stream instead".format(it.code),
-            )
-        }
-        if (mode.requiresSelector && selector == null) {
-            throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
-        }
+        viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
+        listOfNotNull(selector, viewTransitionSelector).forEach(Wire::headerSelector)
+        if (selector == null) EventRules.modeWithoutSelector(mode)?.let { throw DatastarEventValidationException(it) }
+        EventRules.elements(elements, mode, selector, namespace, response = true)?.let { throw DatastarEventValidationException(it) }
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_HTML
@@ -60,7 +57,10 @@ public data class ElementsResponse(
                 selector?.let { put(DatastarProtocol.Headers.SELECTOR, it) }
                 if (mode != ElementPatchMode.DEFAULT) put(DatastarProtocol.Headers.MODE, mode.wire)
                 if (namespace != ElementNamespace.DEFAULT) put(DatastarProtocol.Headers.NAMESPACE, namespace.wire)
-                if (useViewTransition) put(DatastarProtocol.Headers.USE_VIEW_TRANSITION, "true")
+                if (useViewTransition) {
+                    put(DatastarProtocol.Headers.USE_VIEW_TRANSITION, "true")
+                    viewTransitionSelector?.let { put(DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR, it) }
+                }
             }
 }
 
@@ -71,7 +71,8 @@ public fun ElementsResponse(
     mode: ElementPatchMode = ElementPatchMode.DEFAULT,
     namespace: ElementNamespace = ElementNamespace.DEFAULT,
     useViewTransition: Boolean = false,
-): ElementsResponse = ElementsResponse(elements.text, selector, mode, namespace, useViewTransition)
+    viewTransitionSelector: String? = null,
+): ElementsResponse = ElementsResponse(elements.text, selector, mode, namespace, useViewTransition, viewTransitionSelector)
 
 /** An `application/json` body patched as signals. Mirrors [PatchSignals]. */
 public data class SignalsResponse(
@@ -98,9 +99,12 @@ public data class ScriptResponse(
     val attributes: Map<String, String> = emptyMap(),
 ) : DatastarResponse {
     init {
-        if (script.isBlank()) throw DatastarEventValidationException("script must not be blank")
-        attributes.keys.forEach(Wire::attributeName)
-        attributes.values.forEach { Wire.singleLine(it, "script attribute") }
+        EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
+        for ((name, value) in attributes) {
+            (EventRules.scriptAttributeName(name, autoRemove = false) ?: EventRules.scriptAttributeValue(value))?.let {
+                throw DatastarEventValidationException(it)
+            }
+        }
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_JAVASCRIPT
@@ -121,5 +125,5 @@ public data class ScriptResponse(
 /** JSON text with every character past printable ASCII written as a `\u` escape, which only a string can hold. */
 private fun asciiOnly(json: String): String =
     buildString(json.length) {
-        for (c in json) if (c in ' '..'~') append(c) else append("\\u%04x".format(c.code))
+        for (c in json) if (c in ' '..'~') append(c) else append("\\u").append(hex(c.code, 4))
     }

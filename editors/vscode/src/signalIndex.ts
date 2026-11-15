@@ -1,45 +1,42 @@
 import * as vscode from "vscode";
-import { collectSelectors, type Selectors } from "./selectors.ts";
-import { collectSignalDefinitions, collectSignals, signalDeclarations, type SignalDeclaration } from "./signals.ts";
-import { signalReferencesInHtml, signalReferencesInKotlin, type SignalReference } from "./signalReferences.ts";
-import { constantNames, constantsAcross, otherDeclaredNames } from "./interpolation.ts";
-import { catalog } from "./catalog.ts";
-import { kotlinModules } from "./modules.ts";
+import { constantsAcross, driftFactsOf, signalPlaces, signalsOf, workspaceFiles, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
 
-/** Template files read as markup, as the IntelliJ plugin reads them by default, whatever language an extension gives them. */
-const MARKUP_EXTENSIONS = [
-  "html", "htm", "xhtml", "jte", "kte", "ftl", "ftlh", "vm", "mustache", "hbs", "handlebars", "peb", "pebble", "twig", "jinja", "jinja2", "j2",
-  "cshtml", "razor", "php", "erb", "ejs", "liquid", "njk", "edge", "astro", "svelte", "vue",
-];
+/** The markup files read whatever language an extension gives them, and the folders left unread with every hidden one, as the analysis has them. */
+const { markupExtensions: MARKUP_EXTENSIONS, skippedFolders: SKIPPED_FOLDERS } = workspaceFiles();
 const SOURCE_GLOB = `**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`;
-/** The folders left unread, as `analyzeProject` leaves them: build output, dependencies, and every hidden folder. */
-const SKIPPED_FOLDERS: readonly string[] = ["build", "node_modules", ".gradle", "dist", "out", "target"];
 const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 const FILE_CAP = 5000;
 
 /** Where a file lives on a disk the workspace reads; a git diff, an untitled buffer or an output channel defines nothing. */
 export const INDEXED_SCHEMES: ReadonlySet<string> = new Set(["file", "vscode-remote", "vscode-vfs"]);
 
+/** The ids and classes markup declares, which a selector may name. */
+export interface Selectors {
+  ids: Set<string>;
+  classes: Set<string>;
+}
+
 interface FileEntry {
   version: number | null;
   language: "kotlin" | "html";
   /** Where the file defines and reads signals: worked out on the first search, which completion never asks for. */
   places?: Places;
-  signals: Set<string>;
-  definitions: Set<string>;
-  selectors: Selectors;
-  /** The `const val` names a Kotlin file lets other files see, which a hole in an HTML string may name. */
-  constants: Set<string>;
-  /** The other names a Kotlin file lets other files see, which keep a constant of the same name from counting. */
-  others: Set<string>;
+  /** What the file gives the workspace: its signals, its ids and classes, and the names its Kotlin lets other files see. */
+  found: FileSignals;
+  /**
+   * What the file tells the others about the signals the server reads. A file on disk is read for
+   * it at once; an open document only when it is linted ([SignalIndex.readDrift]), not on each
+   * keystroke, and until then this is what its text said before.
+   */
+  drift: DriftFacts;
+  driftStale: boolean;
 }
 
 /** Where a file defines and reads signals, and where its lines start, so that an offset becomes a position without the text. */
 export interface Places {
   /** The attribute prefix the reads were found with. */
   prefix: string;
-  declarations: SignalDeclaration[];
-  reads: SignalReference[];
+  names: SignalPlaces;
   lineStarts: number[];
 }
 
@@ -51,8 +48,8 @@ export interface Places {
 export class SignalIndex implements vscode.Disposable {
   private byFile = new Map<string, FileEntry>();
   private built = false;
-  private definitionsUnion: Set<string> | null = null;
-  private constantsUnion: Set<string> | null = null;
+  private definitionsUnion: string[] | null = null;
+  private constantsUnion: string[] | null = null;
   private readonly changed = new vscode.EventEmitter<void>();
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -66,7 +63,12 @@ export class SignalIndex implements vscode.Disposable {
   ) {
     this.disposables.push(
       this.changed,
-      vscode.workspace.onDidSaveTextDocument((d) => this.update(d)),
+      // A file no folder of the workspace holds is found only here, and it may define a signal as any other.
+      vscode.workspace.onDidOpenTextDocument((d) => this.update(d)),
+      vscode.workspace.onDidSaveTextDocument((d) => {
+        this.update(d);
+        this.readDrift(d);
+      }),
       vscode.workspace.onDidChangeTextDocument((e) => this.update(e.document)),
       // A closed document's unsaved edits are gone; what counts is the disk again.
       vscode.workspace.onDidCloseTextDocument((d) => void this.read(d.uri)),
@@ -102,7 +104,7 @@ export class SignalIndex implements vscode.Disposable {
       files.map(async (uri) => {
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          next.set(uri.toString(), entry(Buffer.from(bytes).toString("utf8"), uri.path.endsWith(".kt") ? "kotlin" : "html", null));
+          next.set(uri.toString(), entry(Buffer.from(bytes).toString("utf8"), uri.path.endsWith(".kt") ? "kotlin" : "html", null, null, this.prefix()));
         } catch {
           // unreadable file: skip
         }
@@ -136,7 +138,7 @@ export class SignalIndex implements vscode.Disposable {
       this.remove(uri.toString());
       return;
     }
-    this.set(uri.toString(), entry(text, language, null));
+    this.set(uri.toString(), entry(text, language, null, null, this.prefix()));
   }
 
   /** Read a document again, unless this version of it is already read. */
@@ -144,14 +146,49 @@ export class SignalIndex implements vscode.Disposable {
     const language = this.languageOf(document);
     if (!language) return;
     const key = document.uri.toString();
-    if (this.byFile.get(key)?.version === document.version) return;
-    this.set(key, entry(document.getText(), language, document.version));
+    const previous = this.byFile.get(key);
+    if (previous?.version === document.version) return;
+    this.set(key, entry(document.getText(), language, document.version, previous?.drift ?? NO_DRIFT, this.prefix()));
+  }
+
+  /** Read what a document tells the others about the signals the server reads, when its text has changed since. */
+  readDrift(document: vscode.TextDocument): void {
+    const key = document.uri.toString();
+    const e = this.byFile.get(key);
+    if (!e?.driftStale || e.version !== document.version) return;
+    const before = e.drift;
+    e.drift = driftFactsOf(document.getText(), e.language === "kotlin", this.prefix());
+    e.driftStale = false;
+    if (this.driftMatters(key, before, e.drift)) this.changed.fire();
+  }
+
+  /** Whether a file's facts changing from `a` to `b` can change what the server reads is judged in another file. */
+  private driftMatters(key: string, a: DriftFacts, b: DriftFacts): boolean {
+    if (!sameNames(a.readInto, b.readInto) || !sameNames(a.encoded, b.encoded) || !sameNames(a.patched, b.patched)) return true;
+    // The package and the imports decide which class a name of the file is.
+    if (a.packageName !== b.packageName || !sameNames(a.imports, b.imports)) return true;
+    const declared = changed(a.declared, b.declared);
+    const classes = changed(
+      a.classes.map((c) => JSON.stringify(c)),
+      b.classes.map((c) => JSON.stringify(c)),
+    ).map((c) => (JSON.parse(c) as { name: string }).name);
+    if (declared.length === 0 && classes.length === 0) return false;
+    // A declared name counts where another file reads it, and a class where another reads into it or
+    // declares a page from it: one more class of a name may leave a read naming two.
+    for (const [k, e] of this.byFile) {
+      if (k === key) continue;
+      if (declared.some((n) => e.drift.reads.includes(n)) || classes.some((c) => e.drift.encoded.includes(c) || e.drift.patched.includes(c) || e.drift.readInto.includes(c))) return true;
+    }
+    return false;
   }
 
   private set(key: string, next: FileEntry): void {
     const previous = this.byFile.get(key);
     this.byFile.set(key, next);
-    if (!previous || !sameSet(previous.definitions, next.definitions) || !sameSet(previous.constants, next.constants) || !sameSet(previous.others, next.others)) {
+    const a = previous?.found;
+    const b = next.found;
+    const drift = previous !== undefined && !next.driftStale && this.driftMatters(key, previous.drift, next.drift);
+    if (!a || !sameNames(a.definitions, b.definitions) || !sameNames(a.constants, b.constants) || !sameNames(a.others, b.others) || drift) {
       this.definitionsUnion = null;
       this.constantsUnion = null;
       this.changed.fire();
@@ -164,8 +201,8 @@ export class SignalIndex implements vscode.Disposable {
     let defined = false;
     for (const [k, e] of this.byFile) {
       if (k !== key && !k.startsWith(folder)) continue;
+      defined ||= e.found.definitions.length > 0 || e.found.constants.length > 0 || e.found.others.length > 0 || this.driftMatters(k, e.drift, NO_DRIFT);
       this.byFile.delete(k);
-      defined ||= e.definitions.size > 0 || e.constants.size > 0 || e.others.size > 0;
     }
     if (defined) {
       this.definitionsUnion = null;
@@ -181,47 +218,46 @@ export class SignalIndex implements vscode.Disposable {
     return languageByExtension(document.uri);
   }
 
-  /** Ids and classes declared in one file. */
-  selectorsForFile(uri: string): Selectors {
-    return this.byFile.get(uri)?.selectors ?? { ids: new Set(), classes: new Set() };
-  }
-
   /** Ids and classes declared anywhere in the workspace. */
   allSelectors(): Selectors {
     const ids = new Set<string>();
     const classes = new Set<string>();
     for (const e of this.byFile.values()) {
-      for (const i of e.selectors.ids) ids.add(i);
-      for (const c of e.selectors.classes) classes.add(c);
+      for (const i of e.found.ids) ids.add(i);
+      for (const c of e.found.classes) classes.add(c);
     }
     return { ids, classes };
   }
 
-  /** Signals declared in one file, or an empty set. */
-  forFile(uri: string): Set<string> {
-    return this.byFile.get(uri)?.signals ?? new Set();
-  }
-
   all(): Set<string> {
     const out = new Set<string>();
-    for (const e of this.byFile.values()) for (const n of e.signals) out.add(n);
+    for (const e of this.byFile.values()) for (const n of e.found.signals) out.add(n);
     return out;
   }
 
-  /** Every signal defined anywhere in the workspace, which a `$name` is checked against: no reads, as [all] has. Cached until one changes. */
-  allDefinitions(): ReadonlySet<string> {
+  /**
+   * Every signal defined anywhere in the workspace, which a `$name` is checked against: no reads, as [all] has.
+   * The same array until one changes, which is how the analysis knows it has read it before.
+   */
+  allDefinitions(): string[] {
     if (this.definitionsUnion) return this.definitionsUnion;
     const out = new Set<string>();
-    for (const e of this.byFile.values()) for (const n of e.definitions) out.add(n);
-    this.definitionsUnion = out;
-    return out;
+    for (const e of this.byFile.values()) for (const n of e.found.definitions) out.add(n);
+    this.definitionsUnion = [...out];
+    return this.definitionsUnion;
   }
 
   /** Every `const val` the workspace's Kotlin lets other files see and declares as nothing else. Cached until one changes. */
-  allConstants(): ReadonlySet<string> {
+  allConstants(): string[] {
     if (this.constantsUnion) return this.constantsUnion;
-    this.constantsUnion = constantsAcross(this.byFile.values());
+    this.constantsUnion = constantsAcross([...this.byFile.values()].map((e) => e.found));
     return this.constantsUnion;
+  }
+
+  /** What every file but `uri` tells it about the signals the server reads. */
+  driftExcept(uri: vscode.Uri): DriftFacts[] {
+    const key = uri.toString();
+    return [...this.byFile].filter(([k]) => k !== key).map(([, e]) => e.drift);
   }
 
   /** Where every indexed file defines and reads signals, by uri; a file is read again only the first time. */
@@ -276,42 +312,36 @@ export async function textOf(uri: string): Promise<string | null> {
   }
 }
 
-/** Where `text` defines and reads signals, a Kotlin file's with the modules it can use (see `kotlinModules`). */
+/** Where `text` defines and reads signals. */
 export function placesIn(text: string, language: "kotlin" | "html", prefix: string): Places {
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
-  const reads = language === "kotlin" ? signalReferencesInKotlin(text, prefix, kotlinModules(text)) : signalReferencesInHtml(text, prefix);
-  return { prefix, declarations: signalDeclarations(text, language, foreignIn(text, language)), reads, lineStarts };
+  return { prefix, names: signalPlaces(text, language === "kotlin", prefix), lineStarts };
 }
 
 /**
- * The calls of `text` that are somebody else's and define no signal: in a Kotlin file without the
- * DSL's import, its short helpers, `set`, `toggle` and `signal`, whose names other APIs use too. A
- * `data*` helper names the attribute it writes, so a helper of the project's own still counts, and
- * so does a core call, since the official SDK's `patchSignals` defines signals too.
+ * A file's entry. Read from disk (`drift` null), it is read whole; an open document's change
+ * keeps what it said about server reads before, `drift`, until the document is linted.
  */
-function foreignIn(text: string, language: "kotlin" | "html"): (name: string) => boolean {
-  if (language !== "kotlin" || kotlinModules(text).htmlDsl !== false) return () => false;
-  return (name) => SHORT_HELPERS.has(name);
+function entry(text: string, language: "kotlin" | "html", version: number | null, drift: DriftFacts | null, prefix: string): FileEntry {
+  const found = signalsOf(text, language === "kotlin", prefix);
+  if (drift) return { version, language, found, drift, driftStale: true };
+  return { version, language, found, drift: driftFactsOf(text, language === "kotlin", prefix), driftStale: false };
 }
 
-const SHORT_HELPERS: ReadonlySet<string> = new Set(catalog.signalNameHelpers.keys());
 
-function entry(text: string, language: "kotlin" | "html", version: number | null): FileEntry {
-  const foreign = foreignIn(text, language);
-  return {
-    version,
-    language,
-    signals: collectSignals(text, language, foreign),
-    definitions: collectSignalDefinitions(text, language, foreign),
-    selectors: collectSelectors(text),
-    constants: language === "kotlin" ? constantNames(text) : new Set(),
-    others: language === "kotlin" ? otherDeclaredNames(text) : new Set(),
-  };
+const NO_DRIFT: DriftFacts = { declared: [], readInto: [], encoded: [], patched: [], classes: [], reads: [], packageName: "", imports: [] };
+
+/** The names in one list and not the other. */
+function changed(a: readonly string[], b: readonly string[]): string[] {
+  const inA = new Set(a);
+  const inB = new Set(b);
+  return [...a.filter((n) => !inB.has(n)), ...b.filter((n) => !inA.has(n))];
 }
 
-function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a.size !== b.size) return false;
-  for (const n of a) if (!b.has(n)) return false;
-  return true;
+/** Whether two lists of distinct names hold the same names. */
+function sameNames(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const names = new Set(a);
+  return b.every((n) => names.has(n));
 }

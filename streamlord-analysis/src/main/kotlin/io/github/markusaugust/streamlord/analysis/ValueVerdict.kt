@@ -4,8 +4,7 @@ import io.github.markusaugust.streamlord.core.domain.Position
 
 /*
  * What a value's fact says of it, written into markup: the one place the analysis asks which fact
- * a value has, so a rule is given once and named. The twin of valueVerdict.ts; the table both
- * hold is in twins/value-verdict.json. A fact of null is a value of unknown type.
+ * a value has, so a rule is given once and named. The table is in cases/value-verdict.json. A fact of null is a value of unknown type.
  */
 
 /** What a fact alone says of a value a Kotlin template writes into a position. */
@@ -35,9 +34,10 @@ internal fun verdict(
             if (plain.scalar()) Verdict.SAFE else Verdict.ESCAPE
         }
 
+        // `true` or `false` is no CSS that does harm.
         Position.STYLE -> {
             when (plain) {
-                ValueFact.NUMBER -> Verdict.SAFE
+                ValueFact.NUMBER, ValueFact.BOOLEAN -> Verdict.SAFE
                 ValueFact.UNSIGNED -> Verdict.DIGITS
                 else -> Verdict.UNSAFE
             }
@@ -51,7 +51,12 @@ internal fun verdict(
             }
         }
 
-        Position.CODE, Position.STRUCTURE -> {
+        // Digits, true, false or null cannot end a script, a style or an event handler; the text of an open Number may.
+        Position.CODE -> {
+            if (plain.scalar() && fact != ValueFact.OPEN_NUMBER) Verdict.SAFE else Verdict.UNSAFE
+        }
+
+        Position.STRUCTURE -> {
             Verdict.UNSAFE
         }
     }
@@ -65,8 +70,14 @@ internal fun verdict(
 public fun ValueFact?.writesItself(): Boolean =
     this == ValueFact.CONSTANT || this == ValueFact.NUMBER || this == ValueFact.BOOLEAN || this == ValueFact.UNSIGNED
 
-/** A fact as the judgement reads it: a `String?` is a String, whose null only the fixes ask about. */
-internal fun ValueFact?.plain(): ValueFact? = if (this == ValueFact.NULLABLE_STRING) ValueFact.STRING else this
+/** A fact as the judgement reads it: a `String?` is a String and a `Trusted` markup, whose difference only the fixes ask about. */
+internal fun ValueFact?.plain(): ValueFact? =
+    when (this) {
+        ValueFact.NULLABLE_STRING -> ValueFact.STRING
+        ValueFact.TRUSTED -> ValueFact.MARKUP
+        ValueFact.OPEN_NUMBER -> ValueFact.NUMBER
+        else -> this
+    }
 
 /** Markup is the author's own in element text; in an attribute or code it is characters that can break out. */
 private fun ValueFact?.ownAt(position: Position): Boolean =
@@ -97,10 +108,11 @@ internal fun ValueFact.described(): String = if (this == ValueFact.UNSIGNED) "an
 internal fun ValueFact?.argKind(): ArgKind? =
     when (this) {
         ValueFact.STRING, ValueFact.NULLABLE_STRING -> ArgKind.STRING
-        ValueFact.NUMBER -> ArgKind.NUMBER
+        ValueFact.NUMBER, ValueFact.OPEN_NUMBER -> ArgKind.NUMBER
         ValueFact.UNSIGNED -> ArgKind.UNSIGNED
         ValueFact.BOOLEAN -> ArgKind.BOOLEAN
         ValueFact.MARKUP -> ArgKind.MARKUP
+        ValueFact.TRUSTED -> ArgKind.TRUSTED
         else -> null
     }
 
@@ -120,23 +132,26 @@ internal fun ValueFact?.isNullable(): Boolean = this == ValueFact.NULLABLE
 internal fun ValueFact?.isOther(): Boolean = this == ValueFact.OTHER
 
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */
-public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP
+public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP || this == ValueFact.TRUSTED
 
 /** Each kind from the one safe in the fewest places to the one safe everywhere. */
 private val WEAKEST_FIRST =
     listOf(
         ValueFact.STRING,
         null,
+        ValueFact.COLLECTION,
         ValueFact.OTHER,
         ValueFact.MARKUP,
+        ValueFact.TRUSTED,
         ValueFact.NULLABLE,
         ValueFact.UNSIGNED,
+        ValueFact.OPEN_NUMBER,
         ValueFact.BOOLEAN,
         ValueFact.NUMBER,
         ValueFact.CONSTANT,
     )
 
-/** Of the kinds a hole's values have, the one safe in the fewest places; one not known stands between a String and markup. */
+/** Of the kinds a placeholder's values have, the one safe in the fewest places; one not known stands between a String and markup. */
 internal fun weakest(kinds: List<ValueFact?>): ValueFact? {
     val worst = kinds.minOfOrNull { WEAKEST_FIRST.indexOf(it) } ?: WEAKEST_FIRST.lastIndex
     return WEAKEST_FIRST[worst]

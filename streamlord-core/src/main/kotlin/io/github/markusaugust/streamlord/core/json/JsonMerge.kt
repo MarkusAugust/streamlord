@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core.json
 
+import kotlin.math.floor
+
 /**
  * RFC 7386 JSON merge patch, which is what a Datastar signal patch is.
  *
@@ -38,7 +40,7 @@ public class SignalPatchException(
 ) : IllegalArgumentException(message)
 
 /**
- * The store as the Datastar 1.0.4 client reads it after a signal patch: `mergePatch` and
+ * The store as the Datastar 1.0.5 client reads it after a signal patch: `mergePatch` and
  * `mergeInner` in the client's `signals.ts`, which differ from [mergePatch] in four ways.
  *
  * `onlyIfMissing` is honoured leaf by leaf, so a nested object is still walked and only the
@@ -130,13 +132,13 @@ private fun open(value: Any?): Any? =
 private fun freeze(value: Any): JsonValue =
     when (value) {
         is JsArray -> {
-            value.items.replaceAll(::freeze)
+            for (i in value.items.indices) value.items[i] = freeze(value.items[i])
             @Suppress("UNCHECKED_CAST")
             JsonArray(value.items as List<JsonValue>).also { it.jsOrdered = true }
         }
 
         is JsObject -> {
-            value.fields.replaceAll { _, v -> freeze(v) }
+            for (field in value.fields.entries) field.setValue(freeze(field.value))
             @Suppress("UNCHECKED_CAST")
             JsonObject(inJsOrder(value.fields as Map<String, JsonValue>)).also { it.jsOrdered = true }
         }
@@ -251,7 +253,7 @@ private class ClientMerge(
         items[index.toInt()] = value
     }
 
-    // `delete` leaves a hole, read as ""; deleting an array's length is a TypeError in the client's strict-mode code.
+    // `delete` leaves an empty slot, read as ""; deleting an array's length is a TypeError in the client's strict-mode code.
     private fun delete(
         parent: Any,
         key: String,
@@ -279,7 +281,7 @@ private fun arrayIndex(key: String): Long? = key.toLongOrNull()?.takeIf { it >= 
 /** What `array.length = value` takes [value] for, or `null` where the browser throws a `RangeError`. */
 private fun arrayLength(value: Any): Long? {
     val number = jsNumber(value)
-    return if (number >= 0 && number <= 4294967295.0 && number == Math.floor(number)) number.toLong() else null
+    return if (number >= 0 && number <= 4294967295.0 && number == floor(number)) number.toLong() else null
 }
 
 /** JavaScript's `Number(value)`, for a value of the store. */
@@ -324,7 +326,7 @@ private class Refusal(
 
 private const val PROTO = "__proto__"
 
-/** Why a patch with a key `__proto__` is refused; the VS Code fold in sse.ts gives the same text. */
+/** Why a patch with a key `__proto__` is refused. */
 internal const val PROTO_REFUSED =
     "A key named __proto__ whose value is an object with keys mostly makes Datastar's client throw at that key, " +
         "and the bindings on the page then stop redrawing. Otherwise the client gives the object holding the key " +

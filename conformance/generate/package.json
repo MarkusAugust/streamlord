@@ -7,7 +7,8 @@
     "reference": "node reference.mjs",
     "client": "node client.mjs",
     "dom": "node dom.mjs",
-    "dsl": "node dsl.mjs"
+    "dsl": "node dsl.mjs",
+    "pro": "node pro.mjs"
   },
   "devDependencies": {
     "esbuild": "0.25.5",

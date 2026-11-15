@@ -3,8 +3,10 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
+import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.decodeEntities
-import io.github.markusaugust.streamlord.core.domain.AttributeKeys
+import io.github.markusaugust.streamlord.core.client.radixDouble
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.MarkupVisitor
@@ -14,6 +16,7 @@ import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import kotlin.math.abs
+import kotlin.math.floor
 
 /*
  * Markup checks for the HTML Datastar patches: complete elements, ids where the protocol needs
@@ -21,16 +24,16 @@ import kotlin.math.abs
  */
 
 /** An attribute name as a browser parses it, without template syntax or a spread in it. */
-private val PLAIN_ATTRIBUTE_NAME = Regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
+private val PLAIN_ATTRIBUTE_NAME = regex("""[A-Za-z_:][A-Za-z0-9_:.@-]*""")
 
 /** A modifier name with arguments run into it by underscores, and nothing else. */
-private val MODIFIER_WORD = Regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
+private val MODIFIER_WORD = regex("""[a-z][a-z0-9]*(?:_[A-Za-z0-9]+)+""")
 
 private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr")
 
-private val JS_DECIMAL = Regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+private val JS_DECIMAL = regex("[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
 
-private val JS_RADIX = Regex("0([xob])([0-9a-f]+)")
+private val JS_RADIX = regex("0([xob])([0-9a-f]+)")
 
 /** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
 private val FIRST_TAG_READ = setOf(ModifierType.DURATION, ModifierType.INT, ModifierType.IDENT)
@@ -47,7 +50,7 @@ private const val JS_SPACE =
 private fun jsNumber(tag: String): Double? {
     val t = tag.trim { it in JS_SPACE }.asciiLowercase()
     if (t.isEmpty()) return 0.0
-    if (JS_DECIMAL.matches(t)) return t.toDouble()
+    if (JS_DECIMAL.matchEntire(t) != null) return t.toDouble()
     val m = JS_RADIX.matchEntire(t) ?: return null
     val radix =
         when (m.groupValues[1]) {
@@ -55,11 +58,11 @@ private fun jsNumber(tag: String): Double? {
             "o" -> 8
             else -> 2
         }
-    return m.groupValues[2].toBigIntegerOrNull(radix)?.toDouble()
+    return radixDouble(m.groupValues[2], radix)
 }
 
 /** What JavaScript's `parseFloat` reads from the start of a tag: digits, and an exponent if one follows. */
-private val JS_FLOAT_PREFIX = Regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
+private val JS_FLOAT_PREFIX = regex("^[+-]?[0-9]+(?:e[+-]?[0-9]+)?")
 
 /**
  * `tagToMs` in tags.ts for one tag: the milliseconds the client waits, `Number` of what comes
@@ -99,37 +102,26 @@ private val OPTIONAL_END: Map<String, Set<String>> =
         "tfoot" to setOf("tbody"),
     )
 
-/**
- * Where a template engine or a Kotlin template will substitute text, the expression cannot be
- * judged before rendering: Pebble, Twig, Jinja, Handlebars and Mustache (`{{ }}`, `{% %}`),
- * ERB, EJS and JTE comments (`<% %>`), Kotlin, Thymeleaf, FreeMarker, JTE, kte and Velocity
- * (`${ }`, and JTE's `!{ }` for unescaped output), Thymeleaf's `*{ }`, `#{ }` and `@{ }`,
- * FreeMarker's square-bracket syntax (`[# ]`, `[= ]`), JTE's control flow (`@if`, `@for`,
- * ...), Velocity's (`#if`, `#foreach`, ...), and the placeholder for a Kotlin interpolation.
- */
-public val TEMPLATE_SYNTAX: Regex =
-    Regex(
-        """\{\{|\{%|<%|[$!*#@]\{|\[#|\[=|(?:^|[\s>])@(?:if|elseif|else|endif|for|endfor|template|import|param|raw|endraw)\b|""" +
-            """(?:^|[\s>])#(?:if|elseif|else|end|foreach|set|macro|parse|include)\b|__kt__""",
-    )
-
 /** Datastar reads `500ms`, `1s`, and a bare number as milliseconds. */
-private val DURATION = Regex("""^\d+(ms|s)?$""")
-private val WHOLE_NUMBER = Regex("""^\d+$""")
+private val DURATION = regex("""^\d+(ms|s)?$""")
+private val WHOLE_NUMBER = regex("""^\d+$""")
 
 /** A value that looks like a name, so that its problems as a name are told rather than called an expression. */
-private val NAME_LIKE = Regex("""[\p{L}\p{Nd}_$.-]+""")
+private val NAME_LIKE = regex("""[\p{L}\p{Nd}_$.-]+""")
 
 /** A `$name` in a filter, which the client evaluates without rewriting signals. */
-private val FILTER_SIGNAL = Regex("""\$[A-Za-z_][\w$]*""")
-private val WORD_CHAR_CLASS = Regex("""\w""")
-private val IDENT = Regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
-private val SIGNAL_NAME = Regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
-private val HAS_CAPITAL = Regex("""[A-Z]""")
-private val HAS_LOWERCASE = Regex("""[a-z]""")
+private val FILTER_SIGNAL = regex("""\$[A-Za-z_][\w$]*""")
+private val WORD_CHAR_CLASS = regex("""\w""")
+private val IDENT = regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
+private val SIGNAL_NAME = regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
+
+// A signal's name as the client reads one after `$`, without the `$`.
+private val BARE_SIGNAL = regex("""[A-Za-z_]\w*(?:[.-]\w+)*""")
+private val HAS_CAPITAL = regex("""[A-Z]""")
+private val HAS_LOWERCASE = regex("""[a-z]""")
 
 /** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */
-private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
+private val KEY_ESCAPE = regex("""(?s)\\(.)""")
 
 /**
  * The path of a key of the object form, part by part as the keys are written and read as the
@@ -139,7 +131,7 @@ private val KEY_ESCAPE = Regex("""\\(.)""", RegexOption.DOT_MATCHES_ALL)
 private fun keyParts(k: ObjectKey): List<String> = k.parts.map { p -> KEY_ESCAPE.replace(p) { it.groupValues[1] } }
 
 /** A number literal, whole. */
-private val NUMBER = Regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
+private val NUMBER = regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 private val NO_FUNCTION_WORDS = setOf("true", "false", "null", "undefined", "NaN", "Infinity")
 private val UNARY_WORDS = setOf("typeof", "void", "delete")
 private val BINARY_WORDS = setOf("in", "instanceof")
@@ -150,14 +142,16 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
  * string, a template, a regular expression, an array with such an item), a unary operation, or
  * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
  * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
- * judged. Shared with the VS Code extension (`certainlyNoFunction` in markup.ts), which this
- * follows step by step.
+ * judged.
  */
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
     if (v.isEmpty()) return false
-    if (NUMBER.matches(v) || v in NO_FUNCTION_WORDS) return true
     val regions = jsRegions(v)
+    // A comment around a number is space, but for a line comment at the end, which may run past the end of the value.
+    val ends = v.lastIndexOf("//").let { it >= 0 && regions[it] == Region.COMMENT && '\n' !in v.substring(it) }
+    val bare = CharArray(v.length) { if (regions[it] == Region.COMMENT && !ends) ' ' else v[it] }.concatToString().trim()
+    if (NUMBER.matchEntire(bare) != null || bare in NO_FUNCTION_WORDS) return true
     var depth = 0
     var binary = false
     var unary = false
@@ -307,7 +301,6 @@ private fun arrayItems(
  * value or stands where the value of a group, a conditional or a `||`, `&&`, `??` or `,` comes
  * from, as in `({x: 1})`, `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put
  * in an array or returned by a function does not count, and a value with `=>` in it is a function.
- * Shared with the VS Code extension (`mayGiveObject` in markup.ts).
  */
 internal fun mayGiveObject(value: String): Boolean {
     val regions = jsRegions(value)
@@ -371,10 +364,34 @@ private fun valueEnd(
 
 /**
  * Does the value hold template syntax, so that it cannot be judged before rendering? A `${`
- * inside a JavaScript template literal is JavaScript's own and does not count.
+ * inside a JavaScript template literal is JavaScript's own and does not count; an engine whose
+ * rules differ is read through [judgedValue].
  */
-public fun hasTemplateSyntax(value: String): Boolean =
-    TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quoteAt(value, it.range.first) != '`' }
+internal fun hasTemplateSyntax(value: String): Boolean {
+    val quotes = QuoteScan(value)
+    return TEMPLATE_SYNTAX.findAll(value).any { it.value != "\${" || quotes.at(it.range.first) != '`' }
+}
+
+/** Whether [value] holds template syntax besides the [PLACEHOLDER] of a Kotlin template, which the expression checks read around. */
+internal fun hasForeignTemplateSyntax(value: String): Boolean = hasTemplateSyntax(value.replace(PLACEHOLDER, "kt____"))
+
+/**
+ * The issues of [text], an expression with a [PLACEHOLDER] where a Kotlin template or a `%s` writes a
+ * value the code computes: none on a placeholder, whose text is not the value's, and the rest judged
+ * as ever. Where a placeholder in code may be a signal the author meant, `$count` read by Kotlin, as
+ * [signalMeant] says of its offset, the syntax is that reading's too and no syntax error is told.
+ */
+internal fun aroundPlaceholders(
+    text: String,
+    issues: List<Issue>,
+    signalMeant: (Int) -> Boolean = { true },
+): List<Issue> {
+    if (PLACEHOLDER !in text) return issues
+    val at = generateSequence(text.indexOf(PLACEHOLDER)) { text.indexOf(PLACEHOLDER, it + 1).takeIf { n -> n >= 0 } }.toList()
+    val regions by lazy(LazyThreadSafetyMode.NONE) { jsRegions(text) }
+    val syntax = issues.none { it.code == "expression-syntax" } || at.none { regions[it] == Region.CODE && signalMeant(it) }
+    return issues.filter { i -> (syntax || i.code != "expression-syntax") && at.none { i.start < it + PLACEHOLDER.length && i.end > it } }
+}
 
 /** Whether a template construct starts at [at] in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
 private fun cutByTemplate(
@@ -382,8 +399,11 @@ private fun cutByTemplate(
     at: Int,
 ): Boolean = tagSource.getOrNull(at) == '{' || (at < tagSource.length && templateConstructEnd(tagSource, at) > at)
 
+/** What a signal's read follows where an expression starts: nothing, an operator or an opening bracket. */
+private const val EXPRESSION_STARTS = "(!&|=+-*/%<>?:,[{;"
+
 /** A Kotlin template, `$name` or `${...}`, in a name written in Kotlin source. */
-private val KOTLIN_TEMPLATE = Regex("""\$[A-Za-z_{]""")
+private val KOTLIN_TEMPLATE = regex("""\$[A-Za-z_{]""")
 
 public data class Attribute(
     val name: String,
@@ -426,6 +446,8 @@ public data class MarkupOptions(
     val hyphenatedSignals: Set<String> = emptySet(),
     /** Whether the markup is a template's or an HTML file's, whose template comments and tags are skipped, rather than a Kotlin string's. */
     val templates: Boolean = true,
+    /** As [Source.prefixSetting]. */
+    val prefixSetting: String = PREFIX_SETTING,
 )
 
 /**
@@ -495,8 +517,142 @@ public fun tokenize(
     return Tokens(tags, topLevelText)
 }
 
+/**
+ * A start tag closes the open elements whose end tag was left out: `<li>` closes the `<li>`
+ * before it, `<tbody>` closes the cell, the row and the `<thead>` above it. The search stops
+ * at the first element that needs its end tag.
+ */
+private fun <T> closeImplied(
+    stack: MutableList<T>,
+    opening: String,
+    name: (T) -> String,
+) {
+    var i = stack.size - 1
+    while (i >= 0) {
+        val closers = OPTIONAL_END[name(stack[i])] ?: return
+        if (opening in closers) {
+            while (stack.size > i) stack.removeAt(stack.size - 1)
+        }
+        i--
+    }
+}
+
+/**
+ * The start tags of [tags] whose attributes the client applies: not an element with
+ * `data-ignore`, nor one inside it, nor one with `data-ignore__self` (shouldIgnore in engine.ts).
+ * An element that carries the ignore attribute itself keeps that attribute alone, so that what is
+ * wrong with it is still said.
+ */
+internal fun appliedTags(
+    tags: List<Tag>,
+    prefix: String,
+): List<Tag> {
+    val ignore = prefix + "ignore"
+    val self = ignore + "__self"
+    val out = ArrayList<Tag>()
+    // The open elements, each with whether it or one around it has data-ignore.
+    val open = ArrayList<Pair<String, Boolean>>()
+    for (tag in tags) {
+        if (tag.closing) {
+            val idx = open.indexOfLast { it.first == tag.name }
+            if (idx >= 0) while (open.size > idx) open.removeAt(open.size - 1)
+            continue
+        }
+        closeImplied(open, tag.name) { it.first }
+        val names = tag.attributes.map { it.name.asciiLowercase() }
+        val ignored = open.lastOrNull()?.second == true || ignore in names
+        if (!ignored && self !in names) {
+            out += tag
+        } else if (ignore in names || self in names) {
+            out += tag.copy(attributes = tag.attributes.filter { it.name.asciiLowercase().let { n -> n == ignore || n == self } })
+        }
+        if (!tag.selfClosing) open += tag.name to ignored
+    }
+    return out
+}
+
+/**
+ * A value of another library's: Knockout's or Vue's `name: value` binding, or words, as a share
+ * button's text.
+ */
+private val FOREIGN_VALUE =
+    regex(
+        """\s*(?:[A-Za-z_][\w-]*\s*:\s*\S.*|[A-Za-z\x{80}-\x{10FFFF}][\w'.,!?\x{80}-\x{10FFFF}-]*""" +
+            """(?:\s+[\w'.,!?\x{80}-\x{10FFFF}-]+)+)\s*""",
+    )
+
+/**
+ * The SVG attributes whose name has a capital, by that name in lower case without hyphens: the
+ * table the HTML parser adjusts SVG attributes by (https://html.spec.whatwg.org/#adjust-svg-attributes).
+ */
+private val SVG_NAMES: Map<String, String> =
+    """
+    attributeName attributeType baseFrequency baseProfile calcMode clipPathUnits diffuseConstant edgeMode
+    filterUnits glyphRef gradientTransform gradientUnits kernelMatrix kernelUnitLength keyPoints keySplines
+    keyTimes lengthAdjust limitingConeAngle markerHeight markerUnits markerWidth maskContentUnits maskUnits
+    numOctaves pathLength patternContentUnits patternTransform patternUnits pointsAtX pointsAtY pointsAtZ
+    preserveAlpha preserveAspectRatio primitiveUnits refX refY repeatCount repeatDur requiredExtensions
+    requiredFeatures specularConstant specularExponent spreadMethod startOffset stdDeviation stitchTiles
+    surfaceScale systemLanguage tableValues targetX targetY textLength viewBox viewTarget xChannelSelector
+    yChannelSelector zoomAndPan
+    """.split(' ', '\n')
+        .filter { it.isNotEmpty() }
+        .associateBy { it.asciiLowercase() }
+
+/** `attributes["data-ignore"] = ...` in Kotlin under [prefix], kotlinx.html's own way to write what `dataIgnore()` writes. */
+private fun ignoreIndex(prefix: String) = regex("""\battributes\s*\[\s*"${prefixPattern(prefix)}ignore(__self)?"\s*]""")
+
+/**
+ * Where a Kotlin file builds an element with `dataIgnore()` or `attributes["data-ignore"]`, which
+ * the client leaves alone with all it holds: the DSL calls and strings at those offsets are not
+ * judged, as markup under data-ignore is not. With `self` it is the element's own calls alone,
+ * those of its block and none nested deeper.
+ */
+internal fun dslIgnored(
+    src: String,
+    lex: KotlinLex,
+    foreign: (name: String, nameStart: Int) -> Boolean,
+    prefix: String,
+): (Int) -> Boolean {
+    if (!src.contains("ignore", ignoreCase = true)) return { false }
+    val blocks = lex.blocks(src)
+    val whole = ArrayList<IntRange>()
+    val own = HashSet<IntRange>()
+
+    fun add(
+        at: Int,
+        self: Boolean,
+    ) {
+        val block = blocks.around(at) ?: return
+        if (self) own += block else whole += block
+    }
+    for (site in findCallSites(src, setOf("dataIgnore"), lex)) {
+        if (foreign(site.name, site.nameStart)) continue
+        add(site.nameStart, (site.named("self") ?: site.positional.firstOrNull())?.text?.trim() == "true")
+    }
+    for (m in ignoreIndex(prefix).findAll(src)) if (lex.mask[m.range.first]) add(m.range.first, m.groupValues[1].isNotEmpty())
+    if (whole.isEmpty() && own.isEmpty()) return { false }
+    return { at -> whole.any { at in it } || blocks.around(at) in own }
+}
+
+/**
+ * The elements of SVG, as the HTML parser lowercases their names, but those HTML has too (`a`,
+ * `script`, `style`, `title`): the ones an attribute of [SVG_NAMES] belongs on.
+ */
+private val SVG_ELEMENTS =
+    """
+    animate animatemotion animatetransform circle clippath defs desc ellipse filter foreignobject g image line
+    lineargradient marker mask metadata mpath path pattern polygon polyline radialgradient rect set stop svg switch
+    symbol text textpath tspan use view
+    """.split(' ', '\n')
+        .filter { it.isNotEmpty() }
+        .toSet()
+
+/** Whether [name], a tag's name in lower case, is an SVG element's: one of [SVG_ELEMENTS] or a filter primitive, `fe...`. */
+private fun isSvgElement(name: String): Boolean = name in SVG_ELEMENTS || (name.startsWith("fe") && name.length > 2)
+
 /** The `<` or `</` of a tag whose name is a Kotlin template's placeholder, which the browser would read as a name. */
-private val KOTLIN_TAG_NAME = Regex("""(</?)__kt__""")
+private val KOTLIN_TAG_NAME = regex("""(</?)__kt__""")
 
 /**
  * [html] with the placeholder of a Kotlin template as a tag's name, `<$tag>`, turned into a name of
@@ -518,7 +674,7 @@ internal fun withTemplateTagNames(html: String): String =
  * text.ts) and no key gives it back; [ClientCasing.readsAs] says what it would read. Shared by the HTML
  * warning and the Kotlin wire hint.
  */
-public fun wireKey(
+internal fun wireKey(
     key: String,
     keyCase: KeyCase?,
     explicitCase: String?,
@@ -567,16 +723,65 @@ private fun emptyKeyAdvice(
 }
 
 /** The key as the client recases it: each value of the last `__case` in turn, or the attribute's default without one. */
-private fun clientCase(
+internal fun clientCase(
     key: String,
     modifiers: List<ParsedModifier>,
     defaultCase: String,
 ): String = ClientCasing.modifyCasing(key, modifiers.lastOrNull { it.name == "case" }?.args?.distinct(), defaultCase)
 
-/** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
-public enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
+/** The event the attribute named [name] listens for, as the client recases its key, or null where it is no data-on with a key. */
+internal fun Catalog.listensFor(
+    name: String,
+    prefix: String,
+): String? {
+    val parsed = parseAttributeName(name.asciiLowercase(), prefix) ?: return null
+    if (parsed.spec?.name != "on" || parsed.key.isNullOrEmpty()) return null
+    return clientCase(parsed.key, parsed.modifiers, "kebab")
+}
 
-public fun keyKind(spec: AttributeSpec): KeyKind =
+/**
+ * The DOM event [key] is once lowercased, where it is written with a capital and only its lower
+ * case names one: `keyDown` is keydown, `DOMContentLoaded` is itself. Null otherwise.
+ */
+internal fun Catalog.lowercaseDomEvent(key: String): String? {
+    val lower = key.asciiLowercase()
+    if (lower == key || domEvents.none { it.name == lower } || domEvents.any { it.name == key }) return null
+    return lower
+}
+
+/** The DOM event in mixed case that [key], written in lower case, is not: webkitanimationend for webkitAnimationEnd. */
+internal fun Catalog.mixedCaseDomEvent(key: String): String? =
+    domEvents.firstOrNull { it.name != key && it.name.asciiLowercase() == key }?.name
+
+/**
+ * The event a DSL call's expression is run for: `dataOnFetch`'s, the one `dataOn` is handed as a
+ * literal, or the one a helper of data-on is named for, `dataOnKeydown`'s keydown.
+ */
+internal fun dslEvent(site: CallSite): String? =
+    when (site.name) {
+        "dataOnFetch" -> {
+            DATASTAR_FETCH
+        }
+
+        "dataOn" -> {
+            (site.named("event") ?: site.positional.firstOrNull())?.string?.takeIf { it.interpolations.isEmpty() }?.text
+        }
+
+        else -> {
+            site.name
+                .takeIf { Catalog.default.attributesByKotlin[it]?.name == "on" }
+                ?.removePrefix("dataOn")
+                ?.lowercase()
+        }
+    }
+
+/** The event Datastar dispatches at each step of a backend action's request. */
+internal const val DATASTAR_FETCH = "datastar-fetch"
+
+/** What a key is to Datastar: the noun the messages and the hover use, from `keyCase` in the catalog. */
+internal enum class KeyKind { SIGNAL, EVENT, CLASS, RAW }
+
+internal fun keyKind(spec: AttributeSpec): KeyKind =
     when (spec.keyCase) {
         KeyCase.CAMEL -> KeyKind.SIGNAL
         KeyCase.KEBAB -> if (spec.name == "on") KeyKind.EVENT else KeyKind.CLASS
@@ -588,7 +793,7 @@ public fun keyKind(spec: AttributeSpec): KeyKind =
  * "the class isOpen", or, for a raw key, the key itself. One wording for the HTML warning, the
  * Kotlin wire hint and the hover note.
  */
-public fun keyReading(
+internal fun keyReading(
     spec: AttributeSpec,
     name: String,
     wire: String,
@@ -603,9 +808,9 @@ public fun keyReading(
 /**
  * What a raw key with a capital can do, said once, where it applies: an attribute keeps its name in
  * the object form (attr.ts sets the key as written); a style property has no form that keeps one,
- * since the object form writes the key kebab-case (style.ts:50 in 1.0.4).
+ * since the object form writes the key kebab-case (style.ts:50 in 1.0.5).
  */
-public fun rawKeyNote(
+internal fun rawKeyNote(
     spec: AttributeSpec,
     prefix: String,
     key: String,
@@ -615,7 +820,7 @@ public fun rawKeyNote(
             ""
         }
 
-        // The object form writes a key kebab-case too (style.ts:50 in 1.0.4), so no form keeps a capital.
+        // The object form writes a key kebab-case too (style.ts:50 in 1.0.5), so no form keeps a capital.
         spec.name == "style" && key.startsWith("--") -> {
             " No form keeps a capital in a custom property: name it in kebab-case, here and in the CSS, as ${ClientCasing.kebab(key)}."
         }
@@ -639,7 +844,7 @@ public class MarkupValidator(
     private val backendActions = catalog.actions.filter { it.kind == "backend" }.map { it.name }
 
     /** A call to one of them, written as Datastar parses it: no space before the parenthesis. */
-    private val backendAction = Regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
+    private val backendAction = regex("@(?:" + backendActions.joinToString("|") { Regex.escape(it) } + ")\\(")
 
     public fun validateMarkup(
         html: String,
@@ -647,6 +852,7 @@ public class MarkupValidator(
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         val (tags, topLevelText) = tokenize(html, opts.templates)
+        val applied = if (opts.checkAttributes) appliedTags(tags, opts.prefix).associateBy { it.start } else emptyMap()
         val stack = ArrayList<Tag>()
         val topLevel = ArrayList<Tag>()
         for (tag in tags) {
@@ -663,12 +869,19 @@ public class MarkupValidator(
                 }
                 continue
             }
-            closeImplied(stack, tag.name)
+            closeImplied(stack, tag.name) { it.name }
             if (stack.isEmpty()) topLevel += tag
             if (!tag.selfClosing) stack += tag
-            if (opts.checkAttributes) {
+            applied[tag.start]?.let { read ->
                 issues +=
-                    validateAttributes(tag, opts.prefix, html.substring(tag.start, tag.end), opts.hyphenatedSignals)
+                    validateAttributes(
+                        read,
+                        opts.prefix,
+                        html.substring(tag.start, tag.end),
+                        opts.hyphenatedSignals,
+                        prefixSetting = opts.prefixSetting,
+                        movable = opts.templates,
+                    )
             }
         }
         for (unclosed in stack) {
@@ -709,30 +922,103 @@ public class MarkupValidator(
         return issues
     }
 
-    /**
-     * A start tag closes the open elements whose end tag was left out: `<li>` closes the `<li>`
-     * before it, `<tbody>` closes the cell, the row and the `<thead>` above it. The search stops
-     * at the first element that needs its end tag.
-     */
-    private fun closeImplied(
-        stack: MutableList<Tag>,
-        opening: String,
-    ) {
-        var i = stack.size - 1
-        while (i >= 0) {
-            val closers = OPTIONAL_END[stack[i].name] ?: return
-            if (opening in closers) {
-                while (stack.size > i) stack.removeAt(stack.size - 1)
-            }
-            i--
-        }
-    }
-
     /** Validate the Datastar attributes on one tag. */
     public fun validateAttributes(
         tag: Tag,
         prefix: String,
     ): List<Issue> = validateAttributes(tag, prefix, null)
+
+    /**
+     * The one Datastar attribute the bare name of [attr] is one edit from, two letters swapped
+     * among them, where something says the author meant Datastar. `data-test`, `data-kind` and
+     * `data-unit` are honest names one edit from Datastar's, so the name alone says nothing. The
+     * value says it where it reads a signal or calls an action of the catalog, as the client
+     * finds them, at a place an expression could start, and holds no template of its own: `$5`,
+     * `costs $five`, `{{ $foo }}` and `@if($x)` are money and another language. No value says it
+     * where that attribute is written without one. An attribute that needs a key is never meant by
+     * a name without one.
+     */
+    private fun meantAttribute(
+        base: String,
+        attr: Attribute,
+    ): AttributeSpec? {
+        val value = decodeEntities(attr.value.orEmpty()).text
+        val near =
+            catalog.attributes.filter { ElementsGuard.oneEditAway(base, it.name, swaps = true) }.singleOrNull()
+                // data-text-foo: a key after a hyphen on an attribute that takes none, which the client looks up as text-foo.
+                ?: catalog.attributes
+                    .filter { !it.keyed && base.startsWith(it.name + "-") }
+                    .maxByOrNull { it.name.length }
+                    ?.takeIf { value.isNotEmpty() }
+                ?: return null
+        if (near.keyRequired) return null
+        if (value.isEmpty()) return near.takeIf { it.valueKind == ValueKind.NONE || it.valueKind == ValueKind.FILTER }
+        return near.takeIf { readsAsDatastar(value) }
+    }
+
+    /**
+     * Whether [value] reads a signal or calls an action of the catalog, as the client finds them, at
+     * a place an expression could start, with no template of its own: `$5`, `costs $five`,
+     * `{{ $foo }}` and `@if($x)` are money and another language.
+     */
+    private fun readsAsDatastar(value: String): Boolean {
+        val read = clientRewrite(value).rewrites
+        return !hasTemplateSyntax(
+            value,
+        ) && "<?" !in value && "<%" !in value && read.all { it.signal || it.name in catalog.actionsByName } &&
+            read.any { r ->
+                !r.signal ||
+                    (
+                        r.name.first().let { it.isLetter() || it == '_' } &&
+                            value.lastNonSpaceBefore(r.start).let { it == null || it in EXPRESSION_STARTS }
+                    )
+            }
+    }
+
+    /**
+     * What to do where [value] of the attribute [name] fails as Datastar's and reads nothing of it,
+     * as Knockout's `data-bind="text: name"` and a share button's `data-text="Check this out"` do:
+     * keep Datastar off the element. Empty where the value reads a signal or calls an action.
+     */
+    private fun foreignNote(
+        name: String,
+        prefix: String,
+        value: String,
+    ): String {
+        if (FOREIGN_VALUE.matchEntire(value) == null || clientRewrite(value).rewrites.isNotEmpty()) return ""
+        val alias = if (prefix == CatalogNames.PREFIX) ", or an aliased bundle," else ""
+        return " If ${name.asciiLowercase()} is another library's here, ${prefix}ignore on the element$alias keeps Datastar off it."
+    }
+
+    /**
+     * A plain `data-*` Datastar attribute where the prefix is an alias: the aliased client reads
+     * only names with the alias and ignores this one. Another library may use the same plain names,
+     * which is why one aliases, so only a key, a modifier or a value that reads as Datastar's says
+     * the author meant Datastar.
+     */
+    private fun plainUnderAlias(
+        attr: Attribute,
+        lower: String,
+        prefix: String,
+        prefixSetting: String,
+    ): Issue? {
+        if (prefix == CatalogNames.PREFIX || !lower.startsWith(CatalogNames.PREFIX)) return null
+        val parsed = catalog.parseAttributeName(lower, CatalogNames.PREFIX)?.takeIf { it.spec != null } ?: return null
+        val value = attr.value?.let { decodeEntities(it).text }.orEmpty()
+        // A value the client reads as a signal's name says Datastar only where it is one: Knockout's data-bind="text: name" is not.
+        val datastar =
+            if (parsed.spec!!.valueKind == ValueKind.SIGNAL) BARE_SIGNAL.matchEntire(value.trim()) != null else readsAsDatastar(value)
+        if (parsed.key == null && parsed.modifiers.isEmpty() && !datastar) return null
+        val aliased = prefix + attr.name.substring(CatalogNames.PREFIX.length)
+        return Issue(
+            attr.nameStart,
+            attr.nameEnd,
+            "The prefix is set to $prefix, so Datastar ignores ${attr.name}. Check $prefixSetting.",
+            Severity.WARNING,
+            "prefix-mismatch",
+            fixes = listOf(Fix("Change to $aliased", attr.nameStart, attr.nameStart + CatalogNames.PREFIX.length, prefix)),
+        )
+    }
 
     /**
      * Validate the Datastar attributes on one tag, whose text is [tagSource]: with it, a template
@@ -745,30 +1031,41 @@ public class MarkupValidator(
         tagSource: String?,
         hyphenatedSignals: Set<String> = emptySet(),
         kotlin: Boolean = false,
+        prefixSetting: String = PREFIX_SETTING,
+        movable: Boolean = true,
+        engine: TemplateEngine? = null,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         for (attr in tag.attributes) {
             val lower = attr.name.asciiLowercase()
-            if (prefix == CatalogNames.PREFIX && lower.startsWith(CatalogNames.ALIASED_PREFIX)) {
+            // data-star-rating is another library's: only a name the aliased bundle reads is an aliased Datastar attribute.
+            if (prefix == CatalogNames.PREFIX && lower.startsWith(CatalogNames.ALIASED_PREFIX) &&
+                catalog.parseAttributeName(lower, CatalogNames.ALIASED_PREFIX)?.spec != null
+            ) {
                 issues +=
                     Issue(
                         attr.nameStart,
                         attr.nameEnd,
-                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check the Streamlord attribute prefix setting.",
+                        "This is an aliased Datastar attribute, but the prefix is set to data-. Check $prefixSetting.",
                         Severity.WARNING,
                         "prefix-mismatch",
                     )
                 continue
             }
-            if (!lower.startsWith(prefix)) continue
+            if (!lower.startsWith(prefix)) {
+                plainUnderAlias(attr, lower, prefix, prefixSetting)?.let { issues += it }
+                continue
+            }
             val parsed = catalog.parseAttributeName(lower, prefix) ?: continue
             val nameEnd = attr.nameEnd
             val spec = parsed.spec
-            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"]: a template construct
+            // data-on:${evt}, data-signals:{{ name }}, attributes["data-bind:$key"], Razor's data-bind:@Model.Key: a template construct
             // cut the name short or stands in it, so the key, its modifiers and the value that went with
             // the name are not known until the page is rendered.
             val cut = tagSource != null && cutByTemplate(tagSource, nameEnd - tag.start)
-            val templated = cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name))
+            val templated =
+                cut || hasTemplateSyntax(attr.name) || (kotlin && KOTLIN_TEMPLATE.containsMatchIn(attr.name)) ||
+                    (engine == TemplateEngine.RAZOR && razorConstructs(attr.name).isNotEmpty())
             if (spec == null && templated) continue
             if (spec == null) {
                 // The rule of the runtime guard, which a key or a modifier after the name makes stricter.
@@ -777,23 +1074,34 @@ public class MarkupValidator(
                         .nearAttribute(parsed.base, qualified = parsed.key != null || parsed.modifiers.isNotEmpty())
                         ?.let { catalog.attributesByName.getValue(it) }
                 val baseEnd = attr.nameStart + prefix.length + parsed.base.length
+
+                // A name the guard refuses is a mistake for certain; one it lets pass may be the author's own.
+                fun nearName(
+                    meant: AttributeSpec,
+                    sure: Boolean,
+                ): Issue {
+                    val written = "$prefix${parsed.base}"
+                    val message = if (sure) "Unknown Datastar attribute $written." else "$written is not a Datastar attribute."
+                    return Issue(
+                        start = attr.nameStart,
+                        end = nameEnd,
+                        message = "$message Did you mean $prefix${meant.name}?",
+                        severity = if (sure) Severity.WARNING else Severity.HINT,
+                        code = "unknown-attribute",
+                        link = Docs.attribute(meant),
+                        fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
+                    )
+                }
                 if (near != null) {
-                    issues +=
-                        Issue(
-                            start = attr.nameStart,
-                            end = nameEnd,
-                            message = "Unknown Datastar attribute $prefix${parsed.base}. Did you mean $prefix${near.name}?",
-                            severity = Severity.WARNING,
-                            code = "unknown-attribute",
-                            link = Docs.attribute(near.name),
-                            fixes = listOf(Fix("Change to $prefix${near.name}", attr.nameStart, baseEnd, "$prefix${near.name}")),
-                        )
+                    issues += nearName(near, sure = true)
                     continue
                 }
                 // data-on-click, data-bind-value: the pre-1.0 syntax, which 1.0 reads as an attribute it does not have.
                 val dash = parsed.base.indexOf('-')
                 val keyedSpec =
+                    // data-on- has no key yet to move after a colon: a name half typed.
                     if (dash > 0 &&
+                        dash < parsed.base.length - 1 &&
                         parsed.key == null
                     ) {
                         catalog.attributesByName[parsed.base.substring(0, dash)]?.takeIf { it.keyed }
@@ -820,10 +1128,16 @@ public class MarkupValidator(
                             link = Docs.attribute(if (init) "init" else keyedSpec.name),
                             fixes = listOf(Fix("Change to $fixed", attr.nameStart, baseEnd, fixed)),
                         )
+                    continue
+                }
+                if (parsed.key == null &&
+                    parsed.modifiers.isEmpty()
+                ) {
+                    meantAttribute(parsed.base, attr)?.let { issues += nearName(it, sure = false) }
                 }
                 continue
             }
-            val link = Docs.attribute(spec.name)
+            val link = Docs.attribute(spec)
             if (parsed.key == "" && !templated) {
                 // data-indicator: the client splits the key off at a colon with something after it, so it
                 // looks up an attribute named indicator:, finds none and leaves the element alone.
@@ -873,7 +1187,7 @@ public class MarkupValidator(
             if (!spec.keyed && parsed.key != null && parsed.key !in spec.keys && !templated) {
                 issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
             }
-            if (parsed.key != null && !templated) issues += validateKeyCase(attr, parsed, spec, prefix)
+            if (parsed.key != null && !templated) issues += validateKeyCase(attr, parsed, spec, prefix, tag.name)
             val named = validateSignalNames(attr, parsed, spec, prefix, templated)
             issues += named
             if (!templated) issues += validateDottedKey(attr, parsed, spec, prefix)
@@ -913,6 +1227,7 @@ public class MarkupValidator(
                         "$prefix${spec.name} only works on <${spec.onlyOn.joinToString(">, <")}>.",
                         Severity.WARNING,
                         "wrong-element",
+                        link,
                     )
             }
             // The client reads the nonce off <html> as it loads and throws for an empty one (csp.ts:9-16);
@@ -992,12 +1307,38 @@ public class MarkupValidator(
                         )
                     continue
                 }
+                // The modifiers are a Map in parseAttributeKey: the last one of a name is the one read.
+                val last = parsed.modifiers.last { it.name == mod.name }
+                if (last !== mod) {
+                    if (last.args != mod.args) {
+                        issues +=
+                            Issue(
+                                mstart,
+                                mend,
+                                "Datastar reads only the last __${mod.name}, __${last.text}, and ignores this one.",
+                                Severity.WARNING,
+                                "modifier-args",
+                                link,
+                            )
+                    }
+                    continue
+                }
+                // What a Pro plugin reads of a modifier its reference does not list is not known here.
+                if (spec.pro && !mspec.listed) continue
                 val present = parsed.modifiers.filter { it !== mod }.map { it.name }
                 issues += validateModifierArgs(mspec, mod.args, mstart, mend, spec, present, listensFor).map { it.copy(link = link) }
             }
             val value = attr.value
-            if (value != null && spec.valueKind == ValueKind.EXPRESSION && value.isNotBlank() && !hasTemplateSyntax(value)) {
-                val decoded = decodeEntities(value)
+            // An empty value is no value to the client, which raises ValueRequired where one is
+            // needed and otherwise runs nothing: an empty expression, as a blank one is.
+            if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
+                issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
+            }
+            // The value as the checks judge it, the file's engine's own syntax masked; null where it waits for rendering.
+            val masked = value?.let { judgedValue(it, engine) }
+            val expression = value?.let { judgedValue(it, engine, aroundPlaceholders = true) }
+            if (expression != null && spec.valueKind == ValueKind.EXPRESSION && expression.isNotEmpty()) {
+                val decoded = decodeEntities(expression)
 
                 fun source(
                     start: Int,
@@ -1006,30 +1347,54 @@ public class MarkupValidator(
                     val from = decoded.toSource(start)
                     return attr.valueStart + from to attr.valueStart + if (end > start) maxOf(decoded.toSource(end), from + 1) else from
                 }
-                for (issue in expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec)) {
+                val event =
+                    if (spec.name == "on" &&
+                        !parsed.key.isNullOrEmpty()
+                    ) {
+                        clientCase(parsed.key, parsed.modifiers, "kebab")
+                    } else {
+                        null
+                    }
+                val foreign = if (parsed.key == null && parsed.modifiers.isEmpty()) foreignNote(attr.name, prefix, decoded.text) else ""
+                val judged =
+                    expressions.validate(
+                        decoded.text,
+                        hyphenatedSignals = hyphenatedSignals,
+                        attribute = spec,
+                        event = event,
+                        prefix = prefix,
+                    )
+                for (issue in aroundPlaceholders(decoded.text, judged)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
                         issue.copy(
                             start = start,
                             end = end,
+                            message =
+                                if (issue.code == "expression-syntax" && foreign.isNotEmpty()) {
+                                    issue.message.removeSuffix(".") + "." + foreign
+                                } else {
+                                    issue.message
+                                },
                             fixes = issue.fixes.map { source(it.start, it.end).let { (s, e) -> it.copy(start = s, end = e) } },
                         )
                 }
             }
-            if (value != null && spec.valueKind == ValueKind.FILTER && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (masked != null && spec.valueKind == ValueKind.FILTER && masked.isNotBlank()) {
                 issues += validateFilter(attr, spec, prefix)
             }
-            if (spec.name == "computed" && parsed.key == null && value != null && value.isNotBlank() && !hasTemplateSyntax(value)) {
+            if (spec.name == "computed" && parsed.key == null && masked != null && masked.isNotBlank()) {
                 issues += validateComputedObject(attr, prefix)
             }
-            if (value != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() && !hasTemplateSyntax(value) &&
-                named.none { it.start >= attr.valueStart } && !SIGNAL_NAME.matches(value.trim())
+            if (value != null && masked != null && spec.valueKind == ValueKind.SIGNAL && value.isNotBlank() &&
+                named.none { it.start >= attr.valueStart } && SIGNAL_NAME.matchEntire(value.trim()) == null
             ) {
                 issues +=
                     Issue(
                         attr.valueStart,
                         attr.valueEnd,
-                        "$prefix${spec.name} takes a signal name, not an expression.",
+                        "$prefix${spec.name} takes a signal name, not an expression." +
+                            if (parsed.key == null && parsed.modifiers.isEmpty()) foreignNote(attr.name, prefix, value) else "",
                         Severity.WARNING,
                         "signal-name-expected",
                     )
@@ -1038,8 +1403,97 @@ public class MarkupValidator(
                 issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
             }
         }
+        // attributes["..."] in Kotlin sets one attribute of an element whose others the code around it sets.
+        if (!kotlin) issues += filterWithoutListener(tag, prefix)
         issues += indicatorWithoutAction(tag, prefix, tagSource)
+        issues += indicatorAfterInit(tag, prefix, tagSource, movable)
         return issues
+    }
+
+    /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */
+    private fun filterWithoutListener(
+        tag: Tag,
+        prefix: String,
+    ): List<Issue> {
+        val filter = tag.attributes.firstOrNull { it.name.asciiLowercase() == "${prefix}on-signal-patch-filter" } ?: return emptyList()
+        if (tag.attributes.any { catalog.parseAttributeName(it.name.asciiLowercase(), prefix)?.spec?.name == "on-signal-patch" }) {
+            return emptyList()
+        }
+        return listOf(
+            Issue(
+                filter.nameStart,
+                filter.nameEnd,
+                "${prefix}on-signal-patch-filter does nothing without ${prefix}on-signal-patch on the same element, which reads it.",
+                Severity.WARNING,
+                "wrong-element",
+                Docs.attribute("on-signal-patch-filter"),
+            ),
+        )
+    }
+
+    /**
+     * Whether expression [js] calls a backend action as it runs: in its code, not in a string, nor
+     * in a function it hands on, `setTimeout(() => @get('/x'))`, which sends later.
+     */
+    internal fun sendsAtOnce(js: String): Boolean {
+        val regions = jsRegions(js)
+        val inFunctions by lazy(LazyThreadSafetyMode.NONE) { functionDepths(js, regions) }
+        return backendAction.findAll(js).any { regions[it.range.first] == Region.CODE && inFunctions[it.range.first] == 0 }
+    }
+
+    /**
+     * `data-init` that sends a request, before `data-indicator` on the same element: the client
+     * applies an element's attributes in their order, and `data-init` runs at once, so the request
+     * has started before the indicator listens for it, and the signal stays false. With a modifier
+     * the init waits, a delay or a view transition, and the indicator is there in time. The fix moves
+     * the indicator before the init; where the text is not [movable], a Kotlin string that may write a
+     * quote, a backslash or a dollar escaped, only when it holds none.
+     */
+    private fun indicatorAfterInit(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
+        movable: Boolean,
+    ): List<Issue> {
+        val attrs = tag.attributes
+        val at =
+            attrs.indexOfFirst {
+                val lower = it.name.asciiLowercase()
+                lower == "${prefix}indicator" || lower.startsWith("${prefix}indicator:") || lower.startsWith("${prefix}indicator__")
+            }
+        if (at < 0) return emptyList()
+        val init =
+            attrs.subList(0, at).firstOrNull {
+                it.name.asciiLowercase() == "${prefix}init" && it.value != null && sendsAtOnce(decodeEntities(it.value).text)
+            } ?: return emptyList()
+        if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
+        val indicator = attrs[at]
+        val fix =
+            tagSource?.let { source ->
+                fun local(offset: Int) = offset - tag.start
+                val end = indicator.value?.let { indicator.valueEnd + if (indicator.quoted) 1 else 0 } ?: indicator.nameEnd
+                val moved = source.substring(local(indicator.nameStart), local(end))
+                var space = local(indicator.nameStart)
+                while (space > local(init.nameStart) && source[space - 1].isWhitespace()) space--
+                val replaced = source.substring(local(init.nameStart), local(end))
+                val text = moved + source.substring(space, local(indicator.nameStart)) + source.substring(local(init.nameStart), space)
+                // In a Kotlin string a quote, a backslash or a dollar may be written escaped, which this text does not know.
+                Fix("Move ${prefix}indicator before ${prefix}init", init.nameStart, end, text).takeIf {
+                    movable || replaced.none { c -> c == '"' || c == '\\' || c == '$' || c == '\n' }
+                }
+            }
+        return listOf(
+            Issue(
+                indicator.nameStart,
+                indicator.nameEnd,
+                "${prefix}indicator comes after ${prefix}init, which starts its request as Datastar applies it, " +
+                    "before the indicator exists, so the signal stays false. Put ${prefix}indicator first.",
+                Severity.WARNING,
+                "indicator-order",
+                Docs.attribute("indicator"),
+                listOfNotNull(fix),
+            ),
+        )
     }
 
     /**
@@ -1068,7 +1522,7 @@ public class MarkupValidator(
         // Template syntax in a value, or attributes spread into the tag by name, leave what it
         // sends unknown until rendered.
         if ((tagSource != null && hasTemplateSyntax(tagSource)) ||
-            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || !PLAIN_ATTRIBUTE_NAME.matches(it.name) }
+            tag.attributes.any { (it.value != null && hasTemplateSyntax(it.value)) || PLAIN_ATTRIBUTE_NAME.matchEntire(it.name) == null }
         ) {
             return emptyList()
         }
@@ -1118,7 +1572,7 @@ public class MarkupValidator(
                         "A modifier follows two underscores: $prefix${spec.name}:$fixed.",
                 severity = Severity.ERROR,
                 code = "unknown-modifier",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
         )
@@ -1141,7 +1595,7 @@ public class MarkupValidator(
         if (keyKind(spec) != KeyKind.SIGNAL) return emptyList()
         val out = ArrayList<Issue>()
         val name = prefix + spec.name
-        val link = Docs.attribute(spec.name)
+        val link = Docs.attribute(spec)
         val colon = attr.name.indexOf(':')
         // data-signals:__proto__ has no key to the client: the `__` starts the modifiers, and no plugin is named `signals:`.
         if (!parsed.key.isNullOrEmpty() && colon >= 0 && !cut) {
@@ -1166,6 +1620,20 @@ public class MarkupValidator(
             }
         }
         val value = attr.value
+        if (value != null && value.isNotEmpty() && value.isBlank() && spec.valueKind == ValueKind.SIGNAL && parsed.key.isNullOrEmpty() &&
+            !cut
+        ) {
+            // The client takes a blank value for one, and reads a signal by that name.
+            out +=
+                Issue(
+                    attr.valueStart,
+                    attr.valueStart + value.length,
+                    "$name declares a signal named by spaces alone, which no expression can read.",
+                    Severity.ERROR,
+                    "signal-name",
+                    link,
+                )
+        }
         if (value == null || value.isBlank() || hasTemplateSyntax(value)) return out
         val decoded = decodeEntities(value)
 
@@ -1173,7 +1641,7 @@ public class MarkupValidator(
             from: Int,
             to: Int,
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
-        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matches(decoded.text)) {
+        if (spec.valueKind == ValueKind.SIGNAL && NAME_LIKE.matchEntire(decoded.text) != null) {
             val held = decoded.text
             val path = signalPathProblem(held)
             val reach = if (path == null) signalNameProblem(held) else null
@@ -1253,7 +1721,7 @@ public class MarkupValidator(
     }
 
     /**
-     * `data-computed` without a key takes an object of functions (computed.ts in 1.0.4): any other
+     * `data-computed` without a key takes an object of functions (computed.ts in 1.0.5): any other
      * value declares nothing, and a value under a key that is no function raises ComputedExpectedFunction.
      * Only a value sure to be no function is judged: `fns`, `{total: $a ? f : g}` and
      * `{total: new Function(...)}` may well give one.
@@ -1321,7 +1789,7 @@ public class MarkupValidator(
         val decoded = decodeEntities(value)
         val text = decoded.text
         val name = prefix + spec.name
-        val link = Docs.attribute(spec.name)
+        val link = Docs.attribute(spec)
 
         fun source(
             from: Int,
@@ -1340,7 +1808,7 @@ public class MarkupValidator(
                 val at = m.range.first
                 val before = text.getOrNull(at - 1)
                 if (regions[at] != Region.CODE ||
-                    (before != null && (before == '$' || WORD_CHAR_CLASS.matches(before.toString())))
+                    (before != null && (before == '$' || WORD_CHAR_CLASS.matchEntire(before.toString()) != null))
                 ) {
                     continue
                 }
@@ -1355,6 +1823,11 @@ public class MarkupValidator(
                         link,
                     )
             }
+        }
+        // The free plugins hand the value to filtered, as a backend action its filterSignals; Pro's are not read here.
+        if (!spec.pro) {
+            out +=
+                filterValueIssues(catalog, text, jsRegions(text), ::source, name, link)
         }
         for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
             val (start, end) = source(issue.start, issue.end)
@@ -1379,16 +1852,60 @@ public class MarkupValidator(
         parsed: ParsedAttribute,
         spec: AttributeSpec,
         prefix: String,
+        tagName: String,
     ): List<Issue> {
         val colon = attr.name.indexOf(':')
         if (colon < 0 || spec.keyCase == null) return emptyList()
         val key = attr.name.substring(colon + 1).substringBefore("__")
+        val keyStart = attr.nameStart + colon + 1
+        val name = prefix + spec.name
+
+        /** [attr] as the object form, which keeps [as] as written; null where its value holds both quotes. */
+        fun objectForm(`as`: String): Fix? {
+            val value = attr.value ?: return null
+            val quote =
+                when {
+                    '"' !in value -> '"'
+                    '\'' !in value -> '\''
+                    else -> return null
+                }
+            val end = attr.valueEnd + if (attr.quoted) 1 else 0
+            return Fix("Use the object form", attr.nameStart, end, "$name=$quote{$`as`: $value}$quote")
+        }
+
+        // The key-case issue on the key, with its fix.
+        fun onKey(
+            message: String,
+            fix: Fix?,
+            severity: Severity = Severity.WARNING,
+        ) = listOf(Issue(keyStart, keyStart + key.length, message, severity, "key-case", Docs.attribute(spec), listOfNotNull(fix)))
+
+        fun changeTo(written: String) = Fix("Change to $written", keyStart, keyStart + key.length, written)
+
+        // data-attr:view-box sets view-box: attr.ts sets the key as the browser hands it over, and SVG reads viewBox.
+        val oneCase = spec.keyIsAttributeName && !spec.pro && !HAS_CAPITAL.containsMatchIn(key) && isSvgElement(tagName)
+        val svg = if (oneCase) SVG_NAMES[key.replace("-", "")] else null
+        if (svg != null) {
+            val message = "This sets $key, but SVG reads $svg, a name with a capital, which the object form keeps: $name=\"{$svg: ...}\"."
+            return onKey(message, objectForm(svg))
+        }
+        val existing = parsed.modifiers.firstOrNull { it.name == "case" }
+        val event = keyKind(spec) == KeyKind.EVENT && existing == null
+        // data-on:webkitanimationend: the browser dispatches webkitAnimationEnd, which this never hears.
+        val mixed = if (event) catalog.mixedCaseDomEvent(key) else null
+        val wire = mixed?.let { wireKey(it, spec.keyCase, null) }
+        if (wire != null) {
+            return onKey("This listens for $key, which no browser fires: the event is $mixed. Write $name:$wire.", changeTo(wire))
+        }
         if (!HAS_CAPITAL.containsMatchIn(key)) return emptyList()
         // HTML written in capitals (DATA-ON:CLICK) is not camelCase: lowercased, the key is what the author meant.
         if (key.length > 1 && !HAS_LOWERCASE.containsMatchIn(key)) return emptyList()
-        val keyStart = attr.nameStart + colon + 1
-        val name = prefix + spec.name
-        val existing = parsed.modifiers.firstOrNull { it.name == "case" }
+        // data-on:keyDown works: the browser hands Datastar keydown, the event that fires.
+        val dom = if (event) catalog.lowercaseDomEvent(key) else null
+        if (dom != null) {
+            val message = "The browser lowercases attribute names, so this listens for $dom, the DOM event. Write $name:$dom."
+            return onKey(message, changeTo(dom), Severity.HINT)
+        }
         // With an explicit __case already there, only the key itself changes, when that case gives the name back.
         val fixed =
             if (existing != null) {
@@ -1416,7 +1933,7 @@ public class MarkupValidator(
                             "$noKey Write it in one case.",
                     severity = Severity.WARNING,
                     code = "key-case",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                 ),
             )
         }
@@ -1432,19 +1949,9 @@ public class MarkupValidator(
         if (keyKind(spec) == KeyKind.RAW) {
             // A kebab-case key would set view-box, not viewBox: for an attribute the object form keeps the
             // name, for a style property no form does, since the object form writes it kebab-case.
-            val value = attr.value
-            val quote =
-                if (value == null || '"' !in value) {
-                    '"'
-                } else if ('\'' !in value) {
-                    '\''
-                } else {
-                    null
-                }
             val fixes =
-                if (spec.name == "attr" && value != null && quote != null) {
-                    val end = attr.valueEnd + if (attr.quoted) 1 else 0
-                    listOf(Fix("Use the object form", attr.nameStart, end, "$name=$quote{$key: $value}$quote"))
+                if (spec.name == "attr" && attr.value != null) {
+                    listOfNotNull(objectForm(key))
                 } else if (spec.name == "style" && !key.startsWith("--")) {
                     listOf(Fix("Change to ${ClientCasing.kebab(key)}", keyStart, keyStart + key.length, ClientCasing.kebab(key)))
                 } else {
@@ -1461,7 +1968,7 @@ public class MarkupValidator(
                     )}",
                     severity = Severity.WARNING,
                     code = "key-case",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                     fixes = fixes,
                 ),
             )
@@ -1475,7 +1982,7 @@ public class MarkupValidator(
                         "Write $name:$fixed$keep: keys are kebab-case$camelNote.",
                 severity = Severity.WARNING,
                 code = "key-case",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
         )
@@ -1491,7 +1998,7 @@ public class MarkupValidator(
         spec: AttributeSpec,
     ): String? {
         val underscore = name.indexOf('_')
-        if (underscore <= 0 || underscore == name.length - 1 || !MODIFIER_WORD.matches(name)) return null
+        if (underscore <= 0 || underscore == name.length - 1 || MODIFIER_WORD.matchEntire(name) == null) return null
         val head = name.substring(0, underscore)
         val modifier = spec.modifiers.firstOrNull { it.name == head } ?: return null
         if (modifier.type == ModifierType.FLAG) return null
@@ -1543,7 +2050,7 @@ public class MarkupValidator(
             // __debounce..500ms: the client reads the empty tag as the value and never comes to .500ms.
             // Without it, the modifier is the fix only if it holds up itself: __debounce..leading has no duration.
             val fixed = "." + args.joinToString(".")
-            val holds = validateModifierArgs(spec, args, start, end, attribute, present, listensFor).none { it.severity == Severity.ERROR }
+            val holds = validateModifierArgs(spec, args, start, end, attribute, present, listensFor).isEmpty()
             fail(
                 "Datastar reads the first argument of __${spec.name}, which is empty here, and not .${args.first()}." +
                     if (holds) " Write __${spec.name}$fixed." else "",
@@ -1576,9 +2083,9 @@ public class MarkupValidator(
             ModifierType.DURATION -> {
                 val d = args.firstOrNull()
                 val flags = args.drop(1)
-                val later = flags.indexOfFirst { DURATION.matches(it) }
+                val later = flags.indexOfFirst { DURATION.matchEntire(it) != null }
                 val at = start + spec.name.length
-                if (d != null && !DURATION.matches(d) && d in spec.flags && later >= 0) {
+                if (d != null && DURATION.matchEntire(d) == null && d in spec.flags && later >= 0) {
                     // __debounce.leading.500ms: the client reads the first argument as the duration.
                     val ordered = listOf(flags[later], d) + flags.filterIndexed { k, _ -> k != later }
                     val fixed = "__${spec.name}.${ordered.joinToString(".")}"
@@ -1592,16 +2099,16 @@ public class MarkupValidator(
                         if (unknown.isEmpty()) listOf(Fix("Change to $fixed", at, end, "." + ordered.joinToString("."))) else emptyList(),
                     )
                     for (f in unknown) {
-                        if (!DURATION.matches(f)) unknownFlag(f)
+                        if (DURATION.matchEntire(f) == null) unknownFlag(f)
                     }
                     return issues
                 }
                 val next = flags.firstOrNull()
-                if (d != null && WHOLE_NUMBER.matches(d) && next != null && DURATION.matches(next)) {
+                if (d != null && WHOLE_NUMBER.matchEntire(d) != null && next != null && DURATION.matchEntire(next) != null) {
                     // __debounce.1.5s: the dot ends the duration, which the client reads as 1 ms.
                     val seconds = next.endsWith("s") && !next.endsWith("ms")
                     val ms = "$d.${next.removeSuffix("ms").removeSuffix("s")}".toDouble() * if (seconds) 1000 else 1
-                    val whole = if (ms == Math.floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
+                    val whole = if (ms == floor(ms) && !ms.isInfinite()) "${ms.toLong()}ms" else null
                     // With a flag it does not know after it, the whole duration would fail in turn, so it is no fix.
                     val fixable = whole != null && flags.drop(1).all { it in spec.flags }
                     fail(
@@ -1620,8 +2127,22 @@ public class MarkupValidator(
                     }
                     return issues
                 }
-                val read = d?.takeIf { it.isNotEmpty() && !DURATION.matches(it) }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
-                if (d != null && read != null) {
+                val read = d?.takeIf { it.isNotEmpty() && DURATION.matchEntire(it) == null }?.let(::clientMs)?.takeIf { abs(it) < 1e15 }
+                // onInterval.ts hands setInterval what tagToMs reads, 0 for no duration and for NaN.
+                val wait =
+                    when {
+                        d.isNullOrEmpty() -> 0.0
+                        DURATION.matchEntire(d) != null -> clientMs(d)
+                        else -> read ?: 0.0
+                    }
+                if (attribute.name == "on-interval" && spec.name == "duration" && wait != null && wait <= 0) {
+                    val how = if (d.isNullOrEmpty()) "without a duration" else "with __${spec.name}.$d"
+                    ignored(
+                        "Datastar runs the interval every 0 ms $how, as often as the browser allows. " +
+                            "Write a duration such as __${spec.name}.1s.",
+                        if (d.isNullOrEmpty() && args.size <= 1) listOf(Fix("Add .1s", at, end, ".1s")) else emptyList(),
+                    )
+                } else if (d != null && read != null) {
                     // Not written as a duration, but read as one: __debounce.5x waits 5 ms.
                     val at = start + spec.name.length
                     val fix = "${jsFormat(read)}ms".takeIf { read >= 0 && read % 1 == 0.0 }
@@ -1629,11 +2150,16 @@ public class MarkupValidator(
                         "Datastar reads __${spec.name}.$d as ${jsFormat(read)} ms." + (fix?.let { " Write __${spec.name}.$it." } ?: ""),
                         fix?.let { listOf(Fix("Change to __${spec.name}.$it", at, at + 1 + d.length, ".$it")) } ?: emptyList(),
                     )
-                } else if (d.isNullOrEmpty() || !DURATION.matches(d)) {
-                    val at = start + spec.name.length
+                } else if (d.isNullOrEmpty() || DURATION.matchEntire(d) == null) {
+                    // tagToMs reads 0 for no tag and NaN for one with no number, which setTimeout takes as 0.
                     // A dot with nothing after it, __debounce., is no duration either, and the fix takes its place.
-                    fail(
-                        "__${spec.name} needs a duration such as __${spec.name}.500ms or __${spec.name}.1s.",
+                    val such = "Write a duration such as __${spec.name}.500ms or __${spec.name}.1s."
+                    ignored(
+                        if (d.isNullOrEmpty()) {
+                            "__${spec.name} without a duration waits 0 ms. $such"
+                        } else {
+                            "Datastar reads no duration from __${spec.name}.${args.joinToString(".")} and waits 0 ms. $such"
+                        },
                         if (d.isNullOrEmpty() && args.size <= 1) listOf(Fix("Add .500ms", at, end, ".500ms")) else emptyList(),
                     )
                 }
@@ -1662,12 +2188,17 @@ public class MarkupValidator(
                         fail("__${spec.name} needs one of: $allowed.")
                     }
                 }
-                // __case.camel.foo: the client applies each value it has a function for and skips the rest.
-                val applied = if (spec.name == "case") rest.filter { it in ClientCasing.CASES } else rest
-                if (applied.isNotEmpty()) {
-                    fail("__${spec.name} takes a single value.")
-                } else if (rest.isNotEmpty() && v != null && v in spec.values) {
-                    ignored("__${spec.name} takes a single value; Datastar ignores ${rest.joinToString("") { ".$it" }}$listensFor.")
+                // __case.snake.pascal: modifyCasing applies each value in turn, and leaves the key as it is for one it has no function for.
+                val unread = if (spec.name == "case") rest.filter { it !in ClientCasing.CASES } else rest
+                if (unread.isNotEmpty() && v != null && v in spec.values) {
+                    ignored(
+                        if (spec.name == "case") {
+                            val values = unread.joinToString("") { ".$it" }
+                            "Unknown value $values for __case, which Datastar ignores$listensFor. Allowed: $allowed."
+                        } else {
+                            "__${spec.name} takes a single value; Datastar ignores ${rest.joinToString("") { ".$it" }}$listensFor."
+                        },
+                    )
                 }
             }
 
@@ -1682,20 +2213,34 @@ public class MarkupValidator(
                     fail("__${spec.name} needs an integer$range, e.g. __${spec.name}.50.")
                 } else if (v == null) {
                     ignored("Datastar reads __${spec.name} without a value as 0.")
+                } else if (args.size > 1) {
+                    // __threshold.0.5: tagFirst reads the tag before the dot.
+                    val fraction = args.size == 2 && args.all { WHOLE_NUMBER.matchEntire(it) != null }
+                    // A fraction of 1 in hundredths, 0.5 or 0.05, is a whole percentage, 50 or 5.
+                    val hundredths = args[1].padEnd(2, '0')
+                    val percent = if (fraction && v == "0" && hundredths.length == 2) hundredths.trimStart('0').ifEmpty { "0" } else null
+                    ignored(
+                        "Datastar reads __${spec.name}.${args.joinToString(".")} as ${jsFormat(n)}: a dot separates arguments" +
+                            if (fraction) {
+                                ", and the ${spec.name} is a ${if (percent != null) "percentage. Write __${spec.name}.$percent." else "whole percentage."}"
+                            } else {
+                                "."
+                            },
+                        percent?.let { listOf(Fix("Change to __${spec.name}.$it", start, end, "${spec.name}.$it")) } ?: emptyList(),
+                    )
                 } else if ((min != null && n < min) || (max != null && n > max)) {
                     ignored("Datastar clamps __${spec.name}.$v to ${if (min != null && n < min) min else max}.")
                 }
-                if (args.size > 1) fail("__${spec.name} takes a single value.")
             }
 
             ModifierType.IDENT -> {
                 val v = args.firstOrNull()
-                if (v == null || !IDENT.matches(v)) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
+                if (v == null || IDENT.matchEntire(v) == null) fail("__${spec.name} needs a name, e.g. __${spec.name}.value.")
                 if (args.size > 1) fail("__${spec.name} takes a single name.")
             }
 
             ModifierType.IDENTS -> {
-                if (args.isEmpty() || args.any { !IDENT.matches(it) }) {
+                if (args.isEmpty() || args.any { IDENT.matchEntire(it) == null }) {
                     fail("__${spec.name} needs one or more names, e.g. __${spec.name}.input.blur.")
                 }
             }

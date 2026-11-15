@@ -6,7 +6,9 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
+import io.github.markusaugust.streamlord.core.client.regex
 import org.intellij.lang.annotations.Language
+import kotlin.jvm.JvmInline
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -95,9 +97,9 @@ public enum class Position {
     /**
      * A `data-*` attribute whose value Datastar evaluates, an expression or a signal filter
      * ([ElementsGuard.evaluatedAttributes]), or follows as a signal path: `data-bind`, `data-ref`
-     * and `data-indicator`, where `__proto__.x` writes into every object of the page. An attribute
-     * the client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an
-     * ordinary one.
+     * and `data-indicator`, where `__proto__.x` writes into every object of the page; and Pro's
+     * `data-match-media`, whose query the reference writes as a string literal. An attribute the
+     * client reads as it stands, `data-nonce` or `data-preserve-attr` among them, is an ordinary one.
      */
     DATASTAR,
 
@@ -172,9 +174,15 @@ public class UnsafeInterpolationException(
                 }
             val fix =
                 when (position) {
+                    Position.DATASTAR if attribute?.substringBefore(':')?.endsWith(MATCH_MEDIA) == true -> {
+                        "Write the query into the markup, where a constant of yours may stand as a Kotlin template, " +
+                            "or set it with the DSL's dataMatchMedia."
+                    }
+
                     Position.DATASTAR -> {
-                        "Put the value in a signal and reference it from the expression, write a signal name in the " +
-                            "markup yourself, or pass a Number or Boolean, which can carry neither an expression nor a path."
+                        // A string written into data-signals is refused by this same rule, so no signal is advised.
+                        "Put the value in an attribute of its own, such as data-label, and read it in the expression with " +
+                            "el.dataset.label, or pass a Number or Boolean, which can carry neither an expression nor a path."
                     }
 
                     Position.URL -> {
@@ -243,37 +251,56 @@ public class UnsafeInterpolationException(
  * `${'$'}{...}`. At render time the source is gone, so the placeholders have to be left standing. That is
  * the whole of what this function asks of you.
  *
+ * The values are always the values: a `List` or an array handed over as one of them is one value,
+ * written in brackets as Kotlin writes a list, `[a, b]`, escaped like any text. An array is
+ * written that way too, where a Kotlin template writes its class and hash. To pass the elements of
+ * a collection as the values, spread them: `interpolate(format, *values.toTypedArray())`. From
+ * Java, `values` is varargs, so a `String[]` passed alone is spread: it is the values.
+ *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
  * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
  */
 public fun interpolate(
     @Language("HTML") format: String,
     vararg values: Any?,
-): Html = interpolate(format, values.asList(), ElementsGuard.defaultPrefixes)
+): Html = interpolated(format, values.asList(), ElementsGuard.defaultPrefixes)
 
 /**
- * [interpolate] with the values as a list, and the `data-*` prefixes to recognise.
+ * [interpolate] with the `data-*` prefixes to recognise, which come first.
  *
  * Pass [prefixes] when your Datastar bundle is aliased to something other than `data-` or
  * `data-star-`; the attributes of an alias this function does not know are attributes it cannot
  * refuse a value in.
  */
 public fun interpolate(
+    prefixes: List<String>,
     @Language("HTML") format: String,
+    vararg values: Any?,
+): Html = interpolated(format, values.asList(), prefixes)
+
+private fun interpolated(
+    format: String,
     values: List<Any?>,
-    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    prefixes: List<String>,
 ): Html {
-    val holes = holes(format)
-    require(holes.size == values.size) {
-        "The markup has ${holes.size} %s ${if (holes.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
-            "${if (values.size == 1) "value was" else "values were"} given"
+    val placeholders = placeholders(format)
+    require(placeholders.size == values.size) {
+        // Until 0.22.0 a List handed over alone was the values; it is one value now, as any other.
+        val spread =
+            if (values.size == 1 && values[0].let { it is Iterable<*> || it is Array<*> }) {
+                ". That value is a collection, which is one value: to pass its elements, spread them, interpolate(format, *values.toTypedArray())"
+            } else {
+                ""
+            }
+        "The markup has ${placeholders.size} %s ${if (placeholders.size == 1) "placeholder" else "placeholders"} and ${values.size} " +
+            "${if (values.size == 1) "value was" else "values were"} given$spread"
     }
-    if (holes.isEmpty()) return Html(format.replace("%%", "%"))
+    if (placeholders.isEmpty()) return Html(format.replace("%%", "%"))
 
     // A Trusted value is markup: it is read in place, and the other values are judged where its text puts them.
     val known = HashMap<Int, String>()
     for ((index, value) in values.withIndex()) if (value is Trusted) known[index] = value.html
-    val written = Written(format, holes.map { it until it + 2 }, known, percents = true)
+    val written = Written(format, placeholders.map { it until it + 2 }, known, percents = true)
     val text = written.text
     val landscapes = landscapes(text, written.open, prefixes)
 
@@ -281,13 +308,13 @@ public fun interpolate(
     var cut = 0
     for ((index, value) in values.withIndex()) {
         if (value is Trusted) continue
-        val hole = written.starts[index]
-        out.append(text, cut, hole)
-        cut = hole + 2
-        val landing = landingOf(landscapes, hole)
+        val placeholder = written.starts[index]
+        out.append(text, cut, placeholder)
+        cut = placeholder + 2
+        val landing = landingOf(landscapes, placeholder)
         // Markup interpolate built is markup where it starts and ends in the data state in
-        // every reading, so that it cannot move the holes after it; anywhere else it is characters.
-        if (value is Html && landing.position == Position.TEXT && landscapes.all { it.inData(hole) && it.closes(value.text, hole) }) {
+        // every reading, so that it cannot move the placeholders after it; anywhere else it is characters.
+        if (value is Html && landing.markupInPlace && landscapes.all { it.closes(value.text, placeholder) }) {
             out.append(value.text)
         } else {
             if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
@@ -300,23 +327,23 @@ public fun interpolate(
 }
 
 /**
- * Markup as it will be written, as far as that is known before the values are escaped: each hole
- * whose text is known, a [Trusted] value's, replaced by that text, and every other hole left
+ * Markup as it will be written, as far as that is known before the values are escaped: each placeholder
+ * whose text is known, a [Trusted] value's, replaced by that text, and every other placeholder left
  * standing to be shadowed. With [percents], as a format is, `%%` in the literal is one `%`; a
  * known text is written as it stands, `%%` and all.
  *
- * @property starts Where each hole, known or not, begins in [text], by its index.
- * @property open The holes whose text is not known, as spans of [text].
+ * @property starts Where each placeholder, known or not, begins in [text], by its index.
+ * @property open The placeholders whose text is not known, as spans of [text].
  */
 private class Written(
     markup: String,
-    holes: List<IntRange>,
+    placeholders: List<IntRange>,
     known: Map<Int, String>,
     percents: Boolean,
 ) {
     val text: String
-    val starts = IntArray(holes.size)
-    val open = ArrayList<IntRange>(holes.size - known.size)
+    val starts = IntArray(placeholders.size)
+    val open = ArrayList<IntRange>(placeholders.size - known.size)
 
     // Runs of [text] in order: where each starts, where in the markup it came from, and whether it is a known text.
     private val runStarts = ArrayList<Int>()
@@ -354,26 +381,26 @@ private class Written(
         }
 
         var cut = 0
-        for (index in holes.indices.sortedBy { holes[it].first }) {
-            val hole = holes[index]
-            literal(cut, hole.first)
+        for (index in placeholders.indices.sortedBy { placeholders[it].first }) {
+            val placeholder = placeholders[index]
+            literal(cut, placeholder.first)
             starts[index] = out.length
             val text = known[index]
             if (text != null) {
-                run(hole.first, true)
+                run(placeholder.first, true)
                 out.append(text)
             } else {
-                run(hole.first, false)
-                open += out.length until out.length + (hole.last - hole.first + 1)
-                out.append(markup, hole.first, hole.last + 1)
+                run(placeholder.first, false)
+                open += out.length until out.length + (placeholder.last - placeholder.first + 1)
+                out.append(markup, placeholder.first, placeholder.last + 1)
             }
-            cut = hole.last + 1
+            cut = placeholder.last + 1
         }
         literal(cut, markup.length)
         text = out.toString()
     }
 
-    /** Where [at] in [text] came from in the markup; within a known text, where its hole begins. */
+    /** Where [at] in [text] came from in the markup; within a known text, where its placeholder begins. */
     fun sourceOf(at: Int): Int {
         val run = lastAtOrBefore(runStarts, at)
         return if (runKnown[run]) runSources[run] else runSources[run] + at - runStarts[run]
@@ -399,7 +426,14 @@ private fun Position.admits(value: Any?): Boolean =
         Position.STRUCTURE, Position.CODE -> false
     }
 
-private val SCHEME = Regex("^([A-Za-z][A-Za-z0-9+.-]*):")
+/**
+ * Pro's media query, `data-match-media:dark="'(prefers-color-scheme: dark)'"`: the reference writes
+ * it as a string literal, and Pro's source is not here to say it is never run, so a value is
+ * refused there as in an expression.
+ */
+private const val MATCH_MEDIA = "match-media"
+
+private val SCHEME = regex("^([A-Za-z][A-Za-z0-9+.-]*):")
 private val SAFE_SCHEMES = setOf("http", "https", "mailto", "tel")
 
 /**
@@ -413,8 +447,24 @@ internal fun safeUrl(url: String): Boolean {
     return scheme.asciiLowercase() in SAFE_SCHEMES
 }
 
+/** A value as interpolate writes it: an array as a list is written, `[a, b]`, where a template writes its class and hash. */
+private fun textOf(value: Any?): String =
+    when (value) {
+        null -> ""
+        is Array<*> -> value.contentDeepToString()
+        is IntArray -> value.contentToString()
+        is LongArray -> value.contentToString()
+        is ShortArray -> value.contentToString()
+        is ByteArray -> value.contentToString()
+        is DoubleArray -> value.contentToString()
+        is FloatArray -> value.contentToString()
+        is BooleanArray -> value.contentToString()
+        is CharArray -> value.contentToString()
+        else -> value.toString()
+    }
+
 private fun StringBuilder.escaped(value: Any?) {
-    val text = value?.toString() ?: ""
+    val text = textOf(value)
     for (ch in text) {
         when (ch) {
             '&' -> append("&amp;")
@@ -428,55 +478,63 @@ private fun StringBuilder.escaped(value: Any?) {
 }
 
 /**
- * Where one hole in a piece of markup lands, as [interpolate] judges it.
+ * Where one placeholder in a piece of markup lands, as [interpolate] judges it.
  *
- * The editors judge a Kotlin template in an HTML string with this, so that a hole is refused or
+ * The editors judge a Kotlin template in an HTML string with this, so that a placeholder is refused or
  * let through by the same reading in the editor as at run time.
  *
- * @property position The strictest of the positions the hole takes in the readings of the markup;
+ * @property position The strictest of the positions the placeholder takes in the readings of the markup;
  *   see [interpolate].
  * @property attribute The attribute it landed in, when it landed in a quoted one.
  * @property valueStart Where that attribute's value starts in the markup, or -1.
  * @property loadsCode Whether that attribute is a URL the browser loads and runs, or treats as its
  *   own document, on its tag: `src` of a `<script>`, `<iframe>` or `<embed>`, `href` of a `<base>`,
- *   a `<link>` or an SVG `<script>`, `data` of an `<object>`. A hole there is judged by
+ *   a `<link>` or an SVG `<script>`, `data` of an `<object>`. A placeholder there is judged by
  *   [urlHostFixedBy] rather than [urlSchemeFixedBy].
  * @property tagStart Where the tag it landed in starts in the markup, at its `<`, when it landed
  *   in a tag, on an attribute's name or in its value; or -1. A tag over several lines starts on the
  *   first, and raw text, a comment or a quoted value holds no tag.
+ * @property nameStart Where the attribute name it landed on starts in the markup, when it landed on
+ *   one; or -1. The name is the browser's: an `=` first in it is part of it, a value after an `=`
+ *   and white space is no name.
+ * @property markupInPlace Whether an [Html] that closes what it opens is written there as it
+ *   stands: in element text that is text in every reading, and not the body of a `textarea` or a
+ *   `title`, where interpolate escapes it as it does anywhere else.
  */
 @InternalStreamlordApi
-public class HoleLanding(
+public class ValueLanding(
     public val position: Position,
     public val attribute: String?,
     public val valueStart: Int,
     public val loadsCode: Boolean,
     public val tagStart: Int = -1,
+    public val nameStart: Int = -1,
+    public val markupInPlace: Boolean = false,
 )
 
 /**
- * Where each of [holes] lands in [markup]. A hole is any span the caller will fill: `%s` to
+ * Where each of [placeholders] lands in [markup]. A placeholder is any span the caller will fill: `%s` to
  * [interpolate], a Kotlin template to the editors. Each is read as a run of letters, so `<%s>` is
- * a tag whose name is the hole.
+ * a tag whose name is the placeholder.
  *
- * [known] holds the text of the holes, by index, whose content is known to be markup, as a
- * [Trusted] value's is: the markup is read with that text in place of the hole, as [interpolate]
- * reads it, so `<%s>` with `script` known puts the next hole in a script. A known hole is not
- * judged, and its landing is [Position.TEXT] with no attribute. A [HoleLanding.valueStart] is an
- * offset into [markup] still; one that falls inside a known text is where that hole begins.
+ * [known] holds the text of the placeholders, by index, whose content is known to be markup, as a
+ * [Trusted] value's is: the markup is read with that text in place of the placeholder, as [interpolate]
+ * reads it, so `<%s>` with `script` known puts the next placeholder in a script. A known placeholder is not
+ * judged, and its landing is [Position.TEXT] with no attribute. A [ValueLanding.valueStart] is an
+ * offset into [markup] still; one that falls inside a known text is where that placeholder begins.
  */
 @InternalStreamlordApi
-public fun holeLandings(
+public fun valueLandings(
     markup: String,
-    holes: List<IntRange>,
+    placeholders: List<IntRange>,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
     known: Map<Int, String> = emptyMap(),
-): List<HoleLanding> {
-    val written = Written(markup, holes, known, percents = false)
+): List<ValueLanding> {
+    val written = Written(markup, placeholders, known, percents = false)
     val landscapes = landscapes(written.text, written.open, prefixes)
-    return holes.indices.map { index ->
+    return placeholders.indices.map { index ->
         if (index in known) {
-            HoleLanding(Position.TEXT, null, -1, false)
+            ValueLanding(Position.TEXT, null, -1, false)
         } else {
             landingOf(landscapes, written.starts[index]).inSource(written)
         }
@@ -484,55 +542,75 @@ public fun holeLandings(
 }
 
 /**
- * Where [hole] lands in [markup] as the browser parses it as a patch: the one reading that follows
- * the browser's element stack from HTML, with scripting off. Where [holeLandings] takes the
+ * Where [placeholder] lands in [markup] as the browser parses it as a patch: the one reading that follows
+ * the browser's element stack from HTML, with scripting off. Where [valueLandings] takes the
  * strictest of every reading, so that nothing is let through that one of them would refuse, this
  * is the reading the markup has, which an editor shows at the caret: in a `<textarea>` the text is
  * text. It is [walkMarkup]'s, which the editors' checks read by as well, and with [templates] it
- * skips the comments and tags of a template language as that does. A [HoleLanding.valueStart] is an
+ * skips the comments and tags of a template language as that does. A [ValueLanding.valueStart] is an
  * offset into [markup].
  */
 @InternalStreamlordApi
 public fun landingAsParsed(
     markup: String,
-    hole: IntRange,
+    placeholder: IntRange,
     prefixes: List<String> = ElementsGuard.defaultPrefixes,
     templates: Boolean = false,
-): HoleLanding {
-    val written = Written(markup, listOf(hole), emptyMap(), percents = false)
+): ValueLanding {
+    val written = Written(markup, listOf(placeholder), emptyMap(), percents = false)
     val reading = Reading(tracked = true, context = NS_HTML, templates = templates)
     val parsed = landscape(shadow(written.text, written.open), written.open, prefixes, reading)
     return landingOf(listOf(parsed), written.starts[0]).inSource(written)
 }
 
 /** The landing with its offsets into the markup as written. */
-private fun HoleLanding.inSource(written: Written): HoleLanding =
-    HoleLanding(
+private fun ValueLanding.inSource(written: Written): ValueLanding =
+    ValueLanding(
         position,
         attribute,
         if (valueStart < 0) valueStart else written.sourceOf(valueStart),
         loadsCode,
         if (tagStart < 0) tagStart else written.sourceOf(tagStart),
+        if (nameStart < 0) nameStart else written.sourceOf(nameStart),
+        markupInPlace,
     )
 
 /**
- * Whether the start of a URL attribute's value, the literal text before its first hole, already
+ * Whether the start of a URL attribute's value, the literal text before its first placeholder, already
  * settles the scheme, so that no value written after it can make the URL run: a `/`, `?` or `#`
  * before any `:`, or a whole scheme that only navigates. Read as [safeUrl] reads, after entities
- * are decoded; in `values`, a list, only the entry the hole is in counts.
+ * are decoded; in `values`, a list, only the entry the placeholder is in counts.
  */
 @InternalStreamlordApi
 public fun urlSchemeFixedBy(
     attribute: String,
     prefix: String,
-): Boolean {
+): Boolean = settledScheme(attribute, prefix)?.let { it.isEmpty() || it in SAFE_SCHEMES } == true
+
+/**
+ * The scheme the start of a URL attribute's value already writes in full when it is one that does
+ * more than navigate, `javascript` of `javascript:`, lowercased: interpolate then refuses every
+ * value written after it. Null where the start settles no scheme or a safe one; read as
+ * [urlSchemeFixedBy] reads.
+ */
+@InternalStreamlordApi
+public fun refusedUrlScheme(
+    attribute: String,
+    prefix: String,
+): String? = settledScheme(attribute, prefix)?.takeIf { it.isNotEmpty() && it !in SAFE_SCHEMES }
+
+/** The scheme [prefix] writes in full, lowercased, empty where a `/`, `?` or `#` comes first; null where it settles none. */
+private fun settledScheme(
+    attribute: String,
+    prefix: String,
+): String? {
     val decoded = decodeEntities(prefix).text
     val entry = if (attribute.asciiLowercase() == "values") decoded.substringAfterLast(';') else decoded
     val read = entry.filterNot { it == '\t' || it == '\n' || it == '\r' }.trimStart { it <= ' ' }
     for (c in read) {
         when (c) {
             '/', '?', '#' -> {
-                return true
+                return ""
             }
 
             ':' -> {
@@ -540,20 +618,20 @@ public fun urlSchemeFixedBy(
                     .find(read)
                     ?.groupValues
                     ?.get(1)
-                    ?.asciiLowercase() in SAFE_SCHEMES
+                    ?.asciiLowercase()
             }
         }
     }
-    return false
+    return null
 }
 
 /**
  * Whether the start of a code-loading URL attribute's value, the literal text before its first
- * hole, already fixes the host, so that no value written after it can point the load at another
+ * placeholder, already fixes the host, so that no value written after it can point the load at another
  * origin: a path-absolute `/x` (a single `/` and then a character that is not `/` or `\`, so a
  * value cannot make it `//host`), a same-document `#` or `?`, or a whole origin `scheme://host/`
  * with a safe scheme. A bare `/`, or a host the literal does not terminate, is not enough. Read as
- * [urlSchemeFixedBy] reads, after entities are decoded; in `values`, only the entry the hole is in.
+ * [urlSchemeFixedBy] reads, after entities are decoded; in `values`, only the entry the placeholder is in.
  */
 @InternalStreamlordApi
 public fun urlHostFixedBy(
@@ -636,7 +714,7 @@ private class Reading(
  * The readings of the markup. Three fixed ones: as HTML, as svg or math, as svg or math whose CDATA
  * sections are text. And the ones that follow the browser's element stack and switch rule by
  * position (see scanMarkup), starting in HTML as a patch in a `<template>` does, inside an `<svg>`
- * as a patch in the svg namespace does, and inside a `<math>`. A hole takes the strictest position
+ * as a patch in the svg namespace does, and inside a `<math>`. A placeholder takes the strictest position
  * of them all. The fixed readings each hold one rule throughout and so each miss where the markup
  * changes context partway; the tracked readings catch those, while the fixed ones stay a
  * conservative floor. From inside an svg and a math, the stack is followed twice: once with every
@@ -648,10 +726,10 @@ private class Reading(
  */
 private fun landscapes(
     markup: String,
-    holes: List<IntRange>,
+    placeholders: List<IntRange>,
     prefixes: List<String>,
 ): List<Landscape> {
-    val shadow = shadow(markup, holes)
+    val shadow = shadow(markup, placeholders)
     val scripting = if (mentionsNoscript(shadow)) listOf(false, true) else listOf(false)
     val readings =
         scripting.map { Reading(scripting = it) } +
@@ -662,20 +740,21 @@ private fun landscapes(
             listOf(NS_SVG, NS_MATH).flatMap { context ->
                 scripting.map { Reading(tracked = true, scripting = it, context = context, htmlStaysOpen = false) }
             }
-    return readings.map { landscape(shadow, holes, prefixes, it) }
+    val placeholderEnds = placeholders.associate { it.first to it.last + 1 }
+    return readings.map { landscape(shadow, placeholders, prefixes, it, placeholderEnds) }
 }
 
-/** The [shadow] of a markup with [holes] in it, read the one way [reading] gives. */
+/** The [shadow] of a markup with [placeholders] in it, read the one way [reading] gives. */
 private fun landscape(
     shadow: String,
-    holes: List<IntRange>,
+    placeholders: List<IntRange>,
     prefixes: List<String>,
     reading: Reading,
+    placeholderEnds: Map<Int, Int> = placeholders.associate { it.first to it.last + 1 },
 ): Landscape {
     // Longest first, so `data-star-` is tried before `data-` whatever order the caller used.
     val ordered = prefixes.sortedByDescending { it.length }
-    val holeEnds = holes.associate { it.first to it.last + 1 }
-    return Landscape(ordered, reading, shadow, holeEnds).also { reading.scan(shadow, it) }
+    return Landscape(ordered, reading, shadow, placeholderEnds).also { reading.scan(shadow, it) }
 }
 
 /** Whether a `noscript` may stand in [html], which only then reads differently with scripting on. */
@@ -683,39 +762,42 @@ private fun mentionsNoscript(html: String): Boolean = html.contains("noscript", 
 
 private fun landingOf(
     landscapes: List<Landscape>,
-    hole: Int,
-): HoleLanding {
-    val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(hole)) }
-    return HoleLanding(
-        strictest.positionOf(hole),
-        strictest.attributeAt(hole),
-        strictest.valueStartAt(hole),
-        strictest.loadsCodeAt(hole),
-        strictest.tagStartAt(hole),
+    placeholder: Int,
+): ValueLanding {
+    val strictest = landscapes.maxBy { STRICTNESS.indexOf(it.positionOf(placeholder)) }
+    val position = strictest.positionOf(placeholder)
+    return ValueLanding(
+        position,
+        strictest.attributeAt(placeholder),
+        strictest.valueStartAt(placeholder),
+        strictest.loadsCodeAt(placeholder),
+        strictest.tagStartAt(placeholder),
+        strictest.nameStartAt(placeholder),
+        position == Position.TEXT && landscapes.all { it.inData(placeholder) },
     )
 }
 
 /**
- * [markup] with every hole replaced by letters, which keeps every offset where it was.
+ * [markup] with every placeholder replaced by letters, which keeps every offset where it was.
  *
  * The walk has to see the markup as the browser will once the values are in place. `<%s>` is not
- * a tag to a scanner that wants a letter after the `<`, and a hole nobody reads as a tag name is
- * a hole nobody refuses: the value would become the tag. With a name in its place the span is a
- * tag, and the hole inside it is structure.
+ * a tag to a scanner that wants a letter after the `<`, and a placeholder nobody reads as a tag name is
+ * a placeholder nobody refuses: the value would become the tag. With a name in its place the span is a
+ * tag, and the placeholder inside it is structure.
  */
 private fun shadow(
     markup: String,
-    holes: List<IntRange>,
+    placeholders: List<IntRange>,
 ): String {
     val chars = markup.toCharArray()
-    for (hole in holes) {
-        for (i in hole) chars[i] = if (i == hole.first) 'd' else 's'
+    for (placeholder in placeholders) {
+        for (i in placeholder) chars[i] = if (i == placeholder.first) 'd' else 's'
     }
-    return String(chars)
+    return chars.concatToString()
 }
 
-/** The offset of each `%s`, in order. `%%` is one escaped per cent and never a hole. */
-private fun holes(format: String): List<Int> {
+/** The offset of each `%s`, in order. `%%` is one escaped per cent and never a placeholder. */
+private fun placeholders(format: String): List<Int> {
     val found = ArrayList<Int>()
     var i = 0
     while (i < format.length - 1) {
@@ -739,13 +821,13 @@ private fun holes(format: String): List<Int> {
 }
 
 /**
- * The shape of the markup around the holes: which spans are quoted attribute values, which are
+ * The shape of the markup around the placeholders: which spans are quoted attribute values, which are
  * inside a tag, and which are the body of a script or a style.
  */
 private val URL_ATTRIBUTES =
     setOf("href", "src", "action", "formaction", "xlink:href", "poster", "data", "cite", "background", "ping", "manifest")
 
-/** What the markup after a hole in a comment may begin with for dashes or a `!` in the value to end the comment there. */
+/** What the markup after a placeholder in a comment may begin with for dashes or a `!` in the value to end the comment there. */
 private val COMMENT_CLOSERS = listOf(">", "!>", "->", "-!>")
 
 /** SVG's animation elements, whose `values`, `to` and `from` can set an `href`. */
@@ -784,23 +866,23 @@ private fun refreshUrls(content: String): List<String> {
     return listOf(rest, url).flatMap { listOf(it, it.trimStart('"', '\'')) }
 }
 
-private val REFRESH_URL_KEY = Regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
+private val REFRESH_URL_KEY = regex("^[Uu][Rr][Ll][\\t\\n\\u000C\\r ]*=[\\t\\n\\u000C\\r ]*")
 
-/** The span of [text] from [from] to [to] as it will be written, with the values of the holes [inside] it escaped. */
+/** The span of [text] from [from] to [to] as it will be written, with the values of the placeholders [inside] it escaped. */
 private fun written(
     text: String,
     from: Int,
     to: Int,
     inside: List<Int>,
-    holes: List<Int>,
+    placeholders: List<Int>,
     values: List<Any?>,
 ): String {
     val out = StringBuilder()
     var cut = from
     for (index in inside) {
-        out.append(text, cut, holes[index])
+        out.append(text, cut, placeholders[index])
         out.escaped(values[index])
-        cut = holes[index] + 2
+        cut = placeholders[index] + 2
     }
     out.append(text, cut, to)
     return out.toString()
@@ -809,9 +891,9 @@ private fun written(
 private class Landscape(
     private val prefixes: List<String>,
     private val reading: Reading,
-    // The shadowed markup this landscape reads, and where each hole in it ends, by where it starts.
+    // The shadowed markup this landscape reads, and where each placeholder in it ends, by where it starts.
     private val markup: String,
-    private val holeEnds: Map<Int, Int>,
+    private val placeholderEnds: Map<Int, Int>,
 ) : MarkupVisitor {
     private val declarationStarts = ArrayList<Int>()
     private val declarationEnds = ArrayList<Int>()
@@ -821,6 +903,8 @@ private class Landscape(
     private val attributeEnds = ArrayList<Int>()
     private val tagStarts = ArrayList<Int>()
     private val tagEnds = ArrayList<Int>()
+    private val nameStarts = ArrayList<Int>()
+    private val nameEnds = ArrayList<Int>()
     private val codeStarts = ArrayList<Int>()
     private val codeEnds = ArrayList<Int>()
     private val opaqueStarts = ArrayList<Int>()
@@ -837,6 +921,8 @@ private class Landscape(
         valueEnd: Int,
         quoted: Boolean,
     ) {
+        nameStarts += nameStart
+        nameEnds += nameStart + name.length
         // An unquoted value ends at the first space, so a value written into one can add
         // attributes beside it. It is left to the tag spans, which refuse.
         if (!quoted || valueStart < 0) return
@@ -890,27 +976,27 @@ private class Landscape(
     }
 
     /**
-     * Whether a value at [hole] in the declaration that begins at [start] could end it or change
+     * Whether a value at [placeholder] in the declaration that begins at [start] could end it or change
      * what it is, though escaping takes its `<` and `>`: `--` or `[CDATA[` after `<!` turns a bogus
      * comment into a comment or a section, and dashes, a `!` or a `]` before the `>` the markup
-     * writes after the hole close a comment or a section early.
+     * writes after the placeholder close a comment or a section early.
      */
     private fun reshapes(
         start: Int,
-        hole: Int,
+        placeholder: Int,
     ): Boolean {
-        val end = holeEnds[hole] ?: return false
+        val end = placeholderEnds[placeholder] ?: return false
         val after = markup.substring(end, minOf(markup.length, end + 3))
         if (markup.startsWith("<!--", start)) return COMMENT_CLOSERS.any { after.startsWith(it) }
         if (!markup.startsWith("<!", start)) return false
-        val between = markup.substring(start + 2, hole)
+        val between = markup.substring(start + 2, placeholder)
         return (between.length < 2 && "--".startsWith(between)) ||
             (between.length < 7 && "[CDATA[".startsWith(between)) ||
             (markup.startsWith("<![CDATA[", start) && (after.startsWith(">") || after.startsWith("]>")))
     }
 
-    fun positionOf(hole: Int): Position {
-        val attribute = indexOfSpan(hole, attributeStarts, attributeEnds)
+    fun positionOf(placeholder: Int): Position {
+        val attribute = indexOfSpan(placeholder, attributeStarts, attributeEnds)
         if (attribute >= 0) {
             val name = attributeNames[attribute].asciiLowercase()
             return when {
@@ -921,10 +1007,10 @@ private class Landscape(
                 else -> Position.ATTRIBUTE
             }
         }
-        if (indexOfSpan(hole, tagStarts, tagEnds) >= 0) return Position.STRUCTURE
-        if (indexOfSpan(hole, codeStarts, codeEnds) >= 0) return Position.CODE
-        val declaration = indexOfSpan(hole, declarationStarts, declarationEnds)
-        if (declaration >= 0 && reshapes(declarationStarts[declaration], hole)) return Position.STRUCTURE
+        if (indexOfSpan(placeholder, tagStarts, tagEnds) >= 0) return Position.STRUCTURE
+        if (indexOfSpan(placeholder, codeStarts, codeEnds) >= 0) return Position.CODE
+        val declaration = indexOfSpan(placeholder, declarationStarts, declarationEnds)
+        if (declaration >= 0 && reshapes(declarationStarts[declaration], placeholder)) return Position.STRUCTURE
         return Position.TEXT
     }
 
@@ -943,7 +1029,7 @@ private class Landscape(
         attributeTags[attribute] == "meta" && attributeNames[attribute].asciiLowercase() == "content"
 
     /**
-     * Throws for the first URL attribute with a hole whose value, every value in place, would
+     * Throws for the first URL attribute with a placeholder whose value, every value in place, would
      * carry a scheme that does more than navigate. A list of them, as `values` holds, is judged
      * entry by entry, and the `content` of a `<meta>` by the URL a refresh would read from it.
      *
@@ -954,7 +1040,7 @@ private class Landscape(
      */
     fun checkUrls(
         text: String,
-        holes: List<Int>,
+        placeholders: List<Int>,
         values: List<Any?>,
     ) {
         for (attribute in attributeStarts.indices) {
@@ -962,21 +1048,21 @@ private class Landscape(
             if (!refresh && !isUrl(attribute)) continue
             val start = attributeStarts[attribute]
             val end = attributeEnds[attribute]
-            val first = lastAtOrBefore(holes, start - 1) + 1
-            val inside = (first until holes.size).takeWhile { holes[it] < end }.filter { values[it] !is Trusted }
+            val first = lastAtOrBefore(placeholders, start - 1) + 1
+            val inside = (first until placeholders.size).takeWhile { placeholders[it] < end }.filter { values[it] !is Trusted }
             val untrusted = inside.firstOrNull() ?: continue
             val name = attributeNames[attribute]
             // A code-loading URL has to have its host fixed before the first value nobody vouched
             // for; a safe scheme is not enough, since a safe scheme can still point at another origin.
             if (!refresh && codeUrl(attribute)) {
-                if (!urlHostFixedBy(name, text.substring(start, holes[untrusted]))) {
+                if (!urlHostFixedBy(name, text.substring(start, placeholders[untrusted]))) {
                     throw UnsafeInterpolationException(Position.URL, untrusted, name, loadsCode = true)
                 }
                 continue
             }
             // The attribute as it will be written, decoded once, as the browser does: a reference
             // the literal begins can end in the value, `&%s` and `#106;` making a `j`.
-            val value = decodeEntities(written(text, start, end, inside, holes, values)).text
+            val value = decodeEntities(written(text, start, end, inside, placeholders, values)).text
             val entries =
                 when {
                     refresh -> refreshUrls(value)
@@ -988,29 +1074,29 @@ private class Landscape(
     }
 
     /**
-     * Whether [hole] is in the data state: text, and not a tag, a comment, a CDATA section or the
+     * Whether [at] is in the data state: text, and not a tag, a comment, a CDATA section or the
      * body of a `textarea` or a `title`, which only their own closing sequence ends and which markup
      * written there could end. The walk has already found each of those spans, so this is a lookup.
      */
-    fun inData(hole: Int): Boolean = indexOfSpan(hole, tagStarts, tagEnds) < 0 && indexOfSpan(hole, opaqueStarts, opaqueEnds) < 0
+    fun inData(at: Int): Boolean = indexOfSpan(at, tagStarts, tagEnds) < 0 && indexOfSpan(at, opaqueStarts, opaqueEnds) < 0
 
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
      * into, with scripting on as well when it holds a `noscript`. A reading that follows the element
-     * stack reads it where it lands, at [hole], rather than where the reading starts, and there it
+     * stack reads it where it lands, at [placeholder], rather than where the reading starts, and there it
      * leaves no element open at all: the format's end tags do not all reach one, as an object bounds
      * them, an integration point stops an svg's, and an `<a>` is opened again after its parent closes.
      */
     fun closes(
         html: String,
-        hole: Int,
+        placeholder: Int,
     ): Boolean {
         fun closesIn(r: Reading) =
             r.scan(html, Discard) && (r.scripting || !mentionsNoscript(html) || r.withScripting().scan(html, Discard))
         // A reading that follows the element stack reads the value where it lands, not where the
         // reading starts: read from inside an svg, the `<a>` of `<div>%s</div>` and an `<a><span>` is
         // HTML. The fixed readings have no stack to know it by.
-        val at = indexOfSpan(hole, textStarts, textEnds)
+        val at = indexOfSpan(placeholder, textStarts, textEnds)
         if (!reading.tracked || at < 0) return closesIn(reading)
         val place = textPlaces[at]
         // Right in an integration point the value is HTML, whatever the reading started in.
@@ -1037,13 +1123,15 @@ private class Landscape(
         return closesIn(reading.of(namespace, leaves = namespace != NS_HTML)) && (namespace != NS_HTML || fits(html, place))
     }
 
-    fun valueStartAt(hole: Int): Int = indexOfSpan(hole, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
+    fun valueStartAt(at: Int): Int = indexOfSpan(at, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 
-    fun attributeAt(hole: Int): String? = indexOfSpan(hole, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
+    fun attributeAt(at: Int): String? = indexOfSpan(at, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
-    fun loadsCodeAt(hole: Int): Boolean = indexOfSpan(hole, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
+    fun loadsCodeAt(placeholder: Int): Boolean = indexOfSpan(placeholder, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
 
-    fun tagStartAt(hole: Int): Int = indexOfSpan(hole, tagStarts, tagEnds).let { if (it >= 0) tagStarts[it] else -1 }
+    fun tagStartAt(placeholder: Int): Int = indexOfSpan(placeholder, tagStarts, tagEnds).let { if (it >= 0) tagStarts[it] else -1 }
+
+    fun nameStartAt(placeholder: Int): Int = indexOfSpan(placeholder, nameStarts, nameEnds).let { if (it >= 0) nameStarts[it] else -1 }
 
     // Their value is a signal path the client follows without a guard (bind.ts, ref.ts, indicator.ts).
     private val signalPaths = CatalogNames.signalAttributes
@@ -1052,7 +1140,7 @@ private class Landscape(
         val prefix = prefixes.firstOrNull { lower.startsWith(it) } ?: return false
         val rest = lower.substring(prefix.length)
         val name = rest.substringBefore(':').substringBefore("__")
-        return name in ElementsGuard.evaluatedAttributes || name in signalPaths
+        return name in ElementsGuard.evaluatedAttributes || name in signalPaths || name == MATCH_MEDIA
     }
 
     /** The span [at] is in, or -1. Spans are found in order and never overlap, so the last to start at or before it is the one. */

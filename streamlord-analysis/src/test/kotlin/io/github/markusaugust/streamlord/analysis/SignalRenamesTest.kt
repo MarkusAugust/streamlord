@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 class SignalRenamesTest {
     @Test
     fun `what a rename writes at each place`() {
-        for (case in twinCases("signal-renames.json")) {
+        for (case in sharedCases("signal-renames.json")) {
             val name = case.string("name")
             val rename = case.string("rename")!!
             val expected = case.string("text")
@@ -18,7 +18,7 @@ class SignalRenamesTest {
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
             val at = case.string("at")!!
-            val d = signalDeclarations(src, language).first { src.substring(it.start, it.end) == at }
+            val d = signalDeclarations(Source(src, language)).first { src.substring(it.start, it.end) == at }
             assertEquals(expected, signalRenameText(src, d, rename), name)
         }
     }

@@ -8,7 +8,7 @@ description: "Reconnects, heartbeats, proxies and threads: what a long-lived str
 > Gorvek of Bonereach
 
 Datastar's documentation does not describe what its client does when a connection drops, and no
-SDK describes it either. Everything here was read out of the Datastar 1.0.4 client source,
+SDK describes it either. Everything here was read out of the Datastar 1.0.5 client source,
 measured against a deployed service or in this repository's own tests, and each claim says which;
 the few that are neither say so. The ones marked **observed** are
 behaviour of the client, not promises of the protocol. Check them against the version you ship.
@@ -24,7 +24,7 @@ createHttpMethod('post', 'POST')        // every other method defaults to true
 
 A long-lived stream is almost always a `@get`, so this is almost always your case. The client
 aborts the request on `visibilitychange` and builds a fresh one when the page comes back
-(`fetch.ts:506`). **Observed.**
+(`fetch.ts:507-513`). **Observed.**
 
 Turn it off where you open the stream:
 
@@ -41,7 +41,7 @@ to answer it from the top.
 ## When Datastar reconnects, and when it does not
 
 The default is `retry: 'auto'`, which reconnects **only on a transport failure**. Not on a 4xx or
-5xx (`fetch.ts:594`), and not when a 200 stream ends cleanly (`fetch.ts:676`). Returning 503 from
+5xx (`fetch.ts:594`), and not when a 200 stream ends cleanly (`fetch.ts:680`). Returning 503 from
 a handler under load does not buy you a retry; it buys you a dead stream.
 
 | Value | Reconnects on |
@@ -49,18 +49,18 @@ a handler under load does not buy you a retry; it buys you a dead stream.
 | `auto` (default) | network errors only |
 | `error` | network errors, and 4xx/5xx |
 | `always` | anything that is not 204 or a redirect, including a clean end |
-| `never` | network errors only, the same as `auto` |
+| `never` | nothing |
 
-That last row is not a typo. `'never'` is read in exactly one place in the client, the branch
-that decides what to do about a response that is not a 200 (`fetch.ts:594`), and `auto` declines
-to retry there anyway. A transport failure is handled somewhere else entirely, in the `catch`
-around the request, and that path calls `retryRequest()` without consulting the setting at all
-(`fetch.ts:686`). So `never` still reconnects after a dropped connection, up to `retryMaxCount`
-times, with the same backoff as any other value. If you need a stream that truly gives up, count
-the attempts on your own side; the option name promises more than the client delivers.
+`'never'` gives up at the first failure: the `catch` around the request rejects without a retry
+(`fetch.ts:689`), and the action fails with that error. Datastar 1.0.4 read the setting only for
+an answer that was not a 200, so there `never` still reconnected after a dropped connection, as
+`auto` does. If your pages may still load 1.0.4, do not count on `never` to stop a stream.
 
 Backoff is `retryInterval` (1000 ms) multiplied by `retryScaler` (2) up to `retryMaxWait`
-(30 000 ms), for at most `retryMaxCount` (10) attempts. All five are typed:
+(30 000 ms), for at most `retryMaxCount` (10) retries over the whole action: a 200 in between
+does not start the count again, and the wait goes back to `retryInterval` only after a stream that
+ended. A retry that is waiting when the page is hidden is dropped, and the request is sent anew
+when the page shows again. All five are typed:
 
 ```kotlin sample=html
 div {
@@ -82,9 +82,9 @@ Two SSE fields the
 and Datastar's own reference never mentions.
 
 **`retry:`** sets the client's base retry interval, overriding
-`retryInterval` (`fetch.ts:669`). **Observed.** It holds for the rest of the action, across
+`retryInterval` (`fetch.ts:668`). **Observed.** It holds for the rest of the action, across
 reconnects, until a later frame sets another. The first reconnect waits the full value;
-`retryMaxWait` only caps the backoff steps after it (`fetch.ts:539-542`). Streamlord omits
+`retryMaxWait` only caps the backoff steps after it (`fetch.ts:541-544`). Streamlord omits
 the line when it writes as the protocol default of 1000 ms, as the specification says to, so a
 stream that has changed the interval goes back to it with 999 or 1001 ms:
 
@@ -97,13 +97,14 @@ A retry is a whole number of milliseconds from 1 to `Int.MAX_VALUE`, since the l
 milliseconds. Under one it would read `retry: 0`: a reconnect with no wait, whose backoff never
 grows, since zero times `retryScaler` is zero. Above the limit the browser's timer overflows. An
 event with either fails when it is built. A short retry has a cost of its own: a server that
-answers 200 and then drops the connection is reconnected to on that schedule without end, since
-`retryMaxCount` only counts attempts that never reach a 200.
+answers 200 and then drops the connection is reconnected to on that schedule `retryMaxCount`
+times, and then the client gives up for good, since the count runs over the whole action and a
+200 does not start it again. A stream meant to live for hours needs a `retryMaxCount` to match.
 
 **`id:`**, when you send one, is kept by the client and put on the **next** attempt as a
-`last-event-id` request header (`fetch.ts:662`). **Observed.** An event without an id leaves the
+`last-event-id` request header (`fetch.ts:661`). **Observed.** An event without an id leaves the
 header as it was: the client changes it only when an `id:` line arrives, and drops it only on an
-empty one (`fetch.ts:665`). **Observed.** An event cannot carry an empty id; it is refused when
+empty one (`fetch.ts:664`). **Observed.** An event cannot carry an empty id; it is refused when
 the event is built. An `SseFrame` built by hand can, to drop the header on purpose. Streamlord
 also keeps an id to printable ASCII with no space at either end, which comes back as it was
 written: `fetch` cannot send a character above U+00FF, Node's `fetch` refuses a control
@@ -174,7 +175,7 @@ On Spring it is a parameter of the bean you already declare,
 Four things it does not do:
 
 - **It does not keep Datastar's client alive.** The client has no idle timeout of its own: its
-  `fetch` runs without a timer, and its retry counter resets when a 200 arrives, not per frame. The
+  `fetch` runs without a timer, and a frame that arrives does not touch its count of retries. The
   heartbeat is for what sits between you and the browser, and for finding out on the server that
   the reader has gone: the comment is a write, and a write to a closed connection fails. It
   takes a few: the first still land in the operating system's buffer. Over a local socket, the
@@ -423,9 +424,12 @@ response that intends to stay open for an hour is not something it waits for.
 So a deploy cuts your streams, and that is the behaviour to design around rather than configure
 away. The good news is in the table [further up](#when-datastar-reconnects-and-when-it-does-not):
 a severed connection is a transport failure, and a transport failure is the one case the default
-`retry: 'auto'` does reconnect from. Your readers come back on the new instance after the one
-second base interval, all of them, together. If that herd is a problem, raise `retryInterval`
-where you open the stream.
+`retry: 'auto'` does reconnect from. The first time a stream is cut, its reader comes back on
+the new instance after the one second base interval, and so do all the others, together. If that
+herd is a problem, raise `retryInterval` where you open the stream. Each later cut of the same
+stream waits twice as long as the one before, up to thirty seconds, and the tenth is the last,
+since the count runs over the stream's whole life: raise `retryMaxCount` for a stream that is to
+outlive more deploys than that.
 
 To end streams cleanly instead, the handler has to know the server is going down. Watch Ktor's
 `ApplicationStopPreparing` event and finish your flows from there; nothing in Streamlord can do it

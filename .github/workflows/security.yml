@@ -47,7 +47,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
           java-version: 21
@@ -72,8 +72,9 @@ jobs:
       # point at code that read CI secrets, and a tag is only as fixed as whoever can push it.
       # Dependabot updates the commit and the comment together.
       #
-      # The lockfiles it reads are editors/vscode/package-lock.json and docs/bun.lock, and it
-      # looks for secrets committed anywhere in the tree.
+      # The lockfiles it reads are editors/vscode/package-lock.json, kotlin-js-store/package-lock.json
+      # (what Kotlin/JS fetches to test the analysis on Node), conformance/generate/package-lock.json
+      # and docs/bun.lock, and it looks for secrets committed anywhere in the tree.
       - name: Scan the repository
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -84,7 +85,7 @@ jobs:
           format: sarif
           output: trivy-repository.sarif
 
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: trivy-repository.sarif
           category: trivy-repository
@@ -104,7 +105,7 @@ jobs:
         id: owner
         run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -118,7 +119,7 @@ jobs:
           format: sarif
           output: trivy-image.sarif
 
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image

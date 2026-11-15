@@ -15,6 +15,59 @@ down yourself. A body must be declared `Content-Type: application/json`, as Data
 declares every body it sends signals in; one declared otherwise, or not at all, is refused with
 `SignalsMediaTypeException`, a 415, for the reason on [Security](/security/#forms-from-other-sites).
 
+## A form
+
+A form sent with Datastar's `contentType: 'form'` carries the form's own fields, not signals:
+`application/x-www-form-urlencoded`, or `multipart/form-data` when the form says
+`enctype="multipart/form-data"`. `readSignals` refuses it with the same `SignalsMediaTypeException`,
+and its message says to read the fields as form parameters, which is all a handler for a form does:
+
+```kotlin sample=html
+form {
+    dataOnSubmit(post("/quests") { contentType = FetchOptions.ContentType.FORM })
+    input(name = "title")
+    button { +"Add" }
+}
+```
+
+```kotlin sample=ktor-routing
+post("/quests") {
+    val title = call.receiveParameters()["title"].orEmpty()
+    call.respondDatastar {
+        patchElements(interpolate("""<li id="quest">%s</li>""", title))
+    }
+}
+```
+
+On Spring WebMVC, a `@RequestParam` takes the field:
+
+```kotlin sample=spring
+@PostMapping("/quests")
+fun add(
+    @RequestParam title: String,
+    response: HttpServletResponse,
+): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
+    response.datastarStream {
+        patchElements(interpolate("""<li id="quest">%s</li>""", title))
+    }
+```
+
+On WebFlux a `@RequestParam` is read from the query string alone, and a form's field answers
+`400`. Bind the form to an object instead, which works on WebMVC too:
+
+```kotlin sample=spring
+data class Quest(val title: String)
+
+@PostMapping("/quests")
+fun add(@ModelAttribute quest: Quest): ResponseEntity<Flow<ServerSentEvent<String>>> =
+    flowOf(PatchElements(interpolate("""<li id="quest">%s</li>""", quest.title)))
+        .asDatastarResponse()
+```
+
+From `@get` or `@delete` the fields travel in the query string instead, where a `datastar`
+parameter is none of them, so `readSignals` gives none and `call.request.queryParameters["title"]`
+or `@RequestParam` reads the field.
+
 ## Without a codec
 
 The built-in reader needs no dependency and no data class:
@@ -96,7 +149,8 @@ too. Pass the value as a pair, `"search" to codec.toJsonValue(...)`, and the fie
 
 What the codec leaves out, the page does not declare. A field that is `null` declares nothing,
 because the client holds no null: it removes a signal patched to `null`, and an expression that
-reads it, or a `data-bind` on it, gets `""`. A `null` in a list is held as `""` too. So a form
+reads it afterwards, or a `data-bind` on it, gets `""`. An expression already on the page is not
+run again for the removal, and goes on showing what it showed. A `null` in a list is held as `""` too. So a form
 with `age: Int? = null` can come back from the browser as `"age": ""`, which a read into `Int?`
 refuses. Give such a field the value the page starts it with, `""` or `0`, or make the type take
 what the browser sends. The editors warn on a pair written `"selected" to null` in `dataSignals`.
@@ -289,7 +343,7 @@ folds a patch the way the client does.
 A patch the client fails on partway, such as a `length` an array cannot take, makes
 `mergePatchAsClient` throw `SignalPatchException` with the store as the client keeps it, the keys
 before the failing one applied, and both Stream Inspectors show that store and the reason. In
-the browser the damage outlasts the patch: Datastar 1.0.4 leaves its update batch open after the
+the browser the damage outlasts the patch: Datastar 1.0.5 leaves its update batch open after the
 throw, so the bindings already on the page stop redrawing until it is reloaded. Measured in
 Chrome, a `data-text` stayed where it was while clicks moved its signal on, while element
 patches still landed and a binding added after the throw showed the current value.
@@ -375,6 +429,11 @@ div {
 The client fills each half of the filter on its own: set only `include`, and the default
 `exclude` still keeps the underscored names home. `payloadExpr` sends exactly the expression's
 value, so `readSignals()` on `/rows/delete` sees `ids` and nothing else.
+
+Every option has such a twin whose name ends in `Expr`, for a value the page computes:
+`retryExpr = $$"$mode"`, `contentTypeExpr`, `retryMaxCountExpr` and the rest. A filter's halves
+take one too, `SignalFilter(includeExpr = $$"$pattern")`, and `SignalFilter(filterExpr = ...)`
+is the whole filter as one expression, for `@setAll` and `@toggleAll` as well.
 
 ## The size limit
 

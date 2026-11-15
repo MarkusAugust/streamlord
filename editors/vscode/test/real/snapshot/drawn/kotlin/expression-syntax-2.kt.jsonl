@@ -1,0 +1,6 @@
+{"what":"file","language":"kotlin"}
+{"what":"diagnostic","code":"expression-syntax","link":"https://data-star.dev/guide/datastar_expressions","message":"Datastar expression: Unexpected end of input","range":"1:66-1:68","severity":"Error","source":"streamlord"}
+{"what":"hover","at":"1:40-1:53","answers":[{"contents":[{"value":"5204ed61fb46"}],"range":"1:40-1:53"}]}
+{"what":"hover","at":"1:56-1:61","answers":[{"contents":[{"value":"2ac987a2dca5"}],"range":"1:56-1:61"}]}
+{"what":"signature","at":"1:62-1:67","active":0,"parameter":0,"signatures":[{"documentation":"POST with signals in the body.","label":"@post(uri, options?)","parameters":[{"documentation":"A string. The address of the request; a relative one is read against the page.","label":[6,9]},{"documentation":"An object of options. contentType, filterSignals, headers and the others the reference lists; one left out takes its default.","label":[11,19]}]}]}
+{"what":"rename","at":"1:1-2:1","error":"No signal here to rename."}

@@ -1,12 +1,13 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.json.JsonWriter
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import org.intellij.lang.annotations.Language
 import kotlin.time.Duration
 
 /**
- * An event bound for the browser over the Datastar SSE protocol (v1.0.4).
+ * An event bound for the browser over the Datastar SSE protocol (v1.0.5).
  *
  * The protocol itself knows only two rites, `datastar-patch-elements` and
  * `datastar-patch-signals`. Streamlord models a third, [ExecuteScript], because the SDK
@@ -28,8 +29,8 @@ public sealed interface DatastarEvent {
      * later frame sets another. `null` leaves the client's current interval in place, which is
      * the action's `retryInterval` (1000 ms unless set) until a frame has changed it. 1000 ms is
      * never written, as the SDK specification has it, so a stream that has changed the interval
-     * goes back with 999 or 1001 ms. `retryMaxCount` only counts reconnects that never reach a
-     * 200, and `retryMaxWait` caps the backoff after the first wait, not this value.
+     * goes back with 999 or 1001 ms. `retryMaxCount` counts every reconnect of the action, one that
+     * reached a 200 too, and `retryMaxWait` caps the backoff after the first wait, not this value.
      */
     public val retry: Duration?
 }
@@ -39,7 +40,8 @@ public sealed interface DatastarEvent {
  *
  * Datastar demands *elements*, not fragments: each top-level node must be a complete element,
  * and when no [selector] is given each of them must carry an `id` so the client can find its
- * counterpart.
+ * counterpart: one without it skips, with only a console warning. `Streamlord(guardElements = true)`
+ * refuses such a patch; the event itself takes it, since the SDK specification's own tests send one.
  *
  * @property elements The HTML to patch. May be `null` only when [mode] is [ElementPatchMode.REMOVE],
  *   and only white space as HTML counts it (tab, line feed, form feed, carriage return, space)
@@ -49,10 +51,15 @@ public sealed interface DatastarEvent {
  *   other modes, the client inserts those as text, and they are taken.
  * @property selector CSS selector for the target. Required for every mode except OUTER and REPLACE.
  * @property mode How the elements are driven into the DOM. Defaults to OUTER (morph).
- * @property namespace The namespace of the new elements. Defaults to HTML.
+ * @property namespace The namespace of the new elements. Defaults to HTML. In [ElementNamespace.SVG]
+ *   and [ElementNamespace.MATHML] the client parses the markup inside an `<svg>` or a `<math>`, so an
+ *   HTML element there, which closes it, is refused, outside a `<foreignObject>` or the like; in HTML
+ *   an SVG or MathML element outside its own root, such as a bare `<circle>`, is refused, since the
+ *   browser would make it an HTML element that draws nothing.
  * @property useViewTransition Wrap the patch in the View Transitions API.
- * @property viewTransitionSelector CSS selector of the element to run the view transition on.
- *   Only sent when [useViewTransition] is `true`.
+ * @property viewTransitionSelector CSS selector of the element to run the view transition on, the
+ *   document when `null`. Sent only with [useViewTransition], since the client reads it for nothing
+ *   else, so `useViewTransition = animate` can name the element whatever `animate` is.
  */
 public data class PatchElements(
     @Language("HTML") val elements: String? = null,
@@ -68,20 +75,8 @@ public data class PatchElements(
         validateCommon(eventId, retry)
         selector?.let { Wire.selector(it) }
         viewTransitionSelector?.let { Wire.selector(it, "viewTransitionSelector") }
-        if (mode.requiresSelector && selector == null) {
-            throw DatastarEventValidationException("Patch mode '${mode.wire}' requires a selector")
-        }
-        // An inner patch of nothing empties its target, the one way to clear a container.
-        val empty = if (mode == ElementPatchMode.INNER) elements == null else Wire.noElements(elements, mode, selector)
-        if (mode != ElementPatchMode.REMOVE && empty) {
-            throw DatastarEventValidationException(
-                if (mode == ElementPatchMode.INNER) {
-                    "Patch mode 'inner' requires elements; pass \"\" to empty the target"
-                } else {
-                    "Patch mode '${mode.wire}' requires elements"
-                },
-            )
-        }
+        if (selector == null) EventRules.modeWithoutSelector(mode)?.let { throw DatastarEventValidationException(it) }
+        EventRules.elements(elements, mode, selector, namespace, response = false)?.let { throw DatastarEventValidationException(it) }
     }
 
     public companion object {
@@ -89,6 +84,7 @@ public data class PatchElements(
         public fun remove(
             selector: String,
             useViewTransition: Boolean = false,
+            viewTransitionSelector: String? = null,
             eventId: String? = null,
             retry: Duration? = null,
         ): PatchElements =
@@ -96,6 +92,7 @@ public data class PatchElements(
                 selector = selector,
                 mode = ElementPatchMode.REMOVE,
                 useViewTransition = useViewTransition,
+                viewTransitionSelector = viewTransitionSelector,
                 eventId = eventId,
                 retry = retry,
             )
@@ -140,6 +137,25 @@ public data class PatchSignals(
         validateCommon(eventId, retry)
         Wire.signals(signals)
     }
+
+    public companion object {
+        /**
+         * A patch that removes signals by name, as `removeSignals` on a stream sends it, for code
+         * that builds the events itself, as a `Flow` of them does. A dotted name removes a nested
+         * signal, and a name under another one being removed is left out. A name with a hyphen is
+         * refused; remove such a key with the JSON form, `PatchSignals("""{"form": {"first-name": null}}""")`.
+         */
+        public fun remove(
+            vararg names: String,
+            eventId: String? = null,
+            retry: Duration? = null,
+        ): PatchSignals =
+            PatchSignals(
+                JsonWriter.write(SignalNames.nested(removedNames(names.asList()).map { it to null })),
+                eventId = eventId,
+                retry = retry,
+            )
+    }
 }
 
 /**
@@ -168,13 +184,8 @@ public data class ExecuteScript(
 ) : DatastarEvent {
     init {
         validateCommon(eventId, retry)
-        if (script.isBlank()) throw DatastarEventValidationException("script must not be blank")
-        attributes.keys.forEach(Wire::attributeName)
-        if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
-            throw DatastarEventValidationException(
-                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false",
-            )
-        }
+        EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
+        for (name in attributes.keys) EventRules.scriptAttributeName(name, autoRemove)?.let { throw DatastarEventValidationException(it) }
     }
 
     /** The script element exactly as it is sent to the browser. */
@@ -194,6 +205,28 @@ public data class ExecuteScript(
                 append(Wire.escapeScriptBody(script))
                 append("</script>")
             }
+
+    public companion object {
+        /**
+         * Send the browser to another page, as `redirect` on a stream does, for code that builds the
+         * events itself. The URL is quoted, and the navigation runs from a `setTimeout`, as the
+         * official SDKs do, so the script element is applied and removed before the page unloads.
+         *
+         * @throws IllegalArgumentException for a URL with a scheme that does more than navigate, such
+         *   as `javascript:`: only a relative URL or an `http`, `https`, `mailto` or `tel` one is followed.
+         */
+        public fun redirect(url: String): ExecuteScript {
+            require(safeUrl(url)) { "redirect follows a relative URL or an http, https, mailto or tel one, not '$url'" }
+            return ExecuteScript("setTimeout(() => { window.location.href = ${JsonWriter.writeString(url)} })")
+        }
+
+        /** Put [url] in the address bar in place of the current history entry, as `replaceUrl` on a stream does. */
+        public fun replaceUrl(url: String): ExecuteScript =
+            ExecuteScript("window.history.replaceState(window.history.state, '', ${JsonWriter.writeString(url)})")
+
+        /** Put [url] in the address bar as a new history entry, as `pushUrl` on a stream does. */
+        public fun pushUrl(url: String): ExecuteScript = ExecuteScript("window.history.pushState(null, '', ${JsonWriter.writeString(url)})")
+    }
 
     /** The wire-level event this script becomes. */
     public fun toPatchElements(): PatchElements =
@@ -221,3 +254,6 @@ internal fun DatastarEvent.withEventId(id: String?): DatastarEvent =
         is PatchSignals -> copy(eventId = id)
         is ExecuteScript -> copy(eventId = id)
     }
+
+/** The names a removal of [names] removes: each once, and none under another name it removes. */
+internal fun removedNames(names: List<String>): List<String> = names.distinct().filter { name -> names.none { name.startsWith("$it.") } }

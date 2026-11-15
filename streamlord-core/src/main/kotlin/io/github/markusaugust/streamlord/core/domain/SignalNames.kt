@@ -3,9 +3,10 @@ package io.github.markusaugust.streamlord.core.domain
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.clientRewrite
+import io.github.markusaugust.streamlord.core.client.regex
 
 /**
- * The signal names Datastar's client cannot hold, measured against its 1.0.4 store.
+ * The signal names Datastar's client cannot hold, measured against its 1.0.5 store.
  *
  * - `__proto__` is never stored. With some objects under it, `{"x": 1}` among them, the merge
  *   throws halfway through a batch it never closes, and the bindings already on the page stop
@@ -72,7 +73,7 @@ public object SignalNames {
 
     // What Datastar's client finds behind a `$`, less the hyphen a signal name may not hold: ASCII
     // word characters, in parts joined by `.`.
-    private val SIGNAL_NAME = Regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
+    private val SIGNAL_NAME = regex("[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)*")
 
     /**
      * Why [name] cannot declare a signal in code, or `null` when it can: what
@@ -85,7 +86,7 @@ public object SignalNames {
         AttributeKeys.nameProblem(name)
             ?: hyphenProblem(name)
             ?: pathProblem(name)
-            ?: if (SIGNAL_NAME.matches(name)) {
+            ?: if (SIGNAL_NAME.matchEntire(name) != null) {
                 null
             } else {
                 "is not a name a \$ reference reaches: Datastar reads ASCII letters, digits and _, in parts joined by dots"
@@ -109,7 +110,7 @@ public object SignalNames {
     /** [name] with each hyphen dropped and the letter after it raised: `first-name` is `firstName`. */
     public fun withoutHyphens(name: String): String = HYPHEN.replace(name) { it.value.trimStart('-').uppercase() }
 
-    private val HYPHEN = Regex("-+.?")
+    private val HYPHEN = regex("-+.?")
 
     /**
      * [name], a reference an expression writes after `$`, with its hyphens taken out, or `null`
@@ -170,9 +171,10 @@ public object SignalNames {
         return out.toString()
     }
 
-    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and a
-    // template literal without `${`, so their text is in strings; the text of one with `${` it reads
-    // as code, which JavaScript does not, so the scan steps over that text itself.
+    // The offsets in text of the hyphens that go wrong. The client skips a quoted string, and
+    // the text of a template literal it takes whole, so those are in runs; the text of one whose
+    // `${` holds a brace it reads as code, which JavaScript does not, so the scan steps over that
+    // text itself.
     private fun wrongHyphens(text: String): Set<Int> {
         val read = clientRewrite(text)
         val references = read.rewrites.filter { it.signal }
@@ -205,7 +207,7 @@ public object SignalNames {
                 continue
             }
             val skip =
-                read.runs.firstOrNull { i in it }
+                read.runs.firstOrNull { i in it.range }?.range
                     ?: references.firstOrNull { i >= it.start && i < it.end }?.let { it.start until it.end }
             if (skip != null) {
                 i = skip.last + 1
@@ -250,6 +252,14 @@ public object SignalNames {
         return parts.firstOrNull { it in PROTOTYPE_NAMES }?.let {
             "has the part $it, which every object already has, so the client cannot hold a signal there"
         }
+    }
+
+    /** [nest] of names each held to [hyphenProblem] and [pathProblem] first, as a patch of named signals needs. */
+    internal fun nested(pairs: List<Pair<String, Any?>>): Map<String, Any?> {
+        for ((name, _) in pairs) {
+            (hyphenProblem(name) ?: pathProblem(name))?.let { throw DatastarEventValidationException("signal $name $it") }
+        }
+        return nest(pairs)
     }
 
     /**

@@ -8,6 +8,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SimpleModificationTracker
 import com.intellij.util.xmlb.XmlSerializerUtil
+import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 
@@ -41,7 +42,7 @@ class StreamlordSettings : PersistentStateComponent<StreamlordSettings.State> {
          * File extensions of template languages that get the HTML side as text when no plugin gives them an HTML tree:
          * JTE and kte, FreeMarker, Velocity, Mustache, Handlebars, Pebble, Twig, Jinja and the rest.
          */
-        var templateExtensions: MutableList<String> = DEFAULT_TEMPLATE_EXTENSIONS.toMutableList()
+        var templateExtensions: MutableList<String> = ProjectFiles.TEMPLATE_EXTENSIONS.toMutableList()
     }
 
     private var state = State()
@@ -72,38 +73,6 @@ class StreamlordSettings : PersistentStateComponent<StreamlordSettings.State> {
                 .toSet()
 
     companion object {
-        val DEFAULT_TEMPLATE_EXTENSIONS: List<String> =
-            listOf(
-                "jte",
-                "kte",
-                "ftl",
-                "ftlh",
-                "vm",
-                "mustache",
-                "hbs",
-                "handlebars",
-                "peb",
-                "pebble",
-                "twig",
-                "jinja",
-                "jinja2",
-                "j2",
-                "cshtml",
-                "razor",
-                "php",
-                "erb",
-                "ejs",
-                "liquid",
-                "njk",
-                "edge",
-                "astro",
-                "svelte",
-                "vue",
-                "tmpl",
-                "gotmpl",
-                "gohtml",
-            )
-
         fun getInstance(project: Project): StreamlordSettings = project.service()
     }
 }

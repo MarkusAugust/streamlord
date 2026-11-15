@@ -9,7 +9,7 @@ Accept: text/event-stream, text/html, application/json
 Datastar-Request: true
 
 HTTP/1.1 200 
-Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{nonce}'; object-src 'none'; base-uri 'self'
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{nonce}'; object-src 'none'; base-uri 'self'; require-trusted-types-for 'script'; trusted-types datastar
 Content-Type: text/html;charset=UTF-8
 Content-Length: 128
 Date: {date}

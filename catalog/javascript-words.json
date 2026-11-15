@@ -1,0 +1,22 @@
+{
+  "$comment": "The JavaScript words the editors colour in a Datastar expression: each keyword under the scope TypeScript's grammar gives it, the constants, and the globals. streamlord-analysis compiles this in for IntelliJ's colours (Tokens.kt), and editors/vscode/scripts/generate.mjs writes the keywords, constants and globals of syntaxes/datastar-expression.tmLanguage.json from it.",
+  "keywords": {
+    "keyword.control.conditional.datastar": ["if", "else", "switch", "case"],
+    "keyword.control.flow.datastar": ["return", "await", "yield", "break", "continue", "throw"],
+    "keyword.control.loop.datastar": ["for", "while", "do"],
+    "keyword.control.trycatch.datastar": ["try", "catch", "finally"],
+    "keyword.operator.new.datastar": ["new"],
+    "keyword.operator.expression.$1.datastar": ["typeof", "void", "delete", "instanceof", "in", "of"],
+    "variable.language.this.datastar": ["this"],
+    "storage.type.datastar": ["let", "const", "var"],
+    "storage.type.function.datastar": ["function"],
+    "storage.type.class.datastar": ["class"],
+    "storage.modifier.async.datastar": ["async"]
+  },
+  "constants": ["true", "false", "null", "undefined", "NaN", "Infinity"],
+  "globals": [
+    "window", "document", "console", "Math", "JSON", "Date", "Intl", "navigator", "location", "history",
+    "localStorage", "sessionStorage", "fetch", "setTimeout", "setInterval", "clearTimeout",
+    "clearInterval", "Promise", "Array", "Object", "String", "Number", "Boolean"
+  ]
+}

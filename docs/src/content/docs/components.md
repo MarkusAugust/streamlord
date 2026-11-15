@@ -6,7 +6,7 @@ description: "Custom elements, third-party widgets and your own scripts next to 
 Datastar owns the attributes it reads and the elements it patches. Everything else on the page,
 a custom element, a chart library, a script you wrote, lives next to it. The rules on this page
 keep the two from stepping on each other. What they say about the client was checked against
-the Datastar 1.0.4 client's source.
+the Datastar 1.0.5 client's source.
 
 ## Attributes down, events up
 
@@ -129,9 +129,11 @@ server's, and focus and typed text go with it. At the top level the client looks
 its id, so a changed id finds nothing: it warns `PatchElementsNoTargetsFound` and leaves the page
 as it was.
 
-Unique means on the whole page, not only in the list. The client looks an id up in the whole
-document, so when the rows change order, a `#case-41` in a sidebar can be moved into the list in
-place of the row. A duplicate inside the patched element or in the patch is dropped from the
+Unique means within the element you patch. The client matches the rows by the ids inside that
+element and nowhere else, so a `#case-41` in a sidebar is left where it is when the rows change
+order. Datastar 1.0.4 looked an id up in the whole document there, and moved the sidebar's element
+into the list in place of the row. Only the element you patch itself is found by its id in the
+whole document. A duplicate inside the patched element or in the patch is dropped from the
 matching by id.
 
 Leave the id off and the element is matched by its tag and its place among its siblings, unless
@@ -141,10 +143,10 @@ a field or a focused control, needs a stable id, or must sit where nothing is in
 it. An id keeps the element, not what the browser set on it: an open `<details>` closes on the
 next morph unless it also carries `dataPreserveAttr("open")`.
 
-Datastar documents none of this beyond the two sentences above. It is what the 1.0.4 client does,
+Datastar documents none of this beyond the two sentences above. It is what the 1.0.5 client does,
 read in `isSoftMatch` and `findBestMatch` in
-[`patchElements.ts`](https://github.com/starfederation/datastar/blob/v1.0.4/library/src/plugins/watchers/patchElements.ts)
-and tested with Datastar 1.0.4, and a later version may match differently. The matching through the
+[`patchElements.ts`](https://github.com/starfederation/datastar/blob/v1.0.5/library/src/plugins/watchers/patchElements.ts)
+and tested with Datastar 1.0.5, and a later version may match differently. The matching through the
 ids an element contains is the "id sets" that [idiomorph](https://github.com/bigskysoftware/idiomorph)
 describes; idiomorph does not document the case without an id either.
 

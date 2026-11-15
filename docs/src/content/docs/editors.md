@@ -87,6 +87,11 @@ template literal that also holds a `${...}`. An empty `data-nonce` on `<html>` i
 Datastar throws `NonceRequired` and does not start, and one that is no base64 value a warning,
 since a browser ignores it in the policy and blocks the scripts.
 
+**Unknown signals.** A `$name` no file in the project defines is a warning, and so, in a Kotlin
+file, is a signal the server reads that no page declares (`signal-never-declared`). One switch in
+each editor turns both on and off: the setting `streamlord.diagnostics.unknownSignals` in VS Code,
+and its counterpart, the inspection Streamlord › Unknown signals, in IntelliJ.
+
 **Completions** for signals, actions, attributes, modifiers, ids and classes. Signals are
 collected from the whole project, since the page that declares one is rarely the file that reads
 it. They work where the value runs over several lines or sits in single quotes, and in Kotlin
@@ -118,7 +123,7 @@ a signals class, which Kotlin's own rename renames. In `$user.name.length` each 
 signal: the caret on `user` renames `user`, on `name` it renames `user.name`.
 
 **Help inside an expression.** Put the caret in the options of a backend action and completion
-offers the ones not yet written, each with what Datastar 1.0.4 does with it; hovering one says the
+offers the ones not yet written, each with what Datastar 1.0.5 does with it; hovering one says the
 same. Parameter info shows the action's parameters with the one the caret is on: Parameter Info in
 IntelliJ (⌘P on macOS, Ctrl+P elsewhere), Trigger Parameter Hints in VS Code (⇧⌘Space on macOS,
 Ctrl+Shift+Space elsewhere), and on typing `(` or `,`. After `data-on:` come Datastar's own events,
@@ -131,16 +136,17 @@ IDE closes it for you.
 <div data-on:datastar-fetch="evt.detail.type === 'error' && ($failed = true)"></div>
 ```
 
-`retry` here is worth the hover: in 1.0.4 a request that fails on the network is retried
-whatever it says, so `'auto'` and `'never'` act alike, and `'error'` is what also retries a 4xx or
-5xx answer.
+`retry` here is worth the hover: `'auto'` retries only a request that fails on the network,
+`'error'` is what also retries a 4xx or 5xx answer, and `'never'` retries nothing.
 
 **Hover documentation**, snippets, and syntax highlighting of the Datastar tokens only, never
-of your Kotlin or your HTML, which belong to your theme. In IntelliJ the Datastar tokens take
-their colours from your theme too: a signal is coloured as a static field, a backend action such
-as `@get` as a keyword, and any other action as a function call. IntelliJ's own schemes give a
-function call and a class name no colour, so there an action, an attribute key and a modifier
-argument read as plain text; Settings | Editor | Color Scheme | Streamlord gives them one.
+of your Kotlin or your HTML, which belong to your theme. In both editors the Datastar tokens take
+their colours from your theme too, through the standard scopes and keys it already colours. In
+IntelliJ a signal is coloured as a static field, an action such as `@get` and a modifier as a
+keyword, a global such as `Math` as a constant, and the parts of an attribute's name as an HTML
+attribute's name. Every one of IntelliJ's own schemes colours each of them, classic Default,
+Darcula and the New UI's Light and Dark alike; a name, a call and an operator stay as plain as in
+JavaScript. Settings | Editor | Color Scheme | Streamlord gives any of them a colour of your own.
 
 **A Stream Inspector** that shows a live SSE stream decoded rather than as raw text, with saved
 requests in `.streamlord/inspector.json` that the two editors share.
@@ -148,7 +154,23 @@ requests in `.streamlord/inspector.json` that the two editors share.
 **Route code lenses** in VS Code, gutter icons in IntelliJ.
 
 The JVM template languages are covered: JTE, kte, FreeMarker, Velocity, Mustache and Pebble.
-Thymeleaf is plain HTML and needs nothing special.
+Thymeleaf is plain HTML and needs nothing special. In VS Code, Twig, PHP and Razor files get the
+same colours, where their extension or VS Code's own grammar reads them. Each engine's own syntax
+in a value, `${...}` in FreeMarker or `{{ }}` in Twig, keeps the engine's colours and is left out
+of the checks, while the rest of the value is still checked; in JTE, kte, FreeMarker and Velocity
+that holds inside a JavaScript template too, since the engine writes it before the browser reads
+the page. Each editor knows the engine from the file's own language, so a file associated with
+FreeMarker by a setting, or not yet saved, gets FreeMarker's rules too.
+
+Razor reads every `@` before the browser does: `@Model.Name`, `@(...)` and `@{...}` are C#, and so
+is `@post('/save')`, which Razor tries to run as a method named `post`. Write Datastar's actions
+with two: `@@post('/save')`, which Razor writes as the `@post('/save')` the browser reads. VS Code
+colours the first `@` as Razor's escape and the rest as Datastar's action, and the checks read it
+as that action.
+
+```html
+<button data-on:click="@@post('/cart/@Model.Id')">Add</button>
+```
 
 ## The Stream Inspector's two files
 
@@ -226,19 +248,19 @@ have a schema, so the editor marks a mistake as you type it.
 
 ## One implementation, two editors
 
-Everything they know comes from `catalog/datastar-1.0.4.json`, which the SDK's own tests bind to
+Everything they know comes from `catalog/datastar-1.0.5.json`, which the SDK's own tests bind to
 the DSL, so the catalog cannot drift from the library without a test failing.
 
 The checks live once, in `streamlord-analysis`: a Kotlin module with no dependency beyond
 `streamlord-core`, holding the Kotlin string reader, the JavaScript syntax check, the markup and
 attribute rules, the signal and selector collectors, the route finder and the inspector's file
-format. The IntelliJ plugin calls it. The VS Code extension mirrors it in TypeScript, and both
-test suites run one shared corpus of expressions, markup, HTML and Kotlin, each case with the
-issue codes, the ranges and the text every quick fix must leave behind. It lives in
-`editors/vscode/test/fixtures/corpus`. What is no issue, such as the signals a file declares, the
-routes it serves or the curl line of a saved request, is a case in `fixtures/twins` beside it, which
-both suites read the same way. The JavaScript check is two parsers, acorn in the extension and a
-port of it in Kotlin, and the corpus is what holds them to the same verdict.
+format. Both editors run it: the IntelliJ plugin calls it on the JVM, and the VS Code extension
+runs the same Kotlin compiled to JavaScript. Its tests run on both, over one corpus of expressions,
+markup, HTML and Kotlin, each case with the issue codes, the ranges and the text every quick fix
+must leave behind. It lives in `editors/vscode/test/fixtures/corpus`. What is no issue, such as the
+signals a file declares, the routes it serves or the curl line of a saved request, is a case in
+`fixtures/cases` beside it. The JavaScript check is a port of acorn to Kotlin, so an expression
+parses the same in both editors.
 
 **You can call it too**, which is worth doing in the tests of your own markup functions:
 

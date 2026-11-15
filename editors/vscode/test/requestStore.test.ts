@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { files, Position, settings, unreadable, Uri, workspace, type OpenDocument } from "./vscode-mock.ts";
 import { RequestStore } from "../src/requestStore.ts";
-import { removeRequest, saveRequest } from "../src/requests.ts";
+import { removeRequest, saveRequest } from "../src/analysis.ts";
 import { RunningServers } from "../src/serverLog.ts";
 
 const ENV = "/ws/.streamlord/env.json";
@@ -259,7 +259,7 @@ describe("request store", () => {
     const { onDisk, typed, doc, edits, restore } = typedInEditor();
     try {
       await store().save(request("a"));
-      assert.equal(doc.text, saveRequest(typed, request("a")).text);
+      assert.equal(doc.text, saveRequest(typed, request("a"), REQUESTS).text);
       assert.equal(edits.count, 1);
       assert.equal(disk(REQUESTS), onDisk);
     } finally {
@@ -271,7 +271,7 @@ describe("request store", () => {
     const { onDisk, typed, doc, edits, restore } = typedInEditor();
     try {
       await store().delete("feed");
-      assert.equal(doc.text, removeRequest(typed, "feed").text);
+      assert.equal(doc.text, removeRequest(typed, "feed", REQUESTS).text);
       assert.ok(doc.text.includes('"name": "typed"'), doc.text);
       assert.equal(edits.count, 1);
       assert.equal(disk(REQUESTS), onDisk);
@@ -284,7 +284,7 @@ describe("request store", () => {
     const { onDisk, typed, doc, restore } = typedInEditor();
     try {
       await store().delete("typed");
-      assert.equal(doc.text, removeRequest(typed, "typed").text);
+      assert.equal(doc.text, removeRequest(typed, "typed", REQUESTS).text);
       assert.ok(!doc.text.includes('"name": "typed"'), doc.text);
       assert.equal(disk(REQUESTS), onDisk);
     } finally {

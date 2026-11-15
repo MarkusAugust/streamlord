@@ -3,55 +3,32 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.asciiLowercase
-import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
-import io.github.markusaugust.streamlord.core.domain.HoleLanding
-import io.github.markusaugust.streamlord.core.domain.Position
-import io.github.markusaugust.streamlord.core.domain.holeLandings
-import io.github.markusaugust.streamlord.core.domain.urlHostFixedBy
-import io.github.markusaugust.streamlord.core.domain.urlSchemeFixedBy
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
+import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ModifierRules
+import kotlin.concurrent.Volatile
+import kotlin.time.Duration
 
 /*
  * Editor-independent analysis: Kotlin or HTML source in, issues with source offsets out.
  */
 
-public data class AnalyzeOptions(
-    val prefix: String = CatalogNames.PREFIX,
-    val checkHtmlAttributes: Boolean = true,
-    /** The `const val` names the workspace declares: a value the author wrote, silent wherever it lands. */
-    val constants: Set<String> = emptySet(),
-    /** What the editor knows of a Kotlin value written into an HTML string, from types the text cannot show (IntelliJ). */
-    val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
-    /** Whether streamlord-html is on the classpath: null when the host does not know, and the file's imports decide. */
-    val htmlDsl: Boolean? = null,
-    /** Whether streamlord-core is on the classpath; null counts as present. Without core there is no streamlord-html either. */
-    val core: Boolean? = null,
-    /** Where the name of each call starts ([CallSite.nameStart]) that the host knows is not Streamlord's. */
-    val foreignCalls: Set<Int> = emptySet(),
-)
+/** The setting as the IntelliJ plugin's settings page shows it. */
+internal const val PREFIX_SETTING: String = "the Streamlord attribute prefix setting"
 
-/** Which of Streamlord's modules the analysed file can use, as [AnalyzeOptions] says. */
-internal class Sdk private constructor(
-    val core: Boolean,
-    /** As [AnalyzeOptions.htmlDsl]: null leaves it to the file's imports. */
-    val htmlDsl: Boolean?,
+/** A file as the rules read it: its [source], and its [modules] settled once for all of them. */
+internal class Reading(
+    val source: Source,
+    val modules: FileModules,
 ) {
-    companion object {
-        val DEFAULT = Sdk(true, null)
-        private val DSL = Sdk(true, true)
-        private val CORE_ONLY = Sdk(true, false)
-        private val NONE = Sdk(false, false)
-
-        fun of(opts: AnalyzeOptions): Sdk =
-            when {
-                opts.core == false -> NONE
-                opts.htmlDsl == true -> DSL
-                opts.htmlDsl == false -> CORE_ONLY
-                else -> DEFAULT
-            }
-    }
+    val prefix: String get() = source.prefix
+    val prefixSetting: String get() = source.prefixSetting
+    val constants: Set<String> get() = source.constants
+    val valueFact: ((start: Int, end: Int) -> ValueFact?)? get() = source.valueFact
 }
 
 /**
@@ -59,7 +36,9 @@ internal class Sdk private constructor(
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
- * refuses it where only a number is let in. [OTHER] is a class the editor resolved whose name the
+ * refuses it where only a number is let in. [TRUSTED] is core's `Trusted`, judged as [MARKUP] is,
+ * which `interpolate` writes as it stands wherever it lands, so a rewrite escapes nothing of it.
+ * [OTHER] is a class the editor resolved whose name the
  * text alone would take for Streamlord's markup, an `Html` or a `Trusted` of another package
  * ([ofResolvedClass]): nothing about it is known, and no reading of the text makes it markup. Only
  * IntelliJ gives it; VS Code has no resolver.
@@ -72,78 +51,83 @@ public enum class ValueFact {
     NULLABLE,
     CONSTANT,
     MARKUP,
+    TRUSTED,
     UNSIGNED,
     OTHER,
+
+    /** A List, a Set, a Map or an array, which a template writes in brackets: no CSS, nor anything to vouch for. */
+    COLLECTION,
+
+    /** A `kotlin.Number` of no closed type: a number to interpolate, but a class of it may write any text in code. */
+    OPEN_NUMBER,
     ;
 
     /** What [ofTypeName] in ValueTypes.kt hangs on. */
     public companion object
 }
 
-private val MODE_NAME = Regex("""(?:^|\.)([A-Z]+)\s*$""")
-private val CASE_ARG = Regex("""^\s*Case\.[A-Z]+\s*$""")
-private val CASE_VALUE = Regex("""Case\.([A-Z]+)""")
-private val CASE_IN_LAMBDA = Regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
-private val OBJECT_FORM = Regex("""^\s*[{\[]""")
-private val HAS_CAPITAL = Regex("""[A-Z]""")
+private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
+
+/** The constant [arg] names, `APPEND` of `ElementPatchMode.APPEND` or of an imported `APPEND`; null for a value the code computes. */
+private fun constantName(arg: Arg): String? = CONSTANT_NAME.find(arg.text)?.groupValues?.get(1)
+
+private val CASE_ARG = regex("""^\s*Case\.[A-Z]+\s*$""")
+private val CASE_VALUE = regex("""Case\.([A-Z]+)""")
+private val CASE_IN_LAMBDA = regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
+private val OBJECT_FORM = regex("""^\s*[{\[]""")
+private val HAS_CAPITAL = regex("""[A-Z]""")
 
 // A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
 // `val once = 1` a variable of the lambda's own.
-private val LAMBDA_ASSIGNMENT = Regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
-private val KOTLIN_STRING = Regex(""""(?:[^"\\]|\\.)*"""")
+private val LAMBDA_ASSIGNMENT = regex("""(?<!\b(?:val|var)\s)\b([A-Za-z]+)\s*=(?!=)\s*([^;\n}]*)""")
+private val KOTLIN_STRING = regex(""""(?:[^"\\]|\\.)*"""")
+
+// No time at all, `0.seconds` or `Duration.ZERO`, which an interval refuses.
+private val ZERO_DURATION =
+    regex("""(?:0+(?:\.0+)?\.(?:nanoseconds|microseconds|milliseconds|seconds|minutes|hours|days)|(?:Duration\.)?ZERO)""")
 
 // The parameter a DSL helper takes its key by, when it is passed by name.
 private val KEY_PARAMETERS = listOf("name", "event", "key", "property", "attribute", "signal")
-private val DOLLAR_RUNS = Regex("""\$+""")
-private val ASSIGN_BEFORE = Regex("""\s*=\s*$""")
-private val BRACED_TEMPLATE = Regex("""\$\{""")
-private val TRIM_AFTER = Regex("""\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
-// A name, a property chain or a number literal, which takes a call after it without brackets.
-private val SIMPLE_RECEIVER = Regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
-private val END_TAG_ATTRIBUTES = Regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
+/** The length of the `=` and the white space around it that end [src] before [end], or 0: read back from [end], not from the start. */
+private fun assignBefore(
+    src: String,
+    end: Int,
+): Int {
+    var k = end
+    while (k > 0 && src[k - 1] in JAVA_SPACE) k--
+    if (k == 0 || src[k - 1] != '=') return 0
+    k--
+    while (k > 0 && src[k - 1] in JAVA_SPACE) k--
+    return end - k
+}
 
-/** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
-private const val UNQUOTED_STOP = " \t\n\u000C\r\u000B\"'=<>`"
-
-/** Where escaping is all a value needs, so that `interpolate(...)` takes it. */
-private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Position.URL)
-
-/** What interpolate does with a URL whose value decides the scheme. */
-private const val REFUSES_SCHEME = "interpolate(...), which refuses a scheme that runs"
-
-private const val CODE_URL_ADVICE =
-    "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
-
-/** The folders [Analyzer.analyzeProject] leaves unread, as the VS Code index does: build output and dependencies. */
-private val SKIPPED_FOLDERS = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
-
-/** Where a markup's holes land, read with the text of the known ones in place. */
-private class HoleReading(
-    val landings: List<HoleLanding>,
-    /** What the markup reads from where the value of hole `j`'s attribute starts to where hole `to` starts, each known text in place. */
-    val prefix: (j: Int, to: Int) -> String,
-)
+/** What `\s` matches in java.util.regex. */
+private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 
 private val INTERPOLATE = setOf("interpolate")
 
-private val FORMAT_SPECIFIER = Regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
+private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
+
+/** The codes of what Kotlin writes into a string, whatever the client then makes of it. */
+private val KOTLIN_OWN =
+    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
+
+/** The words every message of a refusal of the DSL's as the page renders has. */
+private val STREAMLORD_REFUSES = regex("""Streamlord (?:refuses|throws)|as the page renders""")
 
 /** kotlinx.html's own way to write any attribute: `attributes["data-on:click"] = "..."`. */
-private val ATTRIBUTES_INDEX = Regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
+private val ATTRIBUTES_KEY = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]""")
+private val ATTRIBUTES_INDEX = regex("""\battributes\s*\[\s*"(data-[^"\\]*)"\s*]\s*=\s*""")
 
 /** What may follow the value of an assignment: the end of the statement, nothing more of an expression. */
-private val STATEMENT_END = Regex("""[ \t]*(?:[;}\n\r]|$)""")
+private val STATEMENT_END = regex("""[ \t]*(?:[;}\n\r]|$)""")
 
-/** The DSL helper that says the same as a whole-string expression, when there is one, by its name. */
-private val HELPERS: List<Pair<Regex, String>> =
-    listOf(
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "signal",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)\+\+$""") to "increment",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*)--$""") to "decrement",
-        Regex("""^!\$([A-Za-z_][A-Za-z0-9_.]*)$""") to "not",
-        Regex("""^\$([A-Za-z_][A-Za-z0-9_.]*) = !\$\1$""") to "toggle",
-    )
+/** A declaration of the name that follows, `val payloadExpr = `, which sets no option. */
+private val DECLARED_BEFORE = regex("""\bva[lr]\s+\z""")
+
+/** The `to` before a value in a map an option is set to, `headerExprs = mapOf(...)`. */
+private val TO_BEFORE = regex("""\bto\s*\z""")
 
 /**
  * The analysis of Kotlin source and HTML documents against one catalog. Stateless apart from a
@@ -180,26 +164,34 @@ public class Analyzer(
     private val allSiteNames: Set<String> = catalog.allCallSiteNames + keyOnlyHelpers + valueNameHelpers
     private val htmlSiteNames: Set<String> = catalog.htmlCallSites.keys
 
+    /** The SSE calls and answers whose arguments core judges, of those [allSiteNames] leaves out. */
+    private val eventOnlyNames: Set<String> = eventCallNames - allSiteNames
+
     /**
      * The calls streamlord-html alone defines, which are somebody else's in a project without it:
      * the attributes' helpers, the expression call sites and the expression helpers.
      */
-    public val dslNames: Set<String> =
+    internal val dslNames: Set<String> =
         catalog.attributes.flatMap { it.kotlin }.toSet() + catalog.expressionCallSites.keys + catalog.signalNameHelpers.keys +
-            "statements"
+            catalog.expressionOptions.keys + "statements"
 
     /** Whether the call named [name] at [nameStart] is not Streamlord's, as [opts] says: then its strings are free strings. */
-    private fun foreignCalls(opts: AnalyzeOptions): (name: String, nameStart: Int) -> Boolean {
-        val sdk = Sdk.of(opts)
-        val given = opts.foreignCalls
+    private fun foreignCalls(opts: Reading): (name: String, nameStart: Int) -> Boolean {
+        val modules = opts.modules
         // Every call the analysis looks for is core's or the DSL's, so without core none is Streamlord's.
-        return { name, at -> !sdk.core || at in given || (sdk.htmlDsl == false && name in dslNames) }
+        return { name, at -> !modules.core || modules.foreign(name, at) || (modules.htmlDsl == false && name in dslNames) }
     }
 
-    /** Names of all DSL functions the analysis recognises in Kotlin source. */
-    public val callSiteNames: Set<String> get() = allSiteNames
+    /** `payloadExpr = ` and the other options that take an expression, set: what [expressionOptions] looks for. */
+    private val optionAssigned: Regex? =
+        catalog.expressionOptions.keys
+            .takeIf { it.isNotEmpty() }
+            ?.let { regex("""\b(""" + it.joinToString("|") + """)\s*=(?!=)\s*""") }
 
-    private val lexCacheCap = 256 * 1024
+    /** Names of all DSL functions the analysis recognises in Kotlin source. */
+    internal val callSiteNames: Set<String> get() = allSiteNames
+
+    private val lexCacheCap = 4 * 1024 * 1024
 
     @Volatile
     private var lastLex: Pair<String, KotlinLex>? = null
@@ -214,67 +206,55 @@ public class Analyzer(
         return lex
     }
 
-    public fun analyzeKotlin(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<Issue> = analyzeKotlinSites(src, opts).flatMap { it.issues }
+    /** The issues of a Kotlin file of which nothing more is known than its text. */
+    public fun analyzeKotlin(src: String): List<Issue> = analyzeKotlin(Source(src, SourceLanguage.KOTLIN))
 
-    /**
-     * Every `.kt` file under [root] that VS Code indexes, analysed with the constants the files
-     * declare between them ([projectConstants]) added to [opts]'s: the verdict VS Code gives the
-     * same workspace. Below [root], folders named `build`, `node_modules`, `.gradle`, `dist`, `out`
-     * or `target`, and hidden ones, are left out. The issues come in path order, then by offset;
-     * [failures] keeps those that should fail a build.
-     */
-    public fun analyzeProject(
-        root: java.io.File,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<ProjectIssue> {
-        val files =
-            root
-                .walkTopDown()
-                .onEnter { it == root || (it.name !in SKIPPED_FOLDERS && !it.name.startsWith(".")) }
-                .filter { it.isFile && it.extension == "kt" }
-                .sortedBy { it.invariantSeparatorsPath }
-                .map { it to it.readText() }
-                .toList()
-        val project = opts.copy(constants = opts.constants + projectConstants(files.map { it.second }))
-        return files.flatMap { (file, source) ->
-            analyzeKotlin(source, project).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
-                val (line, column) = issue.position(source)
-                ProjectIssue(file, line, column, issue)
-            }
-        }
-    }
+    public fun analyzeKotlin(source: Source): List<Issue> = analyzeKotlinSites(source).flatMap { it.issues }
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
-    public fun analyzeKotlinSites(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<SiteIssues> {
+    public fun analyzeKotlinSites(source: Source): List<SiteIssues> {
+        val src = source.text
+        val opts = Reading(source, settle(source))
         val out = ArrayList<SiteIssues>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
         val facts = fileFacts(src, lex)
         val foreign = foreignCalls(opts)
-        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, foreign)
-        val dsl = Sdk.of(opts).htmlDsl
+        val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, opts.prefix, foreign, lex)
+        val dsl = opts.modules.htmlDsl
+        val eventCalls = EventCalls(src)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
         for (site in findCallSites(src, allSiteNames, lex)) {
             // Somebody else's call: its strings are judged as any string handed to an unknown function.
             if (foreign(site.name, site.nameStart)) continue
             val issues = ArrayList<Issue>()
-            catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, hyphenated, opts, siteHelpers) }
-            val html = catalog.htmlCallSites[site.name]
-            html?.let { issues += checkHtmlSite(site, it, opts, src, hyphenated) }
-            catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
-            catalog.selectorCallSites[site.name]?.let { issues += checkSelectorSite(site, it) }
-            issues += checkKeyCaseSite(site, src)
-            // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
-            for (judged in judgedStrings(site, src)) {
-                for (x in lex.strings) if (x.start >= judged.start && x.end <= judged.end) claimed += x.start
+            catalog.expressionCallSites[site.name]?.let { issues += checkExpressionSite(site, it, src, lex, hyphenated, opts, siteHelpers) }
+            val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated, eventCalls) }
+            html?.let { issues += it.issues }
+            // An answer sends its script as it is, and the client sets it as the element's text: only a stream escapes a script end.
+            if (catalog.eventCalls[site.name]?.response !=
+                true
+            ) {
+                catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
             }
+            if (site.name in eventCallNames &&
+                site.name !in htmlSiteNames
+            ) {
+                issues += eventArgumentIssues(site, null, eventCalls, opts.prefix)
+            }
+            issues += checkKeyCaseSite(site, src, opts.prefix)
+            issues += modifierLambdaIssues(site, src, lex)
+            // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
+            for (judged in judgedStrings(site, src, lex)) {
+                for (x in lex.stringsIn(judged.start, judged.end)) claimed += x.start
+            }
+            if (issues.isNotEmpty() || html?.rewrite != null) out += SiteIssues(site, null, issues, html?.rewrite)
+        }
+        // The calls whose arguments core alone judges, those the loop above has not read.
+        for (site in findCallSites(src, eventOnlyNames, lex)) {
+            if (foreign(site.name, site.nameStart)) continue
+            val issues = eventArgumentIssues(site, null, eventCalls, opts.prefix)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
@@ -283,16 +263,19 @@ public class Analyzer(
         for (site in findCallSites(src, INTERPOLATE, lex)) {
             if (foreign(site.name, site.nameStart) || otherInterpolate) continue
             val format = interpolateFormat(site, src) ?: continue
-            for (x in lex.strings) if (x.start >= format.second.start && x.end <= format.second.end) claimed += x.start
+            for (x in lex.stringsIn(format.second.start, format.second.end)) claimed += x.start
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             val issues = checkNonceSite(site)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
-        val hyphenSites = signalNameHyphenSites(src, lex, dslHelpers(src, EXPRESSION_HELPERS, dsl), allSiteNames + "statements", foreign)
+        // The helpers the file can call, read from its imports once for all its calls and assignments.
+        val helpers = dslHelpers(src, EXPRESSION_HELPERS, dsl)
+        val hyphenSites = signalNameHyphenSites(src, lex, helpers, allSiteNames + "statements", foreign)
         for ((site, issues) in hyphenSites) {
             out += SiteIssues(site, null, issues)
         }
@@ -300,24 +283,42 @@ public class Analyzer(
             if (!lex.mask[m.range.first]) continue
             val value = attributesIndexValue(src, m, lex)
             value?.let { claimed += it.start }
-            val issues = checkAttributesIndex(m, value, opts, src, hyphenated)
+            val issues = checkAttributesIndex(m, value, opts, src, hyphenated, helpers)
             if (issues.isNotEmpty()) out += SiteIssues(null, value, issues)
         }
-        // A literal joined to values with `+` is read as one string with a hole for each value.
+        for (o in expressionOptions(src, lex)) {
+            if (foreign(o.name, o.nameStart)) continue
+            claimed += o.value.start
+            // FetchOptions writes each expression option in parentheses.
+            val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null, o.name)
+            if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
+        }
+        // A literal joined to values with `+` is read as one string with a placeholder for each value.
         val chained = HashSet<Int>()
-        val topLevel = lex.strings.toHashSet()
+        val topLevel = lex.strings.mapTo(HashSet()) { it.start }
         for (s in withNested(lex.strings)) {
             if (s.start in claimed || s.start in chained || s.unterminated) continue
             // A literal inside a template is joined to its neighbours in the template's code.
-            val chain = chainFrom(src, s, if (s in topLevel) lex.mask else facts.code)
+            val chain = chainFrom(src, s, if (s.start in topLevel) lex.mask else facts.code)
             val whole = chain ?: s
-            if (chain != null) for (at in chain.start until chain.end) if (src[at] == '"' || src[at] == '$') chained += at
+            // The chain's own literals are read with it; one in a value it joins, or in a template, is a string of its own.
+            if (chain != null) for (l in chain.literals) chained += l.start
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
-            val issues = checkFreeHtmlString(whole, opts, src, hyphenated)
-            if (issues.isNotEmpty()) out += SiteIssues(null, whole, issues)
+            val judged = checkFreeHtmlString(whole, opts, src, hyphenated, s.start !in topLevel)
+            if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
-        return out
+        val ignored = dslIgnored(src, lex, foreign, opts.prefix)
+        return out.mapNotNull { s ->
+            val kept = s.issues.filter { !ignored(it.start) || ownIssue(it) }
+            if (kept.size == s.issues.size) s else s.copy(issues = kept).takeIf { kept.isNotEmpty() || it.rewrite != null }
+        }
     }
+
+    /**
+     * What Kotlin and Streamlord do with a call or a string, which `dataIgnore` does not change: a
+     * template Kotlin writes into the text, and what the DSL refuses as the page renders.
+     */
+    private fun ownIssue(issue: Issue): Boolean = issue.code in KOTLIN_OWN || STREAMLORD_REFUSES.containsMatchIn(issue.message)
 
     /**
      * The strings [site] judges: the markup, the expression, the script or the selector it is handed,
@@ -326,12 +327,14 @@ public class Analyzer(
     private fun judgedStrings(
         site: CallSite,
         src: String,
+        lex: KotlinLex,
     ): List<KotlinString> {
         val out = ArrayList<KotlinString>(1)
-        catalog.htmlCallSites[site.name]?.let { spec -> markupString(site, spec, src)?.let { out += it } }
+        catalog.htmlCallSites[site.name]?.let { spec -> markupString(site, spec, src, lex)?.let { out += it } }
         catalog.expressionCallSites[site.name]?.let { spec ->
             if (!(spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null })) {
-                expressionString(site, spec, src)?.let { out += it }
+                expressionString(site, spec, src, lex)?.let { out += it }
+                out += site.moreStrings(spec)
             }
         }
         catalog.scriptCallSites[site.name]?.let { spec -> site.selectString(spec)?.let { out += it } }
@@ -348,6 +351,59 @@ public class Analyzer(
     /** The DSL helpers that write `data-nonce`: `dataNonce`. */
     private val nonceCalls: Set<String> = catalog.attributesByName["nonce"]?.kotlin?.toSet() ?: emptySet()
 
+    /** The DSL helper of a backend action, `get("/x")`, which a `dataInit` handed it sends at once. */
+    private val backendHelper by lazy(LazyThreadSafetyMode.NONE) {
+        regex("""\s*(?:""" + catalog.actions.filter { it.kind == "backend" }.joinToString("|") { Regex.escape(it.kotlin) } + """)\s*\(""")
+    }
+
+    /**
+     * `dataIndicator` called after a `dataInit` that sends at once, in the same element's block:
+     * the DSL writes the attributes in the order of the calls, and the indicator then comes too
+     * late, as the indicator-order check says of HTML. A dataInit with a lambda of modifiers may
+     * wait, and is left alone.
+     */
+    private fun indicatorOrderIssues(
+        src: String,
+        lex: KotlinLex,
+        foreign: (name: String, nameStart: Int) -> Boolean,
+    ): List<SiteIssues> {
+        val sites = findCallSites(src, INDICATOR_ORDER_CALLS, lex).filter { !foreign(it.name, it.nameStart) }
+        if (sites.none { it.name == "dataInit" } || sites.none { it.name == "dataIndicator" }) return emptyList()
+
+        val blocks = lex.blocks(src)
+
+        fun blockOf(at: Int) = blocks.around(at)
+
+        fun sendsAtOnce(init: CallSite): Boolean {
+            if (init.trailingLambda) return false
+            val arg = init.positional.firstOrNull() ?: init.named("expression") ?: return false
+            val s = arg.string
+            if (s != null) return !s.unterminated && s.interpolations.isEmpty() && markup.sendsAtOnce(s.text)
+            return backendHelper.matchAt(arg.text, 0) != null
+        }
+        val sending = sites.filter { it.name == "dataInit" && sendsAtOnce(it) }.map { blockOf(it.nameStart) to it.nameStart }
+        return sites
+            .filter { it.name == "dataIndicator" }
+            .filter { ind -> blockOf(ind.nameStart).let { b -> b != null && sending.any { it.first == b && it.second < ind.nameStart } } }
+            .map { ind ->
+                SiteIssues(
+                    ind,
+                    null,
+                    listOf(
+                        Issue(
+                            ind.nameStart,
+                            ind.nameStart + ind.name.length,
+                            "dataIndicator comes after dataInit, which starts its request as Datastar applies it, " +
+                                "before the indicator exists, so the signal stays false. Call dataIndicator first.",
+                            Severity.WARNING,
+                            "indicator-order",
+                            Docs.attribute("indicator"),
+                        ),
+                    ),
+                )
+            }
+    }
+
     /** `dataNonce("...")` of a literal it refuses as the page renders, through [CspNonce.checked]: empty, or no base64 value. */
     private fun checkNonceSite(site: CallSite): List<Issue> {
         val s = (site.named("nonce") ?: site.positional.firstOrNull())?.string ?: return emptyList()
@@ -361,7 +417,7 @@ public class Analyzer(
                 message = problem.removeSuffix(".") + ". ${site.name} refuses it as the page renders.",
                 severity = Severity.ERROR,
                 code = if (empty) "missing-nonce" else "invalid-nonce",
-                link = Docs.attribute("nonce"),
+                link = Docs.attribute(catalog.attributesByName.getValue("nonce")),
             ),
         )
     }
@@ -371,16 +427,108 @@ public class Analyzer(
      * the name, where it starts, and the literal that follows the `=`, unterminated while it is typed.
      */
     public fun attributesIndexes(src: String): List<AttributesIndex> {
+        lastIndexes?.takeIf { it.first == src }?.let { return it.second }
+        return readAttributesIndexes(src).also { lastIndexes = src to it }
+    }
+
+    // Completion and hover ask for the same file's several times in one question.
+    @Volatile
+    private var lastIndexes: Pair<String, List<AttributesIndex>>? = null
+
+    private fun readAttributesIndexes(src: String): List<AttributesIndex> {
         val lex = lex(src)
         val out = ArrayList<AttributesIndex>()
-        for (m in ATTRIBUTES_INDEX.findAll(src)) {
+        for (m in ATTRIBUTES_KEY.findAll(src)) {
             if (!lex.mask[m.range.first]) continue
-            val value = lex.stringAt(m.range.last + 2)?.takeIf { it.start == m.range.last + 1 }
             val nameStart = m.range.first + m.value.indexOf('"') + 1
-            out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, m, lex) != null)
+            // While the assignment is still being typed the key stands alone, with no value.
+            val assigned =
+                ATTRIBUTES_INDEX.matchAt(src, m.range.first) ?: run {
+                    out += AttributesIndex(m.groupValues[1], nameStart, null, false)
+                    continue
+                }
+            val value = lex.stringAt(assigned.range.last + 2)?.takeIf { it.start == assigned.range.last + 1 }
+            out += AttributesIndex(m.groupValues[1], nameStart, value, attributesIndexValue(src, assigned, lex) != null)
         }
         return out
     }
+
+    /**
+     * Each option of a backend action's FetchOptions in [src] set to an expression, for the checks,
+     * completion and colouring: `payloadExpr = "..."`, a literal that is the whole value, unterminated
+     * while it is typed, and each value of a map option, `headerExprs = mapOf("X-Id" to "...")`.
+     */
+    public fun expressionOptions(
+        src: String,
+        lex: KotlinLex = lex(src),
+    ): List<ExpressionOption> {
+        val assigned = optionAssigned ?: return emptyList()
+        val out = ArrayList<ExpressionOption>()
+        val maps by lazy(LazyThreadSafetyMode.NONE) { findCallSites(src, MAP_CALLS, lex) }
+        val lambdas by lazy(LazyThreadSafetyMode.NONE) { optionLambdas(src, lex) }
+        for (m in assigned.findAll(src)) {
+            val at = m.range.first
+            if (!lex.mask[at] || DECLARED_BEFORE.containsMatchIn(src.substring(maxOf(0, at - 16), at))) continue
+            // Set in the lambda of a backend action's options, and on nothing else: `form.payloadExpr` is another's.
+            if (src.lastNonSpaceBefore(at) == '.' || lambdas.none { at in it }) continue
+            val name = m.groupValues[1]
+            val after = m.range.last + 1
+            if ("map" !in catalog.expressionOptions.getValue(name)) {
+                val value = lex.stringAt(after + 1)?.takeIf { it.start == after } ?: continue
+                if (value.unterminated || STATEMENT_END.matchesAt(src, value.end)) out += ExpressionOption(name, at, value)
+                continue
+            }
+            val call = maps.firstOrNull { it.nameStart == after } ?: continue
+            for (arg in call.args) {
+                val value = lex.stringsIn(arg.start, arg.end).lastOrNull() ?: continue
+                if (uncommented(src, arg).end == value.end && TO_BEFORE.containsMatchIn(src.substring(arg.start, value.start))) {
+                    out += ExpressionOption(name, at, value)
+                }
+            }
+        }
+        return out
+    }
+
+    /**
+     * The braces of each lambda that sets a backend action's options: the one after `post("/x")`, or
+     * the one passed as an argument, `options = { ... }`, of the DSL's backend helpers.
+     */
+    private fun optionLambdas(
+        src: String,
+        lex: KotlinLex,
+    ): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        for (site in findCallSites(src, backendHelpers, lex)) {
+            for (arg in site.args) if (src.getOrNull(arg.start) == '{') out += arg.start until arg.end
+            if (!site.trailingLambda) continue
+            val open = src.indexOf('{', site.closeParen + 1)
+            closingBrace(src, lex, open)?.let { out += open..it }
+        }
+        return out
+    }
+
+    /** Where the brace that opens at [open] closes, counting the braces of code alone; null when it never does. */
+    private fun closingBrace(
+        src: String,
+        lex: KotlinLex,
+        open: Int,
+    ): Int? {
+        if (open < 0) return null
+        var depth = 0
+        for (k in open until src.length) {
+            if (!lex.mask[k]) continue
+            if (src[k] == '{') depth++
+            if (src[k] == '}' && --depth == 0) return k
+        }
+        return null
+    }
+
+    /** The DSL's backend helpers, `get` and `getExpr` and the rest, which take a lambda of FetchOptions. */
+    private val backendHelpers: Set<String> =
+        catalog.actions
+            .filter { it.kind == "backend" && it.kotlin.isNotEmpty() }
+            .flatMap { listOf(it.kotlin, it.kotlin + "Expr") }
+            .toSet()
 
     /** The string literal assigned in an `attributes["..."] =` match, when it is the whole value: not the first half of a concatenation. */
     private fun attributesIndexValue(
@@ -400,8 +548,11 @@ public class Analyzer(
     private fun hyphenatedSignals(
         src: String,
         language: SourceLanguage,
+        prefix: String,
         foreign: (String, Int) -> Boolean = { _, _ -> false },
-    ): Set<String> = collectSignalDefinitions(src, language, foreign).filterTo(HashSet()) { '-' in it }
+        lex: KotlinLex? = null,
+    ): Set<String> =
+        collectSignalDefinitions(src, language, foreign, lex, prefix).filter { '-' in it }.mapTo(HashSet()) { it.removePrefix(REFUSED) }
 
     /**
      * `attributes["data-on:click"] = "$count++"` judged as the attribute it writes: the name as in
@@ -411,11 +562,11 @@ public class Analyzer(
     private fun checkAttributesIndex(
         m: MatchResult,
         value: KotlinString?,
-        opts: AnalyzeOptions,
+        opts: Reading,
         src: String,
         hyphenated: Set<String>,
+        helpers: Set<String>,
     ): List<Issue> {
-        if (!opts.checkHtmlAttributes) return emptyList()
         val name = m.groupValues[1]
         val nameStart = m.range.first + m.value.indexOf('"') + 1
         // The attribute in a space of its own, `name="value"`: the name at 0, the value after the `="`.
@@ -426,11 +577,9 @@ public class Analyzer(
         val kind = catalog.parseAttributeName(name.asciiLowercase(), opts.prefix)?.spec?.valueKind
         if (value != null && kind == ValueKind.EXPRESSION) {
             // kotlinx.html's own form: a helper is offered only where the file can call it.
-            issues += expressionHoles(value, src, opts, name, dslHelpers(src, EXPRESSION_HELPERS, Sdk.of(opts).htmlDsl))
+            issues += expressionTemplates(value, src, opts, name, helpers)
         }
-        if (value != null && kind == ValueKind.SIGNAL) issues += signalNameHoles(value, src, opts, name)
-        // With a template in the value the interpolation issue speaks for it, as at a DSL call.
-        val judgeValue = value != null && !(PLACEHOLDER in value.text && value.interpolations.any { it.kind == InterpolationKind.SIMPLE })
+        if (value != null && kind == ValueKind.SIGNAL) issues += signalNameTemplates(value, src, opts, name)
 
         // A range in the value maps through the literal as a whole, so an error at its end keeps a width.
         fun range(
@@ -444,9 +593,9 @@ public class Analyzer(
             } else {
                 value!!.toSource(start - valueStart, end - valueStart)
             }
-        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true)) {
+        for (i in markup.validateAttributes(tag, opts.prefix, null, hyphenated, kotlin = true, prefixSetting = opts.prefixSetting)) {
             val inName = i.end <= name.length
-            if (!inName && !judgeValue) continue
+            if (!inName && value == null) continue
             val r = range(i.start, i.end)
             val fixes =
                 i.fixes.filter { (it.end <= name.length) == inName }.map { f ->
@@ -470,18 +619,18 @@ public class Analyzer(
      * there is a Kotlin value, and the name is written without the dollar. Any other template
      * writes a Kotlin value into the signal path, as in markup.
      */
-    private fun signalNameHoles(
+    private fun signalNameTemplates(
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Reading,
         attribute: String,
     ): List<Issue> {
         val out = ArrayList<Issue>()
         for (ip in s.interpolations) {
             // A constant or a number the author wrote is the name, as it is in markup.
-            val fact = holeFact(s, src, opts, ip).plain()
+            val fact = factOf(s, src, opts, ip).plain()
             if (fact.writesItself()) continue
-            if (ip.kind == InterpolationKind.SIMPLE && s.dollars == 1) {
+            if (ip.kind == InterpolationKind.SIMPLE && ip.dollars == 1) {
                 // The literal without the dollar, as written: what the fix writes and the message shows.
                 val written = src.substring(s.contentStart, ip.start) + src.substring(ip.start + 1, s.contentEnd)
                 out +=
@@ -497,23 +646,15 @@ public class Analyzer(
                     )
                 continue
             }
-            out +=
-                Issue(
-                    start = ip.start,
-                    end = ip.end,
-                    message = datastarMessage(holeDisplay(ip, s.dollars), attribute),
-                    severity = Severity.WARNING,
-                    code = "unsafe-interpolation",
-                    link = Docs.EXPRESSIONS,
-                )
+            out += datastarIssue(ip, attribute)
         }
         return out
     }
 
     /**
-     * The string literal at an offset when it holds HTML: the argument of an HTML call site, or a
-     * free-standing literal that looks like HTML (see [isHtmlString]). Completion and hover use
-     * it to give Kotlin the HTML side.
+     * The string literal at an offset when it holds HTML: the argument of an HTML call site, the
+     * format of core's `interpolate`, however it opens, or a free-standing literal that looks like
+     * HTML (see [isHtmlString]). Completion, hover and colours use it to give Kotlin the HTML side.
      */
     public fun htmlStringAt(
         src: String,
@@ -522,8 +663,15 @@ public class Analyzer(
         val lex = lex(src)
         val s = lex.stringAt(offset) ?: return null
         if (isHtmlString(src, s)) return s
-        val site =
-            findCallSites(src, htmlSiteNames, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen + 1 } ?: return null
+        val around = { names: Set<String> ->
+            findCallSites(src, names, lex).firstOrNull {
+                it.openParen < s.start &&
+                    s.end <= it.closeParen + 1
+            }
+        }
+        val formatOf = around(INTERPOLATE)?.takeUnless { shadowsCore(src, "interpolate") }?.let { interpolateFormat(it, src) }
+        if (formatOf?.second?.start == s.start) return s
+        val site = around(htmlSiteNames) ?: return null
         val spec = catalog.htmlCallSites[site.name] ?: return null
         val arg = markupString(site, spec)
         return if (arg != null && arg.start == s.start) s else null
@@ -538,11 +686,12 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String? = null,
+        lex: KotlinLex? = null,
     ): KotlinString? {
         if (site.trailingLambda) return null
         val s = site.selectString(spec)
-        if (s != null || src == null) return s
-        return chainArg(site, spec, src)
+        if (s != null || src == null || lex == null) return s
+        return chainArg(site, spec, src, lex)
     }
 
     /** The argument a call site takes its string from, when it is a `+` chain that starts with a literal: `patchElements("<p>" + name + "</p>")`. */
@@ -550,50 +699,61 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
+        lex: KotlinLex,
     ): KotlinString? {
         val positional = site.positional
         val arg =
             spec.named?.let { site.named(it) }
                 ?: (if (spec.arg == null) positional.lastOrNull() else positional.getOrNull(spec.arg))
                 ?: return null
-        val lex = lex(src)
-        val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
+        // The strings come in the order of the file, so the one the argument starts with is looked up, not searched for.
+        val first = lex.strings.getOrNull(lex.strings.binarySearchBy(arg.start) { it.start }) ?: return null
         return chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end }
     }
 
     /** Analyse an HTML document (a template): attributes and expressions only, no id or completeness rules. */
-    public fun analyzeHtml(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<Issue> = analyzeHtml(src, opts, hyphenatedSignals(src, SourceLanguage.HTML))
+    public fun analyzeHtml(src: String): List<Issue> = analyzeHtml(Source(src, SourceLanguage.HTML))
 
-    private fun analyzeHtml(
+    /** As [analyzeHtml], for markup the host knows more of: its prefix, and how it names the prefix setting. */
+    public fun analyzeHtml(source: Source): List<Issue> =
+        analyzeHtml(source.text, Reading(source, settle(source)), hyphenatedSignals(source.text, SourceLanguage.HTML, source.prefix))
+
+    internal fun analyzeHtml(
         src: String,
-        opts: AnalyzeOptions,
+        opts: Reading,
         hyphenated: Set<String>,
         templates: Boolean = true,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
-        for (tag in tokenize(src, templates).tags) {
-            if (tag.closing) continue
-            issues += markup.validateAttributes(tag, opts.prefix, src.substring(tag.start, tag.end), hyphenated)
+        for (tag in appliedTags(tokenize(src, templates).tags, opts.prefix)) {
+            issues +=
+                markup.validateAttributes(
+                    tag,
+                    opts.prefix,
+                    src.substring(tag.start, tag.end),
+                    hyphenated,
+                    prefixSetting = opts.prefixSetting,
+                    movable = templates,
+                    engine = opts.source.engine,
+                )
         }
         return issues
     }
 
     /**
-     * Every signal the Datastar expressions of a Kotlin file read: in the expression handed to a DSL
-     * call, in the name handed to a helper such as `signal("count")`, and in the attributes of HTML
-     * strings, handed to a call or free-standing. A Kotlin template (`$count` in a plain literal)
-     * is not a signal and is left out; the interpolation check speaks for it.
+     * Every signal the Datastar expressions of a file read. In markup, those of its attributes; in
+     * Kotlin, those in the expression handed to a DSL call, in the name handed to a helper such as
+     * `signal("count")`, and in the attributes of HTML strings, handed to a call or free-standing. A
+     * Kotlin template (`$count` in a plain literal) is not a signal and is left out; the
+     * interpolation check speaks for it.
      */
-    public fun signalReferencesInKotlin(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<SignalReference> {
+    public fun signalReferences(source: Source): List<SignalReference> {
+        val src = source.text
+        if (source.language != SourceLanguage.KOTLIN) return markupSignalReferences(src, catalog, source.prefix)
         val out = ArrayList<SignalReference>()
         val claimed = HashSet<Int>()
         val lex = lex(src)
+        val opts = Reading(source, settle(source))
         val foreign = foreignCalls(opts)
 
         fun add(
@@ -609,13 +769,12 @@ public class Analyzer(
         for (site in findCallSites(src, allSiteNames, lex)) {
             if (foreign(site.name, site.nameStart)) continue
             // The literals the analysis judges at the site are the site's; a `+` chain's are read as free strings, as ever.
-            for (judged in judgedStrings(site, src)) {
+            for (judged in judgedStrings(site, src, lex)) {
                 if (site.args.any { it.string?.start == judged.start && it.string.end == judged.end }) claimed += judged.start
             }
             catalog.expressionCallSites[site.name]?.let { spec ->
                 if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return@let
-                val s = site.selectString(spec)?.takeUnless { it.unterminated } ?: return@let
-                add(s, expressionSignalReferences(s.text), site)
+                for (s in site.expressionStrings(spec)) if (!s.unterminated) add(s, expressionSignalReferences(s.text), site)
             }
             catalog.htmlCallSites[site.name]?.let { spec ->
                 val s = markupString(site, spec)?.takeUnless { it.unterminated } ?: return@let
@@ -623,7 +782,7 @@ public class Analyzer(
             }
         }
         val helpers =
-            dslHelpers(src, HELPER_READ_CALLS, Sdk.of(opts).htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
+            dslHelpers(src, HELPER_READ_CALLS, opts.modules.htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
                 ?: emptyList()
         for (site in helpers) {
             // A call on a receiver, `filter.not("x")`, is not the top-level helper.
@@ -640,18 +799,18 @@ public class Analyzer(
                 add(s, expressionSignalReferences(s.text), null)
             }
         }
+        for (o in expressionOptions(src, lex)) {
+            if (foreign(o.name, o.nameStart)) continue
+            claimed += o.value.start
+            if (!o.value.unterminated) add(o.value, expressionSignalReferences(o.value.text), null)
+        }
         for (s in lex.strings) {
             if (s.start in claimed || s.unterminated || !isHtmlString(src, s)) continue
             add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), null)
         }
-        return out
+        val ignored = dslIgnored(src, lex, foreign, opts.prefix)
+        return out.filter { !ignored(it.start) }
     }
-
-    /** Every signal the Datastar expressions of an HTML document or template read. */
-    public fun signalReferencesInHtml(
-        src: String,
-        opts: AnalyzeOptions = AnalyzeOptions(),
-    ): List<SignalReference> = markupSignalReferences(src, catalog, opts.prefix)
 
     /** The markup rules of one HTML string handed to a patch, with the id rule on or off. */
     public fun validateMarkup(
@@ -659,990 +818,9 @@ public class Analyzer(
         opts: MarkupOptions,
     ): List<Issue> = markup.validateMarkup(html, opts)
 
-    public fun validateExpression(text: String): List<Issue> = expressions.validate(text)
+    internal fun validateExpression(text: String): List<Issue> = expressions.validate(text)
 
-    /**
-     * A string that holds HTML but is not handed straight to a Streamlord call: a function that
-     * returns markup, a `val` with a fragment. Nothing is known about how it will be patched, so
-     * only the attributes are checked, as in a template file; ids and completeness are not.
-     */
-    private fun checkFreeHtmlString(
-        s: KotlinString,
-        opts: AnalyzeOptions,
-        src: String,
-        hyphenated: Set<String>,
-    ): List<Issue> {
-        val view = markupView(src, s)
-        val issues = ArrayList(judgeHoles(s, src, opts, view))
-        if (opts.checkHtmlAttributes) issues += mapIssues(s, src, analyzeHtml(view, opts, hyphenated, templates = false))
-        return issues
-    }
-
-    /** The format handed to `interpolate`: its first argument or `format =`, a literal or a `+` chain that starts with one. */
-    private fun interpolateFormat(
-        site: CallSite,
-        src: String,
-    ): Pair<Arg, KotlinString>? {
-        val arg = site.named("format") ?: site.positional.firstOrNull() ?: return null
-        arg.string?.let { return if (it.unterminated) null else arg to it }
-        val lex = lex(src)
-        val first = lex.strings.firstOrNull { it.start == arg.start } ?: return null
-        val chain = chainFrom(src, first, lex.mask)?.takeIf { it.end == arg.end } ?: return null
-        return arg to chain
-    }
-
-    /**
-     * A call to `interpolate`, judged as it will run. A Kotlin template in the format is filled in
-     * before `interpolate` sees the markup, so it is neither escaped nor refused. The `%s` holes
-     * are counted against the values, and each is judged by where it lands and what the text shows
-     * the value to be: core's `admits`, so an error only where `interpolate` throws for certain.
-     * The format is read as HTML like any free string; it is not a patch, so no id is asked for.
-     */
-    private fun checkInterpolateSite(
-        site: CallSite,
-        formatArg: Arg,
-        s: KotlinString,
-        src: String,
-        opts: AnalyzeOptions,
-        hyphenated: Set<String>,
-    ): List<Issue> {
-        val holes = percentHoles(s.text)
-        val (format, at) = withPercentHoles(s, holes)
-        // Each value as the code writes it, without a comment after it, which the editor's range leaves out too.
-        val values = site.args.filter { it !== formatArg && it.named == null }.map { uncommented(src, it) }
-        // The values one by one, as the vararg overload takes them: no spread and nothing by name.
-        val plain = site.args.all { it.named == null } && values.none { it.text.startsWith("*") }
-        val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
-        val kinds =
-            values.mapIndexed { k, it ->
-                if (known[k].isOther()) null else known[k].argKind() ?: valueKind(src, it.text, it.string != null, s.start)
-            }
-        val issues = ArrayList<Issue>()
-        // The overload that takes a List is called with one or two values, each of which could be a List.
-        val counted = plain && (values.isEmpty() || values.size >= 3 || kinds.any { it != null })
-        if (counted && holes.size != values.size) {
-            val h = holes.size
-            val v = values.size
-            // `%d` as String.format writes it: interpolate knows only %s.
-            val specifier = FORMAT_SPECIFIER.find(s.text.replace("%%", "  "))?.value
-            val advice =
-                if (specifier != null) {
-                    "Only %s is a placeholder, whatever the value: write %s in place of $specifier."
-                } else {
-                    "Write %% for a per cent sign that is not a placeholder."
-                }
-            issues +=
-                Issue(
-                    site.nameStart,
-                    site.nameStart + site.name.length,
-                    "interpolate throws IllegalArgumentException here: the markup has " +
-                        "$h %s ${if (h == 1) "placeholder" else "placeholders"} and " +
-                        "$v ${if (v == 1) "value is" else "values are"} given. $advice",
-                    Severity.ERROR,
-                    "interpolate-placeholders",
-                )
-        }
-        val mapped = plain && holes.size == values.size
-        // With one or two values the first of which is a List, the call is the List overload's, and a
-        // value added would make it the vararg one's, which writes the List as one value.
-        val listOverload =
-            values.size in 1..2 && kinds[0] == null && known[0] == null && visiblyList(src, values[0].text, s.start)
-        val view = markupView(src, format)
-        val starts = format.interpolations.map { it.decodedStart } + at
-        // interpolate reads the markup with each Trusted value's text in place: known where the value is a literal.
-        val written = HashMap<Int, String>()
-        val unknown = ArrayList<Int>()
-        if (mapped) {
-            for ((k, a) in values.withIndex()) {
-                if (kinds[k] != ArgKind.TRUSTED) continue
-                val text = trustedLiteral(src, a.text, s.start)
-                if (text == null) unknown += at[k] else written[format.interpolations.size + k] = text
-            }
-        }
-        val reading =
-            readHoles(
-                view,
-                starts.map { it until it + PLACEHOLDER.length },
-                listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
-                written,
-            )
-        val landings = reading.landings
-        // After a Trusted whose text is not known, a value may land elsewhere than the markup shows.
-        val uncertainFrom = unknown.minOrNull() ?: Int.MAX_VALUE
-        val percentAt = { j: Int -> j >= format.interpolations.size }
-        val trapOf = traps(format, src)
-        for ((k, ip) in format.interpolations.withIndex()) {
-            val landing = landings[k]
-            val told = holeFact(format, src, opts, ip)
-            val fact = told.plain()
-            if (ip.kind == InterpolationKind.SIMPLE && landing.position == Position.DATASTAR) {
-                val judged = trapOf(ip)?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
-                if (judged != null) {
-                    issues += judged
-                    continue
-                }
-            }
-            // Kotlin fills in the digits of an unsigned number before interpolate sees the markup, so it is a number here.
-            if (fact.writesItself()) continue
-            if (fact.isNullable() && landing.position in ESCAPED_POSITIONS) continue
-            // Markup in element text is safe as markup, but interpolate reads it as format: a %s in it is a hole.
-            val markupText = fact.isMarkup() && landing.position == Position.TEXT
-            val shown = holeDisplay(ip, format.dollars)
-            // A `%` right before the template would make `%%s` of the hole: a per cent sign and an s.
-            val percents = runBefore(format.text, ip.decodedStart, '%')
-            // A %s hole writes nothing for null and escapes markup held as a String, so the fix would change the page;
-            // an Html or a Trusted it writes as it is.
-            val keeps =
-                !told.isNullableString() &&
-                    !mayBeNull(src, ip.text, s.start) &&
-                    if (markupText) {
-                        markupValued(src, format, ip)
-                    } else {
-                        !(landing.position == Position.TEXT && mayHoldMarkup(src, ip.text, s.start, opts.constants))
-                    }
-            // As a %s hole it would be refused, along with every hole after it in the URL, unless the literal before it fixes the host.
-            val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
-            val fixable =
-                landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
-                    !listOverload && percents % 2 == 0 && keeps
-            val fixes = if (fixable) listOf(holeFix(ip, shown, at, values, formatArg, markupText)) else emptyList()
-            val message =
-                when {
-                    loadsAnywhere -> templateCodeUrlMessage(shown, landing.attribute ?: "the URL")
-                    markupText -> rereadMessage(shown)
-                    else -> templateMessage(shown, landing, endTagAt(view, ip.decodedStart))
-                }
-            issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS, fixes)
-        }
-        for ((k, d) in at.withIndex()) {
-            val landing = landings[format.interpolations.size + k]
-            val arg = if (mapped) values[k] else null
-            val kind = if (arg != null) kinds[k] else null
-            val r = format.toSource(d, d + PLACEHOLDER.length)
-            val base = format.interpolations.size
-            val uncertain = d > uncertainFrom
-            // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
-            // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
-            // in place. It names that value, and a URL of Trusted values alone goes unjudged.
-            val attribute = landing.attribute
-            if (landing.loadsCode && attribute != null) {
-                // A Trusted of known text is read as markup and is not among them.
-                val inUrl = at.indices.filter { landings[base + it].valueStart == landing.valueStart }
-                val first = inUrl.firstOrNull { (if (mapped) kinds[it] else null) != ArgKind.TRUSTED }
-                // A Trusted before it whose text is not known ends what is known to come before.
-                val vouched = if (first != null && inUrl[0] != first) inUrl[0] else null
-                val before = first?.let { reading.prefix(base + k, base + (vouched ?: it)) }
-                if (first != null && before != null && !urlHostFixedBy(attribute, before)) {
-                    if (first != k) continue
-                    // A template before the hole is filled in first, so what the literal fixes is known only without one.
-                    val templated = format.interpolations.any { it.decodedStart >= landing.valueStart && it.decodedStart < d }
-                    val certain = !templated && vouched == null && !uncertain && kind != null
-                    val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
-                    issues +=
-                        Issue(
-                            r.first,
-                            r.last + 1,
-                            refusedCodeUrlMessage(shown, attribute, certain, vouched != null || uncertain),
-                            if (certain) Severity.ERROR else Severity.WARNING,
-                            "unsafe-interpolation",
-                            Docs.EXPRESSIONS,
-                        )
-                    continue
-                }
-            }
-            if (landing.position in ESCAPED_POSITIONS) {
-                // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
-                if (landing.position == Position.TEXT && arg != null && kind != ArgKind.MARKUP && kind != ArgKind.TRUSTED &&
-                    markupHeldAsString(src, arg.text, s.start)
-                ) {
-                    val message = escapedMarkupMessage(shortened(arg.text))
-                    issues += Issue(r.first, r.last + 1, message, Severity.WARNING, "interpolate-template", Docs.EXPRESSIONS)
-                }
-                continue
-            }
-            val allowed =
-                when (landing.position) {
-                    Position.DATASTAR -> setOf(ArgKind.NUMBER, ArgKind.BOOLEAN)
-                    Position.STYLE -> setOf(ArgKind.NUMBER)
-                    else -> emptySet<ArgKind>()
-                }
-            if (kind == ArgKind.TRUSTED || kind in allowed) continue
-            val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
-            if (kind == ArgKind.UNSIGNED && arg != null && (landing.position == Position.DATASTAR || landing.position == Position.STYLE)) {
-                issues +=
-                    Issue(
-                        r.first,
-                        r.last + 1,
-                        if (uncertain) uncertainMessage(shown, landing, false) else unsignedRefusedMessage(shown, landing),
-                        if (uncertain) Severity.WARNING else Severity.ERROR,
-                        "unsafe-interpolation",
-                        Docs.EXPRESSIONS,
-                        listOf(toLongFix(arg)),
-                    )
-                continue
-            }
-            issues +=
-                Issue(
-                    r.first,
-                    r.last + 1,
-                    if (uncertain && kind != null) {
-                        uncertainMessage(shown, landing, endTagAt(view, d))
-                    } else {
-                        refusedMessage(shown, landing, kind != null, endTagAt(view, d))
-                    },
-                    if (kind == null || uncertain) Severity.WARNING else Severity.ERROR,
-                    "unsafe-interpolation",
-                    Docs.EXPRESSIONS,
-                )
-        }
-        if (opts.checkHtmlAttributes) issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
-        return issues
-    }
-
-    /** The value converted to a Long, which is a `kotlin.Number`: `u.toLong()`, `(a + b).toLong()`. */
-    private fun toLongFix(arg: Arg): Fix {
-        val t = arg.text.trim()
-        val receiver = if (SIMPLE_RECEIVER.matches(t)) t else "($t)"
-        return Fix("Convert ${shortened(t)} with toLong()", arg.start, arg.end, "$receiver.toLong()")
-    }
-
-    /** How many times [c] stands right before [at] in [text]. */
-    private fun runBefore(
-        text: String,
-        at: Int,
-        c: Char,
-    ): Int {
-        var k = at
-        while (k > 0 && text[k - 1] == c) k--
-        return at - k
-    }
-
-    /** Whether [at] in the markup is past the name of an end tag, `</p x="%s">`, whose attributes the browser drops. */
-    private fun endTagAt(
-        view: String,
-        at: Int,
-    ): Boolean {
-        val lt = if (at > 0) view.lastIndexOf('<', at - 1) else -1
-        return lt >= 0 && END_TAG_ATTRIBUTES.matches(view.substring(lt, at))
-    }
-
-    /** The template made a `%s` hole in place, and its expression passed as the value at the same place among the others. */
-    private fun holeFix(
-        ip: Interpolation,
-        shown: String,
-        holes: List<Int>,
-        values: List<Arg>,
-        format: Arg,
-        markup: Boolean,
-    ): Fix {
-        val index = countBelow(holes, ip.decodedStart)
-        val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
-        val before = values.getOrNull(index)
-        val after = values.lastOrNull() ?: format
-        val edit = if (before != null) Edit(before.start, before.start, "$expr, ") else Edit(after.end, after.end, ", $expr")
-        val title = "Make $shown a %s placeholder, " + if (markup) "where interpolate writes it as it is" else "which interpolate escapes"
-        return Fix(title, ip.start, ip.end, "%s", listOf(edit))
-    }
-
-    /** Where a hole that is not escaped lands, said for a message, and what to write instead. */
-    private fun landingWords(
-        landing: HoleLanding,
-        endTag: Boolean,
-    ): Pair<String, String> =
-        when (landing.position) {
-            Position.DATASTAR -> {
-                "${landing.attribute ?: "a Datastar attribute"}, which Datastar runs as an expression or follows as a signal path" to
-                    "Put the value in a signal and reference it from the expression, or write the signal's name in the markup yourself."
-            }
-
-            Position.STYLE -> {
-                "${landing.attribute ?: "style"}, which is read as CSS" to
-                    "Pass a number and write the unit in the markup, or choose between classes."
-            }
-
-            Position.CODE -> {
-                "${landing.attribute ?: "a script or style element"}, which the browser runs" to
-                    "Put the value in a data-* attribute or a signal and read it from there; wrap markup you built yourself in Trusted(...)."
-            }
-
-            else -> {
-                if (endTag) {
-                    "an end tag, which takes no attributes" to "Write the end tag from literals alone."
-                } else {
-                    "the markup's own structure, a tag name, an attribute name or an unquoted value" to
-                        "Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
-                }
-            }
-        }
-
-    /** Markup a Kotlin template writes into the format, which interpolate then reads as format. */
-    private fun rereadMessage(shown: String): String =
-        "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
-            "a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. " +
-            "Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
-
-    private fun templateMessage(
-        shown: String,
-        landing: HoleLanding,
-        endTag: Boolean,
-    ): String {
-        val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
-        if (landing.position in ESCAPED_POSITIONS) return "$base Make it a %s placeholder and pass the value to interpolate."
-        val (where, instead) = landingWords(landing, endTag)
-        return "$base It lands in $where. $instead"
-    }
-
-    private fun unsignedRefusedMessage(
-        shown: String,
-        landing: HoleLanding,
-    ): String {
-        val (where, _) = landingWords(landing, false)
-        val allowed = if (landing.position == Position.DATASTAR) "a number or a boolean" else "a number"
-        return "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in $where, " +
-            "where only $allowed is let in. Convert it with toLong() first."
-    }
-
-    /** An unsigned number a Kotlin template writes where interpolate would refuse it: its digits are safe as they are. */
-    private fun unsignedWrittenMessage(
-        shown: String,
-        where: String,
-    ): String =
-        "Kotlin writes $shown into $where as digits, which is safe there, but it is an unsigned number, which interpolate refuses there: " +
-            "it is not a kotlin.Number. Convert it with toLong() if you build this with interpolate."
-
-    private fun refusedMessage(
-        shown: String,
-        landing: HoleLanding,
-        certain: Boolean,
-        endTag: Boolean,
-    ): String {
-        val allowed =
-            when (landing.position) {
-                Position.DATASTAR -> "a number or a boolean"
-                Position.STYLE -> "a number"
-                else -> "Trusted(...)"
-            }
-        val (where, instead) = landingWords(landing, endTag)
-        return if (certain) {
-            "interpolate always throws here: $shown lands in $where, and only $allowed is let in there. $instead"
-        } else {
-            "interpolate throws here unless $shown is $allowed: it lands in $where. $instead"
-        }
-    }
-
-    /** A value interpolate refuses where the markup shows it landing, which a Trusted before it whose text is not known may move. */
-    private fun uncertainMessage(
-        shown: String,
-        landing: HoleLanding,
-        endTag: Boolean,
-    ): String {
-        val allowed =
-            when (landing.position) {
-                Position.DATASTAR -> "a number or a boolean"
-                Position.STYLE -> "a number"
-                else -> "Trusted(...)"
-            }
-        val (where, instead) = landingWords(landing, endTag)
-        return "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
-            "where only $allowed is let in. $instead"
-    }
-
-    /**
-     * Whether the hole at [k] is in a URL that loads code, `src` of a script and the like, whose host
-     * the literal before the URL's first hole does not fix: interpolate refuses every value there but
-     * Trusted, as Landscape.checkUrls in core does. [counts] says which holes interpolate sees as holes.
-     */
-    private fun hostUnfixed(
-        reading: HoleReading,
-        starts: List<Int>,
-        k: Int,
-        counts: (Int) -> Boolean,
-    ): Boolean {
-        val landing = reading.landings[k]
-        val attribute = landing.attribute
-        if (!landing.loadsCode || attribute == null) return false
-        var first = k
-        for ((j, l) in reading.landings.withIndex()) {
-            if (counts(j) && l.valueStart == landing.valueStart && starts[j] < starts[first]) first = j
-        }
-        return !urlHostFixedBy(attribute, reading.prefix(k, first))
-    }
-
-    /**
-     * The holes of [view] as interpolate reads them: holeLandings with the text of the [known] holes,
-     * a literal Trusted's, in place. A known text can hold the start of a value, where holeLandings
-     * gives the offset of the hole, so a prefix is read from the markup as written.
-     */
-    private fun readHoles(
-        view: String,
-        holes: List<IntRange>,
-        prefixes: List<String>,
-        known: Map<Int, String>,
-    ): HoleReading {
-        val landings = holeLandings(view, holes, prefixes, known)
-        if (known.isEmpty()) return HoleReading(landings) { j, to -> view.substring(landings[j].valueStart, holes[to].first) }
-        val text = StringBuilder()
-        var cut = 0
-        val starts = IntArray(holes.size)
-        for (i in holes.indices.sortedBy { holes[it].first }) {
-            val hole = holes[i]
-            text.append(view, cut, hole.first)
-            starts[i] = text.length
-            text.append(known[i] ?: view.substring(hole.first, hole.last + 1))
-            cut = hole.last + 1
-        }
-        text.append(view, cut, view.length)
-        val markup = text.toString()
-        val open = holes.indices.filter { it !in known }
-        val written by lazy {
-            holeLandings(markup, open.map { starts[it] until starts[it] + holes[it].last + 1 - holes[it].first }, prefixes)
-        }
-        return HoleReading(landings) { j, to -> markup.substring(written[open.indexOf(j)].valueStart, starts[to]) }
-    }
-
-    private fun codeUrlMessage(
-        shown: String,
-        attribute: String,
-    ): String =
-        "Kotlin writes $shown into $attribute, which loads code from wherever the value points, and the markup before it does not fix " +
-            "the host: even an https:// URL can load code from another origin. Escaping does not help. $CODE_URL_ADVICE."
-
-    private fun templateCodeUrlMessage(
-        shown: String,
-        attribute: String,
-    ): String =
-        "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it. " +
-            "It lands in $attribute, which loads code from wherever the value points, and the markup before it does not fix the host. " +
-            "$CODE_URL_ADVICE, and make it a %s placeholder."
-
-    private fun refusedCodeUrlMessage(
-        shown: String,
-        attribute: String,
-        certain: Boolean,
-        vouched: Boolean,
-    ): String {
-        val where = "$attribute, which loads code from wherever the value points"
-        val instead = "$CODE_URL_ADVICE, or wrap a URL you chose yourself in Trusted(...)."
-        return when {
-            vouched -> {
-                "interpolate throws here unless the Trusted text before $shown fixes the host or $shown is Trusted(...): " +
-                    "it lands in $where. $instead"
-            }
-
-            certain -> {
-                "interpolate always throws here: $shown lands in $where, and the markup before it does not fix the host. " +
-                    "Only Trusted(...) is let in there. $instead"
-            }
-
-            else -> {
-                "interpolate throws here unless $shown is Trusted(...): it lands in $where, " +
-                    "and the markup before it does not fix the host. $instead"
-            }
-        }
-    }
-
-    private fun escapedMarkupMessage(shown: String): String =
-        "interpolate escapes $shown here, so the tags it holds are printed as text: it is markup held as a String. " +
-            "Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...)."
-
-    /**
-     * The whole literal rewritten as a `$$` literal (Kotlin 2.2+): the flagged template becomes a
-     * signal by staying as it is, every other template gains a dollar so it stays Kotlin, and the
-     * `${'$'}` idiom becomes the plain dollar it always meant. [dollars] is how many the literal
-     * needs; the text is made only when it is read.
-     */
-    private fun multiDollarFix(
-        s: KotlinString,
-        src: String,
-        signal: Interpolation,
-        dollars: Int,
-    ): Fix {
-        val prefix = "$".repeat(dollars)
-        return Fix.later("Make it a $prefix literal, where \$${signal.text} is a signal", s.start, s.end) {
-            // A kept template gains the dollars it now needs; the dollars before it stay text, as they were.
-            // The flagged one keeps its run, which is now text.
-            val keep = s.interpolations.filter { it !== signal }.mapTo(HashSet()) { it.start }
-            val out = StringBuilder(prefix).append(src.substring(s.start, s.contentStart).trimStart('$'))
-            var i = s.contentStart
-            while (i < s.contentEnd) {
-                if (i in keep) out.append("$".repeat(dollars - 1))
-                if (src.startsWith("\${'$'}", i)) {
-                    out.append('$')
-                    i += 6
-                    continue
-                }
-                out.append(src[i])
-                i++
-            }
-            out.append(src, s.contentEnd, s.end).toString()
-        }
-    }
-
-    /** What every trap of a literal shares: the dollars a `$$` rewrite needs, the helper that says the whole literal, and whether it is one literal. */
-    private class TrapShared(
-        val dollars: Int,
-        val helpers: List<Fix>,
-        val whole: Boolean,
-    )
-
-    /**
-     * The trap of each `$name` in a literal, `kotlin-interpolation`, made when a hole asks for it:
-     * what is shared by every hole of the literal is read once. [available] names the DSL helpers
-     * a fix may write, each with its import; null where the literal is handed to a DSL call.
-     */
-    private fun traps(
-        s: KotlinString,
-        src: String,
-        available: Set<String>? = null,
-    ): (Interpolation) -> Issue? {
-        // In a multi-dollar literal a single $ is text, so there is no trap: every template there is deliberate.
-        if (s.dollars > 1) return { null }
-        val shared by lazy(LazyThreadSafetyMode.NONE) {
-            // Literals joined with `+` are one string to the judgement, but a prefix makes only the first a `$$` literal.
-            val whole = readKotlinStringAt(src, s.start)?.end == s.end
-            val content = src.substring(s.contentStart, s.contentEnd)
-            // Enough dollars that no run already in the text opens a template: one more than the longest run.
-            val longestRun = DOLLAR_RUNS.findAll(content).maxOfOrNull { it.value.length } ?: 0
-            val found = ArrayList<Fix>()
-            // The literal as the author meant it, with every template read as a signal.
-            if (whole && !BRACED_TEMPLATE.containsMatchIn(content)) {
-                // A helper is not a string: it replaces the literal together with the trim call after it.
-                val end = s.end + (TRIM_AFTER.matchAt(src, s.end)?.value?.length ?: 0)
-                for ((re, helper) in HELPERS) {
-                    if (available != null && helper !in available) continue
-                    // The whole content: `$` alone would also match before a final line break.
-                    val m = re.matchEntire(content) ?: continue
-                    val call = "$helper(\"${m.groupValues[1]}\")"
-                    found.add(0, Fix("Use $call", s.start, end, call, importEdits(src, HTML_PACKAGE, helper)))
-                }
-            }
-            TrapShared(maxOf(2, longestRun + 1), found, whole)
-        }
-        // Where the DSL may be missing, signal(...) is advised only where it can be called.
-        val advisesSignal = available == null || "signal" in available
-        return trap@{ ip ->
-            if (ip.kind != InterpolationKind.SIMPLE) return@trap null
-            val fixes = ArrayList<Fix>(shared.helpers)
-            if (shared.whole) fixes += multiDollarFix(s, src, ip, shared.dollars)
-            fixes += Fix("Escape as \${'$'}${ip.text}", ip.start, ip.start + 1, "\${'$'}")
-            if (!s.raw) fixes += Fix("Escape as \\$${ip.text}", ip.start, ip.start, "\\")
-            Issue(
-                start = ip.start,
-                end = ip.end,
-                message =
-                    "Kotlin interpolates \$${ip.text} here; the browser will never see a signal. " +
-                        (if (advisesSignal) "Write signal(\"${ip.text}\"), make" else "Make") +
-                        " the literal \$\$\"...\" (Kotlin 2.2+), or escape as \${'$'}${ip.text}.",
-                severity = Severity.ERROR,
-                code = "kotlin-interpolation",
-                link = Docs.EXPRESSIONS,
-                fixes = fixes,
-            )
-        }
-    }
-
-    /**
-     * Each hole of an HTML string, judged by where it lands as `interpolate` judges it at run time
-     * (core's [holeLandings]): escaping saves it, or nothing does. What the analysis can see is the
-     * author's own (a constant, a literal, markup built here) is left alone; what it cannot see
-     * into is never an error, since a build fails on errors and the text cannot tell `count: Int`
-     * from a String.
-     */
-    private fun judgeHoles(
-        s: KotlinString,
-        src: String,
-        opts: AnalyzeOptions,
-        view: String,
-    ): List<Issue> {
-        if (s.interpolations.isEmpty()) return emptyList()
-        val trapOf = traps(s, src)
-        // Without core there is no interpolate to build the string with, and Trusted is not Streamlord's.
-        val sdk = Sdk.of(opts)
-        val core = sdk.core
-        // A fix writes interpolate or Trusted only where the name is core's: not somebody else's call or import.
-        val canInterpolate = coreNameUsable(src, "interpolate", sdk, opts.foreignCalls)
-        val canTrust = coreNameUsable(src, "Trusted", sdk, opts.foreignCalls)
-        // A literal Trusted is markup the author wrote, read in place: the other holes are judged against it.
-        val written = HashMap<Int, String>()
-        for ((k, ip) in s.interpolations.withIndex()) {
-            // A Trusted the editor resolves to another package is none of core's, whatever the text says.
-            if (ip.kind == InterpolationKind.OPERAND || !core || opts.valueFact?.invoke(ip.start, ip.end).isOther()) continue
-            trustedLiteral(src, ip.text, s.start)?.let { written[k] = it }
-        }
-        val reading =
-            readHoles(
-                view,
-                s.interpolations.map { it.decodedStart until it.decodedStart + PLACEHOLDER.length },
-                // Both bundles' prefixes, as interpolate reads them: a value is judged by what either would run.
-                listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
-                written,
-            )
-        val landings = reading.landings
-        val told = s.interpolations.map { holeFact(s, src, opts, it) }
-        val starts = s.interpolations.map { it.decodedStart }
-        // interpolate(...) can take the literal only when every hole is a value it escapes and keeps.
-        val fixable =
-            canInterpolate &&
-                s.dollars == 1 &&
-                !trimmed(src, s) &&
-                s.interpolations.none { it.kind == InterpolationKind.OPERAND } &&
-                s.interpolations.indices.all { k -> interpolateKeeps(src, s, s.interpolations[k], told[k], landings[k].position, opts) } &&
-                // interpolate refuses every value in a URL that loads code unless the literal fixes its host.
-                s.interpolations.indices.none { k -> hostUnfixed(reading, starts, k) { true } }
-        // The rewrite is made once for the literal, and only when a fix is applied.
-        val rewrite = interpolateText(src, s)
-        val issues = ArrayList<Issue>()
-        for ((k, ip) in s.interpolations.withIndex()) {
-            if (k in written) continue
-            val landing = landings[k]
-            val fact = told[k].plain()
-            val shown = holeDisplay(ip, s.dollars)
-            val factSays = verdict(fact, landing.position)
-            val severity = if (fact.knownCharacters()) Severity.WARNING else Severity.HINT
-
-            fun rewritten(
-                title: String,
-                preferred: Boolean = true,
-            ): List<Fix> = if (fixable) listOf(interpolateFix(src, s, rewrite, title, preferred)) else emptyList()
-
-            fun issue(
-                severity: Severity,
-                code: String,
-                message: String,
-                fixes: List<Fix> = emptyList(),
-            ): Issue = Issue(ip.start, ip.end, message, severity, code, Docs.EXPRESSIONS, fixes)
-
-            fun unescaped(): Issue {
-                // A String in element text may be markup the author built, which only the author knows: then
-                // both the rewrite, which escapes it, and Trusted, which keeps it, are offered, and neither first.
-                val text = landing.position == Position.TEXT
-                val trust =
-                    text && !told[k].isNullableString() &&
-                        (
-                            fact.isString() ||
-                                (
-                                    fact == null &&
-                                        (callResult(ip.text) || markupTextValue(src, ip.text, s.start)) &&
-                                        mayHoldMarkup(src, ip.text, s.start, opts.constants)
-                                )
-                        ) &&
-                        !mayBeNull(src, ip.text, s.start)
-                if (!core) {
-                    // A call or a value of unknown type may be markup the author composed; a known String stays a warning.
-                    return issue(
-                        if (trust && fact == null) Severity.HINT else severity,
-                        "unescaped-interpolation",
-                        plainUnescapedMessage(shown, fact, text),
-                    )
-                }
-                val fixes = rewritten(ESCAPES_TITLE, !trust) + if (trust && canTrust) listOf(trustedFix(src, s, ip, shown)) else emptyList()
-                val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust)
-                return issue(severity, "unescaped-interpolation", message, fixes)
-            }
-            when (landing.position) {
-                Position.TEXT, Position.ATTRIBUTE -> {
-                    if (factSays == Verdict.ESCAPE) issues += unescaped()
-                }
-
-                Position.URL -> {
-                    if (factSays == Verdict.SAFE) continue
-                    val attribute = landing.attribute ?: "the URL"
-                    val prefix = reading.prefix(k, k)
-                    val before = decodeEntities(prefix).text
-                    issues +=
-                        if (landing.loadsCode && !urlHostFixedBy(attribute, prefix)) {
-                            issue(Severity.WARNING, "unsafe-interpolation", codeUrlMessage(shown, attribute))
-                        } else if (urlSchemeFixedBy(attribute, before)) {
-                            unescaped()
-                        } else {
-                            issue(
-                                Severity.WARNING,
-                                "unsafe-interpolation",
-                                "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
-                                    "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
-                                    if (canInterpolate) ", or build the string with $REFUSES_SCHEME." else ".",
-                                rewritten(REFUSES_URL_TITLE),
-                            )
-                        }
-                }
-
-                Position.STYLE -> {
-                    if (factSays == Verdict.SAFE) continue
-                    if (factSays == Verdict.DIGITS) {
-                        // Its digits are safe; only interpolate would refuse it.
-                        if (core) {
-                            issues +=
-                                issue(Severity.HINT, "unsafe-interpolation", unsignedWrittenMessage(shown, landing.attribute ?: "style"))
-                        }
-                        continue
-                    }
-                    val css =
-                        "Kotlin writes $shown into ${landing.attribute ?: "style"}, where it is read as CSS, " +
-                            "so escaping does not help."
-                    issues +=
-                        issue(
-                            Severity.WARNING,
-                            "unsafe-interpolation",
-                            if (fact.isNullable()) {
-                                "$css It is a number that may be null, which Kotlin writes as null: give it a value with ?:, or choose between classes."
-                            } else {
-                                "$css Choose between classes, or write a number."
-                            },
-                        )
-                }
-
-                Position.DATASTAR -> {
-                    val trap = if (ip.kind == InterpolationKind.SIMPLE) trapOf(ip) else null
-                    val judged = trap?.let { datastarTrap(it, ip, landing, view, opts.prefix, fact) }
-                    if (judged != null) {
-                        issues += judged
-                    } else if (factSays == Verdict.DIGITS) {
-                        if (!core) continue
-                        issues +=
-                            issue(
-                                Severity.HINT,
-                                "unsafe-interpolation",
-                                unsignedWrittenMessage(
-                                    shown,
-                                    landing.attribute ?: "a Datastar attribute",
-                                ),
-                            )
-                    } else if (factSays == Verdict.UNSAFE) {
-                        val attribute = landing.attribute ?: "a Datastar attribute"
-                        issues += issue(Severity.WARNING, "unsafe-interpolation", datastarMessage(shown, attribute))
-                    }
-                }
-
-                Position.CODE -> {
-                    if (factSays == Verdict.SAFE) continue
-                    issues +=
-                        issue(
-                            Severity.WARNING,
-                            "unsafe-interpolation",
-                            "Kotlin writes $shown into ${landing.attribute ?: "a script or style element"}, which the browser runs, " +
-                                "so escaping does not help. Put the value in a data-* attribute or a signal and read it from there.",
-                        )
-                }
-
-                Position.STRUCTURE -> {
-                    if (factSays == Verdict.SAFE) continue
-                    // `</h$n>` names the element `<h$n` opened; the opening one is judged.
-                    val closing = closingTagBefore(view, ip.decodedStart)
-                    if (closing != null &&
-                        s.interpolations.take(k).any {
-                            it.text == ip.text && it.decodedStart > closing.length &&
-                                view.startsWith("<$closing", it.decodedStart - closing.length - 1)
-                        }
-                    ) {
-                        continue
-                    }
-                    issues +=
-                        when {
-                            endTagAt(view, ip.decodedStart) -> {
-                                issue(
-                                    severity,
-                                    "unsafe-interpolation",
-                                    "Kotlin writes $shown into an end tag, which takes no attributes: the browser drops them, " +
-                                        "and a value from outside can still end the tag and write markup. Write the end tag from literals alone.",
-                                )
-                            }
-
-                            unquotedValueBefore(view, ip.decodedStart) -> {
-                                issue(
-                                    if (fact.scalar()) Severity.HINT else Severity.WARNING,
-                                    "unsafe-interpolation",
-                                    "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. Quote the value.",
-                                    listOfNotNull(quoteFix(s, view, ip)),
-                                )
-                            }
-
-                            else -> {
-                                issue(
-                                    severity,
-                                    "unsafe-interpolation",
-                                    "Kotlin writes $shown into the markup's own structure: a tag name, an attribute name " +
-                                        "or a list of attributes. Fine for one chosen in code; a value from outside decides " +
-                                        "the markup itself, and escaping cannot prevent that.",
-                                )
-                            }
-                        }
-                }
-            }
-        }
-        return issues
-    }
-
-    /** Whether [at] in the markup is inside an attribute value written without quotes: `x=$q`. */
-    private fun unquotedValueBefore(
-        view: String,
-        at: Int,
-    ): Boolean {
-        var k = at
-        while (k > 0 && view[k - 1] !in UNQUOTED_STOP) k--
-        while (k > 0 && view[k - 1] in " \t\n\u000C\r") k--
-        return k > 0 && view[k - 1] == '='
-    }
-
-    /** The name an end tag has so far right before [at], `h` of `</h$n>`, or null when [at] does not follow one. */
-    private fun closingTagBefore(
-        view: String,
-        at: Int,
-    ): String? {
-        var k = at
-        while (k > 0 && (view[k - 1].let { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it in ":_-" })) k--
-        return if (k >= 2 && view.startsWith("</", k - 2)) view.substring(k, at) else null
-    }
-
-    /**
-     * Whether `interpolate(...)` writes the value as the template does, escaped at most, so the
-     * rewrite keeps the page: anything it admits where it lands, but not a value that may be null
-     * (a template writes `null`, interpolate nothing), a `Trusted` outside element text (it is not
-     * escaped there, so the rewrite would fix nothing), nor markup held as a String in element text,
-     * which it would escape.
-     */
-    private fun interpolateKeeps(
-        src: String,
-        s: KotlinString,
-        ip: Interpolation,
-        told: ValueFact?,
-        position: Position,
-        opts: AnalyzeOptions,
-    ): Boolean {
-        val fact = told.plain()
-        if (position == Position.DATASTAR || position == Position.STYLE) return fact.interpolateTakesIn(position)
-        if (position !in ESCAPED_POSITIONS) return false
-        if (fact.isNullable() || told.isNullableString() || mayBeNull(src, ip.text, s.start)) return false
-        // A template writes a List as `[a, b]`; interpolate given one value that is a List takes the other overload.
-        if (visiblyList(src, ip.text, s.start)) return false
-        if (!told.isOther() && callsTrusted(src, ip.text)) return position == Position.TEXT
-        if (fact.isMarkup()) return position != Position.TEXT || markupValued(src, s, ip)
-        if (position == Position.TEXT && !fact.digitsOrBoolean() &&
-            mayHoldMarkup(src, ip.text, s.start, opts.constants)
-        ) {
-            return false
-        }
-        return !(fact.isConstant() && position == Position.TEXT && ip.kind != InterpolationKind.SIMPLE && '<' in ip.text)
-    }
-
-    /**
-     * What the analysis knows of a hole's value: the editor's fact when it gives one, which no rule
-     * of the text overrides; otherwise what the text shows, of the hole or of each value an `if`, a
-     * `when` or an `?:` in it can give.
-     */
-    private fun holeFact(
-        s: KotlinString,
-        src: String,
-        opts: AnalyzeOptions,
-        ip: Interpolation,
-    ): ValueFact? {
-        opts.valueFact?.invoke(ip.start, ip.end)?.let { return it }
-        val sdk = Sdk.of(opts)
-        val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(HoleValue(ip.text, false)) else holeValues(ip.text)
-        val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }
-        if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
-        if (isMarkup(src, s, ip, sdk)) return ValueFact.MARKUP
-        return weakest(kinds)
-    }
-
-    /**
-     * What a value written into the HTML as it is can do, and what to write instead: [interpolate]
-     * and [trusted] say whether a fix may name `interpolate` and `Trusted` in this file, which
-     * plain Kotlin and kotlinx.html stand in for where it may not.
-     */
-    private fun unescapedMessage(
-        shown: String,
-        markup: Boolean,
-        text: Boolean,
-        interpolate: Boolean,
-        trusted: Boolean,
-    ): String {
-        // Markup an attribute holds is only characters, whose quotes end the value: that it is markup is the problem.
-        if (markup) {
-            return "Kotlin writes $shown into the HTML as it is, and it is markup: inside an attribute its quotes and tags " +
-                "are only characters, and a quote ends the value. Write text there rather than markup."
-        }
-        val base =
-            "Kotlin writes $shown into the HTML as it is. If it can hold text from outside, " +
-                if (interpolate) {
-                    "build the string with interpolate(...), which escapes it"
-                } else {
-                    "escape it before it goes in, or build this part with kotlinx.html, which escapes " +
-                        if (text) "text" else "attribute values"
-                }
-        if (!text) return "$base."
-        val built = if (trusted) "declare it Html or wrap it in Trusted(...)" else "this is fine"
-        return "$base; if it is markup you built, $built."
-    }
-
-    /** [unescapedMessage] for a project without core: what the browser does, and what plain Kotlin or kotlinx.html can do. */
-    private fun plainUnescapedMessage(
-        shown: String,
-        fact: ValueFact?,
-        text: Boolean,
-    ): String = unescapedMessage(shown, fact.isMarkup(), text, interpolate = false, trusted = false)
-
-    private fun datastarMessage(
-        shown: String,
-        attribute: String,
-    ): String =
-        "Kotlin writes $shown into $attribute, which Datastar runs as an expression or follows as a signal path. " +
-            "Text from outside becomes code there, even inside quotes. " +
-            "Put the value in a signal, or in an attribute of its own read with el.dataset; only a number or a boolean is safe to write in."
-
-    /**
-     * `$name` where a signal could stand: the Kotlin value or the signal of that name, which only the
-     * author knows. Null when the hole sits in a JavaScript string or an attribute that takes no
-     * expression, where no signal was ever possible and the value is what is judged.
-     */
-    private fun datastarTrap(
-        trap: Issue,
-        ip: Interpolation,
-        landing: HoleLanding,
-        view: String,
-        prefix: String,
-        fact: ValueFact?,
-    ): Issue? {
-        val attribute = landing.attribute ?: return null
-        if (landing.valueStart < 0) return null
-        val spec = catalog.parseAttributeName(attribute.asciiLowercase(), prefix)?.spec
-        if (spec?.valueKind != ValueKind.EXPRESSION) return null
-        val quote = view.getOrNull(landing.valueStart - 1) ?: '"'
-        val valueEnd = view.indexOf(quote, landing.valueStart)
-        val value = view.substring(landing.valueStart, if (valueEnd < 0) view.length else valueEnd)
-        val before = decodeEntities(value.substring(0, ip.decodedStart - landing.valueStart)).text
-        if (quoteAt(before, before.length) != null) return null
-        val name = ip.text
-        val fixes = trap.fixes.filter { it.title.startsWith("Make it") || it.title.startsWith("Escape") }
-        // data-signals:count="$initial" seeds a signal from the server, like the object form does.
-        val whole = spec.name != "signals" && value.trim() == PLACEHOLDER
-        // A number or a boolean is safe written in: what is left to ask is whether a signal was meant.
-        if (fact != null && fact.digitsOrBoolean()) {
-            val what = fact.described()
-            return trap.copy(
-                severity = Severity.HINT,
-                fixes = fixes,
-                message =
-                    "Kotlin writes \$$name here, $what from the server, which is safe in a Datastar expression. " +
-                        "Meant as the signal \$$name, make the literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as \${'$'}$name.",
-            )
-        }
-        return trap.copy(
-            severity = Severity.WARNING,
-            fixes = fixes,
-            message =
-                if (whole) {
-                    "Kotlin interpolates \$$name here, as the whole Datastar expression. " +
-                        "Meant as a server value, only a number or a boolean is safe there; " +
-                        "meant as the signal \$$name, make the whole literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as \${'$'}$name."
-                } else {
-                    "Kotlin interpolates \$$name inside a Datastar expression. " +
-                        "Meant as a server value, only a number or a boolean is safe there; " +
-                        "meant as the signal \$$name, make the literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as \${'$'}$name."
-                },
-        )
-    }
-
-    private fun mapIssues(
+    internal fun mapIssues(
         s: KotlinString,
         src: String,
         issues: List<Issue>,
@@ -1681,64 +859,123 @@ public class Analyzer(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
-    ): KotlinString? = site.selectString(spec) ?: chainArg(site, spec, src)
+        lex: KotlinLex,
+    ): KotlinString? = site.selectString(spec) ?: chainArg(site, spec, src, lex)
 
     private fun checkExpressionSite(
         site: CallSite,
         spec: CallSiteSpec,
         src: String,
+        lex: KotlinLex,
         hyphenated: Set<String>,
-        opts: AnalyzeOptions,
+        opts: Reading,
         helpers: Set<String>,
     ): List<Issue> {
         if (spec.onlyIfStringArgs && site.args.any { it.named == null && it.string == null }) return emptyList()
-        val s = expressionString(site, spec, src) ?: return emptyList()
-        if (s.unterminated) return emptyList()
         val attribute = catalog.attributesByKotlin[site.name]
-        val named = attribute?.let { CatalogNames.PREFIX + it.name } ?: "the expression of ${site.name}"
+        val named = attribute?.let { opts.prefix + it.name } ?: "the expression of ${site.name}"
+        val strings = listOfNotNull(expressionString(site, spec, src, lex)) + site.moreStrings(spec)
+        val oneValue = site.name.takeIf { spec.oneValue }
+        return strings.flatMap { s ->
+            // An attribute's expression passes ExpressionGuard as the page renders, which refuses an empty one.
+            if (attribute != null && !s.unterminated && s.interpolations.isEmpty() && s.text.isBlank()) {
+                listOf(
+                    Issue(
+                        s.start,
+                        s.end,
+                        "${site.name} throws as the page renders: Streamlord refuses an empty expression.",
+                        Severity.ERROR,
+                        "empty-expression",
+                        Docs.attribute(attribute),
+                    ),
+                )
+            } else {
+                expressionIssues(s, src, opts, hyphenated, helpers, named, attribute, dslEvent(site), oneValue)
+            }
+        }
+    }
+
+    /**
+     * The first comma at the top of [s], which [function] writes in parentheses as one value: there it
+     * is JavaScript's comma operator, and the value is what follows it. `postExpr("'/a', {retry: 'never'}")`
+     * sends to no address.
+     */
+    private fun commaOperatorIssue(
+        s: KotlinString,
+        function: String,
+    ): Issue? {
+        val at = Brackets(s.text, jsRegions(s.text)).topCommas.firstOrNull() ?: return null
+        val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
+        val r = s.toSource(at, at + 1)
+        return Issue(
+            r.first,
+            r.last + 1,
+            "$function writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma " +
+                "operator and keeps only what follows it." +
+                if (backend) " The options go in the lambda after the call." else "",
+            Severity.WARNING,
+            "one-value",
+            Docs.EXPRESSIONS,
+        )
+    }
+
+    /** The issues of [s], a literal Datastar runs as an expression: its Kotlin templates, and the expression itself. */
+    private fun expressionIssues(
+        s: KotlinString,
+        src: String,
+        opts: Reading,
+        hyphenated: Set<String>,
+        helpers: Set<String>,
+        named: String,
+        attribute: AttributeSpec?,
+        event: String?,
+        oneValue: String? = null,
+    ): List<Issue> {
+        if (s.unterminated) return emptyList()
         // An import from elsewhere, Hamcrest's not, takes a helper's name here too.
-        val issues = ArrayList(expressionHoles(s, src, opts, named, helpers))
-        val text = s.text
-        if (PLACEHOLDER in text && s.interpolations.any { it.kind == InterpolationKind.SIMPLE }) return issues
-        issues += mapIssues(s, src, expressions.validate(text, hyphenatedSignals = hyphenated, attribute = attribute))
+        val issues = ArrayList(expressionTemplates(s, src, opts, named, helpers))
+        oneValue?.let { commaOperatorIssue(s, it) }?.let { issues += it }
+        val judged =
+            expressions.validate(
+                s.text,
+                hyphenatedSignals = hyphenated,
+                attribute = attribute,
+                event = event,
+                prefix = opts.prefix,
+            )
+        val simple = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE }.mapTo(HashSet()) { it.decodedStart }
+        issues += mapIssues(s, src, aroundPlaceholders(s.text, judged) { it in simple })
         return issues
     }
 
     /**
      * The templates of a literal Datastar runs as an expression, and the values joined to it with
      * `+`. `$name` where a signal could stand is the trap. Any other template, `${expr}`, one inside
-     * a JavaScript string (`@post('/x/$id')`, where Datastar leaves a `$` alone, engine.ts:448 in
-     * 1.0.4), or one in a `$$` literal, writes the Kotlin value into code Datastar runs: a `'` in text
+     * a JavaScript string (`@post('/x/$id')`, where Datastar leaves a `$` alone, engine.ts:546 in
+     * 1.0.5), or one in a `$$` literal, writes the Kotlin value into code Datastar runs: a `'` in text
      * from outside ends the string and the rest runs. A number or a boolean is safe there, as
      * `interpolate` lets in.
      */
-    private fun expressionHoles(
+    private fun expressionTemplates(
         s: KotlinString,
         src: String,
-        opts: AnalyzeOptions,
+        opts: Reading,
         attribute: String,
         helpers: Set<String>? = null,
     ): List<Issue> {
         val trapOf = traps(s, src, helpers)
         val out = ArrayList<Issue>()
+        val quotes = QuoteScan(s.text)
         for (ip in s.interpolations) {
             val trap = trapOf(ip)
-            if (trap != null && quoteAt(s.text, ip.decodedStart) == null) {
+            if (trap != null && quotes.at(ip.decodedStart) == null) {
                 out += trap
                 continue
             }
-            val fact = holeFact(s, src, opts, ip).plain()
+            val fact = factOf(s, src, opts, ip).plain()
             // Kotlin writes the digits of an unsigned number; it is interpolate that would refuse it.
             if (fact.writesItself()) continue
-            out +=
-                Issue(
-                    start = ip.start,
-                    end = ip.end,
-                    message = datastarMessage(holeDisplay(ip, s.dollars), attribute),
-                    severity = Severity.WARNING,
-                    code = "unsafe-interpolation",
-                    link = Docs.EXPRESSIONS,
-                )
+            out += datastarIssue(ip, attribute)
         }
         return out
     }
@@ -1746,46 +983,75 @@ public class Analyzer(
     private fun checkHtmlSite(
         site: CallSite,
         spec: CallSiteSpec,
-        opts: AnalyzeOptions,
+        opts: Reading,
         src: String,
+        lex: KotlinLex,
         hyphenated: Set<String>,
-    ): List<Issue> {
-        val s = markupString(site, spec, src)
-        if (s == null && !site.trailingLambda) return emptyList()
-        if (s != null && s.unterminated) return emptyList()
+        eventCalls: EventCalls,
+    ): Judged {
+        val s = markupString(site, spec, src, lex)
+        if (s == null && !site.trailingLambda) return Judged()
+        if (s != null && s.unterminated) return Judged()
         // In every signature the selector and the mode follow the elements, so they may be given by
         // position. A trailing lambda holds the elements, so the selector comes first.
         val elements =
             if (s == null) -1 else (spec.arg ?: 0).takeIf { spec.named == null || site.named(spec.named) == null }
-        val selectorArg = spec.selectorArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 1) }
+
+        fun argument(
+            name: String,
+            place: Int,
+        ) = site.named(name) ?: elements?.let { site.positional.getOrNull(it + place) }
+        val selectorArg = argument("selector", 1)
         val selector = selectorArg?.text?.takeIf { it != "null" }
-        val modeArg = spec.modeArg?.let { site.named(it) } ?: elements?.let { site.positional.getOrNull(it + 2) }
-        // `ElementPatchMode.APPEND`, or `APPEND` when the constant is imported. Anything else is a value not known here.
+        val modeArg = argument("mode", 2)
         val mode =
-            modeArg?.let { arg ->
-                val name =
-                    MODE_NAME
-                        .find(arg.text)
-                        ?.groupValues
-                        ?.get(1)
-                        ?.lowercase()
-                if (name == "default") "outer" else name?.takeIf { it in catalog.patchModes }
-            }
+            modeArg
+                ?.let(::constantName)
+                ?.lowercase()
+                ?.let {
+                    if (it ==
+                        "default"
+                    ) {
+                        "outer"
+                    } else {
+                        it
+                    }
+                }?.takeIf { it in catalog.patchModes }
         val view = s?.let { markupView(src, it) } ?: ""
-        val issues = ArrayList(s?.let { judgeHoles(it, src, opts, view) }.orEmpty())
-        if (modeArg != null && mode != null && mode != "outer" && mode != "replace" && selector == null) {
-            val assign = ASSIGN_BEFORE.find(src.substring(0, modeArg.start))?.value?.length ?: 0
+        val judged = s?.let { judgeValues(it, src, opts, view) }
+        val issues = ArrayList(judged?.issues.orEmpty())
+        val modeKnown = if (modeArg == null) ElementPatchMode.DEFAULT else mode?.let { ElementPatchMode.fromWire(it) }
+        // A mode without a selector is judged on a receiver of any name, as it always was.
+        val unselected = modeArg != null && selector == null && eventCalls.named(site)
+        val needsSelector = modeKnown?.takeIf { unselected }?.let { modeWithoutSelector(site, eventCalls, it) }
+        if (modeArg != null && needsSelector != null) {
+            val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
             issues +=
                 Issue(
                     start = site.nameStart,
                     end = site.openParen,
-                    message = "Mode ${mode.uppercase()} requires a selector; Streamlord will reject this event at runtime.",
+                    message = needsSelector,
                     severity = Severity.ERROR,
                     code = "mode-needs-selector",
                     link = Docs.SSE,
                     fixes = if (modeArg.named != null) listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")) else emptyList(),
                 )
+        }
+        issues += eventArgumentIssues(site, selectorArg, eventCalls, opts.prefix)
+        if (s != null && modeKnown != null && eventCalls.ours(site)) {
+            // A namespace the code computes is not known here.
+            val namespaceArg = argument("namespace", 3)
+            val named = namespaceArg?.let(::constantName)?.let { n -> if (n == "DEFAULT") ElementNamespace.DEFAULT.name else n }
+            val namespace =
+                if (namespaceArg ==
+                    null
+                ) {
+                    ElementNamespace.DEFAULT
+                } else {
+                    ElementNamespace.entries.firstOrNull { it.name == named }
+                }
+            elementsIssue(site, eventCalls, s, modeKnown, selectorArg, namespace)?.let { issues += it }
         }
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")
@@ -1796,11 +1062,18 @@ public class Analyzer(
                     src,
                     markup.validateMarkup(
                         view,
-                        MarkupOptions(requireIds, opts.prefix, opts.checkHtmlAttributes, hyphenated, templates = false),
+                        MarkupOptions(
+                            requireIds,
+                            opts.prefix,
+                            true,
+                            hyphenated,
+                            templates = false,
+                            prefixSetting = opts.prefixSetting,
+                        ),
                     ),
                 )
         }
-        return issues
+        return Judged(issues, judged?.rewrite)
     }
 
     /**
@@ -1812,6 +1085,7 @@ public class Analyzer(
     private fun checkKeyCaseSite(
         site: CallSite,
         src: String,
+        prefix: String,
     ): List<Issue> {
         val spec = catalog.attributesByKotlin[site.name] ?: return emptyList()
         if (site.name in valueNameHelpers) return valueNameIssues(site, spec)
@@ -1845,7 +1119,7 @@ public class Analyzer(
         // A hyphen it refuses before the modifiers are joined on, which signalNameHyphenIssues says.
         if (signalKey && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
-        val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matches(it.text)) }?.text
+        val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matchEntire(it.text) != null) }?.text
         val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         val capital = HAS_CAPITAL.containsMatchIn(name)
@@ -1857,7 +1131,35 @@ public class Analyzer(
             val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
+        val mixed = if (spec.name == "on" && explicitCase == null && !capital) catalog.mixedCaseDomEvent(name) else null
+        if (mixed != null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message = "${site.name}(\"$name\") listens for $name, which no browser fires: the event is $mixed.",
+                    severity = Severity.WARNING,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec),
+                    fixes = listOf(Fix("Change to $mixed", key.contentStart, key.contentEnd, mixed)),
+                ),
+            )
+        }
         if (!capital) return emptyList()
+        val dom = if (spec.name == "on" && explicitCase == null) catalog.lowercaseDomEvent(name) else null
+        if (dom != null) {
+            return listOf(
+                Issue(
+                    start = key.start,
+                    end = key.end,
+                    message = "${site.name}(\"$name\") listens for $name, which no browser fires: the DOM event is $dom.",
+                    severity = Severity.WARNING,
+                    code = "key-case-wire",
+                    link = Docs.attribute(spec),
+                    fixes = listOf(Fix("Change to $dom", key.contentStart, key.contentEnd, dom)),
+                ),
+            )
+        }
         if (wire == null) {
             return listOf(
                 Issue(
@@ -1871,7 +1173,7 @@ public class Analyzer(
                             "Write it in one case.",
                     severity = Severity.HINT,
                     code = "key-case-wire",
-                    link = Docs.attribute(spec.name),
+                    link = Docs.attribute(spec),
                 ),
             )
         }
@@ -1881,13 +1183,13 @@ public class Analyzer(
                 start = key.start,
                 end = key.end,
                 message =
-                    "Written on the wire as ${CatalogNames.PREFIX}${spec.name}:$wire, which Datastar reads back as $what: " +
+                    "Written on the wire as $prefix${spec.name}:$wire, which Datastar reads back as $what: " +
                         "the browser lowercases attribute names, so a key is kebab-case. " +
                         "In HTML or a template you write it that way yourself." +
-                        rawKeyNote(spec, CatalogNames.PREFIX, name),
+                        rawKeyNote(spec, prefix, name),
                 severity = Severity.HINT,
                 code = "key-case-wire",
-                link = Docs.attribute(spec.name),
+                link = Docs.attribute(spec),
             ),
         )
     }
@@ -1904,7 +1206,7 @@ public class Analyzer(
         src: String,
     ): Boolean {
         fun on(parameter: String) = (site.named(parameter) ?: site.positional.getOrNull(2))?.text?.trim() == "true"
-        if (site.name == "dataSignals" && on("ifMissing")) return true
+        if (site.name == KEYED_OR_OBJECT && on("ifMissing")) return true
         if (site.name == "dataPersist" && on("session")) return true
         val names = spec.modifiers.map { it.name.lowercase() }.filter { it != "case" }
         return LAMBDA_ASSIGNMENT.findAll(modifiersLambda(site, src).replace(KOTLIN_STRING, "\"\"")).any { m ->
@@ -1918,10 +1220,65 @@ public class Analyzer(
     private fun modifiersLambda(
         site: CallSite,
         src: String,
-    ): String =
-        trailingLambdaText(site, src).ifEmpty {
-            (site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") })?.text ?: ""
+    ): String = modifiersLambdaAt(site, src).second
+
+    /** [modifiersLambda] and where it starts in [src]. */
+    private fun modifiersLambdaAt(
+        site: CallSite,
+        src: String,
+    ): Pair<Int, String> {
+        val trailing = trailingLambdaText(site, src)
+        if (trailing.isNotEmpty()) return src.indexOf('{', site.closeParen + 1) to trailing
+        val arg = site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") } ?: return 0 to ""
+        return arg.start to arg.text
+    }
+
+    /**
+     * What the DSL refuses as it renders, from the literals the lambda of modifiers of [site] sets:
+     * a flag of a duration that is not set, `half`, `full` and `threshold` together, a threshold
+     * out of 0 to 100, an interval of no time. A value the code computes is not judged.
+     */
+    private fun modifierLambdaIssues(
+        site: CallSite,
+        src: String,
+        lex: KotlinLex,
+    ): List<Issue> {
+        if (site.name !in catalog.attributesByKotlin) return emptyList()
+        val (start, lambda) = modifiersLambdaAt(site, src)
+        if (lambda.isEmpty()) return emptyList()
+        // Strings and comments blanked where they stand, so an offset in the lambda is one in the source.
+        val code = CharArray(lambda.length) { i -> if (lex.mask[start + i] || lambda[i] == '\n') lambda[i] else ' ' }.concatToString()
+        // The value of each property set to a literal, by its name, and where it is set.
+        val set = LAMBDA_ASSIGNMENT.findAll(code).associateBy({ it.groupValues[1] }, { it })
+
+        fun value(name: String) = set[name]?.groupValues?.get(2)?.trim()
+
+        val out = ArrayList<Issue>()
+
+        fun refuse(
+            m: MatchResult,
+            why: String,
+        ) {
+            val end = m.range.first + m.value.trimEnd().length
+            out += Issue(start + m.range.first, start + end, "Streamlord throws at render: $why.", Severity.ERROR, "modifier-args")
         }
+
+        fun on(name: String) = set[name]?.takeIf { value(name) == "true" }
+        for ((duration, flags) in ModifierRules.durationFlags) {
+            if (value(duration) != null && value(duration) != "null") continue
+            flags.firstNotNullOfOrNull(::on)?.let { refuse(it, ModifierRules.flagWithoutDuration(it.groupValues[1], duration)) }
+        }
+        val threshold = set["threshold"]?.takeIf { value("threshold") != "null" }
+        val alternatives = listOfNotNull(on("half"), on("full"), threshold).sortedBy { it.range.first }
+        if (alternatives.size > 1) refuse(alternatives[1], ModifierRules.ALTERNATIVES)
+        val percent = value("threshold")?.toIntOrNull()
+        if (threshold != null && percent != null && percent !in ModifierRules.thresholds) refuse(threshold, ModifierRules.THRESHOLD_RANGE)
+        val interval = set["duration"]
+        if (site.name == "dataOnInterval" && interval != null && ZERO_DURATION.matchEntire(value("duration")!!) != null) {
+            refuse(interval, ModifierRules.intervalNotPositive(Duration.ZERO.toString()))
+        }
+        return out
+    }
 
     /** A name `dataBind`, `dataRef` or `dataIndicator` writes in the value that `Casing.signalName` refuses, as it does in a key ([signalNameRefusal]). */
     private fun valueNameIssues(
@@ -1946,7 +1303,7 @@ public class Analyzer(
             message = "Streamlord refuses \"$name\" at runtime: it $reason.",
             severity = Severity.ERROR,
             code = "key-refused",
-            link = Docs.attribute(spec.name),
+            link = Docs.attribute(spec),
         )
 
     /**
@@ -1962,13 +1319,10 @@ public class Analyzer(
         src: String,
     ): List<Issue> {
         // The key form takes the name and an expression; one positional string is the object form.
-        val key =
-            (site.named("name") ?: site.named("attribute"))?.string
-                ?: site.positional
-                    .takeIf { it.size >= 2 || site.named("expression") != null }
-                    ?.first()
-                    ?.string
-                ?: return emptyList()
+        // A name given by name is the name, literal or not: no positional argument stands in for it.
+        val named = site.named("name") ?: site.named("attribute")
+        val first = site.positional.takeIf { it.size >= 2 || site.named("expression") != null }?.firstOrNull()
+        val key = (named ?: first)?.string ?: return emptyList()
         val name = key.text
         if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
         AttributeKeys.nameProblem(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
@@ -2033,20 +1387,14 @@ public class Analyzer(
             ),
         )
     }
-
-    private fun checkSelectorSite(
-        site: CallSite,
-        spec: CallSiteSpec,
-    ): List<Issue> {
-        val s = site.selectString(spec) ?: return emptyList()
-        if (s.unterminated) return emptyList()
-        if (s.text.isBlank()) return listOf(Issue(s.start, s.end, "Selector must not be blank.", Severity.ERROR, "blank-selector"))
-        if (s.text.any { it == '\r' || it == '\n' }) {
-            return listOf(Issue(s.start, s.end, "Selector must not contain line breaks.", Severity.ERROR, "selector-newline"))
-        }
-        return emptyList()
-    }
 }
+
+/** An option of FetchOptions set to an expression: its [name], where the name starts, and the literal that is the expression. */
+public data class ExpressionOption(
+    val name: String,
+    val nameStart: Int,
+    val value: KotlinString,
+)
 
 /**
  * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
@@ -2059,11 +1407,42 @@ public data class AttributesIndex(
     val whole: Boolean,
 )
 
-/** The issues that belong to one DSL call, or to one free-standing HTML string. */
+/**
+ * The issues that belong to one DSL call, or to one free-standing HTML string, and the [rewrite]
+ * of its HTML string to a call of `interpolate`, where every value in it is one `interpolate` keeps.
+ */
 public data class SiteIssues(
     val site: CallSite?,
     val string: KotlinString?,
     val issues: List<Issue>,
+    val rewrite: Fix? = null,
+)
+
+/**
+ * The rewrite of an HTML string to a call of `interpolate` that an editor offers as a context
+ * action for the caret or selection from [start] to [end] in a file whose [sites] are analysed:
+ * the selection lies in one string that has a value the rewrite escapes and whose values
+ * `interpolate` accepts, and no issue the selection touches offers the rewrite already. Null anywhere else.
+ */
+public fun rewriteAt(
+    sites: List<SiteIssues>,
+    start: Int,
+    end: Int = start,
+): Fix? {
+    // The innermost: a literal inside a template of another has a rewrite of its own.
+    val site =
+        sites
+            .filter { it.rewrite != null && start >= it.rewrite.start && end <= it.rewrite.end }
+            .minByOrNull { it.rewrite!!.end - it.rewrite.start } ?: return null
+    val rewrite = site.rewrite!!
+    val offered = site.issues.any { i -> i.start <= end && start <= i.end && i.fixes.any { it.sharesTextWith(rewrite) } }
+    return rewrite.takeUnless { offered }
+}
+
+/** The issues of the values of an HTML string, and its rewrite to `interpolate` where that can be offered. */
+internal class Judged(
+    val issues: List<Issue> = emptyList(),
+    val rewrite: Fix? = null,
 )
 
 internal fun String.lastNonSpaceBefore(index: Int): Char? {

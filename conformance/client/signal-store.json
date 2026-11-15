@@ -1,5 +1,6 @@
 {
-  "$comment": "pathToObj from utils/paths.ts, filtered and mergePatch from engine/signals.ts, and isStringTrue from utils/text.ts of the Datastar 1.0.4 client. held is JSON.stringify of the root after mergePatch of store; filtered is JSON.stringify of filtered({include, exclude}) with the fetch default exclude /(^|\\.)_/ unless given; pollutes lists what Object.prototype or a function on it gained, removed again afterwards.",
+  "$comment": "pathToObj from utils/paths.ts, filtered and mergePatch from engine/signals.ts, and isStringTrue from utils/text.ts of the Datastar 1.0.5 client. held is JSON.stringify of the root after mergePatch of store; filtered is JSON.stringify of filtered({include, exclude}) with the fetch default exclude /(^|\\.)_/ unless given; pollutes lists what Object.prototype or a function on it gained, removed again afterwards.",
+  "version": "1.0.5",
   "cases": {
     "pathToObj": [
       {

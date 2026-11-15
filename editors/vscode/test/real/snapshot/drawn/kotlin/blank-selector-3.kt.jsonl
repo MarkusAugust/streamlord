@@ -1,0 +1,3 @@
+{"what":"file","language":"kotlin"}
+{"what":"diagnostic","code":"blank-selector","link":"https://data-star.dev/reference/sse_events","message":"removeElements throws: selector must not be blank.","range":"2:60-2:62","severity":"Error","source":"streamlord"}
+{"what":"rename","at":"1:1-3:1","error":"No signal here to rename."}

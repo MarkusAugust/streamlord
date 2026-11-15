@@ -147,29 +147,35 @@ class ProDslTest {
     fun `pro actions`() {
         assertEquals("""@clipboard('Hello, world!')""", clipboard("Hello, world!"))
         assertEquals("""@clipboard('SGVsbG8=', true)""", clipboard("SGVsbG8=", isBase64 = true))
-        assertEquals("@clipboard(${'$'}code)", clipboardExpr(signal("code")))
-        assertEquals("@fit(${'$'}sliderValue, 0, 100, 0, 255)", fit(signal("sliderValue"), 0, 100, 0, 255))
-        assertEquals("@fit(${'$'}x, 0, 1, 0, 1, true)", fit(signal("x"), 0, 1, 0, 1, clamp = true))
-        assertEquals("@fit(${'$'}x, 0, 1, 0, 1, false, true)", fit(signal("x"), 0, 1, 0, 1, round = true))
+        assertEquals("@clipboard((${'$'}code))", clipboardExpr(signal("code")))
+        assertEquals("@clipboard(('a', true), true)", clipboardExpr("'a', true", isBase64 = true))
+        assertEquals("@fit((${'$'}sliderValue), 0, 100, 0, 255)", fit(signal("sliderValue"), 0, 100, 0, 255))
+        assertEquals("@fit((${'$'}x), 0, 1, 0, 1, true)", fit(signal("x"), 0, 1, 0, 1, shouldClamp = true))
+        assertEquals("@fit((${'$'}x), 0, 1, 0, 1, false, true)", fit(signal("x"), 0, 1, 0, 1, shouldRound = true))
         assertEquals(
-            """@intl('number', 1000000, {style: 'currency', currency: 'USD'})""",
+            "@fit((${'$'}x), (${'$'}lo), (${'$'}hi), (0), (${'$'}max * 2), true)",
+            fitExpr(signal("x"), signal("lo"), signal("hi"), "0", "${signal("max")} * 2", shouldClamp = true),
+        )
+        assertFailsWith<IllegalArgumentException> { fitExpr(signal("x"), "", "1", "0", "1") }
+        assertEquals(
+            """@intl('number', (1000000), {style: 'currency', currency: 'USD'})""",
             intl(
                 IntlType.NUMBER,
                 "1000000",
                 mapOf("style" to "currency", "currency" to "USD"),
             ),
         )
-        assertEquals("""@intl('datetime', new Date(), {}, 'de-AT')""", intl(IntlType.DATETIME, "new Date()", locales = arrayOf("de-AT")))
-        assertEquals("""@intl('number', ${'$'}n)""", intl(IntlType.NUMBER, signal("n")))
+        assertEquals("""@intl('datetime', (new Date()), {}, 'de-AT')""", intl(IntlType.DATETIME, "new Date()", locales = arrayOf("de-AT")))
+        assertEquals("""@intl('number', (${'$'}n))""", intl(IntlType.NUMBER, signal("n")))
         // The client reads options.unit and options.type without a guard, so these always get an object.
-        assertEquals("""@intl('relativeTime', -3, {})""", intl(IntlType.RELATIVE_TIME, "-3"))
-        assertEquals("""@intl('displayNames', 'nb', {}, 'en')""", intl(IntlType.DISPLAY_NAMES, "'nb'", locales = arrayOf("en")))
+        assertEquals("""@intl('relativeTime', (-3), {})""", intl(IntlType.RELATIVE_TIME, "-3"))
+        assertEquals("""@intl('displayNames', ('nb'), {}, 'en')""", intl(IntlType.DISPLAY_NAMES, "'nb'", locales = arrayOf("en")))
         assertEquals(
-            """@intl('displayNames', 'nb', {type: 'language'})""",
+            """@intl('displayNames', ('nb'), {type: 'language'})""",
             intl(IntlType.DISPLAY_NAMES, "'nb'", mapOf("type" to "language")),
         )
         assertEquals(
-            """@intl('list', ${'$'}items, {type: 'conjunction'}, ['nb', 'en'])""",
+            """@intl('list', (${'$'}items), {type: 'conjunction'}, ['nb', 'en'])""",
             intl(
                 IntlType.LIST,
                 signal("items"),

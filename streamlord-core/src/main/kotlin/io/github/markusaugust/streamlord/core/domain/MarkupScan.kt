@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.commentClose
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.rawTextEnd
+import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.client.regionMatchesAsciiIgnoreCase
 
 /**
@@ -106,6 +107,15 @@ public fun walkMarkup(
     scanMarkupTracked(html, visitor, NS_HTML, scripting = false, htmlStaysOpen = true, templates = templates)
 }
 
+/** [walkMarkup] of a patch the client parses inside an element of the [context] namespace, as it does an svg or mathml one. */
+internal fun walkMarkup(
+    html: String,
+    visitor: MarkupVisitor,
+    context: Int,
+) {
+    scanMarkupTracked(html, visitor, context, scripting = false, htmlStaysOpen = true)
+}
+
 /** Where a run of text stands among the elements open around it, as a walk that follows the element stack reports it. */
 @InternalStreamlordApi
 public class TextPlace(
@@ -128,7 +138,9 @@ public class TextPlace(
 )
 
 /** The characters that end a tag name, and so an end tag's name as well. */
-private fun Char?.endsName(): Boolean = this == null || isHtmlSpace() || this == '/' || this == '>'
+private fun Char?.endsName(): Boolean = this == null || this.endsName()
+
+private fun Char.endsName(): Boolean = isHtmlSpace() || this == '/' || this == '>'
 
 private fun Char?.isAsciiLetter(): Boolean = this != null && (this in 'a'..'z' || this in 'A'..'Z')
 
@@ -283,7 +295,7 @@ internal val VOID =
     )
 
 /** HTML tags that, met inside an `<svg>` or `<math>`, close the foreign content and return to HTML. */
-private val EXITS_FOREIGN =
+internal val EXITS_FOREIGN =
     setOf(
         "b",
         "big",
@@ -1149,7 +1161,7 @@ private fun templateTagAt(
         else -> null
     }
 
-private val TEMPLATE_CALL = Regex("""^[@#][A-Za-z]+\s*\(""")
+private val TEMPLATE_CALL = regex("""^[@#][A-Za-z]+\s*\(""")
 
 /**
  * Where a template construct that starts at [at] inside a tag ends, or [at] when none starts

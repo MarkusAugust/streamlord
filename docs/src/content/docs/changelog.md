@@ -7,6 +7,52 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.22.0
+
+**`interpolate` takes a collection as one value.** A `List`, `Set` or array handed to it is written
+in brackets and escaped, where a lone `List` was taken for the values. Spread it to pass its
+elements, `interpolate(format, *values.toTypedArray())`, and put an aliased bundle's prefixes first,
+`interpolate(prefixes, format, vararg values)`. A value in `data-match-media` now throws: write the
+query into the format, or use `dataMatchMedia`.
+
+**Elements in the wrong namespace throw.** `PatchElements` and `ElementsResponse` refuse an HTML
+element under `svg` or `mathml`, and an SVG or MathML element under `html` outside its root. Put HTML
+in a `<foreignObject>`, or send shapes with `namespace = ElementNamespace.SVG`, as
+[SVG and MathML](/protocol/#svg-and-mathml) shows.
+
+**The starter CSP requires Trusted Types.** `CspNonce.starterPolicy`, the default of
+`CspNoncePlugin` and `CspNonceFilter`, allows only Datastar's policy, so other code that writes
+into the DOM as markup or a script, or a library that creates a policy of its own, is refused, and
+so is a patch with an inline `on*` attribute or a `<script src>`. [The policy is yours](/security/#the-policy-is-yours) shows how to set one without.
+
+**`viewTransitionSelector` comes after `useViewTransition`** in `ElementsResponse`,
+`respondElements`, `datastarElements`, `elementsResponse`, `PatchElements.remove` and
+`removeElements`. Name the arguments that follow it, `eventId` and `retry` of a removal and the
+`streamlord` bean of `datastarElements`, and rebuild.
+
+**A few signatures moved.** `FetchOptions.responseOverrides` is gone, since the client never read
+it: set the selector, mode and view transition on `respondElements` or `datastarElements`, and
+`onlyIfMissing` on `respondSignals` or `datastarSignals`. Spring's
+`datastarSignals(value, onlyIfMissing, streamlord)` takes the bean last. `fit` in
+streamlord-html-pro names its flags `shouldClamp` and `shouldRound`. `awaitPatchElements` in
+streamlord-test takes new matchers before `timeout`, so name it, `timeout = 5.seconds`.
+`JsonObject.decimal`, `JsonNumber.toBigDecimal` and `toBigDecimalOrNull` are extension functions:
+import them, or from Java call `JsonDecimals.decimal(object, key)`. `SignalFilter` has three more
+values, so code compiled against its constructor needs a rebuild.
+
+**With `guardElements` on, two more mistakes throw:** a patch without a selector in `outer` or
+`replace` mode whose top element has no id, and a `data-*` name with two letters swapped,
+`data-no:click`.
+
+**streamlord-analysis takes a `Source` everywhere.** `AnalyzeOptions` is gone: write
+`analyzer.analyzeKotlin(Source(text, SourceLanguage.KOTLIN, prefix, constants = names))`, with
+`Source.modules` for what was `core`, `htmlDsl` and `coreHtml`. Only what the editors call stays
+public; [CHANGELOG.md](https://github.com/MarkusAugust/streamlord/blob/master/CHANGELOG.md) lists
+what replaces each name that went internal.
+
+**The IntelliJ plugin needs the Kotlin plugin in K2 mode,** the default. IntelliJ 2026.1 with K1
+turned on no longer loads it.
+
 ## 0.21.0
 
 **Code that calls the requests file functions of streamlord-analysis needs a few changes.**

@@ -1,8 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
-import io.github.markusaugust.streamlord.core.json.JsonObject
-import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.protocol.SseReader
 import io.github.markusaugust.streamlord.core.protocol.SseMessage as CoreSseMessage
 
@@ -72,11 +70,11 @@ public class SseParser {
 
 public fun decodeDatastar(
     msg: SseMessage,
-    receivedAt: Long = System.currentTimeMillis(),
+    receivedAt: Long = currentTimeMillis(),
 ): DatastarFrame {
     val groups = LinkedHashMap<String, MutableList<String>>()
     // Joined as the client joins them, which drops empty lines before the first that has text,
-    // and split again (fetch.ts:412-416, :114), so a message with no data still has one line.
+    // and split again (fetch.ts:413-416, :114), so a message with no data still has one line.
     val joined = msg.data.fold("") { acc, line -> if (acc.isEmpty()) line else "$acc\n$line" }
     for (line in joined.split("\n")) {
         // As the client splits it, slice(0, i) and slice(i + 1): without a space, the key is the

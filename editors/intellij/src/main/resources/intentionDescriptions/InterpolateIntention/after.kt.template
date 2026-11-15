@@ -1,0 +1,1 @@
+fun card(name: String): String = interpolate("<p class=\"card\">%s</p>", name).text

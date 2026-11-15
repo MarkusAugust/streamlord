@@ -164,5 +164,5 @@ a signal name with the camelCase fix. For strings and templates they flag a capi
 key (with the kebab-case fix) and a hyphen after a signal that nothing in the file declares with
 its hyphen (with the camelCase or spaced-subtraction fix).
 
-The default per attribute lives in `catalog/datastar-1.0.4.json` as `keyCase`, and both the SDK's
+The default per attribute lives in `catalog/datastar-1.0.5.json` as `keyCase`, and both the SDK's
 tests and the extensions read it from there.

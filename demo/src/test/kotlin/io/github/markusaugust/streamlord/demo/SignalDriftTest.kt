@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.demo
 
 import io.github.markusaugust.streamlord.analysis.SignalFacts
+import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.signalDrift
@@ -25,12 +26,12 @@ class SignalDriftTest {
         val facts = LinkedHashMap<String, SignalFacts>()
         for (dir in kotlinSources) {
             File(dir).walkTopDown().filter { it.extension == "kt" }.forEach {
-                facts[it.path] = collectSignalFacts(it.readText(), SourceLanguage.KOTLIN)
+                facts[it.path] = collectSignalFacts(Source(it.readText(), SourceLanguage.KOTLIN))
             }
         }
         for (dir in markupSources) {
             File(dir).walkTopDown().filter { it.extension in setOf("astro", "md", "html") }.forEach {
-                facts[it.path] = collectSignalFacts(it.readText(), SourceLanguage.HTML)
+                facts[it.path] = collectSignalFacts(Source(it.readText(), SourceLanguage.HTML))
             }
         }
         return facts
@@ -52,8 +53,7 @@ class SignalDriftTest {
         val main = File("src/main/kotlin/io/github/markusaugust/streamlord/demo/Main.kt")
         facts[main.path] =
             collectSignalFacts(
-                main.readText().replace("val query: String = \"\"", "val querry: String = \"\""),
-                SourceLanguage.KOTLIN,
+                Source(main.readText().replace("val query: String = \"\"", "val querry: String = \"\""), SourceLanguage.KOTLIN),
             )
 
         val issues = signalDrift(facts).issues.values.flatten()

@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
+import org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin
 
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
@@ -14,6 +15,18 @@ plugins {
     alias(libs.plugins.dokka) apply false
 }
 
+/*
+ * Kotlin/JS writes an npm workspace for `:analysis-js` and names it with this project's version as
+ * it stands when the plugin is applied. Nothing of it is published, so it is applied here under a
+ * fixed one, and kotlin-js-store/package-lock.json does not change with a release.
+ */
+run {
+    val released = version
+    version = "0.0.0"
+    apply<NodeJsRootPlugin>()
+    version = released
+}
+
 // The oldest Kotlin a consumer may compile with; see compilerOptions below.
 val kotlinFloor: String = libs.versions.kotlinFloor.get()
 
@@ -25,12 +38,15 @@ val kotlinFloor: String = libs.versions.kotlinFloor.get()
  * mode so that nothing leaves the walls of a module by accident.
  */
 subprojects {
+    // Kotlin/JS, configured in its own build file; nothing below applies to it.
+    if (name == "analysis-js") return@subprojects
+
     /*
      * Modules that exist for the build itself and never leave it. They are not
-     * published, they are not held to explicit API mode, and an unused value in
-     * a documentation sample is not worth failing a release over.
+     * published and not held to explicit API mode; a warning fails them as it
+     * fails the rest.
      */
-    val internal = name in setOf("docs-samples", "demo")
+    val internal = name in setOf("docs-samples", "demo", "rewrite-probes")
 
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "java-library")
@@ -77,11 +93,11 @@ subprojects {
         jvmToolchain(21)
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_17)
-            allWarningsAsErrors.set(!internal)
+            allWarningsAsErrors.set(true)
             freeCompilerArgs.addAll("-Xjdk-release=17", "-Xjsr305=strict")
             // The API the modules share among themselves. The samples and the demo stand for an
             // application's code, so they compile without it, as an application would.
-            if (name !in setOf("docs-samples", "demo")) optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
+            if (name !in setOf("docs-samples", "demo", "rewrite-probes")) optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
             /*
              * A Kotlin compiler reads metadata at most one version ahead of its own, so modules
              * built by this Kotlin at its own level would refuse to compile in a project on the
@@ -236,8 +252,8 @@ project(":streamlord-ktor") {
         "updateTranscripts",
         "*WireTranscriptTest",
         "the wire transcripts under conformance/wire from what the Ktor adapter answers now",
-        // The requests every adapter answers and the comparison with their transcripts.
-        compiling = setOf("test", "oldestKtorTest"),
+        // The requests every adapter answers and the comparison with their transcripts, and where the tests serve.
+        compiling = setOf("test", "oldestKtorTest", "javaxTomcatTest"),
     )
 }
 project(":streamlord-spring") {

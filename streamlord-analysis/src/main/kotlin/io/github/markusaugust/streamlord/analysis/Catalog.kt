@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -17,6 +18,14 @@ public data class Modifier(
     val max: Int? = null,
     /** Modifiers with which the client never reads this one: `__full` and `__half` set the threshold themselves. */
     val ignoredWith: List<String> = emptyList(),
+    /** What the modifier does, in the reference's words. */
+    val doc: String = "",
+    /** What each of [flags] does. */
+    val flagDocs: Map<String, String> = emptyMap(),
+    /** The values completion offers after the modifier's dot, where the type does not list them. */
+    val suggest: List<String> = emptyList(),
+    /** Whether the reference lists it for the attribute; one it does not is accepted, and neither offered nor documented. */
+    val listed: Boolean = true,
 )
 
 /**
@@ -53,15 +62,23 @@ public data class AttributeSpec(
      * written, as the body of an event handler.
      */
     val returnsValue: Boolean = false,
-    /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.4). */
+    /** Keys a keyless attribute accepts all the same: `data-on-signal-patch:filter` (onSignalPatch.ts:27 in 1.0.5). */
     val keys: List<String> = emptyList(),
     /** The names the expression is handed besides `el`: `evt` in `data-on`, `patch` in `data-on-signal-patch`. */
     val argNames: List<String> = emptyList(),
     /** Whether the key is an HTML attribute's name, which the DSL takes as HTML has it: `data-attr`, `data-animate`. */
     val keyIsAttributeName: Boolean = false,
+    /** The page of the reference that describes the attribute, where it is not under its name among the attributes. */
+    val reference: String? = null,
 )
 
-public data class ActionSpec(
+/**
+ * What a value Datastar reads is meant to be: an argument of an action, an option of a backend
+ * action, a key of a signal filter. [PATTERN] is a regular expression or a string.
+ */
+internal enum class ArgumentKind { STRING, NUMBER, BOOLEAN, OBJECT, OPTIONS, FILTER, FUNCTION, PATTERN, ANY }
+
+internal data class ActionSpec(
     val name: String,
     val pro: Boolean,
     val kind: String,
@@ -80,25 +97,59 @@ public data class ActionSpec(
                 .filter { it.isNotEmpty() }
 }
 
-/** Which argument of a Streamlord call holds the Datastar string, and where its companions are. */
+/** Which argument of a Streamlord call holds the Datastar string. */
 public data class CallSiteSpec(
     /** A positional index, or `null` for "the last positional string". */
     val arg: Int?,
     val named: String? = null,
-    val selectorArg: String? = null,
-    val modeArg: String? = null,
     val onlyIfStringArgs: Boolean = false,
+    /** The parameters after [arg] that take an expression too, each by its place or its name: `fitExpr`'s ends. */
+    val more: List<String> = emptyList(),
+    /** Whether the function writes each expression in parentheses, as one value: `getExpr`, `peek`. */
+    val oneValue: Boolean = false,
 ) {
     val last: Boolean get() = arg == null
+}
+
+/**
+ * One of core's SSE calls, or an answer that is no stream, as the catalog's `events` lists it: the
+ * first argument core judges as it runs ([takes]: `elements`, `selector`, `signals`, `signalNames`,
+ * `script` or `url`, null where core judges nothing) and the catalog's flags of it: `stream`,
+ * `response`, `names`, `json` and `value`.
+ */
+internal class EventCallSpec(
+    val takes: String?,
+    val flags: Set<String>,
+) {
+    /** It takes an `eventId` and a `retry`. */
+    val stream: Boolean get() = "stream" in flags
+
+    /** An answer that is no stream, whose selector goes in a header. */
+    val response: Boolean get() = "response" in flags
 }
 
 public data class FetchOption(
     val name: String,
     val type: String,
     val default: String,
-    /** What the option does, as Datastar 1.0.4's `fetch.ts` reads it. */
+    /** What the option does, as Datastar 1.0.5's `fetch.ts` reads it. */
     val doc: String = "",
 )
+
+/**
+ * An option of a backend action, or a key of a signal filter, with what a value of it is meant to
+ * be: its [kind], the strings it takes where it takes only some, and what Datastar does with a value
+ * it cannot read as meant ([otherwise]): a string outside [values], or a number that is NaN.
+ */
+internal class ValueField(
+    val option: FetchOption,
+    val kind: ArgumentKind,
+    val values: List<String>,
+    val otherwise: String,
+) {
+    val name: String get() = option.name
+    val type: String get() = option.type
+}
 
 /** An event Datastar dispatches on the document, with what its listener is handed: not an SSE event, which core.domain.DatastarEvent is. */
 public data class DocumentEvent(
@@ -106,9 +157,24 @@ public data class DocumentEvent(
     val doc: String,
 )
 
-/** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one. */
-public data class DomEvent(
+/** A DOM event, with its page on MDN when TypeScript's lib.dom.d.ts names one, and the interface its listener is handed. */
+internal data class DomEvent(
     val name: String,
+    val mdn: String?,
+    val type: String,
+)
+
+/** An interface an event listener is handed, as lib.dom.d.ts declares it: the one it extends and its own members. */
+internal class EventInterface(
+    val name: String,
+    val extends: String?,
+    val members: List<EventMember>,
+)
+
+/** A member of an [EventInterface]: a property, or a method, and its page on MDN. */
+internal class EventMember(
+    val name: String,
+    val method: Boolean,
     val mdn: String?,
 )
 
@@ -136,30 +202,67 @@ public class Catalog private constructor(
     raw: JsonObject,
 ) {
     public val attributes: List<AttributeSpec>
-    public val actions: List<ActionSpec>
-    public val fetchOptions: List<FetchOption>
-    public val fetchEvents: List<String>
+    internal val actions: List<ActionSpec>
+    internal val fetchOptions: List<FetchOption>
 
-    /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:52 in 1.0.4). */
+    /** [fetchOptions] with the kind of each. */
+    internal val optionFields: List<ValueField>
+
+    /** The keys of a signal filter: of `filterSignals`, and of the filter `@setAll` and `@toggleAll` take. */
+    internal val filterFields: List<ValueField>
+
+    /** The kind of each parameter of each action, in order. */
+    internal val actionKinds: Map<String, List<ArgumentKind>>
+
+    /** The strings each parameter of each action takes where it takes only some, in order: the types of `@intl`. */
+    internal val actionValues: Map<String, List<List<String>>>
+
+    /** What each parameter of each action is, in order, as the hover says it. */
+    internal val parameterDocs: Map<String, List<String>>
+
+    /** The types a `datastar-fetch` event of a backend action's own is dispatched with, in order. */
+    internal val fetchEvents: List<String>
+
+    /** What each of [fetchEvents] says of the request. */
+    internal val fetchEventDocs: Map<String, String>
+
+    /** The events Datastar dispatches on the document, which `data-on` listens there for on its own (on.ts:54 in 1.0.5). */
     public val datastarEvents: List<DocumentEvent> =
         (raw.array("datastarEvents")?.objects() ?: emptyList()).map { DocumentEvent(it.string("name") ?: "", it.string("doc") ?: "") }
 
     /** The DOM events an element can be listened to for, from `catalog/dom-events.json`, which no Datastar version changes. */
-    public val domEvents: List<DomEvent> get() = DOM_EVENTS
+    internal val domEvents: List<DomEvent> get() = DOM_EVENTS
 
-    /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:467). */
-    public val compiledParameters: List<String>
-    public val patchModes: List<String>
+    /** The interfaces those events are handed, and CustomEvent, by name, from the same file. */
+    internal val eventInterfaces: Map<String, EventInterface> get() = EVENT_INTERFACES
+
+    /** The names `genRx` compiles every expression with, before a plugin's own `argNames` (engine.ts:567). */
+    internal val compiledParameters: List<String>
+    internal val patchModes: List<String>
     public val expressionCallSites: Map<String, CallSiteSpec>
-    public val htmlCallSites: Map<String, CallSiteSpec>
-    public val scriptCallSites: Map<String, CallSiteSpec>
-    public val selectorCallSites: Map<String, CallSiteSpec>
 
-    /** The calls whose arguments are signals by name, each with the flags the catalog gives it: `names`, `json`. */
+    /** Core's SSE calls and answers, by the name a call writes: `PatchElements.remove` for a companion's function. */
+    internal val eventCalls: Map<String, EventCallSpec>
+
+    // Of the events, those called by a name of their own, and what each takes.
+    private fun eventsTaking(takes: String): List<String> =
+        eventCalls.filter { (name, call) -> call.takes == takes && '.' !in name }.keys.toList()
+
+    internal val htmlCallSites: Map<String, CallSiteSpec>
+    internal val scriptCallSites: Map<String, CallSiteSpec>
+    internal val selectorCallSites: Map<String, CallSiteSpec>
+
+    /**
+     * The calls whose arguments are signals by name, the DSL's and core's, each with the flags the
+     * catalog gives it: `names`, `json`, `value`.
+     */
     public val signalCalls: Map<String, Set<String>>
 
     /** The expression helpers, whose first argument is a signal name, each with its flags: `reads`, `shared`. */
     public val signalNameHelpers: Map<String, Set<String>>
+
+    /** The options of a backend action's FetchOptions whose value is an expression, each with its flags: `map`. */
+    public val expressionOptions: Map<String, Set<String>>
 
     init {
         val groups = raw.obj("modifierGroups") ?: JsonObject.EMPTY
@@ -175,10 +278,11 @@ public class Catalog private constructor(
                     valueKind = ValueKind.valueOf((a.string("valueKind") ?: "none").uppercase()),
                     kotlin = a.array("kotlin")?.strings() ?: emptyList(),
                     modifiers =
-                        (a.array("modifiers")?.objects() ?: emptyList()).flatMap { m ->
-                            val ref = m.string("\$ref")
-                            if (ref != null) (groups.array(ref)?.objects() ?: emptyList()).map(::toModifier) else listOf(toModifier(m))
-                        },
+                        (a.array("modifiers")?.objects() ?: emptyList())
+                            .flatMap { m ->
+                                val ref = m.string("\$ref")
+                                if (ref != null) (groups.array(ref)?.objects() ?: emptyList()).map(::toModifier) else listOf(toModifier(m))
+                            }.map { m -> if (m.name in a.array("unlisted")?.strings().orEmpty()) m.copy(listed = false) else m },
                     onlyOn = a.array("onlyOn")?.strings(),
                     doc = a.string("doc") ?: "",
                     requires = a.string("requires")?.let { Requires.valueOf(it.uppercase()) },
@@ -186,6 +290,7 @@ public class Catalog private constructor(
                     keys = a.array("keys")?.strings() ?: emptyList(),
                     argNames = a.array("argNames")?.strings() ?: emptyList(),
                     keyIsAttributeName = a.boolean("keyIsAttributeName") ?: false,
+                    reference = a.string("reference"),
                 )
             }
         actions =
@@ -199,55 +304,89 @@ public class Catalog private constructor(
                     doc = a.string("doc") ?: "",
                 )
             }
-        fetchOptions =
-            (raw.array("fetchOptions")?.objects() ?: emptyList()).map {
-                FetchOption(it.string("name") ?: "", it.string("type") ?: "", it.string("default") ?: "", it.string("doc") ?: "")
+        actionKinds =
+            raw.array("actions")!!.objects().associate { a ->
+                a.string("name")!! to (a.array("kinds")?.strings()?.map { ArgumentKind.valueOf(it.uppercase()) } ?: emptyList())
             }
-        fetchEvents = raw.array("fetchEvents")?.strings() ?: emptyList()
+        actionValues =
+            raw.array("actions")!!.objects().associate { a ->
+                a.string("name")!! to (a.array("values")?.map { (it as JsonArray).strings() } ?: emptyList())
+            }
+        parameterDocs =
+            raw.array("actions")!!.objects().associate { a -> a.string("name")!! to (a.array("parameterDocs")?.strings() ?: emptyList()) }
+        optionFields = (raw.array("fetchOptions")?.objects() ?: emptyList()).map(::toField)
+        fetchOptions = optionFields.map { it.option }
+        filterFields = (raw.array("signalFilter")?.objects() ?: emptyList()).map(::toField)
+        val events = raw.array("fetchEvents")?.objects() ?: emptyList()
+        fetchEvents = events.map { it.string("name")!! }
+        fetchEventDocs = events.associate { it.string("name")!! to (it.string("doc") ?: "") }
         compiledParameters = raw.array("compiledParameters")!!.strings()
         patchModes = raw.obj("sse")?.array("patchModes")?.strings() ?: emptyList()
         val sites = raw.obj("kotlinCallSites") ?: JsonObject.EMPTY
         expressionCallSites = callSites(sites.obj("expression"))
-        htmlCallSites = callSites(sites.obj("html"))
-        scriptCallSites = callSites(sites.obj("script"))
-        selectorCallSites = callSites(sites.obj("selector"))
-        signalCalls = flagged(sites.obj("signals")!!)
+        eventCalls =
+            (sites.obj("events") ?: JsonObject.EMPTY)
+                .filterKeys { !it.startsWith("\$") }
+                .mapValues { (_, value) -> EventCallSpec((value as JsonObject).string("takes"), flags(value)) }
+        // Each call takes first what it takes, by the parameter of that name.
+        htmlCallSites = eventsTaking("elements").associateWith { CallSiteSpec(0, "elements") }
+        scriptCallSites = eventsTaking("script").associateWith { CallSiteSpec(0, "script") }
+        selectorCallSites = eventsTaking("selector").associateWith { CallSiteSpec(0, "selector") }
+        signalCalls =
+            flagged(sites.obj("signals")!!) +
+            (eventsTaking("signals") + eventsTaking("signalNames")).associateWith { eventCalls.getValue(it).flags - "stream" - "response" }
         signalNameHelpers = flagged(sites.obj("signalNames")!!)
+        expressionOptions = flagged(sites.obj("expressionOptions") ?: JsonObject.EMPTY)
     }
 
-    public val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
+    internal val attributesByName: Map<String, AttributeSpec> = attributes.associateBy { it.name }
 
     /**
      * The attribute each DSL helper writes from its string argument. dataOnSignalPatch writes
      * data-on-signal-patch from its string and the filter companion from a SignalFilter, so a
      * helper is never its filter.
      */
-    public val attributesByKotlin: Map<String, AttributeSpec> =
+    internal val attributesByKotlin: Map<String, AttributeSpec> =
         buildMap {
             for (a in attributes) {
                 for (k in a.kotlin) if (get(k)?.valueKind != ValueKind.EXPRESSION || a.valueKind == ValueKind.EXPRESSION) put(k, a)
             }
         }
-    public val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
+    internal val actionsByName: Map<String, ActionSpec> = actions.associateBy { it.name }
 
     /**
      * The words an expression may read without declaring them: the parameters it is compiled with
      * and every plugin's `argNames`, without `$` and `__action`, which are the client's own.
      */
-    public val scopeNames: Set<String> =
+    internal val scopeNames: Set<String> =
         (compiledParameters + attributes.flatMap { it.argNames }).filter { it.first().isLetter() && !it.startsWith("__") }.toSet()
 
     /** The DSL helpers whose first argument is the name of a signal the page declares: those of the attributes whose key is camel-cased. */
-    public val namingHelpers: Set<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.flatMap { it.kotlin }.toSet()
+    internal val namingHelpers: Set<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.flatMap { it.kotlin }.toSet()
+
+    /**
+     * The DSL calls that take a signal's name, the key, and its expression after it, `dataSignals("name", "...")`: those of
+     * the attributes whose key is camel-cased and whose value is an expression.
+     */
+    internal val signalPairCalls: Set<String> =
+        attributes.filter { it.keyCase == KeyCase.CAMEL && it.valueKind == ValueKind.EXPRESSION }.flatMap { it.kotlin }.toSet()
+
+    /** The DSL call of `data-signals`, whose one argument may be an object of signals, and that of `data-computed`. */
+    internal val signalsCall: String = attributes.single { it.name == "signals" }.kotlin.single()
+    internal val computedCall: String = attributes.single { it.name == "computed" }.kotlin.single()
+
+    /** The DSL calls whose first argument names a signal: alone, `dataBind("name")`, or as the key of a pair. */
+    internal val signalNameCalls: Set<String> =
+        attributes.filter { it.valueKind == ValueKind.SIGNAL }.flatMap { it.kotlin }.toSet() + signalPairCalls
 
     /** The attributes whose key is the name of a signal, in which the client camel-cases it. */
-    public val signalKeyAttributes: List<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.map { it.name }
+    internal val signalKeyAttributes: List<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.map { it.name }
 
     /** The backend actions, `@get` and the rest, which send a request. */
-    public val backendActions: List<String> = actions.filter { it.kind == "backend" }.map { it.name }
+    internal val backendActions: List<String> = actions.filter { it.kind == "backend" }.map { it.name }
 
     /** Every DSL function the analysis looks at, of every kind. */
-    public val allCallSiteNames: Set<String> =
+    internal val allCallSiteNames: Set<String> =
         expressionCallSites.keys + htmlCallSites.keys + scriptCallSites.keys + selectorCallSites.keys
 
     /** Parse a rendered attribute name such as `data-on:click__once__debounce.500ms` into its parts. */
@@ -273,6 +412,14 @@ public class Catalog private constructor(
         return ParsedAttribute(base, key, modifiers, attributesByName[base])
     }
 
+    private fun toField(o: JsonObject): ValueField =
+        ValueField(
+            FetchOption(o.string("name") ?: "", o.string("type") ?: "", o.string("default") ?: "", o.string("doc") ?: ""),
+            ArgumentKind.valueOf((o.string("kind") ?: "any").uppercase()),
+            o.array("values")?.strings() ?: emptyList(),
+            o.string("otherwise") ?: "",
+        )
+
     private fun toModifier(m: JsonObject): Modifier =
         Modifier(
             name = m.string("name") ?: "",
@@ -282,12 +429,17 @@ public class Catalog private constructor(
             min = m.int("min"),
             max = m.int("max"),
             ignoredWith = m.array("ignoredWith")?.strings() ?: emptyList(),
+            doc = m.string("doc") ?: "",
+            flagDocs = m.obj("flagDocs")?.let { docs -> docs.keys.associateWith { docs.string(it) ?: "" } } ?: emptyMap(),
+            suggest = m.array("suggest")?.strings() ?: emptyList(),
         )
 
     private fun flagged(obj: JsonObject): Map<String, Set<String>> =
         obj
             .filterKeys { !it.startsWith("\$") }
-            .mapValues { (_, value) -> (value as JsonObject).filterValues { it == JsonBoolean.TRUE }.keys }
+            .mapValues { (_, value) -> flags(value as JsonObject) }
+
+    private fun flags(entry: JsonObject): Set<String> = entry.filterValues { it == JsonBoolean.TRUE }.keys
 
     private fun callSites(obj: JsonObject?): Map<String, CallSiteSpec> {
         if (obj == null) return emptyMap()
@@ -299,9 +451,9 @@ public class Catalog private constructor(
                 CallSiteSpec(
                     arg = spec.int("arg"),
                     named = spec.string("named"),
-                    selectorArg = spec.string("selectorArg"),
-                    modeArg = spec.string("modeArg"),
                     onlyIfStringArgs = spec.boolean("onlyIfStringArgs") ?: false,
+                    more = spec.array("more")?.strings() ?: emptyList(),
+                    oneValue = spec.boolean("oneValue") ?: false,
                 )
         }
         return out
@@ -320,19 +472,28 @@ public class Catalog private constructor(
         /** Read a catalog from its JSON text. */
         public fun parse(json: String): Catalog = Catalog(JsonParser.parseObject(json))
 
+        private val DOM_EVENTS_FILE by lazy { JsonParser.parseObject(CatalogText.DOM_EVENTS) }
+
         private val DOM_EVENTS: List<DomEvent> by lazy {
-            JsonParser
-                .parseObject(
-                    CatalogText.DOM_EVENTS,
-                ).array("events")!!
-                .objects()
-                .map { DomEvent(it.string("name")!!, it.string("mdn")) }
+            DOM_EVENTS_FILE.array("events")!!.objects().map { DomEvent(it.string("name")!!, it.string("mdn"), it.string("interface")!!) }
+        }
+
+        private val EVENT_INTERFACES: Map<String, EventInterface> by lazy {
+            val all = DOM_EVENTS_FILE.obj("interfaces")!!
+            all.keys.associateWith { name ->
+                val i = all.obj(name)!!
+                EventInterface(
+                    name,
+                    i.string("extends"),
+                    i.array("members")!!.objects().map { EventMember(it.string("name")!!, it.boolean("method")!!, it.string("mdn")) },
+                )
+            }
         }
     }
 }
 
 /** Levenshtein distance, for "did you mean" hints. */
-public fun distance(
+internal fun distance(
     a: String,
     b: String,
 ): Int {

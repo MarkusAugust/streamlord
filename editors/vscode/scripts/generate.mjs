@@ -2,17 +2,20 @@
 /**
  * Generates what VS Code can serve on its own from the catalog: HTML custom data for the
  * built-in HTML language service (attribute completion and hover in .html files) and snippets
- * for Kotlin and HTML. Run by `npm run build`; the outputs are committed so the vsix is
+ * for Kotlin and HTML, and the Kotlin and HTML injection grammars. Run by `npm run build`; the outputs are committed so the vsix is
  * reproducible without this step.
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { domEventsFile, pinnedLibDom } from "./domEvents.mjs";
+import { withExpressionWords } from "./expressionWords.mjs";
+import { htmlElementInjectionGrammar, htmlInjectionGrammar, htmlPlaceholdersGrammar } from "./htmlGrammar.mjs";
+import { grammarText, kotlinDslInjectionGrammar, kotlinInjectionGrammar, kotlinTemplateInjectionGrammar } from "./kotlinGrammar.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
-const catalog = JSON.parse(readFileSync(join(root, "../../catalog/datastar-1.0.4.json"), "utf8"));
+const catalog = JSON.parse(readFileSync(join(root, "../../catalog/datastar-1.0.5.json"), "utf8"));
 const groups = catalog.modifierGroups;
 
 const expand = (mods) => mods.flatMap((m) => (m.$ref ? groups[m.$ref] : [m]));
@@ -36,7 +39,8 @@ const modifierText = (m) => {
 };
 
 const docFor = (a) => {
-  const mods = expand(a.modifiers);
+  // A modifier the reference does not list for the attribute is accepted, and not documented.
+  const mods = expand(a.modifiers).filter((m) => !(a.unlisted ?? []).includes(m.name));
   const lines = [a.doc, "", ...a.forms.map((f) => "`" + f + "`")];
   if (mods.length) lines.push("", "**Modifiers:** " + mods.map((m) => "`" + modifierText(m) + "`").join(", "));
   if (a.pro) lines.push("", "_Datastar Pro. Requires the Pro bundle, which you license and load yourself._");
@@ -49,7 +53,7 @@ const customData = {
   globalAttributes: catalog.attributes.map((a) => ({
     name: "data-" + a.name,
     description: { kind: "markdown", value: docFor(a) },
-    references: [{ name: "Datastar reference", url: `https://data-star.dev/reference/attributes#data-${a.name}` }],
+    references: [{ name: "Datastar reference", url: a.reference ?? `https://data-star.dev/reference/attributes#data-${a.name}` }],
   })),
 };
 writeFileSync(join(root, "html-customdata.json"), JSON.stringify(customData, null, 2) + "\n");
@@ -73,4 +77,19 @@ writeFileSync(join(root, "snippets/html.json"), JSON.stringify(htmlSnippets, nul
 // ---- DOM events, which both editors offer after data-on: -----------------------------------
 writeFileSync(join(root, "../../catalog/dom-events.json"), domEventsFile(pinnedLibDom()));
 
-console.log(`generated catalog/dom-events.json, html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);
+// ---- The Kotlin and HTML injection grammars, whose lists are the catalog's ------------------
+writeFileSync(join(root, "syntaxes/kotlin-injection.tmLanguage.json"), grammarText(kotlinInjectionGrammar(catalog)));
+writeFileSync(join(root, "syntaxes/kotlin-dsl-injection.tmLanguage.json"), grammarText(kotlinDslInjectionGrammar()));
+const htmlInjection = htmlInjectionGrammar(catalog);
+writeFileSync(join(root, "syntaxes/html-injection.tmLanguage.json"), grammarText(htmlInjection));
+writeFileSync(join(root, "syntaxes/html-element-injection.tmLanguage.json"), grammarText(htmlElementInjectionGrammar(htmlInjection)));
+const templateSyntax = JSON.parse(readFileSync(join(root, "../../catalog/template-syntax.json"), "utf8"));
+writeFileSync(join(root, "syntaxes/placeholders-html-injection.tmLanguage.json"), grammarText(htmlPlaceholdersGrammar(templateSyntax)));
+const expressionFile = join(root, "syntaxes/datastar-expression.tmLanguage.json");
+const words = JSON.parse(readFileSync(join(root, "../../catalog/javascript-words.json"), "utf8"));
+writeFileSync(expressionFile, grammarText(withExpressionWords(JSON.parse(readFileSync(expressionFile, "utf8")), words)));
+for (const n of [1, 2, 3]) {
+  writeFileSync(join(root, `syntaxes/kotlin-template${n === 1 ? "" : n}-injection.tmLanguage.json`), grammarText(kotlinTemplateInjectionGrammar(n)));
+}
+
+console.log(`generated the Kotlin injection grammars, catalog/dom-events.json, html-customdata.json (${customData.globalAttributes.length} attributes) and snippets/html.json (${Object.keys(htmlSnippets).length} snippets)`);

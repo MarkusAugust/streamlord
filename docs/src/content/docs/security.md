@@ -22,6 +22,10 @@ after `<!--`, which would keep the element open past its end tag. It HTML-escape
 the official SDKs do, and refuses a URL with a scheme that does more than navigate, such as
 `javascript:`, with `IllegalArgumentException`: only a relative URL or an `http`, `https`,
 `mailto` or `tel` one is followed. `replaceUrl()` and `pushUrl()` quote it the same way.
+Relative is not the same as on your site: `//evil.example/x`, and `/\evil.example/x`, which the
+browser reads as the same, are relative and lead to another host, as `https://evil.example/` does.
+A URL taken from the request, a `returnTo` or a `next`, is yours to check against the paths you
+mean to send people to before you redirect to it.
 
 ## JavaScript-safe JSON
 
@@ -40,7 +44,7 @@ both scripts run and the paragraph is there.
 
 U+2028 and U+2029 are line terminators in JavaScript and ordinary characters in JSON. Since
 ES2019 a string literal may hold them, so in a current browser a raw one does no harm: in
-Chrome 155 with Datastar 1.0.4, `data-signals:r` set to `'{"s":"a<U+2028>b<U+2029>c"}'`, with the
+Chrome 157 with Datastar 1.0.5, `data-signals:r` set to `'{"s":"a<U+2028>b<U+2029>c"}'`, with the
 raw characters, gives the same five-character string as the escaped form. An engine older than
 Chrome 66, Firefox 62 or Safari 12, and Edge before 79, ends the string at the character and
 throws `SyntaxError`, and so does a tool that reads JavaScript by the older rules. Written as
@@ -58,7 +62,7 @@ written in a string or a template, a quote in a value cannot end it.
 ## Signal names the client cannot hold
 
 Every object in a browser already has `constructor`, `toString` and ten other properties from
-`Object.prototype`. In Datastar 1.0.4's store, what `__proto__` holds becomes the prototype of the
+`Object.prototype`. In Datastar 1.0.5's store, what `__proto__` holds becomes the prototype of the
 object holding it. With `{"x": 1}`, `{"0": 1}` or `{"length": 5}` under it the merge throws
 halfway, and the bindings already on the page stop redrawing until it is reloaded. With `{}` or
 `{"x": null}` it throws nothing, and a second `__proto__` under the first throws nothing either:
@@ -176,10 +180,18 @@ it had finished, and the client does not come back.
 
 ## CSP
 
-Datastar compiles attribute expressions with `new Function`, which a strict `script-src` blocks.
-A `data-nonce` on the `<html>` element switches the client to compiling through nonce-bearing
-script elements instead, and the value in that attribute has to be the value in the response's
-`Content-Security-Policy` header.
+Datastar compiles attribute expressions with `new Function`, which a strict `script-src` blocks:
+without CSP mode, a policy has to allow `'unsafe-eval'` in `script-src` or no expression on the
+page runs. A `data-nonce` on the `<html>` element switches the client to compiling through
+nonce-bearing script elements instead, and the value in that attribute has to be the value in the
+response's `Content-Security-Policy` header. The aliased bundle, which reads `data-star-*`
+attributes, reads it from `data-star-nonce`; `dataNonce` writes the name
+[`DatastarAttributes.prefix`](/html-dsl/#the-aliased-bundle) gives.
+
+CSP mode changes how an expression is compiled, not what it may do. Every `data-*` expression is
+still code your page runs, with the page's own rights, so a value from a user written into one is
+script injection whatever the policy says. Keep user input out of expressions: put it in markup
+through `interpolate` or the DSL, which escape it, or in a signal the expression reads.
 
 Install the plugin and read the nonce off the call. Both ends come from one variable, so they
 cannot drift:
@@ -246,9 +258,48 @@ interpolate("""<html data-nonce="%s"><body></body></html>""", nonce)
 
 The default policy is `CspNonce.starterPolicy`, which is deliberately strict and deliberately
 small: same-origin everything, scripts from this origin or carrying the nonce, no plugins, a
-`<base>` that cannot be moved. It is somewhere to start, not an answer, and the first thing it
-does in a real application is break something you then have to name. Replace it as soon as you
-know what your page loads:
+`<base>` that cannot be moved, and [Trusted Types](https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API)
+required:
+
+```text
+default-src 'self'; script-src 'self' 'nonce-…'; object-src 'none'; base-uri 'self';
+require-trusted-types-for 'script'; trusted-types datastar
+```
+
+In CSP mode Datastar's client creates one Trusted Types policy, named `datastar`
+(`CspNonce.TRUSTED_TYPES_POLICY`), and passes through it every string it turns into markup or a
+script: a patch, a script it patches in, a compiled expression. The browser then refuses any other
+code on the page that writes a string into the DOM as markup or a script, which is where most
+script injection lands. Two things a patch can carry are refused as well, because the client
+copies them with `setAttribute`, which takes no Trusted Types value: an inline `on*` attribute,
+which the nonce policy blocks anyway, and a `<script src>`; load such a script from the page
+instead. A library of your own that creates a policy needs its name added after `datastar`. A
+browser without Trusted Types ignores both directives.
+
+The policy name is allowed once, and Datastar creates it once: a second copy of the bundle on the
+page, from another URL, finds the `data-nonce` the first removed, so it never enters CSP mode or
+creates the policy, and its expressions are blocked by the nonce policy instead (measured in
+headless Chrome 153 on the 1.0.5 bundle). Load one copy. The starter policy does not add
+`'allow-duplicates'`, which would let any script that runs after Datastar create a `datastar`
+policy of its own that passes every string through.
+
+To go back to the policy without Trusted Types, name it yourself:
+
+```kotlin sample=ktor-application
+install(CspNoncePlugin) {
+    policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" }
+}
+```
+
+```kotlin sample=spring
+@Bean
+fun cspNonceFilter(): CspNonceFilter =
+    CspNonceFilter(policy = { n -> "default-src 'self'; script-src 'self' 'nonce-$n'; object-src 'none'; base-uri 'self'" })
+```
+
+The starter policy is somewhere to start, not an answer, and the first thing it does in a real
+application is break something you then have to name. Replace it as soon as you know what your
+page loads:
 
 ```kotlin sample=ktor-application
 install(CspNoncePlugin) {
@@ -270,7 +321,7 @@ own CSP writer takes one fixed string and cannot.
 
 ### Three things the client does that will catch you out
 
-All three are in Datastar 1.0.4's `engine/csp.ts`, and none of them announce themselves:
+All three are in Datastar 1.0.5's `engine/csp.ts`, and none of them announce themselves:
 
 - **The nonce is read once, from `<html>`, when the client loads**, and the attribute is removed
   immediately after. A nonce patched into the page later does nothing, because CSP mode was
@@ -437,6 +488,14 @@ On Ktor, `install(StreamlordPlugin) { requireJsonContentType = false }` does the
 This closes the cheapest way in, not every way. A handler that changes something on `GET`, or a
 CORS policy that answers yes to other sites, opens it again, so keep CSRF tokens or `SameSite`
 cookies as well.
+
+## Signals are the reader's
+
+Signals live in the page, where the reader can read and change every one of them from the
+browser's console, and they come back with every request as the reader left them. Put nothing in a
+signal the reader may not see, a price the server decides or another user's data, and read
+nothing from one that the server has not checked: a role, a total or an id from the signals is
+what the reader sent, not what you sent. Validate them on the server as you would a form.
 
 ## What is still yours
 

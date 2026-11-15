@@ -1,0 +1,18 @@
+{
+  "name": "streamlord-real-languages",
+  "displayName": "Languages for the real-editor run",
+  "description": "Declares the template languages other extensions bring, and nothing else. Kotlin is left out, since Streamlord declares it itself.",
+  "publisher": "streamlord-test",
+  "version": "0.0.0",
+  "private": true,
+  "engines": { "vscode": "^1.105.0" },
+  "contributes": {
+    "languages": [
+      { "id": "jte", "extensions": [".jte"] },
+      { "id": "kte", "extensions": [".kte"] },
+      { "id": "freemarker", "extensions": [".ftl"] },
+      { "id": "velocity", "extensions": [".vm"] },
+      { "id": "mustache", "extensions": [".mustache"] }
+    ]
+  }
+}

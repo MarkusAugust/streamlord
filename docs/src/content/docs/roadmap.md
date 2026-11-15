@@ -113,7 +113,7 @@ wrong. In expressions the findings are right about the unrendered text, and a ta
 belong there in any case;
 [Templates](/templates/#do-not-render-a-value-into-an-expression) shows what to write instead.
 
-Planned: `AnalyzeOptions` takes the delimiter pairs your engine uses, and the editors read them
+Planned: `Source` takes the delimiter pairs your engine uses, and the editors read them
 from a setting. Small, and the only reason it is not higher is that it affects one rule for
 engines outside a set that already covers most of them.
 

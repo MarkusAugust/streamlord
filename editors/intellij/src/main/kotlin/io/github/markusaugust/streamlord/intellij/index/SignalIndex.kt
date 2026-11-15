@@ -17,12 +17,19 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
+import io.github.markusaugust.streamlord.analysis.Catalog
+import io.github.markusaugust.streamlord.analysis.Modules
+import io.github.markusaugust.streamlord.analysis.ProjectFiles
+import io.github.markusaugust.streamlord.analysis.ProjectSignals
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
+import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalReference
+import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSelectors
 import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
+import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
@@ -75,6 +82,10 @@ class SignalIndex(
 
         @Volatile
         var reads: List<SignalReference>? = null
+
+        /** What the file tells the others about the signals the server reads, for [driftIn]; the check alone asks. */
+        @Volatile
+        var facts: SignalFacts? = null
     }
 
     private class Names(
@@ -150,6 +161,16 @@ class SignalIndex(
         }
     }
 
+    /** Every place in the project that defines a signal, by its name: [declarationsOf] for all names at once. */
+    fun declarationsByName(): Map<String, List<Place>> {
+        refresh()
+        return places { e ->
+            declaredIn(e, null)
+                ?.let { if (withoutDsl(e)) it.withoutDsl ?: it.declarations else it.declarations }
+                ?.map { Triple(it.start, it.end, it.name) }
+        }.groupBy { it.name }
+    }
+
     /** Every place in the project that reads the signal [name] or reads into it, `$user.name` for `user`. */
     fun readsOf(name: String): List<Place> {
         refresh()
@@ -188,11 +209,11 @@ class SignalIndex(
             if (language == SourceLanguage.KOTLIN &&
                 callsAny(current, helpers)
             ) {
-                signalDeclarations(current, language, helpers)
+                signalDeclarations(Source(current, language, prefix(), WITHOUT_DSL))
             } else {
                 null
             }
-        val declared = Declared(signalDeclarations(current, language), withoutDsl)
+        val declared = Declared(signalDeclarations(Source(current, language, prefix())), withoutDsl)
         if (keep) e.declared = declared
         return declared
     }
@@ -206,12 +227,50 @@ class SignalIndex(
         val (current, keep) = textOf(e, text) ?: return null
         val analysis = StreamlordAnalysis.getInstance(project)
         val reads =
-            when (language) {
-                SourceLanguage.KOTLIN -> analysis.analyzer.signalReferencesInKotlin(current, analysis.options())
-                SourceLanguage.HTML -> analysis.analyzer.signalReferencesInHtml(current, analysis.options())
-            }.map { SignalReference(it.start, it.end, it.name) }
+            analysis.analyzer
+                .signalReferences(
+                    analysis.source(current, language),
+                ).map { SignalReference(it.start, it.end, it.name) }
         if (keep) e.reads = reads
         return reads
+    }
+
+    /**
+     * What the project knows about the signals of [file], for the analysis's `projectSignalIssues`, as the VS Code
+     * extension asks it. Each file's facts are kept with its entry and read again only when the file changes, so a pass
+     * costs one read of the file that changed and a walk over what is kept ("Cache Results of Heavy Computations",
+     * https://plugins.jetbrains.com/docs/intellij/psi-performance.html). The daemon runs the inspection again on a change
+     * in any file; [refresh] is what finds it.
+     */
+    fun projectSignals(file: PsiFile): ProjectSignals {
+        val own = entryFor(file)
+        val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
+        return object : ProjectSignals {
+            override fun defined() = definitionsSeenFrom(file)
+
+            override fun own() =
+                own?.let { e -> language?.let { factsIn(e, file.text) ?: collectSignalFacts(Source(file.text, it, prefix())) } }
+
+            override fun others(): List<SignalFacts> {
+                if (own == null || language == null) return emptyList()
+                refresh()
+                return entries.values.mapNotNull { e ->
+                    if (e === own || e.file == own.file) return@mapNotNull null
+                    ProgressManager.checkCanceled()
+                    factsIn(e, null)
+                }
+            }
+        }
+    }
+
+    private fun factsIn(
+        e: Entry,
+        text: String?,
+    ): SignalFacts? {
+        e.facts?.let { return it }
+        val language = e.file?.let(::languageOf) ?: return null
+        val (current, keep) = textOf(e, text) ?: return null
+        return collectSignalFacts(Source(current, language, prefix())).also { if (keep) e.facts = it }
     }
 
     private fun places(of: (Entry) -> List<Triple<Int, Int, String>>?): List<Place> {
@@ -337,7 +396,7 @@ class SignalIndex(
         val helpers = shortHelpers()
         val withoutDsl =
             if (language == SourceLanguage.KOTLIN && callsAny(text, helpers)) {
-                Names(collectSignals(text, language, helpers), collectSignalDefinitions(text, language, helpers))
+                Source(text, language, prefix(), WITHOUT_DSL).let { Names(collectSignals(it), collectSignalDefinitions(it)) }
             } else {
                 null
             }
@@ -347,8 +406,8 @@ class SignalIndex(
                 stamp,
                 text.length,
                 prefix(),
-                collectSignals(text, language),
-                collectSignalDefinitions(text, language),
+                collectSignals(Source(text, language, prefix())),
+                collectSignalDefinitions(Source(text, language, prefix())),
                 withoutDsl,
                 collectSelectors(text),
             )
@@ -418,15 +477,12 @@ class SignalIndex(
     }
 
     private fun indexable(vf: VirtualFile): Boolean =
-        vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in SKIPPED_DIRECTORIES }
+        vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in ProjectFiles.SKIPPED_FOLDERS }
 
     private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 
-    /** The DSL's helpers that name a signal, whose names other APIs use too. */
-    private fun shortHelpers(): Set<String> =
-        StreamlordAnalysis
-            .getInstance(project)
-            .catalog.signalNameHelpers.keys
+    /** The DSL's helpers that name a signal, somebody else's in a module without the DSL. */
+    private fun shortHelpers(): Set<String> = Catalog.default.signalNameHelpers.keys
 
     /** Whether [text] calls one of [names] on no receiver: a file without such a call reads the same in every module. */
     private fun callsAny(
@@ -451,7 +507,7 @@ class SignalIndex(
     }
 
     /** HTML's own extensions and the template extensions in the settings, which the inspections read as markup too. */
-    private fun markupExtensions(): Set<String> = HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
+    private fun markupExtensions(): Set<String> = ProjectFiles.HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
 
     /** Kotlin sources and markup, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
     private fun languageOf(vf: VirtualFile): SourceLanguage? =
@@ -462,11 +518,10 @@ class SignalIndex(
         }
 
     companion object {
+        private val WITHOUT_DSL = Modules.known(core = true, htmlDsl = false)
         private val CALL = Pattern.compile("""\b([A-Za-z_]\w*)\s*\(""")
         private const val FILE_CAP = 5000
         private const val SIZE_CAP = 1_000_000L
-        private val SKIPPED_DIRECTORIES = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
-        private val HTML_EXTENSIONS = setOf("html", "htm", "xhtml")
 
         fun getInstance(project: Project): SignalIndex = project.service()
     }

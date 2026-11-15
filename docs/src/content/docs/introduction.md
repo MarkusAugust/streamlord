@@ -11,7 +11,7 @@ your page living in a framework.
 Streamlord is four tools, designed together. Adopt one, or all four:
 
 - **The SDK.** Adapters for [Ktor](/ktor/) and [Spring](/spring-webmvc/) over one core that
-  speaks the Datastar 1.0.4 protocol exactly.
+  speaks the Datastar 1.0.5 protocol exactly.
 - **Assertions for your tests.** `streamlord-test` reads a response back into the events it
   carried, so a [test](/testing/) says what the endpoint meant instead of comparing bytes.
 - **The analysis.** Datastar lives inside attribute values and Kotlin strings, where no compiler
@@ -152,10 +152,10 @@ their own. You reach for a codec module only when you want data classes as signa
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.21.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.22.0")
     // Optional: the kotlinx.html DSL, and data classes as signals.
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.21.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.21.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.22.0")
 }
 ```
 

@@ -1,0 +1,1 @@
+fun card(name: String): String = "<p class=\"card\"><spot>$name</spot></p>"

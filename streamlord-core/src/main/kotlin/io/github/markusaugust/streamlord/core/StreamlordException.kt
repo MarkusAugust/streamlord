@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core
 
+import kotlin.jvm.JvmOverloads
+
 /**
  * The root of every curse Streamlord may lay upon you.
  *
@@ -48,14 +50,32 @@ public open class SignalsDecodeException(
  * as JSON without the browser asking this server first; JSON it cannot send that way. The answer
  * is a `415`, and a handler that knows only [SignalsDecodeException] still answers a `400`.
  *
+ * Datastar's `contentType: 'form'` sends a form that way, as the form's own fields and no signals;
+ * the message says so, and a handler reads such a request's fields as form parameters
+ * (`call.receiveParameters()` on Ktor, a `@ModelAttribute` object on Spring WebMVC and WebFlux,
+ * or a `@RequestParam` on WebMVC alone, since WebFlux reads one from the query string only).
+ *
  * [contentType] is the header as the request had it, or `null` when it had none.
  */
 public class SignalsMediaTypeException(
     public val contentType: String?,
 ) : SignalsDecodeException(
         "Signals in a request body must be sent as application/json; this one is " +
-            (contentType?.let { "'$it'" } ?: "without a Content-Type"),
+            (contentType?.let { "'$it'" } ?: "without a Content-Type") +
+            if (contentType != null && isForm(contentType)) {
+                ". Datastar sends a form with contentType: 'form' as the form's own fields and no signals: " +
+                    "read them as form parameters, as your framework reads any form"
+            } else {
+                ""
+            },
     )
+
+private fun isForm(contentType: String): Boolean =
+    contentType
+        .substringBefore(';')
+        .trim()
+        .lowercase()
+        .let { it == "application/x-www-form-urlencoded" || it == "multipart/form-data" }
 
 /**
  * Raised when an incoming signal payload exceeds the limit configured on
@@ -68,13 +88,17 @@ public class SignalsTooLargeException(
 ) : StreamlordException("Incoming signals are $actualSize in size; the limit is $maxSize")
 
 /**
- * Raised by the built-in JSON parser when the text is not valid JSON. [position] is the
- * zero-based character offset at which the parser lost faith.
+ * Raised by the built-in JSON parser when the text is not valid JSON, or is JSON past one of its
+ * limits, a nesting depth or a number's length, which [limit] says. [position] is the zero-based
+ * character offset at which the parser lost faith.
  */
-public class JsonParseException(
-    message: String,
-    public val position: Int,
-) : StreamlordException("$message (at position $position)")
+public class JsonParseException
+    @JvmOverloads
+    constructor(
+        message: String,
+        public val position: Int,
+        public val limit: Boolean = false,
+    ) : StreamlordException("$message (at position $position)")
 
 /**
  * Raised inside a stream when a [io.github.markusaugust.streamlord.core.application.StreamAuthorisation]

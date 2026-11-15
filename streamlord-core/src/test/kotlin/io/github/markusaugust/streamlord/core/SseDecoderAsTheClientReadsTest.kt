@@ -8,7 +8,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
-import java.io.File
+import io.github.markusaugust.streamlord.fixtures.fixtureText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 /**
  * The decoder is what a test trusts to say what the client received, so it has to read a stream
- * the way Datastar's client does (fetch.ts in 1.0.4). Each case here is one where it used to be
+ * the way Datastar's client does (fetch.ts in 1.0.5). Each case here is one where it used to be
  * more forgiving, or less.
  */
 class SseDecoderAsTheClientReadsTest {
@@ -62,7 +62,7 @@ class SseDecoderAsTheClientReadsTest {
         assertEquals(emptyList(), SseDecoder.decode("event: other\ndata: x\n\n"))
     }
 
-    // The client takes id and retry from every message, Datastar's or not (fetch.ts:421, :427).
+    // The client takes id and retry from every message, Datastar's or not (fetch.ts:422, :428).
     @Test
     fun `id and retry are checked on every message, since the client takes them from every one`() {
         assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("event: other\nretry: soon\ndata: x\n\n") }
@@ -136,7 +136,7 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     // The client decodes each field and each value on its own, and each decode drops a leading
-    // byte order mark (fetch.ts:406-408).
+    // byte order mark (fetch.ts:408-410).
     @Test
     fun `a byte order mark before a field or a value is dropped`() {
         assertEquals(PatchSignals("{}"), SseDecoder.decodeOne("\uFEFFevent: datastar-patch-signals\ndata: signals {}\n\n"))
@@ -144,13 +144,13 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     // The client stores it and sends it back as last-event-id, which a header cannot carry, so
-    // every reconnect fails (fetch.ts:554, :683).
+    // every reconnect fails (fetch.ts:556, :695).
     @Test
     fun `an id with a NUL in it is malformed`() {
         assertFailsWith<DatastarEventValidationException> { SseDecoder.decode("id: a\u0000b\n" + signals + "\n") }
     }
 
-    // fetch.ts:403 reads a field only up to a colon; a line without one is skipped.
+    // fetch.ts:404 reads a field only up to a colon; a line without one is skipped.
     @Test
     fun `a line without a colon is ignored`() {
         assertEquals(
@@ -177,7 +177,7 @@ class SseDecoderAsTheClientReadsTest {
      */
     @Test
     fun `a comment ends where the HTML parser ends it`() {
-        val cases = JsonParser.parse(File("../conformance/dom/comment-ends.json").readText()) as JsonArray
+        val cases = JsonParser.parse(fixtureText("conformance/dom/comment-ends.json")) as JsonArray
         assertEquals(16, cases.size)
         for (case in cases.objects()) {
             val input = case.string("input")!!
@@ -187,7 +187,7 @@ class SseDecoderAsTheClientReadsTest {
     }
 
     /**
-     * Each frame in `conformance/dom/decoder-cases.json` is run through the free Datastar 1.0.4
+     * Each frame in `conformance/dom/decoder-cases.json` is run through the free Datastar 1.0.5
      * bundle in happy-dom by `conformance/generate/dom.mjs`, through the client's own fetch path,
      * on a page holding `<div id="wrap"><div id="target">old</div></div>` and the signal
      * `keep: 1`, with `startViewTransition` counting its calls. None made the client throw,
@@ -200,7 +200,7 @@ class SseDecoderAsTheClientReadsTest {
      */
     @Test
     fun `decodes each frame to what the client did with it`() {
-        val cases = JsonParser.parse(File("../conformance/dom/decoder-cases.json").readText()) as JsonArray
+        val cases = JsonParser.parse(fixtureText("conformance/dom/decoder-cases.json")) as JsonArray
         assertEquals(85, cases.size)
 
         // White space as HTML counts it, which the page shows as nothing between elements.

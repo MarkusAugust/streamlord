@@ -5,7 +5,7 @@
 >
 > Sarn the Faceless
 
-Datastar 1.0.4 as a language in your editor. Half of the
+Datastar 1.0.5 as a language in your editor. Half of the
 [Streamlord](https://github.com/MarkusAugust/streamlord) toolchain, and the half that needs no
 part of the other: it reads your HTML and template files whatever answers them, and your Kotlin
 strings alongside the Streamlord SDK.
@@ -46,8 +46,8 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   written in a DSL call, `dataSignals("foo-bar", …)` or `signal("form.first-name")`, is an error,
   since the SDK refuses it at runtime, with the camelCase fix.
 - What Datastar's own rewrite of an expression does that JavaScript would not: a `$name` or
-  `@name(` in the text of a template literal that also holds a `${...}`, or inside a regular
-  expression, is rewritten there too; a `'` in a comment, a regular expression or a template
+  `@name(` in the text of a template literal whose `${...}` holds a brace, or inside a regular
+  expression, is rewritten there too; a `'` in a comment or a regular expression
   pairs with a later quote, and the `$name` between them stays a JavaScript variable; `$år` is no
   signal, since only ASCII follows a `$`; and `@get` without its parenthesis is a syntax error.
 - Signal names Datastar's client cannot hold or no `$name` reaches: `__proto__` anywhere in the
@@ -74,8 +74,10 @@ template file; the id and completeness rules apply only where the string is hand
 **Quick fixes** on the lightbulb: `$count` becomes `increment("count")`, `signal("count")`,
 `toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`, `__debounce_150ms`
 becomes `__debounce.150ms` and `__prevent.stop` becomes `__prevent__stop`; `@Post` becomes
-`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added.
-Every diagnostic links to the matching page of the Datastar reference.
+`@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added;
+an HTML string with Kotlin values in it becomes a call of `interpolate(...)`, which is also a
+refactoring anywhere in a string that can take it. Every diagnostic links to the matching page of
+the Datastar reference, or to Streamlord's page on HTML strings.
 
 **Snippets** for Ktor and Spring routes and the DSL calls in Kotlin, for a function that
 returns HTML as a `$$"""..."""` string (`htmlFunction`), and for every `data-*` attribute in
@@ -121,9 +123,14 @@ and for the DSL functions, in HTML files, templates and HTML strings in Kotlin a
 **Syntax highlighting** of Datastar expressions and HTML inside the DSL strings and in
 free-standing HTML strings, and of Datastar's attributes in HTML, the catalog's and no other
 `data-*` (plugin, key, modifiers and modifier arguments each get their own scope, and the value
-of an attribute that takes an expression is highlighted as a Datastar expression). Most themes color only
-a few of these scopes, so run `Streamlord: Apply recommended colors` once to write a palette
-into your user settings; `Streamlord: Remove recommended colors` takes it out again.
+of an attribute that takes an expression is highlighted as a Datastar expression). In Kotlin
+this needs a Kotlin grammar, which a Kotlin extension brings; with Streamlord alone a `.kt` file
+gets every other feature here, uncoloured. The same colours reach FreeMarker, Velocity, Twig, PHP
+and Razor where their extension or VS Code's own grammar reads the file, and each engine's
+placeholders in a value, `{{ }}` and `${}` in a plain `.html` file among them, keep the engine's
+colours. Every scope is a standard one, which each of VS Code's built-in themes colours; for a
+palette of Streamlord's own, run `Streamlord: Apply recommended colors` once to write it into your
+user settings; `Streamlord: Remove recommended colors` takes it out again.
 
 **Stream Inspector** (`Streamlord: Open Stream Inspector`): connect to a running endpoint with
 a method, signals and headers; every SSE event arrives decoded, and the signal store is kept
@@ -223,8 +230,8 @@ other response is shown with its `datastar-*` headers and up to 1 MiB of its bod
 |---|---|---|
 | `streamlord.diagnostics.enabled` | `true` | Validate Kotlin strings and HTML. |
 | `streamlord.diagnostics.html` | `true` | Also validate markup files. |
-| `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines. |
-| `streamlord.languages` | html, jte, kte, ftl, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
+| `streamlord.diagnostics.unknownSignals` | `true` | Warn on a `$name` no file in the workspace defines, and on a signal the server reads that no page declares (`signal-never-declared`). IntelliJ's counterpart is the inspection Streamlord › Unknown signals. |
+| `streamlord.languages` | html, jte, kte, freemarker, velocity, mustache, pebble, twig, … | Language ids that get the HTML side. Reload after changing. |
 | `streamlord.attributePrefix` | `data-` | `data-star-` when you load the aliased bundle. |
 | `streamlord.inspector.defaultUrl` | `http://localhost:8080/` | `{{baseUrl}}` unless `.streamlord/env.json` sets `baseUrl`. |
 | `streamlord.inspector.requestsFile` | `.streamlord/inspector.json` | Workspace-relative file holding the saved inspector requests, written with `/`, and not `.streamlord/env.json`. A path that is refused says why in the inspector, which then shows the default file. A file elsewhere gets no JSON schema. |
@@ -238,18 +245,63 @@ Pro bundle you license and load yourself.
 
 ## Development
 
+Node 24 and JDK 21. The analysis is Kotlin, the same `streamlord-analysis` the IntelliJ plugin
+runs: the Gradle project in `analysis-js` compiles it to JavaScript with its TypeScript types, and
+`src/analysis.ts` is the one module the extension reaches it through.
+
 ```
 npm ci
-npm test           # unit tests: analysis, providers (with a vscode mock), grammars (real TextMate engine)
-npm run test:live  # the Stream Inspector client against the demo service (STREAMLORD_LIVE_URL, default http://localhost:8080)
+npm run analysis   # builds the analysis with ../../gradlew; the three below run it first, and it does nothing when no Kotlin has changed
+npm test           # unit tests: the port to the analysis, providers (with a vscode mock), grammars (real TextMate engine)
+npm run typecheck
 npm run build      # generates html-customdata.json and snippets/html.json from the catalog, then dist/extension.js
+npm run test:live  # the Stream Inspector client against the demo service (STREAMLORD_LIVE_URL, default http://localhost:8080)
 npm run package    # streamlord-<version>.vsix
 ```
+
+A rule of the analysis is changed in Kotlin, under `streamlord-analysis` or `streamlord-core` at
+the repository root, and tested there: `./gradlew build` runs those tests on the JVM and on Node.
+What the extension may call is `Port.kt` and `InspectorPort.kt` in `analysis-js`. `npm run watch`
+builds the Kotlin once and then watches the TypeScript alone: after a Kotlin change, `npm run
+analysis` in a second terminal, and the watch bundles what it wrote.
 
 `test:live` needs the repository's demo running: `./gradlew :demo:run` from the repository root,
 then `npm run test:live` here.
 
 Press F5 in the `streamlord.code-workspace` to launch an Extension Development Host.
+
+### What the real editor shows
+
+`npm run real` builds the extension, starts the VS Code installed on this Mac with it, opens every
+file of `test/fixtures/real` and writes down what the editor answers: diagnostics with their
+links, each quick fix and the file after it, and at every offset of every file the hover, the
+signature help, the definitions, the references and the rename with its edits; completions at the
+places `test/real/marks.json` names, and at those it marks `"actions": true` the lightbulb at the
+caret instead; code lenses, document links, colors and the registered commands. The answers are the snapshot in `test/real/snapshot`, one record a line.
+
+```
+npm run real              # record the snapshot again
+npm run real -- --check   # run and compare: fails with the lines that differ
+```
+
+It is a local tool and no CI job: it needs VS Code in `/Applications` (or `STREAMLORD_REAL_CODE`
+set to its `Contents/MacOS/Code`), and a window opens while it runs and closes by itself. The
+profile is a fresh one under `/tmp/streamlord-real` (`STREAMLORD_REAL_TMP`, a short path), so your
+own settings and extensions take no part. Run the check before and after a change to the
+extension's internals; record again only when a difference is one you meant.
+
+A file under `test/real/outside` lies in no folder of the workspace: the editor is shown it and
+never finds it by itself, as any file in a window without a folder. A code lens is recorded with
+the request it fills the inspector with.
+
+The workspace holds the three ways of writing markup: HTML and template files, HTML in Kotlin
+strings, and the kotlinx.html DSL. The files under `drawn` are cases of `test/fixtures/corpus`,
+each as a file of its own (`drawn/origin.json` says which), and those under `aliased` are read with
+the prefix `data-star-`. `test/real/languages` declares the template languages, which other
+extensions bring. It leaves Kotlin out: the extension declares `kotlin` itself, since VS Code
+has no Kotlin of its own, and the run shows that a `.kt` file works with Streamlord alone. VS Code hands no extension the TextMate scopes it colours by, so the scopes in the snapshot
+are read with the same engine (`vscode-textmate`), VS Code's own HTML grammar and the extension's
+grammars; Kotlin, which VS Code ships no grammar for, is read with `test/fixtures/host-kotlin.json`.
 
 ### Publishing
 

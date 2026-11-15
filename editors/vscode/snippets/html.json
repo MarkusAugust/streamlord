@@ -121,7 +121,7 @@
   },
   "data-match-media": {
     "prefix": "data-match-media",
-    "body": "data-match-media:${1:name}=\"${2:expression}\"",
+    "body": "data-match-media:${1:name}=\"${2:value}\"",
     "description": "Pro: Pro. A boolean signal that follows a media query."
   },
   "data-on-raf": {

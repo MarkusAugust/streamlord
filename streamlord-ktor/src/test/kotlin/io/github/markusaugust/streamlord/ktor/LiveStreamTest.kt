@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.ktor
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.test.LiveDatastarStream
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
@@ -38,8 +39,8 @@ class LiveStreamTest {
 
     @BeforeTest
     fun start() {
-        server =
-            embeddedServer(CIO, port = 0, host = "127.0.0.1") {
+        val started =
+            startOnLoopback(CIO, {
                 routing {
                     get("/count") {
                         try {
@@ -58,14 +59,9 @@ class LiveStreamTest {
                         call.respond(HttpStatusCode.NoContent)
                     }
                 }
-            }.start()
-        port =
-            runBlocking {
-                server.engine
-                    .resolvedConnectors()
-                    .first()
-                    .port
-            }
+            })
+        server = started.first
+        port = started.second
     }
 
     @AfterTest
@@ -75,7 +71,7 @@ class LiveStreamTest {
 
     private fun post(path: String) {
         http.send(
-            HttpRequest.newBuilder(URI("http://127.0.0.1:$port$path")).POST(HttpRequest.BodyPublishers.noBody()).build(),
+            HttpRequest.newBuilder(URI("http://$LOOPBACK:$port$path")).POST(HttpRequest.BodyPublishers.noBody()).build(),
             HttpResponse.BodyHandlers.discarding(),
         )
     }
@@ -83,7 +79,7 @@ class LiveStreamTest {
     @Test
     fun `a command reaches the stream that was already open`() =
         runTest {
-            LiveDatastarStream.open(URI("http://127.0.0.1:$port/count")).use { page ->
+            LiveDatastarStream.open(URI("http://$LOOPBACK:$port/count")).use { page ->
                 page.awaitSignal("count", 0)
 
                 post("/increment")
@@ -99,7 +95,7 @@ class LiveStreamTest {
     @Test
     fun `a reader who closes the stream ends the handler`() =
         runTest {
-            val page = LiveDatastarStream.open(URI("http://127.0.0.1:$port/count"))
+            val page = LiveDatastarStream.open(URI("http://$LOOPBACK:$port/count"))
             page.awaitSignal("count", 0)
 
             page.close()

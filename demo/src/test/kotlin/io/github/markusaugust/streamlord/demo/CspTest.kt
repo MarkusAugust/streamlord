@@ -74,6 +74,6 @@ class CspTest {
         }
 
     private companion object {
-        const val DATASTAR_URL = "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js"
+        const val DATASTAR_URL = "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.5/bundles/datastar.js"
     }
 }

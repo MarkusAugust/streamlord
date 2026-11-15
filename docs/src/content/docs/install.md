@@ -13,9 +13,9 @@ know why.
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.21.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.21.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.21.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-kotlinx:0.22.0")
 }
 ```
 
@@ -23,17 +23,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-ktor</artifactId>
-  <version>0.21.0</version>
+  <version>0.22.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.21.0</version>
+  <version>0.22.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-kotlinx</artifactId>
-  <version>0.21.0</version>
+  <version>0.22.0</version>
 </dependency>
 ```
 
@@ -41,9 +41,9 @@ dependencies {
 
 ```kotlin tab="Gradle" group=install label="Build tool" sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.21.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.21.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.21.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.22.0")
 }
 ```
 
@@ -51,17 +51,17 @@ dependencies {
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-spring</artifactId>
-  <version>0.21.0</version>
+  <version>0.22.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-html</artifactId>
-  <version>0.21.0</version>
+  <version>0.22.0</version>
 </dependency>
 <dependency>
   <groupId>io.github.markusaugust.streamlord</groupId>
   <artifactId>streamlord-json-jackson</artifactId>
-  <version>0.21.0</version>
+  <version>0.22.0</version>
 </dependency>
 ```
 
@@ -122,16 +122,16 @@ Resolved from the build, not from memory. `kotlin-stdlib` is left out of all thr
 **`streamlord-json-jackson`**: Jackson 3
 
 <!-- deps=streamlord-json-jackson -->
-- `tools.jackson.core:jackson-databind 3.2.4`
-  - `tools.jackson.core:jackson-core 3.2.4`
-  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
+- `tools.jackson.core:jackson-databind 3.3.0`
+  - `tools.jackson.core:jackson-core 3.3.0`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.23`
 
 **`streamlord-json-jackson2`**: Jackson 2
 
 <!-- deps=streamlord-json-jackson2 -->
-- `com.fasterxml.jackson.core:jackson-databind 2.22.4`
-  - `com.fasterxml.jackson.core:jackson-core 2.22.4`
-  - `com.fasterxml.jackson.core:jackson-annotations 2.22`
+- `com.fasterxml.jackson.core:jackson-databind 2.23.0`
+  - `com.fasterxml.jackson.core:jackson-core 2.23.0`
+  - `com.fasterxml.jackson.core:jackson-annotations 2.23`
 
 Jackson 3 still takes its annotations from the 2.x artifact; that is Jackson's own arrangement,
 not something Streamlord does.
@@ -149,20 +149,20 @@ ignored.
 
 **Gradle, with `io.spring.dependency-management`.** The same as Maven, and this is the setup
 start.spring.io generates. That plugin pins every managed version, downwards as well as upwards,
-so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.2.4`
+so the Jackson you get is Boot's. Resolved under Boot 4.0.8, the codec's `jackson-databind 3.3.0`
 becomes Boot's `3.1.5`.
 
 **Gradle, with `platform(SpringBootPlugin.BOM_COORDINATES)`.** The highest version wins. A
 platform contributes constraints rather than enforcement, so if Boot pins a Jackson older than the
 one this release was built against, adding the codec **raises** your Jackson version: the same
-build resolves `3.2.4`. If Boot's pin is newer, Boot's wins and nothing changes.
+build resolves `3.3.0`. If Boot's pin is newer, Boot's wins and nothing changes.
 
 Both were resolved rather than reasoned about, and neither is a surprise you cannot undo:
 
 ```kotlin sample=none
 dependencies {
     // Take Boot's Jackson, whatever it is.
-    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.21.0") {
+    implementation("io.github.markusaugust.streamlord:streamlord-json-jackson:0.22.0") {
         exclude(group = "tools.jackson.core")
     }
 }
@@ -228,7 +228,7 @@ extra["jackson-bom.version"] = "2.21.8"
 
 Not `implementation(platform("tools.jackson:jackson-bom:3.1.8"))`: under that plugin the line
 resolves to Boot's 3.1.7 and says nothing. With `platform(SpringBootPlugin.BOM_COORDINATES)` you
-need none of this on Boot 4, because the codec's 3.2.4 already wins. Each block was resolved and
+need none of this on Boot 4, because the codec's 3.3.0 already wins. Each block was resolved and
 run, the codec decoding through Boot's own mapper, on Boot 4.1.2 and 3.5.16. Drop the property once
 Boot pins a fixed Jackson itself.
 
@@ -281,7 +281,7 @@ identical bytes on the wire. On WebFlux the frames are written by Spring's own e
 fields and the same data, in Spring's spelling.
 
 **The Tongue** is `streamlord-html`: every `data-*` attribute, action and modifier of Datastar
-1.0.4 as typed extension functions.
+1.0.5 as typed extension functions.
 
 `streamlord-html-pro` is a separate, opt-in artifact for [Datastar Pro](/datastar-pro/). It
 contains no Pro code and is inert without the bundle you licensed.
@@ -300,7 +300,7 @@ yourself, for example over your own sources in CI. See [The analysis](/analysis/
 
 The Datastar client bundle. Streamlord is the server half; it does not ship, fetch or vendor the
 JavaScript, and it has no opinion about whether you take it from a CDN or serve it from your own
-static files. **1.0.4** is what this release speaks.
+static files. **1.0.5** is what this release speaks.
 
 ## Versions
 
@@ -318,12 +318,12 @@ Netty 4.1.114.Final, which has known vulnerabilities, among them HTTP request sm
 MadeYouReset attack on HTTP/2 ([CVE-2025-55163](https://github.com/advisories/GHSA-prj3-ccx8-p6x4)).
 Streamlord brings neither Ktor nor Netty, so the remedy is in your build. Either move to a newer
 Ktor (3.6.0 brings Netty 4.2.17.Final), or keep Ktor and raise Netty to the newest 4.1 release,
-4.1.139.Final at the time of writing; neither had an advisory against it then. The adapter's
+4.1.140.Final at the time of writing; neither had an advisory against it then. The adapter's
 tests on Ktor 3.0 run on that Netty. In Gradle:
 
 ```kotlin sample=none
 dependencies {
-    implementation(platform("io.netty:netty-bom:4.1.139.Final"))
+    implementation(platform("io.netty:netty-bom:4.1.140.Final"))
 }
 ```
 
@@ -335,7 +335,7 @@ In Maven, import the same BOM:
     <dependency>
       <groupId>io.netty</groupId>
       <artifactId>netty-bom</artifactId>
-      <version>4.1.139.Final</version>
+      <version>4.1.140.Final</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>

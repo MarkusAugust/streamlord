@@ -9,13 +9,357 @@
   ],
   "repository": {
     "expression": {
+      "comment": "An expression in double quotes, as an HTML value or a Kotlin string writes it: what may run over lines stops before a double quote, which ends the value. expression-single is the same in single quotes.",
       "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#entity-strings"
+        },
+        {
+          "include": "#quoted-key"
+        },
         {
           "include": "#strings"
         },
         {
+          "include": "#template"
+        },
+        {
           "include": "#regex"
         },
+        {
+          "include": "#tokens"
+        }
+      ]
+    },
+    "signal": {
+      "comment": "The client's signal, $(\\w+(?:[.-]\\w+)*). In a Kotlin string the dollar may be written \\$ or ${'$'}.",
+      "match": "(?:(\\\\)(?=\\$)|(\\$\\{'\\$'\\}))?(\\$)?(?<=\\$|\\$'\\})(\\w+(?:-\\w+)*)((?:\\.\\w+(?:-\\w+)*)*)",
+      "captures": {
+        "1": {
+          "name": "constant.character.escape.kotlin"
+        },
+        "2": {
+          "name": "constant.character.escape.dollar.kotlin"
+        },
+        "3": {
+          "name": "variable.other.constant.signal.datastar punctuation.definition.signal.datastar"
+        },
+        "4": {
+          "name": "variable.other.constant.signal.datastar"
+        },
+        "5": {
+          "name": "variable.other.property.signal-path.datastar"
+        }
+      }
+    },
+    "action": {
+      "match": "(@)(get|post|put|patch|delete|query)(?=\\s*\\()",
+      "captures": {
+        "1": {
+          "name": "entity.name.function.action.backend.datastar punctuation.definition.action.datastar"
+        },
+        "2": {
+          "name": "entity.name.function.action.backend.datastar"
+        }
+      }
+    },
+    "action-other": {
+      "match": "(@)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+      "captures": {
+        "1": {
+          "name": "entity.name.function.action.datastar punctuation.definition.action.datastar"
+        },
+        "2": {
+          "name": "entity.name.function.action.datastar"
+        }
+      }
+    },
+    "scope-vars": {
+      "match": "(?<![.$])\\b(el|evt|patch)\\b(?!\\s*:(?!:))",
+      "name": "variable.language.scope.datastar"
+    },
+    "globals": {
+      "match": "(?<![.$])\\b(window|document|console|Math|JSON|Date|Intl|navigator|location|history|localStorage|sessionStorage|fetch|setTimeout|setInterval|clearTimeout|clearInterval|Promise|Array|Object|String|Number|Boolean)\\b",
+      "name": "support.class.global.datastar"
+    },
+    "constants": {
+      "match": "(?<![.$])\\b(true|false|null|undefined|NaN|Infinity)\\b",
+      "name": "constant.language.datastar"
+    },
+    "option-keys": {
+      "comment": "Keys of the fetch-action options object and signal filters, where an object's key stands: after { or a comma.",
+      "match": "(?:(?<=[{,])|^)(\\s*)\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude)\\b(\\s*)(:)(?!:)",
+      "captures": {
+        "2": {
+          "name": "support.type.property-name.option.datastar"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.datastar"
+        }
+      }
+    },
+    "object-key": {
+      "match": "(?:(?<=[{,])|^)(\\s*)([A-Za-z_$][A-Za-z0-9_$]*)(\\s*)(:)(?!:)",
+      "captures": {
+        "2": {
+          "name": "variable.other.property.key.datastar"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.datastar"
+        }
+      }
+    },
+    "method-call": {
+      "match": "(?:(\\.)|(\\?\\.))([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*\\()",
+      "captures": {
+        "1": {
+          "name": "punctuation.accessor.datastar"
+        },
+        "2": {
+          "name": "punctuation.accessor.optional.datastar"
+        },
+        "3": {
+          "name": "entity.name.function.method.datastar"
+        }
+      }
+    },
+    "property": {
+      "match": "(?:(\\.)|(\\?\\.))([A-Za-z_$][A-Za-z0-9_$]*)",
+      "captures": {
+        "1": {
+          "name": "punctuation.accessor.datastar"
+        },
+        "2": {
+          "name": "punctuation.accessor.optional.datastar"
+        },
+        "3": {
+          "name": "variable.other.property.datastar"
+        }
+      }
+    },
+    "duration": {
+      "match": "(?<![\\w$.])\\d+(?:ms|s)\\b",
+      "name": "constant.numeric.duration.datastar"
+    },
+    "numbers": {
+      "match": "(?<![\\w$.])(?:0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*n?|0[bB][01](?:_?[01])*n?|0[oO][0-7](?:_?[0-7])*n?|(?:\\d(?:_?\\d)*(?:\\.(?:\\d(?:_?\\d)*)?)?|\\.\\d(?:_?\\d)*)(?:[eE][+-]?\\d(?:_?\\d)*)?n?)(?![\\w$])",
+      "name": "constant.numeric.datastar"
+    },
+    "arrow": {
+      "match": "=>",
+      "name": "storage.type.function.arrow.datastar"
+    },
+    "strings": {
+      "comment": "A string ends on its line, or before the other kind of quote: the quote that opens the value ends it, so an unclosed string ends where its value does. A region, so that a template engine's placeholder inside it is the engine's.",
+      "patterns": [
+        {
+          "begin": "'",
+          "end": "'|(?=\")|$",
+          "name": "string.quoted.single.datastar",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.datastar"
+            }
+          ]
+        },
+        {
+          "begin": "\"",
+          "end": "\"|(?=')|$",
+          "name": "string.quoted.double.datastar",
+          "patterns": [
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.datastar"
+            }
+          ]
+        }
+      ]
+    },
+    "regex": {
+      "comment": "A slash opens a regex where a value cannot stand before it: at the start of the value, after its opening quote, or after an operator other than ++ and --, a bracket, a comma or a keyword. After a value it divides. No pattern here uses \\G, which would cost the engine its cache of matches on a long line. It holds no double quote, which would end the value it stands in; regex-single none of a single one.",
+      "match": "(?:^|(?<=[\"'(,=:!&|?{};\\[*%<>~^]|[^+]\\+|[^-]-|\\breturn|\\btypeof|\\bin|\\bof))(\\s*)(/(?![/*])(?:\\\\.|\\[(?:\\\\.|[^\\]\\\\\"])*\\]|[^/\\\\\\[\\n\"])+/[dgimsuy]*)",
+      "captures": {
+        "2": {
+          "name": "string.regexp.datastar"
+        }
+      }
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "===|!==|==|!=|<=|>=",
+          "name": "keyword.operator.comparison.datastar"
+        },
+        {
+          "match": "&&=|\\|\\|=|\\?\\?=|&&|\\|\\||\\?\\?|\\?\\.",
+          "name": "keyword.operator.comparison.datastar"
+        },
+        {
+          "match": "\\+\\+|--",
+          "name": "keyword.operator.increment.datastar"
+        },
+        {
+          "match": ">>>=|<<=|>>=|\\*\\*=|&=|\\|=|\\^=|\\+=|-=|\\*=|/=|%=|(?<![=!<>])=(?![=>])",
+          "name": "keyword.operator.assignment.datastar"
+        },
+        {
+          "match": ">>>|<<|>>|[~^|&]",
+          "name": "keyword.operator.bitwise.datastar"
+        },
+        {
+          "match": "\\*\\*|[-+*/%]|<|>|!|\\?|:",
+          "name": "keyword.operator.arithmetic.datastar"
+        }
+      ]
+    },
+    "punctuation": {
+      "match": "[{}()\\[\\],;]",
+      "name": "punctuation.datastar"
+    },
+    "identifier": {
+      "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b",
+      "name": "variable.other.readwrite.datastar"
+    },
+    "comments": {
+      "comment": "A comment in an expression. A line comment ends where the line does, or at a quote, which may close the attribute or the Kotlin string it is written in; a block comment over lines ends before a double quote, which ends the value.",
+      "patterns": [
+        {
+          "match": "/\\*.*?\\*/",
+          "name": "comment.block.datastar"
+        },
+        {
+          "begin": "/\\*",
+          "end": "\\*/|(?=\")",
+          "name": "comment.block.datastar"
+        },
+        {
+          "match": "//.*?(?=[\"']|$)",
+          "name": "comment.line.double-slash.datastar"
+        }
+      ]
+    },
+    "entity-strings": {
+      "comment": "A string in HTML's spellings of a quote, as an attribute in double quotes holds a double quote: on its line, and never past the value's own quote.",
+      "patterns": [
+        {
+          "match": "(&quot;|&#34;)((?:(?!&quot;|&#34;)[^\"'\\n])*)(&quot;|&#34;)",
+          "captures": {
+            "1": {
+              "name": "string.quoted.double.datastar punctuation.definition.string.begin.datastar"
+            },
+            "2": {
+              "name": "string.quoted.double.datastar"
+            },
+            "3": {
+              "name": "string.quoted.double.datastar punctuation.definition.string.end.datastar"
+            }
+          }
+        },
+        {
+          "match": "(&#39;|&apos;)((?:(?!&#39;|&apos;)[^\"'\\n])*)(&#39;|&apos;)",
+          "captures": {
+            "1": {
+              "name": "string.quoted.single.datastar punctuation.definition.string.begin.datastar"
+            },
+            "2": {
+              "name": "string.quoted.single.datastar"
+            },
+            "3": {
+              "name": "string.quoted.single.datastar punctuation.definition.string.end.datastar"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "comment": "Each keyword with the scope TypeScript's grammar gives it. Written by scripts/generate.mjs from catalog/javascript-words.json, with the constants and the globals.",
+      "patterns": [
+        {
+          "match": "(?<![.$])\\b(if|else|switch|case)\\b",
+          "name": "keyword.control.conditional.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(return|await|yield|break|continue|throw)\\b",
+          "name": "keyword.control.flow.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(for|while|do)\\b",
+          "name": "keyword.control.loop.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(try|catch|finally)\\b",
+          "name": "keyword.control.trycatch.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(new)\\b",
+          "name": "keyword.operator.new.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(typeof|void|delete|instanceof|in|of)\\b",
+          "name": "keyword.operator.expression.$1.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(this)\\b",
+          "name": "variable.language.this.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(let|const|var)\\b",
+          "name": "storage.type.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(function)\\b",
+          "name": "storage.type.function.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(class)\\b",
+          "name": "storage.type.class.datastar"
+        },
+        {
+          "match": "(?<![.$])\\b(async)\\b",
+          "name": "storage.modifier.async.datastar"
+        }
+      ]
+    },
+    "spread": {
+      "match": "\\.\\.\\.",
+      "name": "keyword.operator.spread.datastar"
+    },
+    "function-call": {
+      "match": "\\b([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*\\()",
+      "name": "entity.name.function.datastar"
+    },
+    "expression-single": {
+      "comment": "An expression in single quotes: what may run over lines stops before a single quote.",
+      "patterns": [
+        {
+          "include": "#comments-single"
+        },
+        {
+          "include": "#entity-strings"
+        },
+        {
+          "include": "#quoted-key"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#template-single"
+        },
+        {
+          "include": "#regex-single"
+        },
+        {
+          "include": "#tokens"
+        }
+      ]
+    },
+    "tokens": {
+      "patterns": [
         {
           "include": "#signal"
         },
@@ -35,7 +379,7 @@
           "include": "#constants"
         },
         {
-          "include": "#control"
+          "include": "#keywords"
         },
         {
           "include": "#option-keys"
@@ -44,10 +388,16 @@
           "include": "#object-key"
         },
         {
+          "include": "#spread"
+        },
+        {
           "include": "#method-call"
         },
         {
           "include": "#property"
+        },
+        {
+          "include": "#function-call"
         },
         {
           "include": "#duration"
@@ -69,189 +419,115 @@
         }
       ]
     },
-    "signal": {
-      "match": "(\\$)(\\w+(?:-\\w+)*)((?:\\.\\w+(?:-\\w+)*)*)",
-      "captures": {
-        "1": {
-          "name": "punctuation.definition.signal.datastar"
-        },
-        "2": {
-          "name": "variable.other.constant.signal.datastar"
-        },
-        "3": {
-          "name": "variable.other.property.signal-path.datastar"
-        }
-      }
-    },
-    "action": {
-      "match": "(@)(get|post|put|patch|delete|query)(?=\\s*\\()",
-      "captures": {
-        "1": {
-          "name": "punctuation.definition.action.datastar"
-        },
-        "2": {
-          "name": "entity.name.function.action.backend.datastar"
-        }
-      }
-    },
-    "action-other": {
-      "match": "(@)([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
-      "captures": {
-        "1": {
-          "name": "punctuation.definition.action.datastar"
-        },
-        "2": {
-          "name": "entity.name.function.action.datastar"
-        }
-      }
-    },
-    "scope-vars": {
-      "match": "\\b(el|evt|patch)\\b",
-      "name": "variable.language.scope.datastar"
-    },
-    "globals": {
-      "match": "\\b(window|document|console|Math|JSON|Date|Intl|navigator|location|history|localStorage|sessionStorage|fetch|setTimeout|setInterval|clearTimeout|clearInterval|Promise|Array|Object|String|Number|Boolean)\\b",
-      "name": "support.class.global.datastar"
-    },
-    "constants": {
-      "match": "\\b(true|false|null|undefined|NaN|Infinity)\\b",
-      "name": "constant.language.datastar"
-    },
-    "control": {
-      "match": "\\b(if|else|return|await|async|new|typeof|instanceof|in|of|for|while|do|switch|case|break|continue|throw|try|catch|finally|void|delete|function|let|const|var|this|yield|class)\\b",
-      "name": "keyword.control.datastar"
-    },
-    "option-keys": {
-      "comment": "Keys of the fetch-action options object and signal filters, when used as object keys.",
-      "match": "\\b(contentType|filterSignals|selector|headers|openWhenHidden|payload|requestCancellation|responseOverrides|retry|retryInterval|retryScaler|retryMaxWait|retryMaxCount|include|exclude|mode|namespace|useViewTransition|onlyIfMissing)\\b(?=\\s*:)",
-      "name": "support.type.property-name.option.datastar"
-    },
-    "object-key": {
-      "match": "\\b([A-Za-z_$][A-Za-z0-9_$]*)\\b(?=\\s*:(?!:))",
-      "name": "variable.other.property.key.datastar"
-    },
-    "method-call": {
-      "match": "(\\.)([A-Za-z_$][A-Za-z0-9_$]*)(?=\\s*\\()",
-      "captures": {
-        "1": {
-          "name": "punctuation.accessor.datastar"
-        },
-        "2": {
-          "name": "entity.name.function.method.datastar"
-        }
-      }
-    },
-    "property": {
-      "match": "(\\.)([A-Za-z_$][A-Za-z0-9_$]*)",
-      "captures": {
-        "1": {
-          "name": "punctuation.accessor.datastar"
-        },
-        "2": {
-          "name": "variable.other.property.datastar"
-        }
-      }
-    },
-    "duration": {
-      "match": "\\b\\d+(?:ms|s)\\b",
-      "name": "constant.numeric.duration.datastar"
-    },
-    "numbers": {
-      "match": "\\b(?:0[xX][0-9a-fA-F]+|\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b",
-      "name": "constant.numeric.datastar"
-    },
-    "arrow": {
-      "match": "=>",
-      "name": "storage.type.function.arrow.datastar"
-    },
-    "strings": {
+    "template": {
+      "begin": "`",
+      "end": "`|(?=\")",
+      "name": "string.template.datastar",
       "patterns": [
         {
-          "begin": "'",
-          "end": "'",
-          "name": "string.quoted.single.datastar",
+          "comment": "A Kotlin string writes the template's dollar as ${'$'}: ${'$'}{ opens the expression as ${ does.",
+          "begin": "\\$\\{'\\$'\\}\\{|\\$\\{(?!'\\$'\\})",
+          "end": "\\}|(?=\")",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.template-expression.begin.datastar"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.template-expression.end.datastar"
+            }
+          },
+          "name": "meta.template.expression.datastar",
           "patterns": [
             {
-              "match": "\\\\.",
-              "name": "constant.character.escape.datastar"
+              "include": "#expression"
             }
           ]
         },
         {
-          "begin": "\"",
-          "end": "\"",
-          "name": "string.quoted.double.datastar",
-          "patterns": [
-            {
-              "match": "\\\\.",
-              "name": "constant.character.escape.datastar"
-            }
-          ]
+          "match": "\\$\\{'\\$'\\}",
+          "name": "constant.character.escape.dollar.kotlin"
         },
         {
-          "begin": "`",
-          "end": "`",
-          "name": "string.template.datastar",
-          "patterns": [
-            {
-              "begin": "\\$\\{",
-              "end": "\\}",
-              "beginCaptures": {
-                "0": {
-                  "name": "punctuation.definition.template-expression.begin.datastar"
-                }
-              },
-              "endCaptures": {
-                "0": {
-                  "name": "punctuation.definition.template-expression.end.datastar"
-                }
-              },
-              "name": "meta.template.expression.datastar",
-              "patterns": [
-                {
-                  "include": "#expression"
-                }
-              ]
-            },
-            {
-              "match": "\\\\.",
-              "name": "constant.character.escape.datastar"
-            }
-          ]
+          "match": "\\\\.",
+          "name": "constant.character.escape.datastar"
         }
       ]
     },
-    "regex": {
-      "match": "(?<=[(,:=\\s{\\[])/(?![/*])(?:\\\\.|\\[[^\\]]*\\]|[^/\\\\\\n])+/[gimsuy]*",
-      "name": "string.regexp.datastar"
-    },
-    "operators": {
+    "template-single": {
+      "begin": "`",
+      "end": "`|(?=')",
+      "name": "string.template.datastar",
       "patterns": [
         {
-          "match": "===|!==|==|!=|<=|>=|&&|\\|\\||\\?\\?|\\?\\.",
-          "name": "keyword.operator.comparison.datastar"
+          "comment": "A Kotlin string writes the template's dollar as ${'$'}: ${'$'}{ opens the expression as ${ does.",
+          "begin": "\\$\\{'\\$'\\}\\{|\\$\\{(?!'\\$'\\})",
+          "end": "\\}|(?=')",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.template-expression.begin.datastar"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.template-expression.end.datastar"
+            }
+          },
+          "name": "meta.template.expression.datastar",
+          "patterns": [
+            {
+              "include": "#expression-single"
+            }
+          ]
         },
         {
-          "match": "\\+\\+|--",
-          "name": "keyword.operator.increment.datastar"
+          "match": "\\$\\{'\\$'\\}",
+          "name": "constant.character.escape.dollar.kotlin"
         },
         {
-          "match": "(?<![=!<>])=(?!=)|\\+=|-=|\\*=|/=",
-          "name": "keyword.operator.assignment.datastar"
-        },
-        {
-          "match": "[-+*/%]|<|>|!|\\?|:",
-          "name": "keyword.operator.arithmetic.datastar"
+          "match": "\\\\.",
+          "name": "constant.character.escape.datastar"
         }
       ]
     },
-    "punctuation": {
-      "match": "[{}()\\[\\],;]",
-      "name": "punctuation.datastar"
+    "comments-single": {
+      "comment": "As comments, in single quotes.",
+      "patterns": [
+        {
+          "match": "/\\*.*?\\*/",
+          "name": "comment.block.datastar"
+        },
+        {
+          "begin": "/\\*",
+          "end": "\\*/|(?=')",
+          "name": "comment.block.datastar"
+        },
+        {
+          "match": "//.*?(?=[\"']|$)",
+          "name": "comment.line.double-slash.datastar"
+        }
+      ]
     },
-    "identifier": {
-      "match": "\\b[A-Za-z_$][A-Za-z0-9_$]*\\b",
-      "name": "variable.other.readwrite.datastar"
+    "quoted-key": {
+      "comment": "A quoted key of an object, {'text-red-500': $err} as data-class writes one: a key as an unquoted one is.",
+      "match": "(?:(?<=[{,])|^)(\\s*)('(?:[^'\"\\\\\\n]|\\\\.)*'|\"(?:[^\"'\\\\\\n]|\\\\.)*\")(\\s*)(:)(?!:)",
+      "captures": {
+        "2": {
+          "name": "variable.other.property.key.datastar"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.datastar"
+        }
+      }
+    },
+    "regex-single": {
+      "match": "(?:^|(?<=[\"'(,=:!&|?{};\\[*%<>~^]|[^+]\\+|[^-]-|\\breturn|\\btypeof|\\bin|\\bof))(\\s*)(/(?![/*])(?:\\\\.|\\[(?:\\\\.|[^\\]\\\\'])*\\]|[^/\\\\\\[\\n'])+/[dgimsuy]*)",
+      "captures": {
+        "2": {
+          "name": "string.regexp.datastar"
+        }
+      }
     }
   }
 }

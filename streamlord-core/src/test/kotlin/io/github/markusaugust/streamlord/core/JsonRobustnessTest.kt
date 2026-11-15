@@ -4,13 +4,13 @@ import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonValue
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.measureTime
 
 /**
  * Hostile input for the built-in parser. The only acceptable outcomes are a [JsonValue] or a
@@ -41,7 +41,7 @@ class JsonRobustnessTest {
                 chars[random.nextInt(chars.size)] = "{}[]\":,\\0e- \u0000".random(random)
             }
             try {
-                JsonParser.parse(String(chars))
+                JsonParser.parse(chars.concatToString())
             } catch (_: JsonParseException) {
                 // expected
             }
@@ -59,40 +59,45 @@ class JsonRobustnessTest {
 
     @Test
     fun `one mebibyte parses in linear time`() {
-        val big =
-            buildString {
-                append('{')
-                var i = 0
-                while (length < 1_048_576) {
-                    if (i > 0) append(',')
-                    append("\"k")
-                        .append(i)
-                        .append("\":\"")
-                        .append("v".repeat(50))
-                        .append('"')
-                    i++
-                }
-                append('}')
-            }
-        val elapsed = measureTime { assertTrue((JsonParser.parse(big) as JsonObject).size > 10_000) }
-        assertTrue(elapsed.inWholeMilliseconds < 2_000, "took $elapsed")
+        assertGrowsLinearly("parsing an object of many keys", 16_000, ::manyKeys) { text ->
+            assertTrue((JsonParser.parse(text) as JsonObject).size > text.length / 100)
+        }
     }
+
+    private fun manyKeys(length: Int) =
+        buildString {
+            append('{')
+            var i = 0
+            while (this.length < length) {
+                if (i > 0) append(',')
+                append("\"k$i\":\"${"v".repeat(50)}\"")
+                i++
+            }
+            append('}')
+        }
 
     @Test
     fun `pathological numbers do not throw from accessors`() {
         val obj = JsonParser.parseObject("""{"a":1e2147483648,"b":1e999999999,"c":-0,"d":123456789012345678901234567890,"e":1E400}""")
         assertNull(obj.int("a"))
         assertNull(obj.long("a"))
-        obj.decimal("a")
         assertEquals(Double.POSITIVE_INFINITY, obj.double("a"))
         assertNull(obj.long("b"))
         assertEquals(0L, obj.long("c"))
         assertNull(obj.long("d"))
-        assertEquals(java.math.BigDecimal("123456789012345678901234567890"), obj.decimal("d"))
         assertEquals(Double.POSITIVE_INFINITY, obj.double("e"))
-        assertNull(JsonNumber("1e99999999999").toBigDecimalOrNull())
         assertNull(JsonNumber("1e99999999999").toLongOrNull())
-        assertFailsWith<ArithmeticException> { JsonNumber("1e99999999999").toBigDecimal() }
+        // A whole number however written is a Long, on the JVM and in JavaScript alike.
+        assertEquals(1000L, JsonNumber("1e3").toKotlin())
+        assertEquals(1L, JsonNumber("1.0").toKotlin())
+        // An exponent no decimal can carry has no whole number, even under a zero.
+        assertNull(JsonNumber("0e99999999999").toLongOrNull())
+        assertNull(JsonNumber("0e-99999999999").toLongOrNull())
+        assertNull(JsonNumber("0.0e-2147483647").toLongOrNull())
+        assertEquals(0L, JsonNumber("0e2147483647").toLongOrNull())
+        assertEquals(0L, JsonNumber("0e2147483648").toLongOrNull())
+        assertEquals(0L, JsonNumber("0.00e-5").toLongOrNull())
+        assertEquals(100L, JsonNumber("1e2").toLongOrNull())
         obj.toKotlin()
     }
 

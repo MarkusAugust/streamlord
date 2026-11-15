@@ -3,18 +3,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 /**
- * The extension bundles its one dependency into dist/extension.js, so the notice its licence asks
- * for ships beside it in ThirdPartyNotices.txt (`vsce package` lists it). Held to the licence the
- * installed package carries, so an upgrade that changes it fails here.
+ * dist/extension.js bundles the analysis, which is Kotlin compiled to JavaScript and carries the
+ * Kotlin standard library with it, so the notice its licence asks for ships beside it in
+ * ThirdPartyNotices.txt (`vsce package` lists it). Nothing from npm is bundled: a dependency added
+ * to package.json fails here until its licence is in the file.
  */
 describe("third-party notices", () => {
-  it("carry the licence of every bundled dependency", () => {
-    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { dependencies: Record<string, string> };
+  it("carry the licence of what the bundle holds", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { dependencies?: Record<string, string> };
     const notices = readFileSync(new URL("../ThirdPartyNotices.txt", import.meta.url), "utf8");
-    assert.deepEqual(Object.keys(pkg.dependencies), ["acorn"]);
-    for (const name of Object.keys(pkg.dependencies)) {
-      const licence = readFileSync(new URL(`../node_modules/${name}/LICENSE`, import.meta.url), "utf8");
-      assert.ok(notices.includes(licence), `ThirdPartyNotices.txt lacks the licence of ${name}`);
-    }
+    assert.deepEqual(Object.keys(pkg.dependencies ?? {}), []);
+    assert.match(notices, /The Kotlin standard library/);
+    assert.match(notices, /Apache License\s+Version 2\.0, January 2004/);
+    assert.match(notices, /END OF TERMS AND CONDITIONS/);
   });
 });

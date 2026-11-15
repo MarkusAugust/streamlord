@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** The key rules the DSL throws with and the analysis reports; the corpus holds the editor's twin to them. */
+/** The key rules the DSL throws with and the analysis reports. */
 class AttributeKeysTest {
     @Test
     fun `kebab writes one hyphen per capital and keeps a custom property's two`() {

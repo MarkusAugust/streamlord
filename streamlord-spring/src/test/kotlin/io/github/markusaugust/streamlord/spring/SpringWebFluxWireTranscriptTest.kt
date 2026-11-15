@@ -1,18 +1,16 @@
 package io.github.markusaugust.streamlord.spring
 
-import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
-import io.github.markusaugust.streamlord.core.port.driven.IncomingRequest
-import io.github.markusaugust.streamlord.core.port.driven.rejectDeclaredLengthAbove
 import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.wire.LOOPBACK
 import io.github.markusaugust.streamlord.wire.WireCases
 import io.github.markusaugust.streamlord.wire.WireTranscript
+import io.github.markusaugust.streamlord.wire.boundPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.reactive.asFlow
 import org.apache.catalina.startup.Tomcat
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -22,7 +20,6 @@ import org.junit.jupiter.api.TestInstance
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.ServerSentEvent
@@ -34,7 +31,6 @@ import org.springframework.web.reactive.config.EnableWebFlux
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.adapter.WebHttpHandlerBuilder
-import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 
 /**
@@ -43,8 +39,8 @@ import java.nio.file.Files
  * answer compared with `conformance/wire/spring-webflux-tomcat/<case>.txt`.
  *
  * WebFlux has no stream of its own here: a flow of events is mapped to Spring's `ServerSentEvent`,
- * which Spring writes. So the comment is Spring's own, the signals are read through the core's port
- * over the exchange, as the WebFlux page leaves to the reader, and `compress` has nothing to act on.
+ * which Spring writes. So the comment is Spring's own, the signals are read by the adapter's own
+ * `readSignalsJson`, and `compress` has nothing to act on.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SpringWebFluxWireTranscriptTest {
@@ -109,38 +105,10 @@ class SpringWebFluxWireTranscriptTest {
 
         @RequestMapping("/signals")
         suspend fun readSignals(exchange: ServerWebExchange): ResponseEntity<String> =
-            datastarSignals(WireCases.echo(exchange.request.method.name(), streamlord.readSignalsJson(ExchangeIncomingRequest(exchange))))
+            datastarSignals(WireCases.echo(exchange.request.method.name(), exchange.readSignalsJson(streamlord)))
 
         @GetMapping("/csp/page", produces = ["text/html;charset=UTF-8"])
         fun page(exchange: ServerWebExchange): String = WireCases.page(exchange.cspNonce)
-    }
-
-    /** The core's port over a WebFlux exchange, with the bounded body read the port asks for. */
-    private class ExchangeIncomingRequest(
-        private val exchange: ServerWebExchange,
-    ) : IncomingRequest {
-        override val method: String get() = exchange.request.method.name()
-
-        override fun queryParameter(name: String): String? = exchange.request.queryParams.getFirst(name)
-
-        override fun header(name: String): String? = exchange.request.headers.getFirst(name)
-
-        override suspend fun bodyText(maxBytes: Int): String {
-            val declared = exchange.request.headers.contentLength
-            rejectDeclaredLengthAbove(maxBytes, declared.takeIf { it >= 0 })
-            val bytes = ByteArrayOutputStream()
-            exchange.request.body.asFlow().collect { buffer ->
-                try {
-                    val chunk = ByteArray(minOf(maxBytes + 1 - bytes.size(), buffer.readableByteCount()))
-                    buffer.read(chunk)
-                    bytes.write(chunk)
-                } finally {
-                    DataBufferUtils.release(buffer)
-                }
-                if (bytes.size() > maxBytes) throw SignalsTooLargeException(bytes.size().toLong(), maxBytes)
-            }
-            return bytes.toString(Charsets.UTF_8)
-        }
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -170,6 +138,8 @@ class SpringWebFluxWireTranscriptTest {
     fun start() {
         tomcat.setBaseDir(baseDir.toString())
         tomcat.setPort(0)
+        // On the loopback address, which the transcripts read from; Loopback.kt in conformance/wire has why.
+        tomcat.connector.setProperty("address", LOOPBACK)
         val context = tomcat.addContext("", null)
         val handler = WebHttpHandlerBuilder.applicationContext(AnnotationConfigApplicationContext(Flux::class.java)).build()
         Tomcat.addServlet(context, "reactive", TomcatHttpHandlerAdapter(handler)).apply {
@@ -178,7 +148,7 @@ class SpringWebFluxWireTranscriptTest {
         }
         context.addServletMapping("/", "reactive")
         tomcat.start()
-        port = tomcat.connector.localPort
+        port = boundPort(tomcat.connector.localPort, "Tomcat")
     }
 
     @AfterAll

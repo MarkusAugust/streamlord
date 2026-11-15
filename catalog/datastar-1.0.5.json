@@ -1,0 +1,625 @@
+{
+  "$comment": "Single source of truth for the Datastar 1.0.5 surface Streamlord knows: attributes, modifiers, actions, fetch options. streamlord-core compiles its names in (CatalogNames), streamlord-analysis compiles it in as text, the VS Code extension bundles it, and streamlord-html-pro/CatalogTest binds it to the DSL. Pro entries name only publicly documented attribute names; no Datastar Pro code is included anywhere.",
+  "version": "1.0.5",
+  "prefix": "data-",
+  "aliasedPrefix": "data-star-",
+  "modifierTypes": {
+    "flag": "no argument, e.g. __once",
+    "duration": "a duration such as 500ms or 1s, e.g. __debounce.500ms, optionally followed by flags",
+    "enum": "one of the listed values, e.g. __case.kebab",
+    "int": "an integer, e.g. __threshold.50",
+    "ident": "an identifier, e.g. __prop.value",
+    "idents": "one or more identifiers, e.g. __event.input.blur"
+  },
+  "modifierGroups": {
+    "timing": [
+      { "name": "delay", "type": "duration", "doc": "Delay the event listener." },
+      {
+        "name": "debounce",
+        "type": "duration",
+        "flags": ["leading", "notrailing"],
+        "flagDocs": { "leading": "Debounce with leading edge.", "notrailing": "Debounce without trailing edge." },
+        "doc": "Debounce the event listener."
+      },
+      {
+        "name": "throttle",
+        "type": "duration",
+        "flags": ["noleading", "trailing"],
+        "flagDocs": { "noleading": "Throttle without leading edge.", "trailing": "Throttle with trailing edge." },
+        "doc": "Throttle the event listener."
+      }
+    ],
+    "case": [
+      { "name": "case", "type": "enum", "values": ["camel", "kebab", "snake", "pascal"], "doc": "Converts the casing of the key." }
+    ],
+    "viewtransition": [
+      { "name": "viewtransition", "type": "flag", "doc": "Wraps the expression in document.startViewTransition() when the View Transition API is available." }
+    ]
+  },
+  "attributes": [
+    {
+      "name": "attr",
+      "keyIsAttributeName": true,
+      "forms": ["data-attr:<name>=\"expr\"", "data-attr=\"{name: expr}\""],
+      "keyed": true,
+      "keyCase": "raw",
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "kotlin": ["dataAttr"],
+      "modifiers": [],
+      "doc": "Sets one or more attributes from expressions."
+    },
+    {
+      "name": "bind",
+      "forms": ["data-bind:<signal>", "data-bind=\"signal\""],
+      "keyed": true,
+      "keyCase": "camel",
+      "valueKind": "signal",
+      "requires": "exclusive",
+      "kotlin": ["dataBind"],
+      "modifiers": [
+        { "$ref": "case" },
+        {
+          "name": "prop",
+          "type": "ident",
+          "suggest": ["checked", "value"],
+          "doc": "Binds to a specific property instead of the default binding. Must not be a read-only property."
+        },
+        {
+          "name": "event",
+          "type": "idents",
+          "suggest": ["blur", "change", "input"],
+          "doc": "Defines which events sync the element property back to the signal."
+        }
+      ],
+      "doc": "Two-way binding between an input element and a signal."
+    },
+    {
+      "name": "class",
+      "forms": ["data-class:<name>=\"expr\"", "data-class=\"{name: expr}\""],
+      "keyed": true,
+      "keyCase": "kebab",
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "kotlin": ["dataClass"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "Toggles CSS classes from boolean expressions."
+    },
+    {
+      "name": "computed",
+      "forms": ["data-computed:<signal>=\"expr\"", "data-computed=\"{name: () => expr}\""],
+      "keyed": true,
+      "keyCase": "camel",
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "kotlin": ["dataComputed"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "A read-only signal derived from other signals."
+    },
+    {
+      "name": "effect",
+      "forms": ["data-effect=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "requires": "value",
+      "kotlin": ["dataEffect"],
+      "modifiers": [],
+      "doc": "Runs an expression whenever a signal it reads changes."
+    },
+    {
+      "name": "ignore",
+      "forms": ["data-ignore", "data-ignore__self"],
+      "keyed": false,
+      "valueKind": "none",
+      "kotlin": ["dataIgnore"],
+      "modifiers": [{ "name": "self", "type": "flag", "doc": "Only ignore the element itself, not its descendants." }],
+      "doc": "Datastar leaves this element (and its subtree, unless __self) alone."
+    },
+    {
+      "name": "ignore-morph",
+      "forms": ["data-ignore-morph"],
+      "keyed": false,
+      "valueKind": "none",
+      "kotlin": ["dataIgnoreMorph"],
+      "modifiers": [],
+      "doc": "This element is never morphed."
+    },
+    {
+      "name": "indicator",
+      "forms": ["data-indicator:<signal>", "data-indicator=\"signal\""],
+      "keyed": true,
+      "keyCase": "camel",
+      "valueKind": "signal",
+      "requires": "exclusive",
+      "kotlin": ["dataIndicator"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "A boolean signal that is true while a fetch from this element is in flight."
+    },
+    {
+      "name": "init",
+      "forms": ["data-init=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "requires": "value",
+      "kotlin": ["dataInit"],
+      "modifiers": [{ "name": "delay", "type": "duration", "doc": "Delay the expression." }, { "$ref": "viewtransition" }],
+      "doc": "Runs an expression once when the element enters the DOM."
+    },
+    {
+      "name": "json-signals",
+      "forms": ["data-json-signals", "data-json-signals=\"{include: /re/, exclude: /re/}\""],
+      "keyed": false,
+      "valueKind": "filter",
+      "kotlin": ["dataJsonSignals"],
+      "modifiers": [{ "name": "terse", "type": "flag", "doc": "Outputs a more compact JSON format without extra whitespace." }],
+      "doc": "Renders the signal store as JSON into the element. Debugging aid."
+    },
+    {
+      "name": "on",
+      "forms": ["data-on:<event>=\"expr\""],
+      "keyed": true,
+      "keyCase": "kebab",
+      "keyRequired": true,
+      "valueKind": "expression",
+      "requires": "value",
+      "argNames": ["evt"],
+      "kotlin": ["dataOn", "dataOnClick", "dataOnSubmit", "dataOnChange", "dataOnInput", "dataOnKeydown", "dataOnFetch"],
+      "modifiers": [
+        { "name": "once", "type": "flag", "doc": "Only trigger the event listener once." },
+        { "name": "passive", "type": "flag", "doc": "Do not call preventDefault on the event listener." },
+        { "name": "capture", "type": "flag", "doc": "Use a capture event listener." },
+        { "$ref": "case" },
+        { "$ref": "timing" },
+        { "$ref": "viewtransition" },
+        { "name": "window", "type": "flag", "ignoredWith": ["outside"], "doc": "Attaches the event listener to the window element." },
+        { "name": "document", "type": "flag", "ignoredWith": ["window", "outside"], "doc": "Attaches the event listener to the document element." },
+        { "name": "outside", "type": "flag", "doc": "Triggers when the event is outside the element." },
+        { "name": "prevent", "type": "flag", "doc": "Calls preventDefault on the event listener." },
+        { "name": "stop", "type": "flag", "doc": "Calls stopPropagation on the event listener." }
+      ],
+      "doc": "Attaches an event listener. `evt` is the event; `el` the element."
+    },
+    {
+      "name": "on-intersect",
+      "forms": ["data-on-intersect=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "requires": "value",
+      "kotlin": ["dataOnIntersect"],
+      "modifiers": [
+        { "name": "once", "type": "flag", "doc": "Only triggers the event once." },
+        { "name": "exit", "type": "flag", "doc": "Only triggers the event when the element exits the viewport." },
+        { "name": "half", "type": "flag", "doc": "Triggers when half of the element is visible." },
+        { "name": "full", "type": "flag", "doc": "Triggers when the full element is visible." },
+        {
+          "name": "threshold",
+          "type": "int",
+          "min": 0,
+          "max": 100,
+          "ignoredWith": ["full", "half"],
+          "suggest": ["25", "50", "75", "100"],
+          "doc": "Triggers when the element is visible by a certain percentage."
+        },
+        { "$ref": "timing" },
+        { "$ref": "viewtransition" }
+      ],
+      "doc": "Runs an expression when the element intersects the viewport."
+    },
+    {
+      "name": "on-interval",
+      "forms": ["data-on-interval=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "requires": "value",
+      "kotlin": ["dataOnInterval"],
+      "modifiers": [
+        {
+          "name": "duration",
+          "type": "duration",
+          "flags": ["leading"],
+          "flagDocs": { "leading": "Execute the first interval immediately." },
+          "doc": "Sets the interval duration."
+        },
+        { "$ref": "viewtransition" }
+      ],
+      "doc": "Runs an expression on an interval (default 1s)."
+    },
+    {
+      "name": "on-signal-patch",
+      "forms": ["data-on-signal-patch=\"expr\""],
+      "keyed": false,
+      "keys": ["filter"],
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "argNames": ["patch"],
+      "kotlin": ["dataOnSignalPatch"],
+      "modifiers": [{ "$ref": "timing" }],
+      "doc": "Runs an expression whenever signals are patched. `patch` holds the patch."
+    },
+    {
+      "name": "on-signal-patch-filter",
+      "forms": ["data-on-signal-patch-filter=\"{include: /re/, exclude: /re/}\""],
+      "keyed": false,
+      "valueKind": "filter",
+      "kotlin": ["dataOnSignalPatch"],
+      "modifiers": [],
+      "doc": "Filters which signal patches trigger data-on-signal-patch."
+    },
+    {
+      "name": "preserve-attr",
+      "forms": ["data-preserve-attr=\"name name\""],
+      "keyed": false,
+      "valueKind": "text",
+      "kotlin": ["dataPreserveAttr"],
+      "modifiers": [],
+      "doc": "Keeps the listed attributes through a morph."
+    },
+    {
+      "name": "ref",
+      "forms": ["data-ref:<signal>", "data-ref=\"signal\""],
+      "keyed": true,
+      "keyCase": "camel",
+      "valueKind": "signal",
+      "requires": "exclusive",
+      "kotlin": ["dataRef"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "Exposes the element as a signal."
+    },
+    {
+      "name": "show",
+      "forms": ["data-show=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "kotlin": ["dataShow"],
+      "modifiers": [],
+      "doc": "Shows the element when the expression is truthy."
+    },
+    {
+      "name": "signals",
+      "forms": ["data-signals:<name>=\"expr\"", "data-signals=\"{name: value}\""],
+      "keyed": true,
+      "keyCase": "camel",
+      "valueKind": "expression",
+      "returnsValue": true,
+      "kotlin": ["dataSignals"],
+      "modifiers": [{ "$ref": "case" }, { "name": "ifmissing", "type": "flag", "doc": "Only patches signals if their keys do not already exist." }],
+      "doc": "Declares signals. Dotted names create nested signals."
+    },
+    {
+      "name": "style",
+      "forms": ["data-style:<property>=\"expr\"", "data-style=\"{property: expr}\""],
+      "keyed": true,
+      "keyCase": "raw",
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "kotlin": ["dataStyle"],
+      "modifiers": [],
+      "doc": "Sets inline styles from expressions."
+    },
+    {
+      "name": "text",
+      "forms": ["data-text=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "returnsValue": true,
+      "requires": "value",
+      "kotlin": ["dataText"],
+      "modifiers": [],
+      "doc": "Sets the element's text content from an expression."
+    },
+    {
+      "name": "nonce",
+      "forms": ["data-nonce=\"nonce\""],
+      "keyed": false,
+      "valueKind": "text",
+      "kotlin": ["dataNonce"],
+      "modifiers": [],
+      "onlyOn": ["html"],
+      "reference": "https://data-star.dev/reference/security#content-security-policy",
+      "doc": "On the html element: enables CSP mode with this nonce."
+    },
+    {
+      "name": "animate",
+      "keyIsAttributeName": true,
+      "pro": true,
+      "forms": ["data-animate:<attribute>=\"expr\"", "data-animate=\"{attribute: expr}\""],
+      "keyed": true,
+      "keyCase": "raw",
+      "valueKind": "expression",
+      "kotlin": ["dataAnimate"],
+      "unlisted": ["duration", "delay", "ease", "loop", "pingpong"],
+      "modifiers": [
+        { "name": "duration", "type": "duration" },
+        { "name": "delay", "type": "duration" },
+        {
+          "name": "ease",
+          "type": "enum",
+          "values": [
+            "linear",
+            "quadratic",
+            "cubic",
+            "elastic",
+            "inquad",
+            "outquad",
+            "inoutquad",
+            "incubic",
+            "outcubic",
+            "inoutcubic",
+            "inquart",
+            "outquart",
+            "inoutquart",
+            "inquint",
+            "outquint",
+            "inoutquint",
+            "insine",
+            "outsine",
+            "inoutsine",
+            "inexpo",
+            "outexpo",
+            "inoutexpo",
+            "incirc",
+            "outcirc",
+            "inoutcirc",
+            "inelastic",
+            "outelastic",
+            "inoutelastic",
+            "inback",
+            "outback",
+            "inoutback",
+            "inbounce",
+            "outbounce",
+            "inoutbounce",
+            "ingolden",
+            "outgolden",
+            "inoutgolden"
+          ]
+        },
+        { "name": "loop", "type": "flag" },
+        { "name": "pingpong", "type": "flag" }
+      ],
+      "doc": "Pro. Animates an attribute, or each attribute of the object form, whenever the expression's signals change."
+    },
+    {
+      "name": "custom-validity",
+      "pro": true,
+      "forms": ["data-custom-validity=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataCustomValidity"],
+      "modifiers": [],
+      "doc": "Pro. Custom form validation: '' is valid, any other string is the message."
+    },
+    {
+      "name": "match-media",
+      "pro": true,
+      "forms": ["data-match-media:<signal>=\"'query'\""],
+      "keyed": true,
+      "keyCase": "camel",
+      "keyRequired": true,
+      "valueKind": "text",
+      "kotlin": ["dataMatchMedia"],
+      "modifiers": [{ "$ref": "case" }],
+      "doc": "Pro. A boolean signal that follows a media query."
+    },
+    {
+      "name": "on-raf",
+      "pro": true,
+      "forms": ["data-on-raf=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnRaf"],
+      "unlisted": ["delay", "debounce", "viewtransition"],
+      "modifiers": [{ "$ref": "timing" }, { "$ref": "viewtransition" }],
+      "doc": "Pro. Runs on every animation frame."
+    },
+    {
+      "name": "on-resize",
+      "pro": true,
+      "forms": ["data-on-resize=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataOnResize"],
+      "unlisted": ["delay", "viewtransition"],
+      "modifiers": [{ "$ref": "timing" }, { "$ref": "viewtransition" }],
+      "doc": "Pro. Runs when the element's size changes."
+    },
+    {
+      "name": "persist",
+      "pro": true,
+      "forms": ["data-persist", "data-persist:<key>", "data-persist=\"{include: /re/}\""],
+      "keyed": true,
+      "keyCase": "raw",
+      "valueKind": "filter",
+      "kotlin": ["dataPersist"],
+      "modifiers": [{ "name": "session", "type": "flag", "doc": "Persists signals in session storage instead of local storage." }],
+      "doc": "Pro. Persists signals in local or session storage."
+    },
+    {
+      "name": "query-string",
+      "pro": true,
+      "forms": ["data-query-string", "data-query-string=\"{include: /re/}\""],
+      "keyed": false,
+      "valueKind": "filter",
+      "kotlin": ["dataQueryString"],
+      "modifiers": [
+        { "name": "filter", "type": "flag", "doc": "Filters out empty values when syncing signal values to query string params." },
+        { "name": "history", "type": "flag", "doc": "Enables history support." }
+      ],
+      "doc": "Pro. Two-way sync between signals and the URL query string."
+    },
+    {
+      "name": "replace-url",
+      "pro": true,
+      "forms": ["data-replace-url=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataReplaceUrl"],
+      "modifiers": [],
+      "doc": "Pro. Replaces the browser URL without reloading."
+    },
+    {
+      "name": "scroll-into-view",
+      "pro": true,
+      "forms": ["data-scroll-into-view", "data-scroll-into-view__smooth__vcenter"],
+      "keyed": false,
+      "valueKind": "none",
+      "kotlin": ["dataScrollIntoView"],
+      "modifiers": [
+        { "name": "smooth", "type": "flag", "doc": "Scrolling is animated smoothly." },
+        { "name": "instant", "type": "flag", "doc": "Scrolling is instant." },
+        { "name": "auto", "type": "flag", "doc": "Scrolling is determined by the computed scroll-behavior CSS property." },
+        { "name": "hstart", "type": "flag", "doc": "Scrolls to the left of the element." },
+        { "name": "hcenter", "type": "flag", "doc": "Scrolls to the horizontal center of the element." },
+        { "name": "hend", "type": "flag", "doc": "Scrolls to the right of the element." },
+        { "name": "hnearest", "type": "flag", "doc": "Scrolls to the nearest horizontal edge of the element." },
+        { "name": "vstart", "type": "flag", "doc": "Scrolls to the top of the element." },
+        { "name": "vcenter", "type": "flag", "doc": "Scrolls to the vertical center of the element." },
+        { "name": "vend", "type": "flag", "doc": "Scrolls to the bottom of the element." },
+        { "name": "vnearest", "type": "flag", "doc": "Scrolls to the nearest vertical edge of the element." },
+        { "name": "focus", "type": "flag", "doc": "Focuses the element after scrolling." }
+      ],
+      "doc": "Pro. Scrolls the element into view."
+    },
+    {
+      "name": "view-transition",
+      "pro": true,
+      "forms": ["data-view-transition=\"expr\""],
+      "keyed": false,
+      "valueKind": "expression",
+      "kotlin": ["dataViewTransition"],
+      "modifiers": [],
+      "doc": "Pro. Sets the element's view-transition-name."
+    }
+  ],
+  "actions": [
+    { "name": "get", "kind": "backend", "signature": "@get(uri, options?)", "kinds": ["string", "options"], "parameterDocs": ["The address of the request; a relative one is read against the page.", "contentType, filterSignals, headers and the others the reference lists; one left out takes its default."], "kotlin": "get", "doc": "GET with signals in the query string." },
+    { "name": "post", "kind": "backend", "signature": "@post(uri, options?)", "kinds": ["string", "options"], "parameterDocs": ["The address of the request; a relative one is read against the page.", "contentType, filterSignals, headers and the others the reference lists; one left out takes its default."], "kotlin": "post", "doc": "POST with signals in the body." },
+    { "name": "put", "kind": "backend", "signature": "@put(uri, options?)", "kinds": ["string", "options"], "parameterDocs": ["The address of the request; a relative one is read against the page.", "contentType, filterSignals, headers and the others the reference lists; one left out takes its default."], "kotlin": "put", "doc": "PUT with signals in the body." },
+    { "name": "patch", "kind": "backend", "signature": "@patch(uri, options?)", "kinds": ["string", "options"], "parameterDocs": ["The address of the request; a relative one is read against the page.", "contentType, filterSignals, headers and the others the reference lists; one left out takes its default."], "kotlin": "patch", "doc": "PATCH with signals in the body." },
+    { "name": "delete", "kind": "backend", "signature": "@delete(uri, options?)", "kinds": ["string", "options"], "parameterDocs": ["The address of the request; a relative one is read against the page.", "contentType, filterSignals, headers and the others the reference lists; one left out takes its default."], "kotlin": "delete", "doc": "DELETE with signals in the query string." },
+    { "name": "query", "kind": "backend", "signature": "@query(uri, options?)", "kinds": ["string", "options"], "parameterDocs": ["The address of the request; a relative one is read against the page.", "contentType, filterSignals, headers and the others the reference lists; one left out takes its default."], "kotlin": "query", "doc": "QUERY with signals in the body." },
+    { "name": "setAll", "kind": "signals", "signature": "@setAll(value, filter?)", "kinds": ["any", "filter"], "parameterDocs": ["The value every matching signal is set to.", "include picks the signals whose path it matches and exclude leaves out those it matches, each a regular expression or a string. Left out, it picks every signal."], "kotlin": "setAll", "doc": "Sets every matching signal." },
+    { "name": "toggleAll", "kind": "signals", "signature": "@toggleAll(filter?)", "kinds": ["filter"], "parameterDocs": ["include picks the signals whose path it matches and exclude leaves out those it matches, each a regular expression or a string. Left out, it picks every signal."], "kotlin": "toggleAll", "doc": "Toggles every matching boolean signal." },
+    { "name": "peek", "kind": "signals", "signature": "@peek(() => expr)", "kinds": ["function"], "parameterDocs": ["Its signals are read without subscribing to them; @peek gives what it returns."], "kotlin": "peek", "doc": "Reads signals without subscribing." },
+    { "name": "clipboard", "pro": true, "kind": "pro", "signature": "@clipboard(text, isBase64?)", "kinds": ["string", "boolean"], "parameterDocs": ["The text to copy.", "true when text is Base64, which is decoded before it is copied."], "kotlin": "clipboard", "doc": "Pro. Copies text to the clipboard." },
+    { "name": "fit", "pro": true, "kind": "pro", "signature": "@fit(v, oldMin, oldMax, newMin, newMax, shouldClamp?, shouldRound?)", "kinds": ["number", "number", "number", "number", "number", "boolean", "boolean"], "parameterDocs": ["The number to map from the old range to the new one.", "The value of v that maps to newMin.", "The value of v that maps to newMax.", "What oldMin maps to.", "What oldMax maps to.", "true keeps the result within the new range; false when left out.", "true rounds the result to the nearest whole number; false when left out."], "kotlin": "fit", "doc": "Pro. Linear interpolation between ranges." },
+    { "name": "intl", "pro": true, "kind": "pro", "signature": "@intl(type, value, options?, locale?)", "kinds": ["string", "any", "object", "any"], "values": [["datetime", "number", "pluralRules", "relativeTime", "list", "displayNames"]], "parameterDocs": ["Which Intl formatter: datetime, number, pluralRules, relativeTime, list or displayNames.", "The value to format.", "The options of that formatter, as its Intl constructor takes them.", "A locale or a list of them; the browser's when left out."], "kotlin": "intl", "doc": "Pro. Locale-aware formatting via Intl." }
+  ],
+  "fetchOptions": [
+    { "name": "contentType", "type": "'json' | 'form'", "default": "'json'", "kind": "string", "values": ["json", "form"], "otherwise": "Datastar sends nothing: the action fails with FetchFailed, whose error is FetchInvalidContentType", "doc": "'json' sends the signals as JSON: the body, or ?datastar= on the URL for @get and @delete. 'form' sends a form instead, the closest one or the one selector names, after the browser has validated it." },
+    { "name": "filterSignals", "type": "{include?: RegExp | string, exclude?: RegExp | string}", "default": "{include: /.*/, exclude: /(^|\\.)_/}", "kind": "filter", "doc": "Which signals a 'json' request sends: include and exclude are regular expressions or strings matched against each signal's path. The default sends every signal except those whose name, at any level, starts with _ (_draft, user._token)." },
+    { "name": "selector", "type": "string", "default": "closest form", "kind": "string", "doc": "With contentType 'form', the CSS selector of the form to send in place of the closest one. A 'json' request does not read it." },
+    { "name": "headers", "type": "Record<string, string>", "default": "{}", "kind": "object", "doc": "Headers added to the request, after Datastar's own Accept and Datastar-Request: true." },
+    { "name": "openWhenHidden", "type": "boolean", "default": "false for @get, true otherwise", "kind": "boolean", "doc": "Whether the request stays open while the tab is hidden. When false, Datastar closes it as the tab is hidden and sends it again as the tab is shown." },
+    { "name": "payload", "type": "any", "default": "the filtered signal store", "kind": "any", "doc": "What a 'json' request sends in place of the signals; filterSignals is then not read." },
+    { "name": "requestCancellation", "type": "'auto' | 'cleanup' | 'disabled' | AbortController", "default": "'auto'", "kind": "string", "values": ["auto", "cleanup", "disabled"], "otherwise": "Datastar cancels no other request, as with 'disabled'", "doc": "'auto' cancels a request with the same method and URL that is still running; 'cleanup' does so too, and also cancels the request when its element or attribute goes; 'disabled' lets requests run side by side. An AbortController cancels the request from your own code." },
+    { "name": "retry", "type": "'auto' | 'error' | 'always' | 'never'", "default": "'auto'", "kind": "string", "values": ["auto", "error", "always", "never"], "otherwise": "Datastar retries as with 'auto'", "doc": "When Datastar sends the request again. 'auto' retries a request that fails on the network, before or during the response; 'error' also retries a 4xx or 5xx answer; 'always' also retries any status but 200, 204 or a redirect, and an event stream when it ends; 'never' retries nothing, and the action fails with the first error. A 200 answer of HTML, JSON or JavaScript is never retried." },
+    { "name": "retryInterval", "type": "number (ms)", "default": "1000", "kind": "number", "otherwise": "it waits no time before a retry", "doc": "Milliseconds before the first retry, multiplied by retryScaler for each one after, and set back when an event stream has ended. A retry: line in the stream sets it too." },
+    { "name": "retryScaler", "type": "number", "default": "2", "kind": "number", "otherwise": "every retry after the first comes at once", "doc": "What the wait is multiplied by after each retry, up to retryMaxWait." },
+    { "name": "retryMaxWait", "type": "number (ms)", "default": "30000", "kind": "number", "otherwise": "every retry after the first comes at once", "doc": "The longest the wait grows to as retryScaler multiplies it, in milliseconds. The first wait, retryInterval, and one a retry: line in the stream sets, are not held to it." },
+    { "name": "retryMaxCount", "type": "number", "default": "10", "kind": "number", "otherwise": "it makes no retry at all", "doc": "How many retries Datastar makes over the whole action before it gives up and dispatches retries-failed. An answer that arrives in between does not give it more." }
+  ],
+  "signalFilter": [
+    {
+      "name": "include",
+      "type": "RegExp | string",
+      "kind": "pattern",
+      "doc": "Picks the signals whose path, such as user.name, it matches: a regular expression, or a string Datastar makes one of. Left out, it picks every signal."
+    },
+    {
+      "name": "exclude",
+      "type": "RegExp | string",
+      "kind": "pattern",
+      "doc": "Leaves out the signals whose path it matches, even those include picks: a regular expression, or a string Datastar makes one of. Left out, filterSignals leaves out the signals whose name, at any level, starts with _, and @setAll, @toggleAll and data-on-signal-patch-filter leave out none."
+    }
+  ],
+  "fetchEvents": [
+    { "name": "started", "doc": "The request is about to be sent." },
+    { "name": "finished", "doc": "The action is over, however it ended: after the response, a failure or the last retry." },
+    { "name": "error", "doc": "The response has a status of 400 or more, which evt.detail.argsRaw.status holds." },
+    { "name": "retrying", "doc": "Datastar waits retryInterval and sends the request again." },
+    { "name": "retries-failed", "doc": "The retries retryMaxCount allows are used up, and the action gives up." }
+  ],
+  "datastarEvents": [
+    { "name": "datastar-fetch", "doc": "Dispatched on the document at each step of a backend action's request; data-on listens there on its own. evt.detail.type is started, finished, error, retrying, retries-failed or the datastar-* event the response sent, and evt.detail.el the element that sent the request." },
+    { "name": "datastar-signal-patch", "doc": "Dispatched on the document when signals change; data-on listens there on its own. evt.detail is the patch: the signals that changed, with their new values." }
+  ],
+  "compiledParameters": ["el", "$", "__action", "evt"],
+  "sse": {
+    "events": ["datastar-patch-elements", "datastar-patch-signals"],
+    "patchModes": ["outer", "inner", "replace", "prepend", "append", "before", "after", "remove"],
+    "namespaces": ["html", "svg", "mathml"],
+    "dataLines": ["selector", "mode", "namespace", "useViewTransition", "viewTransitionSelector", "elements", "signals", "onlyIfMissing"]
+  },
+  "kotlinCallSites": {
+    "$comment": "Which Streamlord functions take Datastar strings, and at which argument; an expression may also be passed by its parameter's name. more: the parameters after it that take an expression too, each by its place or its name. oneValue: the function writes each expression in parentheses, as one value. Used by the editor to know where to validate and complete.",
+    "expression": {
+      "dataOn": { "arg": 1, "named": "expression" }, "dataOnClick": { "arg": 0, "named": "expression" }, "dataOnSubmit": { "arg": 0, "named": "expression" }, "dataOnChange": { "arg": 0, "named": "expression" },
+      "dataOnInput": { "arg": 0, "named": "expression" }, "dataOnKeydown": { "arg": 0, "named": "expression" }, "dataOnFetch": { "arg": 0, "named": "expression" },
+      "dataOnIntersect": { "arg": 0, "named": "expression" }, "dataOnInterval": { "arg": 0, "named": "expression" }, "dataOnSignalPatch": { "arg": 0, "named": "expression" },
+      "dataInit": { "arg": 0, "named": "expression" }, "dataEffect": { "arg": 0, "named": "expression" }, "dataText": { "arg": 0, "named": "expression" }, "dataShow": { "arg": 0, "named": "expression" },
+      "dataComputed": { "arg": "last", "named": "expression" }, "dataClass": { "arg": "last", "named": "expression" }, "dataStyle": { "arg": "last", "named": "expression" }, "dataAttr": { "arg": "last", "named": "expression" },
+      "dataSignals": { "arg": "last", "named": "expression", "onlyIfStringArgs": true },
+      "dataOnRaf": { "arg": 0, "named": "expression" }, "dataOnResize": { "arg": 0, "named": "expression" }, "dataCustomValidity": { "arg": 0, "named": "expression" },
+      "dataReplaceUrl": { "arg": 0, "named": "expression" }, "dataViewTransition": { "arg": 0, "named": "expression" }, "dataAnimate": { "arg": "last", "named": "expression" },
+      "setExpr": { "arg": 1, "named": "expression" }, "peek": { "arg": 0, "named": "expression", "oneValue": true }, "peekExpr": { "arg": 0, "named": "expression", "oneValue": true }, "clipboardExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "getExpr": { "arg": 0, "named": "expression", "oneValue": true }, "postExpr": { "arg": 0, "named": "expression", "oneValue": true }, "putExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "patchExpr": { "arg": 0, "named": "expression", "oneValue": true }, "deleteExpr": { "arg": 0, "named": "expression", "oneValue": true }, "queryExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "setAllExpr": { "arg": 0, "named": "expression", "oneValue": true },
+      "fitExpr": { "arg": 0, "named": "value", "more": ["oldMin", "oldMax", "newMin", "newMax"], "oneValue": true },
+      "fit": { "arg": 0, "named": "value", "oneValue": true }, "intl": { "arg": 1, "named": "value", "oneValue": true }
+    },
+    "expressionOptions": {
+      "$comment": "The options of FetchOptions whose value is an expression, set in the options' lambda: name = \"...\". map: the option is a map, headerExprs = mapOf(\"name\" to \"...\"), whose values are the expressions.",
+      "payloadExpr": {}, "requestCancellationExpr": {}, "headerExprs": { "map": true },
+      "contentTypeExpr": {}, "selectorExpr": {}, "openWhenHiddenExpr": {}, "retryExpr": {}, "retryIntervalExpr": {},
+      "retryScalerExpr": {}, "retryMaxWaitExpr": {}, "retryMaxCountExpr": {}
+    },
+    "events": {
+      "$comment": "Core's SSE calls and its answers that are no stream, Ktor's and Spring's among them, by the name a call writes, a companion's function as Class.function: every one of the public API, which EventCallsJvmTest holds. takes: the first argument, which core judges as it runs: elements (then selector and mode follow it), selector, signals, signalNames, script or url; none where core judges nothing. stream: it also takes eventId and retry. response: an answer that is no stream, whose selector goes in a header. names: its pairs name signals, which a $ then reads. json: it takes the signals as JSON text. value: it takes any value the codec encodes.",
+      "patchElements": { "takes": "elements", "stream": true },
+      "PatchElements": { "takes": "elements", "stream": true },
+      "respondElements": { "takes": "elements", "response": true },
+      "ElementsResponse": { "takes": "elements", "response": true },
+      "datastarElements": { "takes": "elements", "response": true },
+      "removeElements": { "takes": "selector", "stream": true },
+      "PatchElements.remove": { "takes": "selector", "stream": true },
+      "patchSignals": { "takes": "signals", "stream": true, "names": true, "json": true, "value": true },
+      "PatchSignals": { "takes": "signals", "stream": true, "json": true },
+      "respondSignals": { "takes": "signals", "response": true, "json": true, "value": true },
+      "SignalsResponse": { "takes": "signals", "response": true, "json": true },
+      "datastarSignals": { "takes": "signals", "response": true, "json": true, "value": true },
+      "removeSignals": { "takes": "signalNames", "stream": true },
+      "PatchSignals.remove": { "takes": "signalNames", "stream": true },
+      "executeScript": { "takes": "script", "stream": true },
+      "ExecuteScript": { "takes": "script", "stream": true },
+      "respondScript": { "takes": "script", "response": true },
+      "ScriptResponse": { "takes": "script", "response": true },
+      "datastarScript": { "takes": "script", "response": true },
+      "redirect": { "takes": "url" },
+      "ExecuteScript.redirect": { "takes": "url" },
+      "replaceUrl": {}, "ExecuteScript.replaceUrl": {}, "pushUrl": {}, "ExecuteScript.pushUrl": {}
+    },
+    "signals": {
+      "$comment": "The DSL's calls whose arguments are signals by name, as pairs or names; core's are among the events. names: the pair keys are signal names written in code, which a $ then reads. json: the call also takes the signals as JSON text.",
+      "dataSignals": { "names": true }
+    },
+    "signalNames": {
+      "$comment": "The expression helpers, whose first argument is a signal name written as JavaScript. reads: the helper reads the signal. shared: other APIs use the name in the same scope, so a call counts only inside a DSL call.",
+      "signal": { "reads": true },
+      "set": { "shared": true },
+      "setExpr": {},
+      "increment": { "reads": true },
+      "decrement": { "reads": true },
+      "toggle": { "shared": true },
+      "not": { "reads": true }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+<!-- Hover on the first character of a word, filter keys, option values, fetch types, evt members, a half typed pre-1.0 name. -->
+<div data-signals="{count: 0}" data-text="@intl('number', $count)"></div>
+<button data-on:click="@get('/a', {retry: 'never', filterSignals: {include: /a/}})">a</button>
+<button data-on:click="@get('/b', {openWhenHidden: })">b</button>
+<div data-on:datastar-fetch="evt.detail.type === 'started'"></div>
+<input data-on:keydown="evt.">
+<div data-text="$count" data-on-="x"></div>

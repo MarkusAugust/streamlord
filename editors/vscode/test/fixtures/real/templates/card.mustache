@@ -1,0 +1,8 @@
+<article id="card-{{id}}" data-signals:open="false">
+  <h2 data-on:click="$open = !$open">{{title}}</h2>
+  {{#body}}
+  <p data-show="$open" data-text="'{{summary}}'"></p>
+  {{/body}}
+  <button data-on:click="@delete('/cards/{{id}}')" data-indicator:removing>Remove</button>
+  <button data-onn:click="@get('/cards/{{id}}')">Reload</button>
+</article>

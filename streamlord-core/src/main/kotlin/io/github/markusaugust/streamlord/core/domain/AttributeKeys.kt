@@ -2,22 +2,22 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.regex
 
 /**
  * What a key of a Datastar attribute may be, for the DSL that writes one and the analysis that
  * reads a call before it runs: how a name with capitals is written in kebab-case, which keys the
  * client would cut in the wrong place, and how an HTML attribute with capitals is spelled. The DSL
- * throws with these reasons and the analysis reports them, so the two say the same thing; the VS
- * Code extension's twin is held to them by the shared corpus.
+ * throws with these reasons and the analysis reports them, so the two say the same thing.
  */
 @InternalStreamlordApi
 public object AttributeKeys {
-    private val UPPER = Regex("[A-Z]")
-    private val JS_NAME = Regex("[A-Za-z_$][A-Za-z0-9_$]*")
+    private val UPPER = regex("[A-Z]")
+    private val JS_NAME = regex("[A-Za-z_$][A-Za-z0-9_$]*")
 
     // Java's \s, the spaces JavaScript's \s adds (class.ts splits a class list on it), NUL, which
     // the HTML parser turns into U+FFFD, and the characters that end an attribute or its name.
-    private val FORBIDDEN = Regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
+    private val FORBIDDEN = regex("[\\s\\x00\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff\"'<>=/]")
 
     /**
      * Why [name] cannot be a key or a signal name, or null: it is blank, or holds whitespace (as
@@ -59,7 +59,7 @@ public object AttributeKeys {
         if ('-' in name) listOf(name.lowercase()) else listOf(ClientCasing.kebab(name), name.lowercase()).distinct()
 
     /** The object form with [name] as its key, `{viewBox: ...}`, quoted when it is no JavaScript name. */
-    public fun objectForm(name: String): String = if (JS_NAME.matches(name)) "{$name: ...}" else "{'$name': ...}"
+    public fun objectForm(name: String): String = if (JS_NAME.matchEntire(name) != null) "{$name: ...}" else "{'$name': ...}"
 
     /** Why the attribute [name] cannot be a key, or null: the browser lowercases a capital, and [helper]'s object form keeps it. */
     public fun capitalIn(

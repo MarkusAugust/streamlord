@@ -1,53 +1,15 @@
 package io.github.markusaugust.streamlord.core
 
-import io.github.markusaugust.streamlord.core.domain.ElementNamespace
-import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
-import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
-import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.protocol.SseDecoder
-import io.github.markusaugust.streamlord.core.protocol.SseEncoder
-import org.junit.jupiter.api.DynamicTest
-import org.junit.jupiter.api.TestFactory
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.milliseconds
 
 class SseDecoderTest {
-    /**
-     * Every golden file the encoder is held to, read back.
-     *
-     * The encoder already has to match the official bytes; this asks the harder question of
-     * whether those bytes still mean what they were built from. A field the encoder writes and
-     * the decoder forgets is invisible to a comparison of text, and it is exactly the kind of
-     * thing an assertion library would then quietly fail to see.
-     */
-    @TestFactory
-    fun `every golden frame survives the round trip`(): List<DynamicTest> =
-        listOf("get", "post").flatMap { kind ->
-            val dir = File("src/test/resources/golden/$kind")
-            assertTrue(dir.isDirectory, "golden directory missing: ${dir.absolutePath}")
-            dir.listFiles()!!.filter { it.isDirectory }.sortedBy { it.name }.map { case ->
-                DynamicTest.dynamicTest("$kind/${case.name}") {
-                    val wire = File(case, "output.txt").readText()
-                    val declared = JsonParser.parseObject(File(case, "input.json").readText()).array("events")!!.objects()
-                    val decoded = SseDecoder.decode(wire)
-
-                    // Every event the official fixture declares has to come back out of the bytes.
-                    assertEquals(declared.size, decoded.size, "events lost or invented reading $kind/${case.name}")
-
-                    // And the meaning has to survive a second trip, which is where a field the
-                    // encoder writes and the decoder forgets would show itself.
-                    assertEquals(decoded, SseDecoder.decode(decoded.joinToString("") { SseEncoder.encode(it) }))
-                }
-            }
-        }
-
     /**
      * Without a selector, `outer` and `replace` take the elements of what was sent
      * (`newContent.children` in patchElements.ts), so a comment or text alone patches nothing and
@@ -69,63 +31,6 @@ class SseDecoderTest {
         assertEquals(listOf(PatchElements("<!-- </body> -->")), decoded("<!-- </body> -->"))
     }
 
-    @Test
-    fun `an element patch comes back whole`() {
-        val sent =
-            PatchElements(
-                elements = "<li>one</li>\n<li>two</li>",
-                selector = "#feed",
-                mode = ElementPatchMode.APPEND,
-                namespace = ElementNamespace.SVG,
-                useViewTransition = true,
-                viewTransitionSelector = "#card",
-                eventId = "17",
-                retry = 2_000.milliseconds,
-            )
-
-        assertEquals(sent, SseDecoder.decodeOne(SseEncoder.encode(sent)))
-    }
-
-    @Test
-    fun `a signal patch comes back whole`() {
-        val sent = PatchSignals("""{"count":1}""", onlyIfMissing = true, eventId = "4")
-
-        assertEquals(sent, SseDecoder.decodeOne(SseEncoder.encode(sent)))
-    }
-
-    /** The specification says a script is a patch of elements, so that is what returns. */
-    @Test
-    fun `a script comes back as the element patch it always was`() {
-        val decoded = SseDecoder.decodeOne(SseEncoder.encode(ExecuteScript("alert(1)")))
-
-        assertTrue(decoded is PatchElements, decoded.toString())
-        val elements = decoded.elements
-        assertTrue(elements != null && elements.contains("alert(1)"), elements.orEmpty())
-        assertEquals("body", decoded.selector)
-    }
-
-    @Test
-    fun `several events in one stream come back in order`() {
-        val wire =
-            SseEncoder.encode(PatchSignals("""{"a":1}""")) +
-                SseEncoder.encode(PatchElements("<p>x</p>", selector = "#a")) +
-                SseEncoder.encode(PatchSignals("""{"b":2}"""))
-
-        val decoded = SseDecoder.decode(wire)
-
-        assertEquals(3, decoded.size)
-        assertEquals(listOf(PatchSignals::class, PatchElements::class, PatchSignals::class), decoded.map { it::class })
-    }
-
-    @Test
-    fun `a heartbeat is a message and not an event`() {
-        val wire = SseEncoder.comment("keep-alive") + SseEncoder.encode(PatchSignals("""{"a":1}"""))
-
-        assertEquals(1, SseDecoder.decode(wire).size, "a comment is not a Datastar event")
-        assertEquals(2, SseDecoder.messages(wire).size)
-        assertEquals(listOf("keep-alive"), SseDecoder.messages(wire)[0].comments)
-    }
-
     /** A stream may carry somebody else's events; guessing at them would be worse than silence. */
     @Test
     fun `an event Datastar does not define is skipped`() {
@@ -140,6 +45,60 @@ class SseDecoderTest {
         val wire = "event: datastar-patch-signals\r\ndata: signals {\"a\":1}\r\n\r\n"
 
         assertEquals(PatchSignals("""{"a":1}"""), SseDecoder.decodeOne(wire))
+    }
+
+    /**
+     * The client reads signals with `JSON.parse` and runs what it refuses as JavaScript
+     * (`jsStrToObject` in utils/text.ts), and the reference writes them as a `data-signals` value:
+     * `{foo: 1, bar: 2}`. An object literal of plain values is read as the JSON it stands for.
+     */
+    @Test
+    fun `signals written as an object literal are read as the client reads them`() {
+        fun decoded(signals: String) = SseDecoder.decodeOne("event: datastar-patch-signals\ndata: signals $signals\n\n")
+        assertEquals(PatchSignals("""{"foo":1,"bar":2}"""), decoded("{foo: 1, bar: 2}"))
+        assertEquals(PatchSignals("""{"foo":null,"bar":null}"""), decoded("{foo: null, bar: null}"))
+        assertEquals(
+            PatchSignals("""{"a":"it's","b":[1,{"${'$'}c_2":true}],"d":"x"}"""),
+            decoded("""{'a': 'it\'s', b: [1, {${'$'}c_2: true},], "d": 'x',}"""),
+        )
+        assertEquals(
+            PatchSignals("""{"a":1}""", onlyIfMissing = true),
+            SseDecoder.decodeOne("event: datastar-patch-signals\ndata: onlyIfMissing true\ndata: signals {a: 1}\n\n"),
+        )
+    }
+
+    @Test
+    fun `signals that are code and no plain value are refused, since the client runs them`() {
+        for (code in listOf("{a: 1 + 1}", "{a: () => 1}", "{a: undefined}", "{a: b}", "alert(1)")) {
+            val failure =
+                assertFailsWith<DatastarEventValidationException>(code) {
+                    SseDecoder.decode("event: datastar-patch-signals\ndata: signals $code\n\n")
+                }
+            assertTrue("runs as JavaScript" in failure.message.orEmpty(), failure.message)
+        }
+    }
+
+    // Measured against the 1.0.5 client: [1,2] is stored as the signals 0 and 1, and a selector over
+    // two data lines is joined with a line break, which as CSS is a descendant selector.
+    @Test
+    fun `a frame the client acts on but no event can hold is reported for what the stream said`() {
+        val array =
+            assertFailsWith<DatastarEventValidationException> {
+                SseDecoder.decode("event: datastar-patch-signals\ndata: signals [1,2]\n\n")
+            }
+        assertEquals(
+            "Signals that are an array and no JSON object: the client patches its items as signals named 0, 1 and on. The stream sent [1,2]",
+            array.message,
+        )
+        val twoLines =
+            assertFailsWith<DatastarEventValidationException> {
+                SseDecoder.decode("event: datastar-patch-elements\ndata: selector #wrap\ndata: selector #target\ndata: elements z\n\n")
+            }
+        assertEquals(
+            "A selector over 2 data lines, which the client joins with a line break: '#wrap\\n#target'. " +
+                "A PatchElements holds a selector of one line; write it on one",
+            twoLines.message,
+        )
     }
 
     @Test

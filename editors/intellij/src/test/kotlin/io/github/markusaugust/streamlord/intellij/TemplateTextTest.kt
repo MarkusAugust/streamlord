@@ -28,11 +28,10 @@ class TemplateTextTest : BasePlatformTestCase() {
     }
 
     fun `test jte freemarker velocity and mustache fixtures as plain text`() {
-        // The value is wrapped in `return (...)` as Datastar compiles it, so the text ends at a `)` rather than at the end of the input.
         assertEquals(
             listOf(
                 "Unknown modifier __debunce on data-on, which Datastar ignores, so it listens for the event click. Did you mean __debounce?",
-                "Datastar expression: Unexpected token",
+                "Datastar expression: Unexpected end of input",
             ),
             descriptions("template.jte").sorted().reversed(),
         )
@@ -45,7 +44,7 @@ class TemplateTextTest : BasePlatformTestCase() {
         )
         assertEquals(listOf("__threshold needs an integer between 0 and 100, e.g. __threshold.50."), descriptions("template.vm"))
         assertEquals(
-            listOf("data-persist is a Datastar Pro attribute; it needs the Pro bundle.", "Datastar expression: Unexpected token"),
+            listOf("data-persist is a Datastar Pro attribute; it needs the Pro bundle.", "Datastar expression: Unexpected end of input"),
             descriptions("template.mustache"),
         )
     }
@@ -62,6 +61,26 @@ class TemplateTextTest : BasePlatformTestCase() {
         myFixture.configureByText("page2.jte", "<div data-<caret>")
         val items = myFixture.completeBasic()!!.map { it.lookupString }
         assertTrue(items.toString(), "data-on" in items)
+    }
+
+    fun `test each engine's own syntax is left out of the checks and the rest judged`() {
+        fun codes(
+            name: String,
+            text: String,
+        ): List<String> {
+            myFixture.configureByText(name, text)
+            return myFixture
+                .doHighlighting()
+                .mapNotNull { it.description }
+                .filter {
+                    !it.startsWith(
+                        "Typo",
+                    )
+                }.map { it.substringBefore(" See ") }
+        }
+        assertEquals(emptyList<String>(), codes("page.ftl", "<div data-text=\"<#if a>\$a<#else>\$b</#if>\"></div>"))
+        assertEquals(emptyList<String>(), codes("page.ftl", "<div data-text=\"`Hi \${user.name!'x'}`\"></div>"))
+        assertEquals(1, codes("page.jte", "<div data-text=\"`Hi \${name}` + ((\"></div>").size)
     }
 
     fun `test an unknown extension is left alone`() {

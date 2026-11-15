@@ -53,7 +53,7 @@ private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
 private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 /*
- * The `data-*` attributes of Datastar 1.0.4 as kotlinx.html extension functions.
+ * The `data-*` attributes of Datastar 1.0.5 as kotlinx.html extension functions.
  *
  * Every function writes one attribute with the exact key Datastar parses, modifiers included,
  * but [dataOnSignalPatch], whose filter is a second one. kotlinx.html escapes the values for the

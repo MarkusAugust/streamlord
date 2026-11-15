@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /*
  * Finds calls to known DSL functions in Kotlin source and splits their arguments, without a
  * Kotlin parser. The DSL names are distinctive enough that a call is `name(` not preceded by
@@ -33,6 +35,13 @@ public data class CallSite(
     /** Pick the string argument a call-site spec points at. */
     public fun selectString(spec: CallSiteSpec): KotlinString? = selectString(spec.arg, spec.named)
 
+    /** The string arguments of the parameters [CallSiteSpec.more] names, after the one [selectString] picks. */
+    public fun moreStrings(spec: CallSiteSpec): List<KotlinString> =
+        spec.more.mapIndexedNotNull { i, name -> spec.arg?.let { selectString(it + 1 + i, name) } }
+
+    /** Every string argument a call-site spec points at: [selectString]'s and [moreStrings]. */
+    public fun expressionStrings(spec: CallSiteSpec): List<KotlinString> = listOfNotNull(selectString(spec)) + moreStrings(spec)
+
     public fun selectString(
         arg: Int?,
         named: String?,
@@ -54,25 +63,61 @@ public class KotlinLex(
     public val mask: BooleanArray,
 ) {
     /**
-     * The string literal that contains an offset, if any. Scans from the start of the file rather
-     * than backwards from the offset: a quote inside a raw HTML string (`data-text="$count"`) is
-     * not the start of a literal, and only a forward scan knows that.
+     * The string literal that contains an offset, if any. Taken from the literals the lexer found
+     * reading forward from the start of the file, not by reading back from the offset: a quote inside
+     * a raw HTML string (`data-text="$count"`) is not the start of a literal, and only the forward
+     * reading knows that. They come in source order and apart, so the one that may hold the offset is
+     * the last to start before it.
      */
-    public fun stringAt(offset: Int): KotlinString? {
-        for (s in strings) {
-            if (s.start >= offset) return null
-            if (offset <= s.end) return s
+    internal fun stringAt(offset: Int): KotlinString? {
+        val before = strings.binarySearch { if (it.start < offset) -1 else 1 }.let { -it - 2 }
+        return strings.getOrNull(before)?.takeIf { offset <= it.end }
+    }
+
+    /** The literals that lie wholly from [start] up to [end], found by where they start, since [strings] is in source order. */
+    internal fun stringsIn(
+        start: Int,
+        end: Int,
+    ): List<KotlinString> {
+        var i = strings.binarySearch { it.start.compareTo(start) }.let { if (it < 0) -it - 1 else it }
+        val out = ArrayList<KotlinString>()
+        while (i < strings.size && strings[i].start < end) {
+            if (strings[i].end <= end) out += strings[i]
+            i++
         }
-        return null
+        return out
+    }
+
+    /**
+     * The blocks of code in [src], each from its `{` to its `}`, in the order they open: a block
+     * comes after every block it is in. One left open runs to the end of the file.
+     */
+    internal fun blocks(src: String): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        val open = ArrayList<Int>()
+        for (i in src.indices) {
+            if (!mask[i]) continue
+            if (src[i] == '{') {
+                open += out.size
+                out += i..src.length
+            } else if (src[i] == '}' && open.isNotEmpty()) {
+                val at = open.removeAt(open.lastIndex)
+                out[at] = out[at].first..i
+            }
+        }
+        return out
     }
 }
 
-private val FUN_BEFORE = Regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
-private val NAMED_ARG = Regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
-private val TRAILING_LAMBDA = Regex("""^\s*\{""")
+/** The innermost of [this], blocks as [KotlinLex.blocks] gives them, that holds [at]. */
+internal fun List<IntRange>.around(at: Int): IntRange? = lastOrNull { at in it }
+
+private val FUN_BEFORE = regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
+private val NAMED_ARG = regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
+private val TRAILING_LAMBDA = regex("""^\s*\{""")
 
 /** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
-private val TRIM_CALL = Regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
+private val TRIM_CALL = regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 /** The offset of the first character from [from] that is neither whitespace nor part of a comment. */
 private fun skipTrivia(
@@ -255,7 +300,7 @@ private fun makeArg(
  * opposed to string literals, character literals and comments. Kotlin block comments nest,
  * raw strings span lines, and a character literal may hold an escape such as `'A'`.
  */
-public fun lexKotlin(src: String): KotlinLex {
+internal fun lexKotlin(src: String): KotlinLex {
     val strings = ArrayList<KotlinString>()
     val mask = BooleanArray(src.length) { true }
 
@@ -312,23 +357,25 @@ public fun lexKotlin(src: String): KotlinLex {
     return KotlinLex(strings, mask)
 }
 
-/** Every string literal in the source that is not inside a comment, in order. */
-public fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
+/** IntelliJ's injection annotation for HTML, by its short name or its qualified one. */
+internal const val HTML_LANGUAGE = """@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"html"\s*\)"""
 
-private val HTML_MARKER = Regex("""@Language\(\s*"html"\s*\)|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-private val PARAMETER_AFTER_MARKER = Regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
+private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
 /**
  * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,
  * or when the code just before it carries IntelliJ's injection marker: `@Language("HTML")` on
  * the function or property, or a `// language=HTML` comment. The marker reaches the next
- * string literal only.
+ * string literal only. A literal handed straight to a parameter of the file's own function that
+ * carries the annotation is HTML too.
  */
 public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
-    if (textOpensWithTag(s.text)) return true
+    if (textOpensWithTag(markupView(src, s))) return true
+    if (s.start in fileFacts(src).htmlArguments) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
     val after = before.substring(last.range.last + 1)

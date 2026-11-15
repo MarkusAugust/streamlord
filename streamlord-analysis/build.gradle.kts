@@ -18,21 +18,38 @@ dependencies {
  */
 @CacheableTask
 abstract class GenerateCatalogText : DefaultTask() {
-    @get:InputFile
+    /**
+     * The catalogs in catalog/, of which there must be one. A file tree, not the file it holds:
+     * the configuration cache keeps a file resolved while the build is configured, and after a
+     * catalog is renamed would hand the task the old path, where a tree is listed again each run.
+     */
+    @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val catalog: RegularFileProperty
+    abstract val catalogs: ConfigurableFileCollection
 
     /** catalog/dom-events.json, the DOM events both editors offer after `data-on:`, compiled in beside the catalog. */
     @get:InputFile
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val domEvents: RegularFileProperty
 
+    /** catalog/template-syntax.json, the template engines' constructs the checks leave out, compiled in beside the catalog. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val templateSyntax: RegularFileProperty
+
+    /** catalog/javascript-words.json, the JavaScript words both editors colour in an expression, compiled in beside the catalog. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val javascriptWords: RegularFileProperty
+
     @get:OutputDirectory
     abstract val output: DirectoryProperty
 
     @TaskAction
     fun generate() {
-        val file = catalog.get().asFile
+        val file =
+            catalogs.files.singleOrNull()
+                ?: throw GradleException("catalog/ must hold one datastar-*.json, not ${catalogs.files.map { it.name }}")
         val version = file.name.removePrefix("datastar-").removeSuffix(".json")
         val declared = (groovy.json.JsonSlurper().parse(file) as Map<*, *>)["version"]
         check(declared == version) { "${file.name} says it is Datastar $declared" }
@@ -60,9 +77,11 @@ abstract class GenerateCatalogText : DefaultTask() {
         }
         val pieces = pieces(file.readText())
         val events = pieces(domEvents.get().asFile.readText())
+        val syntax = pieces(templateSyntax.get().asFile.readText())
+        val words = pieces(javascriptWords.get().asFile.readText())
         val text =
             """
-            |// Generated from catalog/${file.name} and catalog/dom-events.json by :streamlord-analysis:generateCatalogText. Do not edit.
+            |// Generated from catalog/${file.name}, catalog/dom-events.json, catalog/template-syntax.json and catalog/javascript-words.json by :streamlord-analysis:generateCatalogText. Do not edit.
             |package io.github.markusaugust.streamlord.analysis
             |
             |/** catalog/${file.name} as it stands, for [Catalog.default]. */
@@ -79,6 +98,18 @@ abstract class GenerateCatalogText : DefaultTask() {
             |        listOf(
             |$events,
             |        ).joinToString("")
+            |
+            |    /** catalog/template-syntax.json as it stands, for [TEMPLATE_SYNTAX]. */
+            |    val TEMPLATE_SYNTAX: String =
+            |        listOf(
+            |$syntax,
+            |        ).joinToString("")
+            |
+            |    /** catalog/javascript-words.json as it stands, for the words Tokens.kt colours. */
+            |    val JAVASCRIPT_WORDS: String =
+            |        listOf(
+            |$words,
+            |        ).joinToString("")
             |}
             |
             """.trimMargin()
@@ -90,14 +121,15 @@ abstract class GenerateCatalogText : DefaultTask() {
 
 val generateCatalogText =
     tasks.register<GenerateCatalogText>("generateCatalogText") {
-        catalog.set(
+        catalogs.from(
             rootProject.layout.projectDirectory
                 .dir("catalog")
                 .asFileTree
-                .matching { include("datastar-*.json") }
-                .singleFile,
+                .matching { include("datastar-*.json") },
         )
         domEvents.set(rootProject.layout.projectDirectory.file("catalog/dom-events.json"))
+        templateSyntax.set(rootProject.layout.projectDirectory.file("catalog/template-syntax.json"))
+        javascriptWords.set(rootProject.layout.projectDirectory.file("catalog/javascript-words.json"))
         output.set(layout.buildDirectory.dir("generated/catalogText"))
     }
 
@@ -115,4 +147,11 @@ tasks.withType<Test>().configureEach {
     inputs.dir(root.dir("conformance/client")).withPropertyName("clientFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(root.dir("conformance/dsl")).withPropertyName("dslFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
+// How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript
+// build of the same tests, editors/vscode/analysis-js, brings its own. testCommon runs on both.
+kotlin.sourceSets.test {
+    kotlin.srcDir(project(":streamlord-core").layout.projectDirectory.dir("src/testJvm/kotlin"))
+    kotlin.srcDir(project(":streamlord-core").layout.projectDirectory.dir("src/testCommon/kotlin"))
 }

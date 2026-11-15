@@ -1,0 +1,2 @@
+{"what":"file","language":"kotlin"}
+{"what":"rename","at":"1:1-5:1","error":"No signal here to rename."}

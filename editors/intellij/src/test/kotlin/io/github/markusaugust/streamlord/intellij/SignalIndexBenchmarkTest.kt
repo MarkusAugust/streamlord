@@ -14,6 +14,7 @@ import com.intellij.psi.search.PsiSearchHelper
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
@@ -85,7 +86,7 @@ class SignalIndexBenchmarkTest : BasePlatformTestCase() {
                     PsiSearchHelper.getInstance(project).processAllFilesWithWordInText(word, scope, { file ->
                         candidates++
                         val language = if (file.fileType == KotlinFileType.INSTANCE) SourceLanguage.KOTLIN else SourceLanguage.HTML
-                        if (word in collectSignals(file.text, language)) declaring++
+                        if (word in collectSignals(Source(file.text, language))) declaring++
                         true
                     }, true)
                 }.single()

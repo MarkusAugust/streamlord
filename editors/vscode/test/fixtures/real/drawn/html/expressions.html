@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<body>
+<button data-on:click="$count++">1</button>
+<button data-on:click="$foo.0.name">2</button>
+<button data-on:click="$items.12.title + $a.b.0 + 1.5">3</button>
+<button data-on:click="$foo.0.name +">4</button>
+<button data-on:click="$msg = 'mail me @home (please)'">5</button>
+<button data-on:click="$b = `x @foo(y)`">6</button>
+<button data-on:click="$a = 1 // @nope('x')">7</button>
+<button data-on:click="/* @nada(1) */ $a = 1">8</button>
+<button data-on:click="`${@bogus('/y')}`">9</button>
+<button data-on:click="@GET('/x')">10</button>
+<button data-on:click="@get ('/x')">11</button>
+<button data-on:click="$a-B">12</button>
+<button data-on:click="$n-1">13</button>
+<button data-on:click="$a-b-1">14</button>
+<button data-on:click="$a-b.c-d">15</button>
+<button data-on:click="$foo-_bar">16</button>
+<button data-on:click="'$a-b' + `$c-d ${$e-f}`">17</button>
+<button data-on:click="'$a-b' + `$c-d ${ {e: $e-f}.e }`">18</button>
+<button data-on:click="{a: 1, b: $c}">19</button>
+<button data-on:click="  ">20</button>
+<button data-on:click="$a++ / 2">21</button>
+<button data-on:click="if ($a) /x/.test($b) && @get('/y')">22</button>
+<button data-on:click="import('/x.js').then(m => m.go())">23</button>
+<button data-on:click="for (let x in y, z) {}">24</button>
+<button data-on:click="$a ?? $b || $c">25</button>
+<button data-on:click="($a ?? $b) || $c">26</button>
+<button data-on:click="const x">27</button>
+<button data-on:click="break">28</button>
+<button data-on:click="/(/.test($a)">29</button>
+<button data-on:click="'\u00'">30</button>
+<button data-on:click="1.5n">31</button>
+<button data-on:click="1__0">32</button>
+<button data-on:click="switch ($a) { default: 1; default: 2 }">33</button>
+<button data-on:click="((a, a) => 1)()">34</button>
+<button data-on:click="await @post('/save')">35</button>
+<button data-on:click="let $x = 1">36</button>
+<button data-on:click="x = {$a: 1}">37</button>
+<button data-on:click="$user.name = 'x'; $items[0] = 2">38</button>
+<button data-on:click="`total: $total ${$a}`">39</button>
+<button data-on:click="`total: $total ${ {a: 1}.a }`">40</button>
+<button data-on:click="`mail @home(x) ${$a}`">41</button>
+<button data-on:click="`mail @home(x) ${ {a: 1}.a }`">42</button>
+<button data-on:click="`cost $c`">43</button>
+<button data-on:click="/$re/.test($s)">44</button>
+<button data-on:click="/'/.test($a) && $b == 'x'">45</button>
+<button data-on:click="`it's ${$b}` + 'x'">46</button>
+<button data-on:click="`it's ${ {b: $b}.b }` + 'x'">47</button>
+<button data-on:click='$a = 1 /* say "hi */; $b = "x"'>48</button>
+<button data-on:click="@get">49</button>
+<button data-on:click="$f = @peek">50</button>
+<button data-on:click="$a@get('/x')">51</button>
+<button data-on:click="$år + 1">52</button>
+<button data-on:click="new.target === undefined">53</button>
+<button data-on:click="if ($a) /$x/.test($b)">54</button>
+<button data-on:click="return /$x/.test($b)">55</button>
+<button data-on:click="$a++ / $b / 2">56</button>
+<button data-on:click="$a[0] / $b / 2">57</button>
+<button data-on:click="2 / $b / 2">58</button>
+<button data-on:click="`${@foo$bar(1)}`">59</button>
+<button data-on:click="/'/.test('x') + '$b'">60</button>
+<button data-on:click='/"/.test(x) + "$b"'>61</button>
+<button data-on:click="`Hi ${$a}, you owe $5`">62</button>
+<button data-on:click="`Hi ${ {a: $a}.a }, you owe $5`">63</button>
+<button data-on:click="`total: $total ${ {a: 1}.a } `">64</button>
+<button data-on:click="/[/]$a/.test($b)">65</button>
+<button data-on:click="@get('/x')">66</button>
+<button data-on:click="$grid-col-2">67</button>
+<button data-on:click="$foo-bar">68</button>
+<button data-on:click="`$c-d`">69</button>
+<button data-on:click="$count++; @post('/x', {headers: {'X-A': '1'}})">70</button>
+<button data-on:click="evt.key === 'Escape' && ($open = false)">71</button>
+<button data-on:click="@peek(() => $a.b)">72</button>
+<button data-on:click="{count: 0, name: '', nested: {a: [1, 2, 3]}}">73</button>
+<button data-on:click="{count: 0}">74</button>
+<button data-on:click="{count: }">75</button>
+<button data-on:click="{n: , m: 1}">76</button>
+<button data-on:click="@post('/x'">77</button>
+<button data-on:click="@Post('/x')">78</button>
+<button data-on:click="@clipboard('x')">79</button>
+<button data-on:click="$foo-bar + $form.first-name-x + $a - $b + $count-1">80</button>
+<button data-on:click="$fooBar && $a-$b && $n - 1">81</button>
+<button data-on:click="($total-el.offsetWidth) + 'px'; $count-evt.detail.delta; $n-fn(1); $m-arr[0]">82</button>
+<button data-on:click="@get('/item/$id-preview') && $x">83</button>
+</body>
+</html>

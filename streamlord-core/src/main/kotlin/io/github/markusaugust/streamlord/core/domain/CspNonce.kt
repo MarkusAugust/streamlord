@@ -1,7 +1,7 @@
 package io.github.markusaugust.streamlord.core.domain
 
-import java.security.SecureRandom
-import java.util.Base64
+import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.randomBase64
 
 /**
  * The nonce that turns Datastar's CSP mode on, and the header it has to agree with.
@@ -32,12 +32,17 @@ public object CspNonce {
      */
     public const val ATTRIBUTE: String = "data-nonce"
 
+    /**
+     * The name of the one Trusted Types policy Datastar's client creates in CSP mode (csp.ts:19).
+     * Every string it turns into markup or a script, a patch, a patched-in script, a compiled
+     * expression, passes through it, so a policy that requires Trusted Types allows it by name.
+     */
+    public const val TRUSTED_TYPES_POLICY: String = "datastar"
+
     private const val BYTES = 16
 
     // Section 2.3.1 of CSP Level 3: a nonce-value is a base64-value, padding included.
-    private val BASE64 = Regex("[A-Za-z0-9+/\\-_]+={0,2}")
-
-    private val random = SecureRandom()
+    private val BASE64 = regex("[A-Za-z0-9+/\\-_]+={0,2}")
 
     /**
      * A fresh nonce: 16 random bytes from [SecureRandom], base64 encoded.
@@ -46,22 +51,26 @@ public object CspNonce {
      * responses turns it into a constant, and a constant an attacker can read out of one page
      * and paste into the next is not a nonce.
      */
-    public fun generate(): String {
-        val bytes = ByteArray(BYTES)
-        random.nextBytes(bytes)
-        return Base64.getEncoder().encodeToString(bytes)
-    }
+    public fun generate(): String = randomBase64(BYTES)
 
     /**
      * A policy to start from: same-origin everything, scripts from this origin or carrying
-     * [nonce], no plugins, and a `<base>` that cannot be moved off the origin.
+     * [nonce], no plugins, a `<base>` that cannot be moved off the origin, and Trusted Types
+     * required, with Datastar's own policy, [TRUSTED_TYPES_POLICY], the one allowed. A string
+     * written into the DOM as markup or a script by any other code on the page is then refused
+     * by the browser, as are an inline `on*` attribute and a `<script src>` that a patch morphs
+     * in, which Datastar sets with `setAttribute`. A browser without Trusted Types ignores both
+     * directives.
      *
      * It is deliberately strict and deliberately small, so the first thing it does in a real
      * application is break something you then have to name. Replace it with your own as soon as
      * you know what the page actually loads.
      */
     public fun starterPolicy(nonce: String): String =
-        "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'"
+        // No 'allow-duplicates': Datastar creates its policy once, and with it any later script could
+        // create a `datastar` policy of its own that passes every string through.
+        "default-src 'self'; script-src 'self' 'nonce-$nonce'; object-src 'none'; base-uri 'self'; " +
+            "require-trusted-types-for 'script'; trusted-types $TRUSTED_TYPES_POLICY"
 
     /**
      * Return [nonce] if it can survive the trip into both a header and an HTML attribute.
@@ -85,9 +94,9 @@ public object CspNonce {
         when {
             nonce.isEmpty() -> "The CSP nonce is empty. Datastar raises NonceRequired for an empty data-nonce and does not start."
 
-            !BASE64.matches(
+            BASE64.matchEntire(
                 nonce,
-            ) -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
+            ) == null -> "'$nonce' is not a valid CSP nonce; it must be a base64 value, as CSP Level 3 section 2.3.1 defines one"
 
             else -> null
         }

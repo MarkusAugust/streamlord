@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Inspector } from "../src/inspector.ts";
-import type { DatastarFrame } from "../src/sse.ts";
+import type { DatastarFrame } from "../src/analysis.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
 import { files, Position, settings, unreadable, Uri, workspace } from "./vscode-mock.ts";
@@ -23,7 +23,7 @@ function inspector(): { apply: (signals: string, onlyIfMissing?: string) => void
 }
 
 describe("inspector signal store", () => {
-  // The client keeps the keys a patch set before the one it fails on (signals.ts in 1.0.4).
+  // The client keeps the keys a patch set before the one it fails on (signals.ts in 1.0.5).
   it("shows the keys set before a patch failed, and the reason", () => {
     const { apply, posted } = inspector();
     apply('{"a":[1,2]}');

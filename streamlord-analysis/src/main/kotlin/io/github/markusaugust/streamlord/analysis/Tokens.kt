@@ -1,9 +1,14 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonParser
+
 /*
- * Syntax highlighting of what Datastar adds to JavaScript and HTML: signals, actions, the scope
- * variables, option keys, durations, and the parts of a `data-*` attribute name. Everything that
- * is ordinary JavaScript gets the editor's own colours; only the Datastar concepts need rules.
+ * Syntax highlighting of a Datastar expression and of a `data-*` attribute name. Every token gets
+ * the kind the VS Code grammar (editors/vscode/syntaxes/datastar-expression.tmLanguage.json) gives
+ * the same text, so both editors colour it as the same kind of thing; each editor maps a kind to a
+ * standard key or scope of the user's theme.
  */
 
 public enum class TokenKind {
@@ -34,7 +39,7 @@ public enum class TokenKind {
     /** A regular expression literal. */
     REGEX,
 
-    /** A keyword of JavaScript's own. */
+    /** A keyword of JavaScript's own, `true`, `null` and the arrow `=>` among them. */
     KEYWORD,
 
     /** A number of JavaScript's own. */
@@ -42,6 +47,30 @@ public enum class TokenKind {
 
     /** A Kotlin `${'$'}` escape for a dollar, in Kotlin strings. */
     KOTLIN_DOLLAR_ESCAPE,
+
+    /** The key of an object literal: `a` in `{a: 1}`. */
+    OBJECT_KEY,
+
+    /** A property after a dot: `length` in `x.length`. */
+    PROPERTY,
+
+    /** A function called by name or after a dot: `max` in `Math.max(1)`. */
+    METHOD,
+
+    /** One of the browser's globals: `window`, `Math`, `JSON`. */
+    GLOBAL,
+
+    /** Any other name. */
+    IDENTIFIER,
+
+    /** An operator: `+`, `===`, `&&`, `...`. */
+    OPERATOR,
+
+    /** A comment, `/* ... */` or `// ...`. */
+    COMMENT,
+
+    /** The `${` and `}` around an expression in a template literal. */
+    TEMPLATE_PUNCTUATION,
 }
 
 public data class Token(
@@ -52,181 +81,344 @@ public data class Token(
 
 private val BACKEND_ACTIONS = Catalog.default.backendActions.toSet()
 
-// The options of a backend action, and the keys of two of them that hold objects: filterSignals'
-// include and exclude, and responseOverrides' (fetch.ts:268-271 in 1.0.4).
+// The options of a backend action, and the keys of the one that holds an object: filterSignals'
+// include and exclude.
 private val OPTION_KEYS =
     Catalog.default.fetchOptions
         .map { it.name }
         .toSet() +
-        setOf("include", "exclude", "mode", "namespace", "useViewTransition", "onlyIfMissing")
+        setOf("include", "exclude")
+
+/** catalog/javascript-words.json, which the VS Code grammar's keywords, constants and globals are written from. */
+private val JS_WORDS = JsonParser.parseObject(CatalogText.JAVASCRIPT_WORDS)
+private val JS_CONSTANTS = JS_WORDS.array("constants")!!.strings().toSet()
 private val JS_KEYWORDS =
-    setOf(
-        "if",
-        "else",
-        "return",
-        "await",
-        "async",
-        "new",
-        "typeof",
-        "instanceof",
-        "in",
-        "of",
-        "for",
-        "while",
-        "do",
-        "switch",
-        "case",
-        "break",
-        "continue",
-        "throw",
-        "try",
-        "catch",
-        "finally",
-        "void",
-        "delete",
-        "function",
-        "let",
-        "const",
-        "var",
-        "this",
-        "yield",
-        "class",
-        "true",
-        "false",
-        "null",
-        "undefined",
-        "NaN",
-        "Infinity",
-    )
+    JS_WORDS
+        .obj("keywords")!!
+        .values
+        .flatMap { (it as JsonArray).strings() }
+        .toSet() + JS_CONSTANTS
+private val JS_GLOBALS = JS_WORDS.array("globals")!!.strings().toSet()
+
+/** The words after which a value follows, as after a name: a slash then divides. */
+private val VALUE_WORDS = JS_CONSTANTS + "this"
+
+/** JavaScript's operators, the longest first so that each is read whole. */
+private val OPERATORS =
+    (
+        ">>>= ... === !== **= <<= >>= >>> &&= ||= ??= => == != <= >= && || ?? ?. ++ -- += -= *= /= %= &= |= ^= ** << >> " +
+            "= + - * / % < > ! ? : & | ^ ~"
+    ).split(' ')
+
+/** HTML's spellings of a quote, which a value in an attribute may hold for one. */
+private val ENTITY_QUOTES = listOf("&quot;", "&#34;", "&#39;", "&apos;")
+
 private val KOTLIN_DOLLAR = "\${'$'}"
 
-/** Tokenize a Datastar expression for highlighting; offsets are relative to [text]. */
-public fun tokenizeExpression(text: String): List<Token> {
+private val DURATION_WORD = regex("""\d+(ms|s)""")
+
+/**
+ * Tokenize a Datastar expression for highlighting; offsets are relative to [text]. What [opaque]
+ * covers is somebody else's, a Kotlin template or a template engine's placeholder: it is read as
+ * a value and gets no token, and a string or comment around it keeps the parts outside it.
+ */
+public fun tokenizeExpression(
+    text: String,
+    opaque: List<IntRange> = emptyList(),
+): List<Token> {
+    if (opaque.isEmpty()) return ExpressionScanner(text).all()
+    // Each range reads as one value, a digit amid spaces, so that a name next to it stays whole and a slash after it divides.
+    val masked = CharArray(text.length) { text[it] }
+    for (r in opaque) {
+        val first = maxOf(0, r.first)
+        val last = minOf(text.length - 1, r.last)
+        for (k in first..last) masked[k] = ' '
+        if (first <= last) masked[(first + last + 1) / 2] = '0'
+    }
     val out = ArrayList<Token>()
-    var i = 0
-    var lastSignificant: Char? = null
-    while (i < text.length) {
-        val c = text[i]
-        when {
-            text.startsWith(KOTLIN_DOLLAR, i) -> {
-                out += Token(i, i + KOTLIN_DOLLAR.length, TokenKind.KOTLIN_DOLLAR_ESCAPE)
-                // `${'$'}count` is the signal `$count`: the name that follows is a signal.
-                var j = i + KOTLIN_DOLLAR.length
-                if (j < text.length && text[j].isIdentPart()) j = signalTokens(text, j, j, out)
-                lastSignificant = 'a'
-                i = j
+    for (t in ExpressionScanner(masked.concatToString()).all()) {
+        val inside = opaque.filter { t.start <= it.last && it.first < t.end }.sortedBy { it.first }
+        if (inside.isEmpty()) {
+            out += t
+        } else if (t.kind == TokenKind.STRING || t.kind == TokenKind.COMMENT) {
+            var from = t.start
+            for (r in inside) {
+                if (r.first > from) out += Token(from, r.first, t.kind)
+                from = maxOf(from, r.last + 1)
             }
-
-            c == '\'' || c == '"' || c == '`' -> {
-                var j = i + 1
-                while (j < text.length && text[j] != c) {
-                    if (text[j] == '\\') j++
-                    j++
-                }
-                j = minOf(j + 1, text.length)
-                out += Token(i, j, TokenKind.STRING)
-                lastSignificant = c
-                i = j
-            }
-
-            c == '/' && i + 1 < text.length && text[i + 1] != '/' && text[i + 1] != '*' && regexAllowedAfter(lastSignificant) -> {
-                var j = i + 1
-                var inClass = false
-                while (j < text.length && text[j] != '\n') {
-                    val d = text[j]
-                    if (d == '\\') {
-                        j++
-                    } else if (d == '[') {
-                        inClass = true
-                    } else if (d == ']') {
-                        inClass = false
-                    } else if (d == '/' && !inClass) {
-                        break
-                    }
-                    j++
-                }
-                if (j >= text.length || text[j] != '/') {
-                    // Not a regex after all: a lone slash.
-                    lastSignificant = '/'
-                    i++
-                } else {
-                    j++
-                    while (j < text.length && text[j].isLetter()) j++
-                    out += Token(i, j, TokenKind.REGEX)
-                    lastSignificant = 'a'
-                    i = j
-                }
-            }
-
-            c == '$' && i + 1 < text.length && text[i + 1].isIdentPart() -> {
-                i = signalTokens(text, i, i + 1, out)
-                lastSignificant = 'a'
-            }
-
-            c == '@' && i + 1 < text.length && text[i + 1].isIdentStart() -> {
-                var j = i + 1
-                while (j < text.length && text[j].isIdentPart()) j++
-                val name = text.substring(i + 1, j)
-                var k = j
-                while (k < text.length && text[k].isWhitespace()) k++
-                if (k < text.length && text[k] == '(') {
-                    out += Token(i, j, if (name in BACKEND_ACTIONS) TokenKind.ACTION_BACKEND else TokenKind.ACTION)
-                }
-                lastSignificant = 'a'
-                i = j
-            }
-
-            c.isIdentStart() -> {
-                var j = i + 1
-                while (j < text.length && text[j].isIdentPart()) j++
-                val word = text.substring(i, j)
-                val afterDot = i > 0 && text[i - 1] == '.'
-                var k = j
-                while (k < text.length && text[k].isWhitespace()) k++
-                val beforeColon = k < text.length && text[k] == ':' && (k + 1 >= text.length || text[k + 1] != ':')
-                when {
-                    afterDot -> {}
-
-                    word in Catalog.default.scopeNames -> {
-                        out += Token(i, j, TokenKind.SCOPE_VARIABLE)
-                    }
-
-                    word in OPTION_KEYS && beforeColon -> {
-                        out += Token(i, j, TokenKind.OPTION_KEY)
-                    }
-
-                    word in JS_KEYWORDS && !beforeColon -> {
-                        out += Token(i, j, TokenKind.KEYWORD)
-                    }
-                }
-                lastSignificant = if (word in JS_KEYWORDS && word !in setOf("this", "true", "false", "null", "undefined")) 'k' else 'a'
-                i = j
-            }
-
-            c.isDigit() -> {
-                var j = i + 1
-                while (j < text.length && (text[j].isLetterOrDigit() || text[j] == '.' || text[j] == '_')) j++
-                val word = text.substring(i, j)
-                out += Token(i, j, if (Regex("""\d+(ms|s)""").matches(word)) TokenKind.DURATION else TokenKind.NUMBER)
-                lastSignificant = 'a'
-                i = j
-            }
-
-            c.isWhitespace() -> {
-                i++
-            }
-
-            else -> {
-                lastSignificant = c
-                i++
-            }
+            if (from < t.end) out += Token(from, t.end, t.kind)
         }
     }
     return out
 }
 
+private class ExpressionScanner(
+    private val text: String,
+) {
+    private val out = ArrayList<Token>()
+
+    /** What came before, for a slash: `a` a value, `k` a keyword, else the character. */
+    private var last: Char? = null
+
+    /** Where the colon after an object's key stands: punctuation there, no operator, as the VS Code grammar scopes it. */
+    private var keyColon = -1
+
+    fun all(): List<Token> {
+        run(0, inTemplate = false)
+        return out
+    }
+
+    /** Reads from [from] to the end, or to the `}` that ends a template literal's expression; returns where it stopped. */
+    private fun run(
+        from: Int,
+        inTemplate: Boolean,
+    ): Int {
+        var i = from
+        var depth = 0
+        while (i < text.length) {
+            val c = text[i]
+            val next = text.getOrNull(i + 1)
+            when {
+                inTemplate && c == '}' && depth == 0 -> {
+                    return i
+                }
+
+                text.startsWith(KOTLIN_DOLLAR, i) -> {
+                    out += Token(i, i + KOTLIN_DOLLAR.length, TokenKind.KOTLIN_DOLLAR_ESCAPE)
+                    // `${'$'}count` is the signal `$count`: the name that follows is a signal.
+                    var j = i + KOTLIN_DOLLAR.length
+                    if (j < text.length && text[j].isIdentPart()) j = signalTokens(text, j, j, out)
+                    last = 'a'
+                    i = j
+                }
+
+                c == '&' && ENTITY_QUOTES.any { text.startsWith(it, i) } -> {
+                    val quote = ENTITY_QUOTES.first { text.startsWith(it, i) }
+                    val close = text.indexOf(quote, i + quote.length)
+                    val end = if (close < 0) text.length else close + quote.length
+                    out += Token(i, end, TokenKind.STRING)
+                    last = 'a'
+                    i = end
+                }
+
+                c == '/' && next == '/' -> {
+                    val end = text.indexOf('\n', i).let { if (it < 0) text.length else it }
+                    out += Token(i, end, TokenKind.COMMENT)
+                    i = end
+                }
+
+                c == '/' && next == '*' -> {
+                    val end = text.indexOf("*/", i + 2).let { if (it < 0) text.length else it + 2 }
+                    out += Token(i, end, TokenKind.COMMENT)
+                    i = end
+                }
+
+                c == '`' -> {
+                    i = template(i)
+                    last = 'a'
+                }
+
+                c == '\'' || c == '"' || (c == '\\' && next == '"') -> {
+                    // A string in escaped quotes, as a plain Kotlin string writes JSON, ends at the next escaped quote.
+                    val escaped = c == '\\'
+                    var j = i + if (escaped) 2 else 1
+                    while (j < text.length && !(if (escaped) text.startsWith("\\\"", j) else text[j] == c)) {
+                        if (text[j] == '\\' && !escaped) j++
+                        j++
+                    }
+                    j = minOf(j + if (escaped) 2 else 1, text.length)
+                    val key = (last == '{' || last == ',') && markKeyColon(j)
+                    out += Token(i, j, if (key) TokenKind.OBJECT_KEY else TokenKind.STRING)
+                    last = 'a'
+                    i = j
+                }
+
+                c == '/' && regexAllowedAfter(last) && regexEnd(i) > 0 -> {
+                    val j = regexEnd(i)
+                    out += Token(i, j, TokenKind.REGEX)
+                    last = 'a'
+                    i = j
+                }
+
+                c == '$' && next != null && next.isIdentPart() -> {
+                    i = signalTokens(text, i, i + 1, out)
+                    last = 'a'
+                }
+
+                c == '@' && next != null && next.isIdentStart() -> {
+                    var j = i + 1
+                    while (j < text.length && text[j].isIdentPart()) j++
+                    val name = text.substring(i + 1, j)
+                    if (nextNonSpace(j) == '(') {
+                        out += Token(i, j, if (name in BACKEND_ACTIONS) TokenKind.ACTION_BACKEND else TokenKind.ACTION)
+                    }
+                    last = 'a'
+                    i = j
+                }
+
+                c.isDigit() || (c == '.' && next != null && next.isDigit() && text.getOrNull(i - 1)?.isIdentPart() != true) -> {
+                    i = number(i)
+                    last = 'a'
+                }
+
+                c.isIdentStart() -> {
+                    i = word(i)
+                }
+
+                c.isWhitespace() -> {
+                    i++
+                }
+
+                else -> {
+                    val op = OPERATORS.firstOrNull { text.startsWith(it, i) }
+                    if (op != null) {
+                        if (i != keyColon) out += Token(i, i + op.length, if (op == "=>") TokenKind.KEYWORD else TokenKind.OPERATOR)
+                        last = if (op == "++" || op == "--") 'a' else op.last()
+                        i += op.length
+                    } else {
+                        if (c == '{') depth++
+                        if (c == '}' && depth > 0) depth--
+                        last = c
+                        i++
+                    }
+                }
+            }
+        }
+        return i
+    }
+
+    /** A template literal from its backtick: its text as strings, each `${...}` as an expression. */
+    private fun template(start: Int): Int {
+        var from = start
+        var j = start + 1
+        while (j < text.length && text[j] != '`') {
+            when {
+                text[j] == '\\' -> {
+                    j += 2
+                }
+
+                (text.startsWith("\${", j) && !text.startsWith(KOTLIN_DOLLAR, j)) || text.startsWith(KOTLIN_DOLLAR + "{", j) -> {
+                    // A Kotlin string writes the template's dollar as ${'$'}.
+                    val open = if (text.startsWith(KOTLIN_DOLLAR, j)) KOTLIN_DOLLAR.length + 1 else 2
+                    if (j > from) out += Token(from, j, TokenKind.STRING)
+                    out += Token(j, j + open, TokenKind.TEMPLATE_PUNCTUATION)
+                    val outer = last
+                    last = null
+                    val close = run(j + open, inTemplate = true)
+                    last = outer
+                    if (close >= text.length) return text.length
+                    out += Token(close, close + 1, TokenKind.TEMPLATE_PUNCTUATION)
+                    j = close + 1
+                    from = j
+                }
+
+                else -> {
+                    j++
+                }
+            }
+        }
+        val end = minOf(j + 1, text.length)
+        if (end > from) out += Token(from, end, TokenKind.STRING)
+        return end
+    }
+
+    /** Where a regular expression that opens at [start] ends, or 0 when the slash opens none on its line. */
+    private fun regexEnd(start: Int): Int {
+        var j = start + 1
+        var inClass = false
+        while (j < text.length && text[j] != '\n') {
+            val d = text[j]
+            if (d == '\\') {
+                j++
+            } else if (d == '[') {
+                inClass = true
+            } else if (d == ']') {
+                inClass = false
+            } else if (d == '/' && !inClass) {
+                j++
+                while (j < text.length && text[j].isLetter()) j++
+                return j
+            }
+            j++
+        }
+        return 0
+    }
+
+    private fun number(start: Int): Int {
+        var j = start
+        val radix = text[j] == '0' && text.getOrNull(j + 1)?.lowercaseChar() in setOf('x', 'b', 'o')
+        if (radix) j += 2
+        var dot = false
+        while (j < text.length) {
+            val d = text[j]
+            when {
+                d.isLetterOrDigit() || d == '_' -> {
+                    j++
+                }
+
+                d == '.' && !dot && !radix && text.getOrNull(j + 1)?.isDigit() == true -> {
+                    dot = true
+                    j++
+                }
+
+                (d == '+' || d == '-') && !radix && text[j - 1].lowercaseChar() == 'e' && text.getOrNull(j + 1)?.isDigit() == true -> {
+                    j++
+                }
+
+                else -> {
+                    break
+                }
+            }
+        }
+        val word = text.substring(start, j)
+        out += Token(start, j, if (DURATION_WORD.matchEntire(word) != null) TokenKind.DURATION else TokenKind.NUMBER)
+        return j
+    }
+
+    private fun word(start: Int): Int {
+        var j = start + 1
+        while (j < text.length && text[j].isIdentPart()) j++
+        val word = text.substring(start, j)
+        val afterDot = start > 0 && text[start - 1] == '.'
+        val after = nextNonSpace(j)
+        val beforeColon = after == ':' && text.getOrNull(text.indexOf(':', j) + 1) != ':'
+        val keyPlace = beforeColon && (last == '{' || last == ',')
+        val kind =
+            when {
+                afterDot -> if (after == '(') TokenKind.METHOD else TokenKind.PROPERTY
+                word in Catalog.default.scopeNames -> TokenKind.SCOPE_VARIABLE
+                word in OPTION_KEYS && keyPlace -> TokenKind.OPTION_KEY
+                keyPlace -> TokenKind.OBJECT_KEY
+                word in JS_KEYWORDS -> TokenKind.KEYWORD
+                word in JS_GLOBALS -> TokenKind.GLOBAL
+                after == '(' -> TokenKind.METHOD
+                else -> TokenKind.IDENTIFIER
+            }
+        out += Token(start, j, kind)
+        if (keyPlace) markKeyColon(j)
+        last = if (kind == TokenKind.KEYWORD && word !in VALUE_WORDS) 'k' else 'a'
+        return j
+    }
+
+    /** Note the colon after a key that ends at [from], if one follows it; whether one does. */
+    private fun markKeyColon(from: Int): Boolean {
+        var k = from
+        while (k < text.length && text[k].isWhitespace()) k++
+        if (text.getOrNull(k) != ':' || text.getOrNull(k + 1) == ':') return false
+        keyColon = k
+        return true
+    }
+
+    /** The first character from [from] that is not white space. */
+    private fun nextNonSpace(from: Int): Char? {
+        var k = from
+        while (k < text.length && text[k].isWhitespace()) k++
+        return text.getOrNull(k)
+    }
+}
+
 /**
- * The signal the client's pattern `\$(\w+(?:[.-]\w+)*)` (engine.ts:449 in 1.0.4) reads at [nameStart]:
+ * The signal the client's pattern `\$(\w+(?:[.-]\w+)*)` (engine.ts:546 in 1.0.5) reads at [nameStart]:
  * the name up to its first dot as a SIGNAL token from [start], the rest as its path. Returns the
  * offset after the match, which a trailing dot or hyphen is outside of.
  */
@@ -253,8 +445,71 @@ private fun signalTokens(
 /** After a value a slash divides; after an operator, a bracket or a keyword it opens a regex. */
 private fun regexAllowedAfter(last: Char?): Boolean = last == null || last == 'k' || last !in setOf('a', ')', ']', '}')
 
+private val SIGNAL_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*(?:\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*""")
+
+/**
+ * A signal named without its `$`, as `data-bind="user.name"` and `dataBind("user.name")` write it:
+ * the name and its path, or nothing when [text] is no name the client would read.
+ */
+public fun tokenizeSignalName(text: String): List<Token> {
+    val start = text.indexOfFirst { !it.isWhitespace() }
+    if (start < 0) return emptyList()
+    val end = text.indexOfLast { !it.isWhitespace() } + 1
+    if (SIGNAL_NAME.matchEntire(text.substring(start, end)) == null) return emptyList()
+    val out = ArrayList<Token>()
+    signalTokens(text.substring(0, end), start, start, out)
+    return out
+}
+
+/**
+ * Where a template engine writes into a value before the browser reads it: the constructs of
+ * catalog/template-syntax.json and Streamlord's own `__kt__`. A `${` inside a JavaScript template
+ * literal is JavaScript's own and is none, unless the file's [engine] writes it first; Razor's
+ * constructs are Razor's, and the first `@` of its `@@`, which writes the other.
+ */
+public fun templatePlaceholders(
+    value: String,
+    engine: TemplateEngine? = null,
+): List<IntRange> {
+    val quotes = QuoteScan(value)
+    val out = ArrayList<IntRange>()
+    for (m in TEMPLATE_SYNTAX.findAll(value)) {
+        var s = m.range.first
+        while (s < m.range.last && (value[s].isWhitespace() || value[s] == '>')) s++
+        if (out.lastOrNull()?.let { s <= it.last } == true) continue
+        if (engine?.writesDollarBraces != true && value.startsWith("\${", s) && quotes.at(s) == '`') continue
+        out += s until placeholderEnd(value, s)
+    }
+    if (engine == TemplateEngine.RAZOR) {
+        out += razorConstructs(value)
+        var at = value.indexOf("@@")
+        while (at >= 0) {
+            out += at..at
+            at = value.indexOf("@@", at + 2)
+        }
+    }
+    return out.sortedBy { it.first }
+}
+
 /** The parts of a rendered `data-*` attribute name, for highlighting. */
-public enum class NamePart { PREFIX, PLUGIN, KEY_SEPARATOR, KEY, MODIFIER_SIGIL, MODIFIER, MODIFIER_ARG_DOT, MODIFIER_ARG }
+public enum class NamePart {
+    PREFIX,
+    PLUGIN,
+    KEY_SEPARATOR,
+    KEY,
+    MODIFIER_SIGIL,
+    MODIFIER,
+    MODIFIER_ARG_DOT,
+
+    /** A word: `leading`, `kebab`. */
+    MODIFIER_ARG,
+
+    /** A number: `50` in `__threshold.50`. */
+    MODIFIER_ARG_NUMBER,
+
+    /** A duration: `500ms` in `__debounce.500ms`. */
+    MODIFIER_ARG_DURATION,
+}
 
 public data class NameToken(
     val start: Int,
@@ -262,12 +517,17 @@ public data class NameToken(
     val part: NamePart,
 )
 
-/** Split an attribute name such as `data-on:click__debounce.500ms` into coloured parts; null when it is not a Datastar attribute. */
+private val DIGITS = regex("""\d+""")
+
+/**
+ * Split an attribute name such as `data-on:click__debounce.500ms` into coloured parts; null when it
+ * is not a Datastar attribute. The prefix is matched in any case, as the browser lowercases a name.
+ */
 public fun tokenizeAttributeName(
     name: String,
     prefix: String,
 ): List<NameToken>? {
-    if (!name.startsWith(prefix) || name.length <= prefix.length) return null
+    if (!name.startsWith(prefix, ignoreCase = true) || name.length <= prefix.length) return null
     val out = ArrayList<NameToken>()
     out += NameToken(0, prefix.length, NamePart.PREFIX)
     val rest = name.substring(prefix.length)
@@ -293,7 +553,13 @@ public fun tokenizeAttributeName(
         for (arg in pieces.drop(1)) {
             out += NameToken(p, p + 1, NamePart.MODIFIER_ARG_DOT)
             p++
-            if (arg.isNotEmpty()) out += NameToken(p, p + arg.length, NamePart.MODIFIER_ARG)
+            val kind =
+                when {
+                    DURATION_WORD.matchEntire(arg) != null -> NamePart.MODIFIER_ARG_DURATION
+                    DIGITS.matchEntire(arg) != null -> NamePart.MODIFIER_ARG_NUMBER
+                    else -> NamePart.MODIFIER_ARG
+                }
+            if (arg.isNotEmpty()) out += NameToken(p, p + arg.length, kind)
             p += arg.length
         }
         offset += part.length

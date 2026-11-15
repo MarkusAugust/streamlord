@@ -5,7 +5,7 @@
 // The reference is the free client under datastar-reference/datastar-<version>/library/src and nothing
 // else: the bundler refuses to read a file outside that directory.
 import { build } from "esbuild";
-import { existsSync, mkdirSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { ascii, conformance, release, version } from "./common.mjs";
 
@@ -204,6 +204,20 @@ const expressions = [
   "$items[$i-1]", "$items[$i - 1]", "$a[$b['c-d']]", "$a[$b-c['d']]", "$a[`${$b-c}`]", "$a[`${'x-y'}`]",
   "$a[1-2]", "$a-b[0]", "$a[0].b-c", "$a.b-c['d-e']", "$a[$b][$c-d]", "$a['['].b-c", "$a[']'].b",
   "$a[`x]-${$b}`]", "$a[`${']'}-x`]", "$items.length-1", "$a-$b",
+  // What follows a template literal that holds an interpolation, read as expressions.json records.
+  "`${$a}` + $b", "`${$a}` + @peek(() => $b) + `${$c}`", "$x = `${$a}`; @get('/x'); $y = `${$c}`",
+  "`${$a}`; $b; `${$c}`", "`${ {a: $x}.a }` + $y + `z`", "`${`${$x}`}` + $y",
+  // A leading return and white space is a function body written out, compiled as expressions.json
+  // records.
+  "return $a; $b", "return\n$a; $b", "  return $a; $b", "return($a); $b", "return;$a", "return", "return ",
+  "return (() => { $a = 1; return $b })()", "return $a; return $b",
+  "((n) => { const d = n * 2; return d })($a)", "return ((n) => { const d = n * 2; return d })($a)",
+  "[1, 2].map((n) => { $a = n; return n })", "return [1, 2].map((n) => { $a = n; return n })",
+  // Nothing but semicolons, compiled as expressions.json records.
+  ";;", "; ;",
+  // Quoted text beside a rewritten reference, and the text of a template literal whose ${...} the client rewrites.
+  "'$a-b' + `$c-d ${$e-f}`", "\"$x\" + $y", "$foo.0.name + $['x']", "`${$a} and ${$b}` + `${ {a:1}.a }`",
+  "`total: $total ${$a}`", "`mail @home(x) ${$a}`", "`total: $total ${ {a: 1}.a }`", "$a@get('/x')",
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */
@@ -440,21 +454,22 @@ const isStringTrue = [
 // plugins/attributes, bundled with an `@engine` whose `attribute` records its argument instead of
 // queueing it. Everything else the plugins import is the reference's own.
 const pluginDir = path.join(reference, "plugins", "attributes");
-const recordingEngine = {
-  name: "recording-engine",
+/** An `@engine` for the files of [dir] whose export [name] records its argument in `globalThis[into]`. */
+const recordingEngine = (dir, name, into) => ({
+  name: `recording-${name}`,
   setup(build) {
     build.onResolve({ filter: /^@engine$/ }, (args) =>
-      path.dirname(args.importer) === pluginDir ? { path: "recording-engine", namespace: "recording" } : undefined,
+      path.dirname(args.importer) === dir ? { path: `recording-${name}`, namespace: "recording" } : undefined,
     );
     build.onLoad({ filter: /.*/, namespace: "recording" }, () => ({
       contents:
         `export * from ${JSON.stringify(path.join(reference, aliases["@engine"]))};\n` +
-        "export const attribute = (plugin) => globalThis.registeredPlugins.push(plugin);\n",
+        `export const ${name} = (plugin) => globalThis.${into}.push(plugin);\n`,
       loader: "ts",
       resolveDir: reference,
     }));
   },
-};
+});
 globalThis.registeredPlugins = [];
 for (const name of ["HTMLSelectElement", "HTMLTextAreaElement", "HTMLElement", "HTMLFormElement", "HTMLButtonElement"]) {
   globalThis[name] ??= class {};
@@ -468,7 +483,7 @@ const pluginBundle = await build({
   platform: "neutral",
   target: "es2022",
   define: { ALIAS: "null" },
-  plugins: [recordingEngine, referenceOnly],
+  plugins: [recordingEngine(pluginDir, "attribute", "registeredPlugins"), referenceOnly],
   logLevel: "silent",
 });
 await import(`data:text/javascript;base64,${Buffer.from(pluginBundle.outputFiles[0].text).toString("base64")}`);
@@ -481,6 +496,145 @@ const plugins = globalThis.registeredPlugins
   }))
   .sort((a, b) => a.name.localeCompare(b.name));
 if (plugins.length !== pluginFiles.length) throw new Error(`${pluginFiles.length} plugin files registered ${plugins.length} plugins`);
+
+// --------------------------------------------------------------- fetch-options.json
+
+// The options a backend action reads from its second argument: plugins/actions/fetch.ts, bundled
+// with an `@engine` whose `action` records what it is given, and each action then run with a Proxy
+// that records every property the client asks it for. The URL is empty, so the action throws
+// FetchNoUrlProvided once it has taken its arguments apart, before it sends anything.
+const actionDir = path.join(reference, "plugins", "actions");
+globalThis.registeredActions = [];
+const fetchBundle = await build({
+  stdin: { contents: 'import "./plugins/actions/fetch.ts";', resolveDir: reference, loader: "ts" },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "neutral",
+  target: "es2022",
+  define: { ALIAS: "null" },
+  plugins: [recordingEngine(actionDir, "action", "registeredActions"), referenceOnly],
+  logLevel: "silent",
+});
+await import(`data:text/javascript;base64,${Buffer.from(fetchBundle.outputFiles[0].text).toString("base64")}`);
+const fetchOptions = [];
+for (const { name, apply } of globalThis.registeredActions) {
+  const reads = [];
+  const recording = new Proxy({}, {
+    get(_, key) {
+      if (typeof key === "string" && !reads.includes(key)) reads.push(key);
+      return undefined;
+    },
+    // A client that spread or listed its options would read them unseen.
+    has: () => { throw new Error(`@${name} asks which options it was given`); },
+    ownKeys: () => { throw new Error(`@${name} lists the options it was given`); },
+  });
+  const noUrl = new Error("FetchNoUrlProvided");
+  const ctx = { el: {}, evt: undefined, error: () => noUrl, cleanups: new Map() };
+  const thrown = await apply(ctx, "", recording).then(() => null, (e) => e);
+  if (thrown !== noUrl) throw new Error(`@${name} did not stop at its empty URL: ${thrown}`);
+  fetchOptions.push({ action: name, options: reads.sort() });
+}
+fetchOptions.sort((a, b) => a.action.localeCompare(b.action));
+if (fetchOptions.length === 0 || fetchOptions.some((a) => a.options.length === 0)) {
+  throw new Error(`fetch.ts registered ${fetchOptions.length} actions, or one that read no option`);
+}
+
+// ---------------------------------------------------------------- actions.json
+
+// What each action's source declares: the parameters of its apply after the context, with the
+// type and whether it has a default, and the fields of the FetchArgs and SignalFilterOptions types
+// its options are read as. Read from the TypeScript text, which esbuild drops.
+const source = (file) => {
+  const full = path.join(reference, file);
+  if (!permitted(full)) throw new Error(`Refusing to read ${full}`);
+  return readFileSync(full, "utf8");
+};
+/** [text] split at its commas outside brackets, each piece trimmed, the empty ones left out. */
+const topLevel = (text, at) => {
+  const out = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i <= text.length; i++) {
+    const c = text[i];
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth--;
+    else if ((c === at && depth === 0) || i === text.length) {
+      out.push(text.slice(from, i).trim());
+      from = i + 1;
+    }
+  }
+  return out.filter((p) => p.length > 0);
+};
+/** The parameters of the first function after [head] in [text]. */
+const parametersAfter = (text, head) => {
+  const open = text.indexOf("(", text.indexOf(head));
+  let depth = 0;
+  let close = open;
+  for (; close < text.length; close++) {
+    if (text[close] === "(") depth++;
+    else if (text[close] === ")" && --depth === 0) break;
+  }
+  return topLevel(text.slice(open + 1, close), ",").map((p) => {
+    // A default is an = outside brackets that is no part of =>.
+    let depth = 0;
+    let equals = -1;
+    for (let i = 0; i < p.length && equals < 0; i++) {
+      if ("([{".includes(p[i])) depth++;
+      else if (")]}".includes(p[i])) depth--;
+      else if (p[i] === "=" && depth === 0 && p[i + 1] !== ">") equals = i;
+    }
+    const [name, ...type] = topLevel(equals < 0 ? p : p.slice(0, equals), ":");
+    return { name: name.startsWith("{") ? null : name, type: type.join(":").trim(), optional: equals >= 0 };
+  });
+};
+const typeFields = (text, name) => {
+  const body = text.match(new RegExp(`export type ${name} = \\{([\\s\\S]*?)\\n\\}`))?.[1];
+  if (!body) throw new Error(`no type ${name}`);
+  const fields = {};
+  for (const line of body.split("\n")) {
+    const m = line.match(/^  (\w+)\?: (.+)$/);
+    if (m) fields[m[1]] = m[2].trim();
+  }
+  return fields;
+};
+// A filter an action hands to filtered() is optional where filtered gives it a default of its own.
+const filterDefault = parametersAfter(source("engine/signals.ts"), "export const filtered =").find((p) => p.type === "SignalFilterOptions").optional;
+/** The parameters of the first apply in [text], the context left out. */
+const applyParameters = (text) =>
+  parametersAfter(text, "apply").slice(1).map((p) => (p.type === "SignalFilterOptions" ? { ...p, optional: p.optional || filterDefault } : p));
+const fetchSource = source("plugins/actions/fetch.ts");
+const fetchArgs = typeFields(fetchSource, "FetchArgs");
+const signalFilter = typeFields(source("engine/types.ts"), "SignalFilterOptions");
+const actionCases = [];
+for (const file of readdirSync(actionDir).filter((f) => f.endsWith(".ts")).sort()) {
+  const text = source(path.join("plugins", "actions", file));
+  const names = file === "fetch.ts" ? fetchOptions.map((a) => a.action) : [text.match(/name: '(\w+)'/)[1]];
+  for (const action of names) actionCases.push({ action, parameters: applyParameters(text) });
+}
+actionCases.sort((a, b) => a.action.localeCompare(b.action));
+if (actionCases.some((a) => a.parameters.length === 0) || Object.keys(fetchArgs).length === 0) {
+  throw new Error("an action declared no parameter, or FetchArgs no field");
+}
+
+// ------------------------------------------------------- fetch-option-values.json
+
+// What fetch.ts does with an option whose type is a set of strings when it is given another: the
+// strings the source compares the option with, `option === 'x'` or `!==`, and the errors it throws
+// with the option in their detail. A value it compares with none of them takes the branch of any
+// listed value it never compares with, or, when there is none, ends in one of those errors.
+const fetchOptionValues = Object.entries(fetchArgs)
+  .map(([option, type]) => ({ option, values: type.split("|").map((t) => t.trim()).filter((t) => /^'[^']*'$/.test(t)).map((t) => t.slice(1, -1)) }))
+  .filter(({ values }) => values.length > 0)
+  .map(({ option, values }) => ({
+    option,
+    values,
+    compared: [...new Set([...fetchSource.matchAll(new RegExp(`\\b${option}\\s*[!=]==\\s*'([^']*)'`, "g"))].map((m) => m[1]))].sort(),
+    throws: [...fetchSource.matchAll(new RegExp(`error\\('(\\w+)',\\s*\\{[^}]*\\b${option}\\b[^}]*\\}\\)`, "g"))].map((m) => m[1]),
+  }));
+if (fetchOptionValues.length === 0 || fetchOptionValues.some((o) => o.compared.length === 0)) {
+  throw new Error("FetchArgs has no option of strings, or fetch.ts compares one with nothing");
+}
 
 // ------------------------------------------------------------------- writing
 
@@ -531,11 +685,41 @@ const files = {
       "returnsValue and argNames as the plugin declares them, null, false and [] where it declares none.",
     cases: plugins,
   },
+  "fetch-options.json": {
+    $comment:
+      "The properties each backend action of plugins/actions/fetch.ts of the Datastar " + version + " client reads from its options, " +
+      "the argument after the URL: the file was bundled with an @engine whose action() records it, and each apply was run with " +
+      "an empty URL and a Proxy for the options that records every property asked for and answers undefined, so a property " +
+      "inside an option, such as filterSignals.include, is not listed. A name in the client's FetchArgs type that is not here " +
+      "is one the action never reads.",
+    cases: fetchOptions,
+  },
+  "fetch-option-values.json": {
+    $comment:
+      "Each option of the FetchArgs type of plugins/actions/fetch.ts of the Datastar " + version + " client whose type is a set of " +
+      "strings, read from its TypeScript: values are those strings, compared the strings the source compares the option with " +
+      "(=== or !==), and throws the errors it throws with the option in their detail. A value it compares with none of them " +
+      "takes the branch of a value it never compares with, or, when every value is compared, the else that throws.",
+    cases: fetchOptionValues,
+  },
+  "actions.json": {
+    $comment:
+      "What each action under plugins/actions of the Datastar " + version + " client declares, read from its TypeScript: the " +
+      "parameters of its apply after the context, each with its name (null where it is taken apart), its type and whether it " +
+      "may be left out: it has a default, or it is a SignalFilterOptions and filtered() in engine/signals.ts, which it is handed to, " +
+      "gives one; fetchArgs the fields of the FetchArgs type of fetch.ts, the options of a backend action, and " +
+      "signalFilter those of SignalFilterOptions in engine/types.ts, the filter of filterSignals, @setAll and @toggleAll.",
+    fetchArgs,
+    signalFilter,
+    cases: actionCases,
+  },
 };
 
 mkdirSync(out, { recursive: true });
 for (const [name, content] of Object.entries(files)) {
-  writeFileSync(path.join(out, name), ascii(`${JSON.stringify(content, null, 2)}\n`));
+  // The version on its own, so a test can hold what Streamlord says it speaks to what was read.
+  const { $comment, ...rest } = content;
+  writeFileSync(path.join(out, name), ascii(`${JSON.stringify({ $comment, version, ...rest }, null, 2)}\n`));
   const count = Array.isArray(content.cases) ? content.cases.length : Object.values(content.cases).map((c) => c.length).join("+");
   console.log(`${name}: ${count} cases`);
 }
