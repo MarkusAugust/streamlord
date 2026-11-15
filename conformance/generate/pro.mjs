@@ -12,10 +12,15 @@ const pro = catalog.actions.filter((a) => a.pro).map((a) => a.name)
 
 const response = await fetch(PAGE)
 if (!response.ok) throw new Error(`${PAGE}: ${response.status} ${response.statusText}`)
-// The page's text, its tags and entities taken out, as a reader sees it.
-const text = (await response.text())
-  .replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, '')
-  .replace(/<[^>]+>/g, '')
+// The page's text, its tags and entities taken out, as a reader sees it. Tags go until none is left,
+// since taking one out can join the text around it into another; the text is matched, never shown.
+let page = await response.text()
+let previous
+do {
+  previous = page
+  page = page.replace(/<[^<>]*>/g, '')
+} while (page !== previous)
+const text = page
   .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
   .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
 
