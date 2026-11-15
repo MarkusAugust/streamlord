@@ -186,74 +186,7 @@ internal fun Analyzer.checkInterpolateSite(
         values.mapIndexed { k, it ->
             if (known[k].isOther()) null else known[k].argKind() ?: valueKind(src, it.text, it.string != null, s.start)
         }
-    val issues = ArrayList<Issue>()
-    // The values are always the values: a List among them is one, written as a template writes it.
-    val collections =
-        if (plain) {
-            values.mapIndexedNotNull { k, v ->
-                collectionElements(v.text)?.takeIf { it.isNotEmpty() }?.let {
-                    k to
-                        it
-                }
-            }
-        } else {
-            emptyList()
-        }
-
-    fun writtenOut(of: List<Pair<Int, List<String>>>) =
-        Fix(
-            "Pass the elements as the values",
-            values[of[0].first].start,
-            values[of[0].first].end,
-            of[0].second.joinToString(", "),
-            of.drop(1).map { (k, elements) -> Edit(values[k].start, values[k].end, elements.joinToString(", ")) },
-        )
-    // Where the elements would fill the placeholders, the count is the list's doing: the error says so.
-    val spread = collections.isNotEmpty() && placeholders.size == values.size + collections.sumOf { it.second.size - 1 }
-    if (plain && placeholders.size != values.size) {
-        val h = placeholders.size
-        val v = values.size
-        // `%d` as String.format writes it: interpolate knows only %s.
-        val specifier = FORMAT_SPECIFIER.find(s.text.replace("%%", "  "))?.value
-        val advice =
-            if (specifier != null) {
-                "Only %s is a placeholder, whatever the value: write %s in place of $specifier."
-            } else {
-                "Write %% for a per cent sign that is not a placeholder."
-            }
-        issues +=
-            Issue(
-                site.nameStart,
-                site.nameStart + site.name.length,
-                "interpolate throws IllegalArgumentException here: the markup has " +
-                    "$h %s ${if (h == 1) "placeholder" else "placeholders"} and " +
-                    "$v ${if (v == 1) "value is" else "values are"} given. " +
-                    if (spread) {
-                        val named = collections.joinToString(" and ") { shortened(values[it.first].text) }
-                        "$named ${if (collections.size == 1) "is one value" else "are one value each"}: " +
-                            "write ${if (collections.size == 1) "its" else "their"} elements out to pass them as the values."
-                    } else {
-                        advice
-                    },
-                Severity.ERROR,
-                "interpolate-placeholders",
-                fixes = if (spread) listOf(writtenOut(collections)) else emptyList(),
-            )
-    } else {
-        for (c in collections) {
-            val v = values[c.first]
-            issues +=
-                Issue(
-                    v.start,
-                    v.end,
-                    "interpolate takes ${shortened(v.text)} as one value and writes it whole, in brackets, escaped like any text. " +
-                        "Write the elements out to pass them as the values.",
-                    Severity.HINT,
-                    "interpolate-placeholders",
-                    fixes = listOf(writtenOut(listOf(c))),
-                )
-        }
-    }
+    val issues = ArrayList<Issue>(placeholderCountIssues(site, s, placeholders, values, plain))
     val mapped = plain && placeholders.size == values.size
     val view = markupView(src, format)
     val starts = format.interpolations.map { it.decodedStart } + at
@@ -319,35 +252,9 @@ internal fun Analyzer.checkInterpolateSite(
         val asIs = markupText || told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))
         val fixes =
             if (fixable) listOf(placeholderFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed)) else emptyList()
-        val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
         val message =
-            when {
-                loadsAnywhere -> {
-                    "$base It lands in ${landing.attribute ?: "the URL"}, which loads code from wherever the value points, and the " +
-                        "markup before it does not fix the host. $CODE_URL_ADVICE, and make it a %s placeholder."
-                }
-
-                // Markup a Kotlin template writes into the format, which interpolate then reads as format.
-                markupText -> {
-                    "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
-                        "a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. " +
-                        "Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
-                }
-
-                landing.position in ESCAPED_POSITIONS -> {
-                    "$base Make it a %s placeholder and pass the value to interpolate."
-                }
-
-                else -> {
-                    val (where, instead) =
-                        landingWords(
-                            landing,
-                            endTagAt(view, ip.decodedStart),
-                            rawElement(view, landing, ip.decodedStart),
-                        )
-                    "$base It lands in $where. $instead"
-                }
-            } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
+            templateMessage(shown, landing, view, ip, loadsAnywhere, markupText) +
+                if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
         issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", valueLink(landing), fixes)
     }
     for ((k, d) in at.withIndex()) {
@@ -441,32 +348,227 @@ internal fun Analyzer.checkInterpolateSite(
         if (kind == ArgKind.TRUSTED || kind in allowed) continue
         val unsigned =
             kind == ArgKind.UNSIGNED && arg != null && (landing.position == Position.DATASTAR || landing.position == Position.STYLE)
-        val (where, instead) = landingWords(landing, endTagAt(view, d), rawElement(view, landing, d))
-        val letIn = letIn(landing.position)
-        val message =
-            when {
-                uncertain && kind != null -> {
-                    "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
-                        "where only $letIn is let in. $instead"
-                }
-
-                unsigned -> {
-                    "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in " +
-                        "$where, where only $letIn is let in. Convert it with toLong() first."
-                }
-
-                kind != null -> {
-                    "interpolate always throws here: $shown lands in $where, and only $letIn is let in there. $instead"
-                }
-
-                else -> {
-                    "interpolate throws here unless $shown is $letIn: it lands in $where. $instead"
-                }
-            }
+        val message = refusalMessage(shown, landing, view, d, kind, uncertain, unsigned)
         issues += refused(message, kind != null && !uncertain, if (unsigned) listOf(toLongFix(arg!!)) else emptyList())
     }
     issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
     return issues
+}
+
+/**
+ * The count of [placeholders] against [values], as interpolate holds them to each other, and a List among
+ * the values, which interpolate writes whole as one: [plain] where the values are passed one by one.
+ */
+private fun placeholderCountIssues(
+    site: CallSite,
+    s: KotlinString,
+    placeholders: List<Int>,
+    values: List<Arg>,
+    plain: Boolean,
+): List<Issue> {
+    val issues = ArrayList<Issue>()
+    // The values are always the values: a List among them is one, written as a template writes it.
+    val collections =
+        if (plain) {
+            values.mapIndexedNotNull { k, v ->
+                collectionElements(v.text)?.takeIf { it.isNotEmpty() }?.let {
+                    k to
+                        it
+                }
+            }
+        } else {
+            emptyList()
+        }
+
+    fun writtenOut(of: List<Pair<Int, List<String>>>) =
+        Fix(
+            "Pass the elements as the values",
+            values[of[0].first].start,
+            values[of[0].first].end,
+            of[0].second.joinToString(", "),
+            of.drop(1).map { (k, elements) -> Edit(values[k].start, values[k].end, elements.joinToString(", ")) },
+        )
+    // Where the elements would fill the placeholders, the count is the list's doing: the error says so.
+    val spread = collections.isNotEmpty() && placeholders.size == values.size + collections.sumOf { it.second.size - 1 }
+    if (plain && placeholders.size != values.size) {
+        val h = placeholders.size
+        val v = values.size
+        // `%d` as String.format writes it: interpolate knows only %s.
+        val specifier = FORMAT_SPECIFIER.find(s.text.replace("%%", "  "))?.value
+        val advice =
+            if (specifier != null) {
+                "Only %s is a placeholder, whatever the value: write %s in place of $specifier."
+            } else {
+                "Write %% for a per cent sign that is not a placeholder."
+            }
+        issues +=
+            Issue(
+                site.nameStart,
+                site.nameStart + site.name.length,
+                "interpolate throws IllegalArgumentException here: the markup has " +
+                    "$h %s ${if (h == 1) "placeholder" else "placeholders"} and " +
+                    "$v ${if (v == 1) "value is" else "values are"} given. " +
+                    if (spread) {
+                        val named = collections.joinToString(" and ") { shortened(values[it.first].text) }
+                        "$named ${if (collections.size == 1) "is one value" else "are one value each"}: " +
+                            "write ${if (collections.size == 1) "its" else "their"} elements out to pass them as the values."
+                    } else {
+                        advice
+                    },
+                Severity.ERROR,
+                "interpolate-placeholders",
+                fixes = if (spread) listOf(writtenOut(collections)) else emptyList(),
+            )
+    } else {
+        for (c in collections) {
+            val v = values[c.first]
+            issues +=
+                Issue(
+                    v.start,
+                    v.end,
+                    "interpolate takes ${shortened(v.text)} as one value and writes it whole, in brackets, escaped like any text. " +
+                        "Write the elements out to pass them as the values.",
+                    Severity.HINT,
+                    "interpolate-placeholders",
+                    fixes = listOf(writtenOut(listOf(c))),
+                )
+        }
+    }
+    return issues
+}
+
+/** What a Kotlin template in interpolate's format does, which Kotlin fills in before interpolate sees the markup. */
+private fun Analyzer.templateMessage(
+    shown: String,
+    landing: ValueLanding,
+    view: String,
+    ip: Interpolation,
+    loadsAnywhere: Boolean,
+    markupText: Boolean,
+): String {
+    val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
+    return when {
+        loadsAnywhere -> {
+            "$base It lands in ${landing.attribute ?: "the URL"}, which loads code from wherever the value points, and the " +
+                "markup before it does not fix the host. $CODE_URL_ADVICE, and make it a %s placeholder."
+        }
+
+        // Markup a Kotlin template writes into the format, which interpolate then reads as format.
+        markupText -> {
+            "Kotlin fills in $shown before interpolate reads the markup, so interpolate reads what it holds as markup too: " +
+                "a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. " +
+                "Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is."
+        }
+
+        landing.position in ESCAPED_POSITIONS -> {
+            "$base Make it a %s placeholder and pass the value to interpolate."
+        }
+
+        else -> {
+            val (where, instead) =
+                landingWords(
+                    landing,
+                    endTagAt(view, ip.decodedStart),
+                    rawElement(view, landing, ip.decodedStart),
+                )
+            "$base It lands in $where. $instead"
+        }
+    }
+}
+
+/** Why interpolate refuses the value [shown] at [d] of [view], where only a number or a boolean, or Trusted, is let in. */
+private fun Analyzer.refusalMessage(
+    shown: String,
+    landing: ValueLanding,
+    view: String,
+    d: Int,
+    kind: ArgKind?,
+    uncertain: Boolean,
+    unsigned: Boolean,
+): String {
+    val (where, instead) = landingWords(landing, endTagAt(view, d), rawElement(view, landing, d))
+    val letIn = letIn(landing.position)
+    return when {
+        uncertain && kind != null -> {
+            "interpolate throws here unless the Trusted text before $shown moves it: it lands in $where, " +
+                "where only $letIn is let in. $instead"
+        }
+
+        unsigned -> {
+            "interpolate always throws here: $shown is an unsigned number, which is not a kotlin.Number, and it lands in " +
+                "$where, where only $letIn is let in. Convert it with toLong() first."
+        }
+
+        kind != null -> {
+            "interpolate always throws here: $shown lands in $where, and only $letIn is let in there. $instead"
+        }
+
+        else -> {
+            "interpolate throws here unless $shown is $letIn: it lands in $where. $instead"
+        }
+    }
+}
+
+/**
+ * The issue of the value at [k] of [s], which lands in the markup's own structure of [view]: an end
+ * tag, an unquoted attribute value, or a tag or attribute name; none for the end tag a value of the
+ * same text opened. [scalar] where the value is digits or a word; [issue] writes the issue at the value.
+ */
+private fun Analyzer.structureIssue(
+    s: KotlinString,
+    view: String,
+    k: Int,
+    shown: String,
+    scalar: Boolean,
+    severity: Severity,
+    operands: Boolean,
+    issue: (String, Severity, List<Fix>) -> Issue,
+): Issue? {
+    val ip = s.interpolations[k]
+    // `</h$n>` names the element `<h$n` opened; the opening one is judged.
+    val closing = closingTagBefore(view, ip.decodedStart)
+    val closes =
+        closing != null &&
+            s.interpolations.take(k).any {
+                it.text == ip.text && it.decodedStart > closing.length &&
+                    view.startsWith("<$closing", it.decodedStart - closing.length - 1)
+            }
+    return when {
+        closes -> {
+            null
+        }
+
+        endTagAt(view, ip.decodedStart) -> {
+            issue(
+                "Kotlin writes $shown into an end tag, which takes no attributes: the browser drops them, " +
+                    "and a value from outside can still end the tag and write markup. Write the end tag from literals alone.",
+                severity,
+                emptyList(),
+            )
+        }
+
+        unquotedValueBefore(view, ip.decodedStart) -> {
+            // Digits and words need the quotes alone; anything else is then a quoted value written as it is.
+            val enough = scalar
+            issue(
+                "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. " +
+                    "Quote the value." +
+                    if (enough) "" else " Quoting alone leaves the value as it is: escape it once it is quoted.",
+                if (enough) Severity.HINT else Severity.WARNING,
+                listOfNotNull(quoteFix(s, view, ip, operands)?.let { if (enough) it else it.copy(preferred = false) }),
+            )
+        }
+
+        else -> {
+            issue(
+                "Kotlin writes $shown into the markup's own structure: a tag name, an attribute name " +
+                    "or a list of attributes. Fine for one chosen in code; a value from outside decides " +
+                    "the markup itself, and escaping cannot prevent that.",
+                severity,
+                emptyList(),
+            )
+        }
+    }
 }
 
 /** The value converted to a Long, which is a `kotlin.Number`: `u.toLong()`, `(a + b).toLong()`. */
@@ -1058,51 +1160,15 @@ internal fun Analyzer.judgeValues(
                 }
 
                 Position.STRUCTURE -> {
-                    // `</h$n>` names the element `<h$n` opened; the opening one is judged.
-                    val closing = closingTagBefore(view, ip.decodedStart)
-                    val closes =
-                        closing != null &&
-                            s.interpolations.take(k).any {
-                                it.text == ip.text && it.decodedStart > closing.length &&
-                                    view.startsWith("<$closing", it.decodedStart - closing.length - 1)
-                            }
-                    when {
-                        closes -> {
-                            null
-                        }
-
-                        endTagAt(view, ip.decodedStart) -> {
-                            issue(
-                                "Kotlin writes $shown into an end tag, which takes no attributes: the browser drops them, " +
-                                    "and a value from outside can still end the tag and write markup. Write the end tag from literals alone.",
-                                severity,
-                            )
-                        }
-
-                        unquotedValueBefore(view, ip.decodedStart) -> {
-                            // Digits and words need the quotes alone; anything else is then a quoted value written as it is.
-                            val enough = fact.scalar()
-                            issue(
-                                "Kotlin writes $shown into an attribute value without quotes, where a space starts a new attribute. " +
-                                    "Quote the value." +
-                                    if (enough) "" else " Quoting alone leaves the value as it is: escape it once it is quoted.",
-                                if (enough) Severity.HINT else Severity.WARNING,
-                                fixes =
-                                    listOfNotNull(
-                                        quoteFix(s, view, ip, operands)?.let { if (enough) it else it.copy(preferred = false) },
-                                    ),
-                            )
-                        }
-
-                        else -> {
-                            issue(
-                                "Kotlin writes $shown into the markup's own structure: a tag name, an attribute name " +
-                                    "or a list of attributes. Fine for one chosen in code; a value from outside decides " +
-                                    "the markup itself, and escaping cannot prevent that.",
-                                severity,
-                            )
-                        }
-                    }
+                    structureIssue(
+                        s,
+                        view,
+                        k,
+                        shown,
+                        fact.scalar(),
+                        severity,
+                        operands,
+                    ) { message, level, fixes -> issue(message, level, fixes = fixes) }
                 }
             } ?: continue
     }
