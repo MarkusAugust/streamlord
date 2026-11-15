@@ -133,6 +133,7 @@
     {"name":"this, of a class of the author's that writes CSS, is passed to Trusted as its text","declares":"class Css(val w: Int) {\n    override fun toString() = \"p { width: ${w}px }\"\n    fun render() = \"<style>${this}</style>\"\n}","params":"","body":"Css(3).render()","rewrite":"offered","marks":["${this}"]},
     {"name":"a value of the author's class in a style is passed to Trusted as its text","declares":"class Css(val w: Int) {\n    override fun toString() = \"p { width: ${w}px }\"\n}\nfun g(v: Css) = \"<style>${v}</style>\"","params":"","body":"g(Css(3))","rewrite":"offered","marks":["${v}"]},
     {"name":"a kotlin.Number in a script is no digits, as a class of it may write anything","params":"v: Number","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":["${v}"]},
-    {"name":"an Int in a script is digits","params":"v: Int","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":[]}
+    {"name":"an Int in a script is digits","params":"v: Int","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":[]},
+    {"name":"a String property of a class elsewhere, in a style, is passed to Trusted with no warning, as a template of it","params":"u: User","body":"\"<style>${u.name}</style>\"","rewrite":"offered","marks":["${u.name}"]}
   ]
 }

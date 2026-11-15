@@ -157,11 +157,8 @@ fun main(args: Array<String>) {
     // One file for the cases that import alike, since an import is the file's.
     val files = all.withIndex().groupBy { it.value.imports }
     files.entries.forEachIndexed { k, (imports, group) ->
-        // A value in a style the text cannot see the type of is passed as its toString(), which Kotlin calls redundant,
-        // and not an error, where the value is a String after all.
         val text =
-            "@file:Suppress(\"UNUSED_PARAMETER\", \"UNCHECKED_CAST\", \"USELESS_CAST\", \"REDUNDANT_CALL_OF_CONVERSION_METHOD\", " +
-                "\"unused\", \"ktlint\")\n\npackage $PACKAGE\n\n" +
+            "@file:Suppress(\"UNUSED_PARAMETER\", \"UNCHECKED_CAST\", \"USELESS_CAST\", \"unused\", \"ktlint\")\n\npackage $PACKAGE\n\n" +
                 imports.joinToString("") { "import $it\n" } + "\n" + group.joinToString("\n") { render(it.index, it.value) }
         File(out, "Probes$k.kt").writeText(text)
     }
