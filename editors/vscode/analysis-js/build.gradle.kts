@@ -42,7 +42,9 @@ kotlin {
                 inputs.dir(root.dir("editors/vscode/test/fixtures")).withPropertyName("editorFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
                 inputs.dir(root.dir("conformance")).withPropertyName("conformance").withPathSensitivity(PathSensitivity.RELATIVE)
                 inputs.dir(root.dir("catalog")).withPropertyName("catalog").withPathSensitivity(PathSensitivity.RELATIVE)
-                useMocha { timeout = "120s" }
+                // A growth test times its work some twenty times and stops at one measurement of 20 seconds, which is the
+                // bound that matters; a busy machine took a sound one past 120.
+                useMocha { timeout = "600s" }
             }
         }
         binaries.library()
