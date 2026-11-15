@@ -5,10 +5,12 @@ import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
+import io.github.markusaugust.streamlord.core.domain.ExecuteScript
 import io.github.markusaugust.streamlord.core.domain.PatchElements
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.domain.Wire
 import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonNumber
 import io.github.markusaugust.streamlord.core.json.JsonObject
@@ -405,30 +407,75 @@ public fun datastarEvents(
         }
 
         "text/javascript" in type -> {
-            val attributes =
-                header(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES)?.takeIf { it.isNotEmpty() }?.let {
-                    try {
-                        JsonParser.parseObject(it)
-                    } catch (_: JsonParseException) {
-                        throw DatastarEventValidationException(
-                            "datastar-script-attributes is not one JSON object, so the client runs no script: $it",
-                        )
-                    }
-                }
-            val tag =
-                buildString {
-                    append("<script")
-                    for ((name, value) in attributes.orEmpty()) {
-                        append(' ').append(Wire.attributeName(name)).append("=\"")
-                        append(Wire.escapeAttribute((value as? JsonString)?.value ?: value.toJson())).append('"')
-                    }
-                    append('>').append(body).append("</script>")
-                }
-            DatastarEvents(listOf(PatchElements(tag, selector = "head", mode = ElementPatchMode.APPEND)), emptyList())
+            val header = header(DatastarProtocol.Headers.SCRIPT_ATTRIBUTES)?.takeIf { it.isNotEmpty() }
+            // The client runs nothing for a script of white space alone, and nothing at all when its header throws.
+            if (body.isBlank()) return DatastarEvents(emptyList(), emptyList())
+            val script = ExecuteScript(body, autoRemove = false, attributes = header?.let(::scriptAttributes).orEmpty())
+            DatastarEvents(listOf(PatchElements(script.scriptTag, selector = "head", mode = ElementPatchMode.APPEND)), emptyList())
         }
 
         else -> {
             datastarEvents(body)
         }
     }
+}
+
+/**
+ * The attributes the client sets on a script from [header]: each entry `Object.entries` finds in
+ * what `JSON.parse` gives, a name in ASCII lower case, as `setAttribute` makes it on an HTML element, and a value
+ * made the string JavaScript's `String()` makes of it. A number or a boolean has none; anything
+ * else throws in the client, and the script is not run.
+ */
+private fun scriptAttributes(header: String): Map<String, String> {
+    fun refused(): Nothing =
+        throw DatastarEventValidationException("datastar-script-attributes throws in the client, which runs no script: $header")
+    val parsed =
+        try {
+            JsonParser.parse(header)
+        } catch (_: JsonParseException) {
+            refused()
+        }
+    return when (parsed) {
+        is JsonObject -> {
+            parsed.entries.associate { (name, value) ->
+                name.map { if (it in 'A'..'Z') it + 32 else it }.joinToString("") to
+                    jsString(value)
+            }
+        }
+
+        is JsonNumber, is JsonBoolean -> {
+            emptyMap()
+        }
+
+        is JsonArray -> {
+            if (parsed.isEmpty()) emptyMap() else refused()
+        }
+
+        is JsonString -> {
+            if (parsed.value.isEmpty()) emptyMap() else refused()
+        }
+
+        is JsonNull -> {
+            refused()
+        }
+    }
+}
+
+/** What JavaScript's `String()` makes of [value]: an array joined by commas, with null as nothing, an object `[object Object]`. */
+private fun jsString(value: JsonValue): String =
+    when (value) {
+        is JsonString -> value.value
+        is JsonNumber -> jsNumber(value.toDouble())
+        is JsonBoolean -> value.value.toString()
+        is JsonNull -> "null"
+        is JsonArray -> value.joinToString(",") { if (it is JsonNull) "" else jsString(it) }
+        is JsonObject -> "[object Object]"
+    }
+
+/** A number as JavaScript writes it: `1.5`, `100`, `1e-7`, `1e+21`. */
+private fun jsNumber(d: Double): String {
+    if (d == kotlin.math.floor(d) && kotlin.math.abs(d) < 1e21) return java.math.BigDecimal(d).toPlainString()
+    if (kotlin.math.abs(d) >= 1e-6 && kotlin.math.abs(d) < 1e21) return java.math.BigDecimal(d.toString()).toPlainString()
+    val (mantissa, exponent) = d.toString().split('E')
+    return mantissa.removeSuffix(".0") + "e" + (if (exponent.startsWith('-')) "" else "+") + exponent
 }
