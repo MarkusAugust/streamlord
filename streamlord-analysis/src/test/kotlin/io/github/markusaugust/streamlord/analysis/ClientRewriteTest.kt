@@ -7,42 +7,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * What the client's own rewrite (engine.ts, `genRx`, in 1.0.5) makes of each expression, held
- * against the port. The expected texts are what the client's pattern gives; what the client
- * compiled from 364 expressions is in `conformance/client/expressions.json`, and `ClientOracleTest`
- * holds the port to it.
+ * The port of the client's rewrite (engine.ts, `genRx`, in 1.0.5) held to the client's patterns as
+ * written, on random texts. What the client compiles from each written case is in
+ * `conformance/client/expressions.json`, which `ClientOracleTest` holds the port to.
  */
 class ClientRewriteTest {
-    @Test
-    fun `signals and actions are rewritten as the client rewrites them, and quoted text is left alone`() {
-        val cases =
-            listOf(
-                "'\$a-b' + `\$c-d \${\$e-f}`" to "'\$a-b' + `\$c-d \${\$['e-f']}`",
-                "\$items.map(\$i => \$i.name)" to "\$['items']['map'](\$['i'] => \$['i']['name'])",
-                "\"\$x\" + \$y" to "\"\$x\" + \$['y']",
-                "`a \${\$x} b`" to "`a \${\$['x']} b`",
-                "`\$x`" to "`\$x`",
-                "\$foo.0.name + \$['x']" to "\$['foo']['0']['name'] + \$['x']",
-                "\$a-\$b" to "\$['a']-\$['b']",
-                "x = {\$a: 1}" to "x = {\$['a']: 1}",
-                "\$count++ // \$z" to "\$['count']++ // \$['z']",
-                "'it\\'s \$x' + \$y" to "'it\\'s \$x' + \$['y']",
-                // The client replaces every ${...} in the literal it matched, one after a backslash too.
-                "`\\\${\$x}`" to "`\\\${\$['x']}`",
-                "`\${\$a} and \${\$b}` + `\${ {a:1}.a }`" to "`\${\$['a']} and \${\$['b']}` + `\${ {a:1}.a }`",
-                // The text of a template literal stays as written, whatever its ${...} hold.
-                "`total: \$total \${\$a}`" to "`total: \$total \${\$['a']}`",
-                "`mail @home(x) \${\$a}`" to "`mail @home(x) \${\$['a']}`",
-                // A ${...} with a brace inside keeps the pattern from matching the literal, whose text is then read as code.
-                "`total: \$total \${ {a: 1}.a }`" to "`total: \$['total'] \${ {a: 1}.a }`",
-                // A quote in a comment opens a string to the client's pattern, and the signal after it stays as written.
-                "\$a = 1 // don't\n\$b = 'x'" to "\$['a'] = 1 // don't\n\$b = 'x'",
-                "\$a@get('/x')" to "\$['a']__action(\"get\",evt,'/x')",
-                "@get" to "@get",
-            )
-        for ((text, client) in cases) assertEquals(client, clientRewrite(text).js, text)
-    }
-
     @Test
     fun `an error after a rewritten signal is placed in the expression`() {
         val issues = ExpressionValidator().validate("\$items.map(\$i => \$i.name)", returnsValue = true)

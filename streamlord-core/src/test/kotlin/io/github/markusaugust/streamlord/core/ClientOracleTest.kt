@@ -168,7 +168,7 @@ class ClientOracleTest {
     @Test
     fun `finds the references genRx rewrites`() {
         val cases = rewrites.filter { it.boolean("returnsValue") == false }
-        assertEquals(182, cases.size)
+        assertEquals(190, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             assertEquals(case.string("js"), clientRewrite(jsTrim(expression)).js, expression)

@@ -215,6 +215,9 @@ const expressions = [
   "[1, 2].map((n) => { $a = n; return n })", "return [1, 2].map((n) => { $a = n; return n })",
   // Nothing but semicolons, compiled as expressions.json records.
   ";;", "; ;",
+  // Quoted text beside a rewritten reference, and the text of a template literal whose ${...} the client rewrites.
+  "'$a-b' + `$c-d ${$e-f}`", "\"$x\" + $y", "$foo.0.name + $['x']", "`${$a} and ${$b}` + `${ {a:1}.a }`",
+  "`total: $total ${$a}`", "`mail @home(x) ${$a}`", "`total: $total ${ {a: 1}.a }`", "$a@get('/x')",
 ];
 
 /** The text of the function body `genRx` compiles from [value]: `Function` is replaced to record it. */

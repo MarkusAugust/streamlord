@@ -118,7 +118,7 @@ class ClientOracleTest {
     @Test
     fun `writes the function body genRx compiles`() {
         val cases = group("expressions.json", "rewrites")
-        assertEquals(364, cases.size)
+        assertEquals(380, cases.size)
         for (case in cases) {
             val expression = case.string("expression")!!
             val returnsValue = case.boolean("returnsValue")!!
