@@ -41,8 +41,15 @@ private val PAIR_NAMING =
         .filterValues { "names" in it }
         .keys
 
+/** Core's calls that take signal names to remove, by the name they are written with: `removeSignals`, a companion's `remove`. */
+private val REMOVING_CALLS =
+    Catalog.default.eventCalls
+        .filterValues { it.takes == "signalNames" }
+        .keys
+        .map { it.substringAfterLast('.') }
+
 /** Every call this check reads. */
-internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + "removeSignals"
+internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + REMOVING_CALLS
 
 private val OBJECT_START = regex("""^\s*[{\[]""")
 
@@ -93,7 +100,7 @@ internal fun signalNameHyphenIssues(
         if (s != null && hyphenIsTheReason(s)) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)
     }
 
-    if (site.name == "removeSignals") {
+    if (eventCallName(src, site)?.let(::eventCallTakes) == "signalNames") {
         for (a in positional) {
             val s = a.string ?: continue
             if ('-' in s.text) out += hyphenIssue(s, src, SignalNames.withoutHyphens(s.text), null)

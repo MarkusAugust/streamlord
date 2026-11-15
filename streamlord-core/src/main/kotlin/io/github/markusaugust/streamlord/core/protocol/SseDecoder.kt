@@ -221,10 +221,10 @@ public object SseDecoder {
         return try {
             JsonParser.parseObjectLiteral(text).toJson()
         } catch (_: JsonParseException) {
-            throw DatastarEventValidationException(
-                Wire.notAnObject(text)?.let { (kind, effect) -> "Signals that are $kind and no JSON object: $effect. The stream sent $text" }
-                    ?: "Signals that are neither JSON nor an object literal of plain values, which Datastar's client runs as JavaScript: $text",
-            )
+            val said =
+                Wire.notAnObject(text)?.let { (kind, effect) -> "Signals that are $kind and no JSON object: $effect. The stream sent" }
+                    ?: "Signals that are neither JSON nor an object literal of plain values, which Datastar's client runs as JavaScript:"
+            throw DatastarEventValidationException("$said $text")
         }
     }
 

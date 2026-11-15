@@ -1,10 +1,10 @@
 package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
+import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.regex
-import io.github.markusaugust.streamlord.core.JsonParseException
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonBoolean
 import io.github.markusaugust.streamlord.core.json.JsonNull

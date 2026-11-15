@@ -191,7 +191,10 @@ internal fun encodedSignalTypes(
 }
 
 /** The calls that patch signals from a value the codec encodes, on a stream and in one response. */
-private val PATCH_CALLS = setOf("patchSignals", "respondSignals", "datastarSignals", "SignalsResponse")
+private val PATCH_CALLS =
+    Catalog.default.signalCalls
+        .filterValues { "value" in it }
+        .keys
 private val CONSTRUCTED = regex("""^\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(""")
 
 /**
@@ -310,8 +313,8 @@ internal const val READABLE_CLASS: String = "class:"
 private val PAIR = regex("""^[\s(]*"([A-Za-z_][A-Za-z0-9_.-]*)"\s+to\b""")
 private val NAME = regex("""^"([A-Za-z_][A-Za-z0-9_.-]*)"$""")
 
-/** A map handed over as the signals, `patchSignals(mapOf("count" to 0))`: its own pairs are the keys. */
-private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
+/** The calls that build a map in place, `mapOf("count" to 0)`: handed over as the signals, its own pairs are the keys. */
+internal val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
 private val MAP_CALL = regex("""^\s*(?:mutable|hash|linked)?[mM]apOf\s*\(""")
 
 /** The literal keys of an argument that is a pair, or a map of pairs, with offsets in [text]; nothing inside a value. */

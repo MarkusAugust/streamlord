@@ -106,8 +106,11 @@ public data class ScriptResponse(
 ) : DatastarResponse {
     init {
         EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
-        attributes.keys.forEach(Wire::attributeName)
-        attributes.values.forEach { Wire.singleLine(it, "script attribute") }
+        for ((name, value) in attributes) {
+            (EventRules.scriptAttributeName(name, autoRemove = false) ?: EventRules.scriptAttributeValue(value))?.let {
+                throw DatastarEventValidationException(it)
+            }
+        }
     }
 
     override val contentType: String get() = DatastarProtocol.CONTENT_TYPE_JAVASCRIPT

@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.client.indexOfAsciiIgnoreCase
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
+import io.github.markusaugust.streamlord.core.domain.ElementNamespace
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.HoleLanding
 import io.github.markusaugust.streamlord.core.domain.ModifierRules
@@ -212,8 +213,7 @@ private val STATEMENT_END = regex("""[ \t]*(?:[;}\n\r]|$)""")
 /** A declaration of the name that follows, `val payloadExpr = `, which sets no option. */
 private val DECLARED_BEFORE = regex("""\bva[lr]\s+\z""")
 
-/** The calls a map option is set to, `headerExprs = mapOf(...)`, and the `to` before a value in one. */
-private val MAP_CALLS = setOf("mapOf", "mutableMapOf", "hashMapOf", "linkedMapOf")
+/** The `to` before a value in a map an option is set to, `headerExprs = mapOf(...)`. */
 private val TO_BEFORE = regex("""\bto\s*\z""")
 
 /** The DSL helper that says the same as a whole-string expression, when there is one, by its name. */
@@ -342,7 +342,11 @@ public class Analyzer(
             val html = catalog.htmlCallSites[site.name]?.let { checkHtmlSite(site, it, opts, src, lex, hyphenated, eventCalls) }
             html?.let { issues += it.issues }
             catalog.scriptCallSites[site.name]?.let { issues += checkScriptSite(site, it) }
-            if (site.name in eventCallNames && site.name !in htmlSiteNames) issues += eventArgumentIssues(site, null, eventCalls.ours(site))
+            if (site.name in eventCallNames &&
+                site.name !in htmlSiteNames
+            ) {
+                issues += eventArgumentIssues(site, null, eventCalls, opts.prefix)
+            }
             issues += checkKeyCaseSite(site, src)
             issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
@@ -354,7 +358,7 @@ public class Analyzer(
         // The calls whose arguments core alone judges, those the loop above has not read.
         for (site in findCallSites(src, eventOnlyNames, lex)) {
             if (foreign(site.name, site.nameStart)) continue
-            val issues = eventArgumentIssues(site, null, eventCalls.ours(site))
+            val issues = eventArgumentIssues(site, null, eventCalls, opts.prefix)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         // An interpolate the file takes from elsewhere is not core's, whose format this reads; nor one it
@@ -2391,7 +2395,8 @@ public class Analyzer(
         val judged = s?.let { judgeHoles(it, src, opts, view) }
         val issues = ArrayList(judged?.issues.orEmpty())
         val modeKnown = if (modeArg == null) ElementPatchMode.DEFAULT else mode?.let { ElementPatchMode.fromWire(it) }
-        val needsSelector = modeKnown?.takeIf { modeArg != null && selector == null }?.let { modeWithoutSelector(site, it) }
+        val ours = eventCalls.ours(site)
+        val needsSelector = modeKnown?.takeIf { ours && modeArg != null && selector == null }?.let { modeWithoutSelector(site, it) }
         if (modeArg != null && needsSelector != null) {
             val assign = assignBefore(src, modeArg.start)
             val at = modeArg.start - (modeArg.named?.length ?: 0) - assign
@@ -2406,9 +2411,20 @@ public class Analyzer(
                     fixes = if (modeArg.named != null) listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")) else emptyList(),
                 )
         }
-        val ours = eventCalls.ours(site)
-        issues += eventArgumentIssues(site, selectorArg, ours)
-        if (ours && s != null && modeKnown != null) blankElementsIssue(site, s, modeKnown, selectorArg)?.let { issues += it }
+        issues += eventArgumentIssues(site, selectorArg, eventCalls, opts.prefix)
+        if (s != null && modeKnown != null && ours) {
+            // `ElementNamespace.SVG`, or `SVG` when imported; a namespace the code computes is not known here.
+            val namespaceArg = site.named("namespace") ?: elements?.let { site.positional.getOrNull(it + 3) }
+            val namespace =
+                if (namespaceArg == null) {
+                    ElementNamespace.DEFAULT
+                } else {
+                    MODE_NAME.find(namespaceArg.text)?.groupValues?.get(1)?.let { n ->
+                        if (n == "DEFAULT") ElementNamespace.DEFAULT else ElementNamespace.entries.firstOrNull { it.name == n }
+                    }
+                }
+            elementsIssue(site, s, modeKnown, selectorArg, namespace)?.let { issues += it }
+        }
         // A mode that cannot be read here (a variable) may be one that needs no ids.
         val requireIds = selector == null && (modeArg == null || mode == "outer")
         if (s != null) {

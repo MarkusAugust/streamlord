@@ -200,7 +200,7 @@ internal fun Analyzer.inForeignDslCall(
 
 /**
  * What is written before [offset] of a selector the caret stands in, or null: `selector = "#|"` on
- * any Streamlord call, or the first argument of `removeElements`.
+ * any Streamlord call, or the first argument of a call that takes a selector first, `removeElements`.
  */
 internal fun Analyzer.selectorBefore(
     src: String,
@@ -214,6 +214,7 @@ internal fun Analyzer.selectorBefore(
             val s = a.string
             s != null && s.start < offset && offset <= s.contentEnd + (if (s.unterminated) 1 else 0)
         } ?: return null
-    val selector = arg.named in SELECTOR_ARGUMENTS || (arg.named == null && site.name == "removeElements" && site.args.indexOf(arg) == 0)
+    val selector =
+        arg.named in SELECTOR_ARGUMENTS || (arg.named == null && site.name in catalog.selectorCallSites && site.args.indexOf(arg) == 0)
     return if (selector) src.substring(arg.string!!.contentStart, offset) else null
 }

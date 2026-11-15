@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.core.domain
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.InternalStreamlordApi
+import io.github.markusaugust.streamlord.core.protocol.DatastarAttributes
 import kotlin.time.Duration
 
 /**
@@ -31,6 +32,36 @@ public object EventRules {
     public fun script(script: String): String? = if (script.isBlank()) "script must not be blank" else null
 
     public fun redirect(url: String): String? = refusal { ExecuteScript.redirect(url) }
+
+    /**
+     * An attribute of a script's element named [name]: one HTML can name, and not [effect], the
+     * attribute that removes a script sent with [autoRemove], which the browser would drop for the
+     * caller's own.
+     */
+    public fun scriptAttributeName(
+        name: String,
+        autoRemove: Boolean,
+        effect: String = DatastarAttributes.name("effect"),
+    ): String? =
+        refusal { Wire.attributeName(name) }
+            ?: if (autoRemove && name.equals(effect, ignoreCase = true)) {
+                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false"
+            } else {
+                null
+            }
+
+    /** The value of an attribute of the script an answer that is no stream sends, in a header of one line. */
+    public fun scriptAttributeValue(value: String): String? = refusal { Wire.singleLine(value, "script attribute") }
+
+    /**
+     * Why [html] is refused as the elements of a patch in [namespace]: SVG or MathML outside its
+     * root in HTML, or HTML that closes the root of a patch in the svg or mathml namespace.
+     */
+    public fun markup(
+        html: String,
+        mode: ElementPatchMode,
+        namespace: ElementNamespace,
+    ): String? = PatchMarkup.problem(html, null, mode, namespace)
 
     /** Why a patch in [mode] without a selector is refused, or null where the mode needs none. */
     public fun modeWithoutSelector(mode: ElementPatchMode): String? =

@@ -225,26 +225,14 @@ class CatalogTest {
         assertEquals("foo-bar", Casing.plainKey("fooBar"))
     }
 
+    // The SSE calls, core's events, the analysis's EventCallsJvmTest holds to the API dumps.
     @Test
     fun `every kotlin call site the editor validates exists`() {
         val sites = catalog.obj("kotlinCallSites")!!
         val known =
             freeAttributeFns + proAttributeFns + freeActionFns + proActionFns + expressionFns +
-                methods("io.github.markusaugust.streamlord.html.ElementsKt") +
-                methods("io.github.markusaugust.streamlord.core.port.driving.DatastarStream") +
-                setOf(
-                    "PatchElements",
-                    "ElementsResponse",
-                    "ExecuteScript",
-                    "respondElements",
-                    "respondScript",
-                    "datastarElements",
-                    "datastarScript",
-                    // The adapters' own, which this module does not see: Ktor's and Spring's.
-                    "respondSignals",
-                    "datastarSignals",
-                )
-        for (group in listOf("expression", "html", "script", "selector", "signals", "signalNames")) {
+                methods("io.github.markusaugust.streamlord.html.ElementsKt")
+        for (group in listOf("expression", "signals", "signalNames")) {
             for (fn in sites.obj(group)!!.keys.filter { !it.startsWith("$") }) {
                 assertTrue(fn in known, "call site $fn in group $group does not exist in the SDK")
             }

@@ -113,6 +113,23 @@ public data class CallSiteSpec(
     val last: Boolean get() = arg == null
 }
 
+/**
+ * One of core's SSE calls, or an answer that is no stream, as the catalog's `events` lists it: the
+ * first argument core judges as it runs ([takes]: `elements`, `selector`, `signals`, `signalNames`,
+ * `script` or `url`, null where core judges nothing) and the catalog's flags of it: `stream`,
+ * `response`, `names`, `json` and `value`.
+ */
+internal class EventCallSpec(
+    val takes: String?,
+    val flags: Set<String>,
+) {
+    /** It takes an `eventId` and a `retry`. */
+    val stream: Boolean get() = "stream" in flags
+
+    /** An answer that is no stream, whose selector goes in a header. */
+    val response: Boolean get() = "response" in flags
+}
+
 public data class FetchOption(
     val name: String,
     val type: String,
@@ -225,11 +242,22 @@ public class Catalog private constructor(
     internal val compiledParameters: List<String>
     internal val patchModes: List<String>
     public val expressionCallSites: Map<String, CallSiteSpec>
+
+    /** Core's SSE calls and answers, by the name a call writes: `PatchElements.remove` for a companion's function. */
+    internal val eventCalls: Map<String, EventCallSpec>
+
+    // Of the events, those called by a name of their own, and what each takes.
+    private fun eventsTaking(takes: String): List<String> =
+        eventCalls.filter { (name, call) -> call.takes == takes && '.' !in name }.keys.toList()
+
     internal val htmlCallSites: Map<String, CallSiteSpec>
     internal val scriptCallSites: Map<String, CallSiteSpec>
     internal val selectorCallSites: Map<String, CallSiteSpec>
 
-    /** The calls whose arguments are signals by name, each with the flags the catalog gives it: `names`, `json`. */
+    /**
+     * The calls whose arguments are signals by name, the DSL's and core's, each with the flags the
+     * catalog gives it: `names`, `json`, `value`.
+     */
     public val signalCalls: Map<String, Set<String>>
 
     /** The expression helpers, whose first argument is a signal name, each with its flags: `reads`, `shared`. */
@@ -298,10 +326,17 @@ public class Catalog private constructor(
         patchModes = raw.obj("sse")?.array("patchModes")?.strings() ?: emptyList()
         val sites = raw.obj("kotlinCallSites") ?: JsonObject.EMPTY
         expressionCallSites = callSites(sites.obj("expression"))
-        htmlCallSites = callSites(sites.obj("html"))
-        scriptCallSites = callSites(sites.obj("script"))
-        selectorCallSites = callSites(sites.obj("selector"))
-        signalCalls = flagged(sites.obj("signals")!!)
+        eventCalls =
+            (sites.obj("events") ?: JsonObject.EMPTY)
+                .filterKeys { !it.startsWith("\$") }
+                .mapValues { (_, value) -> EventCallSpec((value as JsonObject).string("takes"), flags(value)) }
+        // Every call that takes elements has them first, and the selector and the mode after; a script or a selector is first too.
+        htmlCallSites = eventsTaking("elements").associateWith { CallSiteSpec(0, "elements", "selector", "mode") }
+        scriptCallSites = eventsTaking("script").associateWith { CallSiteSpec(0, "script") }
+        selectorCallSites = eventsTaking("selector").associateWith { CallSiteSpec(0, "selector") }
+        signalCalls =
+            flagged(sites.obj("signals")!!) +
+            (eventsTaking("signals") + eventsTaking("signalNames")).associateWith { eventCalls.getValue(it).flags - "stream" - "response" }
         signalNameHelpers = flagged(sites.obj("signalNames")!!)
         expressionOptions = flagged(sites.obj("expressionOptions") ?: JsonObject.EMPTY)
     }
@@ -389,7 +424,9 @@ public class Catalog private constructor(
     private fun flagged(obj: JsonObject): Map<String, Set<String>> =
         obj
             .filterKeys { !it.startsWith("\$") }
-            .mapValues { (_, value) -> (value as JsonObject).filterValues { it == JsonBoolean.TRUE }.keys }
+            .mapValues { (_, value) -> flags(value as JsonObject) }
+
+    private fun flags(entry: JsonObject): Set<String> = entry.filterValues { it == JsonBoolean.TRUE }.keys
 
     private fun callSites(obj: JsonObject?): Map<String, CallSiteSpec> {
         if (obj == null) return emptyMap()

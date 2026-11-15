@@ -190,12 +190,7 @@ public data class ExecuteScript(
     init {
         validateCommon(eventId, retry)
         EventRules.script(script)?.let { throw DatastarEventValidationException(it) }
-        attributes.keys.forEach(Wire::attributeName)
-        if (autoRemove && attributes.keys.any { it.equals(DatastarAttributes.name("effect"), ignoreCase = true) }) {
-            throw DatastarEventValidationException(
-                "autoRemove's el.remove() would be dropped in favour of your effect attribute; pass autoRemove = false",
-            )
-        }
+        for (name in attributes.keys) EventRules.scriptAttributeName(name, autoRemove)?.let { throw DatastarEventValidationException(it) }
     }
 
     /** The script element exactly as it is sent to the browser. */
