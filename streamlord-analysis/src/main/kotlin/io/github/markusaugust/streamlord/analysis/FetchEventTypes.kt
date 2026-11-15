@@ -11,10 +11,12 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
-private val OPERATOR_BEFORE = regex("""(?:===?|!==?)\s*$""")
-private val SWITCH_BEFORE = regex("""(?<![\w$.])switch\s*\(\s*$""")
+private val OPERATORS = listOf("!==", "===", "!=", "==")
 private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
 private val CASE = regex("""(?<![\w$.])case\s*""")
+
+// More of the case's expression after its first literal, as the `+ 'b'` of `case 'a' + 'b':`.
+private val MORE_AFTER = regex("""\s*[^\s:}]""")
 
 /** The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched with. */
 internal fun fetchTypeIssues(
@@ -39,12 +41,12 @@ internal fun fetchTypeIssues(
         val at = m.range.first
         if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
         val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
+        val opEnd = spaceBefore(text, at)
         val left =
-            OPERATOR_BEFORE.find(text.substring(0, at).trimEnd())?.let { op ->
-                var close = op.range.first - 1
-                while (close >= 0 && isJsSpace(text[close])) close--
+            OPERATORS.firstOrNull { opEnd >= it.length && text.startsWith(it, opEnd - it.length) }?.let { op ->
+                val close = spaceBefore(text, opEnd - op.length) - 1
                 val q = text.getOrNull(close)
-                val open = if (q == null) -1 else text.lastIndexOf(q, close - 1)
+                val open = if (q == null || q !in "'\"`") -1 else text.lastIndexOf(q, close - 1)
                 if (open >= 0) literal(open)?.takeIf { it.last == close } else null
             }
         for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
@@ -88,7 +90,10 @@ private fun switchCases(
     end: Int,
     literal: (Int) -> IntRange?,
 ): List<IntRange> {
-    if (SWITCH_BEFORE.find(text.substring(0, at)) == null) return emptyList()
+    val paren = spaceBefore(text, at) - 1
+    val word = spaceBefore(text, paren)
+    if (text.getOrNull(paren) != '(' || word < 6 || !text.startsWith("switch", word - 6)) return emptyList()
+    if (text.getOrNull(word - 7).let { it != null && (it.isJsNamePart() || it == '.') }) return emptyList()
     val open = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
     val out = ArrayList<IntRange>()
     var depth = 0
@@ -105,11 +110,22 @@ private fun switchCases(
                 }
 
                 'c' -> {
-                    if (depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { out += it } }
+                    val case = if (depth == 1) CASE.matchAt(text, i)?.let { literal(it.range.last + 1) } else null
+                    if (case != null && MORE_AFTER.matchAt(text, case.last + 1) == null) out += case
                 }
             }
         }
         i++
     }
     return out
+}
+
+/** Where the space just before [at] starts. */
+private fun spaceBefore(
+    text: String,
+    at: Int,
+): Int {
+    var i = at
+    while (i > 0 && isJsSpace(text[i - 1])) i--
+    return i
 }

@@ -39,7 +39,7 @@ internal class Value(
 private const val SHORT = 40
 
 private val NUMBER_LITERAL =
-    regex("""[+-]?(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
+    regex("""(?:\+(?!\+)|-(?!-))*(?:0[xXoObB][0-9a-fA-F_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
 
 // What JavaScript's Number reads as a number: white space alone is 0, and a sign is no part of a hexadecimal, octal or binary one.
 private val NUMERIC_STRING =
@@ -120,6 +120,11 @@ internal class Brackets(
         }
         val open = ArrayList<Int>()
         for (i in js.indices) {
+            if (regions[i] == Region.TEMPLATE) {
+                // The code of a template's `${ }` is bracketed by that `{` and `}`, which are the template's.
+                if (js[i] == '{' && js.getOrNull(i - 1) == '$' && js.getOrNull(i - 2) != '\\') open += i
+                if (js[i] == '}' && open.lastOrNull()?.let { regions[it] } == Region.TEMPLATE) close[open.removeAt(open.size - 1)] = i
+            }
             if (regions[i] != Region.CODE) continue
             when (js[i]) {
                 '(', '[', '{' -> open += i
@@ -197,7 +202,7 @@ internal class Brackets(
         return Value(s, e, written, content)
     }
 
-    /** `function ...`, maybe after `async`, or an arrow: a name or a parenthesised list, maybe after `async`, then `=>`. */
+    /** `function ...` ending at its body, maybe after `async`, or an arrow: a name or a parenthesised list, maybe after `async`, then `=>`. */
     private fun isFunction(
         s: Int,
         e: Int,
@@ -213,7 +218,7 @@ internal class Brackets(
             at += 5
             space()
         }
-        if (word("function")) return true
+        if (word("function")) return js[e - 1] == '}'
         if (at < e && js[at] == '(') {
             val c = close[at]
             if (c !in at until e) return false

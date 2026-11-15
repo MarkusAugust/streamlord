@@ -353,6 +353,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- Both editors read a few Datastar values as the client does where they misjudged them: a function
+  called on the spot, `@get(function(){ return '/x' }())`, is no function; `@get(+-1)` is a
+  number; a comma inside a template literal's `${a, b}` is no comma of `postExpr`'s value;
+  `case 'a' + 'b'` in a datastar-fetch handler compares with `'ab'`, not `'a'`; `/*c*/ 1` in
+  `data-computed` is a value and no function; and `await /*c*/ @get()` gets the message about
+  `await`. Reading the event types of a long datastar-fetch handler takes time in step with its
+  length, where it grew with the square of it.
 - IntelliJ's inspector folds a signal patch nested deeper than 64 levels into the store, as the
   client and the VS Code inspector do, where it showed it raw. In both editors a patch nested more
   than 1000 levels deep, or with a number of more than 1000 digits, leaves the store as it was and

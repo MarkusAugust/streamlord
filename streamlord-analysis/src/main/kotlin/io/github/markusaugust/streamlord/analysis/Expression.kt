@@ -131,8 +131,8 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
-/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
-private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
+/** A name `await` that ends the text, but for space and comments, before a token the parser could not take, as in `await @post(...)`. */
+private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await(?:\s|/\*[^*]*\*+(?:[^/*][^*]*\*+)*/|//[^\n]*)*$""")
 
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
 // on either side, any character beyond ASCII counted as one.

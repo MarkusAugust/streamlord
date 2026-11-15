@@ -148,8 +148,11 @@ private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
 internal fun certainlyNoFunction(value: String): Boolean {
     val v = value.trim()
     if (v.isEmpty()) return false
-    if (NUMBER.matchEntire(v) != null || v in NO_FUNCTION_WORDS) return true
     val regions = jsRegions(v)
+    // A comment before a number is space; one after it may run to the end of the line.
+    val ends = regions.last() == Region.COMMENT
+    val bare = CharArray(v.length) { if (regions[it] == Region.COMMENT && !ends) ' ' else v[it] }.concatToString().trim()
+    if (NUMBER.matchEntire(bare) != null || bare in NO_FUNCTION_WORDS) return true
     var depth = 0
     var binary = false
     var unary = false
