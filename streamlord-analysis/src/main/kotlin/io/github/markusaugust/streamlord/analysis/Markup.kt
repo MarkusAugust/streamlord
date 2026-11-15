@@ -7,7 +7,6 @@ import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.radixDouble
 import io.github.markusaugust.streamlord.core.client.regex
-import io.github.markusaugust.streamlord.core.domain.AttributeKeys
 import io.github.markusaugust.streamlord.core.domain.CspNonce
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 import io.github.markusaugust.streamlord.core.domain.MarkupVisitor

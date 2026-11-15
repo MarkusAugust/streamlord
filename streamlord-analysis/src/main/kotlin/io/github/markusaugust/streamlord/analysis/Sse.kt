@@ -1,8 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
-import io.github.markusaugust.streamlord.core.json.JsonObject
-import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.protocol.SseReader
 import io.github.markusaugust.streamlord.core.protocol.SseMessage as CoreSseMessage
 

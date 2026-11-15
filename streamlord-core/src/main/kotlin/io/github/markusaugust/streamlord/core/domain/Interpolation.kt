@@ -1074,12 +1074,11 @@ private class Landscape(
     }
 
     /**
-     * Whether [placeholder] is in the data state: text, and not a tag, a comment, a CDATA section or the
+     * Whether [at] is in the data state: text, and not a tag, a comment, a CDATA section or the
      * body of a `textarea` or a `title`, which only their own closing sequence ends and which markup
      * written there could end. The walk has already found each of those spans, so this is a lookup.
      */
-    fun inData(placeholder: Int): Boolean =
-        indexOfSpan(placeholder, tagStarts, tagEnds) < 0 && indexOfSpan(placeholder, opaqueStarts, opaqueEnds) < 0
+    fun inData(at: Int): Boolean = indexOfSpan(at, tagStarts, tagEnds) < 0 && indexOfSpan(at, opaqueStarts, opaqueEnds) < 0
 
     /**
      * Whether [html], read in this landscape, leaves nothing open for the markup after it to fall
@@ -1124,22 +1123,9 @@ private class Landscape(
         return closesIn(reading.of(namespace, leaves = namespace != NS_HTML)) && (namespace != NS_HTML || fits(html, place))
     }
 
-    fun valueStartAt(placeholder: Int): Int =
-        indexOfSpan(placeholder, attributeStarts, attributeEnds).let {
-            if (it >=
-                0
-            ) {
-                attributeStarts[it]
-            } else {
-                -1
-            }
-        }
+    fun valueStartAt(at: Int): Int = indexOfSpan(at, attributeStarts, attributeEnds).let { if (it >= 0) attributeStarts[it] else -1 }
 
-    fun attributeAt(placeholder: Int): String? =
-        indexOfSpan(placeholder, attributeStarts, attributeEnds)
-            .takeIf {
-                it >= 0
-            }?.let { attributeNames[it] }
+    fun attributeAt(at: Int): String? = indexOfSpan(at, attributeStarts, attributeEnds).takeIf { it >= 0 }?.let { attributeNames[it] }
 
     fun loadsCodeAt(placeholder: Int): Boolean = indexOfSpan(placeholder, attributeStarts, attributeEnds).let { it >= 0 && codeUrl(it) }
 

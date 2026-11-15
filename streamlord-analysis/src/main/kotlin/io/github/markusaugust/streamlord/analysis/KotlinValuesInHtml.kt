@@ -553,14 +553,7 @@ private fun Analyzer.placeholderFix(
 }
 
 /** The page an issue of a value links to: Datastar's guide where Datastar runs it, the strings page anywhere else. */
-private fun Analyzer.valueLink(landing: ValueLanding): String =
-    if (landing.position ==
-        Position.DATASTAR
-    ) {
-        Docs.EXPRESSIONS
-    } else {
-        Docs.STRINGS
-    }
+private fun valueLink(landing: ValueLanding): String = if (landing.position == Position.DATASTAR) Docs.EXPRESSIONS else Docs.STRINGS
 
 /**
  * What to write instead of a value in a Datastar attribute, ended by [end]: one in Pro's media query

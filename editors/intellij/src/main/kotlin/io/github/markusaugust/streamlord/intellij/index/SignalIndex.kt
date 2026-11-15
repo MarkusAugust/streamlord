@@ -18,7 +18,6 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
 import io.github.markusaugust.streamlord.analysis.Catalog
-import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.ProjectSignals

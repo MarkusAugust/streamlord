@@ -607,11 +607,7 @@ public object Requests {
         return i
     }
 
-    /**
-     * Where a value came from: the settings, the env file, or the log of a server the editor started;
-     * or a source none of these is, which an editor may hand over, read as the file's but never offered
-     * a new base URL.
-     */
+    /** Where a value came from: the settings, the env file, or the log of a server the editor started. */
     public enum class VariableSource { DEFAULT, ENV, RUNNING }
 
     /** A variable that is set, as text, and where it was set, so the inspector can say both. */

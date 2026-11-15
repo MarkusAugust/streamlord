@@ -1054,14 +1054,12 @@ public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
     if (!readsDsl(source)) return emptyList()
     val src = source.text
     return findCallSites(src, catalog.signalNameCalls, lex(src)).mapNotNull { site ->
-        val s = site.positional.firstOrNull()?.string ?: return@mapNotNull null
-        if ((site.name in catalog.signalPairCalls && !site.keyed) ||
-            source.foreign(site.name, site.nameStart)
-        ) {
-            null
-        } else {
-            SignalNameString(s, site)
-        }
+        val named = (site.name !in catalog.signalPairCalls || site.keyed) && !source.foreign(site.name, site.nameStart)
+        site.positional
+            .firstOrNull()
+            ?.string
+            ?.takeIf { named }
+            ?.let { SignalNameString(it, site) }
     }
 }
 

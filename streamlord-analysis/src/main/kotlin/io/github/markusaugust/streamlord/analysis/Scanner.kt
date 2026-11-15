@@ -357,9 +357,6 @@ internal fun lexKotlin(src: String): KotlinLex {
     return KotlinLex(strings, mask)
 }
 
-/** Every string literal in the source that is not inside a comment, in order. */
-internal fun findKotlinStrings(src: String): List<KotlinString> = lexKotlin(src).strings
-
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one. */
 internal const val HTML_LANGUAGE = """@(?:org\.intellij\.lang\.annotations\.)?Language\(\s*"html"\s*\)"""
 

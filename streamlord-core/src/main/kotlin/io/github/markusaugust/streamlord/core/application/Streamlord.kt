@@ -1,7 +1,6 @@
 package io.github.markusaugust.streamlord.core.application
 
 import io.github.markusaugust.streamlord.core.DatastarEventValidationException
-import io.github.markusaugust.streamlord.core.SignalsCodecException
 import io.github.markusaugust.streamlord.core.SignalsDecodeException
 import io.github.markusaugust.streamlord.core.SignalsMediaTypeException
 import io.github.markusaugust.streamlord.core.SignalsTooLargeException
