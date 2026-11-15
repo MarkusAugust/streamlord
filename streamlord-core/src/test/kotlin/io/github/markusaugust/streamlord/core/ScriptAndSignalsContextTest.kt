@@ -33,6 +33,27 @@ class ScriptAndSignalsContextTest {
         )
     }
 
+    // Measured against the 1.0.5 client: JSON.parse takes these, and mergePatch walks them with for-in.
+    @Test
+    fun `JSON that is no object is refused for what the client makes of it, not as JavaScript`() {
+        val said =
+            mapOf(
+                "[1,2]" to "signals must be one JSON object, not an array: the client patches its items as signals named 0, 1 and on",
+                "\"ab\"" to "signals must be one JSON object, not a string: the client patches its characters as signals named 0, 1 and on",
+                "1" to "signals must be one JSON object, not a number: the client patches nothing from it",
+                "true" to "signals must be one JSON object, not a boolean: the client patches nothing from it",
+                " null " to "signals must be one JSON object, not null: the client patches nothing from it",
+            )
+        for ((text, message) in said) {
+            assertEquals(message, assertFailsWith<DatastarEventValidationException>(text) { PatchSignals(text) }.message)
+            assertEquals(message, assertFailsWith<DatastarEventValidationException>(text) { SignalsResponse(text) }.message)
+        }
+        assertEquals(
+            "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
+            assertFailsWith<DatastarEventValidationException> { PatchSignals("[1,") }.message,
+        )
+    }
+
     // Measured against the 1.0.5 store: __proto__ throws midway through a batch it never closes,
     // constructor with an object under it reaches Object.prototype, and a dotted key is one key
     // that $a.b does not reach and a request drops.
