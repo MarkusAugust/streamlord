@@ -450,7 +450,8 @@ internal fun wholeCall(
 /**
  * The kind of a value handed to `interpolate`: a literal, `Trusted(...)`, a call to
  * `interpolate` (its Html), or a name the enclosing declaration gives a type. Null when the text
- * does not show it.
+ * does not show it. Not the [ValueFact] `valueKind` in ValueKinds.kt, which asks whose text a value
+ * is: this asks the type interpolate's `admits` sees, so `1u` is UNSIGNED here and not a literal there.
  */
 internal fun valueKind(
     src: String,
