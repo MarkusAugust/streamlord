@@ -696,7 +696,6 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectIssue {
 
 public final class io/github/markusaugust/streamlord/analysis/Requests {
 	public static final field ENV_FILE Ljava/lang/String;
-	public static final field FOLD_DEPTH I
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/Requests;
 	public static final field NON_STREAM_CUT Ljava/lang/String;
 	public static final field NON_STREAM_LIMIT I

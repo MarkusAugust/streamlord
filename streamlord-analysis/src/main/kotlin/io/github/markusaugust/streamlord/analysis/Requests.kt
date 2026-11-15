@@ -994,7 +994,7 @@ public object Requests {
     }
 
     /** How deep a patch the inspector folds into its store, far deeper than any page's signals. */
-    public const val FOLD_DEPTH: Int = 1000
+    internal const val FOLD_DEPTH: Int = 1000
 
     /**
      * The signals as compact JSON; text that is not JSON is passed through trimmed.

@@ -13,6 +13,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `io.github.markusaugust.streamlord.analysis.analyzeProject` imported where the package is not.
   In the internal API of streamlord-core, `HoleLanding` is `ValueLanding` and `holeLandings` is
   `valueLandings`.
+- streamlord-analysis: `unknownSignalIssue(ref, defined)` is `unknownSignalIssues(refs, defined)`,
+  for every read at once. For Java, `declaredNames` and `projectConstants` are in
+  `KotlinDeclarationsKt`, where they were in `InterpolationsKt`.
 - streamlord-core: `JsonObject.decimal`, `JsonNumber.toBigDecimal` and `JsonNumber.toBigDecimalOrNull`
   are extension functions in the same package, which Kotlin calls as before once they are imported,
   and Java as `JsonDecimals.decimal(object, key)`.
@@ -215,6 +218,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Added
 
+- streamlord-analysis: what both editors call, so that neither keeps a rule of its own:
+  `signalDriftIn(own) { others }`, the signals one file reads that no other declares;
+  `Requests.patchedStore(store, patch, onlyIfMissing)` and `PatchedStore`, a signal store after a
+  patch as the client holds it; `Catalog.signalNameCalls` and `Catalog.signalPairCalls`, the DSL calls
+  whose first argument names a signal. streamlord-core's `JsonParseException.limit` says the text is
+  JSON past one of the parser's limits.
 - `datastarEvents(body, header)` in streamlord-test reads an answer that is no stream, by its
   content type and its `datastar-*` headers, as Datastar's client reads it, into the same
   `DatastarEvents`: `datastarEvents(response.bodyAsText(), response.headers::get)` on Ktor,
