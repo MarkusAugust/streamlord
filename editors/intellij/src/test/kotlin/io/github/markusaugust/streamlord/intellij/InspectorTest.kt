@@ -1158,6 +1158,16 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals("""{"a":[7,2],"b":1,"d":3}""", JsonParser.parse(store.text).toJson())
     }
 
+    // The client nests as deep as a stream says, and the VS Code inspector folds such a patch (port.test.ts).
+    fun `test a patch nested deeper than the SDK reads from a request is folded as the client folds it`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val apply = panel.javaClass.getDeclaredMethod("applyFrame", DatastarFrame::class.java).apply { isAccessible = true }
+        val deep = "{\"a\":".repeat(200) + "1" + "}".repeat(200)
+        apply.invoke(panel, DatastarFrame("datastar-patch-signals", null, null, mapOf("signals" to deep), "", 0L))
+        val store = UIUtil.findComponentsOfType(panel, JBTextArea::class.java).singleOrNull { it.text.startsWith("{\n") }
+        assertEquals(deep, store?.text?.let { JsonParser.parse(it, Int.MAX_VALUE).toJson() })
+    }
+
     // A patch Streamlord refuses on purpose says so, and nothing about the page standing still.
     fun `test a patch Streamlord refuses on purpose says so`() {
         val panel = InspectorPanel(project, testRootDisposable)
