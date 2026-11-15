@@ -4,7 +4,15 @@ import io.github.markusaugust.streamlord.core.DatastarEventValidationException
 import io.github.markusaugust.streamlord.core.client.hex
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.JsonParseException
+import io.github.markusaugust.streamlord.core.json.JsonArray
+import io.github.markusaugust.streamlord.core.json.JsonBoolean
+import io.github.markusaugust.streamlord.core.json.JsonNull
+import io.github.markusaugust.streamlord.core.json.JsonNumber
+import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonShape
+import io.github.markusaugust.streamlord.core.json.JsonString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -119,12 +127,37 @@ public object Wire {
             }
         if (!shaped) {
             throw DatastarEventValidationException(
-                "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
+                notAnObject(value)?.let { (kind, effect) -> "signals must be one JSON object, not $kind: $effect" }
+                    ?: "signals must be one JSON object: Datastar's client runs signals that are not JSON as JavaScript",
             )
         }
         refused?.let { throw DatastarEventValidationException(it) }
         return value
     }
+
+    /**
+     * What [value] is, where it is JSON and no object, and what the client makes of it: `JSON.parse`
+     * takes it, and the patch walks it with `for...in`, which finds an array's indexes and a
+     * string's, and nothing in a number, a boolean or null. Null where it is not JSON, or an object.
+     */
+    internal fun notAnObject(value: String): Pair<String, String>? =
+        when (
+            val parsed =
+                try {
+                    JsonParser.parse(value)
+                } catch (_: JsonParseException) {
+                    return null
+                }
+        ) {
+            is JsonObject -> null
+            is JsonArray -> "an array" to "the client patches its items as signals named 0, 1 and on"
+            is JsonString -> "a string" to "the client patches its characters as signals named 0, 1 and on"
+            is JsonNumber -> "a number" to NOTHING_PATCHED
+            is JsonBoolean -> "a boolean" to NOTHING_PATCHED
+            is JsonNull -> "null" to NOTHING_PATCHED
+        }
+
+    private const val NOTHING_PATCHED = "the client patches nothing from it"
 
     /**
      * Reject an event id that would not come back as it was written. It returns as the
