@@ -2419,40 +2419,35 @@ internal fun trustedFix(
     return Fix("Mark $shown as markup", ip.start, ip.end, text, importEdits(src, DOMAIN, "Trusted"), preferred = false)
 }
 
-/** The calls that make a List, and those whose result is one, whatever they are called on; not those a String has too. */
-private val LIST_MAKERS =
-    setOf("listOf", "mutableListOf", "arrayListOf", "emptyList", "buildList", "listOfNotNull", "List", "MutableList", "ArrayList")
+/** The calls that make a collection, and those whose result is a List, whatever they are called on; not those a String has too. */
+private val COLLECTION_MAKERS =
+    (
+        "listOf mutableListOf arrayListOf emptyList buildList listOfNotNull List MutableList ArrayList " +
+            "setOf mutableSetOf hashSetOf linkedSetOf sortedSetOf emptySet buildSet " +
+            "mapOf mutableMapOf hashMapOf linkedMapOf sortedMapOf emptyMap buildMap " +
+            "arrayOf emptyArray arrayOfNulls intArrayOf longArrayOf doubleArrayOf booleanArrayOf charArrayOf sequenceOf"
+    ).split(" ").toSet()
 private val LIST_RESULTS =
-    setOf(
-        "toList",
-        "toMutableList",
-        "map",
-        "mapNotNull",
-        "mapIndexed",
-        "flatMap",
-        "filterNotNull",
-        "sorted",
-        "sortedBy",
-        "sortedDescending",
-        "sortedWith",
-        "distinct",
-        "chunked",
-        "windowed",
-        "zip",
+    (
+        "toList toMutableList toSet toMutableSet toTypedArray map mapNotNull mapIndexed flatMap filterNotNull " +
+            "sorted sortedBy sortedDescending sortedWith distinct chunked windowed zip"
+    ).split(" ").toSet()
+
+/** The calls whose result is a collection when what they are called on is one. */
+private val COLLECTION_KEPT = setOf("orEmpty", "filter", "filterNot", "take", "drop", "reversed", "plus", "minus")
+
+/** A collection as a declaration reads its type: the name, without what the brackets after it hold. */
+private val COLLECTION_TYPE =
+    regex(
+        """(?:kotlin\.collections\.|java\.util\.)?(?:(?:Mutable)?(?:List|Set|Map|Collection|Iterable)|ArrayList|HashSet|""" +
+            """LinkedHashSet|HashMap|LinkedHashMap|Sequence|(?:Int|Long|Short|Byte|Double|Float|Boolean|Char)?Array)\??""",
     )
 
-/** A declared List, as a declaration reads its type: the name, without what the brackets after it hold. */
-private val LIST_TYPE = regex("""(?:kotlin\.collections\.)?(?:List|MutableList|ArrayList)\??""")
+/** A cast at the end of a value, `v as List<*>`, and the type it names. */
+private val CAST = regex("""\sas\??\s+([\p{L}_][\p{L}\p{Nd}_.]*)\s*(?:<.*>)?\??$""")
 
 /** Whether every value a hole can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
 internal fun callResult(value: String): Boolean = holeValues(value).all { lastCall(it.text) != null }
-
-/** Whether [value] is a name the file declares with a type, which the value then has: one not shown a String is not one. */
-internal fun typeShown(
-    src: String,
-    value: String,
-    at: Int,
-): Boolean = IDENT.matchEntire(value.trim()) != null && declarationOf(src, value.trim(), at)?.type != null
 
 /** Whether a constant's text, as the file shows it, holds a per cent sign: in the value as written, or in the `const val` it names. */
 internal fun constantPercent(
@@ -2464,17 +2459,55 @@ internal fun constantPercent(
     return '%' in t || (IDENT.matchEntire(t) != null && declarationOf(src, t, at)?.text?.contains('%') == true)
 }
 
-/** Whether a value handed to `interpolate` is visibly a List: made by a call that makes one, or a name declared one. */
-internal fun visiblyList(
+/**
+ * The type the file shows [value] to have: a name's declared type, or, for a property reached
+ * through what holds it, `u.tags`, the one type every property of that name the file declares has.
+ */
+internal fun shownType(
     src: String,
     value: String,
     at: Int,
-): Boolean {
+): String? {
     val t = value.trim()
-    if (IDENT.matchEntire(t) != null) return LIST_TYPE.matchEntire(declarationOf(src, t, at)?.type ?: "") != null
-    val call = lastCall(t) ?: return false
-    return if (call.receiver == null) call.name in LIST_MAKERS else call.name in LIST_RESULTS
+    if (IDENT.matchEntire(t) != null) return declarationOf(src, t, at)?.type
+    if (PROPERTY_CHAIN.matchEntire(t) == null || '.' !in t) return null
+    val name = t.substringAfterLast('.').removeSuffix("!!").trim()
+    val types = fileFacts(src).names[name].orEmpty().filter { it.shared }.map { it.type }
+    return types.firstOrNull()?.takeIf { first -> types.all { it == first } }
 }
+
+/**
+ * Whether the text shows every value a hole can give to be a collection, a List, a Set, a Map or
+ * an array: declared one, set to one, made by a call that makes one, or cast to one. A template
+ * writes it in brackets, which no CSS is.
+ */
+internal fun collectionShown(
+    src: String,
+    value: String,
+    at: Int,
+    depth: Int = 0,
+): Boolean =
+    depth < VALUE_DEPTH &&
+        holeValues(value).all { v ->
+            val t = unparen(v.text)
+            val cast = CAST.find(t)
+            val sum = splitTop(t, "+")
+            val call = lastCall(t)
+            when {
+                cast != null -> COLLECTION_TYPE.matchEntire(cast.groupValues[1]) != null
+                sum.size > 1 -> collectionShown(src, sum[0], at, depth + 1)
+                shownType(src, t, at) != null -> COLLECTION_TYPE.matchEntire(shownType(src, t, at)!!) != null
+                IDENT.matchEntire(t) != null -> {
+                    val d = declarationOf(src, t, at)
+                    val init = d?.let { initialiser(src, it) }
+                    init != null && collectionShown(src, init, d.at, depth + 1)
+                }
+                call == null -> false
+                call.receiver == null -> call.name in COLLECTION_MAKERS
+                call.name in LIST_RESULTS -> true
+                else -> call.name in COLLECTION_KEPT && collectionShown(src, call.receiver, at, depth + 1)
+            }
+        }
 
 /** The package of streamlord-html, whose helpers the expression fixes write. */
 internal const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"

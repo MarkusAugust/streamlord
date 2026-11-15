@@ -59,6 +59,15 @@ object HoleFacts {
     private val LISTS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
     private val MARKUP_CALLS = setOf("interpolate", "Trusted")
 
+    /** The collections a template writes in brackets, by their qualified names, Java's that Kotlin's aliases expand to among them. */
+    private val COLLECTIONS: Set<String> =
+        (
+            listOf("List", "Set", "Map", "Collection", "Iterable").flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
+                listOf("ArrayList", "HashSet", "LinkedHashSet", "HashMap", "LinkedHashMap", "TreeMap", "TreeSet", "LinkedList").map { "java.util.$it" } +
+                listOf("", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char").map { "kotlin.${it}Array" } +
+                "kotlin.sequences.Sequence"
+        ).toSet()
+
     /** The expression helpers by name, for a call the Kotlin plugin cannot resolve. */
     private val HELPERS: Set<String> = Catalog.default.signalNameHelpers.keys
 
@@ -273,6 +282,11 @@ object HoleFacts {
 
             lower.isBooleanType -> {
                 if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
+            }
+
+            // A collection of markup is markup the author built; any other a template writes in brackets.
+            classOf(lower) in COLLECTIONS -> {
+                if (markupElements(lower)) ValueFact.MARKUP else ValueFact.COLLECTION
             }
 
             // An Html or a Trusted of another package, which the text alone would take for Streamlord's.

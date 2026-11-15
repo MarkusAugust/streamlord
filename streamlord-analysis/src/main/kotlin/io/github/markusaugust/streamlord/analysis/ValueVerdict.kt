@@ -138,6 +138,7 @@ private val WEAKEST_FIRST =
     listOf(
         ValueFact.STRING,
         null,
+        ValueFact.COLLECTION,
         ValueFact.OTHER,
         ValueFact.MARKUP,
         ValueFact.TRUSTED,

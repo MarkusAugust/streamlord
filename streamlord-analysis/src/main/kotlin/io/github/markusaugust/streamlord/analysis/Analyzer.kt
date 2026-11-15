@@ -62,6 +62,9 @@ public enum class ValueFact {
     TRUSTED,
     UNSIGNED,
     OTHER,
+
+    /** A List, a Set, a Map or an array, which a template writes in brackets: no CSS, nor anything to vouch for. */
+    COLLECTION,
     ;
 
     /** What [ofTypeName] in ValueTypes.kt hangs on. */
@@ -1636,15 +1639,17 @@ public class Analyzer(
             }
         }
         // CSS in the body of a <style> is the author's to vouch for: the rewrite passes it as Trusted(...), which takes
-        // a String, and a value shown to be none as the text a template writes of it: by whether it is taken for one.
-        // An editor that types the values says which are; the text alone leaves most unknown, and is taken at its word.
+        // a String, and any other value as the text a template writes of it, which a class of the author's may make CSS:
+        // by whether it is shown to be a String. A collection it does not vouch for, which a template writes in brackets.
         val vouched by lazy(LazyThreadSafetyMode.NONE) {
             holes
                 .filter { k ->
+                    val text = s.interpolations[k].text
                     canTrust && !keeps[k] && (told[k].isString() || told[k] == null) &&
-                        rawElement(view, landings[k], starts[k]) == "style" && !mayBeNull(src, s.interpolations[k].text, s.start)
+                        rawElement(view, landings[k], starts[k]) == "style" && !mayBeNull(src, text, s.start) &&
+                        !collectionShown(src, text, s.start)
                 }.associateWithTo(LinkedHashMap()) { k ->
-                    told[k].isString() || (opts.valueFact == null && !typeShown(src, s.interpolations[k].text, s.start))
+                    told[k].isString() || shownType(src, s.interpolations[k].text, s.start)?.let { ValueFact.ofTypeName(it) }.isString()
                 }
         }
         // A value interpolate would not take as it is, though it is safe where it lands, stays a template in the format,
@@ -1759,7 +1764,7 @@ public class Analyzer(
                                         mayHoldMarkup(src, ip.text, s.start, opts.constants)
                                 )
                         ) &&
-                        !mayBeNull(src, ip.text, s.start) && !visiblyList(src, ip.text, s.start)
+                        !mayBeNull(src, ip.text, s.start) && !collectionShown(src, ip.text, s.start)
                 // A Trusted or an Html that opens a `+` chain would be joined to nothing, since Kotlin has no plus for
                 // either: no such fix there, nor such advice.
                 val opens = ip.start == s.start

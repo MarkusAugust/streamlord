@@ -324,9 +324,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - `interpolate` refuses a value in `data-match-media`, where it escaped one: the reference writes
   the query as a string literal, so Datastar Pro may run it. The editors warn of a Kotlin value
   there as in any Datastar expression, and no longer offer the rewrite to `interpolate`.
-- The rewrite to `interpolate` passes a value in the body of a `<style>` that is declared no
-  String, a `List` or a class of yours, as `Trusted(v.toString())`, which compiles, where it wrote
-  `Trusted(v)`; IntelliJ now offers it for such a value too.
+- The rewrite to `interpolate` passes a value in the body of a `<style>` that is not shown to be a
+  String, a class of yours that writes CSS, as `Trusted(v.toString())`, which compiles, where it
+  wrote `Trusted(v)`; a String it passes as `Trusted(v)`. A `List`, a `Set`, a `Map` or an array,
+  which a template writes in brackets, it does not vouch for, so no rewrite is offered for the string.
 - A value after a scheme the markup writes that does more than navigate, `href="javascript:${v}"`
   or `data:text/html,`, is said to be in a URL that runs whatever it holds, and the rewrite to
   `interpolate`, which threw for every value there, is no longer offered for the string. In a call
