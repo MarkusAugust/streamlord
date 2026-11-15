@@ -63,6 +63,17 @@ class ExpressionTimingTest {
         ) { analyzer.analyzeHtml(it) }
     }
 
+    // Each `//` after the await could start a comment of its own or be the last one's text: read with a pattern, the
+    // ways multiplied on JavaScript's engine, and VS Code stopped for 44 s at twenty.
+    @Test
+    fun `an await before an error, after many line comments`() {
+        assertGrowsLinearly(
+            "line comments after an await",
+            20,
+            { n -> "<div data-on:click=\"await " + "// ".repeat(n) + "\n x 1\"></div>" },
+        ) { analyzer.analyzeHtml(it) }
+    }
+
     @Test
     fun `an expression of many action calls with options`() {
         assertGrowsLinearly(
