@@ -2166,7 +2166,7 @@ internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that
  * The rewrite of the literal or `+` chain to a call of `interpolate`, over it and [trim], the trim
  * call after it, with the imports the file lacks. Each value of [trusted], by its place among the
  * values, is passed as `Trusted(...)`, CSS in the body of a `<style>` that the author vouches for,
- * and the title names them; one not known to be a String, by its entry, as its `toString()`, the
+ * and the title names them; one not known to be a String, by its entry, as a template of it, `"$v"`, the
  * text a template writes of it. Each template of [kept] stays in the format as it is written. The
  * text is made the first time it is read, and a copy of the fix under another title shares it.
  */
@@ -2227,8 +2227,8 @@ private fun interpolateText(
 
                 vouched -> "Trusted($text)"
 
-                // A safe call would make it a String?, and an operator would bind looser than the call.
-                else -> "Trusted(${if (wholeOperand(text) && '?' !in text) text else "($text)"}.toString())"
+                // The text a template writes of it: a toString() of a value that is a String after all would be a warning.
+                else -> "Trusted(\"" + (if (IDENT.matchEntire(text) != null) "\$$text" else "\${$text}") + "\")"
             }
         }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type

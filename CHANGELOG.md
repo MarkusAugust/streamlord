@@ -327,7 +327,7 @@ All notable changes to Streamlord are recorded here. The format follows
 - `data-match-media`'s value is a media query, written with or without parentheses and quotes, as
   the reference allows, and no longer an expression with a syntax error.
 - The rewrite to `interpolate` passes a value in the body of a `<style>` that is not shown to be a
-  String, a class of yours that writes CSS, as `Trusted(v.toString())`, which compiles, where it
+  String, a class of yours that writes CSS, as `Trusted("$v")`, which compiles with no warning, where it
   wrote `Trusted(v)`; a String it passes as `Trusted(v)`. A `List`, a `Set`, a `Map` or an array,
   which a template writes in brackets, it does not vouch for, so no rewrite is offered for the string.
 - A value after a scheme the markup writes that does more than navigate, `href="javascript:${v}"`
