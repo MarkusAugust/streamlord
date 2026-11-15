@@ -3,7 +3,6 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
-import io.github.markusaugust.streamlord.core.client.groupRange
 import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.SignalNames
 import kotlin.concurrent.Volatile
@@ -447,9 +446,10 @@ internal fun collectDeclaredSignals(
  * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
  * reads, and every signal an expression assigns to.
  *
- * Two kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
- * `class:Form` for a `@Serializable` class whose properties are here, and `toJsonValue:Form` for a
- * class a page is declared from. [isKnownSignal] reads them together.
+ * Three kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
+ * `class:Form` for a `@Serializable` class whose properties are here, `toJsonValue:Form` for a
+ * class a page is declared from, and `refused:is-open` for a name Streamlord refuses. [isKnownSignal]
+ * reads them together.
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
     val foreign = foreignHelpers(source)

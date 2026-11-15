@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.client.groupRange
 import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.concurrent.Volatile
 

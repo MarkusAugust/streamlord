@@ -28,15 +28,3 @@ public fun regex(
     pattern: String,
     vararg options: RegexOption,
 ): Regex = Regex(pattern, options.toSet())
-
-/**
- * Where group [group] of [match], a match of this pattern in [input], stands; null when the group took
- * no part. The JVM reads it off the match; the pattern and [input] are what JavaScript runs again to learn it.
- */
-@InternalStreamlordApi
-@Suppress("UnusedReceiverParameter", "UNUSED_PARAMETER")
-public fun Regex.groupRange(
-    input: CharSequence,
-    match: MatchResult,
-    group: Int,
-): IntRange? = match.groups[group]?.range

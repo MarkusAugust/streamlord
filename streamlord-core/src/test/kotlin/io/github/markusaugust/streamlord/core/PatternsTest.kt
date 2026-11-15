@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.core
 
-import io.github.markusaugust.streamlord.core.client.groupRange
 import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -135,13 +134,5 @@ class PatternsTest {
     fun `after an empty match the engines differ only between the halves of an astral character`() {
         assertEquals(listOf("0-0", "1-1", "3-3", "4-4"), found("""x*""", "a\uD83D\uDE00b") - "2-2")
         assertEquals(listOf("0-1", "3-4"), found("""[a-z]+""", "a\uD83D\uDE00b"))
-    }
-
-    @Test
-    fun `where a group stands is known`() {
-        val pattern = regex("""(a)?(b+)""")
-        val match = pattern.find("xxbb")!!
-        assertEquals(null, pattern.groupRange("xxbb", match, 1))
-        assertEquals(2..3, pattern.groupRange("xxbb", match, 2))
     }
 }

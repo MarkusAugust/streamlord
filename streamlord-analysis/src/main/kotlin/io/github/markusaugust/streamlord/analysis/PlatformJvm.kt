@@ -75,3 +75,11 @@ internal fun startsName(codePoint: Int): Boolean = Character.isUnicodeIdentifier
 /** Past ASCII: whether [codePoint] may continue a JavaScript name, `ID_Continue`; the two joiners are counted by the caller. */
 internal fun continuesName(codePoint: Int): Boolean =
     Character.isUnicodeIdentifierPart(codePoint) && !Character.isIdentifierIgnorable(codePoint)
+
+/** Where group [group] of [match] stands in [input]; the JavaScript build asks its engine again. */
+@Suppress("UnusedReceiverParameter", "UNUSED_PARAMETER")
+internal fun Regex.groupRange(
+    input: CharSequence,
+    match: MatchResult,
+    group: Int,
+): IntRange? = match.groups[group]?.range

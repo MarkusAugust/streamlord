@@ -18,10 +18,3 @@ public expect fun regex(
     pattern: String,
     vararg options: RegexOption,
 ): Regex
-
-@InternalStreamlordApi
-public expect fun Regex.groupRange(
-    input: CharSequence,
-    match: MatchResult,
-    group: Int,
-): IntRange?

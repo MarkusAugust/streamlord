@@ -13,3 +13,10 @@ internal expect fun currentTimeMillis(): Long
 internal expect fun startsName(codePoint: Int): Boolean
 
 internal expect fun continuesName(codePoint: Int): Boolean
+
+/** Where group [group] of [match] stands in [input], which JavaScript says only when asked again with the `d` flag. */
+internal expect fun Regex.groupRange(
+    input: CharSequence,
+    match: MatchResult,
+    group: Int,
+): IntRange?
