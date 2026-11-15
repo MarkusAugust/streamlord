@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
 import io.github.markusaugust.streamlord.core.client.ClientScript
@@ -186,6 +187,7 @@ private fun scopeNameIssues(
     text: String,
     spec: AttributeSpec,
     handed: HandedIn,
+    prefix: String,
 ): List<Issue> {
     val names = handed.pattern ?: return emptyList()
     if (spec.pro || spec.valueKind != ValueKind.EXPRESSION || BINDS_NAMES.containsMatchIn(text)) return emptyList()
@@ -203,18 +205,18 @@ private fun scopeNameIssues(
             // A key of an object literal, `{patch: 1}`, names nothing.
             name !in spec.argNames && regions[m.range.first] == Region.CODE && !(after == ':' && (before == '{' || before == ','))
         }.map { m ->
-            val where = handed.attributes[m.value].orEmpty().joinToString(" and ") { "data-$it" }
+            val where = handed.attributes[m.value].orEmpty().joinToString(" and ") { "$prefix$it" }
             Issue(
                 start = m.range.first,
                 end = m.range.last + 1,
                 message =
-                    "${m.value} is not defined in data-${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
+                    "${m.value} is not defined in $prefix${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
                         "so here it throws a ReferenceError.",
                 severity = Severity.WARNING,
                 code = "scope-name",
                 link = Docs.EXPRESSIONS,
             )
-        }.toList() + undefinedNameIssues(text, spec, handed, regions)
+        }.toList() + undefinedNameIssues(text, spec, handed, regions, prefix)
 }
 
 /** `evt.type` in an attribute whose plugin hands no event: [HandedIn.undefinedElsewhere]. */
@@ -223,18 +225,19 @@ private fun undefinedNameIssues(
     spec: AttributeSpec,
     handed: HandedIn,
     regions: ByteArray,
+    prefix: String,
 ): List<Issue> {
     val names = handed.readFrom ?: return emptyList()
     return names
         .findAll(text)
         .filter { m -> m.value !in spec.argNames && regions[m.range.first] == Region.CODE }
         .map { m ->
-            val where = handed.undefinedElsewhere[m.value].orEmpty().joinToString(" and ") { "data-$it" }
+            val where = handed.undefinedElsewhere[m.value].orEmpty().joinToString(" and ") { "$prefix$it" }
             Issue(
                 start = m.range.first,
                 end = m.range.last + 1,
                 message =
-                    "${m.value} is undefined in data-${spec.name}: Datastar hands an expression the event only in $where, " +
+                    "${m.value} is undefined in $prefix${spec.name}: Datastar hands an expression the event only in $where, " +
                         "so reading from it throws a TypeError.",
                 severity = Severity.WARNING,
                 code = "scope-name",
@@ -832,6 +835,7 @@ public class ExpressionValidator(
      * stands in for [returnsValue], a name only another attribute's expression is handed is flagged
      * too ([scopeNameIssues]). With the [event] a data-on listens for, a type compared with
      * `evt.detail.type` that datastar-fetch never comes with is flagged too ([fetchTypeIssues]).
+     * Messages name attributes with the [prefix] the page is written with.
      */
     public fun validate(
         text: String,
@@ -839,9 +843,10 @@ public class ExpressionValidator(
         hyphenatedSignals: Set<String> = emptySet(),
         attribute: AttributeSpec? = null,
         event: String? = null,
+        prefix: String = CatalogNames.PREFIX,
     ): List<Issue> =
         validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
-            (attribute?.let { scopeNameIssues(text, it, handed) + computedSideEffects(text, it) } ?: emptyList()) +
+            (attribute?.let { scopeNameIssues(text, it, handed, prefix) + computedSideEffects(text, it, prefix) } ?: emptyList()) +
             (if (event == DATASTAR_FETCH) fetchTypeIssues(catalog, text) else emptyList())
 
     /**
@@ -852,6 +857,7 @@ public class ExpressionValidator(
     private fun computedSideEffects(
         text: String,
         spec: AttributeSpec,
+        prefix: String,
     ): List<Issue> {
         if (spec.name != "computed") return emptyList()
         val regions = jsRegions(text)
@@ -866,11 +872,11 @@ public class ExpressionValidator(
             val message =
                 when {
                     r.signal && (ASSIGNS_AFTER.matchAt(text, r.end) != null || updatedBefore(text, r.start)) -> {
-                        "data-computed must not change signals, and this changes $written"
+                        "${prefix}computed must not change signals, and this changes $written"
                     }
 
                     !r.signal && catalog.actionsByName[r.name]?.let { it.kind == "backend" || it.name in SIDE_EFFECT_ACTIONS } == true -> {
-                        "data-computed must not call actions, and this calls $written"
+                        "${prefix}computed must not call actions, and this calls $written"
                     }
 
                     else -> {
@@ -881,7 +887,7 @@ public class ExpressionValidator(
                 Issue(
                     r.start,
                     r.start + written.length,
-                    "$message: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.",
+                    "$message: Datastar runs it again each time a signal it reads changes. Use ${prefix}effect for a side effect.",
                     Severity.WARNING,
                     "computed-value",
                     Docs.attribute("computed"),

@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection
+import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import kotlin.time.measureTime
 
 /** A signal the server reads that no page of the project declares: the analysis's `signal-never-declared`, as VS Code shows it. */
@@ -41,6 +42,22 @@ class SignalDriftInspectionTest : StreamlordTestCase() {
         myFixture.addFileToProject("page.html", "<input data-bind:query>")
         myFixture.configureByText("Search.kt", "fun f(signals: Signals) { signals.string(\"query\"); signals.string(\"questQuery\") }")
         assertEquals(listOf("questQuery"), drift().map { it.text })
+    }
+
+    // As VS Code reads it: the file's own declaration counts under the prefix that is set.
+    fun `test a declaration in the same file under the prefix that is set counts`() {
+        val state = StreamlordSettings.getInstance(project).state
+        val before = state.attributePrefix
+        try {
+            state.attributePrefix = "data-ds-"
+            myFixture.configureByText(
+                "Search.kt",
+                "fun f(signals: Signals) { signals.string(\"query\") }\nval page = \"<input data-ds-bind:query>\"",
+            )
+            assertEquals(emptyList<String>(), drift().map { it.text })
+        } finally {
+            state.attributePrefix = before
+        }
     }
 
     fun `test every signal the server reads declared by a page is nothing`() {

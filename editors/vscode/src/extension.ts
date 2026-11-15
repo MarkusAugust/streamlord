@@ -20,7 +20,8 @@ function markupLanguages(): string[] {
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = () => vscode.workspace.getConfiguration("streamlord");
-  const prefix = () => config().get<string>("attributePrefix", defaultPrefix());
+  // A blank prefix is the default one, as in IntelliJ: no Datastar bundle reads an attribute without one.
+  const prefix = () => config().get<string>("attributePrefix", defaultPrefix()).trim() || defaultPrefix();
   const markup = new Set(markupLanguages());
   const selector: vscode.DocumentSelector = [{ language: "kotlin" }, ...[...markup].map((language) => ({ language }))];
   const issues = new IssueStore();

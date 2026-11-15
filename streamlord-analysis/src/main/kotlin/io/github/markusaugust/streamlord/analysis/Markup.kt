@@ -599,8 +599,8 @@ private val SVG_NAMES: Map<String, String> =
         .filter { it.isNotEmpty() }
         .associateBy { it.asciiLowercase() }
 
-/** `attributes["data-ignore"] = ...` in Kotlin, kotlinx.html's own way to write what `dataIgnore()` writes. */
-private val IGNORE_INDEX = regex("""\battributes\s*\[\s*"data-(?:star-)?ignore(__self)?"\s*]""")
+/** `attributes["data-ignore"] = ...` in Kotlin under [prefix], kotlinx.html's own way to write what `dataIgnore()` writes. */
+private fun ignoreIndex(prefix: String) = regex("""\battributes\s*\[\s*"${prefixPattern(prefix)}ignore(__self)?"\s*]""")
 
 /**
  * Where a Kotlin file builds an element with `dataIgnore()` or `attributes["data-ignore"]`, which
@@ -612,6 +612,7 @@ internal fun dslIgnored(
     src: String,
     lex: KotlinLex,
     foreign: (name: String, nameStart: Int) -> Boolean,
+    prefix: String,
 ): (Int) -> Boolean {
     if (!src.contains("ignore", ignoreCase = true)) return { false }
     val blocks = lex.blocks(src)
@@ -629,7 +630,7 @@ internal fun dslIgnored(
         if (foreign(site.name, site.nameStart)) continue
         add(site.nameStart, (site.named("self") ?: site.positional.firstOrNull())?.text?.trim() == "true")
     }
-    for (m in IGNORE_INDEX.findAll(src)) if (lex.mask[m.range.first]) add(m.range.first, m.groupValues[1].isNotEmpty())
+    for (m in ignoreIndex(prefix).findAll(src)) if (lex.mask[m.range.first]) add(m.range.first, m.groupValues[1].isNotEmpty())
     if (whole.isEmpty() && own.isEmpty()) return { false }
     return { at -> whole.any { at in it } || blocks.around(at) in own }
 }
@@ -1355,7 +1356,14 @@ public class MarkupValidator(
                         null
                     }
                 val foreign = if (parsed.key == null && parsed.modifiers.isEmpty()) foreignNote(attr.name, prefix, decoded.text) else ""
-                val judged = expressions.validate(decoded.text, hyphenatedSignals = hyphenatedSignals, attribute = spec, event = event)
+                val judged =
+                    expressions.validate(
+                        decoded.text,
+                        hyphenatedSignals = hyphenatedSignals,
+                        attribute = spec,
+                        event = event,
+                        prefix = prefix,
+                    )
                 for (issue in aroundPlaceholders(decoded.text, judged)) {
                     val (start, end) = source(issue.start, issue.end)
                     issues +=
