@@ -35,6 +35,15 @@ class CompletionTest : StreamlordTestCase() {
         assertTrue(items.toString(), "\$count" in items && "\$busy" in items)
     }
 
+    fun `test no signal a DSL call names with a hyphen, which Streamlord refuses, and the one an object keeps`() {
+        myFixture.addFileToProject("Other.kt", "fun g() { div { dataSignals(\"is-open\" to false); dataBind(\"first-name\") } }")
+        myFixture.addFileToProject("other.html", "<div data-signals='{\"hs-key\": 1}'></div>")
+        myFixture.configureByText("Feed.kt", "fun f() { dataSignals(\"count\" to 0, \"my-x\" to 1); dataOnClick(\"\$<caret>\") }")
+        val items = myFixture.completeBasic()!!.map { it.lookupString }
+        assertTrue(items.toString(), "\$count" in items && "\$hs-key" in items)
+        assertTrue(items.toString(), items.none { it in setOf("\$is-open", "\$first-name", "\$my-x") })
+    }
+
     fun `test actions after an at sign`() {
         myFixture.configureByText("Feed.kt", "fun f() { dataOnClick(\"@<caret>\") }")
         val items = myFixture.completeBasic()!!.map { it.lookupString }
