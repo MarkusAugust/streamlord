@@ -351,7 +351,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - Signal completion in both editors no longer offers a name a DSL or core call writes with a
   hyphen, `dataSignals("is-open" to false)`, which Streamlord refuses, so no page has it. A key the
   client keeps as written, `data-signals='{"hs-key": 1}'`, is still offered as `$hs-key`, which
-  Datastar reads as that one signal.
+  Datastar reads as that one signal. Nor does an unknown signal's warning suggest such a name:
+  `$isOpen` beside `dataSignals("is-open" to false)` no longer says "Did you mean $is-open?".
 - VS Code: in a `$$"""` raw string that opens on the next line, `$$count` and `$${id}` are Kotlin's
   templates again, not Datastar signals, as in a one-line string.
 - VS Code colours Datastar in FreeMarker, Velocity, Twig, PHP and Razor files, where their extension
