@@ -23,12 +23,11 @@ import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.projectConstants
+import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
-import io.github.markusaugust.streamlord.analysis.signalDriftIn
 import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
-import io.github.markusaugust.streamlord.analysis.unknownSignalIssues
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.analysis.Fix as AnalysedFix
 import io.github.markusaugust.streamlord.analysis.Issue as AnalysedIssue
@@ -181,31 +180,31 @@ fun diagnose(
 ): Array<Issue> {
     val file = source(src, kotlin, prefix, constants, engineOf(languageId))
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
-    val known = defined?.let(::setOf)
-    val unknown = if (known == null) emptyList() else unknownSignalIssues(analyzer.signalReferences(file), known)
-    val drift = if (others == null || !kotlin) emptyList() else drift(src, others)
-    return (found + unknown + drift).map(::plain).toTypedArray()
+    val project =
+        projectSignalIssues(
+            file.language,
+            analyzer.signalReferences(file),
+            defined?.let { { setOf(it) } },
+            others?.let { { collectSignalFacts(source(src, true)) } },
+            { facts(others ?: emptyArray()) },
+        )
+    return (found + project).map(::plain).toTypedArray()
 }
 
-/** The reads of signals in the Kotlin file [src] that neither it nor [others] declares. */
-private fun drift(
-    src: String,
-    others: Array<DriftFacts>,
-): List<AnalysedIssue> =
-    signalDriftIn(collectSignalFacts(source(src, true))) {
-        others.map { o ->
-            val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
-            SignalFacts(
-                o.declared.toSet(),
-                o.readInto.toSet(),
-                classes,
-                emptyList(),
-                o.encoded.toSet(),
-                o.patched.toSet(),
-                o.packageName,
-                o.imports.toSet(),
-            )
-        }
+/** What the workspace's other files say about signals, as the analysis holds it. */
+private fun facts(others: Array<DriftFacts>): List<SignalFacts> =
+    others.map { o ->
+        val classes = o.classes.associate { c -> c.name to c.properties.map { SignalProperty(it, 0, 0) } }
+        SignalFacts(
+            o.declared.toSet(),
+            o.readInto.toSet(),
+            classes,
+            emptyList(),
+            o.encoded.toSet(),
+            o.patched.toSet(),
+            o.packageName,
+            o.imports.toSet(),
+        )
     }
 
 // The Kotlin file analysed last: the lightbulb asks about the text the diagnostics were just made for.

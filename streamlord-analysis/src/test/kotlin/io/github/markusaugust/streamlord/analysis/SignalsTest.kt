@@ -6,6 +6,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SignalsTest {
+    /** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
+    private fun unknown(
+        refs: List<SignalReference>,
+        defined: Set<String>,
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, { defined }, null) { emptyList() }
+
     @Test
     fun `the signals a file declares and defines`() {
         for (case in sharedCases("signals.json")) {
@@ -27,7 +33,7 @@ class SignalsTest {
             // defined, one Streamlord refuses too, for go to declaration and rename.
             val declared = declarations.map { it.name }.toSet()
             assertTrue(declared.containsAll(definitions.filterNot { it == "*" || ':' in it }), name)
-            assertEquals(emptyList(), unknownSignalIssues(declared.map { SignalReference(0, it.length + 1, it) }, definitions), name)
+            assertEquals(emptyList(), unknown(declared.map { SignalReference(0, it.length + 1, it) }, definitions), name)
         }
     }
 }

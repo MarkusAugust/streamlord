@@ -14,6 +14,12 @@ import kotlin.test.assertTrue
  * described in each file.
  */
 class CorpusTest {
+    /** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
+    private fun unknown(
+        refs: List<SignalReference>,
+        defined: Set<String>,
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, { defined }, null) { emptyList() }
+
     private val analyzer = Analyzer()
     private val files = fixtureNames("editors/vscode/test/fixtures/corpus").filter { it.endsWith(".json") }
 
@@ -57,13 +63,13 @@ class CorpusTest {
             // The signals the source reads that it does not itself declare.
             "references" -> {
                 val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
-                unknownSignalIssues(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
+                unknown(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
             }
 
             // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
             "kotlin-references" -> {
                 val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
-                unknownSignalIssues(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
+                unknown(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
             }
 
             else -> {

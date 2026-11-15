@@ -32,7 +32,6 @@ import io.github.markusaugust.streamlord.analysis.collectSignalDefinitions
 import io.github.markusaugust.streamlord.analysis.collectSignalFacts
 import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
-import io.github.markusaugust.streamlord.analysis.signalDriftIn
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
@@ -237,19 +236,17 @@ class SignalIndex(
     }
 
     /**
-     * The signals the Kotlin [file] reads, through a `@Serializable` class or a `Signals` lookup, that no file of the
-     * project declares: the analysis's `signalDriftIn`, as the VS Code extension asks it. Each file's facts are kept with
-     * its entry and read again only when the file changes, so a pass costs one read of the file that changed and a walk
-     * over what is kept ("Cache Results of Heavy Computations",
-     * https://plugins.jetbrains.com/docs/intellij/psi-performance.html). The daemon runs the inspection again on a
-     * change in any file; [refresh] is what finds it.
+     * What [file] says about signals, and every other file of the project, for the analysis's `projectSignalIssues`, as
+     * the VS Code extension asks it; null for a file the index holds none of. Each file's facts are kept with its entry
+     * and read again only when the file changes, so a pass costs one read of the file that changed and a walk over what
+     * is kept ("Cache Results of Heavy Computations", https://plugins.jetbrains.com/docs/intellij/psi-performance.html).
+     * The daemon runs the inspection again on a change in any file; [refresh] is what finds it.
      */
-    fun driftIn(file: PsiFile): List<Issue> {
-        val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
-        if (language != SourceLanguage.KOTLIN) return emptyList()
-        val own = entryFor(file) ?: return emptyList()
-        val ownFacts = factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language, prefix()))
-        return signalDriftIn(ownFacts) {
+    fun factsFor(file: PsiFile): Pair<() -> SignalFacts, () -> List<SignalFacts>>? {
+        val own = entryFor(file) ?: return null
+        val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile) ?: return null
+        val ownFacts = { factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language, prefix())) }
+        val others = {
             refresh()
             entries.values.mapNotNull { e ->
                 if (e === own || e.file == own.file) return@mapNotNull null
@@ -257,6 +254,7 @@ class SignalIndex(
                 factsIn(e, null)
             }
         }
+        return ownFacts to others
     }
 
     private fun factsIn(

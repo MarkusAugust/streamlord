@@ -17,7 +17,8 @@ import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Fix
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Severity
-import io.github.markusaugust.streamlord.analysis.unknownSignalIssues
+import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import org.jetbrains.kotlin.psi.KtFile
@@ -253,10 +254,9 @@ class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
                 StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlSignalReferences(file)
                 else -> return null
             }
-        val drift = if (file is KtFile) index.driftIn(file) else emptyList()
-        if (refs.isEmpty()) return drift
-        val defined = index.definitionsSeenFrom(file)
-        return unknownSignalIssues(refs, defined) + drift
+        val facts = index.factsFor(file)
+        val language = if (file is KtFile) SourceLanguage.KOTLIN else SourceLanguage.HTML
+        return projectSignalIssues(language, refs, { index.definitionsSeenFrom(file) }, facts?.first, facts?.second ?: { emptyList() })
     }
 }
 

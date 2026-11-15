@@ -271,7 +271,7 @@ public data class SignalDriftReport(
  * that file's part of [signalDrift]. A file with no signals class and no lookup can report
  * nothing, so [others] is read only for one that has.
  */
-public fun signalDriftIn(
+internal fun signalDriftIn(
     own: SignalFacts,
     others: () -> Iterable<SignalFacts>,
 ): List<Issue> {
@@ -364,4 +364,23 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         if (issues.isNotEmpty()) out[file] = issues
     }
     return SignalDriftReport(out, declared, read, byCodec)
+}
+
+/**
+ * What the project says of the signals one file in [language] reads, the one entry both editors
+ * ask: each of [refs] that reads a signal none of [defined] is, where the project's definitions are
+ * known, and in a Kotlin file each signal it reads through a signals class or a lookup that no file
+ * declares, where the files are known: [own] is its facts, [others] every other file's, each asked
+ * for only where it is needed.
+ */
+public fun projectSignalIssues(
+    language: SourceLanguage,
+    refs: List<SignalReference>,
+    defined: (() -> Set<String>)?,
+    own: (() -> SignalFacts)?,
+    others: () -> Iterable<SignalFacts>,
+): List<Issue> {
+    val unknown = if (defined == null || refs.isEmpty()) emptyList() else unknownSignalIssues(refs, defined())
+    val drift = if (language != SourceLanguage.KOTLIN || own == null) emptyList() else signalDriftIn(own(), others)
+    return unknown + drift
 }
