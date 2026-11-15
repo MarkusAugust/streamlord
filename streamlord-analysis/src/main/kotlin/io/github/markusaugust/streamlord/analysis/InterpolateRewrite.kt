@@ -194,9 +194,6 @@ internal fun coreType(
     return name + t.substring(bare.length)
 }
 
-// `List<out Html>` reads its elements as `List<Html>` does.
-internal val OUT_VARIANCE = regex("""^\s*out\s+""")
-
 /** [written] with its backticks dropped: `` `Page`? `` as `Page?`, the same name to Kotlin. */
 internal fun unticked(written: String): String = written.replace("`", "")
 

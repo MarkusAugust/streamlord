@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.analysis.Completion
 import io.github.markusaugust.streamlord.analysis.DeclaredNames
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
+import io.github.markusaugust.streamlord.analysis.ProjectSignals
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalProperty
 import io.github.markusaugust.streamlord.analysis.SignalReference
@@ -180,14 +181,15 @@ fun diagnose(
 ): Array<Issue> {
     val file = source(src, kotlin, prefix, constants, engineOf(languageId))
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
-    val project =
-        projectSignalIssues(
-            file.language,
-            analyzer.signalReferences(file),
-            defined?.let { { setOf(it) } },
-            others?.let { { collectSignalFacts(source(src, true)) } },
-            { facts(others ?: emptyArray()) },
-        )
+    val workspace =
+        object : ProjectSignals {
+            override fun defined() = defined?.let(::setOf)
+
+            override fun own() = others?.let { collectSignalFacts(source(src, true)) }
+
+            override fun others() = facts(others ?: emptyArray())
+        }
+    val project = projectSignalIssues(file.language, analyzer.signalReferences(file), workspace)
     return (found + project).map(::plain).toTypedArray()
 }
 

@@ -16,12 +16,10 @@ import {
   signalsOf,
   StreamReader,
   streamRequest,
-  unreachableHint,
   variableCompletions,
   type DriftFacts,
   type Fix,
   type Issue,
-  type Variable,
 } from "../src/analysis.ts";
 
 /**
@@ -211,16 +209,12 @@ describe("what crosses the port", () => {
     assert.deepEqual([sent["__proto__"], sent["constructor"], sent["toString"], sent["X-Token"]], ["a", "b", "c", "d"]);
   });
 
-  it("answers for a variable source and a field it does not know, as for none of those it knows", () => {
+  it("answers for a field it does not know as for none of those it knows", () => {
     const vars = environment(`{"baseUrl":"http://localhost:1","params":{"token":"t"}}`, "http://localhost:8080", undefined, undefined).vars;
-    const odd: Variable[] = vars.map((v) => ({ ...v, source: "elsewhere" }) as unknown as Variable);
     // A field that is none of the three takes the params, and none of the variables with a field of their own.
     assert.deepEqual(variableCompletions("{{", 2, "nowhere", vars)?.items.map((v) => v.name), ["token"]);
     assert.equal(variableCompletions("{{b", 3, "nowhere", vars), null);
-    // A source that is none of the three is no default and no running server, and not the file's either.
-    assert.equal(unreachableHint("{{baseUrl}}/x", odd, undefined, undefined), unreachableHint("{{baseUrl}}/x", vars, undefined, undefined));
     assert.equal(baseUrlSuggestion(vars, "http://localhost:2", "demo"), "http://localhost:2");
-    assert.equal(baseUrlSuggestion(odd, "http://localhost:2", "demo"), null);
   });
   it("folds a patch nested deeper than the SDK reads from a request, as the client does", () => {
     const deep = '{"a":'.repeat(200) + "1" + "}".repeat(200);

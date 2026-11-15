@@ -10,7 +10,7 @@ class SignalsTest {
     private fun unknown(
         refs: List<SignalReference>,
         defined: Set<String>,
-    ) = projectSignalIssues(SourceLanguage.HTML, refs, { defined }, null) { emptyList() }
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
 
     @Test
     fun `the signals a file declares and defines`() {

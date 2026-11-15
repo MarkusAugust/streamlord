@@ -8,7 +8,7 @@ class SignalReferencesTest {
     private fun unknown(
         refs: List<SignalReference>,
         defined: Set<String>,
-    ) = projectSignalIssues(SourceLanguage.HTML, refs, { defined }, null) { emptyList() }
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
 
     private val analyzer = Analyzer()
 

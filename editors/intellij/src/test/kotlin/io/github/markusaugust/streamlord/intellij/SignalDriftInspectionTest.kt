@@ -103,8 +103,8 @@ class SignalDriftInspectionTest : StreamlordTestCase() {
         myFixture.addFileToProject("page.html", "<input data-bind:query>")
         val file = myFixture.configureByText("Plain.kt", "fun f() = 1")
         val before = UiThreadWork.count.get()
-        val facts = SignalIndex.getInstance(project).factsFor(file)!!
-        assertEquals(emptyList<Any>(), projectSignalIssues(SourceLanguage.KOTLIN, emptyList(), null, facts.first, facts.second))
+        val signals = SignalIndex.getInstance(project).projectSignals(file)
+        assertEquals(emptyList<Any>(), projectSignalIssues(SourceLanguage.KOTLIN, emptyList(), signals))
         assertEquals(0, UiThreadWork.count.get() - before)
     }
 }

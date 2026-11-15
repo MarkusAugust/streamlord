@@ -612,7 +612,7 @@ public object Requests {
      * or a source none of these is, which an editor may hand over, read as the file's but never offered
      * a new base URL.
      */
-    public enum class VariableSource { DEFAULT, ENV, RUNNING, OTHER }
+    public enum class VariableSource { DEFAULT, ENV, RUNNING }
 
     /** A variable that is set, as text, and where it was set, so the inspector can say both. */
     public data class Variable(
@@ -677,7 +677,7 @@ public object Requests {
                 when (it.source) {
                     VariableSource.DEFAULT -> "   (default)"
                     VariableSource.RUNNING -> "   (from ${it.origin})"
-                    VariableSource.ENV, VariableSource.OTHER -> ""
+                    VariableSource.ENV -> ""
                 }
         }
 
@@ -889,7 +889,7 @@ public object Requests {
                 "{{baseUrl}} is ${baseUrl.value}, where ${baseUrl.origin} said it started."
             }
 
-            VariableSource.ENV, VariableSource.OTHER -> {
+            VariableSource.ENV -> {
                 val elsewhere = baseUrlSuggestion(vars, running)
                 "{{baseUrl}} is ${baseUrl.value}, from $ENV_FILE." +
                     if (elsewhere != null) " ${running?.name} started on $elsewhere." else ""
@@ -1532,7 +1532,7 @@ public object Requests {
 }
 
 /** A signal store after a patch: the [store] shown, and what the inspector says of the patch where it is not folded whole. */
-public class PatchedStore(
+public class PatchedStore internal constructor(
     public val store: JsonObject,
     public val message: String?,
 )

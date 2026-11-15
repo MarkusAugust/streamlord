@@ -620,11 +620,6 @@
       "decrement": { "reads": true },
       "toggle": { "shared": true },
       "not": { "reads": true }
-    },
-    "signalKeys": {
-      "$comment": "The DSL calls that take a signal's name, the key of the attribute's keyed form, and its expression after it: dataSignals(\"name\", \"expr\").",
-      "dataSignals": {},
-      "dataComputed": {}
     }
   }
 }

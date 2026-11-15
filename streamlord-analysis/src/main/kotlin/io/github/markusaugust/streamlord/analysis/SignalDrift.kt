@@ -367,20 +367,31 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
 }
 
 /**
- * What the project says of the signals one file in [language] reads, the one entry both editors
- * ask: each of [refs] that reads a signal none of [defined] is, where the project's definitions are
- * known, and in a Kotlin file each signal it reads through a signals class or a lookup that no file
- * declares, where the files are known: [own] is its facts, [others] every other file's, each asked
- * for only where it is needed.
+ * What the project knows about signals, which an editor's index holds: the driven port of
+ * [projectSignalIssues], which asks each question only where its answer is needed.
+ */
+public interface ProjectSignals {
+    /** Every signal the project defines, or null where that is not known. */
+    public fun defined(): Set<String>?
+
+    /** What the file asked about says about signals, or null where that is not known. */
+    public fun own(): SignalFacts?
+
+    /** What every other file says about signals. */
+    public fun others(): Iterable<SignalFacts>
+}
+
+/**
+ * What the [project] says of the signals one file in [language] reads, the one entry both editors
+ * ask: each of [refs] that reads a signal the project does not define, and in a Kotlin file each
+ * signal it reads through a signals class or a lookup that no file declares.
  */
 public fun projectSignalIssues(
     language: SourceLanguage,
     refs: List<SignalReference>,
-    defined: (() -> Set<String>)?,
-    own: (() -> SignalFacts)?,
-    others: () -> Iterable<SignalFacts>,
+    project: ProjectSignals,
 ): List<Issue> {
-    val unknown = if (defined == null || refs.isEmpty()) emptyList() else unknownSignalIssues(refs, defined())
-    val drift = if (language != SourceLanguage.KOTLIN || own == null) emptyList() else signalDriftIn(own(), others)
-    return unknown + drift
+    val defined = if (refs.isEmpty()) null else project.defined()
+    val own = if (language == SourceLanguage.KOTLIN) project.own() else null
+    return defined?.let { unknownSignalIssues(refs, it) }.orEmpty() + own?.let { signalDriftIn(it, project::others) }.orEmpty()
 }

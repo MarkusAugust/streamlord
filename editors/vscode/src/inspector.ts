@@ -254,14 +254,11 @@ export class Inspector {
   /** The store as the client would hold it after this frame, see `Requests.patchedStore`; a patch that is no JSON leaves it as it was and is shown raw in the frame. */
   private applyFrame(frame: DatastarFrame): void {
     if (frame.event !== "datastar-patch-signals" || !frame.args.signals) return;
-    try {
-      const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, frame.args.onlyIfMissing ?? null);
-      this.signals = JSON.parse(patched.store);
-      this.post({ type: "signals", signals: this.signals });
-      if (patched.message) this.post({ type: "error", message: patched.message });
-    } catch (e) {
-      this.post({ type: "error", message: `The signal store cannot take this patch: ${(e as Error).message}` });
-    }
+    // The analysis says why where it leaves the store as it was.
+    const patched = applySignalPatch(JSON.stringify(this.signals), frame.args.signals, frame.args.onlyIfMissing ?? null);
+    this.signals = JSON.parse(patched.store);
+    this.post({ type: "signals", signals: this.signals });
+    if (patched.message) this.post({ type: "error", message: patched.message });
   }
 }
 

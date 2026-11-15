@@ -12,6 +12,11 @@ private val TRUSTED_LITERAL =
     regex(
         "(`?)[\\p{L}_][\\p{L}\\p{Nd}_]*\\1\\s*\\(\\s*(?:html\\s*=\\s*)?(?:\"((?:[^\"\\\\$\\n]|\\\\.)*)\"|\"\"\"((?:[^\"$]|\"(?!\"\"))*)\"\"\")\\s*\\)",
     )
+private val MARKUP_CALL_START = regex("""^(?:interpolate|Trusted)\s*\(""")
+
+// `List<out Html>` reads its elements as `List<Html>` does.
+private val OUT_VARIANCE = regex("""^\s*out\s+""")
+
 private val KOTLIN_ESCAPE = regex("""\\(u[0-9A-Fa-f]{4}|.)""")
 
 /**

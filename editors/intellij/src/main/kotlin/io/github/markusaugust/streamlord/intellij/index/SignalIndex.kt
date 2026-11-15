@@ -21,6 +21,7 @@ import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
+import io.github.markusaugust.streamlord.analysis.ProjectSignals
 import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
 import io.github.markusaugust.streamlord.analysis.SignalFacts
@@ -236,25 +237,31 @@ class SignalIndex(
     }
 
     /**
-     * What [file] says about signals, and every other file of the project, for the analysis's `projectSignalIssues`, as
-     * the VS Code extension asks it; null for a file the index holds none of. Each file's facts are kept with its entry
-     * and read again only when the file changes, so a pass costs one read of the file that changed and a walk over what
-     * is kept ("Cache Results of Heavy Computations", https://plugins.jetbrains.com/docs/intellij/psi-performance.html).
-     * The daemon runs the inspection again on a change in any file; [refresh] is what finds it.
+     * What the project knows about the signals of [file], for the analysis's `projectSignalIssues`, as the VS Code
+     * extension asks it. Each file's facts are kept with its entry and read again only when the file changes, so a pass
+     * costs one read of the file that changed and a walk over what is kept ("Cache Results of Heavy Computations",
+     * https://plugins.jetbrains.com/docs/intellij/psi-performance.html). The daemon runs the inspection again on a change
+     * in any file; [refresh] is what finds it.
      */
-    fun factsFor(file: PsiFile): Pair<() -> SignalFacts, () -> List<SignalFacts>>? {
-        val own = entryFor(file) ?: return null
-        val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile) ?: return null
-        val ownFacts = { factsIn(own, file.text) ?: collectSignalFacts(Source(file.text, language, prefix())) }
-        val others = {
-            refresh()
-            entries.values.mapNotNull { e ->
-                if (e === own || e.file == own.file) return@mapNotNull null
-                ProgressManager.checkCanceled()
-                factsIn(e, null)
+    fun projectSignals(file: PsiFile): ProjectSignals {
+        val own = entryFor(file)
+        val language = languageOf(file.virtualFile ?: file.viewProvider.virtualFile)
+        return object : ProjectSignals {
+            override fun defined() = definitionsSeenFrom(file)
+
+            override fun own() =
+                own?.let { e -> language?.let { factsIn(e, file.text) ?: collectSignalFacts(Source(file.text, it, prefix())) } }
+
+            override fun others(): List<SignalFacts> {
+                if (own == null || language == null) return emptyList()
+                refresh()
+                return entries.values.mapNotNull { e ->
+                    if (e === own || e.file == own.file) return@mapNotNull null
+                    ProgressManager.checkCanceled()
+                    factsIn(e, null)
+                }
             }
         }
-        return ownFacts to others
     }
 
     private fun factsIn(

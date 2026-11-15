@@ -16,7 +16,6 @@ internal val LITERAL = regex("""(?:-?\d[\d_]*(?:\.\d+)?[LlFfDd]?|true|false|null
 internal val STRING_LITERAL = regex(""""(?:[^"\\$]|\\.)*"""")
 
 internal val UNSIGNED_SUFFIX = regex("""[uU][lL]?$""")
-internal val MARKUP_CALL_START = regex("""^(?:interpolate|Trusted)\s*\(""")
 private val WORD_CHAR = regex("""[\p{L}\p{Nd}_]""")
 
 /** An expression as a message quotes it: on one line, and cut short past 30 characters. */

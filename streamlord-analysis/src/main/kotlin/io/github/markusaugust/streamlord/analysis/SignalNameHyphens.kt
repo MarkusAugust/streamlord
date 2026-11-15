@@ -18,10 +18,10 @@ internal val NAMING_HELPERS: Set<String> = Catalog.default.namingHelpers
  * The helper whose second argument may be `ifMissing` of the object form, `dataSignals("{...}", true)`,
  * as well as the expression of the keyed form. `dataComputed` takes an expression second or nothing.
  */
-internal const val KEYED_OR_OBJECT = "dataSignals"
+internal val KEYED_OR_OBJECT = Catalog.default.signalsCall
 
 /** The helper with an object form of one argument and a keyed form of two. */
-private const val COMPUTED = "dataComputed"
+private val COMPUTED = Catalog.default.computedCall
 
 /** The expression helpers, whose name is JavaScript: a quoted key in brackets may hold a hyphen. */
 internal val EXPRESSION_HELPERS: Set<String> = Catalog.default.signalNameHelpers.keys
@@ -99,9 +99,7 @@ internal fun signalNameHyphenIssues(
 
     if (site.name in PAIR_NAMING) {
         for (s in pairKeys(site, src, lex)) {
-            if (if (site.name ==
-                    "dataSignals"
-                ) {
+            if (if (site.name == KEYED_OR_OBJECT) {
                     hyphenIsTheReason(s)
                 } else {
                     '-' in s.text

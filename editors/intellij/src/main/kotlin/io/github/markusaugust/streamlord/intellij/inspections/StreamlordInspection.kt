@@ -254,9 +254,8 @@ class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
                 StreamlordAnalysis.isMarkupSide(file) -> analysis.htmlSignalReferences(file)
                 else -> return null
             }
-        val facts = index.factsFor(file)
         val language = if (file is KtFile) SourceLanguage.KOTLIN else SourceLanguage.HTML
-        return projectSignalIssues(language, refs, { index.definitionsSeenFrom(file) }, facts?.first, facts?.second ?: { emptyList() })
+        return projectSignalIssues(language, refs, index.projectSignals(file))
     }
 }
 

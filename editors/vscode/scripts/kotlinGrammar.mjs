@@ -124,7 +124,7 @@ export function kotlinInjectionGrammar(catalog) {
   const second = at((a) => a === 1 || a === "last");
   const last = at((a) => a === "last");
   const signalAttributes = alternation(catalog.attributes.filter((a) => a.valueKind === "signal").flatMap((a) => a.kotlin));
-  const signalPairs = alternation(Object.keys(catalog.kotlinCallSites.signalKeys).filter((name) => !name.startsWith("$")));
+  const signalPairs = alternation(catalog.attributes.filter((a) => a.keyCase === "camel" && a.valueKind === "expression").flatMap((a) => a.kotlin));
   // Core's calls that take markup or a script first, by that parameter's name; a companion's function is called on its class.
   const taking = (what) => Object.entries(sites.events).filter(([n, e]) => !n.startsWith("$") && !n.includes(".") && e.takes === what).map(([n]) => n);
   // What a call takes first is also the name of that parameter.

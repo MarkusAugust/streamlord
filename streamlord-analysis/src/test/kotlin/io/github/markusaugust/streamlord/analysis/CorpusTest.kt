@@ -18,7 +18,7 @@ class CorpusTest {
     private fun unknown(
         refs: List<SignalReference>,
         defined: Set<String>,
-    ) = projectSignalIssues(SourceLanguage.HTML, refs, { defined }, null) { emptyList() }
+    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
 
     private val analyzer = Analyzer()
     private val files = fixtureNames("editors/vscode/test/fixtures/corpus").filter { it.endsWith(".json") }

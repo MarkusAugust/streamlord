@@ -187,11 +187,9 @@ interface VariableCompletion {
 private fun plain(v: Requests.Variable): Variable =
     plain("name" to v.name, "value" to v.value, "source" to v.source.name.lowercase(), "origin" to v.origin)
 
+// The sources are those plain() writes: the extension hands back what environment() gave it.
 private fun analysed(vars: Array<Variable>): List<Requests.Variable> =
-    vars.map { v ->
-        val source = Requests.VariableSource.entries.firstOrNull { it.name.lowercase() == v.source } ?: Requests.VariableSource.OTHER
-        Requests.Variable(v.name, v.value, source, v.origin)
-    }
+    vars.map { Requests.Variable(it.name, it.value, Requests.VariableSource.valueOf(it.source.uppercase()), it.origin) }
 
 private fun running(
     url: String?,

@@ -1197,7 +1197,7 @@ public class Analyzer(
         src: String,
     ): Boolean {
         fun on(parameter: String) = (site.named(parameter) ?: site.positional.getOrNull(2))?.text?.trim() == "true"
-        if (site.name == "dataSignals" && on("ifMissing")) return true
+        if (site.name == KEYED_OR_OBJECT && on("ifMissing")) return true
         if (site.name == "dataPersist" && on("session")) return true
         val names = spec.modifiers.map { it.name.lowercase() }.filter { it != "case" }
         return LAMBDA_ASSIGNMENT.findAll(modifiersLambda(site, src).replace(KOTLIN_STRING, "\"\"")).any { m ->

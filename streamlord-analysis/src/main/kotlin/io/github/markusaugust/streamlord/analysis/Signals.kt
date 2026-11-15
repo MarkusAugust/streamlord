@@ -176,7 +176,7 @@ internal fun encodedSignalTypes(
 ): Set<String> {
     val out = LinkedHashSet<String>()
     val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
-    for (site in findCallSites(src, setOf("dataSignals"), lex)) {
+    for (site in findCallSites(src, setOf(KEYED_OR_OBJECT), lex)) {
         if (foreign(site.name, site.nameStart)) continue
         val positional = site.positional
         // dataSignals(value) or dataSignals(value, true), the second being ifMissing.
@@ -650,15 +650,13 @@ private fun declared(
                     }
                 }
                 // dataSignals("{quests: {urgent: 0}}") writes data-signals="{...}": its keys are the signals.
-                if (site.name == "dataSignals" && idx == 0 &&
-                    positional.getOrNull(1)?.string == null
-                ) {
+                if (site.name == KEYED_OR_OBJECT && idx == 0 && !site.keyed) {
                     a.string?.let { out += objectDeclarations(it, "") }
                 }
                 val name = NAME.find(a.text)?.let { NAME.groupAt(a.text, it, 1) } ?: return@forEachIndexed
                 // removeSignals("a", "b"), and dataSignals("name", "expression"), whose key the client reads back as the name.
                 if (removes) named(declarationAt(name, a.start))
-                if (site.name == "dataSignals" && idx == 0 && positional.getOrNull(1)?.string != null) {
+                if (site.name == KEYED_OR_OBJECT && idx == 0 && site.keyed) {
                     named(declarationAt(name, a.start))
                     // dataSignals("hero", "{strength: 3}") holds an object under the name, whose keys are signals too.
                     out += objectDeclarations(positional[1].string!!, "${name.value}.")
@@ -1008,7 +1006,7 @@ internal fun dataSignalsPairIssues(
     src: String,
     lex: KotlinLex,
 ): List<Issue> {
-    if (site.name != "dataSignals") return emptyList()
+    if (site.name != KEYED_OR_OBJECT) return emptyList()
     return pairKeys(site, src, lex).mapNotNull { key ->
         // A templated name is known only at runtime.
         signalNameRefusal(key.text)?.takeIf { key.interpolations.isEmpty() }?.let { reason ->
@@ -1041,7 +1039,7 @@ internal fun dataSignalsPairIssues(
 }
 
 /** A string a DSL call names a signal with, and the [call]: what a highlighter colours as a signal's name. */
-public class SignalNameString(
+public class SignalNameString internal constructor(
     public val string: KotlinString,
     public val call: CallSite,
 )
@@ -1057,8 +1055,7 @@ public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
     val src = source.text
     return findCallSites(src, catalog.signalNameCalls, lex(src)).mapNotNull { site ->
         val s = site.positional.firstOrNull()?.string ?: return@mapNotNull null
-        val pair = site.name in catalog.signalPairCalls
-        if ((pair && site.positional.getOrNull(1)?.string == null) ||
+        if ((site.name in catalog.signalPairCalls && !site.keyed) ||
             source.foreign(site.name, site.nameStart)
         ) {
             null
@@ -1067,3 +1064,6 @@ public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
         }
     }
 }
+
+/** Whether a string follows the first argument of a pair call, which makes the first a signal's name: `dataSignals("name", "...")`. */
+internal val CallSite.keyed: Boolean get() = positional.getOrNull(1)?.string != null
