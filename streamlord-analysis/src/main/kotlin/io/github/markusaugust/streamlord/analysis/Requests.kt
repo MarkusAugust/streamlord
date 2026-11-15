@@ -970,8 +970,10 @@ public object Requests {
     /**
      * The store after the client applies [patch], a `datastar-patch-signals` frame's `signals`, to
      * [store] (see [mergePatchAsClient]), with [onlyIfMissing] read as the client reads it: `"true"`
-     * after JavaScript's trim (patchSignals.ts:16, text.ts:24 in 1.0.5). The client nests as deep as
-     * a stream says. Null where the patch is no JSON, which the frame shows as it is.
+     * after JavaScript's trim (patchSignals.ts:16, text.ts:24 in 1.0.5). Null where the patch is no
+     * JSON, which the frame shows as it is. The client nests as deep as a stream says and takes a
+     * number however long; a patch past [FOLD_DEPTH] or the parser's number length leaves the store
+     * as it was, refused, with the limit it is past: folding it would spend an editor's stack.
      */
     public fun patchedStore(
         store: JsonObject,
@@ -980,9 +982,9 @@ public object Requests {
     ): PatchedStore? {
         val parsed =
             try {
-                JsonParser.parse(patch, Int.MAX_VALUE)
-            } catch (_: Exception) {
-                return null
+                JsonParser.parse(patch, FOLD_DEPTH)
+            } catch (e: JsonParseException) {
+                return if (e.limit) PatchedStore(store, "${e.message}, which the inspector does not fold", true) else null
             }
         return try {
             PatchedStore(mergePatchAsClient(store, parsed, onlyIfMissing?.trim(::isJsSpace) == "true"), null, false)
@@ -990,6 +992,9 @@ public object Requests {
             PatchedStore(e.store, e.message, e.refused)
         }
     }
+
+    /** How deep a patch the inspector folds into its store, far deeper than any page's signals. */
+    public const val FOLD_DEPTH: Int = 1000
 
     /**
      * The signals as compact JSON; text that is not JSON is passed through trimmed.

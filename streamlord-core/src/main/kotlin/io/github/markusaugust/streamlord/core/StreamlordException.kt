@@ -86,12 +86,14 @@ public class SignalsTooLargeException(
 ) : StreamlordException("Incoming signals are $actualSize in size; the limit is $maxSize")
 
 /**
- * Raised by the built-in JSON parser when the text is not valid JSON. [position] is the
- * zero-based character offset at which the parser lost faith.
+ * Raised by the built-in JSON parser when the text is not valid JSON, or is JSON past one of its
+ * limits, a nesting depth or a number's length, which [limit] says. [position] is the zero-based
+ * character offset at which the parser lost faith.
  */
 public class JsonParseException(
     message: String,
     public val position: Int,
+    public val limit: Boolean = false,
 ) : StreamlordException("$message (at position $position)")
 
 /**
