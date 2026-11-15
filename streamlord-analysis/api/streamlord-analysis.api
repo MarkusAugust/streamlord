@@ -180,7 +180,9 @@ public final class io/github/markusaugust/streamlord/analysis/Catalog {
 	public final fun getExpressionCallSites ()Ljava/util/Map;
 	public final fun getExpressionOptions ()Ljava/util/Map;
 	public final fun getSignalCalls ()Ljava/util/Map;
+	public final fun getSignalNameCalls ()Ljava/util/Set;
 	public final fun getSignalNameHelpers ()Ljava/util/Map;
+	public final fun getSignalPairCalls ()Ljava/util/Set;
 	public final fun parseAttributeName (Ljava/lang/String;Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ParsedAttribute;
 }
 

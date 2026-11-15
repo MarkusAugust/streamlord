@@ -103,13 +103,13 @@ class KotlinDatastarAnnotator : Annotator {
         // Every call that takes an expression is the DSL's, which is somebody else's in a project without it.
         if (!analysis.analyzer.readsDsl(source)) return
         val named =
-            findCallSites(src, SIGNAL_NAME_CALLS, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen }
+            findCallSites(src, analysis.catalog.signalNameCalls, lex).firstOrNull { it.openParen < s.start && s.end <= it.closeParen }
         if (named != null && named.positional
                 .firstOrNull()
                 ?.string
                 ?.start == s.start
         ) {
-            val pair = named.name in PAIR_CALLS
+            val pair = named.name in analysis.catalog.signalPairCalls
             if ((!pair || named.positional.getOrNull(1)?.string != null) && analysis.foreignAmong(file, listOf(named)).isEmpty()) {
                 if (PLACEHOLDER !in s.text) paintDecoded(holder, s, 0, tokenizeSignalName(s.text))
                 return
@@ -257,10 +257,6 @@ class TemplateTextAnnotator : Annotator {
         }
     }
 }
-
-/** The DSL's calls whose first argument names a signal: alone, or as the key of a pair with an expression. */
-private val SIGNAL_NAME_CALLS = setOf("dataBind", "dataRef", "dataIndicator", "dataSignals", "dataComputed")
-private val PAIR_CALLS = setOf("dataSignals", "dataComputed")
 
 /**
  * The spec and the coloured parts of [name] when it is one of the catalog's attributes, under the

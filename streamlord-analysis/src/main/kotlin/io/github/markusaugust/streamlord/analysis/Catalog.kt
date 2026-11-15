@@ -364,6 +364,14 @@ public class Catalog private constructor(
     /** The DSL helpers whose first argument is the name of a signal the page declares: those of the attributes whose key is camel-cased. */
     internal val namingHelpers: Set<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.flatMap { it.kotlin }.toSet()
 
+    /** The DSL calls that pair a signal's name, the key, with its expression: `dataSignals("name", "...")`. */
+    public val signalPairCalls: Set<String> =
+        attributes.filter { it.keyCase == KeyCase.CAMEL && it.valueKind == ValueKind.EXPRESSION }.flatMap { it.kotlin }.toSet()
+
+    /** The DSL calls whose first argument names a signal: alone, `dataBind("name")`, or as the key of a pair. */
+    public val signalNameCalls: Set<String> =
+        attributes.filter { it.valueKind == ValueKind.SIGNAL }.flatMap { it.kotlin }.toSet() + signalPairCalls
+
     /** The attributes whose key is the name of a signal, in which the client camel-cases it. */
     internal val signalKeyAttributes: List<String> = attributes.filter { it.keyCase == KeyCase.CAMEL }.map { it.name }
 

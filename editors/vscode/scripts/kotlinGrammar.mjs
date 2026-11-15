@@ -124,6 +124,8 @@ export function kotlinInjectionGrammar(catalog) {
   const second = at((a) => a === 1 || a === "last");
   const last = at((a) => a === "last");
   const signalAttributes = alternation(catalog.attributes.filter((a) => a.valueKind === "signal").flatMap((a) => a.kotlin));
+  // As the analysis's Catalog.signalPairCalls: a keyed attribute whose key names a signal and whose value is an expression.
+  const signalPairs = alternation(catalog.attributes.filter((a) => a.keyCase === "camel" && a.valueKind === "expression").flatMap((a) => a.kotlin));
   // Core's calls that take markup or a script first, by that parameter's name; a companion's function is called on its class.
   const taking = (what) => Object.entries(sites.events).filter(([n, e]) => !n.startsWith("$") && !n.includes(".") && e.takes === what).map(([n]) => n);
   // What a call takes first is also the name of that parameter.
@@ -275,7 +277,7 @@ export function kotlinInjectionGrammar(catalog) {
     ),
     "expression-call-signal-pair": expressionCall(
       "dataSignals(\"name\", \"...\"), dataComputed(\"name\", \"...\"): the first argument names a signal, the second is the expression.",
-      RECV + r`\b(dataSignals|dataComputed)(\s*\(\s*(?:name\s*(=)\s*)?)(\$*")` + SIGNAL_NAME + r`(")(\s*,\s*` + NAMED + ")",
+      RECV + r`\b(` + signalPairs + r`)(\s*\(\s*(?:name\s*(=)\s*)?)(\$*")` + SIGNAL_NAME + r`(")(\s*,\s*` + NAMED + ")",
       { 2: FN, 5: { name: DQ_START }, 6: { name: SIGNAL }, 7: { name: PATH }, 8: { name: DQ_END } },
     ),
     "expression-call-lone-object": expressionCall(
