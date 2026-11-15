@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.core
 
+import kotlin.jvm.JvmOverloads
+
 /**
  * The root of every curse Streamlord may lay upon you.
  *
@@ -90,11 +92,13 @@ public class SignalsTooLargeException(
  * limits, a nesting depth or a number's length, which [limit] says. [position] is the zero-based
  * character offset at which the parser lost faith.
  */
-public class JsonParseException(
-    message: String,
-    public val position: Int,
-    public val limit: Boolean = false,
-) : StreamlordException("$message (at position $position)")
+public class JsonParseException
+    @JvmOverloads
+    constructor(
+        message: String,
+        public val position: Int,
+        public val limit: Boolean = false,
+    ) : StreamlordException("$message (at position $position)")
 
 /**
  * Raised inside a stream when a [io.github.markusaugust.streamlord.core.application.StreamAuthorisation]

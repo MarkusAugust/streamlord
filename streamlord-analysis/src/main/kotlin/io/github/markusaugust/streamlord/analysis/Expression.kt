@@ -934,10 +934,17 @@ public class ExpressionValidator(
                 )
         }
 
-        val parsed = JsParser.read(rewritten.js)
-        val parseError = parsed.error
-        // Without a known attribute an expression may also be an object literal, which a script reads as a block.
-        val err = if (returnsValue == null) parseError?.takeUnless { objectLiteralParses(rewritten.js) } else parseError
+        val read = JsParser.read(rewritten.js)
+        // Without a known attribute an expression may also be an object literal, which a script reads as a block:
+        // read in parentheses, one character on.
+        val asObject =
+            if (returnsValue == null && read.error != null && rewritten.js.trimStart().startsWith("{")) {
+                JsParser.read("(${rewritten.js})").takeIf { it.error == null }
+            } else {
+                null
+            }
+        val parseError = read.error
+        val err = if (asObject != null) null else parseError
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
@@ -958,7 +965,9 @@ public class ExpressionValidator(
             }
         }
 
-        if (err == null) issues += actionArgumentIssues(catalog, js, rewritten, parsed.calls, ::span)
+        if (err == null) {
+            issues += actionArgumentIssues(catalog, js, rewritten, asObject?.calls ?: read.calls, ::span, if (asObject != null) 1 else 0)
+        }
 
         val starts by lazy { stringStarts(regions) }
         val templates by lazy { TemplateReasons(js, rewritten.runs) }
@@ -1335,13 +1344,6 @@ private fun updatedBefore(
     val before = text.getOrNull(b - 1)
     return !(before.isJsNamePart() || before == ')' || before == ']')
 }
-
-/**
- * With no attribute to say whether the value is read, an expression that opens with `{` may be an
- * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
- * script parse fails, the text is tried once more inside parentheses.
- */
-private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null
 
 /** The signal name typed so far just before [offset] (`$cou|` gives `cou`, `$|` gives ""), or null when not in a signal. */
 internal fun signalPrefixAt(

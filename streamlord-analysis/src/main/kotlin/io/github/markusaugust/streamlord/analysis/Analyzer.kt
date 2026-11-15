@@ -906,7 +906,7 @@ public class Analyzer(
     ): Issue? {
         // Read as the client compiles it, so that an action in it is a call.
         val rewritten = clientRewrite(s.text)
-        val comma = JsParser.value(rewritten.js)?.comma?.takeIf { it >= 0 } ?: return null
+        val comma = JsParser.valueComma(rewritten.js).takeIf { it >= 0 } ?: return null
         val at = rewritten.toExpression(comma)
         val backend = catalog.actions.any { it.kind == "backend" && it.kotlin + "Expr" == function }
         val r = s.toSource(at, at + 1)

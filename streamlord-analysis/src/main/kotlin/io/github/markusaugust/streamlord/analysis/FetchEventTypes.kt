@@ -12,7 +12,6 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
 private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
-private val OPERATOR_BEFORE = regex("""(?:===?|!==?)\s*$""")
 
 /** The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched with. */
 internal fun fetchTypeIssues(
@@ -24,10 +23,11 @@ internal fun fetchTypeIssues(
     val out = ArrayList<Issue>()
     // The switches as the client compiles the text, a rewritten signal standing where it began; none where it does not parse.
     val rewritten = clientRewrite(text)
+    val at = { o: Int -> if (o >= rewritten.js.length) text.length else rewritten.toExpression(o) }
+    // Each switch by where its subject starts: its subject's end and its cases, at offsets of the text.
     val switches =
-        JsParser.read(rewritten.js).switches.map { w ->
-            val at = { o: Int -> if (o >= rewritten.js.length) text.length else rewritten.toExpression(o) }
-            JsSwitch(at(w.subjectStart), at(w.subjectEnd), w.cases.map { JsValue(at(it.start), at(it.end), it.kind) })
+        JsParser.read(rewritten.js).switches.associate { w ->
+            at(w.subjectStart) to (at(w.subjectEnd) to w.cases.map { at(it.start) until at(it.end) })
         }
 
     /** The string literal from [open] to its closing quote, without an escape or a template's code in it. */
@@ -45,14 +45,15 @@ internal fun fetchTypeIssues(
         if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
         val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
         val left =
-            OPERATOR_BEFORE.find(text.substring(0, at).trimEnd())?.let { op ->
-                var close = op.range.first - 1
+            operatorBefore(text, at).takeIf { it >= 0 }?.let { op ->
+                var close = op - 1
                 while (close >= 0 && isJsSpace(text[close])) close--
                 val q = text.getOrNull(close)
                 val open = if (q == null) -1 else text.lastIndexOf(q, close - 1)
                 if (open >= 0) literal(open)?.takeIf { it.last == close } else null
             }
-        for (range in listOfNotNull(left, right) + switchCases(switches, at, m.range.last + 1, ::literal)) {
+        val cases = switches[at]?.takeIf { it.first == m.range.last + 1 }?.second.orEmpty()
+        for (range in listOfNotNull(left, right) + cases.mapNotNull { c -> literal(c.first)?.takeIf { it.last == c.last } }) {
             val type = text.substring(range.first + 1, range.last)
             if (type in catalog.fetchEvents || type.startsWith("datastar")) continue
             val near =
@@ -82,17 +83,15 @@ internal fun fetchTypeIssues(
 }
 
 /**
- * The string literals of the cases of `switch (evt.detail.type) { ... }`, where the match from
- * [at] until [end] is that switch's subject, as [switches] read it: a switch compares with each case
- * by `===`. A case of a switch nested inside is that switch's.
+ * Where the `===`, `==`, `!==` or `!=` that ends [text] before [at], past white space, starts; -1
+ * where none does. Read back from [at], so that each comparison costs what it spans.
  */
-private fun switchCases(
-    switches: List<JsSwitch>,
+private fun operatorBefore(
+    text: String,
     at: Int,
-    end: Int,
-    literal: (Int) -> IntRange?,
-): List<IntRange> =
-    switches
-        .filter { it.subjectStart == at && it.subjectEnd == end }
-        .flatMap { it.cases }
-        .mapNotNull { c -> literal(c.start)?.takeIf { it.last == c.end - 1 } }
+): Int {
+    var end = at
+    while (end > 0 && text[end - 1].isWhitespace()) end--
+    for (op in listOf("!==", "===", "!=", "==")) if (text.startsWith(op, end - op.length)) return end - op.length
+    return -1
+}

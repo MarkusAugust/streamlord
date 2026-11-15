@@ -353,6 +353,14 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Fixed
 
+- Both editors read a Datastar expression with the JavaScript parser they check its syntax with,
+  so they read a few things as the browser does: `@get(+-1)` is a number, and
+  `@get(function () { return '/x' }())` no longer reads as a function. `await` before an action
+  is named past a comment. A keyless `data-computed` value after a comment is judged, and one the
+  client cannot compile gets only its syntax error. In a `datastar-fetch` handler's `switch`, a case
+  beside a comment is judged; `case 'a' + 'b'` is no longer read as `'a'`; no case is judged where
+  the expression does not compile. Completion of an options key leaves out a key written after the
+  caret, also before the object closes.
 - IntelliJ's inspector folds a signal patch nested deeper than 64 levels into the store, as the
   client and the VS Code inspector do, where it showed it raw. In both editors a patch nested more
   than 1000 levels deep, or with a number of more than 1000 digits, leaves the store as it was and

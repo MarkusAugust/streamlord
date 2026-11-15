@@ -138,9 +138,13 @@ private val NO_FUNCTION_NAMES = setOf("undefined", "NaN", "Infinity")
  * string, a template, a regular expression, an array with such an item), or an operation, unary or
  * joining operands by an arithmetic, bitwise or comparison operator. A name, a call, `new`, a value
  * in parentheses, and `?:`, `||`, `&&`, `??`, `=`, `=>` or `,` may give one, and are not judged,
- * nor is a value that does not parse.
+ * nor is a value the client cannot compile.
  */
-internal fun certainlyNoFunction(value: String): Boolean = JsParser.value(value)?.let { noFunction(value, it) } ?: false
+internal fun certainlyNoFunction(value: String): Boolean {
+    // Only a value the client compiles, in the parentheses it writes around it, is judged: `1 // c` is none.
+    if (JsParser.error("($value)") != null) return false
+    return JsParser.value(value)?.let { noFunction(value, it) } ?: false
+}
 
 private fun noFunction(
     text: String,

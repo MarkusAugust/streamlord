@@ -351,8 +351,9 @@ private class Judge(
 
 /**
  * The warnings for the arguments of every action called in [js], read from [calls], the calls
- * [JsParser] read in [rewritten], the script as the client compiles it: each action is a call of
- * its dispatcher there, `__action("name",evt,...)`. [span] maps a stretch of [js] back to the text.
+ * [JsParser] read in [rewritten], the script as the client compiles it, [shift] characters on: each
+ * action is a call of its dispatcher there, `__action("name",evt,...)`. [span] maps a stretch of
+ * [js] back to the text.
  */
 @OptIn(InternalStreamlordApi::class)
 internal fun actionArgumentIssues(
@@ -361,14 +362,16 @@ internal fun actionArgumentIssues(
     rewritten: ClientRewrite,
     calls: List<JsCall>,
     span: (Int, Int) -> Pair<Int, Int>,
+    shift: Int = 0,
 ): List<Issue> {
     val actions = rewritten.rewrites.filter { !it.signal && catalog.actionKinds[it.name]?.isNotEmpty() == true }.associateBy { it.start }
     if (actions.isEmpty()) return emptyList()
     // An offset of the rewritten script, each character of a rewrite standing for where it began, and an end for the end.
-    val at = { offset: Int -> if (offset >= rewritten.js.length) js.length else rewritten.toExpression(offset) }
+    val at = { offset: Int -> if (offset - shift >= rewritten.js.length) js.length else rewritten.toExpression(offset - shift) }
     val judge = Judge(catalog, js, at, span)
     with(judge) {
-        for (call in calls) {
+        // In the order of the text, as each call is written: the parser has them in the order they close.
+        for (call in calls.sortedBy { it.start }) {
             if (call.callee != DISPATCHER) continue
             val r = actions[at(call.start)] ?: continue
             val spec = catalog.actionsByName.getValue(r.name)
