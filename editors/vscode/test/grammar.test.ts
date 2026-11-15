@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import type * as textmate from "vscode-textmate";
+import { assertGrowsLinearly } from "./growth.ts";
 
 /**
  * Tokenizes samples through the real TextMate engine with our grammars injected into minimal
@@ -95,6 +96,14 @@ before(async () => {
 
 /** The DSL's import, after which a file's DSL calls are Streamlord's. */
 const DSL_IMPORT = "import io.github.markusaugust.streamlord.html.*";
+
+/** A reader of one line of `scope`, loaded first so a timing measures the reading alone; a Kotlin line follows the DSL's import. */
+async function lineReader(scope: string): Promise<(line: string) => void> {
+  const grammar = await registry.loadGrammar(scope);
+  assert.ok(grammar);
+  const start = scope === "source.kotlin" ? grammar.tokenizeLine(DSL_IMPORT, tm.INITIAL).ruleStack : tm.INITIAL;
+  return (line) => void grammar.tokenizeLine(line, start);
+}
 
 /** The tokens of `line`; a Kotlin line is read in a file that imports the DSL, unless `withDsl` is false. */
 async function tokens(scope: string, line: string, withDsl = true): Promise<{ text: string; scopes: string[] }[]> {
@@ -727,12 +736,12 @@ describe("datastar colours in Kotlin strings", () => {
   });
 
   it("reads a long line without backtracking", async () => {
-    const value = Array.from({ length: 400 }, () => "$a / 2 / $b + {k: {n: [($c)]}}").join(" + ");
-    const started = performance.now();
-    await tokens("text.html.basic", `<div data-text="${value}">`);
-    await tokens("source.kotlin", `div { dataText("${value.replaceAll("$", "\\$")}") }`);
-    await tokens("text.html.basic", `<div data-text="${"/".repeat(2000)}${"{".repeat(500)}">`);
-    assert.ok(performance.now() - started < 3000, `took ${performance.now() - started} ms`);
+    const value = (n: number) => Array.from({ length: n }, () => "$a / 2 / $b + {k: {n: [($c)]}}").join(" + ");
+    const html = await lineReader("text.html.basic");
+    const kotlin = await lineReader("source.kotlin");
+    assertGrowsLinearly("an expression in HTML", 6, (n) => `<div data-text="${value(n)}">`, html);
+    assertGrowsLinearly("an expression in the DSL", 6, (n) => `div { dataText("${value(n).replaceAll("$", "\\$")}") }`, kotlin);
+    assertGrowsLinearly("slashes and braces", 30, (n) => `<div data-text="${"/".repeat(4 * n)}${"{".repeat(n)}">`, html);
   });
 });
 
@@ -805,11 +814,9 @@ describe("what is not Datastar's", () => {
     assert.deepEqual(between(ternary, "?", "2"), [["?", S.arithmetic], ["1", S.number], [":", S.arithmetic], ["2", S.number]]);
   });
 
-  it("reads a long line of DSL calls in time", async () => {
-    const line = Array.from({ length: 1200 }, (_, i) => `dataOn("click", "\\$c${i}++; @post('/x')"); `).join("");
-    const started = performance.now();
-    await tokens("source.kotlin", line);
-    assert.ok(performance.now() - started < 1000, `took ${performance.now() - started} ms`);
+  it("reads a long line of DSL calls in time that grows with it", async () => {
+    const line = (n: number) => Array.from({ length: n }, (_, i) => `dataOn("click", "\\$c${i}++; @post('/x')"); `).join("");
+    assertGrowsLinearly("a line of DSL calls", 20, line, await lineReader("source.kotlin"));
   });
 });
 
