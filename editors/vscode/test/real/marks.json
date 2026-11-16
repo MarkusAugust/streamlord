@@ -93,7 +93,7 @@
   {"file": "aliased/aliased-4.html", "at": "data-star-on:¦click"},
   {"file": "aliased/aliased-4.html", "at": "data-¦on:click=\"y(\""},
   {"file": "kotlin/RewriteWidget.kt", "at": "data-theme=¦\"light\"", "actions": true},
-  {"file": "kotlin/RewriteWidget.kt", "at": "<div id=\"${k.conte¦ntId}\">", "actions": true},
+  {"file": "kotlin/RewriteWidget.kt", "at": "<div id=\"${k.secti¦onId}\">", "actions": true},
   {"file": "kotlin/RewriteForms.kt", "at": "la¦ng=\"en\">$5 for", "actions": true},
   {"file": "kotlin/RewriteForms.kt", "at": "\"<p ti¦tle=\\\"\" + a", "actions": true},
   {"file": "kotlin/RewriteForms.kt", "at": "|   la¦ng=", "actions": true},
