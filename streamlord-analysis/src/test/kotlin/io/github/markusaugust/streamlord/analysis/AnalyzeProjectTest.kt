@@ -78,6 +78,38 @@ class AnalyzeProjectTest {
     }
 
     @Test
+    fun `strict also fails a build on a value written without its mark, which failures alone lets through`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        // A value left unmarked in a block, a template in a format, and a String in a string that is not interpolate's.
+        write("Block.kt", head + "fun card(name: String) = interpolate { \"<p title=\\\"\$name\\\">x</p>\" }\n")
+        write("Format.kt", head + "fun row(name: String) = interpolate(\"<li>\$name</li>\")\n")
+        write("Plain.kt", "fun cell(name: String) = \"<td>\$name</td>\"\n")
+        // What strict lets through too: a marked value, and a hint.
+        write("Marked.kt", head + "fun card(name: String) = interpolate { \"<p title=\\\"\${+name}\\\">x</p>\" }\n")
+        write("Number.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
+        val all = analyzer.analyzeProject(root)
+        assertEquals(emptyList(), all.failures())
+        assertEquals(emptyList(), all.failures(strict = false))
+        assertEquals(
+            listOf(
+                Triple("Block.kt", "interpolate-template", Severity.WARNING),
+                Triple("Format.kt", "interpolate-template", Severity.WARNING),
+                Triple("Plain.kt", "unescaped-interpolation", Severity.WARNING),
+            ),
+            all.failures(strict = true).map { Triple(it.file.name, it.issue.code, it.issue.severity) },
+        )
+    }
+
+    @Test
+    fun `strict keeps what failures alone fails on`() {
+        write("Click.kt", swallowed)
+        write("Link.kt", "fun link(url: String) = \"\"\"<a href=\"\$url\">x</a>\"\"\"\n")
+        val all = analyzer.analyzeProject(root)
+        assertEquals(all.failures(), all.failures(strict = true))
+        assertEquals(2, all.failures().size)
+    }
+
+    @Test
     fun `formats each issue as a compiler would`() {
         write("src/Click.kt", "package p\n\n$swallowed")
         val found = analyzer.analyzeProject(root).failures().single()

@@ -662,6 +662,7 @@ public final class io/github/markusaugust/streamlord/analysis/PlatformJvmKt {
 	public static final fun analyzeProject (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;)Ljava/util/List;
 	public static synthetic fun analyzeProject$default (Lio/github/markusaugust/streamlord/analysis/Analyzer;Ljava/io/File;Ljava/lang/String;ILjava/lang/Object;)Ljava/util/List;
 	public static final fun failures (Ljava/util/List;)Ljava/util/List;
+	public static final fun failures (Ljava/util/List;Z)Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {
@@ -683,6 +684,7 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectIssue {
 	public final fun format ()Ljava/lang/String;
 	public final fun getColumn ()I
 	public final fun getFails ()Z
+	public final fun getFailsStrict ()Z
 	public final fun getFile ()Ljava/io/File;
 	public final fun getIssue ()Lio/github/markusaugust/streamlord/analysis/Issue;
 	public final fun getLine ()I

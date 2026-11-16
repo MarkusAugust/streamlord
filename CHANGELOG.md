@@ -18,6 +18,11 @@ All notable changes to Streamlord are recorded here. The format follows
 - streamlord-core: an escaped value writes U+FFFD for the two characters a mark is made of, U+FDD0
   and U+FDD1, which no text may hold.
 
+- streamlord-analysis: `failures(strict = true)` also keeps the warnings of a value written without
+  its mark: one left without `+` in the block of `interpolate`, a template in its format, and a
+  `String` in an HTML string that is not `interpolate`'s. `failures()` is as it was.
+  See [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
+
 ### Editors
 
 **Kotlin values in HTML**

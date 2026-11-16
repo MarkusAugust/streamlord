@@ -118,6 +118,19 @@ own on `Any`, and a `unaryPlus` of your own on `String` is not reached there, si
 comes first. The editors know the block by the name `interpolate`, and not by another name you
 import it under.
 
+A mark you forget is caught by the editors alone: the code compiles, and the value is written as
+it is. Where nobody has an editor open, [the analysis](/analysis/#a-test-over-your-own-sources)
+holds the project to it in one test:
+
+```kotlin sample=test
+@Test
+fun `no value reaches a page without its mark`() {
+    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures(strict = true)
+
+    assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
+}
+```
+
 The same rule with the values as arguments, which is the form Java has:
 
 ```kotlin sample=declarations
@@ -329,21 +342,21 @@ it is yours. That fix is on the value in the `<style>`, and the other values say
 marks it so:
 
 ```kotlin sample=declarations
-class WidgetContext(val rootId: String, val contentId: String)
+class LayoutContext(val pageId: String, val sectionId: String)
 
-fun rootHtmlBefore(k: WidgetContext, customCss: String?, bodyHtml: String): String =
+fun pageHtmlBefore(k: LayoutContext, pageStyle: String?, mainHtml: String): String =
     """
-    <div id="${k.rootId}">
-        <style>${customCss.orEmpty()}</style>
-        <div id="${k.contentId}">$bodyHtml</div>
+    <div id="${k.pageId}">
+        <style>${pageStyle.orEmpty()}</style>
+        <div id="${k.sectionId}">$mainHtml</div>
     </div>
     """.trimIndent()
 
-fun rootHtmlAfter(k: WidgetContext, customCss: String?, bodyHtml: String): String =
+fun pageHtmlAfter(k: LayoutContext, pageStyle: String?, mainHtml: String): String =
     interpolate { """
-    <div id="${+k.rootId}">
-        <style>${+Trusted(customCss.orEmpty())}</style>
-        <div id="${+k.contentId}">${+bodyHtml}</div>
+    <div id="${+k.pageId}">
+        <style>${+Trusted(pageStyle.orEmpty())}</style>
+        <div id="${+k.sectionId}">${+mainHtml}</div>
     </div>
     """.trimIndent() }.text
 ```
