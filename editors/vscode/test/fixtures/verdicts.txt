@@ -15523,6 +15523,23 @@ pro-attribute 3524-3544 hint: data-custom-validity is a Datastar Pro attribute; 
 pro-action 3623-3633 hint: @clipboard is a Datastar Pro action; it needs the Pro bundle.
 pro-action 3678-3683 hint: @intl is a Datastar Pro action; it needs the Pro bundle.
 pro-action 3775-3779 hint: @fit is a Datastar Pro action; it needs the Pro bundle.
+== real/html/values.html
+action-argument 295-307 warning: @get takes a string as uri, and function(){} is a function.
+action-argument 377-378 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+action-argument 445-448 warning: @get takes a string as uri, and - 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+action-argument 519-523 warning: @get takes a string as uri, and -(1) is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+option-value 745-757 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with function(){} Datastar retries as with 'auto'.
+computed-value 817-820 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
+computed-value 903-904 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
+computed-value 989-990 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
+expression-syntax 1060-1061 error: Datastar expression: Unexpected end of input
+expression-syntax 1129-1130 error: Datastar expression: Unexpected token
+computed-value 1226-1230 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
+computed-value 1247-1249 warning: data-computed must not change signals, and this changes $a: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
+indicator-order 1515-1529 warning: data-indicator comes after data-init, which starts its request as Datastar applies it, before the indicator exists, so the signal stays false. Put data-indicator first.
+  fix "Move data-indicator before data-init" 1492-1536 "data-indicator=\"busy\" data-init=\"@get('/x')\""
+option-value 1748-1749 warning: include takes a regular expression or a string, and 1 is a number, so Datastar throws a TypeError as it matches a signal.
+signal-name 1800-1811 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
 == real/kotlin/ActionChecks.kt
 one-value 509-510 warning: postExpr writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma operator and keeps only what follows it. The options go in the lambda after the call.
 unknown-option 406-411 warning: @get has no option retyr, so Datastar ignores it. Did you mean retry?
@@ -15895,6 +15912,17 @@ blank-selector 1534-1536 error: removeElements throws: selector must not be blan
 selector-newline 1557-1565 error: removeElements throws: selector must not contain line breaks or NUL characters.
 selector-newline 1617-1623 error: patchElements throws: selector must not contain line breaks or NUL characters.
 script-close 1660-1668 warning: `</script` inside a script body. Streamlord escapes it to `<\\/script`, which only works inside a JavaScript string or regex.
+== real/kotlin/Values.kt
+action-argument 639-640 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+option-value 692-704 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with function(){} Datastar retries as with 'auto'.
+indicator-order 1017-1030 warning: dataIndicator comes after dataInit, which starts its request as Datastar applies it, before the indicator exists, so the signal stays false. Call dataIndicator first.
+computed-value 752-755 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
+computed-value 801-802 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
+expression-syntax 868-869 error: Datastar expression: Unexpected end of input
+action-argument 288-289 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+action-argument 352-355 warning: @get takes a string as uri, and - 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+computed-value 412-413 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
+expression-syntax 491-492 error: Datastar expression: Unexpected token
 == real/kotlin/ViewMistakes.kt
 kotlin-interpolation 171-177 error: Kotlin interpolates $count here; the browser will never see a signal. Write signal("count"), make the literal $$"..." (Kotlin 2.2+), or escape as ${'$'}count.
   fix "Use signal(\"count\")" 170-178 "signal(\"count\")"
