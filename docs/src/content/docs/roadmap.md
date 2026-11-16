@@ -9,36 +9,36 @@ description: "What is planned but not shipped, in the order it will land, and wh
 
 Nothing on this page has shipped yet; an item leaves it in the release that delivers it. It is
 written down so you can see what is coming, decide whether to wait for it, and know what to do
-today instead. Everything that touches your code is opt-in when it lands, the way
-[`guardElements`](/strings/) is, and nothing here changes an API you already call, with one
-exception that says so: [two artifacts get new names](#new-names-for-the-kotlinxhtml-modules).
+today instead. Nothing here changes an API you already call. Two things reach a build that works
+today, and each says so where it stands: [two artifacts get new names](#new-names-for-the-kotlinxhtml-modules),
+and two new warnings appear in the editors, which a
+[strict check](/analysis/#a-test-over-your-own-sources) fails on.
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
 | 1 | [The check for your build, in one line](#the-check-for-your-build-in-one-line) | how much you write to have CI read your markup, and that it reads your templates too | the test that calls `analyzeProject` |
 | 2 | [Values from outside, in the DSL](#values-from-outside-in-the-dsl) | what the editors and the check say about `dataText(userName)` | keep request data out of expression attributes |
-| 3 | [New names for the kotlinx.html modules](#new-names-for-the-kotlinxhtml-modules) | the coordinates of two artifacts | nothing; the old coordinates will point on |
+| 3 | [New names for the kotlinx.html modules](#new-names-for-the-kotlinxhtml-modules) | the coordinates of two artifacts | nothing |
 | 4 | [The front page](#the-front-page) | what a first visit shows of values and of the check | read [Strings](/strings/) and [The analysis](/analysis/) |
 | 5 | [Values from outside, in templates](#values-from-outside-in-templates) | what the editors and the check say about a template tag in an expression | keep the tag out of expression attributes |
 | 6 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 7 | [The reading of markup, before 1.0](#the-reading-of-markup-before-10) | the narrow places where `interpolate` and the editors read markup otherwise than the browser | the notes on [Strings](/strings/) |
+| 7 | [The reading of markup, before 1.0](#the-reading-of-markup-before-10) | the narrow places where markup is read otherwise than the browser or the compiler reads it | the notes on [Strings](/strings/#values-from-outside) |
 | 8 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
-The order is the order of the work, not a schedule. The first four are the next release. The last
-one waits for 1.0 on purpose: a template that lags the API it demonstrates teaches the wrong thing,
-and the API is still moving.
+The order is the order of the work. The first four are meant for the next release, and nothing
+has a date.
 
 ## The check for your build, in one line
 
 The editors catch a mistake as you type, and CI has no editor. The
 [test over your own sources](/analysis/#a-test-over-your-own-sources) closes that, and it is five
 lines you copy: read the folder, keep the failures, assert there are none, format them yourself.
-It also reads `.kt` files alone. Markup in a template or an HTML file is judged in the editor and
-never in the build, so the claim that CI gives the editor's verdict holds for one of the three
-ways to write markup.
+It reads `.kt` files only. That covers the DSL and HTML written in Kotlin strings, two of the
+three ways to write markup. A template or an HTML file is judged in the editor and never in the
+build.
 
-Planned: one function in `streamlord-analysis` that reads the project and fails with every finding
-written as a compiler writes them, so the test is its call:
+Planned: one function in `streamlord-analysis` that reads a module's sources and fails with every
+finding written as a compiler writes them, so the test is one call:
 
 ```kotlin sample=none
 @Test
@@ -47,8 +47,9 @@ fun `markup holds`() = Analyzer().checkProject()
 
 `checkProject(strict = true)` fails on what
 [`failures(strict = true)`](/analysis/#a-test-over-your-own-sources) keeps. It reads the Kotlin
-sources and the markup beside them, the HTML and template files the editors read, each with the
-rules the editor gives that kind of file. `analyzeProject` and `failures()` stay as they are.
+sources under `src/main` and the markup beside them, the HTML and template files the editors read,
+each with the rules the editor gives that kind of file. `analyzeProject` and `failures()` stay as
+they are.
 
 No Gradle or Maven plugin is planned; [Considered, not prioritised](#considered-not-prioritised)
 says why.
@@ -56,34 +57,65 @@ says why.
 ### Until then
 
 Write the test from [The analysis](/analysis/#a-test-over-your-own-sources): `analyzeProject` on
-`src/main/kotlin`, and assert that `failures()` is empty. For a template or an HTML file, hand its
-text to `analyzeHtml` in a test of your own.
+`src/main/kotlin`, and assert that `failures()` is empty. For HTML and template files, walk the
+folder yourself and hand each file's text to `analyzeHtml`:
+
+```kotlin sample=none
+@Test
+fun `no template ships markup the analysis calls an error`() {
+    val analyzer = Analyzer()
+    val errors =
+        java.io.File("src/main/resources/templates")
+            .walkTopDown()
+            .filter { it.extension in setOf("html", "mustache", "peb") }
+            .flatMap { file ->
+                val source = file.readText()
+                analyzer
+                    .analyzeHtml(source)
+                    .filter { it.severity == Severity.ERROR }
+                    .map { it.format(file.path, source) }
+            }.toList()
+
+    assertTrue(errors.isEmpty(), errors.joinToString("\n"))
+}
+```
+
+A JTE, FreeMarker, Velocity or Razor file has syntax of its own that the analysis must be told of:
+give `analyzeHtml` a `Source(text, SourceLanguage.HTML, engine = TemplateEngine.JTE)` in place of
+the text.
 
 ## Values from outside, in the DSL
 
-[`interpolate`](/strings/) asks where a value landed, which it can only do because each value is
-marked where it stands, or its placeholder left standing in the format. The DSL has neither:
-`dataText(expression)` takes a `String` and the call itself is the position, so
-`dataText(userName)` is the original hazard with nothing in the way. Markup written as a string is
-covered twice, by `interpolate` at run time and by the editors, while the DSL is covered by a
-paragraph of advice.
+[`interpolate`](/strings/#values-from-outside) asks where a value landed, which it can only do
+because each value is marked where it stands, or its placeholder left standing in the format. The
+DSL has neither: `dataText(expression)` takes a `String` and the call itself is the position, so
+`dataText(userName)` writes whatever `userName` holds into an expression the browser runs, with
+nothing in the way. Markup written as a string is covered twice, by `interpolate` at run time and
+by the editors. The DSL is covered by advice alone.
 
 Planned: a diagnostic in `streamlord-analysis`, so it lands in both editors and in the
 [check you run from a test](/analysis/), for an expression-valued DSL attribute whose argument is
 not a literal, a constant or one of Streamlord's expression helpers: `dataText(userName)`. It is a
-warning and no more, because a name may hold an expression you built as well as a value from a
-request, and nothing short of the compiler can tell `userName` from `COUNT_TWICE`. A warning fails
-no build: `failures(strict = true)` keeps it, and `failures()` does not. IntelliJ, which knows
-what a name is set to, says nothing where it can see the expression is yours.
+warning with a code of its own. A name may hold an expression you built,
+`val twice = "\$count * 2"`, as well as a value from a request, and the text cannot tell the two
+apart, so `failures()` lets it through and only `failures(strict = true)` keeps it. IntelliJ knows
+the type of a value and whether it is a constant, and says nothing where that shows the
+expression is yours.
 
-It carries the fix the [templates page](/templates/#do-not-render-a-value-into-an-expression)
-shows: the value in an attribute of its own, read with `el.dataset`, or patched into a signal from
-the server. Nothing in the SDK changes.
+It carries the fix shown below. Nothing in the SDK changes.
 
 ### Until then
 
-Keep request data out of expression attributes. Put it in element text or an ordinary attribute,
-where kotlinx.html escapes it for you, and read it with `el.dataset` when an expression needs it.
+Keep request data out of expression attributes. Put the value in a `data-*` attribute of its own,
+where kotlinx.html escapes it for you, and read it in the expression with `el.dataset`:
+
+```kotlin sample=none
+span {
+    attributes["data-name"] = userName
+    dataText("el.dataset.name")
+}
+```
+
 When a value really has to reach an expression, patch it into a signal from the server rather than
 writing it into the markup, which is what signals are for.
 
@@ -92,40 +124,48 @@ writing it into the markup, which is what signals are for.
 `streamlord-html` is the support for the kotlinx.html DSL, one of three ways to write markup, and
 its name says it is all of HTML. `streamlord-html-pro` is the same DSL's helpers for Datastar Pro.
 
-Planned: `streamlord-html` becomes `streamlord-kotlinx-html`, and `streamlord-html-pro` becomes
-`streamlord-kotlinx-html-datastar-pro`. The old coordinates are published once more as a
-relocation, so a build that names them resolves to the new ones and says so. Packages and imports
-do not change. This is the one item on the page that asks something of a build that works today,
-and it comes early because it only gets dearer.
+Planned: the two get names that say what they are.
+
+| Today | After |
+|---|---|
+| `io.github.markusaugust.streamlord:streamlord-html` | `io.github.markusaugust.streamlord:streamlord-kotlinx-html` |
+| `io.github.markusaugust.streamlord:streamlord-html-pro` | `io.github.markusaugust.streamlord:streamlord-kotlinx-html-datastar-pro` |
+
+In the release that renames them the old coordinates are published too, as relocations: a build
+that names them at that version resolves to the new ones. After that release only the new names
+are published, so the build changes its two coordinates to go further. Packages and imports do
+not change. It comes early because it only gets dearer.
 
 ### Until then
 
-Nothing. When it lands, change the two coordinates when the build tells you to.
+Nothing. In the release that renames them, change the two coordinates to those in the table.
 
 ## The front page
 
-The front page tells the story of one mistake that compiles and is caught. It shows neither of the
-two things that most change how you write: a value written where it stands in an HTML string,
-marked with `+`, and the test that holds a whole project to the editors' verdict where nobody has
-an editor open.
+The front page tells the story of one mistake that compiles and is caught. Its CI panel shows a
+test written by hand, a walk over the files that keeps the errors, from before `analyzeProject`
+existed. And it does not show the block form of `interpolate`, a value written where it stands in
+an HTML string and marked with `+`, at all.
 
-Planned: both get a place there, as code that was compiled the morning the page was built, like
-the rest of it.
+Planned: the CI panel shows [the one-line check](#the-check-for-your-build-in-one-line), and the
+block form gets a place of its own, both as code that was compiled the morning the page was built,
+like the rest of it.
 
 ### Until then
 
-[Strings](/strings/#values-from-outside) has the block, and
+[Strings](/strings/#values-from-outside) has the block form, and
 [The analysis](/analysis/#a-test-over-your-own-sources) has the test.
 
 ## Values from outside, in templates
 
-A template has the DSL's gap in another shape. `data-text="'{{ name }}'"` looks like the fix and is
-code injection, as [Templates](/templates/#do-not-render-a-value-into-an-expression) measures, and
-the editors say nothing about it: the analysis declines to judge a value that holds template
-syntax, since it cannot know what the engine will put there.
+A template has the DSL's gap in another shape. `data-text="'{{ name }}'"` looks like a safe way to
+show a value and is code injection, as
+[Templates](/templates/#do-not-render-a-value-into-an-expression) measures, and the editors say
+nothing about it: the analysis declines to judge a value that holds template syntax, since it
+cannot know what the engine will put there.
 
-Planned: the same diagnostic for a template tag inside an attribute the catalog marks as taking an
-expression, `data-text="'{{ name }}'"`, with the delimiters the analysis already knows. Silence
+Planned: the DSL's diagnostic for a template tag inside an attribute the catalog marks as taking
+an expression, `data-text="'{{ name }}'"`, with the delimiters the analysis already knows. Silence
 where the tag is the whole value of an ordinary attribute, `data-value="{{ name }}"`, which is the
 form the templates page recommends. That puts the three ways of writing markup on the same
 footing: the compiler never sees a Datastar expression, so the editors and CI read it instead.
@@ -162,26 +202,38 @@ what the client would have held at that point. This needs no new capture and no 
 every frame is kept with its arguments, `mergePatchAsClient` is a pure function, so the store at
 any index is a fold from the start. The work is the control and the wiring, in both plugins.
 
+It comes after the diagnostics because nothing is wrong without it: it shows more of a stream
+that already ran right or wrong.
+
+### Until then
+
+Watch the frames arrive. To see the store at one frame, stop the stream there and send the request
+again.
+
 ## The reading of markup, before 1.0
 
 `interpolate` reads markup as the browser's tokenizer does, in every way a patch may be read, and
-takes the strictest. The editors read Kotlin as text. Both have narrow places where they read
-otherwise than the browser or the compiler would, each found by testing and none by a report:
+takes the strictest. The editors read Kotlin as text. Each has places where it may read otherwise
+than the browser or the compiler would:
 
 - Inside a `<select>` the browser drops start tags such as `<title>` or `<style>` that the reading
   still takes as the start of text, as [Strings](/strings/#values-from-outside) says. Markup you
   write can do this, never a value.
-- Rules of the browser's tree builder that the reading does not follow: an end tag ignored because
-  another element stands between, `</h1>` closing any heading, a second `<form>` dropped.
-- In the block of `interpolate`, an `operator fun String.unaryPlus()` of your own, and an extension
-  on `Any` called without a receiver, mean the block's. The editors read text and cannot see it.
+- The browser's tree builder has rules past its tokenizer, for elements that close others or are
+  dropped where they stand. The reading follows some of them, and which it misses has not been
+  measured.
+- In the block form of `interpolate` a `+` is the block's, so an `operator fun String.unaryPlus()`
+  of your own is not called there. A call written without a receiver, `toString()` or an
+  extension of your own on `Any`, is made on the block. The editors read text and cannot see
+  either.
 
-Planned: one pass over all of them before 1.0, with the fuzzing against a real HTML parser that
-found the first two, so that 1.0 has no known place where the reading is wrong.
+Planned: one pass over all of them before 1.0, measuring the reading against a real HTML parser,
+so that 1.0 has no known place where the reading is wrong.
 
 ### Until then
 
-Leave such tags out of a `<select>`, and in a block write the receiver of a call that needs one.
+Leave `<title>` and `<style>` out of a `<select>`, close every element you open in markup you hand
+to `interpolate`, and in a block write the receiver of a call that needs one.
 
 ## Starter templates
 
@@ -189,16 +241,11 @@ After 1.0, not before.
 
 A hypermedia library is judged in the first ten minutes, and ten minutes is about what it takes to
 wire Ktor or Spring Boot up from nothing. A repository with a running page, a search box that
-answers over the wire, and a "Use this template" button removes that, and "show, don't tell" is
-the right instinct.
+answers over the wire, and a "Use this template" button removes that.
 
-Planned: one template, not two. Two repositories is two things to keep in step with every release,
-and a template that has fallen a version behind teaches the wrong API with full confidence. One
-repository covering both adapters, or the `demo` module documented as the thing to copy, carries
-the same weight for a fraction of the upkeep.
-
-It waits for 1.0 because the API is still moving. Every release so far has changed the surface,
-and each of them would have aged a template silently.
+Planned: one template for both adapters. A template is one more thing to keep in step with every
+release, and one that has fallen a version behind teaches the wrong API with full confidence, which
+is also why it waits: every release so far has changed the surface.
 
 ### Until then
 
@@ -217,12 +264,12 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   The test runs where your tests run, in either build tool, with nothing but the analysis on the
   test classpath.
 - **A limit on concurrent streams.** An open stream holds a socket and a coroutine for as long as
-  it lasts, and a limiter that counts arrivals misses that, since five streams a minute is five
-  connections held. But the cap is general server hygiene that Ktor and Spring both have
-  facilities for, Streamlord would only save the wiring, and a registry of who holds what needs a
-  counter that comes down on every way out: one miss locks a reader out of their own page. Use
-  your framework's rate limiting, keyed by user, and cap how many streams are open at once, not
-  how many were opened this minute.
+  it lasts, and a limiter that counts arrivals misses that: five streams a minute is five
+  connections held. Streamlord knows which responses are streams, so it could count them, but a
+  registry of who holds what needs a counter that comes down on every way out, and one miss locks
+  a reader out of their own page. What a page mostly needs is not to starve itself, and
+  [terminating HTTP/2 in front of the service](/operations/#six-streams-and-the-page-stalls) does
+  that without a cap.
 - **Delimiters the analysis has not met.** The analysis knows a closed set of template delimiters,
   which covers most engines. One outside it, Qute with `{name}`, Closure with `{$name}`, Rocker
   with `@name`, gets `signal-name-expected` on an attribute that takes a signal name. A setting
@@ -259,6 +306,8 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
 
 ## Open questions
 
-Nothing above is undecided enough to wait for an answer. If you have an opinion on any of it, or
-use an engine or a pattern the list sets aside, the
+One thing is undecided: whether the starter template is a repository of its own, or the `demo`
+module with a page on how to copy it. The first has the button, and the second cannot fall behind.
+
+If you have an opinion on any of it, or use an engine or a pattern the list sets aside, the
 [issue tracker](https://github.com/MarkusAugust/streamlord/issues) is the place for it.
