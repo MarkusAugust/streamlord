@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtParenthesizedExpression
+import org.jetbrains.kotlin.psi.KtPrefixExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
@@ -91,7 +92,7 @@ object ValueFacts {
 
     /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its placeholder. */
     fun of(file: KtFile): Map<TextRange, ValueFact> {
-        val placeholders = placeholders(file)
+        val placeholders = placeholders(file) + markedValues(file)
         val arguments = interpolateArguments(file)
         if (placeholders.isEmpty() && arguments.isEmpty()) return emptyMap()
         return analyze(file) {
@@ -114,6 +115,21 @@ object ValueFacts {
             .collectElementsOfType(file, KtCallExpression::class.java)
             .filter { it.calleeExpression?.text == "interpolate" }
             .flatMap { call -> call.valueArguments.drop(1).mapNotNull { a -> a.getArgumentExpression()?.let { it.textRange to it } } }
+
+    /**
+     * What each template in the block of an `interpolate { ... }` marks with `+`, by the range of what stands
+     * after the mark: a value judged by its type, as a template's is.
+     */
+    private fun markedValues(file: KtFile): List<Pair<TextRange, KtExpression>> =
+        PsiTreeUtil
+            .collectElementsOfType(file, KtCallExpression::class.java)
+            .filter { it.calleeExpression?.text == "interpolate" }
+            .mapNotNull { it.lambdaArguments.firstOrNull()?.getLambdaExpression() }
+            .flatMap { PsiTreeUtil.collectElementsOfType(it, KtStringTemplateEntryWithExpression::class.java) }
+            .mapNotNull { entry ->
+                val mark = entry.expression as? KtPrefixExpression
+                mark?.takeIf { it.operationToken == KtTokens.PLUS }?.baseExpression?.let { it.textRange to it }
+            }
 
     /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */
     private fun resolved(

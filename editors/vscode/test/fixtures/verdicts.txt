@@ -17207,6 +17207,16 @@ unescaped-interpolation 1132-1150 hint: Kotlin writes ${title.escaped()} into th
 key-case-wire 802-810 hint: Written on the wire as data-signals:hs-flag, which Datastar reads back as the signal $hsFlag: the browser lowercases attribute names, so a key is kebab-case. In HTML or a template you write it that way yourself.
 unsafe-interpolation 1150-1152 error: interpolate always throws here: title lands in data-attr:title, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
 unsafe-interpolation 1783-1785 error: interpolate always throws here: title lands in data-attr:title, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+== real/kotlin/InPlace.kt
+unsafe-interpolation 960-968 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+unsafe-interpolation 1045-1052 error: interpolate always throws here: css lands in a <style>, where it is read as CSS, and only Trusted(...) is let in there. Choose between classes, or write a number; wrap CSS you wrote yourself in Trusted(...).
+unsafe-interpolation 1140-1147 error: interpolate always throws here: src lands in src, which loads code from wherever the value points, and the markup before it does not fix the host. Only Trusted(...) is let in there. Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there, or wrap a URL you chose yourself in Trusted(...).
+interpolate-template 1265-1271 warning: Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $title with +, which interpolate escapes" 1265-1271 "${+title}"
+interpolate-template 1273-1281 warning: Kotlin fills in ${title} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark ${title} with +, which interpolate escapes" 1273-1281 "${+title}"
+interpolate-template 1382-1389 warning: Kotlin fills in $$title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $$title with +, which interpolate escapes" 1382-1389 "$${+title}"
 == real/kotlin/InterpolateValues.kt
 unsafe-interpolation 229-231 error: interpolate always throws here: name lands in data-x-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
 interpolate-placeholders 445-454 hint: interpolate takes listOf(a) as one value and writes it whole, in brackets, escaped like any text. Write the elements out to pass them as the values.

@@ -261,6 +261,31 @@ class TemplateValueTypesTest : StreamlordTestCase() {
         assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s placeholder, where interpolate writes it as it is"))
     }
 
+    fun `test a value marked in a block is judged by its type where it stands, and one left unmarked gets the fix that marks it`() {
+        myFixture.configureByText("Block.kt", BLOCK_CALLS)
+        val seen =
+            myFixture
+                .doHighlighting()
+                .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
+                .sortedBy { it.startOffset }
+                .map { "${it.text} ${severity(it.severity)}" }
+        assertEquals(
+            listOf(
+                // A String marked in a Datastar expression: interpolate always throws.
+                "\${+name} error",
+                // A String written without the mark.
+                "\$name warning",
+            ),
+            seen,
+        )
+        val fixes =
+            myFixture
+                .getAllQuickFixes()
+                .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
+                .map { it.familyName }
+        assertTrue(fixes.joinToString(), fixes.contains("Mark \$name with +, which interpolate escapes"))
+    }
+
     fun `test a level set in the profile lowers the errors and leaves the hints and warnings alone`() {
         fun shown(name: String): List<String> {
             // A fresh file each time: the daemon keeps the highlights of an unchanged document.
@@ -469,6 +494,21 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                     </div>
                 ""${'"'}
             }
+            """.trimIndent().replace('¤', '$')
+
+        /** The block form: a widget whose values are safe by types only the editor sees, `k.css` and `k.rootId`; `¤` is a `$`. */
+        val BLOCK_CALLS =
+            """
+            import io.github.markusaugust.streamlord.core.domain.Html
+            import io.github.markusaugust.streamlord.core.domain.Trusted
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+
+            class Widget(val rootId: String, val css: Trusted)
+            fun root(k: Widget, body: Html): Html = interpolate {
+                "<div id=\"¤{+k.rootId}\"><style>¤{+k.css}</style>¤{+body}</div>"
+            }
+            fun refused(name: String): Html = interpolate { "<p data-text=\"¤{+name}\"></p>" }
+            fun unmarked(name: String): Html = interpolate { "<p>¤name</p>" }
             """.trimIndent().replace('¤', '$')
 
         /** What interpolate refuses or rereads, and a search pattern; `¤` is a `$`. */

@@ -21,32 +21,28 @@
      "start": 238,
      "end": 246,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
     },
     {
      "code": "unsafe-interpolation",
      "start": 255,
      "end": 263,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in style, which is read as CSS, and only a number is let in there. Pass a number and write the unit in the markup, or choose between classes.",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in style, which is read as CSS, and only a number is let in there. Pass a number and write the unit in the markup, or choose between classes."
     },
     {
      "code": "unsafe-interpolation",
      "start": 274,
      "end": 282,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
     },
     {
      "code": "unsafe-interpolation",
      "start": 296,
      "end": 304,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
     }
    ]
   },
@@ -59,24 +55,21 @@
      "start": 225,
      "end": 233,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...).",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
     },
     {
      "code": "unsafe-interpolation",
      "start": 234,
      "end": 242,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...).",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
     },
     {
      "code": "unsafe-interpolation",
      "start": 253,
      "end": 261,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...).",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
     }
    ]
   },
@@ -94,8 +87,7 @@
      "start": 236,
      "end": 243,
      "severity": "error",
-     "message": "interpolate always throws here: src lands in src, which loads code from wherever the value points, and the markup before it does not fix the host. Only Trusted(...) is let in there. Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there, or wrap a URL you chose yourself in Trusted(...).",
-     "fixes": []
+     "message": "interpolate always throws here: src lands in src, which loads code from wherever the value points, and the markup before it does not fix the host. Only Trusted(...) is let in there. Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there, or wrap a URL you chose yourself in Trusted(...)."
     }
    ]
   },
@@ -181,8 +173,7 @@
      "start": 259,
      "end": 267,
      "severity": "error",
-     "message": "interpolate always throws here: name lands in data-x-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.",
-     "fixes": []
+     "message": "interpolate always throws here: name lands in data-x-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
     }
    ]
   },
@@ -200,8 +191,7 @@
      "start": 71,
      "end": 79,
      "severity": "hint",
-     "message": "Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, escape it before it goes in, or build this part with kotlinx.html, which escapes text; if it is markup you built, declare it Html or wrap it in Trusted(...).",
-     "fixes": []
+     "message": "Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, escape it before it goes in, or build this part with kotlinx.html, which escapes text; if it is markup you built, declare it Html or wrap it in Trusted(...)."
     }
    ]
   },
@@ -247,8 +237,7 @@
      "start": 232,
      "end": 238,
      "severity": "warning",
-     "message": "Kotlin fills in ${++i} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": []
+     "message": "Kotlin fills in ${++i} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it."
     }
    ]
   }
