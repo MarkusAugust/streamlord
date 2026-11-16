@@ -21,5 +21,7 @@
   <div data-json-signals="{include: /a/, exclude: function(){ return /b/ }()}">a filter from a function called at once</div>
   <div data-json-signals="{include: 1}">a number for a filter</div>
   <div data-signals:constructor="$a ? {x: 1} : 0">an object a conditional may give</div>
+  <button data-on:click="@get('/x').then(f)">a call of what an action gives</button>
+  <div data-signals:constructor="{x: @peek(() => 1)}">an object that holds an action</div>
 </body>
 </html>

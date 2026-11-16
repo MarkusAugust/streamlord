@@ -9,8 +9,8 @@ import kotlin.test.fail
 
 /**
  * Everything the analysis says of the shared fixtures, recorded in `test/fixtures/verdicts.txt` and
- * compared with it on the JVM and on Node: each issue's code, range, severity, message and fixes, in
- * the order the analysis gives them, and what completion, hover and signature help answer. The other
+ * compared with it on the JVM and on Node: each issue's code, range, severity, message and fixes (not its
+ * link), in the order the analysis gives them, and what completion, hover and signature help answer. The other
  * suites hold a case to what its author wrote down; this one holds every case to all it was given,
  * and reads each judged value half typed and in the three ways markup is written, so a change to how
  * a value is read shows each verdict it moves.
@@ -184,9 +184,10 @@ class VerdictDigestTest {
         cases()
         realFiles()
         val found = blocks.joinToString("") { (name, lines) -> "== $name\n" + lines.joinToString("") { "$it\n" } }
-        if (recordFixture(RECORDED, found)) return
         val recorded = fixtureText(RECORDED)
         if (found == recorded) return
+        // A run that records is red where it changed the file, so a switch left on cannot pass for a comparison.
+        if (recordFixture(RECORDED, found)) fail("Recorded $RECORDED anew: read its diff, and run again without the switch")
 
         val was = LinkedHashMap<String, String>()
         var name = ""

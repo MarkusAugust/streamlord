@@ -170,7 +170,7 @@ internal fun certainlyNoFunction(parsed: Parsed): Boolean {
  * function does not count; nor does text that does not parse.
  */
 internal fun mayGiveObject(value: String): Boolean {
-    val nodes = JsParser.expression(value).nodes
+    val nodes = JsParser.expression(clientRewrite(value).js).nodes
     val gives = HashSet<JsNode>()
     for (node in nodes) {
         val may =
@@ -1570,7 +1570,7 @@ public class MarkupValidator(
             to: Int,
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
         if (open < 0 || text.substring(0, open).isNotBlank()) {
-            if (!certainlyNoFunction(JsParser.expression(text))) return emptyList()
+            if (!certainlyNoFunction(JsParser.expression(clientRewrite(text).js))) return emptyList()
             val (start, end) = source(0, text.length)
             return listOf(
                 Issue(
@@ -1586,7 +1586,7 @@ public class MarkupValidator(
         }
         val close = text.lastIndexOf('}')
         val body = text.substring(open + 1, if (close < open) text.length else close)
-        // Each value is read where it starts, as far as it goes: what stands after it need not parse.
+        // Each value is read where it starts, as far as it goes: what stands after the next token need not parse.
         return objectKeys(body).filter { !it.objectUnder && certainlyNoFunction(JsParser.expression(body, it.valueStart)) }.map {
             val (start, end) = source(open + 1 + it.start, open + 1 + it.end)
             Issue(

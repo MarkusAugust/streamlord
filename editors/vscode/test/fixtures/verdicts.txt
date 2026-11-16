@@ -729,6 +729,240 @@ expression-syntax 52-53 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){ return '/x' }())"></div>
 == string: <div data-on:click="@get(function(){ return '/x' }())"></div>
 == dsl: <div data-on:click="@get(function(){ return '/x' }())"></div>
+== html: <div data-on:click="@get('/x')"></div>
+== html: <div data-on:click="@get('/x')."></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x').t"></div>
+== html: <div data-on:click="@get('/x').th"></div>
+== html: <div data-on:click="@get('/x').the"></div>
+== html: <div data-on:click="@get('/x').then"></div>
+== html: <div data-on:click="@get('/x').then("></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x').then(f"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x').then(f)"></div>
+== string: <div data-on:click="@get('/x').then(f)"></div>
+== dsl: <div data-on:click="@get('/x').then(f)"></div>
+== html: <div data-on:click="@get('/x')?"></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')?."></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected token
+== html: <div data-on:click="@get('/x')?.t"></div>
+== html: <div data-on:click="@get('/x')?.th"></div>
+== html: <div data-on:click="@get('/x')?.the"></div>
+== html: <div data-on:click="@get('/x')?.then"></div>
+== html: <div data-on:click="@get('/x')?.then("></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')?.then(1"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')?.then(1)"></div>
+== string: <div data-on:click="@get('/x')?.then(1)"></div>
+== dsl: <div data-on:click="@get('/x')?.then(1)"></div>
+== html: <div data-on:click="@get('/x')("></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1"></div>
+expression-syntax 32-33 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1,"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1, "></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1, 2"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1, 2,"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1, 2, "></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1, 2, 3"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x')(1, 2, 3)"></div>
+== string: <div data-on:click="@get('/x')(1, 2, 3)"></div>
+== dsl: <div data-on:click="@get('/x')(1, 2, 3)"></div>
+== html: <div data-on:click="@p"></div>
+expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
+== html: <div data-on:click="@pe"></div>
+expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
+== html: <div data-on:click="@pee"></div>
+expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
+== html: <div data-on:click="@peek"></div>
+expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
+== html: <div data-on:click="@peek("></div>
+expression-syntax 26-27 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(("></div>
+expression-syntax 27-28 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(()"></div>
+expression-syntax 27-28 error: Datastar expression: Unexpected token
+== html: <div data-on:click="@peek(() "></div>
+expression-syntax 27-28 error: Datastar expression: Unexpected token
+== html: <div data-on:click="@peek(() ="></div>
+expression-syntax 27-30 error: Datastar expression: Unexpected token
+== html: <div data-on:click="@peek(() =>"></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => "></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $f"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $fo"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $foo"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $foo)"></div>
+== html: <div data-on:click="@peek(() => $foo)."></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $foo).t"></div>
+== html: <div data-on:click="@peek(() => $foo).to"></div>
+== html: <div data-on:click="@peek(() => $foo).toF"></div>
+== html: <div data-on:click="@peek(() => $foo).toFi"></div>
+== html: <div data-on:click="@peek(() => $foo).toFix"></div>
+== html: <div data-on:click="@peek(() => $foo).toFixe"></div>
+== html: <div data-on:click="@peek(() => $foo).toFixed"></div>
+== html: <div data-on:click="@peek(() => $foo).toFixed("></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $foo).toFixed(2"></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@peek(() => $foo).toFixed(2)"></div>
+== string: <div data-on:click="@peek(() => $foo).toFixed(2)"></div>
+== dsl: <div data-on:click="@peek(() => $foo).toFixed(2)"></div>
+== html: <div data-on:click="@get(1)."></div>
+expression-syntax 28-29 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(1).t"></div>
+action-argument 25-26 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== html: <div data-on:click="@get(1).th"></div>
+action-argument 25-26 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== html: <div data-on:click="@get(1).the"></div>
+action-argument 25-26 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== html: <div data-on:click="@get(1).then"></div>
+action-argument 25-26 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== html: <div data-on:click="@get(1).then("></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(1).then(2"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(1).then(2)"></div>
+action-argument 25-26 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== string: <div data-on:click="@get(1).then(2)"></div>
+action-argument 37-38 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== dsl: <div data-on:click="@get(1).then(2)"></div>
+action-argument 111-112 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
+== html: <div data-signals:constructor=""></div>
+empty-expression 5-29 warning: Empty Datastar expression.
+== html: <div data-signals:constructor="{"></div>
+expression-syntax 32-33 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a:"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: "></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="{a: @p"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="{a: @pe"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="{a: @pee"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="{a: @peek"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="{a: @peek("></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @peek(("></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @peek(()"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected token
+== html: <div data-signals:constructor="{a: @peek(() "></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected token
+== html: <div data-signals:constructor="{a: @peek(() ="></div>
+expression-syntax 42-45 error: Datastar expression: Unexpected token
+== html: <div data-signals:constructor="{a: @peek(() =>"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @peek(() => "></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @peek(() => 1"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @peek(() => 1)"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="{a: @peek(() => 1)}"></div>
+signal-name 18-29 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+== string: <div data-signals:constructor="{a: @peek(() => 1)}"></div>
+signal-name 29-40 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+== dsl: <div data-signals:constructor="{a: @peek(() => 1)}"></div>
+signal-name 100-111 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+== html: <div data-signals:constructor="$"></div>
+== html: <div data-signals:constructor="$a"></div>
+== html: <div data-signals:constructor="$a "></div>
+== html: <div data-signals:constructor="$a ?"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? "></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x:"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: "></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1}"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} "></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} :"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : "></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : @"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="$a ? {x: 1} : @p"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="$a ? {x: 1} : @pe"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="$a ? {x: 1} : @pee"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected character '@'
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek("></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(("></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(()"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected token
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(() "></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected token
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(() ="></div>
+expression-syntax 52-55 error: Datastar expression: Unexpected token
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(() =>"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(() => "></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(() => 1"></div>
+expression-syntax 58-59 error: Datastar expression: Unexpected end of input
+== html: <div data-signals:constructor="$a ? {x: 1} : @peek(() => 1)"></div>
+signal-name 18-29 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+== string: <div data-signals:constructor="$a ? {x: 1} : @peek(() => 1)"></div>
+signal-name 29-40 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+== dsl: <div data-signals:constructor="$a ? {x: 1} : @peek(() => 1)"></div>
+signal-name 100-111 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+== html: <div data-computed=""></div>
+missing-value 5-18 error: data-computed needs a value; without one Datastar raises ValueRequired.
+== html: <div data-computed="$"></div>
+== html: <div data-computed="$a"></div>
+== html: <div data-computed="$a."></div>
+expression-syntax 23-24 error: Datastar expression: Unexpected end of input
+== html: <div data-computed="$a.0"></div>
+== html: <div data-computed="$a.0 "></div>
+== html: <div data-computed="$a.0 +"></div>
+expression-syntax 26-27 error: Datastar expression: Unexpected end of input
+== html: <div data-computed="$a.0 + "></div>
+expression-syntax 26-27 error: Datastar expression: Unexpected end of input
+== html: <div data-computed="$a.0 + 1"></div>
+computed-value 20-28 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
+== string: <div data-computed="$a.0 + 1"></div>
+computed-value 32-41 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
+== dsl: <div data-computed="$a.0 + 1"></div>
+computed-value 106-115 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-on:click="@get(function(){}"></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}."></div>
@@ -1499,16 +1733,6 @@ option-value 41-42 warning: include takes a regular expression or a string, and 
 option-value 53-54 warning: include takes a regular expression or a string, and 1 is a number, so Datastar throws a TypeError as it matches a signal.
 == dsl: <div data-on:click="@toggleAll({include: 1})"></div>
 option-value 127-128 warning: include takes a regular expression or a string, and 1 is a number, so Datastar throws a TypeError as it matches a signal.
-== html: <div data-on:click="@p"></div>
-expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
-== html: <div data-on:click="@pe"></div>
-expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
-== html: <div data-on:click="@pee"></div>
-expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
-== html: <div data-on:click="@peek"></div>
-expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
-== html: <div data-on:click="@peek("></div>
-expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@peek(1"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@peek(1)"></div>
@@ -1517,18 +1741,6 @@ action-argument 26-27 warning: @peek takes a function, as in @peek(() => expr), 
 action-argument 38-39 warning: @peek takes a function, as in @peek(() => expr), and 1 is a number, so Datastar throws a TypeError as it calls it.
 == dsl: <div data-on:click="@peek(1)"></div>
 action-argument 112-113 warning: @peek takes a function, as in @peek(() => expr), and 1 is a number, so Datastar throws a TypeError as it calls it.
-== html: <div data-on:click="@peek(("></div>
-expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@peek(()"></div>
-expression-syntax 27-28 error: Datastar expression: Unexpected token
-== html: <div data-on:click="@peek(() "></div>
-expression-syntax 27-28 error: Datastar expression: Unexpected token
-== html: <div data-on:click="@peek(() ="></div>
-expression-syntax 27-30 error: Datastar expression: Unexpected token
-== html: <div data-on:click="@peek(() =>"></div>
-expression-syntax 31-32 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@peek(() => "></div>
-expression-syntax 31-32 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@peek(() => 1"></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@peek(() => 1)"></div>
@@ -2714,8 +2926,6 @@ action-argument 25-27 warning: @get takes a string as uri, and 1. is a number, s
 action-argument 37-39 warning: @get takes a string as uri, and 1. is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == dsl: <div data-on:click="@get(1.)"></div>
 action-argument 111-113 warning: @get takes a string as uri, and 1. is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
-== html: <div data-computed=""></div>
-missing-value 5-18 error: data-computed needs a value; without one Datastar raises ValueRequired.
 == html: <div data-computed="1"></div>
 computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="1"></div>
@@ -2821,8 +3031,6 @@ computed-value 20-28 warning: Without a key, data-computed takes an object of fu
 computed-value 32-40 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == dsl: <div data-computed="Infinity"></div>
 computed-value 106-114 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
-== html: <div data-computed="$"></div>
-== html: <div data-computed="$a"></div>
 == html: <div data-computed="$a "></div>
 == html: <div data-computed="$a +"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
@@ -15540,6 +15748,7 @@ indicator-order 1515-1529 warning: data-indicator comes after data-init, which s
   fix "Move data-indicator before data-init" 1492-1536 "data-indicator=\"busy\" data-init=\"@get('/x')\""
 option-value 1748-1749 warning: include takes a regular expression or a string, and 1 is a number, so Datastar throws a TypeError as it matches a signal.
 signal-name 1800-1811 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+signal-name 1974-1985 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
 == real/kotlin/ActionChecks.kt
 one-value 509-510 warning: postExpr writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma operator and keeps only what follows it. The options go in the lambda after the call.
 unknown-option 406-411 warning: @get has no option retyr, so Datastar ignores it. Did you mean retry?

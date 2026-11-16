@@ -86,77 +86,6 @@ private fun ArgumentKind.takes(value: Value): Boolean {
         )
 }
 
-/** Where [Brackets] files the commas outside every bracket. */
-private const val TOP = -1
-
-/**
- * The brackets of [js] in code, read in one pass: where each closes, and the commas and colons
- * at its own depth. It reads text that does not parse too, as at a caret.
- */
-internal class Brackets(
-    val js: String,
-    val regions: ByteArray,
-) {
-    val close = IntArray(js.length) { -1 }
-    private val commas = HashMap<Int, MutableList<Int>>()
-    private val colons = HashMap<Int, MutableList<Int>>()
-
-    init {
-        val open = ArrayList<Int>()
-        var skip = -1
-        for (i in js.indices) {
-            // A template literal and the code of its `${ }` are brackets too, so that a `}` in the text of one nested
-            // inside closes nothing.
-            if (regions[i] == Region.TEMPLATE) {
-                val inText = open.lastOrNull()?.let { js[it] == '`' } == true
-                if (i == skip) continue
-                if (inText && js[i] == '\\') skip = i + 1
-                if (inText && js.startsWith("\${", i)) skip = (i + 1).also { open += it }
-                if (js[i] == '`' && inText) {
-                    open.removeAt(open.size - 1)
-                } else if (js[i] == '`') {
-                    open += i
-                }
-                if (!inText && js[i] == '}' && open.isNotEmpty()) close[open.removeAt(open.size - 1)] = i
-            }
-            if (regions[i] != Region.CODE) continue
-            when (js[i]) {
-                '(', '[', '{' -> open += i
-                ')', ']', '}' -> open.removeLastOrNull()?.let { close[it] = i }
-                ',' -> commas.getOrPut(open.lastOrNull() ?: TOP) { ArrayList() } += i
-                ':' -> open.lastOrNull()?.let { colons.getOrPut(it) { ArrayList() } += i }
-            }
-        }
-    }
-
-    /** The pieces between the bracket at [open] and its close, split at its commas, each trimmed; an empty last one is left out. */
-    fun pieces(open: Int): List<IntRange> {
-        val end = close[open]
-        if (end < 0) return emptyList()
-        val cuts = listOf(open) + (commas[open] ?: emptyList()) + end
-        val out = cuts.zipWithNext().map { (a, b) -> trim(a + 1, b) }
-        return if (out.last().isEmpty()) out.dropLast(1) else out
-    }
-
-    /** The commas outside every bracket, in order. */
-    val topCommas: List<Int> get() = commas[TOP] ?: emptyList()
-
-    /** The colons of the bracket at [open] at its own depth, in order. */
-    fun colons(open: Int): List<Int> = colons[open] ?: emptyList()
-
-    /** [from] until [to] without the white space and comments at either end. */
-    fun trim(
-        from: Int,
-        to: Int,
-    ): IntRange {
-        var a = from
-        var b = to
-        while (a < b && (isJsSpace(js[a]) || regions[a] == Region.COMMENT)) a++
-        while (b > a && (isJsSpace(js[b - 1]) || regions[b - 1] == Region.COMMENT)) b--
-        return a until b
-    }
-}
-
 /**
  * The judging of the literals of one script, [js], by the tree of what was parsed of it; [at] says where in [js] an
  * offset of the parsed text stands, and [span] maps a stretch of [js] back to the text.
@@ -421,8 +350,10 @@ internal fun actionArgumentIssues(
     if (written.isEmpty()) return emptyList()
     val judge = Judge(catalog, js, rewritten::toExpression, span)
     with(judge) {
-        // A call in a comment, a string or a regular expression is no node; the calls come as the text has them.
-        for (call in parsed.nodes.filter { it.type == JsKind.CALL && it.start in written }.sortedBy { it.start }) {
+        // A call in a comment, a string or a regular expression is no node, and a call of what the action gives,
+        // @get('/x').then(f), starts where the action does and calls no name; the calls come as the text has them.
+        val calls = parsed.nodes.filter { it.type == JsKind.CALL && it.inner?.type == JsKind.IDENT && it.start in written }
+        for (call in calls.sortedBy { it.start }) {
             val name = written.getValue(call.start)
             val spec = catalog.actionsByName.getValue(name)
             val kinds = catalog.actionKinds.getValue(name)

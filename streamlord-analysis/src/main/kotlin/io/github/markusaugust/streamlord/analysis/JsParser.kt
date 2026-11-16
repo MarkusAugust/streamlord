@@ -53,7 +53,9 @@ internal object JsParser {
 
 /**
  * What [JsParser.parse] read: the [nodes] of every expression, each after the nodes it holds, so that one pass over
- * the list reads the tree from its leaves up and no reader descends it; or the [error] that stopped the parser.
+ * the list reads the tree from its leaves up and no reader has to descend it; or the [error] that stopped the parser.
+ * A name that is bound or a label is listed as an [JsKind.IDENT] too; a pattern of a declaration or of parameters
+ * and a private name are not listed.
  */
 internal class Parsed(
     val nodes: List<JsNode>,
@@ -229,7 +231,10 @@ internal class JsKey(
     val end: Int,
 )
 
-/** One expression from [start] to [end] of the source; a parenthesis around it is no part of it. */
+/**
+ * One expression from [start] to [end] of the source; a parenthesis around it is no part of it. A call, a member
+ * and a chain start where what they are called or read of starts, so every link of `a.b().c()` starts at `a`.
+ */
 internal class JsNode(
     var type: JsKind,
     val start: Int,
@@ -249,15 +254,19 @@ internal class JsNode(
     var inner: JsNode? = null
 
     /**
-     * An array's elements, an object's properties, the arguments of a call, the two sides of a
-     * [JsKind.BINARY], the three parts of a [JsKind.CONDITIONAL], what an assignment assigns.
+     * An array's elements, an object's properties, the arguments of a call or a `new`, the two sides of a
+     * [JsKind.BINARY], the three parts of a [JsKind.CONDITIONAL], the parts of a [JsKind.SEQUENCE], what an
+     * assignment assigns, the key of a member read in brackets.
      */
     var items: List<JsNode?> = emptyList()
     var optional = false
     var privateProperty = false
     var key: JsKey? = null
 
-    /** A property written `key: value`, the only kind that can redefine `__proto__`. */
+    /**
+     * A property written `key: value`, the only kind that can redefine `__proto__`. Of the others a shorthand
+     * holds an [JsKind.IDENT], and a method or an accessor a [JsKind.FUNCTION].
+     */
     var plain = false
 }
 
@@ -318,6 +327,9 @@ private class Parser(
     /** One expression: all of the source, or with [from] the value that starts there and no more. */
     fun parseValue(from: Int): List<JsNode> {
         pos = maxOf(from, 0)
+        // Nothing before the value is its to read: no line break there, and no start of a line.
+        lastTokStart = pos
+        lastTokEnd = pos
         enterScope(SCOPE_TOP)
         tok = readToken()
         if (from >= 0) {

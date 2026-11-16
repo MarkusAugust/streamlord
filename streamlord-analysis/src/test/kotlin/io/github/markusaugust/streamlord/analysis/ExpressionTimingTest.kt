@@ -26,6 +26,16 @@ class ExpressionTimingTest {
         ) { analyzer.analyzeHtml(it) }
     }
 
+    // A value read from where it starts reads nothing of the line before it.
+    @Test
+    fun `each value of a long object on one line, read where it starts`() {
+        assertGrowsLinearly(
+            "values read where they start",
+            20,
+            { n -> "k: 1,".repeat(n) },
+        ) { body -> for (i in 0 until body.length / 5) JsParser.expression(body, i * 5 + 3) }
+    }
+
     @Test
     fun `a computed object of many values and a filter of many keys`() {
         assertGrowsLinearly(

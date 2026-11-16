@@ -452,4 +452,39 @@ class JsParserTest {
         assertEquals("Unexpected end of input", parsed.error?.message)
         assertEquals(emptyList(), parsed.nodes)
     }
+
+    @Test
+    fun `one expression is read whole, its last node the whole of it`() {
+        val source = " {a: 1}, b // c"
+        val whole = JsParser.expression(source).nodes.last()
+        assertEquals(JsKind.SEQUENCE to "{a: 1}, b", whole.type to source.substring(whole.start, whole.end))
+        assertEquals("Unexpected token", JsParser.expression("1) + (2").error?.message)
+        assertEquals("Unexpected token", JsParser.expression("a; b").error?.message)
+        assertEquals("Unexpected end of input", JsParser.expression("").error?.message)
+    }
+
+    @Test
+    fun `a value is read from where it starts and as far as it goes`() {
+        val source = "{t: 1 + 2, u: () => (, v: 'x'}"
+        val value = JsParser.expression(source, 4).nodes.last()
+        assertEquals(JsKind.BINARY to "1 + 2", value.type to source.substring(value.start, value.end))
+        assertEquals(
+            "'x'",
+            JsParser
+                .expression(source, 26)
+                .nodes
+                .last()
+                .let { source.substring(it.start, it.end) },
+        )
+        assertEquals(emptyList(), JsParser.expression(source, 14).nodes)
+        // A line break before the value is none of its own: `-->` opens a comment only at the start of a line.
+        assertEquals(
+            JsKind.BINARY,
+            JsParser
+                .expression("a\n: b-->c", 4)
+                .nodes
+                .last()
+                .type,
+        )
+    }
 }
