@@ -68,8 +68,9 @@ report `signal-name-expected`. The client is laxer: `data-bind="{$name}"` makes 
 pattern an expression can reach, since a brace or an `@` in one is almost always a mistake.
 
 In the rendered page the tag is gone, so in a signal-name attribute the finding is wrong about
-it, and there is currently no way to tell the analysis otherwise. It is on
-[the roadmap](/roadmap/).
+it, and there is no way to tell the analysis otherwise. A setting for it was weighed and set
+aside, as [the roadmap](/roadmap/#considered-not-prioritised) says; the form below gives no
+finding for any engine.
 
 Nothing about rendering is affected either way. This is the editor's opinion of your file, not
 Streamlord's opinion of your markup.
