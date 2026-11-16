@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.probes
 
 import io.github.markusaugust.streamlord.core.domain.Html
 import io.github.markusaugust.streamlord.core.domain.Trusted
+import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.interpolate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -111,6 +112,7 @@ class RewriteProbesTest {
         val failures = ArrayList<String>()
         var run = 0
         var escaped = 0
+        var inBlock = 0
         for (probe in PROBES) {
             for (vector in vectors(probe)) {
                 // An Html is core's in most probes and com.acme's in some: the probe's own cast says which.
@@ -136,7 +138,8 @@ class RewriteProbesTest {
                     val rewrite = variant.title.startsWith(REWRITE) || MARK.containsMatchIn(variant.title)
                     val same = wrote == was
                     when {
-                        failure != null && !(vector.kind == "hostile" && "refuses" in variant.title) -> {
+                        failure != null &&
+                            !(vector.kind == "hostile" && "refuses" in variant.title && failure is UnsafeInterpolationException) -> {
                             failures += "$at\n    throws ${failure::class.simpleName}: ${failure.message}"
                         }
 
@@ -174,11 +177,12 @@ class RewriteProbesTest {
                                     .trim()
                             // The value is one the fix marks to be escaped, and no other writes: not one it wraps in
                             // Trusted, nor one a string around the rewritten one still writes itself.
-                            val mark = Regex("""(?:\{\+|\+ \+)\(?\s*${Regex.escape(name)}\s*\)?[\s}]""")
+                            val mark = Regex("""(?:\{\+|\+ \+)\s*\(?\s*${Regex.escape(name)}\s*\)?[\s}]""")
                             val unmarked = Regex("""\$\{?\s*${Regex.escape(name)}\b""")
                             val marked = mark.containsMatchIn(variant.source) && !unmarked.containsMatchIn(variant.source)
                             if (marked && HOSTILE in wrote!!) failures += "$at\n    wrote the value as it is: $wrote"
                             escaped += if (marked) 1 else 0
+                            inBlock += if (marked && MARK.containsMatchIn(variant.title)) 1 else 0
                         }
                     }
                 }
@@ -187,6 +191,7 @@ class RewriteProbesTest {
         assertEquals(emptyList(), failures, "${failures.size} of $run runs fail:\n" + failures.joinToString("\n"))
         assertTrue(run > 500, "only $run runs")
         assertTrue(escaped > 100, "only $escaped runs held a hostile value to its escaping")
+        assertTrue(inBlock >= 8, "only $inBlock runs held the mark of a value in a block to its escaping")
     }
 
     @Test

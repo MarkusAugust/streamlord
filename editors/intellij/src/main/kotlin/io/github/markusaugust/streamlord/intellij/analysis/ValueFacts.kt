@@ -117,8 +117,9 @@ object ValueFacts {
             .flatMap { call -> call.valueArguments.drop(1).mapNotNull { a -> a.getArgumentExpression()?.let { it.textRange to it } } }
 
     /**
-     * What each template in the block of an `interpolate { ... }` marks with `+`, by the range of what stands
-     * after the mark: a value judged by its type, as a template's is.
+     * What the block of an `interpolate { ... }` marks with `+`, in a template or joined to a string, by the range
+     * of what stands after the mark, and by the range inside its parentheses where it has them, which is the one
+     * the analysis asks by: a value judged by its type, as a template's is.
      */
     private fun markedValues(file: KtFile): List<Pair<TextRange, KtExpression>> =
         PsiTreeUtil
@@ -128,10 +129,12 @@ object ValueFacts {
             .mapNotNull { call ->
                 call.lambdaArguments.firstOrNull()?.getLambdaExpression()
                     ?: call.valueArguments.firstNotNullOfOrNull { it.getArgumentExpression() as? KtLambdaExpression }
-            }.flatMap { PsiTreeUtil.collectElementsOfType(it, KtStringTemplateEntryWithExpression::class.java) }
-            .mapNotNull { entry ->
-                val mark = entry.expression as? KtPrefixExpression
-                mark?.takeIf { it.operationToken == KtTokens.PLUS }?.baseExpression?.let { it.textRange to it }
+            }.flatMap { PsiTreeUtil.collectElementsOfType(it, KtPrefixExpression::class.java) }
+            .filter { it.operationToken == KtTokens.PLUS }
+            .flatMap { mark ->
+                val value = mark.baseExpression ?: return@flatMap emptyList()
+                val inner = KtPsiUtil.deparenthesize(value) ?: value
+                listOf(value.textRange to inner, inner.textRange to inner).distinct()
             }
 
     /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */

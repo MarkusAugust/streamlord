@@ -101,6 +101,32 @@ class AnalyzeProjectTest {
     }
 
     @Test
+    fun `strict fails on markup held as a String that interpolate would print as text`() {
+        val domain = "io.github.markusaugust.streamlord.core.domain"
+        val head = "import $domain.Html\nimport $domain.interpolate\n\n"
+        write("Held.kt", head + "fun list(row: Html) = interpolate { \"<ul>\${+row.text}</ul>\" }\n")
+        val all = analyzer.analyzeProject(root)
+        assertEquals(emptyList(), all.failures())
+        assertEquals(
+            listOf("interpolate-template" to Severity.WARNING),
+            all.failures(strict = true).map {
+                it.issue.code to
+                    it.issue.severity
+            },
+        )
+    }
+
+    @Test
+    fun `strict fails on a value written with a bare dollar into a Datastar expression, which reads as a signal`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        write("Text.kt", head + "fun f(name: String) = interpolate { \"\"\"<div data-text=\"\$name\"></div>\"\"\" }\n")
+        val all = analyzer.analyzeProject(root)
+        val strict = all.failures(strict = true).map { it.issue.code to it.issue.severity }
+        assertEquals(listOf("kotlin-interpolation" to Severity.WARNING), strict)
+        assertEquals(emptyList(), all.failures())
+    }
+
+    @Test
     fun `strict keeps what failures alone fails on`() {
         write("Click.kt", swallowed)
         write("Link.kt", "fun link(url: String) = \"\"\"<a href=\"\$url\">x</a>\"\"\"\n")

@@ -57,6 +57,34 @@ class ValueJudgementTest {
     }
 
     @Test
+    fun `a this in a template of a string in a value, or after a quote character, keeps the string out of a block`() {
+        val nested = "class Row(val name: String) {\n    fun cell() = \"<p title=\\\"\${\"Hi \${this.name}\".trim()}\\\">x</p>\"\n}"
+        val quoted =
+            "class Row(val a: String) {\n    fun cell(c: Char) = \"<p title=\\\"\${if (c == '\"') this.a else \"x\"}\\\">y</p>\"\n}"
+        for (src in listOf(nested, quoted)) {
+            val issues = analyzer.analyzeKotlin(src)
+            assertEquals(emptyList(), issues.flatMap { it.fixes }.filter { it.title.startsWith("Mark the values with +") }, src)
+            assertTrue(issues.any { "are the block's" in it.message }, issues.map { it.message }.toString())
+        }
+    }
+
+    @Test
+    fun `a name set to a mark is the mark where it is written, whatever letters it has`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        val src = head + "fun f(year: String) = interpolate {\n    val år = +year\n    \"<p title=\\\"\$år\\\">x</p>\"\n}"
+        assertEquals(emptyList(), analyzer.analyzeKotlin(src).map { it.message })
+    }
+
+    @Test
+    fun `a block after the prefixes in the parentheses, or passed by name, is read as a block`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        val after = head + "fun f(name: String) = interpolate(listOf(\"data-x-\"), { \"<p data-x-text=\\\"\${+name}\\\"></p>\" })"
+        assertEquals(listOf("unsafe-interpolation" to Severity.ERROR), analyzer.analyzeKotlin(after).map { it.code to it.severity })
+        val named = head + "fun f(name: String) = interpolate(block = { \"<p title=\\\"\$name\\\">x</p>\" })"
+        assertEquals(listOf("interpolate-template"), analyzer.analyzeKotlin(named).map { it.code })
+    }
+
+    @Test
     fun `the editor's fact wins over what the text shows`() {
         // The text takes both for the author's own: a literal of markup, a workspace constant.
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""

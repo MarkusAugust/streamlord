@@ -63,8 +63,8 @@ private class ExpressionValues(
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
 
-/** A string literal or a comment in a value: text of the value, and no code of it. */
-private val NO_CODE = regex("""\"(?:\\.|[^"\\])*\"|/\*[\s\S]*?\*/|//[^\n]*""")
+/** A character, a string literal without a template or a comment in a value: text of the value, and no code of it. */
+private val NO_CODE = regex("""'(?:\\.|[^'\\])'|\"(?:\\.|[^"\\$])*\"|/\*[\s\S]*?\*/|//[^\n]*""")
 
 /**
  * A `this` without a label, or a call without a receiver of what everything has, `toString()`, `let { }` and their
@@ -334,7 +334,7 @@ internal fun Analyzer.checkInterpolateBlock(
 private fun setToMark(
     block: String,
     name: String,
-): Boolean = regex("""\b${Regex.escape(name)}\s*=\s*\+(?!\+)""").containsMatchIn(block)
+): Boolean = regex("""(?<![\p{L}\p{Nd}_])${Regex.escape(name)}\s*=\s*\+(?!\+)""").containsMatchIn(block)
 
 /**
  * What a template of the block form, or a value joined with `+` in it, marks with `+`, as written and without
@@ -438,9 +438,19 @@ private fun Analyzer.judgeInterpolated(
         val asIs = markupText || told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))
         val fixes =
             when {
-                !fixable -> emptyList()
-                formatArg == null -> listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed, first = ip.start == s.start))
-                else -> listOf(placeholderFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed))
+                !fixable -> {
+                    emptyList()
+                }
+
+                formatArg == null -> {
+                    // After a + written without a space, a mark's own + would make ++ of the two.
+                    val tight = ip.start > 0 && src[ip.start - 1] == '+'
+                    listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed, first = ip.start == s.start, tight))
+                }
+
+                else -> {
+                    listOf(placeholderFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed))
+                }
             }
         val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
         // What to do about it: the value handed to interpolate, as each form hands one over.
@@ -670,6 +680,7 @@ private fun Analyzer.markFix(
     asIs: Boolean,
     preferred: Boolean,
     first: Boolean,
+    tight: Boolean,
 ): Fix {
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
     val operand = markOperand(expr)
@@ -682,6 +693,8 @@ private fun Analyzer.markFix(
 
             // A mark that opens the chain has no string before it to be joined to.
             first -> "\"\${+$operand}\""
+
+            tight -> " +$operand"
 
             else -> "+$operand"
         }

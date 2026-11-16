@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel
 import com.intellij.codeInsight.daemon.HighlightDisplayKey
+import com.intellij.codeInsight.intention.HighPriorityAction
 import com.intellij.codeInspection.ex.QuickFixWrapper
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
@@ -16,7 +17,6 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.ValueFacts
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
-import io.github.markusaugust.streamlord.intellij.inspections.PreferredReplaceTextFix
 import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
@@ -310,7 +310,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
         }
     }
 
-    fun `test a String in element text offers the rewrite and Trusted with neither preferred`() {
+    fun `test a String in element text offers the rewrite first and Trusted after it, lifted above nothing`() {
         myFixture.configureByText("Choice.kt", "fun card(name: String): String = \"<p>\$name</p>\"")
         myFixture.doHighlighting()
         val fixes =
@@ -318,8 +318,10 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                 .getAllQuickFixes()
                 .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
         assertEquals(2, fixes.size)
-        assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.endsWith(" as markup") })
-        assertTrue("no fix is preferred", fixes.none { it is PreferredReplaceTextFix })
+        assertTrue(fixes.joinToString { it.familyName }, fixes[0].familyName.startsWith("Mark the values with + in interpolate { }"))
+        assertTrue(fixes[0] is HighPriorityAction)
+        assertTrue(fixes.joinToString { it.familyName }, fixes[1].familyName.endsWith(" as markup"))
+        assertFalse(fixes[1] is HighPriorityAction)
     }
 
     fun `test a Trusted the file does not declare gets no rewrite into an attribute, where interpolate would not escape it`() {
@@ -508,6 +510,8 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                 "<div id=\"¤{+k.pageId}\"><style>¤{+k.css}</style>¤{+body}</div>"
             }
             fun inParentheses(k: Widget, body: Html): Html = interpolate({ "<div><style>¤{+k.css}</style>¤{+body}</div>" })
+            fun sum(n: Int): Html = interpolate { "<p data-text=\"¤{+(n + 1)}\"></p>" }
+            fun joined(css: Trusted): Html = interpolate { "<style>" + +css + "</style>" }
             fun refused(name: String): Html = interpolate { "<p data-text=\"¤{+name}\"></p>" }
             fun unmarked(name: String): Html = interpolate { "<p>¤name</p>" }
             """.trimIndent().replace('¤', '$')

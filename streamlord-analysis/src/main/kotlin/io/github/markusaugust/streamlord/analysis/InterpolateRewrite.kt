@@ -95,13 +95,22 @@ private fun interpolateText(
     }
     val markup = StringBuilder()
     var form = "" to ""
+    // What the literal being written holds so far, of every literal made one with it.
+    val held = StringBuilder()
     literals.forEachIndexed { k, literal ->
         val written = src.substring(literal.start, literal.contentStart) to src.substring(literal.contentEnd, literal.end)
         when {
-            k == 0 -> markup.append(written.first)
-            written == form && joins(bodies[k - 1], bodies[k], literal.raw) -> markup.setLength(markup.length - form.second.length)
-            else -> markup.append(" + ").append(written.first)
+            k > 0 && written == form && joins(held, bodies[k], literal.raw) -> {
+                markup.setLength(markup.length - form.second.length)
+            }
+
+            else -> {
+                if (k > 0) markup.append(" + ")
+                markup.append(written.first)
+                held.setLength(0)
+            }
         }
+        held.append(bodies[k])
         markup.append(bodies[k]).append(written.second)
         form = written
     }

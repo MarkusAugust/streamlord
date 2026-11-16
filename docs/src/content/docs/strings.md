@@ -112,8 +112,8 @@ a trim call on the string runs before the values go in. A value written without 
 in by Kotlin as in any string, neither escaped nor refused: that is right for a constant and for
 markup you built, and the editors warn of anything else and offer to mark it. A number is never
 marked, since `+` on a number is Kotlin's own, and is written as the number it is. A mark belongs
-to the block it is written in: do nothing to the string but trim it, and inside the block `this` is
-the block. So is the receiver of a call written without one, `toString()` or an extension of your
+to the block it is written in, and written anywhere else it is no mark and no value stands there:
+do nothing to the string but trim it. Inside the block `this` is the block. So is the receiver of a call written without one, `toString()` or an extension of your
 own on `Any`, and a `unaryPlus` of your own on `String` is not reached there, since the block's `+`
 comes first. The editors know the block by the name `interpolate`, and not by another name you
 import it under.
@@ -227,19 +227,19 @@ is escaped like a string instead. Anywhere else, inside
 an attribute, it is characters like any value, and escaped or refused as one.
 
 ```kotlin sample=statements
-val heading = interpolate("""<h2 class="lt-heading">%s</h2>""", "Gorvek")
+val heading = interpolate { """<h2 class="lt-heading">${+"Gorvek"}</h2>""" }
 
-interpolate("""<section id="hero">%s<p>%s</p></section>""", heading, "<the oath>")
+interpolate { """<section id="hero">${+heading}<p>${+"<the oath>"}</p></section>""" }
 ```
 
-A list of rows is a list of `Html`, and `joinToHtml()` makes them one, to fill a single placeholder.
+A list of rows is a list of `Html`, and `joinToHtml()` makes them one, to be marked as a single value.
 Each row already closes what it opens, so nothing is read again or escaped:
 
 ```kotlin sample=statements
 val hits = repository.search("gate")
-val rows = hits.map { interpolate("""<li><a href="%s">%s</a></li>""", it.url, it.title) }
+val rows = hits.map { interpolate { """<li><a href="${+it.url}">${+it.title}</a></li>""" } }
 
-interpolate("""<ul class="lt-list">%s</ul>""", rows.joinToHtml())
+interpolate { """<ul class="lt-list">${+rows.joinToHtml()}</ul>""" }
 ```
 
 `joinToString` would give a `String`, which `interpolate` escapes, so the rows would show as their
@@ -289,7 +289,7 @@ straight to a DSL call too:
 | Where the value lands | What the editors say |
 |---|---|
 | Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, or markup anywhere but element text, where markup says nothing; with a fix that marks the values with `+` in `interpolate { }`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
-| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there, but none for a number, a boolean or null in code, nor for a boolean in `style`; at the start of a URL, the URL of a `<meta>` refresh among them, with the fix to build it with `interpolate(...)`, which refuses a URL that runs, and none after a scheme the markup writes that does more than navigate, `javascript:` or `data:`, since `interpolate` refuses every value there; in the body of a `<style>` with the fix that passes the value as `Trusted(...)` |
+| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there, but none for a number, a boolean or null in code, nor for a boolean in `style`; at the start of a URL, the URL of a `<meta>` refresh among them, with the fix that marks the values with `+` in `interpolate { }`, which refuses a URL that runs, and none after a scheme the markup writes that does more than navigate, `javascript:` or `data:`, since `interpolate` refuses every value there; in the body of a `<style>` with the fix that marks the value as `Trusted(...)` |
 | A URL the browser loads code from (`src` of a script, an iframe or an embed, `href` of a base or a link, `data` of an object) whose literal start does not fix the host | `unsafe-interpolation`: a warning, and no fix, since `interpolate` refuses it too; in a call to `interpolate`, an error where the value is known |
 | An attribute value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value, put first only for a number or a boolean, since any other value is still to be escaped once it is quoted |
 | A tag name, an attribute name, a list of attributes, an end tag | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup; an end tag takes no attributes, so write it from literals alone |
@@ -326,7 +326,7 @@ be a number.
 
 For a `String` in element text the editors cannot tell which you hold, so they offer both the
 rewrite and "Mark … as markup", which wraps the value in `Trusted(...)`. The rewrite stands first
-in the list, and neither is the preferred fix, the one a keystroke applies unasked: text from
+in the list, and in VS Code neither is the preferred fix, the one Auto Fix applies unasked: text from
 outside wants the rewrite, a fragment you rendered yourself wants `Trusted`, or better, to be
 declared `Html`.
 
@@ -361,8 +361,8 @@ fun pageHtmlAfter(k: LayoutContext, pageStyle: String?, mainHtml: String): Strin
     """.trimIndent() }.text
 ```
 
-Under `.trimIndent()` the fix is first in the list but never the preferred one, because the trim
-now runs before the values go in: a value that holds a line break no longer changes how much is
+Under `.trimIndent()` the fix is first in the list but in VS Code never the preferred one, because
+the trim now runs before the values go in: a value that holds a line break no longer changes how much is
 trimmed. `.trimMargin()` has no such catch. Nor is it preferred beside a value that may be null, a
 `String?` or an `Int?`: a template writes `null` for it, which no page means, and `interpolate`
 nothing, as the message says.
@@ -424,7 +424,7 @@ where it is not; a `UInt` there is an error, with a `toLong()` fix. And a Kotlin
 into the format, `interpolate("<p>$name</p>")`, is `interpolate-template`: Kotlin fills it in before
 `interpolate` sees the markup, so it is neither escaped nor refused, and the fix turns it into a
 `%s` placeholder with the value among the arguments, or in a block marks it with `+` where it
-stands. The fix is not the preferred one under `.trimIndent()`,
+stands. In VS Code the fix is not the preferred one under `.trimIndent()`,
 where the trim then runs before the value goes in, nor for a value that may be null, which a
 template writes as `null` and `interpolate` as nothing. Markup is no exception, an `Html` or a
 `Trusted`: in `interpolate("<div>$inner</div>")` Kotlin writes the text of `inner` into the format,
@@ -435,19 +435,19 @@ there, becomes a placeholder and the call throws, and a `%%` becomes `%`. It is
 anywhere but element text:
 
 ```kotlin sample=statements
-val inner = interpolate("<b>%s</b>", "Gorvek")
+val inner = interpolate { "<b>${+"Gorvek"}</b>" }
 
-interpolate("""<div class="lt-card">%s</div>""", inner)
+interpolate { """<div class="lt-card">${+inner}</div>""" }
 ```
 
-A `%s` in element text given markup held as a `String`, `h.text`, `elements { }`, a
+A value marked in element text, or passed for a `%s` there, that is markup held as a `String`, `h.text`, `elements { }`, a
 `joinToString` over markup or over a list of `Html`, or a `val` set to any of these, is
 `interpolate-template` too, a warning: `interpolate` escapes it, so its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
 literal is left alone, `"<the oath>"` among them: text you chose to have escaped.
 
-At run time the source is gone and only the finished string arrives, so the placeholders have to be
-left standing for the same question to be asked. That is the whole of what `interpolate` wants from
-you.
+At run time the source is gone and only the finished string arrives, so each value has to be marked,
+or left a placeholder, for the same question to be asked. That is the whole of what `interpolate`
+wants from you.
 
 ## On Spring
 

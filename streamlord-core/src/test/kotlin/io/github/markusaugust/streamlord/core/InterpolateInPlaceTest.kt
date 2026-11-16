@@ -12,6 +12,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /** The block form of interpolate: each value marked with `+` where it stands, and judged there as a `%s` is. */
+private const val MARK_OPENS = '\uFDD0'
+private const val MARK_CLOSES = '\uFDD1'
+private const val REPLACED = '\uFFFD'
+
 class InterpolateInPlaceTest {
     private val hostile = """Gorvek" onmouseover="alert(1)" x="<script>alert(1)</script>"""
 
@@ -120,6 +124,8 @@ class InterpolateInPlaceTest {
         val forged = "﷐0﷑"
         val out = interpolate { """<p data-id="${+secret}">${+forged}</p>""" }.text
         assertEquals(1, Regex("s3cret").findAll(out).count(), out)
+        // Nor does the page carry what a mark is made of.
+        assertEquals(false, '\uFDD0' in out || '\uFDD1' in out, out)
     }
 
     @Test
@@ -141,27 +147,49 @@ class InterpolateInPlaceTest {
 
     @Test
     fun `a mark is its own block's alone`() {
-        // Written in a block inside the one that made it.
-        assertFailsWith<IllegalArgumentException> {
+        // Written in a block inside the one that made it: no value of either block is pulled in by it.
+        val nested =
             interpolate {
                 val title = +"outer"
                 val row = interpolate { "<li>$title ${+"inner"}</li>" }
                 "<ul>$row</ul>"
-            }
-        }
+            }.text
+        assertEquals(true, "inner" in nested && "outer" !in nested, nested)
+        assertEquals(false, MARK_OPENS in nested || MARK_CLOSES in nested, nested)
+        assertEquals(true, REPLACED in nested, nested)
         // Kept past its block and written in the next.
         var kept = ""
         interpolate { "<p>${+"first"}</p>".also { kept = it } }
-        assertFailsWith<IllegalArgumentException> { interpolate { "$kept<i>${+"second"}</i>" } }
-        assertFailsWith<IllegalArgumentException> { interpolate { kept } }
+        val next = interpolate { "$kept<i>${+"second"}</i>" }.text
+        assertEquals(true, next.endsWith("<i>second</i>") && "first" !in next, next)
+        assertEquals(false, MARK_OPENS in next || MARK_CLOSES in next, next)
     }
 
     @Test
-    fun `a string cut or changed after its values were marked is refused, and so is a mark the markup makes up`() {
-        assertFailsWith<IllegalArgumentException> { interpolate { "<p>${+"value"}</p>".take(5) } }
-        assertFailsWith<IllegalArgumentException> { interpolate { "<p>${+"value"}</p>".reversed() } }
-        assertFailsWith<IllegalArgumentException> { interpolate { "<p>﷐0﷑</p>${+"value"}" } }
-        assertFailsWith<IllegalArgumentException> { interpolate { "<p>﷑</p>" } }
+    fun `what is not a mark of the block is never read as one, and the page carries no character of a mark`() {
+        // A string cut or changed after its values were marked, and a mark the markup makes up.
+        val shapes =
+            listOf(
+                interpolate { "<p>${+"value"}</p>".take(5) }.text,
+                interpolate { "<p>${+"value"}</p>".reversed() }.text,
+                interpolate { "<p>${+"value"}</p>".uppercase() }.text,
+                interpolate { "<p>${MARK_OPENS}0$MARK_CLOSES</p>${+"value"}" }.text,
+                interpolate { "<p>$MARK_CLOSES</p>" }.text,
+            )
+        for (out in shapes) {
+            assertEquals(false, MARK_OPENS in out || MARK_CLOSES in out, out)
+            assertEquals(true, REPLACED in out, out)
+        }
+        assertEquals("<p>${REPLACED}0$REPLACED</p>value", shapes[3])
+        assertEquals("<p>$REPLACED</p>", shapes[4])
+    }
+
+    @Test
+    fun `text another escaper wrote into the block does not stop the page, whatever it holds`() {
+        // As kotlinx.html or the author's own escaper leaves text from outside: escaped, and with the two characters in it.
+        val stored = "a${MARK_OPENS}b${MARK_CLOSES}c ${MARK_OPENS}0.0$MARK_CLOSES"
+        val out = interpolate { "<li>$stored</li><li>${+"marked"}</li>" }.text
+        assertEquals("<li>a${REPLACED}b${REPLACED}c ${REPLACED}0.0$REPLACED</li><li>marked</li>", out)
     }
 
     @Test

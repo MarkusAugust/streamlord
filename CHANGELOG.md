@@ -12,21 +12,28 @@ All notable changes to Streamlord are recorded here. The format follows
   with `+`: `interpolate { """<li><a href="${+url}">${+title}</a></li>""" }`. A marked value is
   escaped or refused by where it landed, as the value of a `%s` is, and nothing is passed in the
   order of its placeholder. A loop may stand in the block, a trim call runs before the values go in,
-  and a value without the mark is written by Kotlin as in any string. The placeholder form stays,
-  and is the one Java has.
+  and a value without the mark is written by Kotlin as in any string. `interpolate(prefixes) { }`
+  takes the prefixes of an aliased bundle. The block's receiver is an `InterpolationScope` and a
+  mark a `Placed`. A mark of another block, or one in a string cut or changed after its values were
+  marked, is no mark: no value stands there, and its two characters are written as U+FFFD. The
+  placeholder form stays, and is the one Java has.
   See [Strings](https://streamlord-docs.netlify.app/strings/#values-from-outside).
 - streamlord-core: an escaped value writes U+FFFD for the two characters a mark is made of, U+FDD0
-  and U+FDD1, which no text may hold.
+  and U+FDD1, which no text may hold, and so does a block for any in its string that is no mark of
+  its own, so text another escaper wrote into the block never stops the page.
 
 - streamlord-analysis: `failures(strict = true)` also keeps the warnings of a value written without
   its mark: one left without `+` in the block of `interpolate`, a template in its format, and a
-  `String` in an HTML string that is not `interpolate`'s. `failures()` is as it was.
+  `String` in an HTML string that is not `interpolate`'s, and a bare dollar in a `data-*`
+  expression of one. `failures()` is as it was, and
+  `ProjectIssue.failsStrict` says it of one issue.
   See [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
 
 ### Editors
 
 **Kotlin values in HTML**
-- Both editors read the block form, written after the call or in its parentheses: a marked value
+- Both editors read the block form, written after the call or in its parentheses, after the
+  prefixes or by its name `block =` too: a marked value
   is an error where `interpolate` will throw, and a value left unmarked gets "Mark … with +" as its
   fix.
 - The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
@@ -37,6 +44,9 @@ All notable changes to Streamlord are recorded here. The format follows
   longer stands in its way.
 - A value looked up in a name declared a map, `${m["key"]}`, may be null: the rewrite is offered
   and not preferred there, and the message says that `interpolate` writes nothing for null.
+- The messages speak of marking: "mark it with + in interpolate { }" where they said "build the
+  string with interpolate(...)", and "Marking the values is not offered here" where no rewrite is.
+  The refusal of a URL that loads code names "the value" where it named a placeholder.
 - The fix that marks values with `+` is the first one offered on a value, in a string and in a
   block. In IntelliJ it stands above "Mark … as markup", which the IDE listed first by its title.
 

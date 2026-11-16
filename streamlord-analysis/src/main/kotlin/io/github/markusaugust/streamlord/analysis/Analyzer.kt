@@ -107,11 +107,16 @@ private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 
 private val INTERPOLATE = setOf("interpolate")
 
-/** `interpolate {`, `interpolate(prefixes) {` or `interpolate({`, as a call of its own and no member of anything. */
+/**
+ * `interpolate {`, `interpolate(prefixes) {`, or the block in the parentheses, `interpolate({` and
+ * `interpolate(prefixes, {`, by its name `block =` too: a call of its own and no member of anything.
+ */
 private val INTERPOLATE_BLOCK =
     regex(
-        """(?<![\p{L}\p{Nd}_.`])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)""" +
-            """\s*(?:\(\s*(?=\{)|\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""",
+        // Each piece is a pattern of its own: the name, the parenthesis that holds the block, the prefixes before it.
+        """(?<![\p{L}\p{Nd}_.`])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)\s*""" +
+            """(?:\(\s*(?:([^(){}]*(?:\([^()]*\)[^(){}]*)*),\s*)?(?:block\s*=\s*)?(?=\{))?""" +
+            """(?:\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""",
     )
 private val PREFIXES_GIVEN =
     regex("""(?:prefixes\s*=\s*)?(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")
@@ -566,7 +571,7 @@ public class Analyzer(
                         ((src[it] == '{' && ++depth < 0) || (src[it] == '}' && --depth == 0))
                 }
                     ?: return@mapNotNullTo null
-            val list = m.groups[2]?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
+            val list = (m.groups[2] ?: m.groups[3])?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
             InterpolateBlock(
                 CallSite("interpolate", name, m.range.last, close, emptyList(), trailingLambda = true),
                 m.range.last..close,
