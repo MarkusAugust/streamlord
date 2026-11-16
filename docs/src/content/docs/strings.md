@@ -113,7 +113,10 @@ in by Kotlin as in any string, neither escaped nor refused: that is right for a 
 markup you built, and the editors warn of anything else and offer to mark it. A number is never
 marked, since `+` on a number is Kotlin's own, and is written as the number it is. A mark belongs
 to the block it is written in: do nothing to the string but trim it, and inside the block `this` is
-the block.
+the block. So is the receiver of a call written without one, `toString()` or an extension of your
+own on `Any`, and a `unaryPlus` of your own on `String` is not reached there, since the block's `+`
+comes first. The editors know the block by the name `interpolate`, and not by another name you
+import it under.
 
 The same rule with the values as arguments, which is the form Java has:
 

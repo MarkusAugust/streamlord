@@ -124,8 +124,11 @@ object ValueFacts {
         PsiTreeUtil
             .collectElementsOfType(file, KtCallExpression::class.java)
             .filter { it.calleeExpression?.text == "interpolate" }
-            .mapNotNull { it.lambdaArguments.firstOrNull()?.getLambdaExpression() }
-            .flatMap { PsiTreeUtil.collectElementsOfType(it, KtStringTemplateEntryWithExpression::class.java) }
+            // The block after the call, or in its parentheses.
+            .mapNotNull { call ->
+                call.lambdaArguments.firstOrNull()?.getLambdaExpression()
+                    ?: call.valueArguments.firstNotNullOfOrNull { it.getArgumentExpression() as? KtLambdaExpression }
+            }.flatMap { PsiTreeUtil.collectElementsOfType(it, KtStringTemplateEntryWithExpression::class.java) }
             .mapNotNull { entry ->
                 val mark = entry.expression as? KtPrefixExpression
                 mark?.takeIf { it.operationToken == KtTokens.PLUS }?.baseExpression?.let { it.textRange to it }

@@ -63,6 +63,9 @@ private class ExpressionValues(
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
 
+/** A string literal or a comment in a value: text of the value, and no code of it. */
+private val NO_CODE = regex("""\"(?:\\.|[^"\\])*\"|/\*[\s\S]*?\*/|//[^\n]*""")
+
 /**
  * A `this` without a label, or a call without a receiver of what everything has, `toString()`, `let { }` and their
  * like: in the block of interpolate each means the block.
@@ -1033,7 +1036,7 @@ internal fun Analyzer.judgeValues(
             }
 
             // In the block a `this` without a label is the block's own, and no longer what the string wrote.
-            s.interpolations.any { OWN_THIS.containsMatchIn(it.text) } -> {
+            s.interpolations.any { OWN_THIS.containsMatchIn(it.text.replace(NO_CODE, " ")) } -> {
                 "in the block of interpolate, this and a call without a receiver such as toString() are the block's"
             }
 

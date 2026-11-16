@@ -8,8 +8,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val REWRITE = "Mark the values with + in interpolate { }"
-private const val ADVICE = "build the string with interpolate(...)"
-private val UNOFFERED = listOf("Marking the values is not offered here", "interpolate(...) cannot take this string")
+private const val ADVICE = "mark it with + in interpolate { }"
+private val UNOFFERED = listOf("Marking the values is not offered here", "interpolate cannot take this string")
+
+/** The fix of a value left unmarked in a block. */
+private val MARK = Regex("""^Mark .* with \+, """)
 private const val HOSTILE = "<i a=\"b\">'&"
 private const val LINES = "a\n      b"
 
@@ -23,9 +26,10 @@ private class Vector(
 
 /**
  * Every probe compiled as written and as each fix leaves it, and both run. A rewrite to
- * `interpolate` gives what the string gave for plain values; a preferred one also for a value that
- * is null or holds a line break; and it never throws, nor writes a hostile value as it is where it
- * passes it to be escaped. Any other fix of a value's issue leaves the result as it was.
+ * `interpolate`, and the mark of a value in a block, gives what the string gave for plain values; a
+ * preferred one also for a value that is null or holds a line break; and it never throws, nor writes
+ * a hostile value as it is where it marks it to be escaped. Any other fix of a value's issue leaves
+ * the result as it was.
  */
 class RewriteProbesTest {
     private fun plain(type: String): Any? =
@@ -106,6 +110,7 @@ class RewriteProbesTest {
     fun `every fix leaves code that runs and means what the string meant`() {
         val failures = ArrayList<String>()
         var run = 0
+        var escaped = 0
         for (probe in PROBES) {
             for (vector in vectors(probe)) {
                 // An Html is core's in most probes and com.acme's in some: the probe's own cast says which.
@@ -128,7 +133,7 @@ class RewriteProbesTest {
                         values.fold(
                             before.getOrThrow(),
                         ) { text, v -> if (v is Array<*>) text.replace(v.toString(), v.contentDeepToString()) else text }
-                    val rewrite = variant.title.startsWith(REWRITE)
+                    val rewrite = variant.title.startsWith(REWRITE) || MARK.containsMatchIn(variant.title)
                     val same = wrote == was
                     when {
                         failure != null && !(vector.kind == "hostile" && "refuses" in variant.title) -> {
@@ -167,13 +172,13 @@ class RewriteProbesTest {
                                     .split(",")[vector.at]
                                     .substringBefore(":")
                                     .trim()
-                            // The value is one the rewrite hands to interpolate to be escaped: not one it wraps in
+                            // The value is one the fix marks to be escaped, and no other writes: not one it wraps in
                             // Trusted, nor one a string around the rewritten one still writes itself.
-                            val passed =
-                                Regex(
-                                    """interpolate\((?s:.*)(?<!Trusted)[,(]\s*${Regex.escape(name)}\s*[,)]""",
-                                ).containsMatchIn(variant.source)
-                            if (passed && HOSTILE in wrote!!) failures += "$at\n    wrote the value as it is: $wrote"
+                            val mark = Regex("""(?:\{\+|\+ \+)\(?\s*${Regex.escape(name)}\s*\)?[\s}]""")
+                            val unmarked = Regex("""\$\{?\s*${Regex.escape(name)}\b""")
+                            val marked = mark.containsMatchIn(variant.source) && !unmarked.containsMatchIn(variant.source)
+                            if (marked && HOSTILE in wrote!!) failures += "$at\n    wrote the value as it is: $wrote"
+                            escaped += if (marked) 1 else 0
                         }
                     }
                 }
@@ -181,6 +186,7 @@ class RewriteProbesTest {
         }
         assertEquals(emptyList(), failures, "${failures.size} of $run runs fail:\n" + failures.joinToString("\n"))
         assertTrue(run > 500, "only $run runs")
+        assertTrue(escaped > 100, "only $escaped runs held a hostile value to its escaping")
     }
 
     @Test

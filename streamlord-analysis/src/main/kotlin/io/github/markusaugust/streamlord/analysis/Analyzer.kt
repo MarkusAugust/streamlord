@@ -107,11 +107,11 @@ private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 
 private val INTERPOLATE = setOf("interpolate")
 
-/** `interpolate {` or `interpolate(prefixes) {`, as a call of its own and no member of anything. */
+/** `interpolate {`, `interpolate(prefixes) {` or `interpolate({`, as a call of its own and no member of anything. */
 private val INTERPOLATE_BLOCK =
     regex(
         """(?<![\p{L}\p{Nd}_.`])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)""" +
-            """\s*(?:\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""",
+            """\s*(?:\(\s*(?=\{)|\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""",
     )
 private val PREFIXES_GIVEN =
     regex("""(?:prefixes\s*=\s*)?(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")

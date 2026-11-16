@@ -21,14 +21,17 @@ All notable changes to Streamlord are recorded here. The format follows
 ### Editors
 
 **Kotlin values in HTML**
-- Both editors read the block form: a marked value is an error where `interpolate` will throw, and
-  a value left unmarked gets "Mark … with +" as its fix.
+- Both editors read the block form, written after the call or in its parentheses: a marked value
+  is an error where `interpolate` will throw, and a value left unmarked gets "Mark … with +" as its
+  fix.
 - The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
   this string with interpolate(...)": the string stays as written, in the block, with each value
   marked where it stands, in place of a format with `%s` and the values after it. It is not offered
   for a string that writes `this` or calls `toString()`, `let { }` and their like without a
   receiver, which in the block are the block's. A margin or a constant with a per cent sign no
   longer stands in its way.
+- A value looked up in a name declared a map, `${m["key"]}`, may be null: the rewrite is offered
+  and not preferred there, and the message says that `interpolate` writes nothing for null.
 - The fix that marks values with `+` is the first one offered on a value, in a string and in a
   block. In IntelliJ it stands above "Mark … as markup", which the IDE listed first by its title.
 

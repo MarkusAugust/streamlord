@@ -18,6 +18,45 @@ class ValueJudgementTest {
     ) = analyzer.analyzeKotlin(opts.copy(text = src)).filter { it.code == "unescaped-interpolation" }.map { it.severity }
 
     @Test
+    fun `a value looked up in a map may be null, so marking it is offered and not preferred, and the message says why`() {
+        // A template writes null for a key the map does not hold, and interpolate writes nothing.
+        for (type in listOf("Map<String, String>", "MutableMap<String, String>", "HashMap<String, String>")) {
+            val src = "fun f(m: $type) = \"<p title=\\\"\${m[\"k\"]}\\\">x</p>\""
+            val issue = analyzer.analyzeKotlin(src).single()
+            val rewrite = issue.fixes.single { it.title.startsWith("Mark the values with +") }
+            assertEquals(false, rewrite.preferred, type)
+            assertTrue("interpolate writes nothing for" in issue.message, issue.message)
+        }
+        // An index into a list is no lookup that may miss.
+        val list = "fun f(m: List<String>) = \"<p title=\\\"\${m[0]}\\\">x</p>\""
+        assertEquals(
+            true,
+            analyzer
+                .analyzeKotlin(list)
+                .single()
+                .fixes
+                .single()
+                .preferred,
+        )
+    }
+
+    @Test
+    fun `a block written in the parentheses of interpolate is read as a block`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        val unmarked = head + "fun f(name: String) = interpolate({ \"<p title=\\\"\$name\\\">x</p>\" })"
+        val issue = analyzer.analyzeKotlin(unmarked).single()
+        assertEquals("interpolate-template", issue.code)
+        assertEquals(
+            head + "fun f(name: String) = interpolate({ \"<p title=\\\"\${+name}\\\">x</p>\" })",
+            issue.fixes.single().apply(unmarked),
+        )
+        val refused = head + "fun f(name: String) = interpolate( { \"<p data-text=\\\"\${+name}\\\"></p>\" } )"
+        assertEquals(listOf("unsafe-interpolation" to Severity.ERROR), analyzer.analyzeKotlin(refused).map { it.code to it.severity })
+        val marked = head + "fun f(name: String) = interpolate({ \"<p title=\\\"\${+name}\\\">x</p>\" })"
+        assertEquals(emptyList(), analyzer.analyzeKotlin(marked))
+    }
+
+    @Test
     fun `the editor's fact wins over what the text shows`() {
         // The text takes both for the author's own: a literal of markup, a workspace constant.
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""

@@ -507,6 +507,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
             fun root(k: Widget, body: Html): Html = interpolate {
                 "<div id=\"¤{+k.rootId}\"><style>¤{+k.css}</style>¤{+body}</div>"
             }
+            fun inParentheses(k: Widget, body: Html): Html = interpolate({ "<div><style>¤{+k.css}</style>¤{+body}</div>" })
             fun refused(name: String): Html = interpolate { "<p data-text=\"¤{+name}\"></p>" }
             fun unmarked(name: String): Html = interpolate { "<p>¤name</p>" }
             """.trimIndent().replace('¤', '$')
