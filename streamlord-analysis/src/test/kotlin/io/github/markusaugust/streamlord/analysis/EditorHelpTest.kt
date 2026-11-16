@@ -13,43 +13,15 @@ import kotlin.test.assertTrue
 class EditorHelpTest {
     private val analyzer = Analyzer()
 
-    /** The case's text without its caret, the caret, and what the editor knows of the file. */
-    private fun asked(case: JsonObject): Pair<Source, Int> {
-        // A case that says nothing of the modules is read as VS Code reads it, by the imports.
-        val written = case.string("text")!!
-        val caret = written.indexOf(CARET)
-        val foreign = case.array("foreign")?.strings()?.toSet() ?: emptySet()
-        val source =
-            Source(
-                text = written.removeRange(caret, caret + 1),
-                language = if (case.string("language") == "kotlin") SourceLanguage.KOTLIN else SourceLanguage.HTML,
-                prefix = case.string("prefix") ?: "data-",
-                modules = case.modules(Modules.FROM_IMPORTS),
-                // As an editor that resolves calls answers: by the call whose name starts there.
-                foreign = { name, at -> name in foreign && written.removeRange(caret, caret + 1).startsWith(name, at) },
-            )
-        return source to caret
-    }
-
-    private fun workspace(case: JsonObject): Workspace {
-        val w = case.obj("workspace") ?: return Workspace(emptyList(), emptyList(), emptyList(), called = "workspace")
-        return Workspace(
-            signals = w.array("signals")?.strings().orEmpty(),
-            ids = w.array("ids")?.strings().orEmpty(),
-            classes = w.array("classes")?.strings().orEmpty(),
-            called = w.string("called") ?: "workspace",
-        )
-    }
-
     @Test
     fun `what completion offers`() {
         eachCase(sharedCases("completions.json"), { it.string("name")!! }) { case ->
-            val (source, caret) = asked(case)
+            val (source, caret) = helpQuestion(case)
             val found =
                 analyzer.complete(
                     source,
                     caret,
-                    workspace(case),
+                    helpWorkspace(case),
                     attributeNames = case.boolean("names") ?: true,
                     domEvents = case.boolean("domEvents") ?: true,
                 )
@@ -104,7 +76,7 @@ class EditorHelpTest {
     @Test
     fun `what hover shows`() {
         eachCase(sharedCases("hovers.json"), { it.string("name")!! }) { case ->
-            val (source, caret) = asked(case)
+            val (source, caret) = helpQuestion(case)
             val found = analyzer.hover(source, caret)
             val expected = case.obj("hover")
             if (expected == null) {
@@ -121,7 +93,7 @@ class EditorHelpTest {
     @Test
     fun `what signature help shows`() {
         eachCase(sharedCases("signature-help.json"), { it.string("name")!! }) { case ->
-            val (source, caret) = asked(case)
+            val (source, caret) = helpQuestion(case)
             val found = analyzer.signatureHelp(source, caret)
             val expected = case.obj("signature")
             if (expected == null) {
@@ -192,8 +164,35 @@ class EditorHelpTest {
             assertTrue(docs.none { it.isBlank() || it.endsWith(".").not() }, action.name)
         }
     }
+}
 
-    private companion object {
-        const val CARET = '¦'
-    }
+private const val CARET = '¦'
+
+/** The case's text without its caret, the caret, and what the editor knows of the file. */
+internal fun helpQuestion(case: JsonObject): Pair<Source, Int> {
+    // A case that says nothing of the modules is read as VS Code reads it, by the imports.
+    val written = case.string("text")!!
+    val caret = written.indexOf(CARET)
+    val foreign = case.array("foreign")?.strings()?.toSet() ?: emptySet()
+    val source =
+        Source(
+            text = written.removeRange(caret, caret + 1),
+            language = if (case.string("language") == "kotlin") SourceLanguage.KOTLIN else SourceLanguage.HTML,
+            prefix = case.string("prefix") ?: "data-",
+            modules = case.modules(Modules.FROM_IMPORTS),
+            // As an editor that resolves calls answers: by the call whose name starts there.
+            foreign = { name, at -> name in foreign && written.removeRange(caret, caret + 1).startsWith(name, at) },
+        )
+    return source to caret
+}
+
+/** What the case says the rest of the workspace defines. */
+internal fun helpWorkspace(case: JsonObject): Workspace {
+    val w = case.obj("workspace") ?: return Workspace(emptyList(), emptyList(), emptyList(), called = "workspace")
+    return Workspace(
+        signals = w.array("signals")?.strings().orEmpty(),
+        ids = w.array("ids")?.strings().orEmpty(),
+        classes = w.array("classes")?.strings().orEmpty(),
+        called = w.string("called") ?: "workspace",
+    )
 }
