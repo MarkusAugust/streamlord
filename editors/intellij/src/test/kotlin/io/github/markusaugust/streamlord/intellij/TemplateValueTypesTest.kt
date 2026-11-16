@@ -318,7 +318,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                 .getAllQuickFixes()
                 .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
         assertEquals(2, fixes.size)
-        assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.startsWith("Mark ") })
+        assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.endsWith(" as markup") })
         assertTrue("no fix is preferred", fixes.none { it is PreferredReplaceTextFix })
     }
 

@@ -122,7 +122,7 @@ class WithoutStreamlordTest : WithoutDslTestCase() {
         assertEquals(listOf("\$name"), shown.map { it.text })
         assertFalse(shown.single().description, shown.single().description.contains("interpolate"))
         val fixes = myFixture.getAllQuickFixes().map { it.text }
-        assertTrue(fixes.toString(), fixes.none { "interpolate" in it || it.startsWith("Mark ") })
+        assertTrue(fixes.toString(), fixes.none { "interpolate" in it || it.endsWith(" as markup") })
     }
 
     // Without core no call is Streamlord's: a patchElements is anybody's, and its HTML a free string.
@@ -168,7 +168,7 @@ class CoreWithoutHtmlTest : WithoutDslTestCase() {
         myFixture.configureByText("Card.kt", "fun card(name: String): String = \"<p>\$name</p>\"")
         myFixture.doHighlighting()
         val fixes = myFixture.getAllQuickFixes().map { it.text }
-        assertTrue(fixes.toString(), fixes.any { "interpolate" in it } && fixes.any { it.startsWith("Mark ") })
+        assertTrue(fixes.toString(), fixes.any { "interpolate" in it } && fixes.any { it.endsWith(" as markup") })
     }
 
     fun `test the templates of core and ktor are offered and the dsl's are not`() {

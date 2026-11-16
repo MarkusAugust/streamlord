@@ -8,7 +8,8 @@ extension functions and default arguments. It offers no Java-facing API.
 
 If your service is written in Java, use the official SDK instead. Called from Java all the same,
 `interpolate` returns a `String`, since `Html` is a value class the JVM erases, so markup nested
-from Java into another `interpolate` is always escaped as text.
+from Java into another `interpolate` is always escaped as text. Its block form, with each value
+marked by `+` where it stands, is Kotlin's alone: Java passes the values after the format.
 
 ## The official Datastar Java SDK
 

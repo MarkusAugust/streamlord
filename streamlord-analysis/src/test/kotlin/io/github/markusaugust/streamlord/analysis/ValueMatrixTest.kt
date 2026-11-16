@@ -145,7 +145,7 @@ class ValueMatrixTest {
 }
 
 private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
-private const val REWRITE = "Build this string with interpolate(...), which"
+private const val REWRITE = "Mark the values with + in interpolate { }, which"
 
 /** The value as each form writes it, and as a rewrite passes it. */
 private val WRITTEN = setOf("\${v}", "\$\${v}", "v")

@@ -6,7 +6,27 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### SDK
+
+- streamlord-core: `interpolate` takes a block, with each value written where it stands and marked
+  with `+`: `interpolate { """<li><a href="${+url}">${+title}</a></li>""" }`. A marked value is
+  escaped or refused by where it landed, as the value of a `%s` is, and nothing is passed in the
+  order of its placeholder. A loop may stand in the block, a trim call runs before the values go in,
+  and a value without the mark is written by Kotlin as in any string. The placeholder form stays,
+  and is the one Java has.
+  See [Strings](https://streamlord-docs.netlify.app/strings/#values-from-outside).
+- streamlord-core: an escaped value writes U+FFFD for the two characters a mark is made of, U+FDD0
+  and U+FDD1, which no text may hold.
+
 ### Editors
+
+**Kotlin values in HTML**
+- Both editors read the block form: a marked value is an error where `interpolate` will throw, and
+  a value left unmarked gets "Mark … with +" as its fix.
+- The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
+  this string with interpolate(...)": the string stays as written, in the block, with each value
+  marked where it stands, in place of a format with `%s` and the values after it. It is not offered
+  for a string that writes `this`, which in the block is the block.
 
 **Actions and options**
 - Both editors no longer call a function called at once a function: `@get(function(){ return '/x' }())`

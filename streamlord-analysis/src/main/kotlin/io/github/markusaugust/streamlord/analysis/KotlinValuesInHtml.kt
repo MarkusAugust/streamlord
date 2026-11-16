@@ -63,8 +63,8 @@ private class ExpressionValues(
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
 
-/** The arguments of a call without a bracket inside them, taken out to see whether what is left is a chain of names. */
-private val CALL_ARGUMENTS = regex("""\([^()]*\)|\[[^\[\]]*\]|!!|\?(?=\.)""")
+/** A `this` without a label, as an expression of its own. */
+private val OWN_THIS = regex("""(?<![\p{L}\p{Nd}_.@`])this(?![\p{L}\p{Nd}_@`])""")
 private val END_TAG_ATTRIBUTES = regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
 
 /** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
@@ -660,8 +660,7 @@ private fun Analyzer.markFix(
     preferred: Boolean,
 ): Fix {
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
-    // The + takes the nearest operand, so anything but a name, a call or a chain of them goes in parentheses.
-    val operand = if (SIMPLE_RECEIVER.matchEntire(expr.replace(CALL_ARGUMENTS, "")) != null) expr else "($expr)"
+    val operand = markOperand(expr)
     val title = "Mark $shown with +, " + if (asIs) "where interpolate writes it as it is" else "which interpolate escapes"
     // The dollars of the literal the template stands in, which in a chain is one of several.
     val dollars = (format.literals.firstOrNull { ip.start in it.start until it.end } ?: format).dollars
@@ -1010,6 +1009,9 @@ internal fun Analyzer.judgeValues(
 
             // The trim call stays on the format, inside the call: one read here, with a margin that is no format character.
             trim != null && (trim.text == null || trim.margin?.contains('%') == true) -> "the trim call after the string cannot be kept"
+
+            // In the block a `this` without a label is the block's own, and no longer what the string wrote.
+            s.interpolations.any { OWN_THIS.containsMatchIn(it.text) } -> "in the block of interpolate, this is the block"
 
             // An annotation and a const val take a constant, which no call is.
             constantOnly(src, s.start) -> ""

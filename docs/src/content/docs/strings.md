@@ -99,11 +99,26 @@ In IntelliJ, where nothing flags an unknown `data-*` name on its own, this guard
 
 `guardElements` walks a finished string, so it can tell you an expression was eaten. What it cannot
 tell you is where a value came from, because by then Kotlin has concatenated everything.
-`interpolate` turns that around: leave the placeholders standing and Streamlord fills them, which
-means it knows exactly where each value landed.
+`interpolate` turns that around: mark each value where it stands, and Streamlord keeps it out of
+the string until the markup is whole, which means it knows exactly where each value landed.
 
 ```kotlin sample=declarations
 fun hit(title: String, url: String): Html =
+    interpolate { """<li><a class="lt-link" href="${+url}">${+title}</a></li>""" }
+```
+
+The `+` marks a value. It may stand in a loop, `rows.joinToString("") { "<li>${+it}</li>" }`, and
+a trim call on the string runs before the values go in. A value written without the mark is filled
+in by Kotlin as in any string, neither escaped nor refused: that is right for a constant and for
+markup you built, and the editors warn of anything else and offer to mark it. A number is never
+marked, since `+` on a number is Kotlin's own, and is written as the number it is. A mark belongs
+to the block it is written in: do nothing to the string but trim it, and inside the block `this` is
+the block.
+
+The same rule with the values as arguments, which is the form Java has:
+
+```kotlin sample=declarations
+fun hitByPlace(title: String, url: String): Html =
     interpolate("""<li><a class="lt-link" href="%s">%s</a></li>""", url, title)
 ```
 
@@ -300,13 +315,14 @@ to be declared `Html`.
 
 ### The rewrite, before and after
 
-"Build this string with interpolate(...)" is offered on a value's warning wherever `interpolate`
+"Mark the values with + in interpolate { }" is offered on a value's warning wherever `interpolate`
 accepts every value of the string, and as a context action anywhere else in such a string: among
 the intentions in IntelliJ, under Refactor in VS Code. This is what it writes.
 
-A trim call stays on the format, inside the call, and CSS in the body of a `<style>` is passed as
-`Trusted(...)`, your word that it is yours. That fix is on the value in the `<style>`, and the
-other values say that the fix passes it so:
+The string stays as you wrote it, in the block, with each value marked where it stands. A trim call
+stays on the string, and CSS in the body of a `<style>` is marked as `Trusted(...)`, your word that
+it is yours. That fix is on the value in the `<style>`, and the other values say that the fix
+passes it so:
 
 ```kotlin sample=declarations
 class WidgetContext(val rootId: String, val contentId: String)
@@ -320,12 +336,12 @@ fun rootHtmlBefore(k: WidgetContext, customCss: String?, bodyHtml: String): Stri
     """.trimIndent()
 
 fun rootHtmlAfter(k: WidgetContext, customCss: String?, bodyHtml: String): String =
-    interpolate("""
-    <div id="%s">
-        <style>%s</style>
-        <div id="%s">%s</div>
+    interpolate { """
+    <div id="${+k.rootId}">
+        <style>${+Trusted(customCss.orEmpty())}</style>
+        <div id="${+k.contentId}">${+bodyHtml}</div>
     </div>
-    """.trimIndent(), k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml).text
+    """.trimIndent() }.text
 ```
 
 Under `.trimIndent()` the fix is never put first, because the trim now runs before the values go
@@ -334,42 +350,39 @@ such catch. Nor is it put first beside a value that may be null, a `String?` or 
 template writes `null` for it, which no page means, and `interpolate` nothing, as the message says.
 
 A `$$"..."` literal keeps its prefix, so a single dollar that was text for the browser stays text.
-Literals joined to values with `+` become one format, and where they are written differently each
-keeps its form, with the value a `%s` at the end of the one before it:
+Literals joined to values with `+` become one string, and where they are written differently each
+keeps its form, with the value marked at the end of the one before it:
 
 ```kotlin sample=declarations
 fun priceBefore(name: String) = $$"""<p title="$${name}" data-text="$price"></p>"""
-fun priceAfter(name: String) = interpolate($$"""<p title="%s" data-text="$price"></p>""", name).text
+fun priceAfter(name: String) = interpolate { $$"""<p title="$${+name}" data-text="$price"></p>""" }.text
 
 fun rowBefore(name: String, note: String) = "<li title=\"" + name + "\">" + note + "</li>"
-fun rowAfter(name: String, note: String) = interpolate("<li title=\"%s\">%s</li>", name, note).text
+fun rowAfter(name: String, note: String) = interpolate { "<li title=\"${+name}\">${+note}</li>" }.text
 
 fun mixedBefore(name: String, note: String) = "<li title=\"" + name + """">""" + note + "</li>"
-fun mixedAfter(name: String, note: String) = interpolate("<li title=\"%s" + """">%s""" + "</li>", name, note).text
+fun mixedAfter(name: String, note: String) = interpolate { "<li title=\"${+name}" + """">${+note}""" + "</li>" }.text
 ```
 
-Every value is passed as it is written, a collection too. `interpolate` writes a `List` handed to
-it as one value, the way a template does, so the page stays as it was:
+Every value is marked as it is written, a collection too. `interpolate` writes a `List` it is
+given as one value, the way a template does, so the page stays as it was:
 
 ```kotlin sample=declarations
 class Hero(val tags: List<String>)
 
 fun tagsBefore(hero: Hero) = "<p>${hero.tags}</p>"
-fun tagsAfter(hero: Hero) = interpolate("<p>%s</p>", hero.tags).text
+fun tagsAfter(hero: Hero) = interpolate { "<p>${+hero.tags}</p>" }.text
 ```
 
-To pass the elements of a list as the values, spread it: `interpolate(format, *values.toTypedArray())`.
-
-A value that is yours, a constant, an enum entry or `${"$"}`, stays a template in the format where
-`interpolate` would refuse it or might escape markup it holds: Kotlin fills it in as before, and
-`interpolate` reads it as part of the markup. One whose text the file shows with a per cent sign
-does not, since `interpolate` would read that as a placeholder:
+A value that is yours, a constant, an enum entry or `${"$"}`, stays unmarked where `interpolate`
+would refuse it or might escape markup it holds: Kotlin fills it in as before, and `interpolate`
+reads it as part of the markup:
 
 ```kotlin sample=declarations
 const val SAVE_ROUTE = "/save"
 
 fun saveBefore(label: String) = "<button data-on:click=\"@post('$SAVE_ROUTE')\">$label</button>"
-fun saveAfter(label: String) = interpolate("<button data-on:click=\"@post('$SAVE_ROUTE')\">%s</button>", label).text
+fun saveAfter(label: String) = interpolate { "<button data-on:click=\"@post('$SAVE_ROUTE')\">${+label}</button>" }.text
 ```
 
 When no rewrite is offered, the warning of each value ends with the reason:
@@ -379,7 +392,8 @@ When no rewrite is offered, the warning of each value ends with the reason:
 | A value where `interpolate` refuses a `String`: a `data-*` expression, `style`, a `<script>`, an event handler, the markup's structure | Move that value out first: into an attribute of its own read with `el.dataset`, a class, or a literal. A `Trusted` there is accepted as it is. |
 | A call or an `if` in element text that may give markup, `${if (open) "<li>$name</li>" else ""}` | Build that part with `interpolate` or declare it `Html`, so that the rewrite does not escape it. |
 | A call or an index after one literal of a `+` chain, `"<p>" + name + "</p>".uppercase()` | The call is that literal's alone. Put the chain in brackets, or the call on the result. |
-| A trim call with a margin that is not a literal, or one that holds a per cent sign | Trim the format yourself, or use `|`. |
+| A trim call with a margin that is not a literal, or one that holds a per cent sign | Trim the string yourself, or use `|`. |
+| A value that says `this` | In the block `this` is the block: name the value first, `val self = this`. |
 
 A string in an annotation's argument or a `const val` gets no rewrite, since Kotlin takes a
 constant there, and neither does a string whose values need no escaping: numbers, constants, an

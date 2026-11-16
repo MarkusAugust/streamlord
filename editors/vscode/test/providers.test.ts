@@ -474,16 +474,17 @@ describe("code action provider", () => {
   /** The literal of the case that found the defects, with each value written as given. */
   const widget = (root: string, css: string, content: string, body: string, events: string) =>
     `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
-  const REWRITE = "Build this string with interpolate(...)";
+  const REWRITE = "Mark the values with + in interpolate { }";
   const ESCAPES = `${REWRITE}, which escapes the values`;
 
   it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
     const css = "${customCss.orEmpty()}";
     const values = ["${k.rootId}", css, "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
     const text = `${head}${widget(...values)}\n`;
-    const rewritten = `${head}interpolate(${widget("%s", "%s", "%s", "%s", "%s")}, k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n`;
+    const marked = widget("${+k.rootId}", "${+Trusted(customCss.orEmpty())}", "${+k.contentId}", "${+bodyHtml}", "${+k.eventsId}");
+    const rewritten = `${head}interpolate { ${marked} }.text\n`;
     // One edit, one title, from whichever value it is offered.
-    const title = `Build this string with interpolate(...), with ${css} as Trusted(...)`;
+    const title = `Mark the values with + in interpolate { }, with ${css} as Trusted(...)`;
     for (const value of values) {
       const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
       // The diagnostic's quick fix is the rewrite there, so no refactoring stands beside it.
@@ -493,8 +494,20 @@ describe("code action provider", () => {
     }
   });
 
+  it("offers marking the values with + first on each value of the widget, and the mark first on a value left unmarked in a block", () => {
+    const values = ["${k.rootId}", "${customCss.orEmpty()}", "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
+    const text = `${head}${widget(...values)}\n`;
+    for (const value of values) {
+      const { actions } = actionsAt(text, text.indexOf(value) + 1);
+      assert.ok(actions[0]?.title.startsWith(REWRITE), `${value}: ${actions.map((a) => a.title).join(" | ")}`);
+    }
+    const block = `import ${DOMAIN}.interpolate\n\nfun card(name: String) = interpolate { "<p title=\\"$name\\">x</p>" }\n`;
+    const inBlock = actionsAt(block, block.indexOf("$name") + 1).actions;
+    assert.equal(inBlock[0]?.title, "Mark $name with +, which interpolate escapes");
+  });
+
   const card = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
-  const carded = `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`;
+  const carded = `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate { "<p class=\\"x\\">\${+name}</p>" }.text`;
 
   it("offers the rewrite once, as a refactoring, at a caret away from the warning", () => {
     const { actions, applied } = actionsAt(card, card.indexOf("class"));

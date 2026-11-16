@@ -32,7 +32,7 @@ class ValueJudgementTest {
         val src = "fun card(title: String) = \"<h2>\${title.escaped()}</h2>\""
         val issue = analyzer.analyzeKotlin(src).single()
         assertTrue("build the string with interpolate(...)" in issue.message, issue.message)
-        assertEquals(emptyList(), issue.fixes.filter { it.title.startsWith("Build this string") })
+        assertEquals(emptyList(), issue.fixes.filter { it.title.startsWith("Mark the values with +") })
         assertTrue("is not offered here" in issue.message, issue.message)
     }
 
@@ -62,8 +62,8 @@ class ValueJudgementTest {
                     .single()
                     .fixes
                     .map { it.title }
-            assertTrue(titles.any { it.startsWith("Build this string") }, "$value: $titles")
-            assertTrue(titles.none { it.startsWith("Mark") }, "$value: $titles")
+            assertTrue(titles.any { it.startsWith("Mark the values with +") }, "$value: $titles")
+            assertTrue(titles.none { it.endsWith(" as markup") }, "$value: $titles")
         }
         // A comparison or a test is a Boolean whatever it compares, and arithmetic of numbers the text shows is a number.
         for (value in listOf("a == b", "a < b", "s in xs", "n * 7 % 13", "a - b", "n.toInt() / 2")) {
@@ -76,7 +76,7 @@ class ValueJudgementTest {
                 .analyzeKotlin(generic)
                 .single()
                 .fixes
-                .none { it.title.startsWith("Build this string") },
+                .none { it.title.startsWith("Mark the values with +") },
         )
     }
 

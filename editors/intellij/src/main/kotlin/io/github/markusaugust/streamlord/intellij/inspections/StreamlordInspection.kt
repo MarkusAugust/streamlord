@@ -126,11 +126,18 @@ private fun highlightSeverity(severity: Severity): HighlightSeverity =
     }
 
 /**
- * The analysis's fixes, the first at the top of the Alt+Enter list unless it is marked not preferred: where the choice is the
- * author's, such as escaping a value or marking it as markup, no fix goes above the others.
+ * The analysis's fixes in the order it gives them, the first at the top of the Alt+Enter list: the IDE sorts the rest of
+ * one problem's fixes by their titles, and would put "Mark … as markup" above the fix that marks the values.
  */
 private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
-    fixes.mapIndexed { i, fix -> if (i == 0 && fix.preferred) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray()
+    fixes
+        .mapIndexed { i, fix ->
+            when {
+                i > 0 -> ReplaceTextFix(fix)
+                fix.preferred -> PreferredReplaceTextFix(fix)
+                else -> FirstReplaceTextFix(fix)
+            }
+        }.toTypedArray()
 
 /**
  * The fix and its further edits (an import) made in [document], from the end backwards so no offset
@@ -161,6 +168,12 @@ open class ReplaceTextFix(
 
 /** The fix the analysis lists first and prefers is the one it means: it goes to the top of the Alt+Enter list, above the IDE's own. */
 class PreferredReplaceTextFix(
+    fix: Fix,
+) : ReplaceTextFix(fix),
+    HighPriorityAction
+
+/** The fix the analysis lists first without preferring it: at the top of the list all the same, the choice still the author's. */
+class FirstReplaceTextFix(
     fix: Fix,
 ) : ReplaceTextFix(fix),
     HighPriorityAction

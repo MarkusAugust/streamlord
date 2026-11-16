@@ -75,7 +75,7 @@ class UiThreadTest : StreamlordTestCase() {
     // The action was found for the text before the edit: applying it reads the text as it is now, in the background.
     fun `test the rewrite to interpolate applied after an edit analyses nothing on the UI thread`() {
         myFixture.configureByText("Applied.kt", "fun card(name: String): String = \"<p cl<caret>ass=\\\"x\\\">\$name</p>\"")
-        val action = myFixture.availableIntentions.first { it.text.startsWith("Build this string with interpolate(...)") }
+        val action = myFixture.availableIntentions.first { it.text.startsWith("Mark the values with + in interpolate { }") }
         // The caret stands in HTML injected into the string: the Kotlin file's own document is the one edited.
         val document = InjectedLanguageEditorUtil.getTopLevelEditor(myFixture.editor).document
         WriteCommandAction.runWriteCommandAction(project) { document.insertString(document.textLength, "\n") }
@@ -86,7 +86,7 @@ class UiThreadTest : StreamlordTestCase() {
 
         assertEquals(
             "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
-                "fun card(name: String): String = interpolate(\"<p class=\\\"x\\\">%s</p>\", name).text\n",
+                "fun card(name: String): String = interpolate { \"<p class=\\\"x\\\">\${+name}</p>\" }.text\n",
             document.text,
         )
         assertEquals(0, UiThreadWork.count.get() - before)

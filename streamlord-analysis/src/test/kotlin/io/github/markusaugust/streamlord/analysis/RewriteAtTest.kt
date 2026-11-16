@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 /** The rewrite to `interpolate` an editor offers for a caret or a selection as a context action: `rewriteAt` over the analysed file. */
 class RewriteAtTest {
     // The title of the rewrite where the string holds a URL, as the editor shows it.
-    private val refusesUrl = "Build this string with interpolate(...), which refuses a URL that runs"
+    private val refusesUrl = "Mark the values with + in interpolate { }, which refuses a URL that runs"
 
     private val analyzer = Analyzer()
     private val import = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
@@ -29,14 +29,14 @@ class RewriteAtTest {
     @Test
     fun `it is offered in the markup of a string whose value has a warning, and is never preferred`() {
         val fix = offered(card, "class")!!
-        assertEquals(import + "fun card(name: String) = interpolate(\"<p class=\\\"x\\\">%s</p>\", name).text", fix.apply(card))
-        assertEquals("Build this string with interpolate(...), which escapes the values" to false, fix.title to fix.preferred)
+        assertEquals(import + "fun card(name: String) = interpolate { \"<p class=\\\"x\\\">\${+name}</p>\" }.text", fix.apply(card))
+        assertEquals("Mark the values with + in interpolate { }, which escapes the values" to false, fix.title to fix.preferred)
     }
 
     @Test
     fun `it has the title of the fix the issues offer, one for the one edit`() {
         val link = "fun link(url: String, name: String) = \"<a href=\\\"\$url\\\">\$name</a>\""
-        val titles = analyzer.analyzeKotlin(link).flatMap { i -> i.fixes.map { it.title } }.filter { it.startsWith("Build") }
+        val titles = analyzer.analyzeKotlin(link).flatMap { i -> i.fixes.map { it.title } }.filter { it.startsWith("Mark the values") }
         assertEquals(listOf(refusesUrl, refusesUrl), titles)
         assertEquals(refusesUrl, offered(link, "<a")?.title)
     }
@@ -62,7 +62,7 @@ class RewriteAtTest {
         assertNull(offered(src, "data-text"))
         val plain = "fun f(n: Int, name: String) = \"<p data-text=\\\"\$n\\\" title=\\\"\$name\\\">x</p>\""
         assertEquals(true, analyzer.analyzeKotlin(plain).any { it.code == "kotlin-interpolation" })
-        assertEquals("Build this string with interpolate(...), which escapes the values", offered(plain, "\$n\\\"")?.title)
+        assertEquals("Mark the values with + in interpolate { }, which escapes the values", offered(plain, "\$n\\\"")?.title)
     }
 
     @Test
@@ -70,7 +70,7 @@ class RewriteAtTest {
         val src = "fun list(xs: List<String>, t: String) = \"<ul title=\\\"\$t\\\">\${xs.joinToString(\"\") { \"<li>\$it</li>\" }}</ul>\""
         assertEquals(
             import + "fun list(xs: List<String>, t: String) = \"<ul title=\\\"\$t\\\">" +
-                "\${xs.joinToString(\"\") { interpolate(\"<li>%s</li>\", it).text }}</ul>\"",
+                "\${xs.joinToString(\"\") { interpolate { \"<li>\${+it}</li>\" }.text }}</ul>\"",
             offered(src, "li>")?.apply(src),
         )
     }
