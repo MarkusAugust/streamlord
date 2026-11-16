@@ -813,14 +813,6 @@ private fun filterSignalsIssues(text: String): List<Issue> {
     return out
 }
 
-/** The syntax error of [js] read as one expression, the way a filter value is evaluated (`return (value)`), or null. */
-internal fun expressionError(js: String): JsSyntaxError? {
-    val err = JsParser.error("return ($js\n)") ?: return null
-
-    fun shift(n: Int): Int = (n - 8).coerceIn(0, js.length)
-    return JsSyntaxError(err.message ?: "Syntax error", shift(err.pos), shift(err.raisedAt))
-}
-
 /** The checks of one Datastar expression: syntax, kebab-case signals, unknown and Pro actions. */
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
@@ -943,9 +935,11 @@ public class ExpressionValidator(
                 )
         }
 
-        val parseError = JsParser.error(rewritten.js)
+        val whole = JsParser.parse(rewritten.js)
         // Without a known attribute an expression may also be an object literal, which a script reads as a block.
-        val err = if (returnsValue == null) parseError?.takeUnless { objectLiteralParses(rewritten.js) } else parseError
+        val literal = if (returnsValue == null && whole.error != null) objectLiteral(rewritten.js) else null
+        val parsed = literal ?: whole
+        val err = parsed.error
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
@@ -971,7 +965,7 @@ public class ExpressionValidator(
             }
         }
 
-        if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
+        if (err == null) issues += actionArgumentIssues(catalog, js, rewritten, parsed, if (literal == null) 0 else 1, ::span)
 
         val starts by lazy { stringStarts(regions) }
         val templates by lazy { TemplateReasons(js, rewritten.runs) }
@@ -1352,9 +1346,11 @@ private fun updatedBefore(
 /**
  * With no attribute to say whether the value is read, an expression that opens with `{` may be an
  * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
- * script parse fails, the text is tried once more inside parentheses.
+ * script parse fails, the text is tried once more inside parentheses: what that read, one character
+ * in, or null where it fails too.
  */
-private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null
+private fun objectLiteral(js: String): Parsed? =
+    if (js.trimStart().startsWith("{")) JsParser.parse("($js)").takeIf { it.error == null } else null
 
 /** The signal name typed so far just before [offset] (`$cou|` gives `cou`, `$|` gives ""), or null when not in a signal. */
 internal fun signalPrefixAt(

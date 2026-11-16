@@ -498,8 +498,11 @@ expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(- 1"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(- 1)"></div>
+action-argument 25-28 warning: @get takes a string as uri, and - 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == string: <div data-on:click="@get(- 1)"></div>
+action-argument 37-40 warning: @get takes a string as uri, and - 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == dsl: <div data-on:click="@get(- 1)"></div>
+action-argument 111-114 warning: @get takes a string as uri, and - 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == html: <div data-on:click="@get(+"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(+-"></div>
@@ -529,8 +532,11 @@ expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(-(1)"></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(-(1))"></div>
+action-argument 25-29 warning: @get takes a string as uri, and -(1) is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == string: <div data-on:click="@get(-(1))"></div>
+action-argument 37-41 warning: @get takes a string as uri, and -(1) is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == dsl: <div data-on:click="@get(-(1))"></div>
+action-argument 111-115 warning: @get takes a string as uri, and -(1) is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == html: <div data-on:click="@get(("></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get((1"></div>
@@ -538,8 +544,11 @@ expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get((1)"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get((1))"></div>
+action-argument 26-27 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == string: <div data-on:click="@get((1))"></div>
+action-argument 38-39 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == dsl: <div data-on:click="@get((1))"></div>
+action-argument 112-113 warning: @get takes a string as uri, and 1 is a number, so Datastar throws FetchNoUrlProvided and sends nothing.
 == html: <div data-on:click="@get(t"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(tr"></div>
@@ -718,11 +727,159 @@ expression-syntax 51-52 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){ return '/x' }()"></div>
 expression-syntax 52-53 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){ return '/x' }())"></div>
-action-argument 25-52 warning: @get takes a string as uri, and function(){ return '/x' }() is a function.
 == string: <div data-on:click="@get(function(){ return '/x' }())"></div>
-action-argument 37-64 warning: @get takes a string as uri, and function(){ return '/x' }() is a function.
 == dsl: <div data-on:click="@get(function(){ return '/x' }())"></div>
-action-argument 111-138 warning: @get takes a string as uri, and function(){ return '/x' }() is a function.
+== html: <div data-on:click="@get(function(){}"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(function(){}."></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(function(){}.n"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(function(){}.na"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(function(){}.nam"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(function(){}.name"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get(function(){}.name)"></div>
+== string: <div data-on:click="@get(function(){}.name)"></div>
+== dsl: <div data-on:click="@get(function(){}.name)"></div>
+== html: <div data-on:click="@get('/x', f"></div>
+expression-syntax 32-33 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', fu"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', fun"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', func"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', funct"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', functi"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', functio"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function("></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function()"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ "></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ r"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ re"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ ret"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ retu"></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ retur"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return "></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {"></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {}"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {} "></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {} }"></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {} }("></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {} }()"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', function(){ return {} }())"></div>
+== string: <div data-on:click="@get('/x', function(){ return {} }())"></div>
+== dsl: <div data-on:click="@get('/x', function(){ return {} }())"></div>
+== html: <div data-on:click="@get('/x', {retr"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry:"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: "></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: f"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: fu"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: fun"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: func"></div>
+expression-syntax 43-44 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: funct"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: functi"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: functio"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function"></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function("></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function()"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){"></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ "></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ r"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ re"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ ret"></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ retu"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ retur"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return"></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return "></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return '"></div>
+expression-syntax 58-59 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'n"></div>
+expression-syntax 58-60 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'ne"></div>
+expression-syntax 58-61 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'nev"></div>
+expression-syntax 58-62 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'neve"></div>
+expression-syntax 58-63 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never"></div>
+expression-syntax 58-64 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never'"></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never' "></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never' }"></div>
+expression-syntax 67-68 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never' }("></div>
+expression-syntax 68-69 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never' }()"></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never' }()}"></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){ return 'never' }()})"></div>
+== string: <div data-on:click="@get('/x', {retry: function(){ return 'never' }()})"></div>
+== dsl: <div data-on:click="@get('/x', {retry: function(){ return 'never' }()})"></div>
+== html: <div data-on:click="@get('/x', {retry: function(){}"></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){}}"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {retry: function(){}})"></div>
+option-value 39-51 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with function(){} Datastar retries as with 'auto'.
+== string: <div data-on:click="@get('/x', {retry: function(){}})"></div>
+option-value 51-63 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with function(){} Datastar retries as with 'auto'.
+== dsl: <div data-on:click="@get('/x', {retry: function(){}})"></div>
+option-value 125-137 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with function(){} Datastar retries as with 'auto'.
 == html: <div data-on:click="@get((("></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get((()"></div>
@@ -850,14 +1007,6 @@ expression-syntax 31-32 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get([1][0])"></div>
 == string: <div data-on:click="@get([1][0])"></div>
 == dsl: <div data-on:click="@get([1][0])"></div>
-== html: <div data-on:click="@get('/x', {retr"></div>
-expression-syntax 36-37 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {retry"></div>
-expression-syntax 37-38 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {retry:"></div>
-expression-syntax 38-39 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {retry: "></div>
-expression-syntax 38-39 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get('/x', {retry: '"></div>
 expression-syntax 39-40 error: Datastar expression: Unterminated string constant
 == html: <div data-on:click="@get('/x', {retry: 'n"></div>
@@ -8291,10 +8440,6 @@ fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type
 fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'/**/: 1 }"></div>
 fetch-event-type 147-153 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-== html: <div data-on:click="@get(function(){}"></div>
-expression-syntax 37-38 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get(function(){}."></div>
-expression-syntax 38-39 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}.b"></div>
 expression-syntax 39-40 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}.bi"></div>
@@ -8316,11 +8461,8 @@ expression-syntax 47-48 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}.bind(null)"></div>
 expression-syntax 48-49 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}.bind(null))"></div>
-action-argument 25-48 warning: @get takes a string as uri, and function(){}.bind(null) is a function.
 == string: <div data-on:click="@get(function(){}.bind(null))"></div>
-action-argument 37-60 warning: @get takes a string as uri, and function(){}.bind(null) is a function.
 == dsl: <div data-on:click="@get(function(){}.bind(null))"></div>
-action-argument 111-134 warning: @get takes a string as uri, and function(){}.bind(null) is a function.
 == html: <div data-computed="1 /*"></div>
 expression-syntax 22-24 error: Datastar expression: Unterminated comment
 computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.

@@ -1797,8 +1797,9 @@ public class MarkupValidator(
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(maxOf(to, from + 1))
         val out = ArrayList<Issue>()
         val json = runCatching { JsonParser.parse(text) }.isSuccess
+        val parsed = filterParse(text)
         if (!json) {
-            val err = expressionError(text)
+            val err = filterError(text, parsed)
             if (err != null) {
                 val (start, end) = source(err.pos, err.raisedAt)
                 return listOf(Issue(start, end, "Datastar filter: ${err.message}", Severity.ERROR, "expression-syntax", link))
@@ -1827,7 +1828,7 @@ public class MarkupValidator(
         // The free plugins hand the value to filtered, as a backend action its filterSignals; Pro's are not read here.
         if (!spec.pro) {
             out +=
-                filterValueIssues(catalog, text, jsRegions(text), ::source, name, link)
+                filterValueIssues(catalog, text, parsed, ::source, name, link)
         }
         for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
             val (start, end) = source(issue.start, issue.end)
