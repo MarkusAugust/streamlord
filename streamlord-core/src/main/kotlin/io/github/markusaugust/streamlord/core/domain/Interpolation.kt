@@ -278,6 +278,94 @@ public fun interpolate(
     vararg values: Any?,
 ): Html = interpolated(format, values.asList(), prefixes)
 
+/**
+ * [interpolate] with each value written where it stands: `+` marks a value in the markup the block
+ * gives, and it is escaped or refused by where it landed, as a `%s` placeholder's value is.
+ *
+ * ```kotlin
+ * fun hit(title: String, url: String): Html =
+ *     interpolate { """<li><a href="${+url}">${+title}</a></li>""" }
+ * ```
+ *
+ * The mark leaves a note in the string and keeps the value, so the markup is read with no value in
+ * it yet: a trim call on the string runs before the values are in, and a `%` in it is one. A mark
+ * may stand in a loop or be written twice. An [Html] and a [Trusted] are marked like any value and
+ * written as [interpolate] writes them.
+ *
+ * A value written without the mark is filled in by Kotlin before this function sees the string: it
+ * is markup as written, neither escaped nor refused, which is right for a constant and for nothing
+ * that comes from outside. A number marks nothing either, since `+` on a number is Kotlin's own; it
+ * is written as the number it is.
+ *
+ * @throws UnsafeInterpolationException if a marked value landed where escaping cannot help.
+ */
+public inline fun interpolate(block: InterpolationScope.() -> String): Html = interpolate(ElementsGuard.defaultPrefixes, block)
+
+/** The block form of [interpolate] with the `data-*` prefixes to recognise, for an aliased bundle. */
+public inline fun interpolate(
+    prefixes: List<String>,
+    block: InterpolationScope.() -> String,
+): Html = InterpolationScope().run { html(block(), prefixes) }
+
+/** Where the block form of [interpolate] is written: it keeps the values its `+` marks. */
+public class InterpolationScope
+    @PublishedApi
+    internal constructor() {
+        private val marked = ArrayList<Any?>()
+
+        /** Marks this value where it is written: [interpolate] escapes it or refuses it by where it lands. */
+        public operator fun Any?.unaryPlus(): Placed {
+            marked += this
+            return Placed("$MARK_OPENS${marked.size - 1}$MARK_CLOSES")
+        }
+
+        /** [markup] with each mark's value where the mark stands, as the placeholder form writes it. */
+        @PublishedApi
+        internal fun html(
+            markup: String,
+            prefixes: List<String>,
+        ): Html {
+            val format = StringBuilder(markup.length + 16)
+            val values = ArrayList<Any?>()
+            var i = 0
+            while (i < markup.length) {
+                val c = markup[i++]
+                if (c == '%') format.append('%')
+                if (c != MARK_OPENS) {
+                    format.append(c)
+                    continue
+                }
+                // A mark is read no further than a mark is long, so a stray opening costs nothing.
+                var close = i
+                while (close < markup.length && close - i < MARK_DIGITS && markup[close].isAsciiDigit()) close++
+                val index = if (markup.getOrNull(close) == MARK_CLOSES) markup.substring(i, close).toIntOrNull() else null
+                if (index == null || index >= marked.size) {
+                    format.append(c)
+                    continue
+                }
+                format.append("%s")
+                values += marked[index]
+                i = close + 1
+            }
+            return interpolated(format.toString(), values, prefixes)
+        }
+    }
+
+/** What a `+` in the block form of [interpolate] writes: a note of which value stands there, and not the value. */
+@JvmInline
+public value class Placed internal constructor(
+    private val mark: String,
+) {
+    override fun toString(): String = mark
+}
+
+// Two characters Unicode sets aside for a program's own use and no text holds, around the value's number.
+private const val MARK_OPENS = '﷐'
+private const val MARK_CLOSES = '﷑'
+private const val MARK_DIGITS = 9
+
+private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
+
 private fun interpolated(
     format: String,
     values: List<Any?>,
