@@ -133,8 +133,7 @@ private fun regexEnds(text: String): IntArray {
     return out
 }
 
-/** A name `await` that ends the text before a token the parser could not take, as in `await @post(...)`. */
-private val AWAIT_BEFORE = regex("""(?<![A-Za-z0-9_$.])await\s*$""")
+private const val AWAIT = "await"
 
 // A name standing on its own: no `.` or `@` before it (a property, an action), and no name character
 // on either side, any character beyond ASCII counted as one.
@@ -648,76 +647,11 @@ private fun placeOf(region: Byte): String =
         else -> ""
     }
 
-/** `include: '` or `"exclude": "`, a pattern given as a string that opens with a slash. */
-private val STRING_PATTERN_HEAD = regex("""(["']?)(include|exclude)\1\s*:\s*(["'`])/""")
-
 /**
  * The flags a filter's pattern may end with. `d` is left out: it changes nothing a filter does, so
  * nobody writes it there, and the tail of a path such as `'/users/id'` is then not read as flags.
  */
 private val REGEX_FLAGS = regex("""[gimsuyv]+""")
-
-/** A pattern of a filter written as a string with flags after its last slash; see [stringPatterns]. */
-internal data class StringPattern(
-    val key: String,
-    val start: Int,
-    val end: Int,
-    val pattern: String,
-    val flags: String,
-)
-
-/** Whether the key that opens at [at] is a key of the code: bare in code, or quoted with the quote opening a string there. */
-private fun keyOpens(
-    text: String,
-    regions: ByteArray,
-    at: Int,
-    quoted: Boolean,
-): Boolean {
-    val opens =
-        if (quoted) {
-            regions[at] == Region.STRING && regions.getOrNull(at - 1) != Region.STRING
-        } else {
-            regions[at] == Region.CODE
-        }
-    return opens && !text.getOrNull(at - 1).isJsNamePart()
-}
-
-/**
- * The patterns of a filter written as a string with a slash before them and flags after the last
- * one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804 in 1.0.5) cuts one `/` from
- * each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. Only the keys of
- * the object between [from] and [to] count: not `xinclude`, nor a key in a string or a comment. A
- * template literal counts when it holds no `${`. A scan rather than one regular expression, which
- * backtracks without end on a run of escapes.
- */
-internal fun stringPatterns(
-    text: String,
-    regions: ByteArray = jsRegions(text),
-    from: Int = 0,
-    to: Int = text.length,
-): List<StringPattern> {
-    val out = ArrayList<StringPattern>()
-    // Searched within the object alone: a search of the text after it would read the rest of the text for each object.
-    var m = STRING_PATTERN_HEAD.find(text.substring(from, to))
-    while (m != null) {
-        val match = m
-        m = m.next()
-        val at = from + match.range.first
-        if (!keyOpens(text, regions, at, match.groupValues[1].isNotEmpty())) continue
-        val quote = match.groupValues[3][0]
-        val start = from + match.range.last - 1
-        var j = start + 1
-        while (j < to && text[j] != quote && !(quote == '`' && text.startsWith("\${", j))) j += if (text[j] == '\\') 2 else 1
-        if (j >= to || text[j] != quote) continue
-        val content = text.substring(start + 1, j)
-        // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
-        val slash = content.lastIndexOf('/')
-        val flags = content.substring(slash + 1)
-        if (slash <= 0 || REGEX_FLAGS.matchEntire(flags) == null) continue
-        out += StringPattern(match.groupValues[2], start, j + 1, content.substring(1, slash), flags)
-    }
-    return out
-}
 
 /** Flags a regular expression literal takes: each once, and `u` and `v` not together. */
 private fun validFlags(flags: String): Boolean = flags.toSet().size == flags.length && !('u' in flags && 'v' in flags)
@@ -742,25 +676,51 @@ private fun literalBody(pattern: String): String {
 /** A character that would not stand in a literal as it stands in the string: an escape, a quote, a reference. */
 private val UNFIXABLE_IN_PATTERN = regex("""[\\'"`&]""")
 
+private val FILTER_KEYS = setOf("include", "exclude")
+
 /**
- * The `filter-pattern` warnings for the string patterns of the object between [from] and [to] in
- * [text]: a filter's value, [json] when it is JSON, or the `filterSignals` of an action.
+ * What stands between the quotes of the string from [start] to [end] of [text]; null where the author wrote no such
+ * string: an unclosed quote before a `$signal` is no string to the client, which rewrites the signal, and the parser
+ * then reads a string out of what the client wrote.
+ */
+internal fun writtenString(
+    text: String,
+    start: Int,
+    end: Int,
+): String? = if (end - start >= 2 && text[start] in "'\"`" && text[end - 1] == text[start]) text.substring(start + 1, end - 1) else null
+
+/**
+ * The `filter-pattern` warnings for the patterns among [properties], those of a filter, that are written as a string
+ * with a slash before them and flags after the last one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804
+ * in 1.0.5) cuts one `/` from each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. A template
+ * literal counts when it holds no `${`. [at] says where in [text] an offset of a node stands; [json] when the filter
+ * is JSON.
  */
 internal fun filterPatternIssues(
     text: String,
-    regions: ByteArray,
-    from: Int,
-    to: Int,
+    properties: List<JsNode?>,
+    at: (Int) -> Int,
     json: Boolean,
     link: String,
 ): List<Issue> =
-    stringPatterns(text, regions, from, to).map { p ->
-        val literal = "/${literalBody(p.pattern)}/${p.flags}"
-        val valid = validFlags(p.flags)
+    properties.filterNotNull().sortedBy { it.start }.mapNotNull { property ->
+        val key = property.key?.name?.takeIf { it in FILTER_KEYS && property.plain } ?: return@mapNotNull null
+        val value = property.inner!!
+        if (value.type != JsKind.STRING && !(value.type == JsKind.TEMPLATE && value.items.isEmpty())) return@mapNotNull null
+        val start = at(value.start)
+        val end = at(value.end)
+        val content = writtenString(text, start, end) ?: return@mapNotNull null
+        // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
+        val slash = content.lastIndexOf('/')
+        val flags = content.substring(slash + 1)
+        if (!content.startsWith("/") || slash <= 0 || REGEX_FLAGS.matchEntire(flags) == null) return@mapNotNull null
+        val pattern = content.substring(1, slash)
+        val literal = "/${literalBody(pattern)}/$flags"
+        val valid = validFlags(flags)
         val advice =
             when {
                 !valid -> {
-                    "As flags ${p.flags} would not do either: each is given once, and u and v not together. " +
+                    "As flags $flags would not do either: each is given once, and u and v not together. " +
                         "Write a regular expression literal${if (json) ", in JavaScript rather than JSON," else ""} with the flags meant."
                 }
 
@@ -774,45 +734,18 @@ internal fun filterPatternIssues(
             }
         // The string's escapes would mean something else in a literal, and a quote or a reference in an attribute would need its own,
         // so the fix is offered only without them.
-        val fixable = valid && !json && !UNFIXABLE_IN_PATTERN.containsMatchIn(p.pattern)
+        val fixable = valid && !json && !UNFIXABLE_IN_PATTERN.containsMatchIn(pattern)
         Issue(
-            p.start,
-            p.end,
-            "Datastar cuts one / from each end of a string ${p.key} and takes the rest as the pattern, " +
-                "so /${p.flags} stays in it and is matched as text, not read as flags. $advice",
+            start,
+            end,
+            "Datastar cuts one / from each end of a string $key and takes the rest as the pattern, " +
+                "so /$flags stays in it and is matched as text, not read as flags. $advice",
             Severity.WARNING,
             "filter-pattern",
             link,
-            if (fixable) listOf(Fix("Change to $literal", p.start, p.end, literal)) else emptyList(),
+            if (fixable) listOf(Fix("Change to $literal", start, end, literal)) else emptyList(),
         )
     }
-
-/** `filterSignals: {` in the options of an action, which the client reads with the same `toRegExp`. */
-private val FILTER_SIGNALS = regex("""(["']?)filterSignals\1\s*:\s*\{""")
-
-/** The `filter-pattern` warnings for the `filterSignals` of the actions in [text]. */
-private fun filterSignalsIssues(text: String): List<Issue> {
-    if ("filterSignals" !in text) return emptyList()
-    val regions = jsRegions(text)
-    val out = ArrayList<Issue>()
-    for (m in FILTER_SIGNALS.findAll(text)) {
-        if (!keyOpens(text, regions, m.range.first, m.groupValues[1].isNotEmpty())) continue
-        val open = m.range.last
-        var depth = 0
-        var close = text.length
-        for (i in open until text.length) {
-            if (regions[i] != Region.CODE) continue
-            if (text[i] == '{') {
-                depth++
-            } else if (text[i] == '}' && --depth == 0) {
-                close = i + 1
-                break
-            }
-        }
-        out += filterPatternIssues(text, regions, open, close, false, Docs.ACTIONS)
-    }
-    return out
-}
 
 /** The checks of one Datastar expression: syntax, kebab-case signals, unknown and Pro actions. */
 public class ExpressionValidator(
@@ -838,9 +771,9 @@ public class ExpressionValidator(
         event: String? = null,
         prefix: String = CatalogNames.PREFIX,
     ): List<Issue> =
-        validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
+        validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals, event) +
             (attribute?.let { scopeNameIssues(text, it, handed, prefix) + computedSideEffects(text, it, prefix) } ?: emptyList()) +
-            (if (event == DATASTAR_FETCH) fetchTypeIssues(catalog, text) else emptyList())
+            emptyList()
 
     /**
      * A signal changed or an action with a side effect called in `data-computed`, which the
@@ -895,6 +828,7 @@ public class ExpressionValidator(
         text: String,
         returnsValue: Boolean?,
         hyphenatedSignals: Set<String>,
+        event: String?,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         if (text.isBlank()) {
@@ -950,17 +884,22 @@ public class ExpressionValidator(
             val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
             val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
             // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
-            val awaitAt =
-                AWAIT_BEFORE
-                    .find(rewritten.js.substring(0, err.pos))
-                    ?.range
-                    ?.first
-                    ?.let(::toText)
+            // After a line break the name ends its statement, and as a property it is no name of its own.
+            val awaitEnd = err.after + AWAIT.length
+            val awaited =
+                awaitEnd <= err.pos && rewritten.js.startsWith(AWAIT, err.after) && !rewritten.js.getOrNull(awaitEnd).isJsNamePart() &&
+                    (awaitEnd until err.pos).none { rewritten.js[it] == '\n' || rewritten.js[it] == '\r' } &&
+                    rewritten.js
+                        .substring(0, err.after)
+                        .trimEnd { it.isJsWhitespace() }
+                        .lastOrNull() != '.' &&
+                    parsed.finished.none { it.type == JsKind.MEMBER && it.end == awaitEnd }
+            val awaitAt = if (awaited) toText(err.after) else null
             if (awaitAt != null) {
                 val message =
                     "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
                         "An action sends its request without it."
-                issues += Issue(awaitAt, awaitAt + "await".length, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+                issues += Issue(awaitAt, awaitAt + AWAIT.length, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
             } else if (pos !in spaced) {
                 issues += Issue(pos, end, "Datastar expression: $said", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
             }
@@ -1067,7 +1006,11 @@ public class ExpressionValidator(
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
         if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
-        issues += filterSignalsIssues(text)
+        // An object under `filterSignals`, which the client reads with the same `toRegExp`: its properties are known for
+        // its own once it is closed.
+        val filters = parsed.finished.filter { it.key?.name == "filterSignals" && it.inner?.type == JsKind.OBJECT }
+        issues += filterPatternIssues(text, filters.flatMap { it.inner!!.items }, ::toText, false, Docs.ACTIONS)
+        if (event == DATASTAR_FETCH) issues += fetchTypeIssues(catalog, text, parsed, ::toText)
         return issues
     }
 

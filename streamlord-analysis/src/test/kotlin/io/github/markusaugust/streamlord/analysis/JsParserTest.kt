@@ -453,6 +453,45 @@ class JsParserTest {
         assertEquals(emptyList(), parsed.nodes)
     }
 
+    private fun finished(source: String) = JsParser.parse(source).finished.map { it.type to source.substring(it.start, it.end) }
+
+    @Test
+    fun `what was read to its end before the error is handed out, and nothing after it`() {
+        assertEquals(listOf(JsKind.IDENT to "f", JsKind.NUMBER to "1"), finished("f(1, "))
+        assertEquals(JsKind.BINARY to "a == 'b'", finished("if (a == 'b'").last())
+        // The comparison is not read to its end while what it compares with may go on.
+        assertEquals(emptyList(), finished("if (a == 'b' +").filter { it.first == JsKind.BINARY })
+        assertEquals(emptyList(), finished("x = ( ; a == 'b'").filter { it.first == JsKind.BINARY })
+        val whole = JsParser.parse("a == 'b'")
+        assertEquals(whole.nodes, whole.finished)
+    }
+
+    @Test
+    fun `a case is a node at its colon, with what it compares and what the switch is on`() {
+        val source = "switch (a.b) { case 'c': f(); default: g(); case (d) }"
+        val parsed = JsParser.parse("switch (a.b) { case 'c': f(); default: g(); case (d): }")
+        val cases = parsed.nodes.filter { it.type == JsKind.CASE }
+        assertEquals(
+            listOf("'c'" to "a.b", "d" to "a.b"),
+            cases.map { c ->
+                listOf(c.inner!!, c.items[0]!!).map { source.substring(it.start, it.end) }.let {
+                    it[0] to
+                        it[1]
+                }
+            },
+        )
+        // Before its colon it is none yet, and at the colon it is one whatever follows.
+        assertEquals(1, JsParser.parse(source).finished.count { it.type == JsKind.CASE })
+        assertEquals(1, JsParser.parse("switch (a) { case 'c': @").finished.count { it.type == JsKind.CASE })
+    }
+
+    @Test
+    fun `an error says where the token before it starts`() {
+        assertEquals(0 to 6, JsParser.error("await f")?.let { it.after to it.pos })
+        assertEquals(0 to 12, JsParser.error("await /*c*/ 'abc")?.let { it.after to it.pos })
+        assertEquals(-1, JsParser.error("(".repeat(200_000))?.after)
+    }
+
     @Test
     fun `one expression is read whole, its last node the whole of it`() {
         val source = " {a: 1}, b // c"
