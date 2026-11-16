@@ -9,6 +9,7 @@ import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.regex
 import org.intellij.lang.annotations.Language
 import kotlin.jvm.JvmInline
+import kotlin.random.Random
 
 /**
  * Markup the caller vouches for, written into the output as it stands.
@@ -117,7 +118,7 @@ public enum class Position {
  * Raised when a value would land somewhere escaping cannot make safe.
  *
  * @property position Where it landed.
- * @property index Which value, counting the placeholders from zero.
+ * @property index Which value, counting the placeholders from zero, or in the block form the marks as they stand in the markup.
  * @property attribute The attribute it landed in, when it landed in one.
  * @property loadsCode Whether that attribute is a URL its tag loads and runs, or treats as its own
  *   document, such as a script's `src`: a [Position.URL] where the literal before the placeholder
@@ -139,7 +140,7 @@ public class UnsafeInterpolationException(
             if (loadsCode) {
                 return "Value $index would land in $attribute, a URL its tag loads and runs, where the markup before it " +
                     "does not fix the host, so any value could point the load at another origin, https or not. Write " +
-                    "the host into the markup before the placeholder, as in \"/js/%s\" or \"https://cdn.example.com/%s\", " +
+                    "the host into the markup before the value, as in \"/js/\" or \"https://cdn.example.com/\", " +
                     "or, if you chose the URL yourself, wrap it in Trusted(...)."
             }
             val where =
@@ -293,11 +294,18 @@ public fun interpolate(
  * written as [interpolate] writes them.
  *
  * A value written without the mark is filled in by Kotlin before this function sees the string: it
- * is markup as written, neither escaped nor refused, which is right for a constant and for nothing
- * that comes from outside. A number marks nothing either, since `+` on a number is Kotlin's own; it
- * is written as the number it is.
+ * is markup as written, neither escaped nor refused, which is right for a constant and for markup
+ * that was built, and for nothing that comes from outside. A number is never marked, since `+` on
+ * a number is Kotlin's own: it is written as the number it is, wherever it stands. The same holds
+ * for a type with a `+` of its own.
  *
- * @throws UnsafeInterpolationException if a marked value landed where escaping cannot help.
+ * A mark is its own block's: written in another block, a nested one or a later one, it is refused,
+ * and so is a string cut or changed after its values were marked. Trim it, and do nothing else to
+ * it. A block marks its values from one thread at a time.
+ *
+ * @throws UnsafeInterpolationException if a marked value landed where escaping cannot help; its
+ *   `index` counts the marks as they stand in the markup.
+ * @throws IllegalArgumentException if the markup holds a mark that is not this block's.
  */
 public inline fun interpolate(block: InterpolationScope.() -> String): Html = interpolate(ElementsGuard.defaultPrefixes, block)
 
@@ -313,10 +321,13 @@ public class InterpolationScope
     internal constructor() {
         private val marked = ArrayList<Any?>()
 
+        // Told apart from every other block's, so a mark written into another block is refused and none can be made up.
+        private val id = Random.nextLong().toULong().toString(MARK_RADIX)
+
         /** Marks this value where it is written: [interpolate] escapes it or refuses it by where it lands. */
         public operator fun Any?.unaryPlus(): Placed {
             marked += this
-            return Placed("$MARK_OPENS${marked.size - 1}$MARK_CLOSES")
+            return Placed("$MARK_OPENS$id.${marked.size - 1}$MARK_CLOSES")
         }
 
         /** [markup] with each mark's value where the mark stands, as the placeholder form writes it. */
@@ -331,17 +342,17 @@ public class InterpolationScope
             while (i < markup.length) {
                 val c = markup[i++]
                 if (c == '%') format.append('%')
-                if (c != MARK_OPENS) {
+                if (c != MARK_OPENS && c != MARK_CLOSES) {
                     format.append(c)
                     continue
                 }
                 // A mark is read no further than a mark is long, so a stray opening costs nothing.
-                var close = i
-                while (close < markup.length && close - i < MARK_DIGITS && markup[close].isAsciiDigit()) close++
-                val index = if (markup.getOrNull(close) == MARK_CLOSES) markup.substring(i, close).toIntOrNull() else null
-                if (index == null || index >= marked.size) {
-                    format.append(c)
-                    continue
+                val close = markup.indexOf(MARK_CLOSES, i).takeIf { c == MARK_OPENS && it >= 0 && it - i <= MARK_LENGTH } ?: -1
+                val index =
+                    if (close < 0 || !markup.startsWith("$id.", i)) null else markup.substring(i + id.length + 1, close).toIntOrNull()
+                require(index != null && index in marked.indices) {
+                    "The markup holds a mark that is not this block's: a value marked with + in another interpolate block, or a string " +
+                        "cut or changed after its values were marked. Mark each value in the block that writes it, and only trim the string."
                 }
                 format.append("%s")
                 values += marked[index]
@@ -359,12 +370,12 @@ public value class Placed internal constructor(
     override fun toString(): String = mark
 }
 
-// Two characters Unicode sets aside for a program's own use and no text holds, around the value's number.
-private const val MARK_OPENS = '﷐'
-private const val MARK_CLOSES = '﷑'
-private const val MARK_DIGITS = 9
-
-private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
+// Two characters Unicode sets aside for a program's own use and no text may hold, around the block's own id and the
+// value's number. A value never brings one into the markup: where one is escaped they are written as U+FFFD.
+private const val MARK_OPENS = '\uFDD0'
+private const val MARK_CLOSES = '\uFDD1'
+private const val MARK_RADIX = 36
+private const val MARK_LENGTH = 24
 
 private fun interpolated(
     format: String,
@@ -560,6 +571,7 @@ private fun StringBuilder.escaped(value: Any?) {
             '>' -> append("&gt;")
             '"' -> append("&quot;")
             '\'' -> append("&#39;")
+            MARK_OPENS, MARK_CLOSES -> append('\uFFFD')
             else -> append(ch)
         }
     }

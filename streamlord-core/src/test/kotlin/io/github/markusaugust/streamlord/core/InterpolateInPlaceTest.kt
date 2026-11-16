@@ -123,6 +123,60 @@ class InterpolateInPlaceTest {
     }
 
     @Test
+    fun `a dozen marks are a dozen values, each in its place`() {
+        val names = (0 until 12).map { "n$it" }
+        assertEquals(names.joinToString("") { "<i>$it</i>" }, interpolate { names.joinToString("") { "<i>${+it}</i>" } }.text)
+    }
+
+    @Test
+    fun `a mark is its own block's alone`() {
+        // Written in a block inside the one that made it.
+        assertFailsWith<IllegalArgumentException> {
+            interpolate {
+                val title = +"outer"
+                val row = interpolate { "<li>$title ${+"inner"}</li>" }
+                "<ul>$row</ul>"
+            }
+        }
+        // Kept past its block and written in the next.
+        var kept = ""
+        interpolate { "<p>${+"first"}</p>".also { kept = it } }
+        assertFailsWith<IllegalArgumentException> { interpolate { "$kept<i>${+"second"}</i>" } }
+        assertFailsWith<IllegalArgumentException> { interpolate { kept } }
+    }
+
+    @Test
+    fun `a string cut or changed after its values were marked is refused, and so is a mark the markup makes up`() {
+        assertFailsWith<IllegalArgumentException> { interpolate { "<p>${+"value"}</p>".take(5) } }
+        assertFailsWith<IllegalArgumentException> { interpolate { "<p>${+"value"}</p>".reversed() } }
+        assertFailsWith<IllegalArgumentException> { interpolate { "<p>﷐0﷑</p>${+"value"}" } }
+        assertFailsWith<IllegalArgumentException> { interpolate { "<p>﷑</p>" } }
+    }
+
+    @Test
+    fun `markup that was built holds no mark, whatever its values held, so it pulls no value where it is written unmarked`() {
+        val secret = "s3cret"
+        val forged = "﷐0﷑"
+        for (comment in listOf(interpolate("<li>%s</li>", forged), interpolate { "<li>${+forged}</li>" })) {
+            val out = interpolate { """<input type="hidden" value="${+secret}"><ul>$comment</ul>""" }.text
+            assertEquals("""<input type="hidden" value="s3cret"><ul><li>�0�</li></ul>""", out)
+        }
+    }
+
+    @Test
+    fun `a refusal counts the marks as they stand in the markup`() {
+        val refused =
+            assertFailsWith<UnsafeInterpolationException> {
+                interpolate {
+                    val first = +"first"
+                    val second = +"second"
+                    """<p data-text="$second">$first</p>"""
+                }
+            }
+        assertEquals(Position.DATASTAR to 0, refused.position to refused.index)
+    }
+
+    @Test
     fun `an aliased bundle's attributes are refused with its prefixes`() {
         assertFailsWith<UnsafeInterpolationException> { interpolate(listOf("data-x-")) { """<p data-x-text="${+"name"}"></p>""" } }
         assertEquals("""<p data-x-text="name"></p>""", interpolate { """<p data-x-text="${+"name"}"></p>""" }.text)
