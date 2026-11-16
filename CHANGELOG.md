@@ -26,7 +26,11 @@ All notable changes to Streamlord are recorded here. The format follows
 - The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
   this string with interpolate(...)": the string stays as written, in the block, with each value
   marked where it stands, in place of a format with `%s` and the values after it. It is not offered
-  for a string that writes `this`, which in the block is the block.
+  for a string that writes `this` or calls `toString()`, `let { }` and their like without a
+  receiver, which in the block are the block's. A margin or a constant with a per cent sign no
+  longer stands in its way.
+- The fix that marks values with `+` is the first one offered on a value, in a string and in a
+  block. In IntelliJ it stands above "Mark … as markup", which the IDE listed first by its title.
 
 **Actions and options**
 - Both editors no longer call a function called at once a function: `@get(function(){ return '/x' }())`

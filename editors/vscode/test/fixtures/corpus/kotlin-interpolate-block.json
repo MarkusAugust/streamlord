@@ -1,444 +1,111 @@
 {
- "$comment": "The block form of interpolate, judged by both editors alike: a template that opens with + is a value interpolate takes where it stands, judged as the value of a %s there is (unsafe-interpolation where interpolate refuses it); any other template Kotlin fills in before interpolate sees the markup (interpolate-template), with the fix that marks it. The format is the one of kotlin.json.",
  "kind": "kotlin",
  "cases": [
-  {
-   "name": "a widget's root, each value marked where it stands",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nclass WidgetContext(val rootId: String, val contentId: String, val eventsId: String)\n\nfun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: Html): Html = interpolate {\n    $$\"\"\"\n    <div id=\"$${+k.rootId}\" data-theme=\"light\" data-lt-boundary=\"\">\n        <style>$${+Trusted(customCss.orEmpty())}</style>\n        <div id=\"$${+k.contentId}\">\n            $${+bodyHtml}\n        </div>\n        <div id=\"$${+k.eventsId}\" hidden></div>\n    </div>\n    \"\"\".trimIndent()\n}",
-   "issues": []
-  },
-  {
-   "name": "a marked String in element text, a quoted attribute and after the start of a URL",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String, id: String) = interpolate { \"\"\"<a href=\"/heads/${+id}\" title=\"${+title}\">${+title}</a>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "a marked String where interpolate refuses one",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-text=\"${+name}\" style=\"${+name}\" onclick=\"${+name}\"></p><script>${+name}</script>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 238,
-     "end": 246,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 255,
-     "end": 263,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in style, which is read as CSS, and only a number is let in there. Pass a number and write the unit in the markup, or choose between classes."
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 274,
-     "end": 282,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 296,
-     "end": 304,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."
-    }
-   ]
-  },
-  {
-   "name": "a marked String for a tag name, an attribute name and an unquoted value",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<${+name} ${+name}=\"x\" title=${+name}></p>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 225,
-     "end": 233,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 234,
-     "end": 242,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 253,
-     "end": 261,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."
-    }
-   ]
-  },
-  {
-   "name": "a marked number and a marked boolean in a Datastar expression",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(count: Int, open: Boolean) = interpolate { \"\"\"<p data-signals=\"{count: ${+count}, open: ${+open}}\"></p>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "a marked URL that loads code, and one a Trusted vouches for",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(src: String) = interpolate { \"\"\"<script src=\"${+src}\"></script><script src=\"${+Trusted(src)}\"></script>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 236,
-     "end": 243,
-     "severity": "error",
-     "message": "interpolate always throws here: src lands in src, which loads code from wherever the value points, and the markup before it does not fix the host. Only Trusted(...) is let in there. Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there, or wrap a URL you chose yourself in Trusted(...)."
-    }
-   ]
-  },
-  {
-   "name": "a String written without the mark",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { \"\"\"<p title=\"$title\">${title}</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 235,
-     "end": 241,
-     "severity": "warning",
-     "message": "Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { \"\"\"<p title=\"${+title}\">${title}</p>\"\"\" }"
-     ]
-    },
-    {
-     "code": "interpolate-template",
-     "start": 243,
-     "end": 251,
-     "severity": "warning",
-     "message": "Kotlin fills in ${title} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { \"\"\"<p title=\"$title\">${+title}</p>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a String written without the mark in a multi-dollar literal",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { $$\"\"\"<p data-text=\"$count\">$$title</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 249,
-     "end": 256,
-     "severity": "warning",
-     "message": "Kotlin fills in $$title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { $$\"\"\"<p data-text=\"$count\">$${+title}</p>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a number, a constant and built markup written without the mark",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nconst val KIND = \"widget\"\n\nfun f(count: Int, row: Html) = interpolate { \"\"\"<p data-count=\"$count\" class=\"$KIND\">$row</p>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "a loop in the block, each row's value marked",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(names: List<String>) = interpolate { \"\"\"<ul>${names.joinToString(\"\") { \"<li>${+it}</li>\" }}</ul>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "a loop in the block, a row's value not marked",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(names: List<String>) = interpolate { \"\"\"<ul>${names.joinToString(\"\") { \"<li>$it</li>\" }}</ul>\"\"\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 267,
-     "end": 270,
-     "severity": "warning",
-     "message": "Kotlin fills in $it before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(names: List<String>) = interpolate { \"\"\"<ul>${names.joinToString(\"\") { \"<li>${+it}</li>\" }}</ul>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a percent sign and the letters of a placeholder in a block are markup",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p style=\"width: 50%\" title=\"%s of %s\">${+name}</p>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "the prefixes of an aliased bundle before the block",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate(listOf(\"data-x-\")) { \"\"\"<p data-x-text=\"${+name}\"></p>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 259,
-     "end": 267,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-x-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    }
-   ]
-  },
-  {
-   "name": "without its prefixes an aliased attribute is any attribute",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-x-text=\"${+name}\"></p>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "a block of somebody else's interpolate is a string like any other",
-   "source": "import com.acme.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p>${+name}</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "unescaped-interpolation",
-     "start": 71,
-     "end": 79,
-     "severity": "hint",
-     "message": "Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, escape it before it goes in, or build this part with kotlinx.html, which escapes text; if it is markup you built, declare it Html or wrap it in Trusted(...)."
-    }
-   ]
-  },
-  {
-   "name": "markup held as a String, marked in element text",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun row(name: String): String = \"<li>$name</li>\"\n\nfun f(name: String) = interpolate { \"\"\"<ul>${+row(name)}</ul>\"\"\" }",
-   "issues": [
-    {
-     "code": "unescaped-interpolation",
-     "start": 222,
-     "end": 227,
-     "severity": "warning",
-     "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun row(name: String): String = interpolate { \"<li>${+name}</li>\" }.text\n\nfun f(name: String) = interpolate { \"\"\"<ul>${+row(name)}</ul>\"\"\" }",
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun row(name: String): String = \"<li>${Trusted(name)}</li>\"\n\nfun f(name: String) = interpolate { \"\"\"<ul>${+row(name)}</ul>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a value that may be null, marked and not",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String?) = interpolate { \"\"\"<p title=\"${+title}\">$title</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 247,
-     "end": 253,
-     "severity": "warning",
-     "message": "Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it. Where $title is null, interpolate writes nothing, and Kotlin writes null.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String?) = interpolate { \"\"\"<p title=\"${+title}\">${+title}</p>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a template that only looks marked: an increment",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(n: Int) = interpolate { var i = n; \"\"\"<p>${++i}</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 232,
-     "end": 238,
-     "severity": "warning",
-     "message": "Kotlin fills in ${++i} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it."
-    }
-   ]
-  },
-  {
-   "name": "a + on a number is Kotlin's own: the number is written wherever it stands",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(count: Int, d: Double) = interpolate { \"\"\"<h${+count} title=${+count} onclick=\"f(${+count})\"><script>var a = ${+count} + ${+d}</script>\"\"\" }",
-   "issues": []
-  },
-  {
-   "name": "the fix that makes a multi-dollar literal writes the marked templates too",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"\"\"<p title=\"${+name}\" data-show=\"$open\">${+a}</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "kotlin-interpolation",
-     "start": 266,
-     "end": 271,
-     "severity": "warning",
-     "message": "Kotlin interpolates $open here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $open, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}open.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { $$\"\"\"<p title=\"$${+name}\" data-show=\"$open\">$${+a}</p>\"\"\" }",
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"\"\"<p title=\"${+name}\" data-show=\"${'$'}open\">${+a}</p>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "the mark of a value in a multi-dollar literal of a chain takes that literal's dollars",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun tail() = interpolate { \"<i>x</i>\" }\n\nfun f(name: String) = interpolate { $$\"\"\"<li data-text=\"$sig\">$$name</li>\"\"\" + tail() }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 288,
-     "end": 294,
-     "severity": "warning",
-     "message": "Kotlin fills in $$name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun tail() = interpolate { \"<i>x</i>\" }\n\nfun f(name: String) = interpolate { $$\"\"\"<li data-text=\"$sig\">$${+name}</li>\"\"\" + tail() }"
-     ]
-    },
-    {
-     "code": "interpolate-template",
-     "start": 305,
-     "end": 311,
-     "severity": "warning",
-     "message": "Kotlin fills in the value `tail()` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it."
-    }
-   ]
-  },
-  {
-   "name": "an expression of two operands is marked in parentheses",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(m: String?, a: String, b: String) = interpolate { \"\"\"<p title=\"${m ?: \"none\"}\">${a + b}</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 254,
-     "end": 268,
-     "severity": "warning",
-     "message": "Kotlin fills in ${m ?: \"none\"} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(m: String?, a: String, b: String) = interpolate { \"\"\"<p title=\"${+(m ?: \"none\")}\">${a + b}</p>\"\"\" }"
-     ]
-    },
-    {
-     "code": "interpolate-template",
-     "start": 270,
-     "end": 278,
-     "severity": "warning",
-     "message": "Kotlin fills in ${a + b} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(m: String?, a: String, b: String) = interpolate { \"\"\"<p title=\"${m ?: \"none\"}\">${+(a + b)}</p>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "without core in the module a block is a string like any other",
-   "core": false,
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-text=\"${+name}\"></p>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 238,
-     "end": 246,
-     "severity": "warning",
-     "message": "Kotlin writes ${+name} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in."
-    }
-   ]
-  },
-  {
-   "name": "a member function named interpolate is no block",
-   "source": "interface Renderer { fun interpolate(name: String) }\n\nclass R : Renderer {\n    override fun interpolate(name: String) {\n        val s = \"<p>$name</p>\"\n        println(s)\n    }\n}",
-   "issues": [
-    {
-     "code": "unescaped-interpolation",
-     "start": 140,
-     "end": 145,
-     "severity": "warning",
-     "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.interpolate\n\ninterface Renderer { fun interpolate(name: String) }\n\nclass R : Renderer {\n    override fun interpolate(name: String) {\n        val s = interpolate { \"<p>${+name}</p>\" }.text\n        println(s)\n    }\n}",
-      "import io.github.markusaugust.streamlord.core.domain.Trusted\n\ninterface Renderer { fun interpolate(name: String) }\n\nclass R : Renderer {\n    override fun interpolate(name: String) {\n        val s = \"<p>${Trusted(name)}</p>\"\n        println(s)\n    }\n}"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "markup in a block that opens with text is read too",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"Hello $a <p data-text=\\\"${+name}\\\"></p>\" }",
-   "issues": [
-    {
-     "code": "interpolate-template",
-     "start": 239,
-     "end": 241,
-     "severity": "warning",
-     "message": "Kotlin fills in $a before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"Hello ${+a} <p data-text=\\\"${+name}\\\"></p>\" }"
-     ]
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 257,
-     "end": 265,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    }
-   ]
-  },
-  {
-   "name": "a mark on a value joined with +",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"<p data-text=\\\"\" + +name + \"\\\">\" + +a + \"</p>\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 252,
-     "end": 257,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    }
-   ]
-  },
-  {
-   "name": "the block called by its whole name",
-   "source": "fun f(name: String) = io.github.markusaugust.streamlord.core.domain.interpolate { \"\"\"<p data-text=\"${+name}\">$name</p>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 99,
-     "end": 107,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    },
-    {
-     "code": "interpolate-template",
-     "start": 109,
-     "end": 114,
-     "severity": "warning",
-     "message": "Kotlin fills in $name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.",
-     "fixes": [
-      "fun f(name: String) = io.github.markusaugust.streamlord.core.domain.interpolate { \"\"\"<p data-text=\"${+name}\">${+name}</p>\"\"\" }"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a block in a block is read with its own prefixes",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate(listOf(\"data-x-\")) { \"\"\"<div>${+interpolate { \"\"\"<p data-text=\"${+name}\"></p>\"\"\" }}</div>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 282,
-     "end": 290,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    }
-   ]
-  },
-  {
-   "name": "a name set to a mark is the mark where it is written",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate {\n    val n = +name\n    \"\"\"<p title=\"$n\">$n</p>\"\"\"\n}",
-   "issues": []
-  },
-  {
-   "name": "a marked value in parentheses and a marked literal",
-   "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-text=\"${+(name)}\" data-show=\"${+\"open\"}\"></p>\"\"\" }",
-   "issues": [
-    {
-     "code": "unsafe-interpolation",
-     "start": 238,
-     "end": 248,
-     "severity": "error",
-     "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    },
-    {
-     "code": "unsafe-interpolation",
-     "start": 261,
-     "end": 271,
-     "severity": "error",
-     "message": "interpolate always throws here: \"open\" lands in data-show, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."
-    }
-   ]
-  }
+  {"name": "a widget's root, each value marked where it stands", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nclass WidgetContext(val rootId: String, val contentId: String, val eventsId: String)\n\nfun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: Html): Html = interpolate {\n    $$\"\"\"\n    <div id=\"$${+k.rootId}\" data-theme=\"light\" data-lt-boundary=\"\">\n        <style>$${+Trusted(customCss.orEmpty())}</style>\n        <div id=\"$${+k.contentId}\">\n            $${+bodyHtml}\n        </div>\n        <div id=\"$${+k.eventsId}\" hidden></div>\n    </div>\n    \"\"\".trimIndent()\n}", "issues": []},
+  {"name": "a marked String in element text, a quoted attribute and after the start of a URL", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String, id: String) = interpolate { \"\"\"<a href=\"/heads/${+id}\" title=\"${+title}\">${+title}</a>\"\"\" }", "issues": []},
+  {"name": "a marked String where interpolate refuses one", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-text=\"${+name}\" style=\"${+name}\" onclick=\"${+name}\"></p><script>${+name}</script>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 238, "end": 246, "severity": "error", "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}, 
+   {"code": "unsafe-interpolation", "start": 255, "end": 263, "severity": "error", "message": "interpolate always throws here: name lands in style, which is read as CSS, and only a number is let in there. Pass a number and write the unit in the markup, or choose between classes."}, 
+   {"code": "unsafe-interpolation", "start": 274, "end": 282, "severity": "error", "message": "interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."}, 
+   {"code": "unsafe-interpolation", "start": 296, "end": 304, "severity": "error", "message": "interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...)."}
+  ]},
+  {"name": "a marked String for a tag name, an attribute name and an unquoted value", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<${+name} ${+name}=\"x\" title=${+name}></p>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 225, "end": 233, "severity": "error", "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."}, 
+   {"code": "unsafe-interpolation", "start": 234, "end": 242, "severity": "error", "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."}, 
+   {"code": "unsafe-interpolation", "start": 253, "end": 261, "severity": "error", "message": "interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...)."}
+  ]},
+  {"name": "a marked number and a marked boolean in a Datastar expression", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(count: Int, open: Boolean) = interpolate { \"\"\"<p data-signals=\"{count: ${+count}, open: ${+open}}\"></p>\"\"\" }", "issues": []},
+  {"name": "a marked URL that loads code, and one a Trusted vouches for", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(src: String) = interpolate { \"\"\"<script src=\"${+src}\"></script><script src=\"${+Trusted(src)}\"></script>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 236, "end": 243, "severity": "error", "message": "interpolate always throws here: src lands in src, which loads code from wherever the value points, and the markup before it does not fix the host. Only Trusted(...) is let in there. Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there, or wrap a URL you chose yourself in Trusted(...)."}
+  ]},
+  {"name": "a String written without the mark", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { \"\"\"<p title=\"$title\">${title}</p>\"\"\" }", "issues": [
+   {"code": "interpolate-template", "start": 235, "end": 241, "severity": "warning", "message": "Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { \"\"\"<p title=\"${+title}\">${title}</p>\"\"\" }"]}, 
+   {"code": "interpolate-template", "start": 243, "end": 251, "severity": "warning", "message": "Kotlin fills in ${title} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { \"\"\"<p title=\"$title\">${+title}</p>\"\"\" }"]}
+  ]},
+  {"name": "a String written without the mark in a multi-dollar literal", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { $$\"\"\"<p data-text=\"$count\">$$title</p>\"\"\" }", "issues": [
+   {"code": "interpolate-template", "start": 249, "end": 256, "severity": "warning", "message": "Kotlin fills in $$title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String) = interpolate { $$\"\"\"<p data-text=\"$count\">$${+title}</p>\"\"\" }"]}
+  ]},
+  {"name": "a number, a constant and built markup written without the mark", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nconst val KIND = \"widget\"\n\nfun f(count: Int, row: Html) = interpolate { \"\"\"<p data-count=\"$count\" class=\"$KIND\">$row</p>\"\"\" }", "issues": []},
+  {"name": "a loop in the block, each row's value marked", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(names: List<String>) = interpolate { \"\"\"<ul>${names.joinToString(\"\") { \"<li>${+it}</li>\" }}</ul>\"\"\" }", "issues": []},
+  {"name": "a loop in the block, a row's value not marked", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(names: List<String>) = interpolate { \"\"\"<ul>${names.joinToString(\"\") { \"<li>$it</li>\" }}</ul>\"\"\" }", "issues": [
+   {"code": "interpolate-template", "start": 267, "end": 270, "severity": "warning", "message": "Kotlin fills in $it before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(names: List<String>) = interpolate { \"\"\"<ul>${names.joinToString(\"\") { \"<li>${+it}</li>\" }}</ul>\"\"\" }"]}
+  ]},
+  {"name": "a percent sign and the letters of a placeholder in a block are markup", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p style=\"width: 50%\" title=\"%s of %s\">${+name}</p>\"\"\" }", "issues": []},
+  {"name": "the prefixes of an aliased bundle before the block", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate(listOf(\"data-x-\")) { \"\"\"<p data-x-text=\"${+name}\"></p>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 259, "end": 267, "severity": "error", "message": "interpolate always throws here: name lands in data-x-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}
+  ]},
+  {"name": "without its prefixes an aliased attribute is any attribute", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-x-text=\"${+name}\"></p>\"\"\" }", "issues": []},
+  {"name": "a block of somebody else's interpolate is a string like any other", "source": "import com.acme.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p>${+name}</p>\"\"\" }", "issues": [
+   {"code": "unescaped-interpolation", "start": 71, "end": 79, "severity": "hint", "message": "Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, escape it before it goes in, or build this part with kotlinx.html, which escapes text; if it is markup you built, declare it Html or wrap it in Trusted(...)."}
+  ]},
+  {"name": "markup held as a String, marked in element text", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun row(name: String): String = \"<li>$name</li>\"\n\nfun f(name: String) = interpolate { \"\"\"<ul>${+row(name)}</ul>\"\"\" }", "issues": [
+   {"code": "unescaped-interpolation", "start": 222, "end": 227, "severity": "warning", "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun row(name: String): String = interpolate { \"<li>${+name}</li>\" }.text\n\nfun f(name: String) = interpolate { \"\"\"<ul>${+row(name)}</ul>\"\"\" }", "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun row(name: String): String = \"<li>${Trusted(name)}</li>\"\n\nfun f(name: String) = interpolate { \"\"\"<ul>${+row(name)}</ul>\"\"\" }"]}
+  ]},
+  {"name": "a value that may be null, marked and not", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String?) = interpolate { \"\"\"<p title=\"${+title}\">$title</p>\"\"\" }", "issues": [
+   {"code": "interpolate-template", "start": 247, "end": 253, "severity": "warning", "message": "Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it. Where $title is null, interpolate writes nothing, and Kotlin writes null.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(title: String?) = interpolate { \"\"\"<p title=\"${+title}\">${+title}</p>\"\"\" }"]}
+  ]},
+  {"name": "a template that only looks marked: an increment", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(n: Int) = interpolate { var i = n; \"\"\"<p>${++i}</p>\"\"\" }", "issues": [
+   {"code": "interpolate-template", "start": 232, "end": 238, "severity": "warning", "message": "Kotlin fills in ${++i} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it."}
+  ]},
+  {"name": "a + on a number is Kotlin's own: the number is written wherever it stands", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(count: Int, d: Double) = interpolate { \"\"\"<h${+count} title=${+count} onclick=\"f(${+count})\"><script>var a = ${+count} + ${+d}</script>\"\"\" }", "issues": []},
+  {"name": "the fix that makes a multi-dollar literal writes the marked templates too", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"\"\"<p title=\"${+name}\" data-show=\"$open\">${+a}</p>\"\"\" }", "issues": [
+   {"code": "kotlin-interpolation", "start": 266, "end": 271, "severity": "warning", "message": "Kotlin interpolates $open here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $open, make the whole literal $$\"\"\"...\"\"\" (Kotlin 2.2+), or escape as ${'$'}open.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { $$\"\"\"<p title=\"$${+name}\" data-show=\"$open\">$${+a}</p>\"\"\" }", "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"\"\"<p title=\"${+name}\" data-show=\"${'$'}open\">${+a}</p>\"\"\" }"]}
+  ]},
+  {"name": "the mark of a value in a multi-dollar literal of a chain takes that literal's dollars", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun tail() = interpolate { \"<i>x</i>\" }\n\nfun f(name: String) = interpolate { $$\"\"\"<li data-text=\"$sig\">$$name</li>\"\"\" + tail() }", "issues": [
+   {"code": "interpolate-template", "start": 288, "end": 294, "severity": "warning", "message": "Kotlin fills in $$name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun tail() = interpolate { \"<i>x</i>\" }\n\nfun f(name: String) = interpolate { $$\"\"\"<li data-text=\"$sig\">$${+name}</li>\"\"\" + tail() }"]}, 
+   {"code": "interpolate-template", "start": 305, "end": 311, "severity": "warning", "message": "Kotlin fills in the value `tail()` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it."}
+  ]},
+  {"name": "an expression of two operands is marked in parentheses", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(m: String?, a: String, b: String) = interpolate { \"\"\"<p title=\"${m ?: \"none\"}\">${a + b}</p>\"\"\" }", "issues": [
+   {"code": "interpolate-template", "start": 254, "end": 268, "severity": "warning", "message": "Kotlin fills in ${m ?: \"none\"} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(m: String?, a: String, b: String) = interpolate { \"\"\"<p title=\"${+(m ?: \"none\")}\">${a + b}</p>\"\"\" }"]}, 
+   {"code": "interpolate-template", "start": 270, "end": 278, "severity": "warning", "message": "Kotlin fills in ${a + b} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(m: String?, a: String, b: String) = interpolate { \"\"\"<p title=\"${m ?: \"none\"}\">${+(a + b)}</p>\"\"\" }"]}
+  ]},
+  {"name": "without core in the module a block is a string like any other", "core": false, "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-text=\"${+name}\"></p>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 238, "end": 246, "severity": "warning", "message": "Kotlin writes ${+name} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in."}
+  ]},
+  {"name": "a member function named interpolate is no block", "source": "interface Renderer { fun interpolate(name: String) }\n\nclass R : Renderer {\n    override fun interpolate(name: String) {\n        val s = \"<p>$name</p>\"\n        println(s)\n    }\n}", "issues": [
+   {"code": "unescaped-interpolation", "start": 140, "end": 145, "severity": "warning", "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).", "fixes": ["import io.github.markusaugust.streamlord.core.domain.interpolate\n\ninterface Renderer { fun interpolate(name: String) }\n\nclass R : Renderer {\n    override fun interpolate(name: String) {\n        val s = interpolate { \"<p>${+name}</p>\" }.text\n        println(s)\n    }\n}", "import io.github.markusaugust.streamlord.core.domain.Trusted\n\ninterface Renderer { fun interpolate(name: String) }\n\nclass R : Renderer {\n    override fun interpolate(name: String) {\n        val s = \"<p>${Trusted(name)}</p>\"\n        println(s)\n    }\n}"]}
+  ]},
+  {"name": "markup in a block that opens with text is read too", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"Hello $a <p data-text=\\\"${+name}\\\"></p>\" }", "issues": [
+   {"code": "interpolate-template", "start": 239, "end": 241, "severity": "warning", "message": "Kotlin fills in $a before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"Hello ${+a} <p data-text=\\\"${+name}\\\"></p>\" }"]}, 
+   {"code": "unsafe-interpolation", "start": 257, "end": 265, "severity": "error", "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}
+  ]},
+  {"name": "a mark on a value joined with +", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"<p data-text=\\\"\" + +name + \"\\\">\" + +a + \"</p>\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 252, "end": 257, "severity": "error", "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}
+  ]},
+  {"name": "the block called by its whole name", "source": "fun f(name: String) = io.github.markusaugust.streamlord.core.domain.interpolate { \"\"\"<p data-text=\"${+name}\">$name</p>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 99, "end": 107, "severity": "error", "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}, 
+   {"code": "interpolate-template", "start": 109, "end": 114, "severity": "warning", "message": "Kotlin fills in $name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["fun f(name: String) = io.github.markusaugust.streamlord.core.domain.interpolate { \"\"\"<p data-text=\"${+name}\">${+name}</p>\"\"\" }"]}
+  ]},
+  {"name": "a block in a block is read with its own prefixes", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate(listOf(\"data-x-\")) { \"\"\"<div>${+interpolate { \"\"\"<p data-text=\"${+name}\"></p>\"\"\" }}</div>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 282, "end": 290, "severity": "error", "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}
+  ]},
+  {"name": "a name set to a mark is the mark where it is written", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate {\n    val n = +name\n    \"\"\"<p title=\"$n\">$n</p>\"\"\"\n}", "issues": []},
+  {"name": "a marked value in parentheses and a marked literal", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"\"\"<p data-text=\"${+(name)}\" data-show=\"${+\"open\"}\"></p>\"\"\" }", "issues": [
+   {"code": "unsafe-interpolation", "start": 238, "end": 248, "severity": "error", "message": "interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}, 
+   {"code": "unsafe-interpolation", "start": 261, "end": 271, "severity": "error", "message": "interpolate always throws here: \"open\" lands in data-show, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label."}
+  ]},
+  {"name": "a value joined with + in a block is marked where it stands, the first as a string of its own", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { name + \"<p>\" + a + \"</p>\" }", "issues": [
+   {"code": "interpolate-template", "start": 232, "end": 236, "severity": "warning", "message": "Kotlin fills in the value `name` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { \"${+name}\" + \"<p>\" + a + \"</p>\" }"]}, 
+   {"code": "interpolate-template", "start": 247, "end": 248, "severity": "warning", "message": "Kotlin fills in the value `a` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String, a: String) = interpolate { name + \"<p>\" + +a + \"</p>\" }"]}
+  ]},
+  {"name": "a string in a value marked as Trusted is that value's, and no markup of the block", "source": "import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(xs: List<String>) = interpolate { \"<ul>${+Trusted(xs.joinToString(\"\") { \"<li>$it</li>\" })}</ul>\" }", "issues": [
+   {"code": "unescaped-interpolation", "start": 268, "end": 271, "severity": "hint", "message": "Kotlin writes $it into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Html\nimport io.github.markusaugust.streamlord.core.domain.Trusted\nimport io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(xs: List<String>) = interpolate { \"<ul>${+Trusted(xs.joinToString(\"\") { interpolate { \"<li>${+it}</li>\" }.text })}</ul>\" }"]}
+  ]},
+  {"name": "a string that calls what everything has without a receiver gets no rewrite: in the block it is the block's", "source": "class Row(val n: String) {\n    override fun toString() = n\n\n    fun cell(note: String) = \"<td title=\\\"${toString()}\\\">$note</td>\"\n}", "issues": [
+   {"code": "unescaped-interpolation", "start": 102, "end": 115, "severity": "hint", "message": "Kotlin writes ${toString()} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. Marking the values is not offered here: in the block of interpolate, this and a call without a receiver such as toString() are the block's."}, 
+   {"code": "unescaped-interpolation", "start": 118, "end": 123, "severity": "warning", "message": "Kotlin writes $note into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: in the block of interpolate, this and a call without a receiver such as toString() are the block's.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.Trusted\n\nclass Row(val n: String) {\n    override fun toString() = n\n\n    fun cell(note: String) = \"<td title=\\\"${toString()}\\\">${Trusted(note)}</td>\"\n}"]}
+  ]},
+  {"name": "literals that would make a template of a dollar and a name stay apart", "source": "fun f(name: String) = \"<p data-text=\\\"$\" + \"count\\\">\" + name + \"</p>\"", "issues": [
+   {"code": "unescaped-interpolation", "start": 56, "end": 60, "severity": "warning", "message": "Kotlin writes the value `name` into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).", "fixes": ["import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { \"<p data-text=\\\"$\" + \"count\\\">${+name}</p>\" }.text", "import io.github.markusaugust.streamlord.core.domain.Trusted\n\nfun f(name: String) = \"<p data-text=\\\"$\" + \"count\\\">\" + Trusted(name) + \"</p>\""]}
+  ]},
+  {"name": "a value that ends in a line comment keeps its line break before the parenthesis", "source": "fun f(a: String, b: String) = \"\"\"<p title=\"${a + b // both\n}\"></p>\"\"\"", "issues": [
+   {"code": "unescaped-interpolation", "start": 43, "end": 60, "severity": "hint", "message": "Kotlin writes ${a + b // both} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it.", "fixes": ["import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(a: String, b: String) = interpolate { \"\"\"<p title=\"${+(a + b // both\n)}\"></p>\"\"\" }.text"]}
+  ]},
+  {"name": "a margin that is a per cent sign is kept, and a constant with one stays as written", "source": "const val OFF = \"50%s\"\n\nfun f(name: String) = \"\"\"\n    %<p class=\"$OFF\">$name</p>\n    \"\"\".trimMargin(\"%\")", "issues": [
+   {"code": "unescaped-interpolation", "start": 71, "end": 76, "severity": "warning", "message": "Kotlin writes $name into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).", "fixes": ["import io.github.markusaugust.streamlord.core.domain.interpolate\n\nconst val OFF = \"50%s\"\n\nfun f(name: String) = interpolate { \"\"\"\n    %<p class=\"${+OFF}\">${+name}</p>\n    \"\"\".trimMargin(\"%\") }.text", "import io.github.markusaugust.streamlord.core.domain.Trusted\n\nconst val OFF = \"50%s\"\n\nfun f(name: String) = \"\"\"\n    %<p class=\"$OFF\">${Trusted(name)}</p>\n    \"\"\".trimMargin(\"%\")"]}
+  ]},
+  {"name": "a value already in parentheses is marked as it stands", "source": "fun f(x: Boolean, name: String) = \"<p>\" + (if (x) name else \"b\") + \"</p>\"", "issues": [
+   {"code": "unescaped-interpolation", "start": 42, "end": 64, "severity": "warning", "message": "Kotlin writes the value `(if (x) name else \"b\")` into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).", "fixes": ["import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(x: Boolean, name: String) = interpolate { \"<p>${+(if (x) name else \"b\")}</p>\" }.text", "import io.github.markusaugust.streamlord.core.domain.Trusted\n\nfun f(x: Boolean, name: String) = \"<p>\" + Trusted((if (x) name else \"b\")) + \"</p>\""]}
+  ]}
  ]
 }

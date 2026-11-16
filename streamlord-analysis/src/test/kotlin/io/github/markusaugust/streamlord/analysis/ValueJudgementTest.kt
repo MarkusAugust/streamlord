@@ -31,7 +31,7 @@ class ValueJudgementTest {
     fun `a message that advises interpolate without offering the rewrite says why`() {
         val src = "fun card(title: String) = \"<h2>\${title.escaped()}</h2>\""
         val issue = analyzer.analyzeKotlin(src).single()
-        assertTrue("build the string with interpolate(...)" in issue.message, issue.message)
+        assertTrue("mark it with + in interpolate { }" in issue.message, issue.message)
         assertEquals(emptyList(), issue.fixes.filter { it.title.startsWith("Mark the values with +") })
         assertTrue("is not offered here" in issue.message, issue.message)
     }

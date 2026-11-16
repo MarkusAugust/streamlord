@@ -63,8 +63,15 @@ private class ExpressionValues(
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
 
-/** A `this` without a label, as an expression of its own. */
-private val OWN_THIS = regex("""(?<![\p{L}\p{Nd}_.@`])this(?![\p{L}\p{Nd}_@`])""")
+/**
+ * A `this` without a label, or a call without a receiver of what everything has, `toString()`, `let { }` and their
+ * like: in the block of interpolate each means the block.
+ */
+private val OWN_THIS =
+    regex(
+        """(?<![\p{L}\p{Nd}_.@`])(?:this(?![\p{L}\p{Nd}_@`])|""" +
+            """javaClass(?![\p{L}\p{Nd}_`])|(?:toString|hashCode|equals|let|also|apply|run|takeIf|takeUnless)\s*[({])""",
+    )
 private val END_TAG_ATTRIBUTES = regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
 
 /** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
@@ -74,10 +81,10 @@ private const val UNQUOTED_STOP = " \t\n\u000C\r\u000B\"'=<>`"
 private val ESCAPED_POSITIONS = setOf(Position.TEXT, Position.ATTRIBUTE, Position.URL)
 
 /** Why no rewrite is offered where the value alone stands in its way. */
-private const val OWN_MARKUP_NOTE = " interpolate(...) is not offered here: it would escape this value, which may be markup you built."
+private const val OWN_MARKUP_NOTE = " Marking the values is not offered here: it would escape this value, which may be markup you built."
 
 /** What interpolate does with a URL whose value decides the scheme. */
-private const val REFUSES_SCHEME = "interpolate(...), which refuses a scheme that runs"
+private const val REFUSES_SCHEME = "interpolate { }, which refuses a scheme that runs"
 
 private const val CODE_URL_ADVICE =
     "Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there"
@@ -420,7 +427,8 @@ private fun Analyzer.judgeInterpolated(
         // host, and after a scheme the markup writes that does more than navigate.
         val loadsAnywhere = hostUnfixed(reading, starts, k) { j -> j == k || percentAt(j) }
         val fixable =
-            landing.position in ESCAPED_POSITIONS && !loadsAnywhere && ip.kind != InterpolationKind.OPERAND && mapped &&
+            landing.position in ESCAPED_POSITIONS && !loadsAnywhere && mapped &&
+                (ip.kind != InterpolationKind.OPERAND || (block && !ip.unread)) &&
                 percents % 2 == 0 && keeps && runningScheme(reading, starts, k) == null
         // Under trimIndent the trim now runs before the value goes in, so a line break in it is no longer trimmed.
         val indentTrimmed = trimAfter(src, format)?.let { it.margin == null } == true
@@ -428,7 +436,7 @@ private fun Analyzer.judgeInterpolated(
         val fixes =
             when {
                 !fixable -> emptyList()
-                formatArg == null -> listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed))
+                formatArg == null -> listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed, first = ip.start == s.start))
                 else -> listOf(placeholderFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed))
             }
         val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
@@ -650,7 +658,7 @@ private fun Analyzer.endTagAt(
 
 /**
  * The fix that marks the value of [ip] in a block: `$name` and `${name}` become `${+name}`, with
- * the dollars the literal opens a template with.
+ * the dollars the literal opens a template with, and a value joined with `+` becomes `+name`.
  */
 private fun Analyzer.markFix(
     format: KotlinString,
@@ -658,13 +666,22 @@ private fun Analyzer.markFix(
     shown: String,
     asIs: Boolean,
     preferred: Boolean,
+    first: Boolean,
 ): Fix {
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
     val operand = markOperand(expr)
     val title = "Mark $shown with +, " + if (asIs) "where interpolate writes it as it is" else "which interpolate escapes"
     // The dollars of the literal the template stands in, which in a chain is one of several.
     val dollars = (format.literals.firstOrNull { ip.start in it.start until it.end } ?: format).dollars
-    val marked = if (ip.kind == InterpolationKind.OPERAND) "+$operand" else "$".repeat(dollars) + "{+" + operand + "}"
+    val marked =
+        when {
+            ip.kind != InterpolationKind.OPERAND -> "$".repeat(dollars) + "{+" + operand + "}"
+
+            // A mark that opens the chain has no string before it to be joined to.
+            first -> "\"\${+$operand}\""
+
+            else -> "+$operand"
+        }
     return Fix(title, ip.start, ip.end, marked, preferred = preferred)
 }
 
@@ -988,13 +1005,12 @@ internal fun Analyzer.judgeValues(
                 told[k].isString() || shownType(src, s.interpolations[k].text, s.start)?.let { ValueFact.ofTypeName(it) }.isString()
             }
     }
-    // A value interpolate would not take as it is, though it is safe where it lands, stays a template in the format,
-    // which Kotlin fills in as before: one of the author's own, a constant or `${"$"}`, but not one whose text, as the
-    // file shows it, interpolate would read as a placeholder; and digits, true, false or null in a script or a style.
+    // A value interpolate would not take as it is, though it is safe where it lands, stays unmarked, and Kotlin fills
+    // it in as before: one of the author's own, a constant or `${"$"}`, and digits, true, false or null in a script or a style.
     val kept by lazy(LazyThreadSafetyMode.NONE) {
         placeholders.filterTo(HashSet()) { k ->
             val ip = s.interpolations[k]
-            val own = told[k].isConstant() && !constantPercent(src, ip.text, s.start)
+            val own = told[k].isConstant()
             val scalar = told[k].scalar() && verdict(told[k], landings[k].position) == Verdict.SAFE
             !keeps[k] && ip.kind != InterpolationKind.OPERAND && (own || scalar)
         }
@@ -1003,20 +1019,32 @@ internal fun Analyzer.judgeValues(
     // Why the string cannot be rewritten whatever its values are, in a few words, or null where it can.
     val unfit by lazy(LazyThreadSafetyMode.NONE) {
         when {
-            s.called -> "a call after one literal of the + chain applies to that literal alone"
+            s.called -> {
+                "a call after one literal of the + chain applies to that literal alone"
+            }
 
-            s.unread -> "what is joined to the string with + cannot be read as values"
+            s.unread -> {
+                "what is joined to the string with + cannot be read as values"
+            }
 
-            // The trim call stays on the format, inside the call: one read here, with a margin that is no format character.
-            trim != null && (trim.text == null || trim.margin?.contains('%') == true) -> "the trim call after the string cannot be kept"
+            // The trim call stays on the string, in the block: one that could be read here.
+            trim != null && trim.text == null -> {
+                "the trim call after the string cannot be kept"
+            }
 
             // In the block a `this` without a label is the block's own, and no longer what the string wrote.
-            s.interpolations.any { OWN_THIS.containsMatchIn(it.text) } -> "in the block of interpolate, this is the block"
+            s.interpolations.any { OWN_THIS.containsMatchIn(it.text) } -> {
+                "in the block of interpolate, this and a call without a receiver such as toString() are the block's"
+            }
 
             // An annotation and a const val take a constant, which no call is.
-            constantOnly(src, s.start) -> ""
+            constantOnly(src, s.start) -> {
+                ""
+            }
 
-            else -> null
+            else -> {
+                null
+            }
         }
     }
     // interpolate(...) can take the string only when every value is one it accepts where it lands.
@@ -1064,11 +1092,11 @@ internal fun Analyzer.judgeValues(
         // What the rewrite does with another value, or why none is offered: the first value in the way.
         fun rewriteNote(): String {
             if (!canInterpolate || trusted[k]) return ""
-            if (!unfit.isNullOrEmpty()) return " interpolate(...) is not offered here: $unfit."
+            if (!unfit.isNullOrEmpty()) return " Marking the values is not offered here: $unfit."
             // A value that may be null, which a template writes as null and the rewrite as nothing.
             val nothing =
                 nullable?.takeIf { fixable }?.let {
-                    " interpolate(...) writes nothing for ${valueShown(
+                    " interpolate writes nothing for ${valueShown(
                         s.interpolations[it],
                     )} where it is null, and Kotlin writes null."
                 } ?: ""
@@ -1079,9 +1107,9 @@ internal fun Analyzer.judgeValues(
             val place = refusedPlace(view, landings[other], starts[other])
             val refused = loose[other] || landings[other].position !in ESCAPED_POSITIONS
             return when {
-                fixable -> " The fix passes $named, in $place, as Trusted(...).$nothing"
-                refused -> " interpolate(...) cannot take this string while $named stands in $place."
-                else -> " interpolate(...) is not offered here: it would escape $named, which may be markup you built."
+                fixable -> " The fix marks $named, in $place, as Trusted(...).$nothing"
+                refused -> " interpolate cannot take this string while $named stands in $place."
+                else -> " Marking the values is not offered here: it would escape $named, which may be markup you built."
             }
         }
 
@@ -1126,7 +1154,7 @@ internal fun Analyzer.judgeValues(
             return issue(
                 "Kotlin writes $shown at the start of $attribute, so the value decides the scheme, " +
                     "and a javascript: URL runs. Escaping does not help: start the value with /, # or https://" +
-                    (if (fixes.isNotEmpty()) ", or build the string with $REFUSES_SCHEME." else ".") + rewriteNote(),
+                    (if (fixes.isNotEmpty()) ", or mark the value with + in $REFUSES_SCHEME." else ".") + rewriteNote(),
                 fixes = fixes,
             )
         }
@@ -1217,7 +1245,7 @@ internal fun Analyzer.judgeValues(
                         if (rawElement(view, landing, starts[k]) == "style") {
                             "Kotlin writes $shown into a <style>, where it is read as CSS, so escaping does not help. " +
                                 "Choose between classes, or write a number." +
-                                if (vouch) " CSS you wrote yourself can be passed to interpolate(...) as Trusted(...)." else ""
+                                if (vouch) " CSS you wrote yourself can be marked as Trusted(...) in interpolate { }." else ""
                         } else {
                             "Kotlin writes $shown into ${landing.attribute ?: "a script"}, which the browser runs, " +
                                 "so escaping does not help. Put the value in a data-* attribute and read it from there."
@@ -1448,7 +1476,7 @@ private fun Analyzer.unescapedMessage(
     val base =
         "Kotlin writes $shown into the HTML as it is. If it can hold text from outside, " +
             if (interpolate) {
-                "build the string with interpolate(...), which escapes it"
+                "mark it with + in interpolate { }, which escapes it"
             } else {
                 "escape it before it goes in, or build this part with kotlinx.html, which escapes " +
                     if (text) "text" else "attribute values"

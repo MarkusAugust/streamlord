@@ -1,6 +1,9 @@
 package io.github.markusaugust.streamlord.intellij
 
+import com.intellij.codeInsight.intention.HighPriorityAction
+import com.intellij.codeInspection.ex.QuickFixWrapper
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
+import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
 
 private const val Q = "\"\"\""
 private const val IMPORTS =
@@ -75,6 +78,17 @@ class RewriteActionTest : StreamlordTestCase() {
         myFixture.configureByText("Unmarked.kt", source)
         val offered = myFixture.availableIntentions.map { it.text }
         assertEquals(offered.toString(), "Mark \$name with +, which interpolate escapes", offered.first())
+    }
+
+    fun `test a fix that marks a value as markup is put above no other where it stands alone`() {
+        // The rewrite is withheld for a string that writes this, so the waiver is the only fix.
+        val source =
+            "import io.github.markusaugust.streamlord.core.domain.Trusted\n\n" +
+                "class Row(val n: String) {\n    fun cell(note: String) = \"<td title=\\\"\${this.n}\\\">\$no<caret>te</td>\"\n}\n"
+        myFixture.configureByText("Alone.kt", source)
+        val fixes = myFixture.getAllQuickFixes().mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
+        val markup = fixes.single { it.familyName == "Mark \$note as markup" }
+        assertFalse(fixes.map { it.familyName }.toString(), markup is HighPriorityAction)
     }
 
     fun `test the rewrite of the widget is a context action in its markup, away from every warning`() {

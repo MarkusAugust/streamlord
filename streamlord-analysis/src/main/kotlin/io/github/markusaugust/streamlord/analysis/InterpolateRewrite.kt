@@ -99,7 +99,7 @@ private fun interpolateText(
         val written = src.substring(literal.start, literal.contentStart) to src.substring(literal.contentEnd, literal.end)
         when {
             k == 0 -> markup.append(written.first)
-            written == form -> markup.setLength(markup.length - form.second.length)
+            written == form && joins(bodies[k - 1], bodies[k], literal.raw) -> markup.setLength(markup.length - form.second.length)
             else -> markup.append(" + ").append(written.first)
         }
         markup.append(bodies[k]).append(written.second)
@@ -110,8 +110,33 @@ private fun interpolateText(
     return "interpolate { $markup$trim }.text"
 }
 
+/**
+ * Whether two literals written alike read the same as one: not where the first ends in a dollar or a name that the
+ * second would carry on, which would make a template or lengthen one, nor where quotes would meet in a raw literal.
+ */
+private fun joins(
+    first: CharSequence,
+    second: CharSequence,
+    raw: Boolean,
+): Boolean {
+    val last = first.lastOrNull() ?: return true
+    val next = second.firstOrNull() ?: return true
+    val name = { c: Char -> c.isLetterOrDigit() || c == '_' || c == '`' }
+    return !(last == '$' || (name(last) && (name(next) || next == '{')) || (raw && (last == '"' || next == '"')))
+}
+
 /** [expr] as what a `+` marks: the mark takes the nearest operand, so anything but a name, a call or a chain of them goes in parentheses. */
-internal fun markOperand(expr: String): String = if (CHAIN.matchEntire(expr.replace(CHAIN_ARGUMENTS, "")) != null) expr else "($expr)"
+internal fun markOperand(expr: String): String =
+    when {
+        CHAIN.matchEntire(expr.replace(CHAIN_ARGUMENTS, "")) != null -> expr
+
+        expr.startsWith("(") && closing(expr, depths(expr), 0) == expr.length -> expr
+
+        // A line comment would take the parenthesis that closes after it.
+        "//" in expr -> "($expr\n)"
+
+        else -> "($expr)"
+    }
 
 private val CHAIN = regex("""[\p{L}_`][\p{L}\p{Nd}_`]*(?:\.[\p{L}_`][\p{L}\p{Nd}_`]*)*""")
 
@@ -395,16 +420,6 @@ private val CAST = regex("""\sas\??\s+([\p{L}_][\p{L}\p{Nd}_.]*)\s*(?:<.*>)?\??$
 
 /** Whether every value a placeholder can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
 internal fun callResult(value: String): Boolean = templateValues(value).all { lastCall(it.text) != null }
-
-/** Whether a constant's text, as the file shows it, holds a per cent sign: in the value as written, or in the `const val` it names. */
-internal fun constantPercent(
-    src: String,
-    value: String,
-    at: Int,
-): Boolean {
-    val t = value.trim()
-    return '%' in t || (KOTLIN_NAME.matchEntire(t) != null && declarationOf(src, t, at)?.text?.contains('%') == true)
-}
 
 /**
  * The type the file shows [value] to have: a name's declared type, or, for a property reached

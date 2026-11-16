@@ -331,7 +331,7 @@ public class Analyzer(
             if (chain != null) for (l in chain.literals) chained += l.start
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
-            val block = blocks.lastOrNull { s.start in it.braces }
+            val block = blocks.lastOrNull { s.start in it.braces }?.takeUnless { inMarkedValue(lex.strings, s, it.braces) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
                 val issues =
                     checkInterpolateBlock(
@@ -574,6 +574,17 @@ public class Analyzer(
                     PLAIN_STRING.findAll(l.groupValues[1]).map { it.groupValues[1] }.toList()
                 },
             )
+        }
+
+    /** Whether [s] stands in a template of a literal of the block at [braces] that marks its value with `+`: it is that value's then. */
+    private fun inMarkedValue(
+        strings: List<KotlinString>,
+        s: KotlinString,
+        braces: IntRange,
+    ): Boolean =
+        withNested(strings).any { outer ->
+            outer.start in braces && outer.start < s.start && s.end <= outer.end &&
+                outer.interpolations.any { it.start <= s.start && s.end <= it.end && markedValue(it) != null }
         }
 
     /** Where the brace that opens at [open] closes, counting the braces of code alone; null when it never does. */

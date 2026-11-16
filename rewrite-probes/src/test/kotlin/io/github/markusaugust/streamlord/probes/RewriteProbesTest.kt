@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 private const val REWRITE = "Mark the values with + in interpolate { }"
 private const val ADVICE = "build the string with interpolate(...)"
-private val UNOFFERED = listOf("interpolate(...) is not offered here", "interpolate(...) cannot take this string")
+private val UNOFFERED = listOf("Marking the values is not offered here", "interpolate(...) cannot take this string")
 private const val HOSTILE = "<i a=\"b\">'&"
 private const val LINES = "a\n      b"
 

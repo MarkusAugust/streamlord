@@ -46,7 +46,7 @@ class CorpusTest {
                     val advises = "build the string with interpolate(...)" in issue.message
                     val offered = issue.fixes.any { it.title.startsWith("Mark the values with + in interpolate { }") }
                     val why =
-                        "interpolate(...) is not offered here" in issue.message ||
+                        "Marking the values is not offered here" in issue.message ||
                             "interpolate(...) cannot take this string" in issue.message
                     if (advises && !offered && !why) failures += "$file: ${case.string("name")}: ${issue.message}"
                 }
