@@ -9,8 +9,8 @@ private const val Q = "\"\"\""
 private const val IMPORTS =
     "import io.github.markusaugust.streamlord.core.domain.Trusted\n" +
         "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n" +
-        "class WidgetContext(val rootId: String, val contentId: String, val eventsId: String)\n\n"
-private const val SIGNATURE = "fun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: String): String =\n    "
+        "class LayoutContext(val pageId: String, val sectionId: String, val streamId: String)\n\n"
+private const val SIGNATURE = "fun pageHtml(k: LayoutContext, pageStyle: String? = null, mainHtml: String): String =\n    "
 
 /** The literal of the case that found the defects, with each value written as given. */
 private fun widget(
@@ -20,13 +20,13 @@ private fun widget(
     body: String,
     events: String,
 ): String =
-    "$Q\n    <div id=\"$root\" data-theme=\"light\" data-lt-boundary=\"\">\n        <style>$css</style>\n" +
+    "$Q\n    <div id=\"$root\" data-theme=\"light\" data-ui-boundary=\"\">\n        <style>$css</style>\n" +
         "        <div id=\"$content\">\n            $body\n        </div>\n        <div id=\"$events\" hidden></div>\n    </div>\n    $Q.trimIndent()"
 
-private const val CSS = "\${customCss.orEmpty()}"
+private const val CSS = "\${pageStyle.orEmpty()}"
 
 /** The widget with each value marked where it stands, the CSS the author vouches for among them. */
-private val MARKED = widget("\${+k.rootId}", "\${+Trusted(customCss.orEmpty())}", "\${+k.contentId}", "\${+bodyHtml}", "\${+k.eventsId}")
+private val MARKED = widget("\${+k.pageId}", "\${+Trusted(pageStyle.orEmpty())}", "\${+k.sectionId}", "\${+mainHtml}", "\${+k.streamId}")
 
 /**
  * The rewrite to `interpolate` as the author reaches it: from the caret in each value of a literal
@@ -40,7 +40,7 @@ class RewriteActionTest : StreamlordTestCase() {
     }
 
     fun `test the rewrite is offered from each value and leaves one call with the style's value as Trusted`() {
-        val values = listOf("\${k.rootId}", CSS, "\${k.contentId}", "\$bodyHtml", "\${k.eventsId}")
+        val values = listOf("\${k.pageId}", CSS, "\${k.sectionId}", "\$mainHtml", "\${k.streamId}")
         val source = IMPORTS + SIGNATURE + widget(values[0], values[1], values[2], values[3], values[4]) + "\n"
         val rewritten =
             IMPORTS + SIGNATURE + "interpolate { " + MARKED + " }.text\n"
@@ -61,7 +61,7 @@ class RewriteActionTest : StreamlordTestCase() {
     }
 
     fun `test marking the values with + is the first action offered on each value of the widget`() {
-        val values = listOf("\${k.rootId}", CSS, "\${k.contentId}", "\$bodyHtml", "\${k.eventsId}")
+        val values = listOf("\${k.pageId}", CSS, "\${k.sectionId}", "\$mainHtml", "\${k.streamId}")
         val source = IMPORTS + SIGNATURE + widget(values[0], values[1], values[2], values[3], values[4]) + "\n"
         for (value in values) {
             val at = source.indexOf(value) + 1
@@ -92,7 +92,7 @@ class RewriteActionTest : StreamlordTestCase() {
     }
 
     fun `test the rewrite of the widget is a context action in its markup, away from every warning`() {
-        val source = IMPORTS + SIGNATURE + widget("\${k.rootId}", CSS, "\${k.contentId}", "\$bodyHtml", "\${k.eventsId}") + "\n"
+        val source = IMPORTS + SIGNATURE + widget("\${k.pageId}", CSS, "\${k.sectionId}", "\$mainHtml", "\${k.streamId}") + "\n"
         val at = source.indexOf("data-theme") + 3
         myFixture.configureByText("Widget.kt", source.substring(0, at) + "<caret>" + source.substring(at))
         val offered = myFixture.availableIntentions.filter { it.text.startsWith("Mark the values with + in interpolate { }") }

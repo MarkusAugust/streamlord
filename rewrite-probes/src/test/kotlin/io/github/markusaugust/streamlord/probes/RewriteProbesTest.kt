@@ -41,7 +41,7 @@ class RewriteProbesTest {
             "Trusted", "Badge" -> Trusted("<b title=\"x\">y</b>")
             "Widget" -> Widget("Ann")
             "User" -> User("Ann", listOf("a", "b"), Trusted("<b>y</b>"))
-            "WidgetContext" -> WidgetContext("root", "content", "events")
+            "LayoutContext" -> LayoutContext("root", "content", "events")
             "List<String>" -> listOf("a", "b")
             "List<Html>" -> listOf(interpolate("<li>%s</li>", "a"), interpolate("<li>%s</li>", "b"))
             "List<List<String>>" -> listOf(listOf("a"), listOf("b", "c"))

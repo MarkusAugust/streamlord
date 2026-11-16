@@ -2,17 +2,17 @@ import io.github.markusaugust.streamlord.core.domain.Html
 import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.interpolate
 
-class WidgetContext(val rootId: String, val contentId: String, val eventsId: String)
+class LayoutContext(val pageId: String, val sectionId: String, val streamId: String)
 
 // Each value marked where it stands: nothing to say.
-fun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: Html): Html = interpolate {
+fun pageHtml(k: LayoutContext, pageStyle: String? = null, mainHtml: Html): Html = interpolate {
     $$"""
-    <div id="$${+k.rootId}" data-theme="light" data-lt-boundary="">
-        <style>$${+Trusted(customCss.orEmpty())}</style>
-        <div id="$${+k.contentId}">
-            $${+bodyHtml}
+    <div id="$${+k.pageId}" data-theme="light" data-ui-boundary="">
+        <style>$${+Trusted(pageStyle.orEmpty())}</style>
+        <div id="$${+k.sectionId}">
+            $${+mainHtml}
         </div>
-        <div id="$${+k.eventsId}" hidden></div>
+        <div id="$${+k.streamId}" hidden></div>
     </div>
     """.trimIndent()
 }

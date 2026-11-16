@@ -482,18 +482,18 @@ describe("code action provider", () => {
   }
 
   const DOMAIN = "io.github.markusaugust.streamlord.core.domain";
-  const head = `import ${DOMAIN}.Trusted\nimport ${DOMAIN}.interpolate\n\nfun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: String): String =\n    `;
+  const head = `import ${DOMAIN}.Trusted\nimport ${DOMAIN}.interpolate\n\nfun pageHtml(k: LayoutContext, pageStyle: String? = null, mainHtml: String): String =\n    `;
   /** The literal of the case that found the defects, with each value written as given. */
   const widget = (root: string, css: string, content: string, body: string, events: string) =>
-    `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
+    `"""\n    <div id="${root}" data-theme="light" data-ui-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
   const REWRITE = "Mark the values with + in interpolate { }";
   const ESCAPES = `${REWRITE}, which escapes the values`;
 
   it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
-    const css = "${customCss.orEmpty()}";
-    const values = ["${k.rootId}", css, "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
+    const css = "${pageStyle.orEmpty()}";
+    const values = ["${k.pageId}", css, "${k.sectionId}", "$mainHtml", "${k.streamId}"] as const;
     const text = `${head}${widget(...values)}\n`;
-    const marked = widget("${+k.rootId}", "${+Trusted(customCss.orEmpty())}", "${+k.contentId}", "${+bodyHtml}", "${+k.eventsId}");
+    const marked = widget("${+k.pageId}", "${+Trusted(pageStyle.orEmpty())}", "${+k.sectionId}", "${+mainHtml}", "${+k.streamId}");
     const rewritten = `${head}interpolate { ${marked} }.text\n`;
     // One edit, one title, from whichever value it is offered.
     const title = `Mark the values with + in interpolate { }, with ${css} as Trusted(...)`;
@@ -507,7 +507,7 @@ describe("code action provider", () => {
   });
 
   it("offers marking the values with + first on each value of the widget, and the mark first on a value left unmarked in a block", () => {
-    const values = ["${k.rootId}", "${customCss.orEmpty()}", "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
+    const values = ["${k.pageId}", "${pageStyle.orEmpty()}", "${k.sectionId}", "$mainHtml", "${k.streamId}"] as const;
     const text = `${head}${widget(...values)}\n`;
     for (const value of values) {
       const { actions } = actionsAt(text, text.indexOf(value) + 1);

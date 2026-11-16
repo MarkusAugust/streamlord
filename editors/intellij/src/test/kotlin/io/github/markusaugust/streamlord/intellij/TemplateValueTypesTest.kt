@@ -496,16 +496,16 @@ class TemplateValueTypesTest : StreamlordTestCase() {
             }
             """.trimIndent().replace('¤', '$')
 
-        /** The block form: a widget whose values are safe by types only the editor sees, `k.css` and `k.rootId`; `¤` is a `$`. */
+        /** The block form: a widget whose values are safe by types only the editor sees, `k.css` and `k.pageId`; `¤` is a `$`. */
         val BLOCK_CALLS =
             """
             import io.github.markusaugust.streamlord.core.domain.Html
             import io.github.markusaugust.streamlord.core.domain.Trusted
             import io.github.markusaugust.streamlord.core.domain.interpolate
 
-            class Widget(val rootId: String, val css: Trusted)
+            class Widget(val pageId: String, val css: Trusted)
             fun root(k: Widget, body: Html): Html = interpolate {
-                "<div id=\"¤{+k.rootId}\"><style>¤{+k.css}</style>¤{+body}</div>"
+                "<div id=\"¤{+k.pageId}\"><style>¤{+k.css}</style>¤{+body}</div>"
             }
             fun inParentheses(k: Widget, body: Html): Html = interpolate({ "<div><style>¤{+k.css}</style>¤{+body}</div>" })
             fun refused(name: String): Html = interpolate { "<p data-text=\"¤{+name}\"></p>" }

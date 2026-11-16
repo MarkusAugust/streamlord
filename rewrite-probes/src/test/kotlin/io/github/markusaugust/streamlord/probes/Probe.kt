@@ -46,10 +46,10 @@ class User(
     val badge: Trusted,
 )
 
-class WidgetContext(
-    val rootId: String,
-    val contentId: String,
-    val eventsId: String,
+class LayoutContext(
+    val pageId: String,
+    val sectionId: String,
+    val streamId: String,
 )
 
 /** A Trusted the text of a probe does not show to be one. */
