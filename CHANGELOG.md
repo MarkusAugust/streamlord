@@ -6,6 +6,28 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### Editors
+
+**Actions and options**
+- Both editors no longer call a function called at once a function: `@get(function(){ return '/x' }())`
+  and `{retry: function(){ return 'never' }()}` give what the function returns, and are not judged.
+  Nor is what is read or called of a function, `function(){}.name` and `function(){}.bind(null)`.
+- Both editors judge a value in parentheses or after a spaced sign as the value it is, and warn of
+  `@get((1))`, `@get(- 1)` and `{retry: ('nope')}` as of the same without them. The warning marks the
+  value inside the parentheses.
+
+**Expressions**
+- Both editors judge a value of `data-computed`, and the value of a signal filter attribute, in
+  parentheses as what it holds, and warn of `(1)` and `{total: (1)}`.
+- A value of `data-computed` that does not parse yet, `1 +` or an open string, gets its syntax error
+  alone. That it is no function, that it changes a signal or calls an action, and that a
+  `data-init` sends before its `data-indicator`, is said once the value parses.
+- A value of `data-computed` that is complete where the rest is not, `{total: 1 // c, ...}` and
+  `1 // c`, is now also said to be no function, beside the syntax error.
+
+Side note: the checks of a value now read the tree the JavaScript parser builds of it, in place of
+reading the text again each on its own.
+
 ## [0.22.0] - 2026-11-15
 
 This release brings Datastar 1.0.5 support to both editors. They check the attributes, the Pro

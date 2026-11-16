@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import io.github.markusaugust.streamlord.core.client.CLIENT_SIGNAL
 import io.github.markusaugust.streamlord.core.client.ClientCasing
+import io.github.markusaugust.streamlord.core.client.ClientRewrite
 import io.github.markusaugust.streamlord.core.client.ClientScript
 import io.github.markusaugust.streamlord.core.client.Rewrite
 import io.github.markusaugust.streamlord.core.client.Run
@@ -813,14 +814,6 @@ private fun filterSignalsIssues(text: String): List<Issue> {
     return out
 }
 
-/** The syntax error of [js] read as one expression, the way a filter value is evaluated (`return (value)`), or null. */
-internal fun expressionError(js: String): JsSyntaxError? {
-    val err = JsParser.error("return ($js\n)") ?: return null
-
-    fun shift(n: Int): Int = (n - 8).coerceIn(0, js.length)
-    return JsSyntaxError(err.message ?: "Syntax error", shift(err.pos), shift(err.raisedAt))
-}
-
 /** The checks of one Datastar expression: syntax, kebab-case signals, unknown and Pro actions. */
 public class ExpressionValidator(
     private val catalog: Catalog = Catalog.default,
@@ -861,13 +854,15 @@ public class ExpressionValidator(
     ): List<Issue> {
         if (spec.name != "computed") return emptyList()
         val regions = jsRegions(text)
-        val inFunctions = functionDepths(text, regions)
+        val rewritten = clientRewrite(text)
+        // Which function a change stands in is the tree's to say: a value that does not parse is not judged.
+        val inFunctions = rewriteDepths(rewritten) ?: return emptyList()
         // The keyed form stores what the expression gives, a function too, which nothing calls; the
         // object form calls each function it holds, and a function those return is never called.
         val runs = if (text.trimStart().startsWith("{")) 1 else 0
         val out = ArrayList<Issue>()
-        for (r in clientRewrite(text).rewrites) {
-            if (regions[r.start] != Region.CODE || inFunctions[r.start] > runs) continue
+        for ((n, r) in rewritten.rewrites.withIndex()) {
+            if (regions[r.start] != Region.CODE || inFunctions[n] > runs) continue
             val written = if (r.signal) text.substring(r.start, r.end) else "@${r.name}"
             val message =
                 when {
@@ -943,9 +938,9 @@ public class ExpressionValidator(
                 )
         }
 
-        val parseError = JsParser.error(rewritten.js)
         // Without a known attribute an expression may also be an object literal, which a script reads as a block.
-        val err = if (returnsValue == null) parseError?.takeUnless { objectLiteralParses(rewritten.js) } else parseError
+        val parsed = if (returnsValue == null) scriptOrLiteral(rewritten.js) else JsParser.parse(rewritten.js)
+        val err = parsed.error
         if (err != null) {
             val pos = minOf(toText(err.pos), text.length)
             val end = maxOf(pos + 1, minOf(toText(err.raisedAt), text.length))
@@ -971,7 +966,7 @@ public class ExpressionValidator(
             }
         }
 
-        if (err == null) issues += actionArgumentIssues(catalog, js, regions, rewritten.rewrites, ::span)
+        if (err == null) issues += actionArgumentIssues(catalog, js, rewritten, parsed, ::span)
 
         val starts by lazy { stringStarts(regions) }
         val templates by lazy { TemplateReasons(js, rewritten.runs) }
@@ -1247,86 +1242,31 @@ public class ExpressionValidator(
     }
 }
 
+/** Where the client wrote each of its rewrites in the text it gives, in their order. */
+internal fun ClientRewrite.writtenAt(): IntArray {
+    var grown = 0
+    return IntArray(rewrites.size) { n ->
+        val r = rewrites[n]
+        (r.start + grown).also { grown += r.written.length - (r.end - r.start) }
+    }
+}
+
 /**
- * How many function bodies each character of [text], whose characters are [regions], stands in:
- * after an `=>` until the `,` or `;` that ends it or the bracket that closes around it, and in the
- * braces of a `function`. Read in one pass, each body ending as the brackets say.
+ * How many functions each of the client's rewrites in [rewritten] stands in, in their order, by the tree of the text
+ * ([scriptOrLiteral]); null where it does not parse, and no depth is known.
  */
-internal fun functionDepths(
-    text: String,
-    regions: ByteArray,
-): IntArray {
-    val change = IntArray(text.length + 1)
-    // The bodies open: where each starts, the bracket depth it lies at, and whether a `,` or `;` there ends it.
-    val starts = ArrayList<Int>()
-    val levels = ArrayList<Int>()
-    val arrows = ArrayList<Boolean>()
-    var depth = 0
-    var function = false
-
-    fun close(at: Int) {
-        change[starts.removeAt(starts.size - 1)]++
-        change[at]--
-        levels.removeAt(levels.size - 1)
-        arrows.removeAt(arrows.size - 1)
+internal fun rewriteDepths(rewritten: ClientRewrite): IntArray? {
+    val parsed = scriptOrLiteral(rewritten.js)
+    if (parsed.error != null) return null
+    val depth = IntArray(rewritten.js.length + 2)
+    for (node in parsed.nodes) {
+        if (node.type != JsKind.FUNCTION && node.type != JsKind.ARROW) continue
+        depth[node.start]++
+        depth[node.end]--
     }
-
-    fun open(
-        at: Int,
-        level: Int,
-        arrow: Boolean,
-    ) {
-        starts += at
-        levels += level
-        arrows += arrow
-    }
-    var i = 0
-    while (i < text.length) {
-        val c = text[i]
-        if (regions[i] != Region.CODE) {
-            i++
-            continue
-        }
-        when {
-            c == '=' && text.getOrNull(i + 1) == '>' -> {
-                open(i + 2, depth, arrow = true)
-                i++
-            }
-
-            c == 'f' &&
-                text.startsWith(
-                    "function",
-                    i,
-                ) && !text.getOrNull(i - 1).isJsNamePart() && !text.getOrNull(i + 8).isJsNamePart() -> {
-                function = true
-                i += 7
-            }
-
-            c == '(' || c == '[' || c == '{' -> {
-                depth++
-                if (c == '{' && function) {
-                    function = false
-                    open(i + 1, depth, arrow = false)
-                }
-            }
-
-            c == ')' || c == ']' || c == '}' -> {
-                depth--
-                while (levels.isNotEmpty() && levels.last() > depth) close(i)
-            }
-
-            c == ',' || c == ';' -> {
-                while (levels.isNotEmpty() && arrows.last() && levels.last() == depth) close(i)
-            }
-        }
-        i++
-    }
-    while (starts.isNotEmpty()) close(text.length)
-    var running = 0
-    return IntArray(text.length) { k ->
-        running += change[k]
-        running
-    }
+    for (i in 1 until depth.size) depth[i] += depth[i - 1]
+    val at = rewritten.writtenAt()
+    return IntArray(at.size) { depth[at[it]] }
 }
 
 /** An assignment after a signal, `= 1`, `+= 1`, or its update, `++`: not `==` or `=>`. */
@@ -1350,11 +1290,15 @@ private fun updatedBefore(
 }
 
 /**
- * With no attribute to say whether the value is read, an expression that opens with `{` may be an
- * object literal Datastar wraps in `return (...)`; to a script parser it is a block. When the
- * script parse fails, the text is tried once more inside parentheses.
+ * [js] read as a script. An expression that opens with `{` may be an object literal Datastar wraps
+ * in `return (...)`, which a script reads as a block: when the script does not parse, such a text
+ * is read once more as the one expression it then is.
  */
-private fun objectLiteralParses(js: String): Boolean = js.trimStart().startsWith("{") && JsParser.error("($js)") == null
+private fun scriptOrLiteral(js: String): Parsed {
+    val script = JsParser.parse(js)
+    if (script.error == null || !js.trimStart().startsWith("{")) return script
+    return JsParser.expression(js).takeIf { it.error == null } ?: script
+}
 
 /** The signal name typed so far just before [offset] (`$cou|` gives `cou`, `$|` gives ""), or null when not in a signal. */
 internal fun signalPrefixAt(

@@ -8,8 +8,9 @@ import io.github.markusaugust.streamlord.core.client.codePointString
  * A syntax check for JavaScript, enough to judge a Datastar expression. It follows acorn step by
  * step (script mode, the latest ECMAScript, `return` and `new.target` allowed at the top level and
  * `await` not, as in the function body Datastar compiles), so that both editors, which run this
- * parser, agree on what parses and on where an error sits. It keeps only as much of a tree as the
- * early errors need: which expressions can be assigned to, which names a pattern binds.
+ * parser, agree on what parses and on where an error sits. It keeps the tree of each expression,
+ * which the early errors need (which expressions can be assigned to, which names a pattern binds)
+ * and the checks of a value read ([JsParser.parse]); a statement leaves no node of its own.
  *
  * A few messages are friendlier than acorn's ("Unexpected end of input"); the verdict is the same.
  */
@@ -22,24 +23,44 @@ internal class JsSyntaxError(
 ) : RuntimeException(message)
 
 internal object JsParser {
-    /** Parse [source] as a script; throws [JsSyntaxError] on the first problem. */
-    public fun check(source: String) {
-        try {
-            Parser(source).parseProgram()
-        } catch (_: StackExhausted) {
-            throw JsSyntaxError("Not enough stack space to parse input", 0, source.length)
-        }
-    }
-
     /** The error for [source], or null when it parses. */
-    public fun error(source: String): JsSyntaxError? =
+    public fun error(source: String): JsSyntaxError? = parse(source).error
+
+    /** [source] read as a script: the nodes of its expressions, or the first problem. */
+    public fun parse(source: String): Parsed = read(source) { it.parseProgram() }
+
+    /**
+     * One expression of [source], as `return (value)` evaluates one, the last of the nodes being the whole of it: all of
+     * [source], or with [from] the value that starts there, a comma or anything else after it left unread.
+     */
+    public fun expression(
+        source: String,
+        from: Int = -1,
+    ): Parsed = read(source) { it.parseValue(from) }
+
+    private fun read(
+        source: String,
+        how: (Parser) -> List<JsNode>,
+    ): Parsed =
         try {
-            check(source)
-            null
+            Parsed(how(Parser(source)), null)
         } catch (e: JsSyntaxError) {
-            e
+            Parsed(emptyList(), e)
+        } catch (_: StackExhausted) {
+            Parsed(emptyList(), JsSyntaxError("Not enough stack space to parse input", 0, source.length))
         }
 }
+
+/**
+ * What [JsParser.parse] read: the [nodes] of every expression, each after the nodes it holds, so that one pass over
+ * the list reads the tree from its leaves up and no reader has to descend it; or the [error] that stopped the parser.
+ * A name that is bound or a label is listed as an [JsKind.IDENT] too; a pattern of a declaration or of parameters
+ * and a private name are not listed.
+ */
+internal class Parsed(
+    val nodes: List<JsNode>,
+    val error: JsSyntaxError?,
+)
 
 private enum class T { NAME, KEYWORD, NUM, STRING, TEMPLATE, REGEX, PUNCT, PRIVATE_NAME, EOF }
 
@@ -161,7 +182,7 @@ private class DestructuringErrors {
     var doubleProto = -1
 }
 
-private enum class N {
+internal enum class JsKind {
     IDENT,
     MEMBER,
     CHAIN,
@@ -177,35 +198,80 @@ private enum class N {
     OBJECT_PATTERN,
     ASSIGN_PATTERN,
     REST,
+    NUMBER,
+    STRING,
+    REGEX,
+
+    /** A template literal; its [JsNode.items] are the expressions of its `${...}`. */
+    TEMPLATE,
+
+    /** `this`, `null`, `true` or `false`, which is its [JsNode.name]. */
+    WORD,
+    FUNCTION,
+    CLASS,
+    CALL,
+    NEW,
+
+    /** A prefix operator or `await` with its operand; `++` and `--` on either side are [UPDATE]. */
+    UNARY,
+    UPDATE,
+    BINARY,
+    CONDITIONAL,
+    SEQUENCE,
     OTHER,
 }
 
-private class Key(
+internal class JsKey(
     /** The identifier or string that names the member; null for a number or a computed key. */
     val name: String?,
     val isIdent: Boolean,
     val computed: Boolean,
     val isPrivate: Boolean,
     val start: Int,
+    val end: Int,
 )
 
-private class Node(
-    var type: N,
+/**
+ * One expression from [start] to [end] of the source; a parenthesis around it is no part of it. A call, a member
+ * and a chain start where what they are called or read of starts, so every link of `a.b().c()` starts at `a`.
+ */
+internal class JsNode(
+    var type: JsKind,
     val start: Int,
 ) {
     var end = start
 
-    /** An identifier's name, an assignment's operator, or a property's kind (`init`, `get`, `set`). */
+    /** Where the parentheses around the node open and close, the outermost of them; the node's own ends where it has none. */
+    var outerStart = start
+    var outerEnd = 0
+        get() = maxOf(field, end)
+
+    /**
+     * An identifier's or a member's name, an operator, a [JsKind.WORD]'s word, or a property's kind
+     * (`init`, `get`, `set`).
+     */
     var name = ""
 
-    /** A spread's argument, a property's value, an assignment's target, a chain's expression. */
-    var inner: Node? = null
-    var items: List<Node?> = emptyList()
+    /**
+     * A spread's argument, a property's value, an assignment's target, a chain's expression, an
+     * operand, what a member is read of, what is called or constructed.
+     */
+    var inner: JsNode? = null
+
+    /**
+     * An array's elements, an object's properties, the arguments of a call or a `new`, the two sides of a
+     * [JsKind.BINARY], the three parts of a [JsKind.CONDITIONAL], the parts of a [JsKind.SEQUENCE], what an
+     * assignment assigns, the key of a member read in brackets.
+     */
+    var items: List<JsNode?> = emptyList()
     var optional = false
     var privateProperty = false
-    var key: Key? = null
+    var key: JsKey? = null
 
-    /** A property written `key: value`, the only kind that can redefine `__proto__`. */
+    /**
+     * A property written `key: value`, the only kind that can redefine `__proto__`. Of the others a shorthand
+     * holds an [JsKind.IDENT], and a method or an accessor a [JsKind.FUNCTION].
+     */
     var plain = false
 }
 
@@ -213,7 +279,7 @@ private class ClassMember(
     val kind: String,
     val isMethod: Boolean,
     val isStatic: Boolean,
-    val key: Key,
+    val key: JsKey,
     val start: Int,
 )
 
@@ -252,11 +318,53 @@ private class Parser(
     private val scopeStack = ArrayList<Scope>()
     private val privateNameStack = ArrayList<PrivateNames>()
 
-    fun parseProgram() {
+    /** Every expression read, each after the nodes it holds. */
+    private val made = ArrayList<JsNode>()
+
+    fun parseProgram(): List<JsNode> {
         strict = strictDirective(0)
         enterScope(SCOPE_TOP)
         tok = readToken()
         while (tok.type != T.EOF) parseStatement(null, topLevel = true)
+        return made
+    }
+
+    /** One expression: all of the source, or with [from] the value that starts there and no more. */
+    fun parseValue(from: Int): List<JsNode> {
+        pos = maxOf(from, 0)
+        // Nothing before the value is its to read: no line break there, and no start of a line.
+        lastTokStart = pos
+        lastTokEnd = pos
+        enterScope(SCOPE_TOP)
+        tok = readToken()
+        if (from >= 0) {
+            parseMaybeAssign()
+        } else {
+            parseExpression()
+            if (tok.type != T.EOF) unexpected()
+        }
+        return made
+    }
+
+    /** [node], read to its end: the token before this one closes it. */
+    private fun done(node: JsNode): JsNode {
+        node.end = lastTokEnd
+        made += node
+        return node
+    }
+
+    private fun node(
+        type: JsKind,
+        start: Int,
+        inner: JsNode? = null,
+        items: List<JsNode?> = emptyList(),
+        name: String = "",
+    ): JsNode {
+        val node = JsNode(type, start)
+        node.inner = inner
+        node.items = items
+        node.name = name
+        return done(node)
     }
 
     // ---- helpers -------------------------------------------------------------------------------
@@ -709,7 +817,7 @@ private class Parser(
         val maybeName = tok.value
         val startsWithName = tok.type == T.NAME
         val expr = parseExpression()
-        if (startsWithName && expr.type == N.IDENT && eat(":")) {
+        if (startsWithName && expr.type == JsKind.IDENT && eat(":")) {
             parseLabeledStatement(start, maybeName, expr, context)
         } else {
             semicolon()
@@ -751,7 +859,7 @@ private class Parser(
     private fun parseLabeledStatement(
         start: Int,
         name: String,
-        expr: Node,
+        expr: JsNode,
         context: String?,
     ) {
         if (labels.any { it.name == name }) raise(expr.start, "Label '$name' is already declared")
@@ -837,7 +945,7 @@ private class Parser(
         if (isKeyword("in") || isForOf) {
             if (awaitAt > -1) {
                 if (isKeyword("in")) unexpected(awaitAt)
-            } else if (isForOf && init.start == initPos && !escaped && init.type == N.IDENT && init.name == "async") {
+            } else if (isForOf && init.start == initPos && !escaped && init.type == JsKind.IDENT && init.name == "async") {
                 // `for (async of x)` would read as the start of an async arrow function.
                 unexpected()
             }
@@ -915,12 +1023,12 @@ private class Parser(
                 unexpected()
             } else if (isUsing && !loopHead) {
                 raise(lastTokEnd, "Missing initializer in $kind declaration")
-            } else if (id.type != N.IDENT && !(isFor && loopHead)) {
+            } else if (id.type != JsKind.IDENT && !(isFor && loopHead)) {
                 raise(lastTokEnd, "Complex binding patterns require an initialization value")
             }
             if (declaration.count++ == 0) {
                 declaration.firstHasInit = hasInit
-                declaration.firstIsIdent = id.type == N.IDENT
+                declaration.firstIsIdent = id.type == JsKind.IDENT
             }
         } while (eat(","))
         return declaration
@@ -934,7 +1042,7 @@ private class Parser(
             handled = true
             if (eat("(")) {
                 val param = parseBindingAtom()
-                val simple = param.type == N.IDENT
+                val simple = param.type == JsKind.IDENT
                 enterScope(if (simple) SCOPE_SIMPLE_CATCH else 0)
                 checkLValPattern(param, if (simple) Bind.SIMPLE_CATCH else Bind.LEXICAL)
                 expect(")")
@@ -986,10 +1094,10 @@ private class Parser(
         statement: Int,
         isAsync: Boolean,
         forInit: Int = 0,
-    ): Node {
+    ): JsNode {
         if (isPunct("*") && statement and FUNC_HANGING_STATEMENT != 0) unexpected()
         val generator = eat("*")
-        var id: Node? = null
+        var id: JsNode? = null
         if (statement and FUNC_STATEMENT != 0) {
             id = parseIdent()
             if (statement and FUNC_HANGING_STATEMENT == 0) {
@@ -1018,13 +1126,13 @@ private class Parser(
         yieldPos = oldYieldPos
         awaitPos = oldAwaitPos
         awaitIdentPos = oldAwaitIdentPos
-        return Node(N.OTHER, start)
+        return node(JsKind.FUNCTION, start)
     }
 
     private fun parseFunctionBody(
         start: Int,
-        id: Node?,
-        params: List<Node?>,
+        id: JsNode?,
+        params: List<JsNode?>,
         isArrow: Boolean,
         isMethod: Boolean,
         forInit: Int,
@@ -1034,7 +1142,7 @@ private class Parser(
             parseMaybeAssign(forInit)
             checkParams(params, false)
         } else {
-            val simple = params.all { it?.type == N.IDENT }
+            val simple = params.all { it?.type == JsKind.IDENT }
             var useStrict = false
             if (!oldStrict || !simple) {
                 useStrict = strictDirective(tok.end)
@@ -1053,14 +1161,14 @@ private class Parser(
     }
 
     private fun checkParams(
-        params: List<Node?>,
+        params: List<JsNode?>,
         allowDuplicates: Boolean,
     ) {
         val names = if (allowDuplicates) null else HashSet<String>()
         for (param in params) if (param != null) checkLValInnerPattern(param, Bind.VAR, names)
     }
 
-    private fun parseClass(isStatement: Boolean): Node {
+    private fun parseClass(isStatement: Boolean): JsNode {
         val start = tok.start
         next()
         // A class is strict code throughout.
@@ -1090,7 +1198,7 @@ private class Parser(
         strict = oldStrict
         next()
         exitClassBody()
-        return Node(N.OTHER, start)
+        return node(JsKind.CLASS, start)
     }
 
     private fun exitClassBody() {
@@ -1163,13 +1271,13 @@ private class Parser(
         val key =
             when {
                 keyName.isNotEmpty() -> {
-                    Key(keyName, isIdent = true, computed = false, isPrivate = false, start = lastTokStart)
+                    JsKey(keyName, isIdent = true, computed = false, isPrivate = false, start = lastTokStart, end = lastTokEnd)
                 }
 
                 tok.type == T.PRIVATE_NAME -> {
                     if (tok.value == "constructor") raise(tok.start, "Classes can't have an element named '#constructor'")
                     val id = parsePrivateIdent()
-                    Key(id.name, isIdent = false, computed = false, isPrivate = true, start = id.start)
+                    JsKey(id.name, isIdent = false, computed = false, isPrivate = true, start = id.start, end = lastTokEnd)
                 }
 
                 else -> {
@@ -1205,12 +1313,12 @@ private class Parser(
 
     private fun checkAccessorParams(
         kind: String,
-        params: List<Node?>,
+        params: List<JsNode?>,
         valueStart: Int,
     ) {
         if (kind == "get" && params.isNotEmpty()) raise(valueStart, "getter should have no params")
         if (kind == "set" && params.size != 1) raise(valueStart, "setter should have exactly one param")
-        if (kind == "set" && params[0]?.type == N.REST) raise(params[0]!!.start, "Setter cannot use rest params")
+        if (kind == "set" && params[0]?.type == JsKind.REST) raise(params[0]!!.start, "Setter cannot use rest params")
     }
 
     private fun parseClassStaticBlock() {
@@ -1227,76 +1335,76 @@ private class Parser(
 
     /** Turn what was parsed as an expression into the pattern it has to be, now that `=` or `=>` follows it. */
     private fun toAssignable(
-        node: Node,
+        node: JsNode,
         isBinding: Boolean,
         ref: DestructuringErrors? = null,
-    ): Node {
+    ): JsNode {
         when (node.type) {
-            N.IDENT -> {
+            JsKind.IDENT -> {
                 if (inAsync() && node.name == "await") raise(node.start, "Cannot use 'await' as identifier inside an async function")
             }
 
-            N.OBJECT_PATTERN, N.ARRAY_PATTERN, N.ASSIGN_PATTERN, N.REST -> {}
+            JsKind.OBJECT_PATTERN, JsKind.ARRAY_PATTERN, JsKind.ASSIGN_PATTERN, JsKind.REST -> {}
 
-            N.OBJECT -> {
-                node.type = N.OBJECT_PATTERN
+            JsKind.OBJECT -> {
+                node.type = JsKind.OBJECT_PATTERN
                 checkPatternErrors(ref, true)
                 for (prop in node.items) {
                     toAssignable(prop!!, isBinding)
                     val rest = prop.inner
-                    if (prop.type == N.REST && (rest?.type == N.ARRAY_PATTERN || rest?.type == N.OBJECT_PATTERN)) {
+                    if (prop.type == JsKind.REST && (rest?.type == JsKind.ARRAY_PATTERN || rest?.type == JsKind.OBJECT_PATTERN)) {
                         raise(rest.start, "Unexpected token")
                     }
                 }
             }
 
-            N.PROPERTY -> {
+            JsKind.PROPERTY -> {
                 if (node.name != "init") raise(node.key!!.start, "Object pattern can't contain getter or setter")
                 toAssignable(node.inner!!, isBinding)
             }
 
-            N.ARRAY -> {
-                node.type = N.ARRAY_PATTERN
+            JsKind.ARRAY -> {
+                node.type = JsKind.ARRAY_PATTERN
                 checkPatternErrors(ref, true)
                 for (element in node.items) if (element != null) toAssignable(element, isBinding)
             }
 
-            N.SPREAD -> {
-                node.type = N.REST
+            JsKind.SPREAD -> {
+                node.type = JsKind.REST
                 val argument = node.inner!!
                 toAssignable(argument, isBinding)
-                if (argument.type == N.ASSIGN_PATTERN) raise(argument.start, "Rest elements cannot have a default value")
+                if (argument.type == JsKind.ASSIGN_PATTERN) raise(argument.start, "Rest elements cannot have a default value")
             }
 
-            N.ASSIGN -> {
+            JsKind.ASSIGN -> {
                 val target = node.inner!!
                 if (node.name != "=") raise(target.end, "Only '=' operator can be used for specifying default value.")
-                node.type = N.ASSIGN_PATTERN
+                node.type = JsKind.ASSIGN_PATTERN
                 toAssignable(target, isBinding)
             }
 
-            N.CHAIN -> {
+            JsKind.CHAIN -> {
                 raise(node.start, "Optional chaining cannot appear in left-hand side")
             }
 
             else -> {
                 // A member such as `a.b` can be assigned to, but a parameter cannot be one.
-                if (node.type != N.MEMBER || isBinding) raise(node.start, "Assigning to rvalue")
+                if (node.type != JsKind.MEMBER || isBinding) raise(node.start, "Assigning to rvalue")
             }
         }
         return node
     }
 
-    private fun parseRestBinding(): Node {
-        val node = Node(N.REST, tok.start)
+    private fun parseRestBinding(): JsNode {
+        val node = JsNode(JsKind.REST, tok.start)
         next()
         node.inner = parseBindingAtom()
         return node
     }
 
-    private fun parseBindingAtom(): Node {
+    private fun parseBindingAtom(): JsNode {
         if (isPunct("[")) {
-            val node = Node(N.ARRAY_PATTERN, tok.start)
+            val node = JsNode(JsKind.ARRAY_PATTERN, tok.start)
             next()
             node.items = parseBindingList("]", allowEmpty = true, allowTrailingComma = true)
             return node
@@ -1309,8 +1417,8 @@ private class Parser(
         close: String,
         allowEmpty: Boolean,
         allowTrailingComma: Boolean,
-    ): List<Node?> {
-        val elements = ArrayList<Node?>()
+    ): List<JsNode?> {
+        val elements = ArrayList<JsNode?>()
         var first = true
         while (!eat(close)) {
             if (first) first = false else expect(",")
@@ -1332,25 +1440,25 @@ private class Parser(
 
     private fun parseMaybeDefault(
         start: Int,
-        left: Node?,
-    ): Node {
+        left: JsNode?,
+    ): JsNode {
         val target = left ?: parseBindingAtom()
         if (!eat("=")) return target
         parseMaybeAssign()
-        val node = Node(N.ASSIGN_PATTERN, start)
+        val node = JsNode(JsKind.ASSIGN_PATTERN, start)
         node.inner = target
         return node
     }
 
     /** A name or a member, nothing more: the target of `+=` and `++`, the name of a function. */
     private fun checkLValSimple(
-        expr: Node,
+        expr: JsNode,
         bind: Bind = Bind.NONE,
         clashes: MutableSet<String>? = null,
     ) {
         val isBind = bind != Bind.NONE
         when (expr.type) {
-            N.IDENT -> {
+            JsKind.IDENT -> {
                 val name = expr.name
                 if (strict && (name == "enum" || name in STRICT_RESERVED || name == "eval" || name == "arguments")) {
                     raise(expr.start, "${if (isBind) "Binding " else "Assigning to "}$name in strict mode")
@@ -1362,11 +1470,11 @@ private class Parser(
                 }
             }
 
-            N.CHAIN -> {
+            JsKind.CHAIN -> {
                 raise(expr.start, "Optional chaining cannot appear in left-hand side")
             }
 
-            N.MEMBER -> {
+            JsKind.MEMBER -> {
                 if (isBind) raise(expr.start, "Binding member expression")
             }
 
@@ -1377,12 +1485,12 @@ private class Parser(
     }
 
     private fun checkLValPattern(
-        expr: Node,
+        expr: JsNode,
         bind: Bind = Bind.NONE,
         clashes: MutableSet<String>? = null,
     ) {
         when (expr.type) {
-            N.OBJECT_PATTERN, N.ARRAY_PATTERN -> {
+            JsKind.OBJECT_PATTERN, JsKind.ARRAY_PATTERN -> {
                 for (item in expr.items) if (item != null) checkLValInnerPattern(item, bind, clashes)
             }
 
@@ -1393,13 +1501,13 @@ private class Parser(
     }
 
     private fun checkLValInnerPattern(
-        expr: Node,
+        expr: JsNode,
         bind: Bind = Bind.NONE,
         clashes: MutableSet<String>? = null,
     ) {
         when (expr.type) {
-            N.PROPERTY -> checkLValInnerPattern(expr.inner!!, bind, clashes)
-            N.ASSIGN_PATTERN, N.REST -> checkLValPattern(expr.inner!!, bind, clashes)
+            JsKind.PROPERTY -> checkLValInnerPattern(expr.inner!!, bind, clashes)
+            JsKind.ASSIGN_PATTERN, JsKind.REST -> checkLValPattern(expr.inner!!, bind, clashes)
             else -> checkLValPattern(expr, bind, clashes)
         }
     }
@@ -1409,18 +1517,19 @@ private class Parser(
     private fun parseExpression(
         forInit: Int = 0,
         ref: DestructuringErrors? = null,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         val expr = parseMaybeAssign(forInit, ref)
         if (!isPunct(",")) return expr
-        while (eat(",")) parseMaybeAssign(forInit, ref)
-        return Node(N.OTHER, start)
+        val list = arrayListOf<JsNode?>(expr)
+        while (eat(",")) list += parseMaybeAssign(forInit, ref)
+        return node(JsKind.SEQUENCE, start, items = list)
     }
 
     private fun parseMaybeAssign(
         forInit: Int = 0,
         outerRef: DestructuringErrors? = null,
-    ): Node {
+    ): JsNode {
         if (isName("yield") && inGenerator()) return parseYield(forInit)
         val own = outerRef == null
         val ref = outerRef ?: DestructuringErrors()
@@ -1447,12 +1556,9 @@ private class Parser(
             if (ref.shorthandAssign >= left.start) ref.shorthandAssign = -1
             if (op == "=") checkLValPattern(left) else checkLValSimple(left)
             next()
-            parseMaybeAssign(forInit)
+            val right = parseMaybeAssign(forInit)
             if (oldDoubleProto > -1) ref.doubleProto = oldDoubleProto
-            val node = Node(N.ASSIGN, start)
-            node.name = op
-            node.inner = left
-            return node
+            return node(JsKind.ASSIGN, start, left, listOf(right), op)
         }
         if (own) checkExpressionErrors(ref, true)
         if (oldParenAssign > -1) ref.parenthesizedAssign = oldParenAssign
@@ -1463,15 +1569,14 @@ private class Parser(
     private fun parseMaybeConditional(
         forInit: Int,
         ref: DestructuringErrors?,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         val expr = parseExprOps(forInit, ref)
         if (checkExpressionErrors(ref)) return expr
-        if (!(expr.type == N.ARROW && expr.start == start) && eat("?")) {
-            parseMaybeAssign()
+        if (!(expr.type == JsKind.ARROW && expr.start == start) && eat("?")) {
+            val then = parseMaybeAssign()
             expect(":")
-            parseMaybeAssign(forInit)
-            return Node(N.OTHER, start)
+            return node(JsKind.CONDITIONAL, start, items = listOf(expr, then, parseMaybeAssign(forInit)))
         }
         return expr
     }
@@ -1479,11 +1584,11 @@ private class Parser(
     private fun parseExprOps(
         forInit: Int,
         ref: DestructuringErrors?,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         val expr = parseMaybeUnary(ref, false, false, forInit)
         if (checkExpressionErrors(ref)) return expr
-        return if (expr.start == start && expr.type == N.ARROW) expr else parseExprOp(expr, start, -1, forInit)
+        return if (expr.start == start && expr.type == JsKind.ARROW) expr else parseExprOp(expr, start, -1, forInit)
     }
 
     private fun binaryPrecedence(): Int {
@@ -1505,24 +1610,25 @@ private class Parser(
     }
 
     private fun parseExprOp(
-        left: Node,
+        left: JsNode,
         leftStart: Int,
         minPrec: Int,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val prec = binaryPrecedence()
         if (prec <= minPrec || (forInit != 0 && isKeyword("in"))) return left
         val logical = isPunct("||") || isPunct("&&")
         val coalesce = isPunct("??")
+        val op = tok.value
         next()
         val start = tok.start
         // The right side of `??` stops before `||` and `&&`, so that mixing them is seen below.
         val right = parseExprOp(parseMaybeUnary(null, false, false, forInit), start, if (coalesce) 2 else prec, forInit)
-        if (right.type == N.PRIVATE_NAME) raise(right.start, "Private identifier can only be left side of binary expression")
+        if (right.type == JsKind.PRIVATE_NAME) raise(right.start, "Private identifier can only be left side of binary expression")
         if ((logical && isPunct("??")) || (coalesce && (isPunct("||") || isPunct("&&")))) {
             raise(tok.start, "Logical expressions and coalesce expressions cannot be mixed. Wrap either by parentheses")
         }
-        return parseExprOp(Node(N.OTHER, leftStart), leftStart, minPrec, forInit)
+        return parseExprOp(node(JsKind.BINARY, leftStart, items = listOf(left, right), name = op), leftStart, minPrec, forInit)
     }
 
     private fun parseMaybeUnary(
@@ -1530,15 +1636,14 @@ private class Parser(
         afterUnary: Boolean,
         incDec: Boolean,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         var sawUnary = afterUnary
-        val expr: Node
+        val expr: JsNode
         if (isName("await") && canAwait()) {
             if (awaitPos == 0) awaitPos = tok.start
             next()
-            parseMaybeUnary(null, true, false, forInit)
-            expr = Node(N.OTHER, start)
+            expr = node(JsKind.UNARY, start, parseMaybeUnary(null, true, false, forInit), name = "await")
             sawUnary = true
         } else if ((tok.type == T.PUNCT && tok.value in PREFIX_OPS) || (tok.type == T.KEYWORD && tok.value in PREFIX_KEYWORDS)) {
             val op = tok.value
@@ -1548,14 +1653,14 @@ private class Parser(
             checkExpressionErrors(ref, true)
             if (update) {
                 checkLValSimple(argument)
-            } else if (strict && op == "delete" && argument.type == N.IDENT) {
+            } else if (strict && op == "delete" && argument.type == JsKind.IDENT) {
                 raise(start, "Deleting local variable in strict mode")
             } else if (op == "delete" && isPrivateFieldAccess(argument)) {
                 raise(start, "Private fields can not be deleted")
             } else {
                 sawUnary = true
             }
-            expr = Node(N.OTHER, start)
+            expr = node(if (update) JsKind.UPDATE else JsKind.UNARY, start, argument, name = op)
         } else if (!sawUnary && tok.type == T.PRIVATE_NAME) {
             // `#x in obj`, inside the class that declares `#x`.
             if (forInit != 0 || privateNameStack.isEmpty()) unexpected()
@@ -1566,32 +1671,32 @@ private class Parser(
             if (checkExpressionErrors(ref)) return operand
             while ((isPunct("++") || isPunct("--")) && !canInsertSemicolon()) {
                 checkLValSimple(operand)
+                val op = tok.value
                 next()
-                operand = Node(N.OTHER, start)
+                operand = node(JsKind.UPDATE, start, operand, name = op)
             }
             expr = operand
         }
-        if (!incDec && !(expr.type == N.ARROW && expr.start == start) && eat("**")) {
+        if (!incDec && !(expr.type == JsKind.ARROW && expr.start == start) && eat("**")) {
             if (sawUnary) raise(lastTokStart, "Unary operator used immediately before exponentiation expression")
-            parseMaybeUnary(null, false, false, forInit)
-            return Node(N.OTHER, start)
+            return node(JsKind.BINARY, start, items = listOf(expr, parseMaybeUnary(null, false, false, forInit)), name = "**")
         }
         return expr
     }
 
-    private fun isPrivateFieldAccess(node: Node): Boolean =
-        (node.type == N.MEMBER && node.privateProperty) || (node.type == N.CHAIN && isPrivateFieldAccess(node.inner!!))
+    private fun isPrivateFieldAccess(node: JsNode): Boolean =
+        (node.type == JsKind.MEMBER && node.privateProperty) || (node.type == JsKind.CHAIN && isPrivateFieldAccess(node.inner!!))
 
     private fun parseExprSubscripts(
         ref: DestructuringErrors?,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         val expr = parseExprAtom(ref, forInit, false)
         // An arrow function with a block body ends the expression: `a => {} (b)` is not a call.
-        if (expr.type == N.ARROW && src.substring(lastTokStart, lastTokEnd) != ")") return expr
+        if (expr.type == JsKind.ARROW && src.substring(lastTokStart, lastTokEnd) != ")") return expr
         val result = parseSubscripts(expr, start, false, forInit)
-        if (ref != null && result.type == N.MEMBER) {
+        if (ref != null && result.type == JsKind.MEMBER) {
             if (ref.parenthesizedAssign >= result.start) ref.parenthesizedAssign = -1
             if (ref.parenthesizedBind >= result.start) ref.parenthesizedBind = -1
             if (ref.trailingComma >= result.start) ref.trailingComma = -1
@@ -1600,13 +1705,13 @@ private class Parser(
     }
 
     private fun parseSubscripts(
-        base: Node,
+        base: JsNode,
         start: Int,
         noCalls: Boolean,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val maybeAsyncArrow =
-            base.type == N.IDENT &&
+            base.type == JsKind.IDENT &&
                 base.name == "async" &&
                 lastTokEnd == base.end &&
                 !canInsertSemicolon() &&
@@ -1617,40 +1722,39 @@ private class Parser(
         while (true) {
             val element = parseSubscript(current, start, noCalls, maybeAsyncArrow, optionalChained, forInit)
             if (element.optional) optionalChained = true
-            if (element === current || element.type == N.ARROW) {
+            if (element === current || element.type == JsKind.ARROW) {
                 if (!optionalChained) return element
-                val chain = Node(N.CHAIN, start)
-                chain.inner = element
-                return chain
+                return node(JsKind.CHAIN, start, element)
             }
             current = element
         }
     }
 
     private fun parseSubscript(
-        base: Node,
+        base: JsNode,
         start: Int,
         noCalls: Boolean,
         maybeAsyncArrow: Boolean,
         optionalChained: Boolean,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val optional = eat("?.")
         if (noCalls && optional) raise(lastTokStart, "Optional chaining cannot appear in the callee of new expressions")
         val computed = eat("[")
         if (computed || (optional && !isPunct("(") && tok.type != T.TEMPLATE) || eat(".")) {
-            val node = Node(N.MEMBER, start)
+            val node = JsNode(JsKind.MEMBER, start)
+            node.inner = base
             if (computed) {
-                parseExpression()
+                node.items = listOf(parseExpression())
                 expect("]")
-            } else if (tok.type == T.PRIVATE_NAME && base.type != N.SUPER) {
+            } else if (tok.type == T.PRIVATE_NAME && base.type != JsKind.SUPER) {
                 parsePrivateIdent()
                 node.privateProperty = true
             } else {
-                parseIdent(liberal = true)
+                node.name = parseIdent(liberal = true).name
             }
             node.optional = optional
-            return node
+            return done(node)
         }
         if (!noCalls && eat("(")) {
             val ref = DestructuringErrors()
@@ -1675,7 +1779,7 @@ private class Parser(
             if (oldYieldPos != 0) yieldPos = oldYieldPos
             if (oldAwaitPos != 0) awaitPos = oldAwaitPos
             if (oldAwaitIdentPos != 0) awaitIdentPos = oldAwaitIdentPos
-            val node = Node(N.OTHER, start)
+            val node = node(JsKind.CALL, start, base, arguments)
             node.optional = optional
             return node
         }
@@ -1683,8 +1787,7 @@ private class Parser(
             if (optional || optionalChained) {
                 raise(tok.start, "Optional chaining cannot appear in the tag of tagged template expressions")
             }
-            parseTemplate(isTagged = true)
-            return Node(N.OTHER, start)
+            return node(JsKind.OTHER, start, base, listOf(parseTemplate(isTagged = true)))
         }
         return base
     }
@@ -1693,7 +1796,7 @@ private class Parser(
         ref: DestructuringErrors?,
         forInit: Int,
         forNew: Boolean,
-    ): Node {
+    ): JsNode {
         // Where an expression begins a slash opens a regular expression; the tokenizer read it as a division.
         // After `await`, acorn takes `/=` for the operator, so `await /=/` is an error there and here.
         if (isPunct("/") || (isPunct("/=") && src.substring(lastTokStart, lastTokEnd) != "await")) {
@@ -1712,8 +1815,16 @@ private class Parser(
             }
 
             T.NUM, T.STRING, T.REGEX -> {
+                val type =
+                    if (tok.type == T.NUM) {
+                        JsKind.NUMBER
+                    } else if (tok.type == T.STRING) {
+                        JsKind.STRING
+                    } else {
+                        JsKind.REGEX
+                    }
                 next()
-                Node(N.OTHER, start)
+                node(type, start)
             }
 
             T.TEMPLATE -> {
@@ -1725,7 +1836,7 @@ private class Parser(
                     "(" -> {
                         val expr = parseParenAndDistinguishExpression(canBeArrow, forInit)
                         if (ref != null) {
-                            val simple = expr.type == N.IDENT || expr.type == N.MEMBER
+                            val simple = expr.type == JsKind.IDENT || expr.type == JsKind.MEMBER
                             if (ref.parenthesizedAssign < 0 && !simple) ref.parenthesizedAssign = start
                             if (ref.parenthesizedBind < 0) ref.parenthesizedBind = start
                         }
@@ -1733,10 +1844,10 @@ private class Parser(
                     }
 
                     "[" -> {
-                        val node = Node(N.ARRAY, start)
+                        val node = JsNode(JsKind.ARRAY, start)
                         next()
                         node.items = parseExprList("]", allowTrailingComma = true, allowEmpty = true, ref = ref)
-                        node
+                        done(node)
                     }
 
                     "{" -> {
@@ -1758,7 +1869,7 @@ private class Parser(
     private fun parseKeywordAtom(
         forInit: Int,
         forNew: Boolean,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         when (tok.value) {
             "super" -> {
@@ -1769,12 +1880,13 @@ private class Parser(
                     raise(start, "super() call outside constructor of a subclass")
                 }
                 if (!isPunct(".") && !isPunct("[") && !isPunct("(")) unexpected()
-                return Node(N.SUPER, start)
+                return node(JsKind.SUPER, start)
             }
 
             "this", "null", "true", "false" -> {
+                val word = tok.value
                 next()
-                return Node(N.OTHER, start)
+                return node(JsKind.WORD, start, name = word)
             }
 
             "function" -> {
@@ -1808,7 +1920,7 @@ private class Parser(
     private fun parseNameAtom(
         canBeArrow: Boolean,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         val escaped = tok.escaped
         val id = parseIdent()
@@ -1828,7 +1940,7 @@ private class Parser(
         return id
     }
 
-    private fun parseDynamicImport(start: Int): Node {
+    private fun parseDynamicImport(start: Int): JsNode {
         next()
         parseMaybeAssign()
         // A second argument (the options) and a trailing comma are allowed; a third argument is not.
@@ -1842,17 +1954,17 @@ private class Parser(
                 }
             }
         }
-        return Node(N.OTHER, start)
+        return node(JsKind.OTHER, start)
     }
 
     private fun parseParenAndDistinguishExpression(
         canBeArrow: Boolean,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         next()
         val innerStart = tok.start
-        val list = ArrayList<Node?>()
+        val list = ArrayList<JsNode?>()
         var first = true
         var lastIsComma = false
         var spreadStart = -1
@@ -1889,10 +2001,14 @@ private class Parser(
         checkExpressionErrors(ref, true)
         if (oldYieldPos != 0) yieldPos = oldYieldPos
         if (oldAwaitPos != 0) awaitPos = oldAwaitPos
-        return if (list.size > 1) Node(N.OTHER, innerStart) else list[0]!!
+        if (list.size > 1) return node(JsKind.SEQUENCE, innerStart, items = list).also { it.end = list.last()!!.end }
+        val only = list[0]!!
+        only.outerStart = start
+        only.outerEnd = lastTokEnd
+        return only
     }
 
-    private fun parseNew(): Node {
+    private fun parseNew(): JsNode {
         val start = tok.start
         next()
         if (eat(".")) {
@@ -1901,35 +2017,36 @@ private class Parser(
             if (property.name != "target") raise(property.start, "The only valid meta property for new is 'new.target'")
             if (escaped) raise(start, "'new.target' must not contain escaped characters")
             if (!allowNewDotTarget()) raise(start, "'new.target' can only be used in functions and class static block")
-            return Node(N.OTHER, start)
+            return node(JsKind.OTHER, start)
         }
         // Member accesses bind to the constructor; the first argument list belongs to `new`.
         val calleeStart = tok.start
         val callee = parseSubscripts(parseExprAtom(null, 0, true), calleeStart, true, 0)
-        if (callee.type == N.SUPER) raise(calleeStart, "Invalid use of 'super'")
-        if (eat("(")) parseExprList(")", allowTrailingComma = true, allowEmpty = false, ref = null)
-        return Node(N.OTHER, start)
+        if (callee.type == JsKind.SUPER) raise(calleeStart, "Invalid use of 'super'")
+        val arguments = if (eat("(")) parseExprList(")", allowTrailingComma = true, allowEmpty = false, ref = null) else emptyList()
+        return node(JsKind.NEW, start, callee, arguments)
     }
 
     /**
      * A template literal, entered at its opening backquote. The text between the expressions is
      * read here, straight from the source, since it is not made of JavaScript tokens.
      */
-    private fun parseTemplate(isTagged: Boolean): Node {
+    private fun parseTemplate(isTagged: Boolean): JsNode {
         val start = tok.start
+        val expressions = ArrayList<JsNode?>()
         while (true) {
             if (pos >= src.length) raise(pos, "Unterminated template literal")
             if (readTemplateChunk(isTagged)) break
             tok = JsToken(T.PUNCT, "\${", pos, pos + 2, false)
             pos += 2
             next()
-            parseExpression()
+            expressions += parseExpression()
             if (!isPunct("}")) unexpected()
         }
         tok = JsToken(T.TEMPLATE, "`", pos, pos + 1, false)
         pos++
         next()
-        return Node(N.OTHER, start)
+        return node(JsKind.TEMPLATE, start, items = expressions)
     }
 
     /** Reads template text up to the closing backquote (true) or the next `${` (false). */
@@ -1960,9 +2077,9 @@ private class Parser(
     private fun parseObj(
         isPattern: Boolean,
         ref: DestructuringErrors?,
-    ): Node {
-        val node = Node(if (isPattern) N.OBJECT_PATTERN else N.OBJECT, tok.start)
-        val properties = ArrayList<Node?>()
+    ): JsNode {
+        val node = JsNode(if (isPattern) JsKind.OBJECT_PATTERN else JsKind.OBJECT, tok.start)
+        val properties = ArrayList<JsNode?>()
         var first = true
         var sawProto = false
         next()
@@ -1986,27 +2103,26 @@ private class Parser(
             properties += prop
         }
         node.items = properties
-        return node
+        return done(node)
     }
 
     private fun parseProperty(
         isPattern: Boolean,
         ref: DestructuringErrors?,
-    ): Node {
+    ): JsNode {
         val start = tok.start
         if (eat("...")) {
             if (isPattern) {
-                val rest = Node(N.REST, start)
+                val rest = JsNode(JsKind.REST, start)
                 rest.inner = parseIdent()
                 if (isPunct(",")) raise(tok.start, "Comma is not permitted after the rest element")
                 return rest
             }
-            val spread = Node(N.SPREAD, start)
-            spread.inner = parseMaybeAssign(0, ref)
+            val spread = node(JsKind.SPREAD, start, parseMaybeAssign(0, ref))
             if (isPunct(",") && ref != null && ref.trailingComma < 0) ref.trailingComma = tok.start
             return spread
         }
-        val prop = Node(N.PROPERTY, start)
+        val prop = JsNode(JsKind.PROPERTY, start)
         var isGenerator = !isPattern && eat("*")
         var isAsync = false
         val escaped = tok.escaped
@@ -2025,21 +2141,23 @@ private class Parser(
             prop.plain = true
         } else if (isPunct("(")) {
             if (isPattern) unexpected()
-            prop.inner = Node(N.OTHER, tok.start)
+            val method = JsNode(JsKind.FUNCTION, tok.start)
             parseMethod(isGenerator, isAsync, false)
+            prop.inner = done(method)
         } else if (accessor && !isPunct(",") && !isPunct("}") && !isPunct("=")) {
             if (isGenerator || isAsync) unexpected()
             prop.name = key.name
             prop.key = parsePropertyName()
             val valueStart = tok.start
-            prop.inner = Node(N.OTHER, valueStart)
+            val method = JsNode(JsKind.FUNCTION, valueStart)
             checkAccessorParams(prop.name, parseMethod(false, false, false), valueStart)
+            prop.inner = done(method)
         } else if (!key.computed && key.isIdent) {
             // Shorthand `{a}`, or `{a = 1}`, which only a pattern may contain.
             if (isGenerator || isAsync) unexpected()
-            val id = Node(N.IDENT, key.start)
+            val id = JsNode(JsKind.IDENT, key.start)
             id.name = key.name!!
-            id.end = lastTokEnd
+            done(id)
             checkUnreserved(id.start, id.name)
             if (id.name == "await" && awaitIdentPos == 0) awaitIdentPos = start
             if (isPattern) {
@@ -2053,28 +2171,28 @@ private class Parser(
         } else {
             unexpected()
         }
-        return prop
+        return done(prop)
     }
 
     /** `async` as a method modifier: followed, on the same line, by the name of the method. */
-    private fun isAsyncProp(key: Key): Boolean {
+    private fun isAsyncProp(key: JsKey): Boolean {
         if (key.computed || !key.isIdent || key.name != "async" || tok.newlineBefore) return false
         return tok.type == T.NAME || tok.type == T.NUM || tok.type == T.STRING || tok.type == T.KEYWORD || isPunct("[") || isPunct("*")
     }
 
-    private fun parsePropertyName(): Key {
+    private fun parsePropertyName(): JsKey {
         val start = tok.start
         if (eat("[")) {
             parseMaybeAssign()
             expect("]")
-            return Key(null, isIdent = false, computed = true, isPrivate = false, start = start)
+            return JsKey(null, isIdent = false, computed = true, isPrivate = false, start = start, end = lastTokEnd)
         }
         if (tok.type == T.NUM || tok.type == T.STRING) {
             val name = if (tok.type == T.STRING) tok.value else null
             next()
-            return Key(name, isIdent = false, computed = false, isPrivate = false, start = start)
+            return JsKey(name, isIdent = false, computed = false, isPrivate = false, start = start, end = lastTokEnd)
         }
-        return Key(parseIdent(liberal = true).name, isIdent = true, computed = false, isPrivate = false, start = start)
+        return JsKey(parseIdent(liberal = true).name, isIdent = true, computed = false, isPrivate = false, start = start, end = lastTokEnd)
     }
 
     /** The parameters and body of an object or class method; returns the parameters. */
@@ -2082,7 +2200,7 @@ private class Parser(
         isGenerator: Boolean,
         isAsync: Boolean,
         allowDirectSuper: Boolean,
-    ): List<Node?> {
+    ): List<JsNode?> {
         val start = tok.start
         val oldYieldPos = yieldPos
         val oldAwaitPos = awaitPos
@@ -2103,10 +2221,10 @@ private class Parser(
 
     private fun parseArrowExpression(
         start: Int,
-        params: List<Node?>,
+        params: List<JsNode?>,
         isAsync: Boolean,
         forInit: Int,
-    ): Node {
+    ): JsNode {
         val oldYieldPos = yieldPos
         val oldAwaitPos = awaitPos
         val oldAwaitIdentPos = awaitIdentPos
@@ -2119,7 +2237,7 @@ private class Parser(
         yieldPos = oldYieldPos
         awaitPos = oldAwaitPos
         awaitIdentPos = oldAwaitIdentPos
-        return Node(N.ARROW, start)
+        return node(JsKind.ARROW, start)
     }
 
     private fun parseExprList(
@@ -2127,8 +2245,8 @@ private class Parser(
         allowTrailingComma: Boolean,
         allowEmpty: Boolean,
         ref: DestructuringErrors?,
-    ): List<Node?> {
-        val elements = ArrayList<Node?>()
+    ): List<JsNode?> {
+        val elements = ArrayList<JsNode?>()
         var first = true
         while (!eat(close)) {
             if (first) {
@@ -2140,10 +2258,9 @@ private class Parser(
             if (allowEmpty && isPunct(",")) {
                 elements += null
             } else if (isPunct("...")) {
-                val spread = Node(N.SPREAD, tok.start)
+                val spreadStart = tok.start
                 next()
-                spread.inner = parseMaybeAssign(0, ref)
-                elements += spread
+                elements += node(JsKind.SPREAD, spreadStart, parseMaybeAssign(0, ref))
                 if (ref != null && isPunct(",") && ref.trailingComma < 0) ref.trailingComma = tok.start
             } else {
                 elements += parseMaybeAssign(0, ref)
@@ -2169,13 +2286,14 @@ private class Parser(
     }
 
     /** A name; with [liberal], as after a dot or as a property key, a keyword serves as one too. */
-    private fun parseIdent(liberal: Boolean = false): Node {
+    private fun parseIdent(liberal: Boolean = false): JsNode {
         if (tok.type != T.NAME && tok.type != T.KEYWORD) unexpected()
-        val node = Node(N.IDENT, tok.start)
+        val node = JsNode(JsKind.IDENT, tok.start)
         node.name = tok.value
         // The word is consumed as a name, so a keyword spelled with an escape is reported as a keyword below.
         next(ignoreEscapedKeyword = true)
-        node.end = lastTokEnd
+        // After a dot or as a key the name is no expression, and stands in no list of them.
+        if (liberal) node.end = lastTokEnd else done(node)
         if (!liberal) {
             checkUnreserved(node.start, node.name)
             if (node.name == "await" && awaitIdentPos == 0) awaitIdentPos = node.start
@@ -2183,9 +2301,9 @@ private class Parser(
         return node
     }
 
-    private fun parsePrivateIdent(): Node {
+    private fun parsePrivateIdent(): JsNode {
         if (tok.type != T.PRIVATE_NAME) unexpected()
-        val node = Node(N.PRIVATE_NAME, tok.start)
+        val node = JsNode(JsKind.PRIVATE_NAME, tok.start)
         node.name = tok.value
         next()
         val names = privateNameStack.lastOrNull()
@@ -2194,7 +2312,7 @@ private class Parser(
         return node
     }
 
-    private fun parseYield(forInit: Int): Node {
+    private fun parseYield(forInit: Int): JsNode {
         val start = tok.start
         if (yieldPos == 0) yieldPos = start
         next()
@@ -2209,7 +2327,7 @@ private class Parser(
             eat("*")
             parseMaybeAssign(forInit)
         }
-        return Node(N.OTHER, start)
+        return node(JsKind.OTHER, start)
     }
 
     // ---- tokens --------------------------------------------------------------------------------

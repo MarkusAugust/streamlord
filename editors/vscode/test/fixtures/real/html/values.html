@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<body data-signals:a="0">
+  <button data-on:click="@get(function(){ return '/x' }())">a function called at once gives what it returns</button>
+  <button data-on:click="@get(function(){}.bind(null))">what a call gives is the author's</button>
+  <button data-on:click="@get(function(){})">a function for the address</button>
+  <button data-on:click="@get((1))">a number in parentheses</button>
+  <button data-on:click="@get(- 1)">a number after a spaced sign</button>
+  <button data-on:click="@get(-(1))">a sign before a number in parentheses</button>
+  <button data-on:click="@get('/x', {retry: function(){ return 'never' }()})">an option from a function called at once</button>
+  <button data-on:click="@get('/x', {retry: function(){}})">a function for an option</button>
+  <div data-computed="(1)">a number in parentheses for the object of functions</div>
+  <div data-computed="{t: (1), u: () => 1}">a number in parentheses under a key</div>
+  <div data-computed="{t: 1, u: () => 1}">a number under a key</div>
+  <div data-computed="1 +">a value that does not parse yet</div>
+  <div data-computed="{t: 1 +, u: () => 1}">a value under a key that does not parse yet</div>
+  <div data-computed="{t: () => @get('/x'), u: () => $a++}">side effects in the functions the client calls</div>
+  <div data-computed:b="() => $a++">a function nothing calls</div>
+  <div data-init="setTimeout(() => @get('/x'))" data-indicator="later">an action in a function handed on</div>
+  <div data-init="@get('/x')" data-indicator="busy">an action sent at once before its indicator</div>
+  <div data-json-signals="{include: /a/, exclude: function(){ return /b/ }()}">a filter from a function called at once</div>
+  <div data-json-signals="{include: 1}">a number for a filter</div>
+  <div data-signals:constructor="$a ? {x: 1} : 0">an object a conditional may give</div>
+  <button data-on:click="@get('/x').then(f)">a call of what an action gives</button>
+  <div data-signals:constructor="{x: @peek(() => 1)}">an object that holds an action</div>
+</body>
+</html>

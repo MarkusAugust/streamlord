@@ -14,93 +14,13 @@ import kotlin.test.assertTrue
  * described in each file.
  */
 class CorpusTest {
-    /** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
-    private fun unknown(
-        refs: List<SignalReference>,
-        defined: Set<String>,
-    ) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
-
     private val analyzer = Analyzer()
     private val files = fixtureNames("editors/vscode/test/fixtures/corpus").filter { it.endsWith(".json") }
 
     private fun run(
         kind: String,
         case: JsonObject,
-    ): List<Issue> {
-        val source = case.string("source")!!
-        // A case may give the attribute prefix of an aliased bundle; the default bundle's otherwise.
-        val prefix = case.string("prefix") ?: "data-"
-        // A case may give the workspace's `const val` names, which modules the project has, and the calls that are not Streamlord's.
-        val foreign = case.array("foreign")?.strings()?.toSet()
-        val starts = foreign?.let { callStarts(source, it).toSet() } ?: emptySet()
-
-        fun read(language: SourceLanguage) =
-            Source(
-                source,
-                language,
-                prefix,
-                case.modules(Modules.UNKNOWN),
-                constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
-                foreign = { _, at -> at in starts },
-            )
-        return when (kind) {
-            "expression" -> {
-                analyzer.validateExpression(source)
-            }
-
-            "markup" -> {
-                analyzer.validateMarkup(source, MarkupOptions(case.boolean("requireIds") ?: false, prefix, true))
-            }
-
-            "html" -> {
-                analyzer.analyzeHtml(read(SourceLanguage.HTML))
-            }
-
-            "kotlin" -> {
-                analyzer.analyzeKotlin(read(SourceLanguage.KOTLIN))
-            }
-
-            // The signals the source reads that it does not itself declare.
-            "references" -> {
-                val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
-                unknown(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
-            }
-
-            // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
-            "kotlin-references" -> {
-                val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
-                unknown(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
-            }
-
-            else -> {
-                error("Unknown corpus kind $kind")
-            }
-        }
-    }
-
-    /**
-     * Where each call of [names] in [text] starts, those in the code of a `${'$'}{...}` template too, read
-     * as the hyphen check reads them (collectHyphenSites): offsets of the whole source.
-     */
-    private fun callStarts(
-        text: String,
-        names: Set<String>,
-        shift: Int = 0,
-        depth: Int = 0,
-    ): List<Int> {
-        val lex = analyzer.lex(text)
-        val out = findCallSites(text, names, lex).mapTo(ArrayList()) { it.nameStart + shift }
-        if (depth >= 4) return out
-        for (s in lex.strings) {
-            for (t in s.interpolations) {
-                if (t.kind != InterpolationKind.BRACED) continue
-                val open = text.indexOf('{', t.start)
-                if (open < 0 || open + 1 > t.end - 1 || text.substring(open + 1, t.end - 1) != t.text) continue
-                out += callStarts(t.text, names, shift + open + 1, depth + 1)
-            }
-        }
-        return out
-    }
+    ): List<Issue> = corpusIssues(analyzer, kind, case)
 
     /**
      * One issue as a line: its code, its range unless the case leaves the range open, its severity
@@ -199,4 +119,92 @@ internal fun JsonObject.modules(otherwise: Modules): Modules {
     val core = boolean("core")
     val dsl = boolean("htmlDsl")
     return if (core == null && dsl == null) otherwise else Modules.known(core ?: true, dsl ?: true)
+}
+
+/** The reads of [refs] that name no signal of [defined], as an editor asks the project. */
+private fun unknown(
+    refs: List<SignalReference>,
+    defined: Set<String>,
+) = projectSignalIssues(SourceLanguage.HTML, refs, Defined(defined))
+
+/** What the analysis says of [case] of a corpus of [kind], in the order it says it. */
+internal fun corpusIssues(
+    analyzer: Analyzer,
+    kind: String,
+    case: JsonObject,
+): List<Issue> {
+    val source = case.string("source")!!
+    // A case may give the attribute prefix of an aliased bundle; the default bundle's otherwise.
+    val prefix = case.string("prefix") ?: "data-"
+    // A case may give the workspace's `const val` names, which modules the project has, and the calls that are not Streamlord's.
+    val foreign = case.array("foreign")?.strings()?.toSet()
+    val starts = foreign?.let { callStarts(analyzer, source, it).toSet() } ?: emptySet()
+
+    fun read(language: SourceLanguage) =
+        Source(
+            source,
+            language,
+            prefix,
+            case.modules(Modules.UNKNOWN),
+            constants = case.array("constants")?.strings()?.toSet() ?: emptySet(),
+            foreign = { _, at -> at in starts },
+        )
+    return when (kind) {
+        "expression" -> {
+            analyzer.validateExpression(source)
+        }
+
+        "markup" -> {
+            analyzer.validateMarkup(source, MarkupOptions(case.boolean("requireIds") ?: false, prefix, true))
+        }
+
+        "html" -> {
+            analyzer.analyzeHtml(read(SourceLanguage.HTML))
+        }
+
+        "kotlin" -> {
+            analyzer.analyzeKotlin(read(SourceLanguage.KOTLIN))
+        }
+
+        // The signals the source reads that it does not itself declare.
+        "references" -> {
+            val defined = collectSignalDefinitions(Source(source, SourceLanguage.HTML, prefix))
+            unknown(analyzer.signalReferences(read(SourceLanguage.HTML)), defined)
+        }
+
+        // The same of a Kotlin source: the signals its DSL calls and HTML strings read that it does not declare.
+        "kotlin-references" -> {
+            val defined = collectSignalDefinitions(Source(source, SourceLanguage.KOTLIN))
+            unknown(analyzer.signalReferences(read(SourceLanguage.KOTLIN)), defined)
+        }
+
+        else -> {
+            error("Unknown corpus kind $kind")
+        }
+    }
+}
+
+/**
+ * Where each call of [names] in [text] starts, those in the code of a `${'$'}{...}` template too, read
+ * as the hyphen check reads them (collectHyphenSites): offsets of the whole source.
+ */
+private fun callStarts(
+    analyzer: Analyzer,
+    text: String,
+    names: Set<String>,
+    shift: Int = 0,
+    depth: Int = 0,
+): List<Int> {
+    val lex = analyzer.lex(text)
+    val out = findCallSites(text, names, lex).mapTo(ArrayList()) { it.nameStart + shift }
+    if (depth >= 4) return out
+    for (s in lex.strings) {
+        for (t in s.interpolations) {
+            if (t.kind != InterpolationKind.BRACED) continue
+            val open = text.indexOf('{', t.start)
+            if (open < 0 || open + 1 > t.end - 1 || text.substring(open + 1, t.end - 1) != t.text) continue
+            out += callStarts(analyzer, t.text, names, shift + open + 1, depth + 1)
+        }
+    }
+    return out
 }

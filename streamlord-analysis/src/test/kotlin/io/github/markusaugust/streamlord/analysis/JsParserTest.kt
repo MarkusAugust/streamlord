@@ -367,4 +367,124 @@ class JsParserTest {
         bad("// c\u2028 1 +")
         bad("/* open", pos = 0, message = "Unterminated comment")
     }
+
+    /** The last expression of [source]: each node's kind, its name or the literal as written, and the nodes it holds. */
+    private fun tree(source: String): String {
+        val parsed = JsParser.parse(source)
+        assertNull(parsed.error, source)
+
+        fun show(n: JsNode?): String {
+            if (n == null) return "_"
+            val literal = n.type in setOf(JsKind.NUMBER, JsKind.STRING, JsKind.REGEX) || (n.type == JsKind.TEMPLATE && n.items.isEmpty())
+            val name =
+                if (literal) {
+                    source.substring(n.start, n.end)
+                } else if (n.type == JsKind.PROPERTY) {
+                    n.key?.name.orEmpty()
+                } else {
+                    n.name
+                }
+            val held = listOfNotNull(n.inner) + n.items
+            return n.type.name.lowercase() + (if (name.isEmpty()) "" else ":$name") +
+                if (held.isEmpty()) "" else held.joinToString(" ", "(", ")") { show(it) }
+        }
+        return show(parsed.nodes.last())
+    }
+
+    @Test
+    fun `an expression is read into the tree of its parts`() {
+        assertEquals("call(ident:f number:1 string:'a' regex:/x/ template:`t` word:null)", tree("f(1, 'a', /x/, `t`, null)"))
+        assertEquals("binary:+(ident:a binary:*(ident:b ident:c))", tree("a + b * c"))
+        assertEquals("binary:-(binary:-(ident:a ident:b) ident:c)", tree("a - b - c"))
+        assertEquals("binary:**(number:2 binary:**(number:3 number:2))", tree("2 ** 3 ** 2"))
+        assertEquals("unary:+(unary:-(number:1n))", tree("+-1n"))
+        assertEquals("unary:typeof(update:++(ident:a))", tree("typeof a++"))
+        assertEquals("conditional(ident:a string:'b' sequence(ident:c ident:d))", tree("a ? 'b' : (c, d)"))
+        assertEquals("assign:+=(member:b(ident:a) number:1)", tree("a.b += 1"))
+        assertEquals("chain(call(member:c(member(ident:a ident:b))))", tree("a[b]?.c()"))
+        assertEquals("new(member:B(ident:A) number:1)", tree("new A.B(1)"))
+        assertEquals("template(ident:a binary:+(ident:b number:1))", tree("`x\${a}y\${b + 1}`"))
+        assertEquals("array(number:1 _ spread(ident:a))", tree("[1, , ...a]"))
+    }
+
+    @Test
+    fun `a function called at once is a call, and a function is one however it is written`() {
+        assertEquals("assign:=(ident:x call(function))", tree("x = function(){ return 1 }()"))
+        assertEquals("assign:=(ident:x call(arrow number:1))", tree("x = (() => 2)(1)"))
+        assertEquals("assign:=(ident:x member:name(function))", tree("x = function(){}.name"))
+        assertEquals("assign:=(ident:x function)", tree("x = async function*(){}"))
+        assertEquals("assign:=(ident:x arrow)", tree("x = async a => a"))
+        assertEquals("assign:=(ident:x class)", tree("x = class {}"))
+    }
+
+    @Test
+    fun `an object is read into its properties, each with its key and what it holds`() {
+        assertEquals(
+            "object(property:a(number:1) property:b c(ident:x) property:d(ident:d) property:e(function) property:f(function) " +
+                "spread(ident:g) property(number:2))",
+            tree("({a: 1, 'b c': x, d, e() {}, get f() { return 1 }, ...g, [h]: 2})"),
+        )
+    }
+
+    @Test
+    fun `a node runs from its first character to its last, without the parentheses around it`() {
+        val source = "f( (1) , /*c*/ 'a' /*d*/, (b, c) )"
+        val call = JsParser.parse(source).nodes.last()
+        assertEquals(listOf("1", "'a'", "b, c"), call.items.map { source.substring(it!!.start, it.end) })
+        assertEquals(source, source.substring(call.start, call.end))
+    }
+
+    @Test
+    fun `every node stands after the nodes it holds`() {
+        val source = "x = a ? [1, {b: `\${c}`, d() {}}] : f(g => -g.h, new I(...j)); k++ || (l, m)"
+        val nodes = JsParser.parse(source).nodes
+        assertEquals(true, nodes.any { it.type == JsKind.SEQUENCE })
+        for ((at, node) in nodes.withIndex()) {
+            for (held in listOfNotNull(node.inner) + node.items.filterNotNull()) {
+                assertEquals(true, nodes.indexOf(held) in 0 until at, "${held.type} of ${node.type} at ${held.start}")
+            }
+        }
+    }
+
+    @Test
+    fun `text that does not parse leaves its error and no node`() {
+        val parsed = JsParser.parse("f(1, ")
+        assertEquals("Unexpected end of input", parsed.error?.message)
+        assertEquals(emptyList(), parsed.nodes)
+    }
+
+    @Test
+    fun `one expression is read whole, its last node the whole of it`() {
+        val source = " {a: 1}, b // c"
+        val whole = JsParser.expression(source).nodes.last()
+        assertEquals(JsKind.SEQUENCE to "{a: 1}, b", whole.type to source.substring(whole.start, whole.end))
+        assertEquals("Unexpected token", JsParser.expression("1) + (2").error?.message)
+        assertEquals("Unexpected token", JsParser.expression("a; b").error?.message)
+        assertEquals("Unexpected end of input", JsParser.expression("").error?.message)
+    }
+
+    @Test
+    fun `a value is read from where it starts and as far as it goes`() {
+        val source = "{t: 1 + 2, u: () => (, v: 'x'}"
+        val value = JsParser.expression(source, 4).nodes.last()
+        assertEquals(JsKind.BINARY to "1 + 2", value.type to source.substring(value.start, value.end))
+        assertEquals(
+            "'x'",
+            JsParser
+                .expression(source, 26)
+                .nodes
+                .last()
+                .let { source.substring(it.start, it.end) },
+        )
+        assertEquals(emptyList(), JsParser.expression(source, 14).nodes)
+        // A line break before the value is none of its own: `-->` opens a comment only at the start of a line.
+        assertEquals(
+            JsKind.BINARY,
+            JsParser
+                .expression("a\n: b-->c", 4)
+                .nodes
+                .last()
+                .type,
+        )
+    }
 }
