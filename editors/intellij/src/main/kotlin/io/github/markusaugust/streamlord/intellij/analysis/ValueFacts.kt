@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtParenthesizedExpression
+import org.jetbrains.kotlin.psi.KtPrefixExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
@@ -91,7 +92,7 @@ object ValueFacts {
 
     /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its placeholder. */
     fun of(file: KtFile): Map<TextRange, ValueFact> {
-        val placeholders = placeholders(file)
+        val placeholders = placeholders(file) + markedValues(file)
         val arguments = interpolateArguments(file)
         if (placeholders.isEmpty() && arguments.isEmpty()) return emptyMap()
         return analyze(file) {
@@ -114,6 +115,27 @@ object ValueFacts {
             .collectElementsOfType(file, KtCallExpression::class.java)
             .filter { it.calleeExpression?.text == "interpolate" }
             .flatMap { call -> call.valueArguments.drop(1).mapNotNull { a -> a.getArgumentExpression()?.let { it.textRange to it } } }
+
+    /**
+     * What the block of an `interpolate { ... }` marks with `+`, in a template or joined to a string, by the range
+     * of what stands after the mark, and by the range inside its parentheses where it has them, which is the one
+     * the analysis asks by: a value judged by its type, as a template's is.
+     */
+    private fun markedValues(file: KtFile): List<Pair<TextRange, KtExpression>> =
+        PsiTreeUtil
+            .collectElementsOfType(file, KtCallExpression::class.java)
+            .filter { it.calleeExpression?.text == "interpolate" }
+            // The block after the call, or in its parentheses.
+            .mapNotNull { call ->
+                call.lambdaArguments.firstOrNull()?.getLambdaExpression()
+                    ?: call.valueArguments.firstNotNullOfOrNull { it.getArgumentExpression() as? KtLambdaExpression }
+            }.flatMap { PsiTreeUtil.collectElementsOfType(it, KtPrefixExpression::class.java) }
+            .filter { it.operationToken == KtTokens.PLUS }
+            .flatMap { mark ->
+                val value = mark.baseExpression ?: return@flatMap emptyList()
+                val inner = KtPsiUtil.deparenthesize(value) ?: value
+                listOf(value.textRange to inner, inner.textRange to inner).distinct()
+            }
 
     /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */
     private fun resolved(

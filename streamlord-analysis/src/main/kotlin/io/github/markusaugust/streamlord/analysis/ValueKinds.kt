@@ -96,8 +96,8 @@ internal fun trustedName(
 
 /**
  * Whether a value can be null as far as the text shows: `null` itself, a name declared with a
- * `?` type, or a safe call with no `?:` after it. A template writes null as `null`, and
- * `interpolate` writes nothing.
+ * `?` type, a safe call with no `?:` after it, or a lookup in a name declared a map, which may
+ * miss. A template writes null as `null`, and `interpolate` writes nothing.
  */
 internal fun mayBeNull(
     src: String,
@@ -116,11 +116,21 @@ internal fun mayBeNull(
                     true
             }
 
+            "?:" in t -> {
+                false
+            }
+
             else -> {
-                "?." in t && "?:" !in t
+                "?." in t ||
+                    MAP_LOOKUP.matchEntire(t)?.let { declarationOf(src, it.groupValues[1], at)?.type }?.let(MAP_TYPE::containsMatchIn) ==
+                    true
             }
         }
     }
+
+/** A name indexed once, `m[key]`, with nothing after it. */
+private val MAP_LOOKUP = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\[[^\[\]]*]""")
+private val MAP_TYPE = regex("""^(?:Mutable|Hash|LinkedHash|Sorted)?Map\b""")
 
 private val TYPE_PARAMETERS = regex("""(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<((?:[^<>]|<[^<>]*>)*)>""")
 private val TYPE_PARAMETER =

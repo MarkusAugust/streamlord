@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.client.regex
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 /*
@@ -9,138 +8,69 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
  * whose name starts with datastar), or a string that never comes.
  */
 
-private val DETAIL_TYPE = regex("""evt\s*\.\s*detail\s*\.\s*type(?![\w$])""")
-private val OPERATOR_AFTER = regex("""\s*(?:===?|!==?)\s*""")
-private val OPERATORS = listOf("!==", "===", "!=", "==")
-private val SWITCH_AFTER = regex("""\s*\)\s*\{""")
-private val CASE = regex("""(?<![\w$.])case\s*""")
+private val EQUALITY = setOf("===", "==", "!==", "!=")
 
-/** The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched with. */
-internal fun fetchTypeIssues(
-    catalog: Catalog,
-    text: String,
-): List<Issue> {
-    if ("detail" !in text) return emptyList()
-    val regions = jsRegions(text)
-    val out = ArrayList<Issue>()
-
-    /** The string literal from [open] to its closing quote, without an escape or a template's code in it. */
-    fun literal(open: Int): IntRange? {
-        val q = text.getOrNull(open) ?: return null
-        if (q != '\'' && q != '"' && q != '`') return null
-        val close = text.indexOf(q, open + 1)
-        if (close < 0 || (open..close).any { regions[it] != regions[open] }) return null
-        val content = text.substring(open + 1, close)
-        // A Kotlin template there is the code's value, not written.
-        return if ('\\' in content || "\${" in content || PLACEHOLDER in content) null else open..close
-    }
-    for (m in DETAIL_TYPE.findAll(text)) {
-        val at = m.range.first
-        if (regions[at] != Region.CODE || text.getOrNull(at - 1).let { it != null && (it.isJsNamePart() || it == '.') }) continue
-        val right = OPERATOR_AFTER.matchAt(text, m.range.last + 1)?.let { literal(it.range.last + 1) }
-        val left =
-            operatorBefore(text, at).takeIf { it >= 0 }?.let { op ->
-                var close = op - 1
-                while (close >= 0 && isJsSpace(text[close])) close--
-                val q = text.getOrNull(close)
-                // Only a quote can open the literal: looking back for any other character would cost the text before it.
-                val open = if (q == null || q !in "'\"`") -1 else text.lastIndexOf(q, close - 1)
-                if (open >= 0) literal(open)?.takeIf { it.last == close } else null
-            }
-        for (range in listOfNotNull(left, right) + switchCases(text, regions, at, m.range.last + 1, ::literal)) {
-            val type = text.substring(range.first + 1, range.last)
-            if (type in catalog.fetchEvents || type.startsWith("datastar")) continue
-            val near =
-                catalog.fetchEvents.singleOrNull { type.isNotEmpty() && it.startsWith(type) }
-                    ?: catalog.fetchEvents.singleOrNull {
-                        ElementsGuard.oneEditAway(type, it, swaps = true) ||
-                            it.equals(type, ignoreCase = true)
-                    }
-            out +=
-                Issue(
-                    range.first,
-                    range.last + 1,
-                    "$DATASTAR_FETCH is never dispatched with the type ${text.substring(
-                        range.first,
-                        range.last + 1,
-                    )}: Datastar dispatches " +
-                        catalog.fetchEvents.joinToString(", ") + " and the datastar events the response sends." +
-                        (near?.let { " Did you mean $it?" } ?: ""),
-                    Severity.WARNING,
-                    "fetch-event-type",
-                    Docs.ACTIONS,
-                    listOfNotNull(near?.let { Fix("Change to $it", range.first + 1, range.last, it) }),
-                )
-        }
-    }
-    return out
+/** `evt.detail.type`, read of the event itself, with `?.` or without. */
+private fun JsNode.isDetailType(): Boolean {
+    val read = if (type == JsKind.CHAIN) inner!! else this
+    val detail = read.inner ?: return false
+    val evt = detail.inner ?: return false
+    return read.type == JsKind.MEMBER && read.name == "type" && detail.type == JsKind.MEMBER && detail.name == "detail" &&
+        evt.type == JsKind.IDENT && evt.name == "evt"
 }
 
 /**
- * The string literals of the cases of `switch (evt.detail.type) { ... }`, where the match from
- * [at] until [end] is that switch's subject: a switch compares with each case by `===`. A case of
- * a switch nested inside is that switch's.
+ * The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched
+ * with: the other side of an equality, and each case of a switch on it, which compares by `===`. A string joined to
+ * something or chosen by a condition is the code's. [parsed] is the tree of the text, and [at] says where in [text]
+ * an offset of a node stands.
  */
-private fun switchCases(
+internal fun fetchTypeIssues(
+    catalog: Catalog,
     text: String,
-    regions: ByteArray,
-    at: Int,
-    end: Int,
-    literal: (Int) -> IntRange?,
-): List<IntRange> {
-    if (!switchBefore(text, at)) return emptyList()
-    val open = SWITCH_AFTER.matchAt(text, end)?.range?.last ?: return emptyList()
-    val out = ArrayList<IntRange>()
-    var depth = 0
-    var i = open
-    while (i < text.length) {
-        if (regions[i] == Region.CODE) {
-            when (text[i]) {
-                '{' -> {
-                    depth++
-                }
-
-                '}' -> {
-                    if (--depth == 0) break
-                }
-
-                'c' -> {
-                    if (depth == 1) CASE.matchAt(text, i)?.let { m -> literal(m.range.last + 1)?.let { out += it } }
-                }
+    parsed: Parsed,
+    at: (Int) -> Int,
+): List<Issue> {
+    val compared = ArrayList<JsNode>()
+    // What is read to its end is judged while the rest is typed: a comparison, and a case at its colon.
+    for (node in parsed.finished) {
+        if (node.type == JsKind.BINARY && node.name in EQUALITY) {
+            val (left, right) = node.items
+            if (left!!.isDetailType()) {
+                compared += right!!
+            } else if (right!!.isDetailType()) {
+                compared += left
             }
+        } else if (node.type == JsKind.CASE && node.items[0]!!.isDetailType()) {
+            compared += node.inner!!
         }
-        i++
+    }
+    val out = ArrayList<Issue>()
+    for (node in compared.sortedBy { it.start }) {
+        if (node.type != JsKind.STRING && !(node.type == JsKind.TEMPLATE && node.items.isEmpty())) continue
+        val start = at(node.start)
+        val end = at(node.end)
+        val type = writtenString(text, start, end) ?: continue
+        // An escape is not read here, and a Kotlin template there is the code's value, not written.
+        if ('\\' in type || PLACEHOLDER in type || type in catalog.fetchEvents || type.startsWith("datastar")) continue
+        val near =
+            catalog.fetchEvents.singleOrNull { type.isNotEmpty() && it.startsWith(type) }
+                ?: catalog.fetchEvents.singleOrNull {
+                    ElementsGuard.oneEditAway(type, it, swaps = true) ||
+                        it.equals(type, ignoreCase = true)
+                }
+        out +=
+            Issue(
+                start,
+                end,
+                "$DATASTAR_FETCH is never dispatched with the type ${text.substring(start, end)}: Datastar dispatches " +
+                    catalog.fetchEvents.joinToString(", ") + " and the datastar events the response sends." +
+                    (near?.let { " Did you mean $it?" } ?: ""),
+                Severity.WARNING,
+                "fetch-event-type",
+                Docs.ACTIONS,
+                listOfNotNull(near?.let { Fix("Change to $it", start + 1, end - 1, it) }),
+            )
     }
     return out
-}
-
-/*
- * The two readings back from a match, each costing what lies between it and what it reads, where a pattern run on all the
- * text before cost that text at each match.
- */
-
-/** Where the `===`, `==`, `!==` or `!=` that ends the text before [at], but for white space, starts; -1 for none. */
-private fun operatorBefore(
-    text: String,
-    at: Int,
-): Int {
-    var end = at
-    while (end > 0 && text[end - 1].isWhitespace()) end--
-    return OPERATORS.firstOrNull { end >= it.length && text.startsWith(it, end - it.length) }?.let { end - it.length } ?: -1
-}
-
-/** Whether `switch (` ends the text before [at], but for ASCII white space, and stands on its own, as no property. */
-private fun switchBefore(
-    text: String,
-    at: Int,
-): Boolean {
-    fun space(c: Char) = c == ' ' || c in '\t'..'\r'
-    var i = at
-    while (i > 0 && space(text[i - 1])) i--
-    if (i == 0 || text[i - 1] != '(') return false
-    i--
-    while (i > 0 && space(text[i - 1])) i--
-    if (i < 6 || !text.startsWith("switch", i - 6)) return false
-    val c = text.getOrNull(i - 7) ?: return true
-    return !(c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '_' || c == '$' || c == '.')
 }

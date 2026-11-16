@@ -13,7 +13,7 @@ private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 private const val PACKAGE = "io.github.markusaugust.streamlord.probes"
 
 /** The issues whose fixes keep what the string writes; a fix for the dollar trap changes it on purpose. */
-private val JUDGED = setOf("unescaped-interpolation", "unsafe-interpolation")
+private val JUDGED = setOf("unescaped-interpolation", "unsafe-interpolation", "interpolate-template")
 
 /** One function to probe: `fun f(params) = body`, with what the file imports and declares beside it. */
 private class Case(

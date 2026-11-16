@@ -380,7 +380,7 @@ class InterpolationReadingsTest {
         val failure = refused("""<script src="%s"></script>""", "https://cdn.example.com/x.js")
 
         assertTrue(failure.loadsCode)
-        assertTrue("\"/js/%s\"" in failure.message!!, failure.message)
+        assertTrue("\"/js/\"" in failure.message!!, failure.message)
         assertFalse("Pass a relative URL" in failure.message!!, failure.message)
         assertFalse(refused("""<a href="%s">x</a>""", "javascript:x").loadsCode)
     }

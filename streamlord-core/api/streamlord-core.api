@@ -394,6 +394,8 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExp
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/util/List;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+	public static final fun interpolate (Ljava/util/List;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
+	public static final fun interpolate (Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
 	public static final fun joinToHtml-eKKYyv0 (Ljava/lang/Iterable;Ljava/lang/String;)Ljava/lang/String;
 	public static synthetic fun joinToHtml-eKKYyv0$default (Ljava/lang/Iterable;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 	public static final fun landingAsParsed (Ljava/lang/String;Lkotlin/ranges/IntRange;Ljava/util/List;Z)Lio/github/markusaugust/streamlord/core/domain/ValueLanding;
@@ -403,6 +405,12 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt
 	public static final fun urlSchemeFixedBy (Ljava/lang/String;Ljava/lang/String;)Z
 	public static final fun valueLandings (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;)Ljava/util/List;
 	public static synthetic fun valueLandings$default (Ljava/lang/String;Ljava/util/List;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/InterpolationScope {
+	public fun <init> ()V
+	public final fun html-Ku8YPtc (Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
+	public final fun unaryPlus-VTpKpQo (Ljava/lang/Object;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/MarkupScanKt {
@@ -503,6 +511,18 @@ public final class io/github/markusaugust/streamlord/core/domain/PatchSignals : 
 public final class io/github/markusaugust/streamlord/core/domain/PatchSignals$Companion {
 	public final fun remove-moChb0s ([Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
 	public static synthetic fun remove-moChb0s$default (Lio/github/markusaugust/streamlord/core/domain/PatchSignals$Companion;[Ljava/lang/String;Ljava/lang/String;Lkotlin/time/Duration;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/core/domain/PatchSignals;
+}
+
+public final class io/github/markusaugust/streamlord/core/domain/Placed {
+	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/github/markusaugust/streamlord/core/domain/Placed;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (Ljava/lang/String;Ljava/lang/Object;)Z
+	public static final fun equals-impl0 (Ljava/lang/String;Ljava/lang/String;)Z
+	public fun hashCode ()I
+	public static fun hashCode-impl (Ljava/lang/String;)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (Ljava/lang/String;)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/Position : java/lang/Enum {

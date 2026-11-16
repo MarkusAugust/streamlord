@@ -16,60 +16,11 @@ import kotlin.test.assertEquals
  * rewrite-probes project, for every cell.
  */
 class ValueMatrixTest {
-    private val analyzer = Analyzer()
-    private val matrix = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/cases/value-matrix.json"))
-    private val places = matrix.array("places")!!.objects()
-    private val values = matrix.array("values")!!.objects()
-    private val forms = matrix.array("forms")!!.objects()
+    private val table = ValueMatrix(Analyzer())
 
-    /** One source of the matrix: [value] written at [place] in a literal of [form]. */
-    private inner class Cell(
-        val place: JsonObject,
-        val value: JsonObject,
-        val form: JsonObject,
-    ) {
-        val name = "${place.string("name")}, ${value.string("name")}, ${form.string("name")}"
-        val shown = form.string("shown")!!
-        val source: String
+    private fun cells() = table.cells()
 
-        /** What the table says of the cell: null where nothing is said. */
-        val verdict = matrix.obj("cells")!!.obj(place.string("name")!!)!!.obj(value.string("name")!!)
-
-        /** The fixes the table gives the cell, each with whether it is preferred where a rule says; null where no rule says what is offered. */
-        val fixes: List<Pair<String, Boolean?>>?
-
-        init {
-            val imports = listOf("$DOMAIN.Trusted", "$DOMAIN.interpolate") + value.array("imports")?.strings().orEmpty()
-            val markup = place.string("markup")!!.let { if (form.boolean("escaped") == true) it.replace("\"", "\\\"") else it }
-            val literal = form.string("open") + markup.replace("§", form.string("placeholder")!!) + form.string("close")
-            val parameter = value.string("type")?.let { "v: $it" }.orEmpty()
-            source =
-                imports.joinToString("") { "import $it\n" } + "\n" + value.string("declares").orEmpty() + "fun f($parameter) = $literal"
-            val own = verdict?.obj("forms")?.obj(form.string("name")!!) ?: verdict
-            // Under trimIndent no rewrite is preferred: a value with a line break changes what the trim removes.
-            val never = form.boolean("rewriteNeverPreferred") == true
-            fixes =
-                own?.array("fixes")?.objects()?.map {
-                    val title = it.string("title")!!.replace("{shown}", shown)
-                    title to it.boolean("preferred")?.let { preferred -> preferred && !(never && title.startsWith(REWRITE)) }
-                }
-        }
-
-        /** The issues of [text], the cell's source or what a fix left of it, with the editor's fact given for the value wherever it stands. */
-        fun analyse(text: String): List<Issue> {
-            val fact = (value.string("kotlinFact") ?: value.string("fact"))?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }
-            return analyzer.analyzeKotlin(
-                Source(text, SourceLanguage.KOTLIN, valueFact = {
-                    start,
-                    end,
-                    ->
-                    fact.takeIf { text.substring(start, end).trim() in WRITTEN }
-                }),
-            )
-        }
-    }
-
-    private fun cells(): List<Cell> = places.flatMap { p -> values.flatMap { v -> forms.map { f -> Cell(p, v, f) } } }
+    private val forms get() = table.forms
 
     /** The values a parameter of the kind [sample] names can hold at run time; [url] where the place is a URL. */
     private fun samples(
@@ -96,7 +47,7 @@ class ValueMatrixTest {
         override fun toString(): String = text
     }
 
-    private fun samples(cell: Cell): List<Any?> =
+    private fun samples(cell: ValueMatrix.Cell): List<Any?> =
         cell.value
             .string("sample")
             ?.let { samples(it, "href=" in cell.place.string("markup")!! || "src=" in cell.place.string("markup")!!) }
@@ -191,12 +142,69 @@ class ValueMatrixTest {
         }
         failed(failures)
     }
+}
 
-    private companion object {
-        const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
-        const val REWRITE = "Build this string with interpolate(...), which"
+private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
+private const val REWRITE = "Mark the values with + in interpolate { }, which"
 
-        /** The value as each form writes it, and as a rewrite passes it. */
-        val WRITTEN = setOf("\${v}", "\$\${v}", "v")
+/** The value as each form writes it, and as a rewrite passes it. */
+private val WRITTEN = setOf("\${v}", "\$\${v}", "v")
+
+/** `cases/value-matrix.json` as its cells: each place, value and form written out as one Kotlin source. */
+internal class ValueMatrix(
+    private val analyzer: Analyzer,
+) {
+    private val matrix = JsonParser.parseObject(fixtureText("editors/vscode/test/fixtures/cases/value-matrix.json"))
+    private val places = matrix.array("places")!!.objects()
+    private val values = matrix.array("values")!!.objects()
+    val forms = matrix.array("forms")!!.objects()
+
+    /** One source of the matrix: [value] written at [place] in a literal of [form]. */
+    inner class Cell(
+        val place: JsonObject,
+        val value: JsonObject,
+        val form: JsonObject,
+    ) {
+        val name = "${place.string("name")}, ${value.string("name")}, ${form.string("name")}"
+        val shown = form.string("shown")!!
+        val source: String
+
+        /** What the table says of the cell: null where nothing is said. */
+        val verdict = matrix.obj("cells")!!.obj(place.string("name")!!)!!.obj(value.string("name")!!)
+
+        /** The fixes the table gives the cell, each with whether it is preferred where a rule says; null where no rule says what is offered. */
+        val fixes: List<Pair<String, Boolean?>>?
+
+        init {
+            val imports = listOf("$DOMAIN.Trusted", "$DOMAIN.interpolate") + value.array("imports")?.strings().orEmpty()
+            val markup = place.string("markup")!!.let { if (form.boolean("escaped") == true) it.replace("\"", "\\\"") else it }
+            val literal = form.string("open") + markup.replace("§", form.string("placeholder")!!) + form.string("close")
+            val parameter = value.string("type")?.let { "v: $it" }.orEmpty()
+            source =
+                imports.joinToString("") { "import $it\n" } + "\n" + value.string("declares").orEmpty() + "fun f($parameter) = $literal"
+            val own = verdict?.obj("forms")?.obj(form.string("name")!!) ?: verdict
+            // Under trimIndent no rewrite is preferred: a value with a line break changes what the trim removes.
+            val never = form.boolean("rewriteNeverPreferred") == true
+            fixes =
+                own?.array("fixes")?.objects()?.map {
+                    val title = it.string("title")!!.replace("{shown}", shown)
+                    title to it.boolean("preferred")?.let { preferred -> preferred && !(never && title.startsWith(REWRITE)) }
+                }
+        }
+
+        /** The issues of [text], the cell's source or what a fix left of it, with the editor's fact given for the value wherever it stands. */
+        fun analyse(text: String): List<Issue> {
+            val fact = (value.string("kotlinFact") ?: value.string("fact"))?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }
+            return analyzer.analyzeKotlin(
+                Source(text, SourceLanguage.KOTLIN, valueFact = {
+                    start,
+                    end,
+                    ->
+                    fact.takeIf { text.substring(start, end).trim() in WRITTEN }
+                }),
+            )
+        }
     }
+
+    fun cells(): List<Cell> = places.flatMap { p -> values.flatMap { v -> forms.map { f -> Cell(p, v, f) } } }
 }

@@ -147,6 +147,8 @@ tasks.withType<Test>().configureEach {
     inputs.dir(root.dir("conformance/client")).withPropertyName("clientFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(root.dir("conformance/dsl")).withPropertyName("dslFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    // `-PrecordVerdicts=true` has VerdictDigestTest write test/fixtures/verdicts.txt anew instead of comparing with it.
+    providers.gradleProperty("recordVerdicts").orNull?.let { systemProperty("streamlord.record", it) }
 }
 
 // How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript

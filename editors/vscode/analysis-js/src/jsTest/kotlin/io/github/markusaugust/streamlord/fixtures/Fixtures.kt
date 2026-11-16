@@ -25,3 +25,9 @@ internal fun fixtureText(path: String): String = Fs.readFileSync("$root/$path", 
 
 /** The names of the files and folders in [folder], sorted. */
 internal fun fixtureNames(folder: String): List<String> = Fs.readdirSync("$root/$folder").sorted()
+
+/** Node records nothing: what the JVM wrote is what it is held to. */
+internal fun recordFixture(
+    path: String,
+    text: String,
+): Boolean = false

@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel
 import com.intellij.codeInsight.daemon.HighlightDisplayKey
+import com.intellij.codeInsight.intention.HighPriorityAction
 import com.intellij.codeInspection.ex.QuickFixWrapper
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
@@ -16,7 +17,6 @@ import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.ValueFacts
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
-import io.github.markusaugust.streamlord.intellij.inspections.PreferredReplaceTextFix
 import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
 import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
@@ -261,6 +261,31 @@ class TemplateValueTypesTest : StreamlordTestCase() {
         assertTrue(fixes.joinToString(), fixes.contains("Make \$inner a %s placeholder, where interpolate writes it as it is"))
     }
 
+    fun `test a value marked in a block is judged by its type where it stands, and one left unmarked gets the fix that marks it`() {
+        myFixture.configureByText("Block.kt", BLOCK_CALLS)
+        val seen =
+            myFixture
+                .doHighlighting()
+                .filter { it.inspectionToolId == "KotlinInterpolationInspection" }
+                .sortedBy { it.startOffset }
+                .map { "${it.text} ${severity(it.severity)}" }
+        assertEquals(
+            listOf(
+                // A String marked in a Datastar expression: interpolate always throws.
+                "\${+name} error",
+                // A String written without the mark.
+                "\$name warning",
+            ),
+            seen,
+        )
+        val fixes =
+            myFixture
+                .getAllQuickFixes()
+                .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
+                .map { it.familyName }
+        assertTrue(fixes.joinToString(), fixes.contains("Mark \$name with +, which interpolate escapes"))
+    }
+
     fun `test a level set in the profile lowers the errors and leaves the hints and warnings alone`() {
         fun shown(name: String): List<String> {
             // A fresh file each time: the daemon keeps the highlights of an unchanged document.
@@ -285,7 +310,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
         }
     }
 
-    fun `test a String in element text offers the rewrite and Trusted with neither preferred`() {
+    fun `test a String in element text offers the rewrite first and Trusted after it, lifted above nothing`() {
         myFixture.configureByText("Choice.kt", "fun card(name: String): String = \"<p>\$name</p>\"")
         myFixture.doHighlighting()
         val fixes =
@@ -293,8 +318,10 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                 .getAllQuickFixes()
                 .mapNotNull { QuickFixWrapper.unwrap(it) as? ReplaceTextFix }
         assertEquals(2, fixes.size)
-        assertTrue(fixes.joinToString { it.familyName }, fixes.any { it.familyName.startsWith("Mark ") })
-        assertTrue("no fix is preferred", fixes.none { it is PreferredReplaceTextFix })
+        assertTrue(fixes.joinToString { it.familyName }, fixes[0].familyName.startsWith("Mark the values with + in interpolate { }"))
+        assertTrue(fixes[0] is HighPriorityAction)
+        assertTrue(fixes.joinToString { it.familyName }, fixes[1].familyName.endsWith(" as markup"))
+        assertFalse(fixes[1] is HighPriorityAction)
     }
 
     fun `test a Trusted the file does not declare gets no rewrite into an attribute, where interpolate would not escape it`() {
@@ -469,6 +496,24 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                     </div>
                 ""${'"'}
             }
+            """.trimIndent().replace('¤', '$')
+
+        /** The block form: a widget whose values are safe by types only the editor sees, `k.css` and `k.pageId`; `¤` is a `$`. */
+        val BLOCK_CALLS =
+            """
+            import io.github.markusaugust.streamlord.core.domain.Html
+            import io.github.markusaugust.streamlord.core.domain.Trusted
+            import io.github.markusaugust.streamlord.core.domain.interpolate
+
+            class Widget(val pageId: String, val css: Trusted)
+            fun root(k: Widget, body: Html): Html = interpolate {
+                "<div id=\"¤{+k.pageId}\"><style>¤{+k.css}</style>¤{+body}</div>"
+            }
+            fun inParentheses(k: Widget, body: Html): Html = interpolate({ "<div><style>¤{+k.css}</style>¤{+body}</div>" })
+            fun sum(n: Int): Html = interpolate { "<p data-text=\"¤{+(n + 1)}\"></p>" }
+            fun joined(css: Trusted): Html = interpolate { "<style>" + +css + "</style>" }
+            fun refused(name: String): Html = interpolate { "<p data-text=\"¤{+name}\"></p>" }
+            fun unmarked(name: String): Html = interpolate { "<p>¤name</p>" }
             """.trimIndent().replace('¤', '$')
 
         /** What interpolate refuses or rereads, and a search pattern; `¤` is a `$`. */

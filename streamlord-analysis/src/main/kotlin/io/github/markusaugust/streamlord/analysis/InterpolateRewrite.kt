@@ -10,21 +10,21 @@ import io.github.markusaugust.streamlord.core.client.regex
 private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 
 /** How every title of the rewrite to `interpolate` starts. */
-internal const val REWRITE_TITLE = "Build this string with interpolate(...)"
+internal const val REWRITE_TITLE = "Mark the values with + in interpolate { }"
 
-/** The title of the rewrite to `interpolate` where the placeholder is a value it escapes. */
+/** The title of the rewrite to `interpolate` where the value is one it escapes. */
 internal const val ESCAPES_TITLE = "$REWRITE_TITLE, which escapes the values"
 
-/** Its title where the placeholder starts a URL, which escaping does not help but interpolate refuses when it would run. */
+/** Its title where the value starts a URL, which escaping does not help but interpolate refuses when it would run. */
 internal const val REFUSES_URL_TITLE = "$REWRITE_TITLE, which refuses a URL that runs"
 
 /**
- * The rewrite of the literal or `+` chain to a call of `interpolate`, over it and [trim], the trim
- * call after it, with the imports the file lacks. Each value of [trusted], by its place among the
- * values, is passed as `Trusted(...)`, CSS in the body of a `<style>` that the author vouches for,
- * and the title names them; one not known to be a String, by its entry, as a template of it, `"$v"`, the
- * text a template writes of it. Each template of [kept] stays in the format as it is written. The
- * text is made the first time it is read, and a copy of the fix under another title shares it.
+ * The rewrite of the literal or `+` chain to the block form of `interpolate`, over it and [trim], the trim
+ * call after it, with the imports the file lacks: each value marked with `+` where it stands. Each value of
+ * [trusted], by its place among the values, is marked as `Trusted(...)`, CSS in the body of a `<style>` that
+ * the author vouches for, and the title names them; one not known to be a String, by its entry, as a template
+ * of it, `"$v"`, the text a template writes of it. Each template of [kept] stays as it is written. The text
+ * is made the first time it is read, and a copy of the fix under another title shares it.
  */
 internal fun interpolateFix(
     src: String,
@@ -40,11 +40,11 @@ internal fun interpolateFix(
 }
 
 /**
- * The call of `interpolate` that writes what the string did: each template becomes `%s` and its
- * value an argument, and each `%` a literal writes, as itself or as an escape, is written twice, so
- * `interpolate` prints it once. A multi-dollar literal keeps its prefix, so a `$name` that was text
- * stays text, and [trim] stays on the format. A value joined with `+` is a `%s` at the end of the
- * literal before it, and literals written alike become one. A single literal is a chain of one.
+ * The block that writes what the string did: the string as it is written, in `interpolate { }`, with each
+ * template's value marked. A multi-dollar literal keeps its prefix, so a `$name` that was text stays text,
+ * and [trim] stays on the string, which is trimmed before the values go in. A value joined with `+` is a
+ * marked template at the end of the literal before it, and literals written alike become one. A single
+ * literal is a chain of one.
  */
 private fun interpolateText(
     src: String,
@@ -54,71 +54,103 @@ private fun interpolateText(
     kept: Set<Int>,
 ): String {
     val literals = s.literals.ifEmpty { listOf(s) }
-    val stays = kept.mapTo(HashSet()) { s.interpolations[it].start }
-    val bodies = literals.map { StringBuilder(formatBody(src, it, stays)) }
-    for (value in s.interpolations.filter { it.kind == InterpolationKind.OPERAND }) {
-        val before = literals.indexOfLast { it.end <= value.start }
-        if (before >= 0) bodies[before].append("%s") else bodies[0].insert(0, "%s")
+    val places = s.interpolations.withIndex().associate { (k, ip) -> ip.start to k }
+
+    fun marked(
+        k: Int,
+        literal: KotlinString,
+    ): String {
+        val text = s.interpolations[k].text.trim()
+        val value =
+            when (trusted[k]) {
+                null -> markOperand(text)
+
+                true -> "Trusted($text)"
+
+                // The text a template writes of it: a toString() of a value that is a String after all would be a warning.
+                false -> "Trusted(\"" + (if (KOTLIN_NAME.matchEntire(text) != null) "\$$text" else "\${$text}") + "\")"
+            }
+        return "$".repeat(literal.dollars) + "{+" + value + "}"
     }
-    val format = StringBuilder()
+    val bodies =
+        literals.map { literal ->
+            val out = StringBuilder()
+            var at = literal.contentStart
+            while (at < literal.contentEnd) {
+                val k = places[at]
+                if (k == null) {
+                    out.append(src[at++])
+                    continue
+                }
+                val end = s.interpolations[k].end
+                out.append(if (k in kept) src.substring(at, end) else marked(k, literal))
+                at = end
+            }
+            out
+        }
+    for ((k, value) in s.interpolations.withIndex()) {
+        if (value.kind != InterpolationKind.OPERAND) continue
+        val before = literals.indexOfLast { it.end <= value.start }
+        if (before >= 0) bodies[before].append(marked(k, literals[before])) else bodies[0].insert(0, marked(k, literals[0]))
+    }
+    val markup = StringBuilder()
     var form = "" to ""
+    // What the literal being written holds so far, of every literal made one with it.
+    val held = StringBuilder()
     literals.forEachIndexed { k, literal ->
         val written = src.substring(literal.start, literal.contentStart) to src.substring(literal.contentEnd, literal.end)
         when {
-            k == 0 -> format.append(written.first)
-            written == form -> format.setLength(format.length - form.second.length)
-            else -> format.append(" + ").append(written.first)
-        }
-        format.append(bodies[k]).append(written.second)
-        form = written
-    }
-    val values =
-        s.interpolations.mapIndexedNotNull { k, it ->
-            val text = it.text.trim()
-            val vouched = trusted[k]
-            when {
-                k in kept -> null
+            k > 0 && written == form && joins(held, bodies[k], literal.raw) -> {
+                markup.setLength(markup.length - form.second.length)
+            }
 
-                vouched == null -> text
-
-                vouched -> "Trusted($text)"
-
-                // The text a template writes of it: a toString() of a value that is a String after all would be a warning.
-                else -> "Trusted(\"" + (if (KOTLIN_NAME.matchEntire(text) != null) "\$$text" else "\${$text}") + "\")"
+            else -> {
+                if (k > 0) markup.append(" + ")
+                markup.append(written.first)
+                held.setLength(0)
             }
         }
+        held.append(bodies[k])
+        markup.append(bodies[k]).append(written.second)
+        form = written
+    }
     // `.text`, the String the literal was: interpolate returns Html, and a fix that changed the type
     // would break whatever took the String.
-    return "interpolate($format$trim${values.joinToString("") { ", $it" }}).text"
+    return "interpolate { $markup$trim }.text"
 }
 
-/** What the literal holds, as source, with each template a `%s`, but one starting at [stays], and each per cent sign it writes doubled. */
-private fun formatBody(
-    src: String,
-    literal: KotlinString,
-    stays: Set<Int>,
-): String {
-    // Where the literal writes a per cent sign, and how many characters of source spell it.
-    val percents = HashMap<Int, Int>()
-    for (i in literal.text.indices) if (literal.text[i] == '%') percents[literal.map[i]] = literal.map[i + 1] - literal.map[i]
-    val placeholders = literal.interpolations.associateBy { it.start }
-    val out = StringBuilder()
-    var k = literal.contentStart
-    while (k < literal.contentEnd) {
-        val placeholder = placeholders[k]
-        val n = percents[k] ?: 0
-        if (placeholder != null) {
-            out.append(if (k in stays) src.substring(k, placeholder.end) else "%s")
-            k = placeholder.end
-        } else if (n > 0) {
-            out.append(src, k, k + n).append(src, k, k + n)
-            k += n
-        } else {
-            out.append(src[k++])
-        }
-    }
-    return out.toString()
+/**
+ * Whether two literals written alike read the same as one: not where the first ends in a dollar or a name that the
+ * second would carry on, which would make a template or lengthen one, nor where quotes would meet in a raw literal.
+ */
+private fun joins(
+    first: CharSequence,
+    second: CharSequence,
+    raw: Boolean,
+): Boolean {
+    val last = first.lastOrNull() ?: return true
+    val next = second.firstOrNull() ?: return true
+    val name = { c: Char -> c.isLetterOrDigit() || c == '_' || c == '`' }
+    return !(last == '$' || (name(last) && (name(next) || next == '{')) || (raw && (last == '"' || next == '"')))
 }
+
+/** [expr] as what a `+` marks: the mark takes the nearest operand, so anything but a name, a call or a chain of them goes in parentheses. */
+internal fun markOperand(expr: String): String =
+    when {
+        CHAIN.matchEntire(expr.replace(CHAIN_ARGUMENTS, "")) != null -> expr
+
+        expr.startsWith("(") && closing(expr, depths(expr), 0) == expr.length -> expr
+
+        // A line comment would take the parenthesis that closes after it.
+        "//" in expr -> "($expr\n)"
+
+        else -> "($expr)"
+    }
+
+private val CHAIN = regex("""[\p{L}_`][\p{L}\p{Nd}_`]*(?:\.[\p{L}_`][\p{L}\p{Nd}_`]*)*""")
+
+/** The arguments of a call and of an index without a bracket inside them, and what else may follow a name in a chain. */
+private val CHAIN_ARGUMENTS = regex("""\([^()]*\)|\[[^\[\]]*\]|!!|\?(?=\.)""")
 
 /**
  * Whether a fix may write [name] of core's domain, `interpolate` or `Trusted`, in [src]: core is
@@ -397,16 +429,6 @@ private val CAST = regex("""\sas\??\s+([\p{L}_][\p{L}\p{Nd}_.]*)\s*(?:<.*>)?\??$
 
 /** Whether every value a placeholder can give is the result of a call, which may be markup the author built: `${badge(user)}`. */
 internal fun callResult(value: String): Boolean = templateValues(value).all { lastCall(it.text) != null }
-
-/** Whether a constant's text, as the file shows it, holds a per cent sign: in the value as written, or in the `const val` it names. */
-internal fun constantPercent(
-    src: String,
-    value: String,
-    at: Int,
-): Boolean {
-    val t = value.trim()
-    return '%' in t || (KOTLIN_NAME.matchEntire(t) != null && declarationOf(src, t, at)?.text?.contains('%') == true)
-}
 
 /**
  * The type the file shows [value] to have: a name's declared type, or, for a property reached

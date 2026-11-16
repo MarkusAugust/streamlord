@@ -106,7 +106,7 @@ fun searchUrl(query: String): String =
     "/search?q=" + java.net.URLEncoder.encode(query, Charsets.UTF_8)
 
 fun searchResults(query: String): Html =
-    interpolate("""<ul id="results"><li>Results for %s</li></ul>""", query)
+    interpolate { """<ul id="results"><li>Results for ${+query}</li></ul>""" }
 
 fun searchPage(results: Html): String =
     "<!doctype html><html><body>$results</body></html>"

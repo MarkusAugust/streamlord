@@ -17,7 +17,7 @@ import org.jetbrains.kotlin.psi.KtFile
  * thread, and the action holds no state.
  */
 class InterpolateIntention : ModCommandAction {
-    override fun getFamilyName(): String = "Build this string with interpolate(...)"
+    override fun getFamilyName(): String = "Mark the values with + in interpolate { }"
 
     override fun getPresentation(context: ActionContext): Presentation? = rewrite(context)?.let { Presentation.of(it.title) }
 

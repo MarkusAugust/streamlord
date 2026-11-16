@@ -6,6 +6,94 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-16
+
+This release lets a Kotlin value be written into an HTML string where it stands. Mark it with `+`
+in the block of `interpolate`, and it is escaped or refused by where it landed, with no placeholder
+and no argument to keep in order. Both editors read the block, and their fix for a value in an HTML
+string now leaves the string as written and marks its values. A build can be held to it with
+`failures(strict = true)`. The editors also judge more of an expression as the client reads it:
+values in parentheses, functions called at once, and `evt.detail.type` however it is compared.
+Nothing breaks: the placeholder form of `interpolate` and `failures()` are as they were.
+
+### SDK
+
+- streamlord-core: `interpolate` takes a block, with each value written where it stands and marked
+  with `+`: `interpolate { """<li><a href="${+url}">${+title}</a></li>""" }`. A marked value is
+  escaped or refused by where it landed, as the value of a `%s` is. A loop may stand in the block,
+  a trim call runs before the values go in, and a value without the mark is written by Kotlin as in
+  any string. The placeholder form stays, and is the one Java has.
+  See [Strings](https://streamlord-docs.netlify.app/strings/#values-from-outside).
+- streamlord-core: `interpolate(prefixes) { }` takes the prefixes of an aliased bundle. The block's
+  receiver is an `InterpolationScope` and a mark a `Placed`.
+- streamlord-core: a mark of another block, or one in a string cut or changed after its values were
+  marked, is no mark: no value stands there. The two characters a mark is made of, U+FDD0 and
+  U+FDD1, are written as U+FFFD wherever a block's string or an escaped value holds them, so text
+  another escaper wrote into the block never stops the page.
+- streamlord-core: the refusal of a URL that loads code names "the value" where it named a
+  placeholder.
+
+### The analysis
+
+- `failures(strict = true)` also keeps the warnings of a value written without its mark: one left
+  without `+` in the block of `interpolate`, a template in its format, a `String` in an HTML string
+  that is not `interpolate`'s, and a bare dollar in a `data-*` expression of one. `failures()` is as
+  it was, and `ProjectIssue.failsStrict` says it of one issue.
+  See [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
+
+### Editors
+
+**Kotlin values in HTML**
+- Both editors read the block of `interpolate`, written after the call or in its parentheses: a
+  marked value is an error where `interpolate` will throw, and a value left unmarked gets "Mark …
+  with +" as its fix.
+- The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
+  this string with interpolate(...)": the string stays as written, in the block, with each value
+  marked where it stands. A margin or a constant with a per cent sign no longer stands in its way.
+- The rewrite is not offered for a string that writes `this` or calls `toString()`, `let { }` and
+  their like without a receiver, which in the block are the block's.
+- The fix that marks values with `+` is the first one offered on a value, in a string and in a
+  block.
+  In IntelliJ it stands above "Mark … as markup", which the IDE listed first by its title.
+- A value looked up in a name declared a map, `${m["key"]}`, may be null: the rewrite is offered
+  and not preferred there, and the message says that `interpolate` writes nothing for null.
+- The messages speak of marking: "mark it with + in interpolate { }" where they said "build the
+  string with interpolate(...)", and "Marking the values is not offered here" where no rewrite is.
+
+**Actions and options**
+- Both editors no longer call a function called at once a function: `@get(function(){ return '/x' }())`
+  and `{retry: function(){ return 'never' }()}` give what the function returns, and are not judged.
+  Nor is what is read or called of a function, `function(){}.name` and `function(){}.bind(null)`.
+- Both editors judge a value in parentheses or after a spaced sign as the value it is, and warn of
+  `@get((1))`, `@get(- 1)` and `{retry: ('nope')}` as of the same without them. The warning marks the
+  value inside the parentheses.
+
+**Expressions**
+- Both editors judge a value of `data-computed`, and the value of a signal filter attribute, in
+  parentheses as what it holds, and warn of `(1)` and `{total: (1)}`.
+- A value of `data-computed` that does not parse yet, `1 +` or an open string, gets its syntax error
+  alone. That it is no function, that it changes a signal or calls an action, and that a
+  `data-init` sends before its `data-indicator`, is said once the value parses.
+- A value of `data-computed` that is complete where the rest is not, `{total: 1 // c, ...}` and
+  `1 // c`, is now also said to be no function, beside the syntax error.
+- Both editors compare `evt.detail.type` with a string however the two are written: in parentheses,
+  after a comment or read with `?.`, `case /* never */ ('nope')`, `switch ((evt.detail.type))` and
+  `evt?.detail?.type === 'nope'`, the type is judged, where it was passed over. A string joined to
+  something or chosen by a condition, `case 'a' + 'b'`, is no longer judged by its first part.
+- `await /* why */ @post(...)` is an error on `await`, with why, as `await @post(...)` is. After a
+  line break `await` is a name that ends its statement, and the error is the one of the next line.
+- A filter pattern written as a string with flags is warned of after a comment or in parentheses too,
+  `include /* all */ : '/a/i'`. In a filter attribute only the filter's own `include` and `exclude`
+  are judged, not those of an object deeper in the value.
+- While an expression is typed, these three checks now speak of what is written to its end and
+  before the first syntax error, and no longer of what stands after it: a case is judged at its
+  colon and the `filterSignals` of an action once its braces are closed, where both were judged a
+  little earlier, and a syntax error early in a handler silences the type and pattern warnings after
+  it until the handler parses again.
+
+Side note: the checks of a value now read the tree the JavaScript parser builds of it, in place of
+reading the text again each on its own.
+
 ## [0.22.0] - 2026-11-15
 
 This release brings Datastar 1.0.5 support to both editors. They check the attributes, the Pro

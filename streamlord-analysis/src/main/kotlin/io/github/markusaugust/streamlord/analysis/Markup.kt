@@ -130,236 +130,60 @@ private val KEY_ESCAPE = regex("""(?s)\\(.)""")
  */
 private fun keyParts(k: ObjectKey): List<String> = k.parts.map { p -> KEY_ESCAPE.replace(p) { it.groupValues[1] } }
 
-/** A number literal, whole. */
-private val NUMBER = regex("""(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*(?:\.[\d_]*)?|\.\d[\d_]*)(?:[eE][+-]?\d+)?)n?""")
-private val NO_FUNCTION_WORDS = setOf("true", "false", "null", "undefined", "NaN", "Infinity")
-private val UNARY_WORDS = setOf("typeof", "void", "delete")
-private val BINARY_WORDS = setOf("in", "instanceof")
-private const val OPERATOR_CHARS = "+-*/%<>&|^!=~"
+private val NO_FUNCTION_NAMES = setOf("undefined", "NaN", "Infinity")
+private val LOGICAL = setOf("||", "&&", "??")
 
 /**
- * Whether the JavaScript expression [value] is sure to give no function: a literal (a number, a
+ * Whether the JavaScript expression [parsed] is of is sure to give no function: a literal (a number, a
  * string, a template, a regular expression, an array with such an item), a unary operation, or
- * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, or
- * anything with `?`, `||`, `&&`, `??`, `=`, `=>` or `,` at its top level may give one, and is not
- * judged.
+ * operands joined by an arithmetic, bitwise or comparison operator. A name, a call, `new`, a
+ * conditional, an assignment, a comma and `||`, `&&` or `??` may give one, and are not judged; nor is
+ * text that does not parse.
  */
-internal fun certainlyNoFunction(value: String): Boolean {
-    val v = value.trim()
-    if (v.isEmpty()) return false
-    val regions = jsRegions(v)
-    // A comment around a number is space, but for a line comment at the end, which may run past the end of the value.
-    val ends = v.lastIndexOf("//").let { it >= 0 && regions[it] == Region.COMMENT && '\n' !in v.substring(it) }
-    val bare = CharArray(v.length) { if (regions[it] == Region.COMMENT && !ends) ' ' else v[it] }.concatToString().trim()
-    if (NUMBER.matchEntire(bare) != null || bare in NO_FUNCTION_WORDS) return true
-    var depth = 0
-    var binary = false
-    var unary = false
-    // Whether what came last at the top level ends an operand, and whether anything came yet.
-    var operand = false
-    var started = false
-    // The literals and brackets that open an operand at the top level, and whether a name, an
-    // operator or a member access stands there as well.
-    var groups = 0
-    var code = false
-    var lastRegion = Region.CODE
-    var i = 0
-    while (i < v.length) {
-        val c = v[i]
-        val r = regions[i]
-        val step = i
-        i++
-        when {
-            r == Region.TEMPLATE && c == '$' && v.getOrNull(step + 1) == '{' && v.getOrNull(step - 1) != '\\' -> {
-                depth++
-                i++
+internal fun certainlyNoFunction(parsed: Parsed): Boolean {
+    val sure = HashSet<JsNode>()
+    for (node in parsed.nodes) {
+        val none =
+            when (node.type) {
+                JsKind.NUMBER, JsKind.STRING, JsKind.REGEX, JsKind.TEMPLATE, JsKind.UNARY, JsKind.UPDATE -> true
+
+                JsKind.WORD -> node.name != "this"
+
+                JsKind.IDENT -> node.name in NO_FUNCTION_NAMES
+
+                JsKind.BINARY -> node.name !in LOGICAL
+
+                // The client takes the functions out of an array as it does out of an object (`updateLeaves` in paths.ts).
+                JsKind.ARRAY -> node.items.any { it in sure }
+
+                else -> false
             }
-
-            r == Region.TEMPLATE && c == '}' && depth > 0 && regions[step - 1] == Region.CODE -> {
-                depth--
-            }
-
-            r == Region.CODE && (c == '(' || c == '[' || c == '{') -> {
-                if (depth == 0) {
-                    if (operand) code = true else groups++
-                    started = true
-                    lastRegion = Region.CODE
-                }
-                depth++
-            }
-
-            r == Region.CODE && (c == ')' || c == ']' || c == '}') -> {
-                depth = maxOf(depth - 1, 0)
-                if (depth == 0) operand = true
-            }
-
-            depth > 0 || r == Region.COMMENT -> {}
-
-            r != Region.CODE -> {
-                if (r != lastRegion) {
-                    if (operand) code = true else groups++
-                }
-                lastRegion = r
-                operand = true
-                started = true
-            }
-
-            else -> {
-                lastRegion = Region.CODE
-                val next = v.getOrNull(step + 1)
-                when {
-                    c.isJsWhitespace() -> {}
-
-                    c == '?' || c == ',' || (c == '=' && next == '>') || ((c == '|' || c == '&') && next == c) -> {
-                        return false
-                    }
-
-                    c == '=' && next != '=' && v.getOrNull(step - 1)?.let { it in "=!<>" } != true -> {
-                        return false
-                    }
-
-                    c.isJsNamePart() -> {
-                        var j = step + 1
-                        while (j < v.length && v[j].isJsNamePart()) j++
-                        val word = v.substring(step, j)
-                        i = j
-                        if (operand && word in BINARY_WORDS) {
-                            binary = true
-                            operand = false
-                        } else if (!started && word in UNARY_WORDS) {
-                            unary = true
-                        } else {
-                            operand = true
-                            code = true
-                        }
-                        started = true
-                    }
-
-                    c == '.' -> {
-                        code = true
-                    }
-
-                    c !in OPERATOR_CHARS -> {
-                        return false
-                    }
-
-                    else -> {
-                        if (operand) {
-                            binary = true
-                        } else if (!started) {
-                            unary = true
-                        }
-                        operand = false
-                        code = true
-                        started = true
-                    }
-                }
-            }
-        }
+        if (none) sure += node
     }
-    if (depth != 0) return false
-    if (binary || unary) return true
-    if (groups != 1 || code) return false
-    // The client takes the functions out of an array as it does out of an object (`updateLeaves`
-    // in paths.ts), so an array gives no function only where one of its items is sure to give none.
-    if (v[0] == '[') return arrayItems(v, regions).any { certainlyNoFunction(it) }
-    return regions[0] != Region.CODE
-}
-
-/** The items of the array literal [v], split at the commas of its top level. */
-private fun arrayItems(
-    v: String,
-    regions: ByteArray,
-): List<String> {
-    val items = ArrayList<String>()
-    var depth = 0
-    var from = 1
-    for (i in v.indices) {
-        if (regions[i] != Region.CODE) continue
-        when (v[i]) {
-            '(', '[', '{' -> {
-                depth++
-            }
-
-            ')', ']', '}' -> {
-                if (--depth == 0) items += v.substring(from, i)
-            }
-
-            ',' -> {
-                if (depth == 1) {
-                    items += v.substring(from, i)
-                    from = i + 1
-                }
-            }
-        }
-    }
-    return items
+    return parsed.nodes.lastOrNull() in sure
 }
 
 /**
- * Whether the JavaScript expression [value] may give an object literal it holds: one that opens the
- * value or stands where the value of a group, a conditional or a `||`, `&&`, `??` or `,` comes
- * from, as in `({x: 1})`, `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put
- * in an array or returned by a function does not count, and a value with `=>` in it is a function.
+ * Whether the JavaScript expression [value] may give an object literal it holds: the value itself, or
+ * what a conditional, a `||`, `&&` or `??`, or the last of a comma's gives, as in `({x: 1})`,
+ * `$a ? {x: 1} : 0` and `null || {x: 1}`. An object passed to a call, put in an array or returned by a
+ * function does not count; nor does text that does not parse.
  */
 internal fun mayGiveObject(value: String): Boolean {
-    val regions = jsRegions(value)
-    // One entry per open bracket: whether it is a group, through which the value comes.
-    val open = ArrayList<Boolean>()
-    // The last character of code outside a string, a template or a comment, `x` after one of those.
-    var last: Char? = null
-    var beforeLast: Char? = null
-    for (i in value.indices) {
-        val r = regions[i]
-        if (r == Region.COMMENT) continue
-        val c = value[i]
-        if (r != Region.CODE) {
-            beforeLast = last
-            last = 'x'
-            continue
-        }
-        if (c.isJsWhitespace()) continue
-        val through = open.all { it }
-        if (through && c == '=' && value.getOrNull(i + 1) == '>') return false
-        // At the start, after `(`, `?` (and `??`), `:`, `,`, `||` or `&&`.
-        val opensOperand = last == null || last in "(?:," || ((last == '|' || last == '&') && beforeLast == last)
-        if (c == '{' && through && opensOperand) return true
-        if (c == '(' || c == '[' || c == '{') {
-            open += c == '(' && opensOperand
-        } else if ((c == ')' || c == ']' || c == '}') && open.isNotEmpty()) {
-            open.removeAt(open.size - 1)
-        }
-        beforeLast = last
-        last = c
+    val nodes = JsParser.expression(clientRewrite(value).js).nodes
+    val gives = HashSet<JsNode>()
+    for (node in nodes) {
+        val may =
+            when (node.type) {
+                JsKind.OBJECT -> true
+                JsKind.CONDITIONAL -> node.items[1] in gives || node.items[2] in gives
+                JsKind.BINARY -> node.name in LOGICAL && node.items.any { it in gives }
+                JsKind.SEQUENCE -> node.items.last() in gives
+                else -> false
+            }
+        if (may) gives += node
     }
-    return false
-}
-
-/** Where the value that starts at [from] in an object's [body] ends: at the `,` after it or the bracket that closes the object. */
-private fun valueEnd(
-    body: String,
-    regions: ByteArray,
-    from: Int,
-): Int {
-    var depth = 0
-    for (i in from until body.length) {
-        if (regions[i] != Region.CODE) continue
-        when (body[i]) {
-            '(', '[', '{' -> {
-                depth++
-            }
-
-            ')', ']', '}' -> {
-                if (depth == 0) return i
-                depth--
-            }
-
-            ',' -> {
-                if (depth == 0) return i
-            }
-        }
-    }
-    return body.length
+    return nodes.lastOrNull() in gives
 }
 
 /**
@@ -1436,9 +1260,13 @@ public class MarkupValidator(
      * in a function it hands on, `setTimeout(() => @get('/x'))`, which sends later.
      */
     internal fun sendsAtOnce(js: String): Boolean {
+        val rewritten = clientRewrite(js)
+        if (rewritten.rewrites.none { !it.signal && it.name in backendActions }) return false
+        val inFunctions = rewriteDepths(rewritten) ?: return false
         val regions = jsRegions(js)
-        val inFunctions by lazy(LazyThreadSafetyMode.NONE) { functionDepths(js, regions) }
-        return backendAction.findAll(js).any { regions[it.range.first] == Region.CODE && inFunctions[it.range.first] == 0 }
+        return rewritten.rewrites.withIndex().any { (n, r) ->
+            !r.signal && r.name in backendActions && regions[r.start] == Region.CODE && inFunctions[n] == 0
+        }
     }
 
     /**
@@ -1742,7 +1570,7 @@ public class MarkupValidator(
             to: Int,
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(to)
         if (open < 0 || text.substring(0, open).isNotBlank()) {
-            if (!certainlyNoFunction(text)) return emptyList()
+            if (!certainlyNoFunction(JsParser.expression(clientRewrite(text).js))) return emptyList()
             val (start, end) = source(0, text.length)
             return listOf(
                 Issue(
@@ -1758,10 +1586,8 @@ public class MarkupValidator(
         }
         val close = text.lastIndexOf('}')
         val body = text.substring(open + 1, if (close < open) text.length else close)
-        val regions = jsRegions(body)
-
-        fun valueOf(k: ObjectKey): String = body.substring(k.valueStart, valueEnd(body, regions, k.valueStart))
-        return objectKeys(body).filter { !it.objectUnder && certainlyNoFunction(valueOf(it)) }.map {
+        // Each value is read where it starts, as far as it goes: what stands after the next token need not parse.
+        return objectKeys(body).filter { !it.objectUnder && certainlyNoFunction(JsParser.expression(body, it.valueStart)) }.map {
             val (start, end) = source(open + 1 + it.start, open + 1 + it.end)
             Issue(
                 start,
@@ -1797,8 +1623,9 @@ public class MarkupValidator(
         ): Pair<Int, Int> = attr.valueStart + decoded.toSource(from) to attr.valueStart + decoded.toSource(maxOf(to, from + 1))
         val out = ArrayList<Issue>()
         val json = runCatching { JsonParser.parse(text) }.isSuccess
+        val parsed = JsParser.expression(text)
         if (!json) {
-            val err = expressionError(text)
+            val err = parsed.error
             if (err != null) {
                 val (start, end) = source(err.pos, err.raisedAt)
                 return listOf(Issue(start, end, "Datastar filter: ${err.message}", Severity.ERROR, "expression-syntax", link))
@@ -1827,9 +1654,15 @@ public class MarkupValidator(
         // The free plugins hand the value to filtered, as a backend action its filterSignals; Pro's are not read here.
         if (!spec.pro) {
             out +=
-                filterValueIssues(catalog, text, jsRegions(text), ::source, name, link)
+                filterValueIssues(catalog, text, parsed, ::source, name, link)
         }
-        for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
+        val filter =
+            parsed.nodes
+                .lastOrNull()
+                ?.takeIf { it.type == JsKind.OBJECT }
+                ?.items
+                .orEmpty()
+        for (issue in filterPatternIssues(text, filter, { it }, json, link)) {
             val (start, end) = source(issue.start, issue.end)
             out +=
                 issue.copy(

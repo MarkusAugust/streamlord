@@ -9,8 +9,8 @@ expression of an HTML string, a warning, since a server value there works as oft
 </p>
 <p>
 Each value is judged by its Kotlin type. A value in element text or a quoted attribute, where escaping is enough, is a hint, or
-a warning for a <code>String</code> and for markup outside element text: build the string with <code>interpolate(...)</code>,
-which escapes it. A value at the start of a URL, in <code>style</code>, in a Datastar expression, in a script or an event
+a warning for a <code>String</code> and for markup outside element text: mark it with <code>+</code> in
+<code>interpolate { }</code>, which escapes it. A value at the start of a URL, in <code>style</code>, in a Datastar expression, in a script or an event
 handler, or in an unquoted attribute value is a warning, since escaping does not help there.
 </p>
 <p>
@@ -22,8 +22,10 @@ enough and in a Datastar expression, but where a signal could stand (<code>"$cou
 <code>count</code>) it is a hint, since the signal may have been meant.
 </p>
 <p>
-Where the module has Streamlord's core, a call to <code>interpolate(...)</code> is judged as it will run. A Kotlin template in its format is filled in before
-<code>interpolate</code> sees the markup, so it is neither escaped nor refused: a warning. More or fewer <code>%s</code> placeholders
+Where the module has Streamlord's core, a call to <code>interpolate</code> is judged as it will run. In its block,
+<code>interpolate { }</code>, a value marked with <code>+</code> is judged where it stands. A value left unmarked there, and a
+Kotlin template in a format, is filled in before <code>interpolate</code> sees the markup, so it is neither escaped nor refused: a
+warning. More or fewer <code>%s</code> placeholders
 than values is an error, since <code>interpolate</code> then throws. A placeholder where <code>interpolate</code> refuses the value,
 a <code>String</code> in a Datastar expression or a <code>Boolean</code> in <code>style</code>, is an error; a value the text
 cannot tell there is a warning.
@@ -32,18 +34,18 @@ cannot tell there is a warning.
 Quick fixes, each offered where the project can use what it writes. The DSL helper (<code>increment("count")</code>,
 <code>signal("count")</code>, <code>toggle("open")</code>) with its import, where the module has streamlord-html, no import
 from elsewhere takes the helper's name, and the helper says the whole literal. A <code>$$"..."</code> literal (Kotlin 2.2+) where a single dollar is text, and the
-<code>${'$'}count</code> escape, in any project. The literal rewritten as <code>interpolate(...)</code> with its import, where the
-module has Streamlord's core and <code>interpolate</code> accepts every value in it: a trim call stays on the format, a
-<code>$$"..."</code> literal keeps its prefix, and literals joined with <code>+</code> become one. For a value that may be null,
-which a template writes as <code>null</code> and <code>interpolate</code> as nothing, and under <code>trimIndent</code>, which
-then runs before the values go in, it is offered and not put first. Where no rewrite is offered, the message of each value
+<code>${'$'}count</code> escape, in any project. The values of a literal marked with <code>+</code> in <code>interpolate { }</code>, with its import, where the
+module has Streamlord's core and <code>interpolate</code> accepts every value in it: the literal stays as written, a trim call
+stays on it, a <code>$$"..."</code> literal keeps its prefix, and literals joined with <code>+</code> become one. For a value that
+may be null, which a template writes as <code>null</code> and <code>interpolate</code> as nothing, and under
+<code>trimIndent</code>, which then runs before the values go in, the message says so. Where no rewrite is offered, the message of each value
 says why: <code>interpolate</code> refuses another value where it stands, another may be markup the rewrite would escape, or a
-call follows one literal of a <code>+</code> chain. CSS in the body of a <code>&lt;style&gt;</code> the rewrite passes as
+call follows one literal of a <code>+</code> chain. CSS in the body of a <code>&lt;style&gt;</code> the rewrite marks as
 <code>Trusted(...)</code>, from that value's own warning. The same rewrite is a context action for the caret or a selection
-anywhere in a string that has a value to escape. Quotes around an unquoted attribute value, and a template in a format made a
-<code>%s</code> placeholder with its value passed in its place. For a <code>String</code> in element text, which may be text from
+anywhere in a string that has a value to escape. Quotes around an unquoted attribute value, a template in a format made a
+<code>%s</code> placeholder with its value passed in its place, and a value left unmarked in a block marked with <code>+</code>. For a <code>String</code> in element text, which may be text from
 outside or markup you built, the rewrite is offered beside "Mark &hellip; as markup", which wraps the value in
-<code>Trusted(...)</code>, again only with core, and neither comes first: which one is right only you know.
+<code>Trusted(...)</code>, again only with core, the rewrite first: which one is right only you know.
 </p>
 <p>
 Without core no call is Streamlord's, and the message says what the browser does and what plain Kotlin or kotlinx.html can do

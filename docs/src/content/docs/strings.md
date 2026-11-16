@@ -99,25 +99,58 @@ In IntelliJ, where nothing flags an unknown `data-*` name on its own, this guard
 
 `guardElements` walks a finished string, so it can tell you an expression was eaten. What it cannot
 tell you is where a value came from, because by then Kotlin has concatenated everything.
-`interpolate` turns that around: leave the placeholders standing and Streamlord fills them, which
-means it knows exactly where each value landed.
+`interpolate` turns that around: mark each value where it stands, and Streamlord keeps it out of
+the string until the markup is whole, which means it knows exactly where each value landed.
 
 ```kotlin sample=declarations
 fun hit(title: String, url: String): Html =
+    interpolate { """<li><a class="lt-link" href="${+url}">${+title}</a></li>""" }
+```
+
+The `+` marks a value. It may stand in a loop, `rows.joinToString("") { "<li>${+it}</li>" }`, and
+a trim call on the string runs before the values go in. A value written without the mark is filled
+in by Kotlin as in any string, neither escaped nor refused: that is right for a constant and for
+markup you built, and the editors warn of anything else and offer to mark it. A number is never
+marked, since `+` on a number is Kotlin's own, and is written as the number it is. A mark belongs
+to the block it is written in, and written anywhere else it is no mark and no value stands there:
+do nothing to the string but trim it. Inside the block `this` is the block. So is the receiver of a call written without one, `toString()` or an extension of your
+own on `Any`, and a `unaryPlus` of your own on `String` is not reached there, since the block's `+`
+comes first. The editors know the block by the name `interpolate`, and not by another name you
+import it under.
+
+A mark you forget is caught by the editors alone: the code compiles, and the value is written as
+it is. Where nobody has an editor open, [the analysis](/analysis/#a-test-over-your-own-sources)
+holds the project to it in one test:
+
+```kotlin sample=test
+@Test
+fun `no value reaches a page without its mark`() {
+    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures(strict = true)
+
+    assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
+}
+```
+
+The same rule with the values as arguments, which is the form Java has:
+
+```kotlin sample=declarations
+fun hitByPlace(title: String, url: String): Html =
     interpolate("""<li><a class="lt-link" href="%s">%s</a></li>""", url, title)
 ```
 
 `%s` is a placeholder and `%%` writes one `%`. Every other `%` is literal, so `width: 50%` and
 `/a%20b` need no ceremony. A miscounted placeholder throws rather than shipping a half-filled page.
+In a block a `%` is always literal.
 
-What happens to a value is decided by where it landed, not by where it came from:
+What happens to a value is decided by where it landed, not by where it came from, and it is the
+same for a value marked with `+` and for the value of a `%s`:
 
-| Where the placeholder is | What happens to the value |
+| Where the value lands | What happens to it |
 |---|---|
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
-| A URL attribute: `href`, `src`, `action`, `formaction`, `xlink:href`, `poster`, `cite`, `background`, `ping`, `manifest`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every placeholder filled, is relative, `http`, `https`, `mailto` or `tel` |
-| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the placeholder already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
+| A URL attribute: `href`, `src`, `action`, `formaction`, `xlink:href`, `poster`, `cite`, `background`, `ping`, `manifest`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole URL, every value in it written, is relative, `http`, `https`, `mailto` or `tel` |
+| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the markup before the value already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
 | The `content` of a `<meta>` that starts with a time, as `http-equiv="refresh"` reads it | Escaped, and the URL after `url=` **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |
 | A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator`; and Pro's `data-match-media`, whose query the reference writes as a string literal | **Refused**, unless it is a number or a boolean |
@@ -128,19 +161,19 @@ What happens to a value is decided by where it landed, not by where it came from
 
 So the `url` in the example above may be `/heads/1` or `https://thurn.example/`, and a `javascript:`
 URL throws instead of becoming a link that runs. The value is judged whole, as the browser reads it:
-a placeholder that ends a path the markup begins takes anything, because the markup already chose
-where it points, and `href="%s%s"` cannot be made into `javascript:` across its two placeholders.
-Character references are decoded once the attribute is whole, as the browser does, so `href="&%s"`
-cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts toward the URL as
-the literal does: it is written as it stands, and the URL is still judged whole, so `href="%s%s"`
-given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other value in it goes
+a value that ends a path the markup begins takes anything, because the markup already chose
+where it points, and `href="${+a}${+b}"` cannot be made into `javascript:` across its two values.
+Character references are decoded once the attribute is whole, as the browser does, so
+`href="&${+a}"` cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts
+toward the URL as the markup does: it is written as it stands, and the URL is still judged whole,
+so `href="${+a}${+b}"` given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other value in it goes
 unjudged.
 
 A URL that loads code asks more of the markup. `https://` settles the scheme of a `<script src>`
-but not whose script it is, so a value there is refused until the literal has written the host
-too: `<script src="https://cdn.example/%s">` takes a file name, `<script src="%s">` takes nothing.
-A single `/` is not enough on its own either, since the value could add a second and name another
-host; `/js/%s` is. The same goes for `<link href>`, whatever its `rel`, since a stylesheet or a
+but not whose script it is, so a value there is refused until the markup has written the host
+too: `<script src="https://cdn.example/${+file}">` takes a file name, `<script src="${+file}">`
+takes nothing. A single `/` is not enough on its own either, since the value could add a second
+and name another host; `/js/${+file}` is. The same goes for `<link href>`, whatever its `rel`, since a stylesheet or a
 module loads from there too. The exception says so, and its `loadsCode` tells such a refusal apart.
 Wrap a URL you chose yourself in `Trusted`.
 
@@ -152,13 +185,13 @@ closes them. A value has to be safe every way, since a patch with an SVG namespa
 `<svg>` of its own. A `<noscript>` holds elements, as the client parses a patch with scripting off;
 markup that mentions one is also read with scripting on, as a page loads it, where a noscript holds
 text, and the stricter reading wins. So a `title` or a `textarea` that shows markup as a code sample
-cannot take a placeholder inside a `data-*` attribute of that sample; put the whole sample in one
-placeholder instead, where it is text either way.
+cannot take a value inside a `data-*` attribute of that sample; make the whole sample one value
+instead, where it is text either way.
 
 One thing the reading does not follow yet is the browser building the page: inside a `<select>` the
 browser drops start tags such as `<title>` or `<style>` that the reading still takes as the start of
-text, so a format that writes one there can put a later placeholder somewhere it is not judged. Only
-markup you write in the format can do this, never a value; leave such tags out of a `<select>`.
+text, so markup that writes one there can put a later value somewhere it is not judged. Only
+markup you write yourself can do this, never a value; leave such tags out of a `<select>`.
 
 The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute Datastar
 evaluates becomes part of a Datastar expression, and your own server signed the page it arrived
@@ -171,16 +204,17 @@ says which value, where it landed, and what to do instead.
 
 ```kotlin sample=statements
 val name = "Gorvek"
+val heads = 3
 
-interpolate("""<li data-text="%s"></li>""", name)    // throws
+interpolate { """<li data-text="${+name}"></li>""" }    // throws
 
-// Passes: a number carries no expression.
-interpolate("""<li data-signals="{n: %s}"></li>""", 3)
+// Passes: a number carries no expression, and needs no mark.
+interpolate { """<li data-signals="{n: $heads}"></li>""" }
 ```
 
 A number or a boolean is let into a Datastar attribute because its text is digits, a dot, a sign
 or `true`/`false`. A number here is a `kotlin.Number`: a `UInt` or a `ULong` is not one, so it is
-refused there; pass `n.toLong()`. No string renders that way and also closes a quote, so the common honest case
+refused there; write `n.toLong()`. No string renders that way and also closes a quote, so the common honest case
 of a server-rendered initial signal needs no waiver.
 
 ### Markup built from markup
@@ -196,19 +230,19 @@ is escaped like a string instead. Anywhere else, inside
 an attribute, it is characters like any value, and escaped or refused as one.
 
 ```kotlin sample=statements
-val heading = interpolate("""<h2 class="lt-heading">%s</h2>""", "Gorvek")
+val heading = interpolate { """<h2 class="lt-heading">${+"Gorvek"}</h2>""" }
 
-interpolate("""<section id="hero">%s<p>%s</p></section>""", heading, "<the oath>")
+interpolate { """<section id="hero">${+heading}<p>${+"<the oath>"}</p></section>""" }
 ```
 
-A list of rows is a list of `Html`, and `joinToHtml()` makes them one, to fill a single placeholder.
+A list of rows is a list of `Html`, and `joinToHtml()` makes them one, to be marked as a single value.
 Each row already closes what it opens, so nothing is read again or escaped:
 
 ```kotlin sample=statements
 val hits = repository.search("gate")
-val rows = hits.map { interpolate("""<li><a href="%s">%s</a></li>""", it.url, it.title) }
+val rows = hits.map { interpolate { """<li><a href="${+it.url}">${+it.title}</a></li>""" } }
 
-interpolate("""<ul class="lt-list">%s</ul>""", rows.joinToHtml())
+interpolate { """<ul class="lt-list">${+rows.joinToHtml()}</ul>""" }
 ```
 
 `joinToString` would give a `String`, which `interpolate` escapes, so the rows would show as their
@@ -230,22 +264,26 @@ Wrap it in `Trusted`, which writes the value as it stands wherever it lands:
 ```kotlin sample=statements
 val hits = repository.search("gate")
 
-interpolate("""<ul class="lt-list">%s</ul>""", Trusted(renderResults(hits)))
+interpolate { """<ul class="lt-list">${+Trusted(renderResults(hits))}</ul>""" }
 ```
 
 That waives both the escaping and the refusals for that value, which is right for a fragment you
 rendered yourself and wrong for anything that came out of a request. It is a word in your source
 that a reviewer can search for, which is the whole reason it is a type and not a flag. It vouches
-for itself alone: in a URL with other placeholders it is part of the URL, and the URL is judged
+for itself alone: in a URL with other values it is part of the URL, and the URL is judged
 whole. Its text is markup like the literal around it, so the other values are judged where it puts
 them:
 
 ```kotlin sample=statements
 val name = "Gorvek"
 
-interpolate("""<button %s="%s">""", Trusted("title"), name)    // escaped into the title
-interpolate("""<button %s="%s">""", Trusted("onclick"), name)  // throws: the browser runs it
-interpolate("<%s>%s</%s>", Trusted("script"), name, Trusted("script")) // throws: a script body
+val title = Trusted("title")
+val onclick = Trusted("onclick")
+val script = Trusted("script")
+
+interpolate { """<button ${+title}="${+name}">""" }    // escaped into the title
+interpolate { """<button ${+onclick}="${+name}">""" }  // throws: the browser runs it
+interpolate { "<${+script}>${+name}</${+script}>" }    // throws: a script body
 ```
 
 ### This is the editors' rule, at run time
@@ -257,8 +295,8 @@ straight to a DSL call too:
 
 | Where the value lands | What the editors say |
 |---|---|
-| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, or markup anywhere but element text, where markup says nothing; with a fix that rewrites the literal as `interpolate(...)`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
-| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there, but none for a number, a boolean or null in code, nor for a boolean in `style`; at the start of a URL, the URL of a `<meta>` refresh among them, with the fix to build it with `interpolate(...)`, which refuses a URL that runs, and none after a scheme the markup writes that does more than navigate, `javascript:` or `data:`, since `interpolate` refuses every value there; in the body of a `<style>` with the fix that passes the value as `Trusted(...)` |
+| Element text, a quoted attribute, a URL whose literal start settles the scheme (`#`, `/`, `?`, `https://`) | `unescaped-interpolation`: a hint, a warning when the value is a `String`, or markup anywhere but element text, where markup says nothing; with a fix that marks the values with `+` in `interpolate { }`, and in element text a second, "Mark … as markup", that wraps the value in `Trusted(...)` |
+| The start of a URL, `style`, a `data-*` expression, signal path or filter, `<script>`, `<style>`, `on*`, `srcdoc` | `unsafe-interpolation`: a warning, since escaping cannot help there, but none for a number, a boolean or null in code, nor for a boolean in `style`; at the start of a URL, the URL of a `<meta>` refresh among them, with the fix that marks the values with `+` in `interpolate { }`, which refuses a URL that runs, and none after a scheme the markup writes that does more than navigate, `javascript:` or `data:`, since `interpolate` refuses every value there; in the body of a `<style>` with the fix that marks the value as `Trusted(...)` |
 | A URL the browser loads code from (`src` of a script, an iframe or an embed, `href` of a base or a link, `data` of an object) whose literal start does not fix the host | `unsafe-interpolation`: a warning, and no fix, since `interpolate` refuses it too; in a call to `interpolate`, an error where the value is known |
 | An attribute value without quotes | `unsafe-interpolation`: a warning, a hint for a number or a boolean, with a fix that quotes the value, put first only for a number or a boolean, since any other value is still to be escaped once it is quoted |
 | A tag name, an attribute name, a list of attributes, an end tag | `unsafe-interpolation`: a hint, a warning when the value is a `String` or markup; an end tag takes no attributes, so write it from literals alone |
@@ -274,8 +312,8 @@ itself and takes an entry only when the enum does not override `toString`. Any o
 where it lands. A number or a boolean says nothing in text, an attribute, a URL, a `data-*`
 expression or `style`, nor in a `<script>`, a `<style>` or an event handler, which digits, `true` and
 `false` cannot end, though a `kotlin.Number`, which any class may be, is no digits there; one that may
-be null, an `Int?`, only where escaping is enough and in code, which `null` cannot end either. Where `interpolate` would refuse such a value, the rewrite keeps it a
-template in the format. An unsigned number, a `UInt` or a `3u`, says nothing where escaping is enough and is a hint
+be null, an `Int?`, only where escaping is enough and in code, which `null` cannot end either. Where `interpolate` would refuse such a value, the rewrite leaves it
+unmarked. An unsigned number, a `UInt` or a `3u`, says nothing where escaping is enough and is a hint
 in a `data-*` expression or `style`: Kotlin writes its digits, but `interpolate` would refuse it
 there. A value that is markup you built, as a whole, says nothing in element text and is a warning
 anywhere else, where its quotes and tags can end what holds it: an HTML literal, an
@@ -294,82 +332,82 @@ the types, and what it knows of a value comes before anything the text suggests.
 be a number.
 
 For a `String` in element text the editors cannot tell which you hold, so they offer both the
-rewrite and "Mark … as markup", which wraps the value in `Trusted(...)`, and put neither first:
-text from outside wants the rewrite, a fragment you rendered yourself wants `Trusted`, or better,
-to be declared `Html`.
+rewrite and "Mark … as markup", which wraps the value in `Trusted(...)`. The rewrite stands first
+in the list, and in VS Code neither is the preferred fix, the one Auto Fix applies unasked: text from
+outside wants the rewrite, a fragment you rendered yourself wants `Trusted`, or better, to be
+declared `Html`.
 
 ### The rewrite, before and after
 
-"Build this string with interpolate(...)" is offered on a value's warning wherever `interpolate`
+"Mark the values with + in interpolate { }" is offered on a value's warning wherever `interpolate`
 accepts every value of the string, and as a context action anywhere else in such a string: among
 the intentions in IntelliJ, under Refactor in VS Code. This is what it writes.
 
-A trim call stays on the format, inside the call, and CSS in the body of a `<style>` is passed as
-`Trusted(...)`, your word that it is yours. That fix is on the value in the `<style>`, and the
-other values say that the fix passes it so:
+The string stays as you wrote it, in the block, with each value marked where it stands. A trim call
+stays on the string, and CSS in the body of a `<style>` is marked as `Trusted(...)`, your word that
+it is yours. That fix is on the value in the `<style>`, and the other values say that the fix
+marks it so:
 
 ```kotlin sample=declarations
-class WidgetContext(val rootId: String, val contentId: String)
+class LayoutContext(val pageId: String, val sectionId: String)
 
-fun rootHtmlBefore(k: WidgetContext, customCss: String?, bodyHtml: String): String =
+fun pageHtmlBefore(k: LayoutContext, pageStyle: String?, mainHtml: String): String =
     """
-    <div id="${k.rootId}">
-        <style>${customCss.orEmpty()}</style>
-        <div id="${k.contentId}">$bodyHtml</div>
+    <div id="${k.pageId}">
+        <style>${pageStyle.orEmpty()}</style>
+        <div id="${k.sectionId}">$mainHtml</div>
     </div>
     """.trimIndent()
 
-fun rootHtmlAfter(k: WidgetContext, customCss: String?, bodyHtml: String): String =
-    interpolate("""
-    <div id="%s">
-        <style>%s</style>
-        <div id="%s">%s</div>
+fun pageHtmlAfter(k: LayoutContext, pageStyle: String?, mainHtml: String): String =
+    interpolate { """
+    <div id="${+k.pageId}">
+        <style>${+Trusted(pageStyle.orEmpty())}</style>
+        <div id="${+k.sectionId}">${+mainHtml}</div>
     </div>
-    """.trimIndent(), k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml).text
+    """.trimIndent() }.text
 ```
 
-Under `.trimIndent()` the fix is never put first, because the trim now runs before the values go
-in: a value that holds a line break no longer changes how much is trimmed. `.trimMargin()` has no
-such catch. Nor is it put first beside a value that may be null, a `String?` or an `Int?`: a
-template writes `null` for it, which no page means, and `interpolate` nothing, as the message says.
+Under `.trimIndent()` the fix is first in the list but in VS Code never the preferred one, because
+the trim now runs before the values go in: a value that holds a line break no longer changes how much is
+trimmed. `.trimMargin()` has no such catch. Nor is it preferred beside a value that may be null, a
+`String?` or an `Int?`: a template writes `null` for it, which no page means, and `interpolate`
+nothing, as the message says.
 
 A `$$"..."` literal keeps its prefix, so a single dollar that was text for the browser stays text.
-Literals joined to values with `+` become one format, and where they are written differently each
-keeps its form, with the value a `%s` at the end of the one before it:
+Literals joined to values with `+` become one string, and where they are written differently each
+keeps its form, with the value marked at the end of the one before it:
 
 ```kotlin sample=declarations
 fun priceBefore(name: String) = $$"""<p title="$${name}" data-text="$price"></p>"""
-fun priceAfter(name: String) = interpolate($$"""<p title="%s" data-text="$price"></p>""", name).text
+fun priceAfter(name: String) = interpolate { $$"""<p title="$${+name}" data-text="$price"></p>""" }.text
 
 fun rowBefore(name: String, note: String) = "<li title=\"" + name + "\">" + note + "</li>"
-fun rowAfter(name: String, note: String) = interpolate("<li title=\"%s\">%s</li>", name, note).text
+fun rowAfter(name: String, note: String) = interpolate { "<li title=\"${+name}\">${+note}</li>" }.text
 
 fun mixedBefore(name: String, note: String) = "<li title=\"" + name + """">""" + note + "</li>"
-fun mixedAfter(name: String, note: String) = interpolate("<li title=\"%s" + """">%s""" + "</li>", name, note).text
+fun mixedAfter(name: String, note: String) = interpolate { "<li title=\"${+name}" + """">${+note}""" + "</li>" }.text
 ```
 
-Every value is passed as it is written, a collection too. `interpolate` writes a `List` handed to
-it as one value, the way a template does, so the page stays as it was:
+Every value is marked as it is written, a collection too. `interpolate` writes a `List` it is
+given as one value, the way a template does, so the page stays as it was:
 
 ```kotlin sample=declarations
 class Hero(val tags: List<String>)
 
 fun tagsBefore(hero: Hero) = "<p>${hero.tags}</p>"
-fun tagsAfter(hero: Hero) = interpolate("<p>%s</p>", hero.tags).text
+fun tagsAfter(hero: Hero) = interpolate { "<p>${+hero.tags}</p>" }.text
 ```
 
-To pass the elements of a list as the values, spread it: `interpolate(format, *values.toTypedArray())`.
-
-A value that is yours, a constant, an enum entry or `${"$"}`, stays a template in the format where
-`interpolate` would refuse it or might escape markup it holds: Kotlin fills it in as before, and
-`interpolate` reads it as part of the markup. One whose text the file shows with a per cent sign
-does not, since `interpolate` would read that as a placeholder:
+A value that is yours, a constant, an enum entry or `${"$"}`, stays unmarked where `interpolate`
+would refuse it or might escape markup it holds: Kotlin fills it in as before, and `interpolate`
+reads it as part of the markup:
 
 ```kotlin sample=declarations
 const val SAVE_ROUTE = "/save"
 
 fun saveBefore(label: String) = "<button data-on:click=\"@post('$SAVE_ROUTE')\">$label</button>"
-fun saveAfter(label: String) = interpolate("<button data-on:click=\"@post('$SAVE_ROUTE')\">%s</button>", label).text
+fun saveAfter(label: String) = interpolate { "<button data-on:click=\"@post('$SAVE_ROUTE')\">${+label}</button>" }.text
 ```
 
 When no rewrite is offered, the warning of each value ends with the reason:
@@ -379,7 +417,8 @@ When no rewrite is offered, the warning of each value ends with the reason:
 | A value where `interpolate` refuses a `String`: a `data-*` expression, `style`, a `<script>`, an event handler, the markup's structure | Move that value out first: into an attribute of its own read with `el.dataset`, a class, or a literal. A `Trusted` there is accepted as it is. |
 | A call or an `if` in element text that may give markup, `${if (open) "<li>$name</li>" else ""}` | Build that part with `interpolate` or declare it `Html`, so that the rewrite does not escape it. |
 | A call or an index after one literal of a `+` chain, `"<p>" + name + "</p>".uppercase()` | The call is that literal's alone. Put the chain in brackets, or the call on the result. |
-| A trim call with a margin that is not a literal, or one that holds a per cent sign | Trim the format yourself, or use `|`. |
+| A trim call with a margin that is not a literal | Trim the string yourself, or use `|`. |
+| A value that says `this`, or calls `toString()`, `hashCode()`, `let { }` and their like without a receiver | In the block these are the block's: name the value first, `val self = this`, or write the receiver, `this@Row.toString()`. |
 
 A string in an annotation's argument or a `const val` gets no rewrite, since Kotlin takes a
 constant there, and neither does a string whose values need no escaping: numbers, constants, an
@@ -391,7 +430,8 @@ a `String` in a `data-*` expression, is an error where the value is known to be 
 where it is not; a `UInt` there is an error, with a `toLong()` fix. And a Kotlin template written
 into the format, `interpolate("<p>$name</p>")`, is `interpolate-template`: Kotlin fills it in before
 `interpolate` sees the markup, so it is neither escaped nor refused, and the fix turns it into a
-`%s` placeholder with the value among the arguments. The fix is not put first under `.trimIndent()`,
+`%s` placeholder with the value among the arguments, or in a block marks it with `+` where it
+stands. In VS Code the fix is not the preferred one under `.trimIndent()`,
 where the trim then runs before the value goes in, nor for a value that may be null, which a
 template writes as `null` and `interpolate` as nothing. Markup is no exception, an `Html` or a
 `Trusted`: in `interpolate("<div>$inner</div>")` Kotlin writes the text of `inner` into the format,
@@ -402,19 +442,19 @@ there, becomes a placeholder and the call throws, and a `%%` becomes `%`. It is
 anywhere but element text:
 
 ```kotlin sample=statements
-val inner = interpolate("<b>%s</b>", "Gorvek")
+val inner = interpolate { "<b>${+"Gorvek"}</b>" }
 
-interpolate("""<div class="lt-card">%s</div>""", inner)
+interpolate { """<div class="lt-card">${+inner}</div>""" }
 ```
 
-A `%s` in element text given markup held as a `String`, `h.text`, `elements { }`, a
+A value marked in element text, or passed for a `%s` there, that is markup held as a `String`, `h.text`, `elements { }`, a
 `joinToString` over markup or over a list of `Html`, or a `val` set to any of these, is
 `interpolate-template` too, a warning: `interpolate` escapes it, so its tags are printed as text. Pass the `Html` itself, or wrap markup you built in `Trusted(...)`. A
 literal is left alone, `"<the oath>"` among them: text you chose to have escaped.
 
-At run time the source is gone and only the finished string arrives, so the placeholders have to be
-left standing for the same question to be asked. That is the whole of what `interpolate` wants from
-you.
+At run time the source is gone and only the finished string arrives, so each value has to be marked,
+or left a placeholder, for the same question to be asked. That is the whole of what `interpolate`
+wants from you.
 
 ## On Spring
 

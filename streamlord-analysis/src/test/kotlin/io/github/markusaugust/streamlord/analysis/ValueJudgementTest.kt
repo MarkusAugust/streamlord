@@ -18,6 +18,73 @@ class ValueJudgementTest {
     ) = analyzer.analyzeKotlin(opts.copy(text = src)).filter { it.code == "unescaped-interpolation" }.map { it.severity }
 
     @Test
+    fun `a value looked up in a map may be null, so marking it is offered and not preferred, and the message says why`() {
+        // A template writes null for a key the map does not hold, and interpolate writes nothing.
+        for (type in listOf("Map<String, String>", "MutableMap<String, String>", "HashMap<String, String>")) {
+            val src = "fun f(m: $type) = \"<p title=\\\"\${m[\"k\"]}\\\">x</p>\""
+            val issue = analyzer.analyzeKotlin(src).single()
+            val rewrite = issue.fixes.single { it.title.startsWith("Mark the values with +") }
+            assertEquals(false, rewrite.preferred, type)
+            assertTrue("interpolate writes nothing for" in issue.message, issue.message)
+        }
+        // An index into a list is no lookup that may miss.
+        val list = "fun f(m: List<String>) = \"<p title=\\\"\${m[0]}\\\">x</p>\""
+        assertEquals(
+            true,
+            analyzer
+                .analyzeKotlin(list)
+                .single()
+                .fixes
+                .single()
+                .preferred,
+        )
+    }
+
+    @Test
+    fun `a block written in the parentheses of interpolate is read as a block`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        val unmarked = head + "fun f(name: String) = interpolate({ \"<p title=\\\"\$name\\\">x</p>\" })"
+        val issue = analyzer.analyzeKotlin(unmarked).single()
+        assertEquals("interpolate-template", issue.code)
+        assertEquals(
+            head + "fun f(name: String) = interpolate({ \"<p title=\\\"\${+name}\\\">x</p>\" })",
+            issue.fixes.single().apply(unmarked),
+        )
+        val refused = head + "fun f(name: String) = interpolate( { \"<p data-text=\\\"\${+name}\\\"></p>\" } )"
+        assertEquals(listOf("unsafe-interpolation" to Severity.ERROR), analyzer.analyzeKotlin(refused).map { it.code to it.severity })
+        val marked = head + "fun f(name: String) = interpolate({ \"<p title=\\\"\${+name}\\\">x</p>\" })"
+        assertEquals(emptyList(), analyzer.analyzeKotlin(marked))
+    }
+
+    @Test
+    fun `a this in a template of a string in a value, or after a quote character, keeps the string out of a block`() {
+        val nested = "class Row(val name: String) {\n    fun cell() = \"<p title=\\\"\${\"Hi \${this.name}\".trim()}\\\">x</p>\"\n}"
+        val quoted =
+            "class Row(val a: String) {\n    fun cell(c: Char) = \"<p title=\\\"\${if (c == '\"') this.a else \"x\"}\\\">y</p>\"\n}"
+        for (src in listOf(nested, quoted)) {
+            val issues = analyzer.analyzeKotlin(src)
+            assertEquals(emptyList(), issues.flatMap { it.fixes }.filter { it.title.startsWith("Mark the values with +") }, src)
+            assertTrue(issues.any { "are the block's" in it.message }, issues.map { it.message }.toString())
+        }
+    }
+
+    @Test
+    fun `a name set to a mark is the mark where it is written, whatever letters it has`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        val src = head + "fun f(year: String) = interpolate {\n    val år = +year\n    \"<p title=\\\"\$år\\\">x</p>\"\n}"
+        assertEquals(emptyList(), analyzer.analyzeKotlin(src).map { it.message })
+    }
+
+    @Test
+    fun `a block after the prefixes in the parentheses, or passed by name, is read as a block`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        val after = head + "fun f(name: String) = interpolate(listOf(\"data-x-\"), { \"<p data-x-text=\\\"\${+name}\\\"></p>\" })"
+        assertEquals(listOf("unsafe-interpolation" to Severity.ERROR), analyzer.analyzeKotlin(after).map { it.code to it.severity })
+        val named = head + "fun f(name: String) = interpolate(block = { \"<p title=\\\"\$name\\\">x</p>\" })"
+        assertEquals(listOf("interpolate-template"), analyzer.analyzeKotlin(named).map { it.code })
+    }
+
+    @Test
     fun `the editor's fact wins over what the text shows`() {
         // The text takes both for the author's own: a literal of markup, a workspace constant.
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
@@ -31,8 +98,8 @@ class ValueJudgementTest {
     fun `a message that advises interpolate without offering the rewrite says why`() {
         val src = "fun card(title: String) = \"<h2>\${title.escaped()}</h2>\""
         val issue = analyzer.analyzeKotlin(src).single()
-        assertTrue("build the string with interpolate(...)" in issue.message, issue.message)
-        assertEquals(emptyList(), issue.fixes.filter { it.title.startsWith("Build this string") })
+        assertTrue("mark it with + in interpolate { }" in issue.message, issue.message)
+        assertEquals(emptyList(), issue.fixes.filter { it.title.startsWith("Mark the values with +") })
         assertTrue("is not offered here" in issue.message, issue.message)
     }
 
@@ -62,8 +129,8 @@ class ValueJudgementTest {
                     .single()
                     .fixes
                     .map { it.title }
-            assertTrue(titles.any { it.startsWith("Build this string") }, "$value: $titles")
-            assertTrue(titles.none { it.startsWith("Mark") }, "$value: $titles")
+            assertTrue(titles.any { it.startsWith("Mark the values with +") }, "$value: $titles")
+            assertTrue(titles.none { it.endsWith(" as markup") }, "$value: $titles")
         }
         // A comparison or a test is a Boolean whatever it compares, and arithmetic of numbers the text shows is a number.
         for (value in listOf("a == b", "a < b", "s in xs", "n * 7 % 13", "a - b", "n.toInt() / 2")) {
@@ -76,7 +143,7 @@ class ValueJudgementTest {
                 .analyzeKotlin(generic)
                 .single()
                 .fixes
-                .none { it.title.startsWith("Build this string") },
+                .none { it.title.startsWith("Mark the values with +") },
         )
     }
 

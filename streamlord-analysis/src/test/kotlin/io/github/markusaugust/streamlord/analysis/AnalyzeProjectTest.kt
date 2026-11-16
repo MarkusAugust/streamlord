@@ -78,6 +78,64 @@ class AnalyzeProjectTest {
     }
 
     @Test
+    fun `strict also fails a build on a value written without its mark, which failures alone lets through`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        // A value left unmarked in a block, a template in a format, and a String in a string that is not interpolate's.
+        write("Block.kt", head + "fun card(name: String) = interpolate { \"<p title=\\\"\$name\\\">x</p>\" }\n")
+        write("Format.kt", head + "fun row(name: String) = interpolate(\"<li>\$name</li>\")\n")
+        write("Plain.kt", "fun cell(name: String) = \"<td>\$name</td>\"\n")
+        // What strict lets through too: a marked value, and a hint.
+        write("Marked.kt", head + "fun card(name: String) = interpolate { \"<p title=\\\"\${+name}\\\">x</p>\" }\n")
+        write("Number.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
+        val all = analyzer.analyzeProject(root)
+        assertEquals(emptyList(), all.failures())
+        assertEquals(emptyList(), all.failures(strict = false))
+        assertEquals(
+            listOf(
+                Triple("Block.kt", "interpolate-template", Severity.WARNING),
+                Triple("Format.kt", "interpolate-template", Severity.WARNING),
+                Triple("Plain.kt", "unescaped-interpolation", Severity.WARNING),
+            ),
+            all.failures(strict = true).map { Triple(it.file.name, it.issue.code, it.issue.severity) },
+        )
+    }
+
+    @Test
+    fun `strict fails on markup held as a String that interpolate would print as text`() {
+        val domain = "io.github.markusaugust.streamlord.core.domain"
+        val head = "import $domain.Html\nimport $domain.interpolate\n\n"
+        write("Held.kt", head + "fun list(row: Html) = interpolate { \"<ul>\${+row.text}</ul>\" }\n")
+        val all = analyzer.analyzeProject(root)
+        assertEquals(emptyList(), all.failures())
+        assertEquals(
+            listOf("interpolate-template" to Severity.WARNING),
+            all.failures(strict = true).map {
+                it.issue.code to
+                    it.issue.severity
+            },
+        )
+    }
+
+    @Test
+    fun `strict fails on a value written with a bare dollar into a Datastar expression, which reads as a signal`() {
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+        write("Text.kt", head + "fun f(name: String) = interpolate { \"\"\"<div data-text=\"\$name\"></div>\"\"\" }\n")
+        val all = analyzer.analyzeProject(root)
+        val strict = all.failures(strict = true).map { it.issue.code to it.issue.severity }
+        assertEquals(listOf("kotlin-interpolation" to Severity.WARNING), strict)
+        assertEquals(emptyList(), all.failures())
+    }
+
+    @Test
+    fun `strict keeps what failures alone fails on`() {
+        write("Click.kt", swallowed)
+        write("Link.kt", "fun link(url: String) = \"\"\"<a href=\"\$url\">x</a>\"\"\"\n")
+        val all = analyzer.analyzeProject(root)
+        assertEquals(all.failures(), all.failures(strict = true))
+        assertEquals(2, all.failures().size)
+    }
+
+    @Test
     fun `formats each issue as a compiler would`() {
         write("src/Click.kt", "package p\n\n$swallowed")
         val found = analyzer.analyzeProject(root).failures().single()
