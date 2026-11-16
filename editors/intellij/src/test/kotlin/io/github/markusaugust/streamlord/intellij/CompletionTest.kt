@@ -407,4 +407,21 @@ class CompletionTest : StreamlordTestCase() {
         val items = myFixture.completeBasic()?.map { it.lookupString } ?: emptyList()
         assertFalse(items.toString(), "patch" in items || "\"patch\"" in myFixture.editor.document.text)
     }
+
+    fun `test a string in the block of interpolate completes as any html string, after a marked value`() {
+        myFixture.addFileToProject("other.html", "<div data-signals=\"{busy: false}\"></div>")
+        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun f(name: String) = interpolate { "
+        myFixture.configureByText("Signals.kt", head + "\"\"\"<p title=\"\${+name}\" data-text=\"\${'\$'}bu<caret>\"></p>\"\"\" }")
+        val signals = myFixture.completeBasic()?.map { it.lookupString } ?: listOf(myFixture.editor.document.text)
+        assertTrue(signals.toString(), signals.any { it.contains("busy") })
+        myFixture.configureByText("Actions.kt", head + "\"\"\"<p title=\"\${+name}\" data-on:click=\"@<caret>\"></p>\"\"\" }")
+        val actions = myFixture.completeBasic()!!.map { it.lookupString }
+        assertTrue(actions.toString(), "@post" in actions)
+        myFixture.configureByText("Modifiers.kt", head + "\"\"\"<p title=\"\${+name}\" data-on:click__<caret>=\"\"></p>\"\"\" }")
+        val modifiers = myFixture.completeBasic()!!.map { it.lookupString }
+        assertTrue(modifiers.toString(), "debounce" in modifiers)
+        myFixture.configureByText("Attributes.kt", head + "\"\"\"<p title=\"\${+name}\" data-<caret>></p>\"\"\" }")
+        val attributes = myFixture.completeBasic()!!.map { it.lookupString }
+        assertTrue(attributes.toString(), attributes.any { it.startsWith("data-on") })
+    }
 }

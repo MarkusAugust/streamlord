@@ -288,6 +288,19 @@ describe("kotlin injection grammar", () => {
     assert.ok(plain.every((x) => !x.scopes.some((s) => s.includes("html") || s.includes("datastar"))), "no html in a query");
   });
 
+  it("highlights html in a string in the block of interpolate, and leaves a marked value to Kotlin", async () => {
+    const t = await tokens("source.kotlin", `fun f(name: String) = interpolate { $$"""<li id="$\${+name}" data-on:click__debounce.500ms="$n++">x</li>""" }`);
+    assert.match(scopeOf(t, "li"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(t, "click"), /entity\.other\.attribute-name\.datastar\.key/);
+    assert.match(scopeOf(t, "debounce"), /keyword\.other\.modifier\.datastar/);
+    assert.match(scopeOf(t, "n"), /variable\.other\.constant\.signal\.datastar/);
+    assert.doesNotMatch(scopeOf(t, "name"), /signal|attribute-name|string\.quoted\.double\.html/);
+    const plain = await tokens("source.kotlin", `fun f(name: String) = interpolate { "<p title=\\"\${+name}\\" data-show=\\"\\$open\\">x</p>" }`);
+    assert.match(scopeOf(plain, "p"), /entity\.name\.tag\.html/);
+    assert.match(scopeOf(plain, "show"), /entity\.other\.attribute-name\.datastar\.plugin/);
+    assert.match(scopeOf(plain, "open"), /variable\.other\.constant\.signal\.datastar/);
+  });
+
   it("reads the annotation by its qualified name too", async () => {
     // The string opens no tag, so only the marker makes it HTML.
     const lines = await tokenLines("source.kotlin", [`@org.intellij.lang.annotations.Language("HTML")`, `fun page(): String = """x <b data-text="$count">y</b>"""`]);

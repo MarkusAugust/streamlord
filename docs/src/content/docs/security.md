@@ -251,7 +251,7 @@ reads `data-nonce` as it stands, never as an expression, so the placeholder is a
 ```kotlin sample=statements
 val nonce = CspNonce.generate()
 
-interpolate("""<html data-nonce="%s"><body></body></html>""", nonce)
+interpolate { """<html data-nonce="${+nonce}"><body></body></html>""" }
 ```
 
 ### The policy is yours

@@ -189,6 +189,18 @@ describe("completion provider", () => {
     const typing = new MockDocument(`fun side() = $$"""\n<div data-`, "kotlin");
     assert.ok(complete(typing, 1, 10, index).some((i) => i.label === "data-on"), "while the string is still being typed");
   });
+
+  it("gives a string in the block of interpolate the html side too, after a marked value and while it is typed", () => {
+    const src = `fun side(name: String) = interpolate { """\n<p title="\${+name}">\n<div data-\n<div data-on:click__\n<div data-text="$\n""" }`;
+    const kdoc = new MockDocument(src, "kotlin");
+    assert.ok(complete(kdoc, 2, 10, index).some((i) => i.label === "data-on"), "attributes");
+    assert.ok(complete(kdoc, 3, 20, index).some((i) => i.label === "debounce"), "modifiers");
+    assert.ok(complete(kdoc, 4, 17, index).some((i) => i.label === "$busy"), "signals in an attribute value");
+    const dollars = new MockDocument(`fun side(name: String) = interpolate { $$"""\n<p title="$\${+name}">\n<div data-text="$`, "kotlin");
+    assert.ok(complete(dollars, 2, 17, index).some((i) => i.label === "$busy"), "signals in a multi-dollar literal still being typed");
+    const short = new MockDocument(`fun side(name: String) = interpolate { "<p title=\\"\${+name}\\" data-" }`, "kotlin");
+    assert.ok(complete(short, 0, 67, index).some((i) => i.label === "data-on"), "attributes in a one-line string");
+  });
 });
 
 /** An item's name, whether its label is a string or carries a detail. */

@@ -34,7 +34,7 @@ form {
 post("/quests") {
     val title = call.receiveParameters()["title"].orEmpty()
     call.respondDatastar {
-        patchElements(interpolate("""<li id="quest">%s</li>""", title))
+        patchElements(interpolate { """<li id="quest">${+title}</li>""" })
     }
 }
 ```
@@ -48,7 +48,7 @@ fun add(
     response: HttpServletResponse,
 ): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody =
     response.datastarStream {
-        patchElements(interpolate("""<li id="quest">%s</li>""", title))
+        patchElements(interpolate { """<li id="quest">${+title}</li>""" })
     }
 ```
 
@@ -60,7 +60,7 @@ data class Quest(val title: String)
 
 @PostMapping("/quests")
 fun add(@ModelAttribute quest: Quest): ResponseEntity<Flow<ServerSentEvent<String>>> =
-    flowOf(PatchElements(interpolate("""<li id="quest">%s</li>""", quest.title)))
+    flowOf(PatchElements(interpolate { """<li id="quest">${+quest.title}</li>""" }))
         .asDatastarResponse()
 ```
 
