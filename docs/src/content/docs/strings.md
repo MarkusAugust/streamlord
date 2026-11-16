@@ -140,15 +140,17 @@ fun hitByPlace(title: String, url: String): Html =
 
 `%s` is a placeholder and `%%` writes one `%`. Every other `%` is literal, so `width: 50%` and
 `/a%20b` need no ceremony. A miscounted placeholder throws rather than shipping a half-filled page.
+In a block a `%` is always literal.
 
-What happens to a value is decided by where it landed, not by where it came from:
+What happens to a value is decided by where it landed, not by where it came from, and it is the
+same for a value marked with `+` and for the value of a `%s`:
 
-| Where the placeholder is | What happens to the value |
+| Where the value lands | What happens to it |
 |---|---|
 | Element text | Escaped |
 | A quoted attribute that is not Datastar's | Escaped |
-| A URL attribute: `href`, `src`, `action`, `formaction`, `xlink:href`, `poster`, `cite`, `background`, `ping`, `manifest`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole value, every placeholder filled, is relative, `http`, `https`, `mailto` or `tel` |
-| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the literal before the placeholder already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
+| A URL attribute: `href`, `src`, `action`, `formaction`, `xlink:href`, `poster`, `cite`, `background`, `ping`, `manifest`, and `values`, `to` or `from` on an SVG animation | Escaped, and **refused** unless the whole URL, every value in it written, is relative, `http`, `https`, `mailto` or `tel` |
+| A URL the browser loads code from: `src` of `<script>`, `<iframe>` or `<embed>`, `href` of `<base>` or `<link>`, `data` of `<object>`, `href` of an SVG `<script>` | Escaped, and **refused** unless the markup before the value already fixes the host: `/x`, `#`, `?`, or a whole origin such as `https://cdn.example/` |
 | The `content` of a `<meta>` that starts with a time, as `http-equiv="refresh"` reads it | Escaped, and the URL after `url=` **refused** unless it is relative, `http`, `https`, `mailto` or `tel` |
 | A `style` attribute | **Refused**, unless it is a number |
 | A `data-*` attribute Datastar evaluates, an expression or a signal filter, or follows as a signal path: `data-bind`, `data-ref`, `data-indicator`; and Pro's `data-match-media`, whose query the reference writes as a string literal | **Refused**, unless it is a number or a boolean |
@@ -159,19 +161,19 @@ What happens to a value is decided by where it landed, not by where it came from
 
 So the `url` in the example above may be `/heads/1` or `https://thurn.example/`, and a `javascript:`
 URL throws instead of becoming a link that runs. The value is judged whole, as the browser reads it:
-a placeholder that ends a path the markup begins takes anything, because the markup already chose
-where it points, and `href="%s%s"` cannot be made into `javascript:` across its two placeholders.
-Character references are decoded once the attribute is whole, as the browser does, so `href="&%s"`
-cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts toward the URL as
-the literal does: it is written as it stands, and the URL is still judged whole, so `href="%s%s"`
-given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other value in it goes
+a value that ends a path the markup begins takes anything, because the markup already chose
+where it points, and `href="${+a}${+b}"` cannot be made into `javascript:` across its two values.
+Character references are decoded once the attribute is whole, as the browser does, so
+`href="&${+a}"` cannot be finished into `&#106;avascript:` by its value. A `Trusted` value counts
+toward the URL as the markup does: it is written as it stands, and the URL is still judged whole,
+so `href="${+a}${+b}"` given `Trusted("")` and `javascript:alert(1)` throws. Only a URL with no other value in it goes
 unjudged.
 
 A URL that loads code asks more of the markup. `https://` settles the scheme of a `<script src>`
-but not whose script it is, so a value there is refused until the literal has written the host
-too: `<script src="https://cdn.example/%s">` takes a file name, `<script src="%s">` takes nothing.
-A single `/` is not enough on its own either, since the value could add a second and name another
-host; `/js/%s` is. The same goes for `<link href>`, whatever its `rel`, since a stylesheet or a
+but not whose script it is, so a value there is refused until the markup has written the host
+too: `<script src="https://cdn.example/${+file}">` takes a file name, `<script src="${+file}">`
+takes nothing. A single `/` is not enough on its own either, since the value could add a second
+and name another host; `/js/${+file}` is. The same goes for `<link href>`, whatever its `rel`, since a stylesheet or a
 module loads from there too. The exception says so, and its `loadsCode` tells such a refusal apart.
 Wrap a URL you chose yourself in `Trusted`.
 
@@ -183,13 +185,13 @@ closes them. A value has to be safe every way, since a patch with an SVG namespa
 `<svg>` of its own. A `<noscript>` holds elements, as the client parses a patch with scripting off;
 markup that mentions one is also read with scripting on, as a page loads it, where a noscript holds
 text, and the stricter reading wins. So a `title` or a `textarea` that shows markup as a code sample
-cannot take a placeholder inside a `data-*` attribute of that sample; put the whole sample in one
-placeholder instead, where it is text either way.
+cannot take a value inside a `data-*` attribute of that sample; make the whole sample one value
+instead, where it is text either way.
 
 One thing the reading does not follow yet is the browser building the page: inside a `<select>` the
 browser drops start tags such as `<title>` or `<style>` that the reading still takes as the start of
-text, so a format that writes one there can put a later placeholder somewhere it is not judged. Only
-markup you write in the format can do this, never a value; leave such tags out of a `<select>`.
+text, so markup that writes one there can put a later value somewhere it is not judged. Only
+markup you write yourself can do this, never a value; leave such tags out of a `<select>`.
 
 The refusals are the point. Escaping cannot save these: a value in a `data-*` attribute Datastar
 evaluates becomes part of a Datastar expression, and your own server signed the page it arrived
@@ -202,16 +204,17 @@ says which value, where it landed, and what to do instead.
 
 ```kotlin sample=statements
 val name = "Gorvek"
+val heads = 3
 
-interpolate("""<li data-text="%s"></li>""", name)    // throws
+interpolate { """<li data-text="${+name}"></li>""" }    // throws
 
-// Passes: a number carries no expression.
-interpolate("""<li data-signals="{n: %s}"></li>""", 3)
+// Passes: a number carries no expression, and needs no mark.
+interpolate { """<li data-signals="{n: $heads}"></li>""" }
 ```
 
 A number or a boolean is let into a Datastar attribute because its text is digits, a dot, a sign
 or `true`/`false`. A number here is a `kotlin.Number`: a `UInt` or a `ULong` is not one, so it is
-refused there; pass `n.toLong()`. No string renders that way and also closes a quote, so the common honest case
+refused there; write `n.toLong()`. No string renders that way and also closes a quote, so the common honest case
 of a server-rendered initial signal needs no waiver.
 
 ### Markup built from markup
@@ -261,22 +264,26 @@ Wrap it in `Trusted`, which writes the value as it stands wherever it lands:
 ```kotlin sample=statements
 val hits = repository.search("gate")
 
-interpolate("""<ul class="lt-list">%s</ul>""", Trusted(renderResults(hits)))
+interpolate { """<ul class="lt-list">${+Trusted(renderResults(hits))}</ul>""" }
 ```
 
 That waives both the escaping and the refusals for that value, which is right for a fragment you
 rendered yourself and wrong for anything that came out of a request. It is a word in your source
 that a reviewer can search for, which is the whole reason it is a type and not a flag. It vouches
-for itself alone: in a URL with other placeholders it is part of the URL, and the URL is judged
+for itself alone: in a URL with other values it is part of the URL, and the URL is judged
 whole. Its text is markup like the literal around it, so the other values are judged where it puts
 them:
 
 ```kotlin sample=statements
 val name = "Gorvek"
 
-interpolate("""<button %s="%s">""", Trusted("title"), name)    // escaped into the title
-interpolate("""<button %s="%s">""", Trusted("onclick"), name)  // throws: the browser runs it
-interpolate("<%s>%s</%s>", Trusted("script"), name, Trusted("script")) // throws: a script body
+val title = Trusted("title")
+val onclick = Trusted("onclick")
+val script = Trusted("script")
+
+interpolate { """<button ${+title}="${+name}">""" }    // escaped into the title
+interpolate { """<button ${+onclick}="${+name}">""" }  // throws: the browser runs it
+interpolate { "<${+script}>${+name}</${+script}>" }    // throws: a script body
 ```
 
 ### This is the editors' rule, at run time
