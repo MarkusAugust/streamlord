@@ -11251,6 +11251,44 @@ interpolate-template 247-253 warning: Kotlin fills in $title before interpolate 
   fix "Mark $title with +, which interpolate escapes" 247-253 "${+title}" (not preferred)
 == corpus/kotlin-interpolate-block.json: a template that only looks marked: an increment
 interpolate-template 232-238 warning: Kotlin fills in ${++i} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+== corpus/kotlin-interpolate-block.json: a + on a number is Kotlin's own: the number is written wherever it stands
+== corpus/kotlin-interpolate-block.json: the fix that makes a multi-dollar literal writes the marked templates too
+kotlin-interpolation 266-271 warning: Kotlin interpolates $open here, as the whole Datastar expression. Meant as a server value, only a number or a boolean is safe there; meant as the signal $open, make the whole literal $$"""...""" (Kotlin 2.2+), or escape as ${'$'}open.
+  fix "Make it a $$ literal, where $open is a signal" 232-285 "$$\"\"\"<p title=\"$${+name}\" data-show=\"$open\">$${+a}</p>\"\"\""
+  fix "Escape as ${'$'}open" 266-267 "${'$'}"
+== corpus/kotlin-interpolate-block.json: the mark of a value in a multi-dollar literal of a chain takes that literal's dollars
+interpolate-template 288-294 warning: Kotlin fills in $$name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $$name with +, which interpolate escapes" 288-294 "$${+name}"
+interpolate-template 305-311 warning: Kotlin fills in the value `tail()` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+== corpus/kotlin-interpolate-block.json: an expression of two operands is marked in parentheses
+interpolate-template 254-268 warning: Kotlin fills in ${m ?: "none"} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark ${m ?: \"none\"} with +, which interpolate escapes" 254-268 "${+(m ?: \"none\")}"
+interpolate-template 270-278 warning: Kotlin fills in ${a + b} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark ${a + b} with +, which interpolate escapes" 270-278 "${+(a + b)}"
+== corpus/kotlin-interpolate-block.json: without core in the module a block is a string like any other
+unsafe-interpolation 238-246 warning: Kotlin writes ${+name} into data-text, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
+== corpus/kotlin-interpolate-block.json: a member function named interpolate is no block
+unescaped-interpolation 140-145 warning: Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Build this string with interpolate(...), which escapes the values" 136-150 "interpolate(\"<p>%s</p>\", name).text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+  fix "Mark $name as markup" 140-145 "${Trusted(name)}" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.Trusted\n\n"
+== corpus/kotlin-interpolate-block.json: markup in a block that opens with text is read too
+interpolate-template 239-241 warning: Kotlin fills in $a before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $a with +, which interpolate escapes" 239-241 "${+a}"
+unsafe-interpolation 257-265 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+== corpus/kotlin-interpolate-block.json: a mark on a value joined with +
+unsafe-interpolation 252-257 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+== corpus/kotlin-interpolate-block.json: the block called by its whole name
+interpolate-template 109-114 warning: Kotlin fills in $name before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $name with +, which interpolate escapes" 109-114 "${+name}"
+unsafe-interpolation 99-107 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+== corpus/kotlin-interpolate-block.json: a block in a block is read with its own prefixes
+unsafe-interpolation 282-290 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+== corpus/kotlin-interpolate-block.json: a name set to a mark is the mark where it is written
+== corpus/kotlin-interpolate-block.json: a marked value in parentheses and a marked literal
+unsafe-interpolation 238-248 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+unsafe-interpolation 261-271 error: interpolate always throws here: "open" lands in data-show, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"

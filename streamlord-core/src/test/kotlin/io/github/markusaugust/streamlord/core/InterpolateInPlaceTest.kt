@@ -123,6 +123,17 @@ class InterpolateInPlaceTest {
     }
 
     @Test
+    fun `a value marked and marked again is marked once`() {
+        assertEquals(
+            "<p>a&amp;b a&amp;b</p>",
+            interpolate {
+                val marked = +"a&b"
+                "<p>${+marked} ${+(+"a&b")}</p>"
+            }.text,
+        )
+    }
+
+    @Test
     fun `a dozen marks are a dozen values, each in its place`() {
         val names = (0 until 12).map { "n$it" }
         assertEquals(names.joinToString("") { "<i>$it</i>" }, interpolate { names.joinToString("") { "<i>${+it}</i>" } }.text)

@@ -62,6 +62,9 @@ private class ExpressionValues(
 
 // A name, a property chain or a number literal, which takes a call after it without brackets.
 private val SIMPLE_RECEIVER = regex("""[\p{L}_][\p{L}\p{Nd}_]*(?:\.[\p{L}_][\p{L}\p{Nd}_]*)*|\p{Nd}[\p{L}\p{Nd}_]*""")
+
+/** The arguments of a call without a bracket inside them, taken out to see whether what is left is a chain of names. */
+private val CALL_ARGUMENTS = regex("""\([^()]*\)|\[[^\[\]]*\]|!!|\?(?=\.)""")
 private val END_TAG_ATTRIBUTES = regex("""</[^\t\n\u000C\r />]*[\t\n\u000C\r /][^>]*""")
 
 /** The characters that end an unquoted attribute value, and the space before one: ASCII only, as HTML has it. */
@@ -274,31 +277,39 @@ internal fun Analyzer.checkInterpolateSite(
 /**
  * The block form, `interpolate { "<p>${+name}</p>" }`: a template that opens with `+` is a value interpolate takes where it
  * stands, judged as the value of a `%s` there is; any other template Kotlin fills in before interpolate sees the markup.
- * [prefixes] are those the call is given, null for none.
+ * [prefixes] are those the call is given, null for none, and [block] is what stands in the block's braces.
  */
 internal fun Analyzer.checkInterpolateBlock(
     s: KotlinString,
     prefixes: List<String>?,
+    block: String,
     src: String,
     opts: Reading,
     hyphenated: Set<String>,
 ): List<Issue> {
-    val marked = s.interpolations.filter { markedValue(it) != null }
-    val values =
-        marked.map { ip ->
+    val all = s.interpolations.filter { markedValue(it) != null }
+    val read =
+        all.map { ip ->
             val value = markedValue(ip)!!
             val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
             Arg(start, start + value.length, null, value, null)
         }
-    val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
-    val kinds = values.mapIndexed { k, it -> if (known[k].isOther()) null else known[k].argKind() ?: argKind(src, it.text, false, s.start) }
-    val format = s.copy(interpolations = s.interpolations - marked.toSet())
+    val facts = read.map { opts.valueFact?.invoke(it.start, it.end) }
+    val told =
+        read.mapIndexed { k, it ->
+            if (facts[k].isOther()) null else facts[k].argKind() ?: argKind(src, it.text, it.text.startsWith("\""), s.start)
+        }
+    // A + on a number is Kotlin's own and marks nothing: the number is written as it is, as from any template.
+    val marks = all.indices.filter { told[it] != ArgKind.NUMBER }
+    // A name set to a mark in the block, `val title = +name`, is the mark where it is written.
+    val set = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE && setToMark(block, it.text) }
+    val format = s.copy(interpolations = s.interpolations - all.toSet() - set.toSet())
     return judgeInterpolated(
         s,
         format,
-        marked.map { it.decodedStart },
-        values,
-        kinds,
+        marks.map { all[it].decodedStart },
+        marks.map { read[it] },
+        marks.map { told[it] },
         true,
         prefixes,
         null,
@@ -306,16 +317,26 @@ internal fun Analyzer.checkInterpolateBlock(
         opts,
         hyphenated,
         ArrayList(),
+        marks.map { all[it].start until all[it].end },
     )
 }
 
-/** What a template of the block form marks with `+`, as written; null for a template that marks nothing. */
+private fun setToMark(
+    block: String,
+    name: String,
+): Boolean = regex("""\b${Regex.escape(name)}\s*=\s*\+(?!\+)""").containsMatchIn(block)
+
+/**
+ * What a template of the block form, or a value joined with `+` in it, marks with `+`, as written and without
+ * parentheses around all of it; null where nothing is marked.
+ */
 internal fun markedValue(ip: Interpolation): String? =
     ip.text
         .trim()
-        .takeIf { ip.kind == InterpolationKind.BRACED && it.startsWith("+") && !it.startsWith("++") }
+        .takeIf { ip.kind != InterpolationKind.SIMPLE && it.startsWith("+") && !it.startsWith("++") }
         ?.drop(1)
         ?.trim()
+        ?.let { if (it.startsWith("(") && closing(it, depths(it), 0) == it.length) it.substring(1, it.length - 1).trim() else it }
         ?.takeIf { it.isNotEmpty() }
 
 /**
@@ -336,6 +357,7 @@ private fun Analyzer.judgeInterpolated(
     opts: Reading,
     hyphenated: Set<String>,
     issues: ArrayList<Issue>,
+    spans: List<IntRange>? = null,
 ): List<Issue> {
     val block = formatArg == null
     val view = markupView(src, format)
@@ -361,7 +383,8 @@ private fun Analyzer.judgeInterpolated(
     // After a Trusted whose text is not known, a value may land elsewhere than the markup shows.
     val uncertainFrom = unknown.minOrNull() ?: Int.MAX_VALUE
     val percentAt = { j: Int -> j >= format.interpolations.size }
-    val trapOf = traps(format, src)
+    // A fix that writes the literal anew writes every template of it, the marked ones too.
+    val trapOf = traps(if (block) s else format, src)
     val attributeValues = ExpressionValues(view)
     for ((k, ip) in format.interpolations.withIndex()) {
         val landing = landings[k]
@@ -449,7 +472,8 @@ private fun Analyzer.judgeInterpolated(
         val landing = landings[format.interpolations.size + k]
         val arg = if (mapped) values[k] else null
         val kind = if (arg != null) kinds[k] else null
-        val r = format.toSource(d, d + PLACEHOLDER.length)
+        // In a block the value's own template or operand is marked; a %s is where it stands in the format.
+        val r = spans?.get(k) ?: format.toSource(d, d + PLACEHOLDER.length)
         val base = format.interpolations.size
         val uncertain = d > uncertainFrom
         val shown = arg?.let { shortened(it.text) } ?: "the value of this %s"
@@ -636,8 +660,13 @@ private fun Analyzer.markFix(
     preferred: Boolean,
 ): Fix {
     val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
+    // The + takes the nearest operand, so anything but a name, a call or a chain of them goes in parentheses.
+    val operand = if (SIMPLE_RECEIVER.matchEntire(expr.replace(CALL_ARGUMENTS, "")) != null) expr else "($expr)"
     val title = "Mark $shown with +, " + if (asIs) "where interpolate writes it as it is" else "which interpolate escapes"
-    return Fix(title, ip.start, ip.end, "$".repeat(format.dollars) + "{+" + expr + "}", preferred = preferred)
+    // The dollars of the literal the template stands in, which in a chain is one of several.
+    val dollars = (format.literals.firstOrNull { ip.start in it.start until it.end } ?: format).dollars
+    val marked = if (ip.kind == InterpolationKind.OPERAND) "+$operand" else "$".repeat(dollars) + "{+" + operand + "}"
+    return Fix(title, ip.start, ip.end, marked, preferred = preferred)
 }
 
 /**

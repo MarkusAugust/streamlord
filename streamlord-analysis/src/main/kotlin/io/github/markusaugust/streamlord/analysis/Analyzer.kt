@@ -108,12 +108,17 @@ private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 private val INTERPOLATE = setOf("interpolate")
 
 /** `interpolate {` or `interpolate(prefixes) {`, as a call of its own and no member of anything. */
-private val INTERPOLATE_BLOCK = regex("""(?<![\p{L}\p{Nd}_.])interpolate\s*(?:\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""")
+private val INTERPOLATE_BLOCK =
+    regex(
+        """(?<![\p{L}\p{Nd}_.`])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)""" +
+            """\s*(?:\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""",
+    )
 private val PREFIXES_GIVEN =
     regex("""(?:prefixes\s*=\s*)?(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")
 private val PLAIN_STRING = regex(""""([^"\\$]*)"""")
 
 private class InterpolateBlock(
+    val site: CallSite,
     val braces: IntRange,
     val prefixes: List<String>?,
 )
@@ -279,7 +284,15 @@ public class Analyzer(
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         // The block form: every literal in the braces is markup interpolate reads, its marked values taken where they stand.
-        val blocks = if (otherInterpolate) emptyList() else interpolateBlocks(src, lex)
+        val blocks =
+            if (otherInterpolate) {
+                emptyList()
+            } else {
+                interpolateBlocks(
+                    src,
+                    facts.code,
+                ).filter { !foreign(it.site.name, it.site.nameStart) }
+            }
         out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
@@ -316,13 +329,23 @@ public class Analyzer(
             val whole = chain ?: s
             // The chain's own literals are read with it; one in a value it joins, or in a template, is a string of its own.
             if (chain != null) for (l in chain.literals) chained += l.start
-            if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
-            val block = blocks.firstOrNull { s.start in it.braces }
-            if (block != null) {
-                val issues = checkInterpolateBlock(whole, block.prefixes, src, opts, hyphenated)
-                if (issues.isNotEmpty()) out += SiteIssues(null, whole, issues)
+            // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
+            // issues' site, so a host that resolves calls can say it is somebody else's.
+            val block = blocks.lastOrNull { s.start in it.braces }
+            if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
+                val issues =
+                    checkInterpolateBlock(
+                        whole,
+                        block.prefixes,
+                        src.substring(block.braces.first, block.braces.last),
+                        src,
+                        opts,
+                        hyphenated,
+                    )
+                if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
             }
+            if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
             val judged = checkFreeHtmlString(whole, opts, src, hyphenated, s.start !in topLevel)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
@@ -529,12 +552,23 @@ public class Analyzer(
     /** The braces of each `interpolate { ... }` and `interpolate(prefixes) { ... }` of the file, with the prefixes written as plain literals. */
     private fun interpolateBlocks(
         src: String,
-        lex: KotlinLex,
+        code: BooleanArray,
     ): List<InterpolateBlock> =
-        INTERPOLATE_BLOCK.findAll(src).filter { lex.mask[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
-            val close = closingBrace(src, lex, m.range.last) ?: return@mapNotNullTo null
-            val list = m.groups[1]?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
+        INTERPOLATE_BLOCK.findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
+            val name = m.range.first + m.value.indexOf("interpolate")
+            // A function declared by the name is no call of it.
+            if (src.substring(0, m.range.first).trimEnd().endsWith("fun")) return@mapNotNullTo null
+            // The braces of code, a template's code among it: a block may stand in a template of another's markup.
+            var depth = 0
+            val close =
+                (m.range.last until src.length).firstOrNull {
+                    code[it] &&
+                        ((src[it] == '{' && ++depth < 0) || (src[it] == '}' && --depth == 0))
+                }
+                    ?: return@mapNotNullTo null
+            val list = m.groups[2]?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
             InterpolateBlock(
+                CallSite("interpolate", name, m.range.last, close, emptyList(), trailingLambda = true),
                 m.range.last..close,
                 list?.let { l ->
                     PLAIN_STRING.findAll(l.groupValues[1]).map { it.groupValues[1] }.toList()

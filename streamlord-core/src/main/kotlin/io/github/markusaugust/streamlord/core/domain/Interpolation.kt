@@ -326,6 +326,8 @@ public class InterpolationScope
 
         /** Marks this value where it is written: [interpolate] escapes it or refuses it by where it lands. */
         public operator fun Any?.unaryPlus(): Placed {
+            // A mark marked again is the mark it was.
+            if (this is Placed) return this
             marked += this
             return Placed("$MARK_OPENS$id.${marked.size - 1}$MARK_CLOSES")
         }
