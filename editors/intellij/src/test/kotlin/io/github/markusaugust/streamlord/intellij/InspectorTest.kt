@@ -586,12 +586,12 @@ class InspectorTest : BasePlatformTestCase() {
         var changes = 0
         servers.onChange(testRootDisposable) { changes++ }
         val process = FakeProcess()
-        servers.track("Motregning back (dev)", process)
+        servers.track("Orders back (dev)", process)
         process.startNotify()
         process.print("\u001B[32m INFO\u001B[0;39m Starting Application\n2026-10-06 INFO Tomcat started on port 91")
         assertEquals(null, servers.current())
         process.print("02 (http) with context path '/'\n")
-        assertEquals(RunningServer("http://localhost:9102", "Motregning back (dev)"), servers.current())
+        assertEquals(RunningServer("http://localhost:9102", "Orders back (dev)"), servers.current())
         val since = System.currentTimeMillis()
         process.print("INFO all is well\n\u001B[33m WARN\u001B[0;39m Resolved [MissingServletRequestParameterException]\n")
         assertEquals(listOf(" WARN Resolved [MissingServletRequestParameterException]"), servers.problemsSince(since))
@@ -603,13 +603,13 @@ class InspectorTest : BasePlatformTestCase() {
 
     fun `test a running server is the baseUrl unless the env file sets one`() {
         val process = FakeProcess()
-        RunningServers.getInstance(project).track("Motregning back (dev)", process)
+        RunningServers.getInstance(project).track("Orders back (dev)", process)
         process.startNotify()
         process.print("Tomcat started on port 9102 (http) with context path '/'\n")
         val store = RequestStore.getInstance(project)
         try {
             assertEquals(
-                Requests.Variable("baseUrl", "http://localhost:9102", Requests.VariableSource.RUNNING, "Motregning back (dev)"),
+                Requests.Variable("baseUrl", "http://localhost:9102", Requests.VariableSource.RUNNING, "Orders back (dev)"),
                 store.environment().vars.single(),
             )
             val (file, changed) = store.useBaseUrl("http://localhost:9103")

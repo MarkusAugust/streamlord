@@ -20,7 +20,7 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   a hint when `name` is a number or a boolean, which is safe written in.
 - A Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it at run time:
   in text or a quoted attribute, where escaping saves it, a hint (a warning for a `String`) with a
-  fix that rewrites the literal as `interpolate(...)`; at the start of a URL, in `style`, a `data-*`
+  fix that marks the values with `+` in `interpolate { }`; at the start of a URL, in `style`, a `data-*`
   expression, a script or an event handler, a warning, since escaping cannot help there. Constants,
   including a `const val` anywhere in the workspace, literals and markup built in the template say
   nothing. A call to `interpolate` is judged too: a miscounted `%s` and a value it will refuse are
@@ -75,7 +75,7 @@ template file; the id and completeness rules apply only where the string is hand
 `toggle("open")` or an escaped `${'$'}count`; `__debunce` becomes `__debounce`, `__debounce_150ms`
 becomes `__debounce.150ms` and `__prevent.stop` becomes `__prevent__stop`; `@Post` becomes
 `@post`; `data-signal` becomes `data-signals`; a missing duration, `id` or `selector` is added;
-an HTML string with Kotlin values in it becomes a call of `interpolate(...)`, which is also a
+an HTML string with Kotlin values in it gets its values marked with `+` in `interpolate { }`, which is also a
 refactoring anywhere in a string that can take it. Every diagnostic links to the matching page of
 the Datastar reference, or to Streamlord's page on HTML strings.
 

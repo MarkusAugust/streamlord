@@ -70,6 +70,27 @@ alone cannot tell a number from a string. The same code is a hint where the valu
 safe, `colspan=$n` with an `Int` `n`, or `<h$level>`, and a hint does not fail a build.
 [Strings](/strings/#this-is-the-editors-rule-at-run-time) has what each code means.
 
+A value written into an HTML string where escaping would have been enough is a hint, or a warning
+for a `String` and for markup outside element text, and fails nothing: it is yours to write. A project that wants none of them asks for it:
+
+```kotlin sample=test
+@Test
+fun `no value reaches a page without its mark`() {
+    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures(strict = true)
+
+    assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
+}
+```
+
+`failures(strict = true)` keeps those warnings too. Under `interpolate-template`: a value left
+without its `+` in the block of `interpolate`, one written as a template into its format, and
+markup held as a `String` that `interpolate` would print as text. Under `unescaped-interpolation`:
+a `String`, or markup outside element text, in an HTML string that is not `interpolate`'s. And
+under `kotlin-interpolation`: a value written with a bare dollar into a `data-*` expression of an
+HTML string, `data-text="$name"`, which may be the server's value or a signal Kotlin swallowed. A
+value that is meant to stand as it is says so by its type, `Html`, or by `Trusted(...)`. A hint
+still fails nothing.
+
 `format()` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
 the form IDEs and CI logs turn into a link to the line; `line` and `column` give the place alone.
 For a single string, `issue.format(path, source)` does the same and `position(source)` gives the

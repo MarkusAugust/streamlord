@@ -20,12 +20,33 @@ public data class ProjectIssue(
     public val fails: Boolean
         get() = issue.severity == Severity.ERROR || (issue.code == "unsafe-interpolation" && issue.severity == Severity.WARNING)
 
+    /**
+     * Whether the issue fails a build that asks for no value written without its mark: what [fails], and every other
+     * warning of a Kotlin value in an HTML string, in a block or a format of `interpolate` or in a string of its own.
+     */
+    public val failsStrict: Boolean
+        get() = fails || (issue.code in UNMARKED && issue.severity == Severity.WARNING)
+
     /** The issue as one line in the form compilers write, as [Issue.format] has it: `src/main/kotlin/Page.kt:12:5: error: ... [code]`. */
     public fun format(): String = issue.format(file.path, SourcePosition(line, column))
 }
 
+/**
+ * The codes of a warning of a value in an HTML string that [ProjectIssue.fails] lets through: one not escaped where
+ * escaping is enough, markup that will be, and a bare dollar in a Datastar expression, a value or a swallowed signal.
+ */
+private val UNMARKED = setOf("interpolate-template", "unescaped-interpolation", "kotlin-interpolation")
+
 /** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
 public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }
+
+/**
+ * The issues that should fail a build, and with [strict] each warning of a value written without its mark too: one left
+ * unmarked in the block of `interpolate`, a template in its format, markup held as a `String` that `interpolate` would
+ * print as text, and a `String` or markup outside element text in an HTML string that is not `interpolate`'s. A value
+ * that is meant to stand so is declared `Html` or wrapped in `Trusted`. A hint never fails.
+ */
+public fun List<ProjectIssue>.failures(strict: Boolean): List<ProjectIssue> = filter { if (strict) it.failsStrict else it.fails }
 
 /**
  * Every `.kt` file under [root] that VS Code indexes, read with [prefix] and the constants the

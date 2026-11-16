@@ -126,11 +126,23 @@ private fun highlightSeverity(severity: Severity): HighlightSeverity =
     }
 
 /**
- * The analysis's fixes, the first at the top of the Alt+Enter list unless it is marked not preferred: where the choice is the
- * author's, such as escaping a value or marking it as markup, no fix goes above the others.
+ * The analysis's fixes, the first at the top of the Alt+Enter list where it is preferred or marks values with `+`: the
+ * IDE sorts one problem's other fixes by their titles, and would put "Mark … as markup" above the fix that marks the
+ * values. Where the choice between other fixes is the author's, no fix goes above the others.
  */
 private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
-    fixes.mapIndexed { i, fix -> if (i == 0 && fix.preferred) PreferredReplaceTextFix(fix) else ReplaceTextFix(fix) }.toTypedArray()
+    fixes
+        .mapIndexed { i, fix ->
+            when {
+                i > 0 -> ReplaceTextFix(fix)
+                fix.preferred -> PreferredReplaceTextFix(fix)
+                MARKS_WITH_PLUS.containsMatchIn(fix.title) -> FirstReplaceTextFix(fix)
+                else -> ReplaceTextFix(fix)
+            }
+        }.toTypedArray()
+
+/** The titles of the two fixes that mark a value with `+`: the one of a string, and the one of a value in a block. */
+private val MARKS_WITH_PLUS = Regex("""^Mark .* with \+[ ,]""")
 
 /**
  * The fix and its further edits (an import) made in [document], from the end backwards so no offset
@@ -161,6 +173,12 @@ open class ReplaceTextFix(
 
 /** The fix the analysis lists first and prefers is the one it means: it goes to the top of the Alt+Enter list, above the IDE's own. */
 class PreferredReplaceTextFix(
+    fix: Fix,
+) : ReplaceTextFix(fix),
+    HighPriorityAction
+
+/** The fix that marks values with `+`, listed first without being preferred: at the top of the list all the same. */
+class FirstReplaceTextFix(
     fix: Fix,
 ) : ReplaceTextFix(fix),
     HighPriorityAction

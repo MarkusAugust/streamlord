@@ -189,6 +189,18 @@ describe("completion provider", () => {
     const typing = new MockDocument(`fun side() = $$"""\n<div data-`, "kotlin");
     assert.ok(complete(typing, 1, 10, index).some((i) => i.label === "data-on"), "while the string is still being typed");
   });
+
+  it("gives a string in the block of interpolate the html side too, after a marked value and while it is typed", () => {
+    const src = `fun side(name: String) = interpolate { """\n<p title="\${+name}">\n<div data-\n<div data-on:click__\n<div data-text="$\n""" }`;
+    const kdoc = new MockDocument(src, "kotlin");
+    assert.ok(complete(kdoc, 2, 10, index).some((i) => i.label === "data-on"), "attributes");
+    assert.ok(complete(kdoc, 3, 20, index).some((i) => i.label === "debounce"), "modifiers");
+    assert.ok(complete(kdoc, 4, 17, index).some((i) => i.label === "$busy"), "signals in an attribute value");
+    const dollars = new MockDocument(`fun side(name: String) = interpolate { $$"""\n<p title="$\${+name}">\n<div data-text="$`, "kotlin");
+    assert.ok(complete(dollars, 2, 17, index).some((i) => i.label === "$busy"), "signals in a multi-dollar literal still being typed");
+    const short = new MockDocument(`fun side(name: String) = interpolate { "<p title=\\"\${+name}\\" data-" }`, "kotlin");
+    assert.ok(complete(short, 0, 67, index).some((i) => i.label === "data-on"), "attributes in a one-line string");
+  });
 });
 
 /** An item's name, whether its label is a string or carries a detail. */
@@ -470,20 +482,21 @@ describe("code action provider", () => {
   }
 
   const DOMAIN = "io.github.markusaugust.streamlord.core.domain";
-  const head = `import ${DOMAIN}.Trusted\nimport ${DOMAIN}.interpolate\n\nfun rootHtml(k: WidgetContext, customCss: String? = null, bodyHtml: String): String =\n    `;
+  const head = `import ${DOMAIN}.Trusted\nimport ${DOMAIN}.interpolate\n\nfun pageHtml(k: LayoutContext, pageStyle: String? = null, mainHtml: String): String =\n    `;
   /** The literal of the case that found the defects, with each value written as given. */
   const widget = (root: string, css: string, content: string, body: string, events: string) =>
-    `"""\n    <div id="${root}" data-theme="light" data-lt-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
-  const REWRITE = "Build this string with interpolate(...)";
+    `"""\n    <div id="${root}" data-theme="light" data-ui-boundary="">\n        <style>${css}</style>\n        <div id="${content}">\n            ${body}\n        </div>\n        <div id="${events}" hidden></div>\n    </div>\n    """.trimIndent()`;
+  const REWRITE = "Mark the values with + in interpolate { }";
   const ESCAPES = `${REWRITE}, which escapes the values`;
 
   it("offers the rewrite from each value and leaves one call with the style's value as Trusted", () => {
-    const css = "${customCss.orEmpty()}";
-    const values = ["${k.rootId}", css, "${k.contentId}", "$bodyHtml", "${k.eventsId}"] as const;
+    const css = "${pageStyle.orEmpty()}";
+    const values = ["${k.pageId}", css, "${k.sectionId}", "$mainHtml", "${k.streamId}"] as const;
     const text = `${head}${widget(...values)}\n`;
-    const rewritten = `${head}interpolate(${widget("%s", "%s", "%s", "%s", "%s")}, k.rootId, Trusted(customCss.orEmpty()), k.contentId, bodyHtml, k.eventsId).text\n`;
+    const marked = widget("${+k.pageId}", "${+Trusted(pageStyle.orEmpty())}", "${+k.sectionId}", "${+mainHtml}", "${+k.streamId}");
+    const rewritten = `${head}interpolate { ${marked} }.text\n`;
     // One edit, one title, from whichever value it is offered.
-    const title = `Build this string with interpolate(...), with ${css} as Trusted(...)`;
+    const title = `Mark the values with + in interpolate { }, with ${css} as Trusted(...)`;
     for (const value of values) {
       const { actions, applied } = actionsAt(text, text.indexOf(value) + 1);
       // The diagnostic's quick fix is the rewrite there, so no refactoring stands beside it.
@@ -493,8 +506,20 @@ describe("code action provider", () => {
     }
   });
 
+  it("offers marking the values with + first on each value of the widget, and the mark first on a value left unmarked in a block", () => {
+    const values = ["${k.pageId}", "${pageStyle.orEmpty()}", "${k.sectionId}", "$mainHtml", "${k.streamId}"] as const;
+    const text = `${head}${widget(...values)}\n`;
+    for (const value of values) {
+      const { actions } = actionsAt(text, text.indexOf(value) + 1);
+      assert.ok(actions[0]?.title.startsWith(REWRITE), `${value}: ${actions.map((a) => a.title).join(" | ")}`);
+    }
+    const block = `import ${DOMAIN}.interpolate\n\nfun card(name: String) = interpolate { "<p title=\\"$name\\">x</p>" }\n`;
+    const inBlock = actionsAt(block, block.indexOf("$name") + 1).actions;
+    assert.equal(inBlock[0]?.title, "Mark $name with +, which interpolate escapes");
+  });
+
   const card = 'fun card(name: String): String = "<p class=\\"x\\">$name</p>"';
-  const carded = `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate("<p class=\\"x\\">%s</p>", name).text`;
+  const carded = `import ${DOMAIN}.interpolate\n\nfun card(name: String): String = interpolate { "<p class=\\"x\\">\${+name}</p>" }.text`;
 
   it("offers the rewrite once, as a refactoring, at a caret away from the warning", () => {
     const { actions, applied } = actionsAt(card, card.indexOf("class"));

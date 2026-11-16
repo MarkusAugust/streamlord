@@ -88,14 +88,14 @@ describe("request store", () => {
 
   it("takes a running server's baseUrl when the env file sets none, and sets the file's on request", async () => {
     const running = new RunningServers();
-    running.feed("1", "Motregning back (dev)", "Tomcat started on port 9102 (http) with context path '/'\n");
+    running.feed("1", "Orders back (dev)", "Tomcat started on port 9102 (http) with context path '/'\n");
     const s = store(running);
     assert.equal(await baseUrl(s), "http://disk:1");
     await s.useBaseUrl("http://localhost:9102");
     assert.equal(disk(), '{"baseUrl": "http://localhost:9102"}');
     files.set(ENV, bytes('{"params": {}}'));
     const found = (await s.environment()).vars[0];
-    assert.deepEqual(found, { name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Motregning back (dev)" });
+    assert.deepEqual(found, { name: "baseUrl", value: "http://localhost:9102", source: "running", origin: "Orders back (dev)" });
   });
 
   it("keeps what else a hand-written requests file holds through a save and a delete", async () => {

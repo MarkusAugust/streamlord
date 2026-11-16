@@ -33,8 +33,8 @@ and `PatchElements` takes the `Html` it returns as it is:
 fun feed(): ResponseEntity<Flow<ServerSentEvent<String>>> =
     flowOf(repository.search("gate"))
         .map { hits ->
-            val rows = hits.map { interpolate("<li>%s</li>", it.title) }.joinToHtml()
-            PatchElements(interpolate("""<ul id="feed">%s</ul>""", rows))
+            val rows = hits.map { interpolate { "<li>${+it.title}</li>" } }.joinToHtml()
+            PatchElements(interpolate { """<ul id="feed">${+rows}</ul>""" })
         }.asDatastarResponse()
 ```
 
