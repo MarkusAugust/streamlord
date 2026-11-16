@@ -402,7 +402,7 @@ private class Judge(
 
 /**
  * The warnings for the arguments of every action called in [js], which the client rewrites to [rewritten] and
- * [parsed] is the tree of, read [shift] characters into what was parsed; [span] maps a stretch of [js] back to the text.
+ * [parsed] is the tree of; [span] maps a stretch of [js] back to the text.
  */
 @OptIn(InternalStreamlordApi::class)
 internal fun actionArgumentIssues(
@@ -410,18 +410,16 @@ internal fun actionArgumentIssues(
     js: String,
     rewritten: ClientRewrite,
     parsed: Parsed,
-    shift: Int,
     span: (Int, Int) -> Pair<Int, Int>,
 ): List<Issue> {
     // Where the client wrote each call of an action it knows the parameters of, in the text that was parsed.
     val written = HashMap<Int, String>()
-    var grown = shift
-    for (r in rewritten.rewrites) {
-        if (!r.signal && catalog.actionKinds[r.name]?.isNotEmpty() == true) written[r.start + grown] = r.name
-        grown += r.written.length - (r.end - r.start)
+    val at = rewritten.writtenAt()
+    for ((n, r) in rewritten.rewrites.withIndex()) {
+        if (!r.signal && catalog.actionKinds[r.name]?.isNotEmpty() == true) written[at[n]] = r.name
     }
     if (written.isEmpty()) return emptyList()
-    val judge = Judge(catalog, js, { rewritten.toExpression(it - shift) }, span)
+    val judge = Judge(catalog, js, rewritten::toExpression, span)
     with(judge) {
         // A call in a comment, a string or a regular expression is no node; the calls come as the text has them.
         for (call in parsed.nodes.filter { it.type == JsKind.CALL && it.start in written }.sortedBy { it.start }) {
@@ -519,25 +517,9 @@ internal fun actionArgumentIssues(
     return judge.out
 }
 
-/** [js] as the client evaluates the value of a filter attribute, `return (value)`: [filterValueIssues] reads its tree. */
-internal fun filterParse(js: String): Parsed = JsParser.parse("$FILTER_OPENS$js\n)")
-
-private const val FILTER_OPENS = "return ("
-
-/** The syntax error [parsed], of [filterParse], found in [js], or null. */
-internal fun filterError(
-    js: String,
-    parsed: Parsed,
-): JsSyntaxError? {
-    val err = parsed.error ?: return null
-
-    fun shift(n: Int): Int = (n - FILTER_OPENS.length).coerceIn(0, js.length)
-    return JsSyntaxError(err.message ?: "Syntax error", shift(err.pos), shift(err.raisedAt))
-}
-
 /**
  * The warnings for [js], the value of the attribute [name] that the client hands to `filtered`, judged as a signal filter is
- * in `filterSignals`; [parsed] is its [filterParse], and [link] the attribute's documentation.
+ * in `filterSignals`; [parsed] is what [JsParser.expression] read of it, and [link] the attribute's documentation.
  */
 internal fun filterValueIssues(
     catalog: Catalog,
@@ -548,7 +530,7 @@ internal fun filterValueIssues(
     link: String,
 ): List<Issue> {
     val root = parsed.nodes.lastOrNull() ?: return emptyList()
-    val judge = Judge(catalog, js, { it - FILTER_OPENS.length }, span)
+    val judge = Judge(catalog, js, { it }, span)
     with(judge) {
         val v = value(root)
         if (!ArgumentKind.FILTER.takes(v) || v.written == Written.NULL) {

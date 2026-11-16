@@ -2724,7 +2724,6 @@ computed-value 32-33 warning: Without a key, data-computed takes an object of fu
 computed-value 106-107 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="-"></div>
 expression-syntax 21-22 error: Datastar expression: Unexpected end of input
-computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="-1"></div>
 computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="-1"></div>
@@ -2733,10 +2732,8 @@ computed-value 32-34 warning: Without a key, data-computed takes an object of fu
 computed-value 106-108 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'"></div>
 expression-syntax 20-21 error: Datastar expression: Unterminated string constant
-computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'a"></div>
 expression-syntax 20-22 error: Datastar expression: Unterminated string constant
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'a'"></div>
 computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="'a'"></div>
@@ -2745,20 +2742,16 @@ computed-value 32-35 warning: Without a key, data-computed takes an object of fu
 computed-value 106-109 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="`"></div>
 expression-syntax 21-22 error: Datastar expression: Unterminated template literal
-computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="`a"></div>
 expression-syntax 21-22 error: Datastar expression: Unterminated template
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="`a$"></div>
 expression-syntax 21-23 error: Datastar expression: Unterminated template
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="`a${"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="`a${b"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="`a${b}"></div>
 expression-syntax 26-27 error: Datastar expression: Unterminated template literal
-computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="`a${b}`"></div>
 computed-value 20-27 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="`a${b}`"></div>
@@ -2767,10 +2760,8 @@ computed-value 32-40 warning: Without a key, data-computed takes an object of fu
 computed-value 106-114 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/"></div>
 expression-syntax 21-22 error: Datastar expression: Unterminated regular expression
-computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/x"></div>
 expression-syntax 21-22 error: Datastar expression: Unterminated regular expression
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/x/"></div>
 computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="/x/"></div>
@@ -2835,10 +2826,8 @@ computed-value 106-114 warning: Without a key, data-computed takes an object of 
 == html: <div data-computed="$a "></div>
 == html: <div data-computed="$a +"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="$a + "></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="$a + 1"></div>
 computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="$a + 1"></div>
@@ -2852,15 +2841,17 @@ expression-syntax 21-22 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="(1"></div>
 expression-syntax 22-23 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="(1)"></div>
+computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="(1)"></div>
+computed-value 32-35 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == dsl: <div data-computed="(1)"></div>
+computed-value 106-109 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="(1) "></div>
+computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="(1) +"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="(1) + "></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
-computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="(1) + 2"></div>
 computed-value 20-27 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="(1) + 2"></div>
@@ -2893,7 +2884,6 @@ expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="a ? 1 : 2"></div>
 == html: <div data-computed="a |"></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a ||"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="a || "></div>
@@ -2910,7 +2900,6 @@ expression-syntax 24-25 error: Datastar expression: Unexpected end of input. If 
 == dsl: <div data-computed="a ?? 1"></div>
 == html: <div data-computed="a &"></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a &&"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="a && "></div>
@@ -2920,7 +2909,6 @@ expression-syntax 24-25 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="a && 1"></div>
 == html: <div data-computed="a | "></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a | 1"></div>
 computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="a | 1"></div>
@@ -2929,7 +2917,6 @@ computed-value 32-37 warning: Without a key, data-computed takes an object of fu
 computed-value 106-111 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="!"></div>
 expression-syntax 21-22 error: Datastar expression: Unexpected end of input
-computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="!a"></div>
 computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="!a"></div>
@@ -2942,10 +2929,8 @@ computed-value 106-108 warning: Without a key, data-computed takes an object of 
 == html: <div data-computed="typeo"></div>
 == html: <div data-computed="typeof"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
-computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="typeof "></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
-computed-value 20-27 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="typeof a"></div>
 computed-value 20-28 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="typeof a"></div>
@@ -2957,10 +2942,8 @@ computed-value 106-114 warning: Without a key, data-computed takes an object of 
 == html: <div data-computed="voi"></div>
 == html: <div data-computed="void"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="void "></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="void 0"></div>
 computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="void 0"></div>
@@ -2974,15 +2957,12 @@ computed-value 106-112 warning: Without a key, data-computed takes an object of 
 == html: <div data-computed="delet"></div>
 == html: <div data-computed="delete"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
-computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="delete "></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
-computed-value 20-27 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="delete a"></div>
 computed-value 20-28 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="delete a."></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
-computed-value 20-29 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="delete a.b"></div>
 computed-value 20-30 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="delete a.b"></div>
@@ -2991,7 +2971,6 @@ computed-value 32-42 warning: Without a key, data-computed takes an object of fu
 computed-value 106-116 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a+"></div>
 expression-syntax 22-23 error: Datastar expression: Unexpected end of input
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a++"></div>
 computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="a++"></div>
@@ -3186,7 +3165,6 @@ expression-syntax 23-24 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="x = 1"></div>
 == html: <div data-computed="x +"></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="x +="></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="x += "></div>
@@ -3214,27 +3192,29 @@ computed-value 106-113 warning: Without a key, data-computed takes an object of 
 computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 /"></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 //"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
+computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 // "></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
+computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 // c"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
+computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="1 // c"></div>
 expression-syntax 38-40 error: Datastar expression: Unexpected end of input
+computed-value 32-38 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == dsl: <div data-computed="1 // c"></div>
 expression-syntax 112-113 error: Datastar expression: Unexpected end of input
+computed-value 106-112 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1;"></div>
 == string: <div data-computed="1;"></div>
 == dsl: <div data-computed="1;"></div>
 == html: <div data-computed="$a\n"></div>
 == html: <div data-computed="$a\n+"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="$a\n+ "></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="$a\n+ 1"></div>
 computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="$a\n+ 1"></div>
@@ -3251,19 +3231,14 @@ expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
 expression-syntax 20-21 error: Datastar expression: Unexpected character '@'
 == html: <div data-computed="@get("></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="@get('"></div>
 expression-syntax 25-26 error: Datastar expression: Unterminated string constant
-computed-value 20-24 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="@get('/"></div>
 expression-syntax 25-27 error: Datastar expression: Unterminated string constant
-computed-value 20-24 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="@get('/x"></div>
 expression-syntax 25-28 error: Datastar expression: Unterminated string constant
-computed-value 20-24 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="@get('/x'"></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="@get('/x')"></div>
 computed-value 20-24 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == string: <div data-computed="@get('/x')"></div>
@@ -3272,67 +3247,48 @@ computed-value 32-36 warning: data-computed must not call actions, and this call
 computed-value 106-110 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="1 +"></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="1 +"></div>
 expression-syntax 35-37 error: Datastar expression: Unexpected end of input
-computed-value 32-35 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == dsl: <div data-computed="1 +"></div>
 expression-syntax 109-110 error: Datastar expression: Unexpected end of input
-computed-value 106-109 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="("></div>
 expression-syntax 33-35 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="("></div>
 expression-syntax 107-108 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="'u"></div>
 expression-syntax 20-22 error: Datastar expression: Unterminated string constant
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'un"></div>
 expression-syntax 20-23 error: Datastar expression: Unterminated string constant
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unt"></div>
 expression-syntax 20-24 error: Datastar expression: Unterminated string constant
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unte"></div>
 expression-syntax 20-25 error: Datastar expression: Unterminated string constant
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unter"></div>
 expression-syntax 20-26 error: Datastar expression: Unterminated string constant
-computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unterm"></div>
 expression-syntax 20-27 error: Datastar expression: Unterminated string constant
-computed-value 20-27 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'untermi"></div>
 expression-syntax 20-28 error: Datastar expression: Unterminated string constant
-computed-value 20-28 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'untermin"></div>
 expression-syntax 20-29 error: Datastar expression: Unterminated string constant
-computed-value 20-29 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'untermina"></div>
 expression-syntax 20-30 error: Datastar expression: Unterminated string constant
-computed-value 20-30 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unterminat"></div>
 expression-syntax 20-31 error: Datastar expression: Unterminated string constant
-computed-value 20-31 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unterminate"></div>
 expression-syntax 20-32 error: Datastar expression: Unterminated string constant
-computed-value 20-32 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="'unterminated"></div>
 expression-syntax 20-33 error: Datastar expression: Unterminated string constant
-computed-value 20-33 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="'unterminated"></div>
 expression-syntax 32-45 error: Datastar expression: Unterminated string constant
-computed-value 32-45 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == dsl: <div data-computed="'unterminated"></div>
 expression-syntax 106-119 error: Datastar expression: Unterminated string constant
-computed-value 106-119 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a i"></div>
 expression-syntax 22-23 error: Datastar expression: Unexpected token. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
 == html: <div data-computed="a in"></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a in "></div>
 expression-syntax 24-25 error: Datastar expression: Unexpected end of input. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a in b"></div>
 computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="a in b"></div>
@@ -3355,10 +3311,8 @@ expression-syntax 22-30 error: Datastar expression: Unexpected token. If data-co
 expression-syntax 22-31 error: Datastar expression: Unexpected token. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
 == html: <div data-computed="a instanceof"></div>
 expression-syntax 32-33 error: Datastar expression: Unexpected end of input. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
-computed-value 20-32 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a instanceof "></div>
 expression-syntax 32-33 error: Datastar expression: Unexpected end of input. If data-computed is another library's here, data-ignore on the element, or an aliased bundle, keeps Datastar off it.
-computed-value 20-33 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="a instanceof B"></div>
 computed-value 20-34 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="a instanceof B"></div>
@@ -3367,10 +3321,8 @@ computed-value 32-46 warning: Without a key, data-computed takes an object of fu
 computed-value 106-120 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 <"></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 < "></div>
 expression-syntax 23-24 error: Datastar expression: Unexpected end of input
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 < 2"></div>
 computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="1 < 2"></div>
@@ -3385,7 +3337,6 @@ computed-value 32-35 warning: Without a key, data-computed takes an object of fu
 computed-value 106-109 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1_"></div>
 expression-syntax 21-22 error: Datastar expression: Numeric separator is not allowed at the last of digits
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1_0"></div>
 computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1_00"></div>
@@ -3445,10 +3396,8 @@ computed-value 32-36 warning: Without a key, data-computed takes an object of fu
 computed-value 106-110 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="+"></div>
 expression-syntax 21-22 error: Datastar expression: Unexpected end of input
-computed-value 20-21 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="+-"></div>
 expression-syntax 22-23 error: Datastar expression: Unexpected end of input
-computed-value 20-22 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="+-1"></div>
 computed-value 20-23 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="+-1"></div>
@@ -3520,7 +3469,6 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: -"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: -1"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -3568,10 +3516,8 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: '"></div>
 expression-syntax 24-25 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'a"></div>
 expression-syntax 24-26 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'a'"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -3619,13 +3565,10 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: `"></div>
 expression-syntax 25-26 error: Datastar expression: Unterminated template literal
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: `a"></div>
 expression-syntax 25-26 error: Datastar expression: Unterminated template
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: `a$"></div>
 expression-syntax 25-27 error: Datastar expression: Unterminated template
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: `a${"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: `a${b"></div>
@@ -3666,10 +3609,8 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: /"></div>
 expression-syntax 25-26 error: Datastar expression: Unterminated regular expression
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: /x"></div>
 expression-syntax 25-26 error: Datastar expression: Unterminated regular expression
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: /x/"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -3994,10 +3935,8 @@ expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: $a +"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: $a + "></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: $a + 1"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4076,41 +4015,56 @@ expression-syntax 25-26 error: Datastar expression: Unexpected end of input
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: (1)"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1),"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), "></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u:"></div>
 expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: "></div>
 expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: ("></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: ()"></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: () "></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: () ="></div>
 expression-syntax 33-36 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: () =>"></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: () => "></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: () => 1"></div>
 expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1), u: () => 1}"></div>
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == string: <div data-computed="{t: (1), u: () => 1}"></div>
+computed-value 33-34 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == dsl: <div data-computed="{t: (1), u: () => 1}"></div>
+computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1) "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1) +"></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1) + "></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (1) + 2"></div>
 expression-syntax 31-32 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4251,7 +4205,6 @@ expression-syntax 45-46 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="{t: a ? 1 : 2, u: () => 1}"></div>
 == html: <div data-computed="{t: a |"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a ||"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: a || "></div>
@@ -4320,7 +4273,6 @@ expression-syntax 42-43 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="{t: a ?? 1, u: () => 1}"></div>
 == html: <div data-computed="{t: a &"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a &&"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: a && "></div>
@@ -4356,7 +4308,6 @@ expression-syntax 42-43 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="{t: a && 1, u: () => 1}"></div>
 == html: <div data-computed="{t: a | "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a | 1"></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4404,7 +4355,6 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: !"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: !a"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4460,10 +4410,8 @@ expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: typeof"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: typeof "></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: typeof a"></div>
 expression-syntax 32-33 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4517,10 +4465,8 @@ expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: void"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: void "></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: void 0"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4578,16 +4524,13 @@ expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: delete"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: delete "></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: delete a"></div>
 expression-syntax 32-33 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: delete a."></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: delete a.b"></div>
 expression-syntax 34-35 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -4635,7 +4578,6 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a+"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a++"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -5470,7 +5412,6 @@ expression-syntax 41-42 error: Datastar expression: Unexpected end of input
 == dsl: <div data-computed="{t: x = 1, u: () => 1}"></div>
 == html: <div data-computed="{t: x +"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: x +="></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: x += "></div>
@@ -5564,83 +5505,114 @@ expression-syntax 25-26 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 /"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 //"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // "></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c,"></div>
 expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, "></div>
 expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u"></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u:"></div>
 expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: "></div>
 expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: ("></div>
 expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: ()"></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: () "></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: () ="></div>
 expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: () =>"></div>
 expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: () => "></div>
 expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: () => 1"></div>
 expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 // c, u: () => 1}"></div>
 expression-syntax 43-44 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == string: <div data-computed="{t: 1 // c, u: () => 1}"></div>
 expression-syntax 55-57 error: Datastar expression: Unexpected end of input
+computed-value 33-34 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == dsl: <div data-computed="{t: 1 // c, u: () => 1}"></div>
 expression-syntax 129-130 error: Datastar expression: Unexpected end of input
+computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;,"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, "></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u:"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: "></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: ("></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: ()"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: () "></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: () ="></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: () =>"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: () => "></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: () => 1"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1;, u: () => 1}"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
+computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == string: <div data-computed="{t: 1;, u: () => 1}"></div>
 expression-syntax 38-39 error: Datastar expression: Unexpected token
+computed-value 33-34 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == dsl: <div data-computed="{t: 1;, u: () => 1}"></div>
 expression-syntax 112-113 error: Datastar expression: Unexpected token
+computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: $a\n"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: $a\n+"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: $a\n+ "></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: $a\n+ 1"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -5696,58 +5668,40 @@ expression-syntax 24-25 error: Datastar expression: Unexpected character '@'
 expression-syntax 24-25 error: Datastar expression: Unexpected character '@'
 == html: <div data-computed="{t: @get("></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('"></div>
 expression-syntax 29-30 error: Datastar expression: Unterminated string constant
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/"></div>
 expression-syntax 29-31 error: Datastar expression: Unterminated string constant
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x"></div>
 expression-syntax 29-32 error: Datastar expression: Unterminated string constant
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'"></div>
 expression-syntax 33-34 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x')"></div>
 expression-syntax 34-35 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'),"></div>
 expression-syntax 35-36 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), "></div>
 expression-syntax 35-36 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u"></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u:"></div>
 expression-syntax 38-39 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: "></div>
 expression-syntax 38-39 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: ("></div>
 expression-syntax 40-41 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: ()"></div>
 expression-syntax 40-41 error: Datastar expression: Unexpected token
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: () "></div>
 expression-syntax 40-41 error: Datastar expression: Unexpected token
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: () ="></div>
 expression-syntax 40-43 error: Datastar expression: Unexpected token
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: () =>"></div>
 expression-syntax 44-45 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: () => "></div>
 expression-syntax 44-45 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: () => 1"></div>
 expression-syntax 46-47 error: Datastar expression: Unexpected end of input
-computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: @get('/x'), u: () => 1}"></div>
 computed-value 24-28 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == string: <div data-computed="{t: @get('/x'), u: () => 1}"></div>
@@ -5756,52 +5710,36 @@ computed-value 36-40 warning: data-computed must not call actions, and this call
 computed-value 110-114 warning: data-computed must not call actions, and this calls @get: Datastar runs it again each time a signal it reads changes. Use data-effect for a side effect.
 == html: <div data-computed="{t: 1 +"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +,"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u:"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: ("></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: ()"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: () "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: () ="></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: () =>"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: () => "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: () => 1"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 +, u: () => 1}"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected token
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == string: <div data-computed="{t: 1 +, u: () => 1}"></div>
 expression-syntax 39-40 error: Datastar expression: Unexpected token
-computed-value 33-34 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == dsl: <div data-computed="{t: 1 +, u: () => 1}"></div>
 expression-syntax 113-114 error: Datastar expression: Unexpected token
-computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: (,"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected token
 == html: <div data-computed="{t: (, "></div>
@@ -5834,93 +5772,64 @@ expression-syntax 37-38 error: Datastar expression: Unexpected token
 expression-syntax 111-112 error: Datastar expression: Unexpected token
 == html: <div data-computed="{t: 'u"></div>
 expression-syntax 24-26 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'un"></div>
 expression-syntax 24-27 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unt"></div>
 expression-syntax 24-28 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unte"></div>
 expression-syntax 24-29 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unter"></div>
 expression-syntax 24-30 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterm"></div>
 expression-syntax 24-31 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'untermi"></div>
 expression-syntax 24-32 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'untermin"></div>
 expression-syntax 24-33 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'untermina"></div>
 expression-syntax 24-34 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminat"></div>
 expression-syntax 24-35 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminate"></div>
 expression-syntax 24-36 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated"></div>
 expression-syntax 24-37 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated,"></div>
 expression-syntax 24-38 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, "></div>
 expression-syntax 24-38 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u"></div>
 expression-syntax 24-40 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u:"></div>
 expression-syntax 24-41 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: "></div>
 expression-syntax 24-41 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: ("></div>
 expression-syntax 24-43 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: ()"></div>
 expression-syntax 24-44 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: () "></div>
 expression-syntax 24-44 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: () ="></div>
 expression-syntax 24-46 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: () =>"></div>
 expression-syntax 24-47 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: () => "></div>
 expression-syntax 24-47 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: () => 1"></div>
 expression-syntax 24-49 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 'unterminated, u: () => 1}"></div>
 expression-syntax 24-50 error: Datastar expression: Unterminated string constant
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == string: <div data-computed="{t: 'unterminated, u: () => 1}"></div>
 expression-syntax 36-62 error: Datastar expression: Unterminated string constant
-computed-value 33-34 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == dsl: <div data-computed="{t: 'unterminated, u: () => 1}"></div>
 expression-syntax 110-136 error: Datastar expression: Unterminated string constant
-computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a i"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected token
 == html: <div data-computed="{t: a in"></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a in "></div>
 expression-syntax 28-29 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a in b"></div>
 expression-syntax 30-31 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -5982,10 +5891,8 @@ expression-syntax 26-34 error: Datastar expression: Unexpected token
 expression-syntax 26-35 error: Datastar expression: Unexpected token
 == html: <div data-computed="{t: a instanceof"></div>
 expression-syntax 36-37 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a instanceof "></div>
 expression-syntax 36-37 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: a instanceof B"></div>
 expression-syntax 38-39 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -6033,10 +5940,8 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 <"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 < "></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1 < 2"></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -6129,7 +6034,6 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1_"></div>
 expression-syntax 25-26 error: Datastar expression: Numeric separator is not allowed at the last of digits
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: 1_0"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -6419,10 +6323,8 @@ computed-value 33-34 error: Without a key, each value of data-computed must be a
 computed-value 107-108 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: +"></div>
 expression-syntax 25-26 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: +-"></div>
 expression-syntax 26-27 error: Datastar expression: Unexpected end of input
-computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
 == html: <div data-computed="{t: +-1"></div>
 expression-syntax 27-28 error: Datastar expression: Unexpected end of input
 computed-value 21-22 error: Without a key, each value of data-computed must be a function, such as t: () => ...; Datastar raises ComputedExpectedFunction for t.
@@ -8465,13 +8367,10 @@ expression-syntax 48-49 error: Datastar expression: Unexpected end of input
 == dsl: <div data-on:click="@get(function(){}.bind(null))"></div>
 == html: <div data-computed="1 /*"></div>
 expression-syntax 22-24 error: Datastar expression: Unterminated comment
-computed-value 20-24 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 /*c"></div>
 expression-syntax 22-24 error: Datastar expression: Unterminated comment
-computed-value 20-25 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 /*c*"></div>
 expression-syntax 22-24 error: Datastar expression: Unterminated comment
-computed-value 20-26 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="1 /*c*/"></div>
 computed-value 20-27 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="1 /*c*/"></div>
@@ -8482,16 +8381,12 @@ computed-value 106-113 warning: Without a key, data-computed takes an object of 
 computed-value 20-28 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/*c*/ 1 /"></div>
 expression-syntax 29-30 error: Datastar expression: Unexpected end of input
-computed-value 20-29 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/*c*/ 1 /*"></div>
 expression-syntax 28-30 error: Datastar expression: Unterminated comment
-computed-value 20-30 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/*c*/ 1 /*d"></div>
 expression-syntax 28-30 error: Datastar expression: Unterminated comment
-computed-value 20-31 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/*c*/ 1 /*d*"></div>
 expression-syntax 28-30 error: Datastar expression: Unterminated comment
-computed-value 20-32 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == html: <div data-computed="/*c*/ 1 /*d*/"></div>
 computed-value 20-33 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == string: <div data-computed="/*c*/ 1 /*d*/"></div>

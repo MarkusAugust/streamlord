@@ -23,27 +23,31 @@ internal class JsSyntaxError(
 ) : RuntimeException(message)
 
 internal object JsParser {
-    /** Parse [source] as a script; throws [JsSyntaxError] on the first problem. */
-    public fun check(source: String) {
-        nodes(source)
-    }
-
-    private fun nodes(source: String): List<JsNode> =
-        try {
-            Parser(source).parseProgram()
-        } catch (_: StackExhausted) {
-            throw JsSyntaxError("Not enough stack space to parse input", 0, source.length)
-        }
-
     /** The error for [source], or null when it parses. */
     public fun error(source: String): JsSyntaxError? = parse(source).error
 
     /** [source] read as a script: the nodes of its expressions, or the first problem. */
-    public fun parse(source: String): Parsed =
+    public fun parse(source: String): Parsed = read(source) { it.parseProgram() }
+
+    /**
+     * One expression of [source], as `return (value)` evaluates one, the last of the nodes being the whole of it: all of
+     * [source], or with [from] the value that starts there, a comma or anything else after it left unread.
+     */
+    public fun expression(
+        source: String,
+        from: Int = -1,
+    ): Parsed = read(source) { it.parseValue(from) }
+
+    private fun read(
+        source: String,
+        how: (Parser) -> List<JsNode>,
+    ): Parsed =
         try {
-            Parsed(nodes(source), null)
+            Parsed(how(Parser(source)), null)
         } catch (e: JsSyntaxError) {
             Parsed(emptyList(), e)
+        } catch (_: StackExhausted) {
+            Parsed(emptyList(), JsSyntaxError("Not enough stack space to parse input", 0, source.length))
         }
 }
 
@@ -308,6 +312,20 @@ private class Parser(
         enterScope(SCOPE_TOP)
         tok = readToken()
         while (tok.type != T.EOF) parseStatement(null, topLevel = true)
+        return made
+    }
+
+    /** One expression: all of the source, or with [from] the value that starts there and no more. */
+    fun parseValue(from: Int): List<JsNode> {
+        pos = maxOf(from, 0)
+        enterScope(SCOPE_TOP)
+        tok = readToken()
+        if (from >= 0) {
+            parseMaybeAssign()
+        } else {
+            parseExpression()
+            if (tok.type != T.EOF) unexpected()
+        }
         return made
     }
 
