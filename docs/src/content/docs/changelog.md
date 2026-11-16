@@ -7,6 +7,18 @@ description: "What each release changed, and what it asks of your code."
 repository is authoritative and complete. This page carries only what changes how you write code,
 with a sentence about what to do.
 
+## 0.23.0
+
+**A value is written where it stands.** `interpolate { """<a href="${+url}">${+title}</a>""" }`
+marks each value with `+`, and `interpolate` escapes or refuses it by where it landed, as it does
+the value of a `%s`. Nothing you have written changes: the placeholder form stays. The editors' fix
+for a value in an HTML string now writes the block. [Strings](/strings/#values-from-outside) has
+the rules.
+
+**A build can ask for every mark.** `failures(strict = true)` also fails on the warnings of a
+value written without its mark. `failures()` is as it was.
+[The analysis](/analysis/#a-test-over-your-own-sources) shows the test.
+
 ## 0.22.0
 
 **`interpolate` takes a collection as one value.** A `List`, `Set` or array handed to it is written

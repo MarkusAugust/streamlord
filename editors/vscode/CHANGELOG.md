@@ -2,6 +2,62 @@
 
 All notable changes to the Streamlord extension are recorded here.
 
+## 0.18.0
+
+- A Kotlin value is written into an HTML string where it stands and marked with `+` in the block of
+  `interpolate`, new in Streamlord 0.23.0: the extension reads the block, and its fix for a value in a
+  string now marks the values, where it moved them out into arguments.
+
+**Kotlin values in HTML**
+
+- The extension reads the block of `interpolate`, written after the call or in its parentheses: a
+  marked value is an error where `interpolate` will throw, and a value left unmarked gets "Mark …
+  with +" as its fix.
+- The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
+  this string with interpolate(...)": the string stays as written, in the block, with each value
+  marked where it stands. A margin or a constant with a per cent sign no longer stands in its way.
+- The rewrite is not offered for a string that writes `this` or calls `toString()`, `let { }` and
+  their like without a receiver, which in the block are the block's.
+- The fix that marks values with `+` is the first one offered on a value, in a string and in a
+  block.
+- A value looked up in a name declared a map, `${m["key"]}`, may be null: the rewrite is offered
+  and not preferred there, and the message says that `interpolate` writes nothing for null.
+- The messages speak of marking: "mark it with + in interpolate { }" where they said "build the
+  string with interpolate(...)", and "Marking the values is not offered here" where no rewrite is.
+
+**Actions and options**
+
+- The extension no longer calls a function called at once a function: `@get(function(){ return '/x' }())`
+  and `{retry: function(){ return 'never' }()}` give what the function returns, and are not judged.
+  Nor is what is read or called of a function, `function(){}.name` and `function(){}.bind(null)`.
+- The extension judges a value in parentheses or after a spaced sign as the value it is, and warns of
+  `@get((1))`, `@get(- 1)` and `{retry: ('nope')}` as of the same without them. The warning marks the
+  value inside the parentheses.
+
+**Expressions**
+
+- The extension judges a value of `data-computed`, and the value of a signal filter attribute, in
+  parentheses as what it holds, and warns of `(1)` and `{total: (1)}`.
+- A value of `data-computed` that does not parse yet, `1 +` or an open string, gets its syntax error
+  alone. That it is no function, that it changes a signal or calls an action, and that a
+  `data-init` sends before its `data-indicator`, is said once the value parses.
+- A value of `data-computed` that is complete where the rest is not, `{total: 1 // c, ...}` and
+  `1 // c`, is now also said to be no function, beside the syntax error.
+- The extension compares `evt.detail.type` with a string however the two are written: in parentheses,
+  after a comment or read with `?.`, `case /* never */ ('nope')`, `switch ((evt.detail.type))` and
+  `evt?.detail?.type === 'nope'`, the type is judged, where it was passed over. A string joined to
+  something or chosen by a condition, `case 'a' + 'b'`, is no longer judged by its first part.
+- `await /* why */ @post(...)` is an error on `await`, with why, as `await @post(...)` is. After a
+  line break `await` is a name that ends its statement, and the error is the one of the next line.
+- A filter pattern written as a string with flags is warned of after a comment or in parentheses too,
+  `include /* all */ : '/a/i'`. In a filter attribute only the filter's own `include` and `exclude`
+  are judged, not those of an object deeper in the value.
+- While an expression is typed, these three checks now speak of what is written to its end and
+  before the first syntax error, and no longer of what stands after it: a case is judged at its
+  colon and the `filterSignals` of an action once its braces are closed, where both were judged a
+  little earlier, and a syntax error early in a handler silences the type and pattern warnings after
+  it until the handler parses again.
+
 ## 0.17.0
 
 - The extension runs the same analysis as the IntelliJ plugin, compiled from Kotlin to JavaScript,

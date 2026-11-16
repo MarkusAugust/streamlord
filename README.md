@@ -178,8 +178,8 @@ kotlinx.html DSL. For Ktor:
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.22.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-ktor:0.23.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.23.0")
 }
 ```
 
@@ -187,8 +187,8 @@ For Spring Boot 4:
 
 ```kotlin sample=none
 dependencies {
-    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.22.0")
-    implementation("io.github.markusaugust.streamlord:streamlord-html:0.22.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-spring:0.23.0")
+    implementation("io.github.markusaugust.streamlord:streamlord-html:0.23.0")
 }
 ```
 

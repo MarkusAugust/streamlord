@@ -26,8 +26,8 @@ template that lags the API it demonstrates teaches the wrong thing, and the API 
 
 ## Values from outside, in the DSL and in templates
 
-[`interpolate`](/strings/) asks where a value landed, which it can only do because the placeholders
-are still standing in the format string. The DSL has no placeholders: `dataText(expression)` takes a
+[`interpolate`](/strings/) asks where a value landed, which it can only do because each value is
+marked where it stands, or its placeholder left standing in the format. The DSL has neither: `dataText(expression)` takes a
 `String` and the call itself is the position, so `dataText(userName)` is the original hazard with
 nothing in the way. A template has the same gap in another shape. `data-text="'{{ name }}'"` looks
 like the fix and is code injection, as

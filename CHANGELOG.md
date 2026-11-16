@@ -6,49 +6,59 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-16
+
+This release lets a Kotlin value be written into an HTML string where it stands. Mark it with `+`
+in the block of `interpolate`, and it is escaped or refused by where it landed, with no placeholder
+and no argument to keep in order. Both editors read the block, and their fix for a value in an HTML
+string now leaves the string as written and marks its values. A build can be held to it with
+`failures(strict = true)`. The editors also judge more of an expression as the client reads it:
+values in parentheses, functions called at once, and `evt.detail.type` however it is compared.
+Nothing breaks: the placeholder form of `interpolate` and `failures()` are as they were.
+
 ### SDK
 
 - streamlord-core: `interpolate` takes a block, with each value written where it stands and marked
   with `+`: `interpolate { """<li><a href="${+url}">${+title}</a></li>""" }`. A marked value is
-  escaped or refused by where it landed, as the value of a `%s` is, and nothing is passed in the
-  order of its placeholder. A loop may stand in the block, a trim call runs before the values go in,
-  and a value without the mark is written by Kotlin as in any string. `interpolate(prefixes) { }`
-  takes the prefixes of an aliased bundle. The block's receiver is an `InterpolationScope` and a
-  mark a `Placed`. A mark of another block, or one in a string cut or changed after its values were
-  marked, is no mark: no value stands there, and its two characters are written as U+FFFD. The
-  placeholder form stays, and is the one Java has.
+  escaped or refused by where it landed, as the value of a `%s` is. A loop may stand in the block,
+  a trim call runs before the values go in, and a value without the mark is written by Kotlin as in
+  any string. The placeholder form stays, and is the one Java has.
   See [Strings](https://streamlord-docs.netlify.app/strings/#values-from-outside).
-- streamlord-core: an escaped value writes U+FFFD for the two characters a mark is made of, U+FDD0
-  and U+FDD1, which no text may hold, and so does a block for any in its string that is no mark of
-  its own, so text another escaper wrote into the block never stops the page.
+- streamlord-core: `interpolate(prefixes) { }` takes the prefixes of an aliased bundle. The block's
+  receiver is an `InterpolationScope` and a mark a `Placed`.
+- streamlord-core: a mark of another block, or one in a string cut or changed after its values were
+  marked, is no mark: no value stands there. The two characters a mark is made of, U+FDD0 and
+  U+FDD1, are written as U+FFFD wherever a block's string or an escaped value holds them, so text
+  another escaper wrote into the block never stops the page.
+- streamlord-core: the refusal of a URL that loads code names "the value" where it named a
+  placeholder.
 
-- streamlord-analysis: `failures(strict = true)` also keeps the warnings of a value written without
-  its mark: one left without `+` in the block of `interpolate`, a template in its format, and a
-  `String` in an HTML string that is not `interpolate`'s, and a bare dollar in a `data-*`
-  expression of one. `failures()` is as it was, and
-  `ProjectIssue.failsStrict` says it of one issue.
+### The analysis
+
+- `failures(strict = true)` also keeps the warnings of a value written without its mark: one left
+  without `+` in the block of `interpolate`, a template in its format, a `String` in an HTML string
+  that is not `interpolate`'s, and a bare dollar in a `data-*` expression of one. `failures()` is as
+  it was, and `ProjectIssue.failsStrict` says it of one issue.
   See [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
 
 ### Editors
 
 **Kotlin values in HTML**
-- Both editors read the block form, written after the call or in its parentheses, after the
-  prefixes or by its name `block =` too: a marked value
-  is an error where `interpolate` will throw, and a value left unmarked gets "Mark … with +" as its
-  fix.
+- Both editors read the block of `interpolate`, written after the call or in its parentheses: a
+  marked value is an error where `interpolate` will throw, and a value left unmarked gets "Mark …
+  with +" as its fix.
 - The rewrite of a string is now "Mark the values with + in interpolate { }", where it was "Build
   this string with interpolate(...)": the string stays as written, in the block, with each value
-  marked where it stands, in place of a format with `%s` and the values after it. It is not offered
-  for a string that writes `this` or calls `toString()`, `let { }` and their like without a
-  receiver, which in the block are the block's. A margin or a constant with a per cent sign no
-  longer stands in its way.
+  marked where it stands. A margin or a constant with a per cent sign no longer stands in its way.
+- The rewrite is not offered for a string that writes `this` or calls `toString()`, `let { }` and
+  their like without a receiver, which in the block are the block's.
+- The fix that marks values with `+` is the first one offered on a value, in a string and in a
+  block.
+  In IntelliJ it stands above "Mark … as markup", which the IDE listed first by its title.
 - A value looked up in a name declared a map, `${m["key"]}`, may be null: the rewrite is offered
   and not preferred there, and the message says that `interpolate` writes nothing for null.
 - The messages speak of marking: "mark it with + in interpolate { }" where they said "build the
   string with interpolate(...)", and "Marking the values is not offered here" where no rewrite is.
-  The refusal of a URL that loads code names "the value" where it named a placeholder.
-- The fix that marks values with `+` is the first one offered on a value, in a string and in a
-  block. In IntelliJ it stands above "Mark … as markup", which the IDE listed first by its title.
 
 **Actions and options**
 - Both editors no longer call a function called at once a function: `@get(function(){ return '/x' }())`
@@ -66,7 +76,6 @@ All notable changes to Streamlord are recorded here. The format follows
   `data-init` sends before its `data-indicator`, is said once the value parses.
 - A value of `data-computed` that is complete where the rest is not, `{total: 1 // c, ...}` and
   `1 // c`, is now also said to be no function, beside the syntax error.
-
 - Both editors compare `evt.detail.type` with a string however the two are written: in parentheses,
   after a comment or read with `?.`, `case /* never */ ('nope')`, `switch ((evt.detail.type))` and
   `evt?.detail?.type === 'nope'`, the type is judged, where it was passed over. A string joined to
