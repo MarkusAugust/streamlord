@@ -374,8 +374,8 @@ internal fun actionArgumentIssues(
                 )
             } else if (pieces.size > parameters.size) {
                 issue(
-                    at(pieces[parameters.size].start),
-                    at(pieces.last().end),
+                    at(pieces[parameters.size].outerStart),
+                    at(pieces.last().outerEnd),
                     "@${spec.name} takes at most ${count(parameters.size)}, as in ${spec.signature}, and Datastar ignores the rest.",
                     "action-arity",
                     link,

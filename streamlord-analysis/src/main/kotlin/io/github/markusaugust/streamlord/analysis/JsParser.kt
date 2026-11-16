@@ -241,6 +241,11 @@ internal class JsNode(
 ) {
     var end = start
 
+    /** Where the parentheses around the node open and close, the outermost of them; the node's own ends where it has none. */
+    var outerStart = start
+    var outerEnd = 0
+        get() = maxOf(field, end)
+
     /**
      * An identifier's or a member's name, an operator, a [JsKind.WORD]'s word, or a property's kind
      * (`init`, `get`, `set`).
@@ -1996,7 +2001,11 @@ private class Parser(
         checkExpressionErrors(ref, true)
         if (oldYieldPos != 0) yieldPos = oldYieldPos
         if (oldAwaitPos != 0) awaitPos = oldAwaitPos
-        return if (list.size > 1) node(JsKind.SEQUENCE, innerStart, items = list).also { it.end = list.last()!!.end } else list[0]!!
+        if (list.size > 1) return node(JsKind.SEQUENCE, innerStart, items = list).also { it.end = list.last()!!.end }
+        val only = list[0]!!
+        only.outerStart = start
+        only.outerEnd = lastTokEnd
+        return only
     }
 
     private fun parseNew(): JsNode {

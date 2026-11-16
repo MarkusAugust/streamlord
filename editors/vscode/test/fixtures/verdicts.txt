@@ -963,6 +963,62 @@ computed-value 20-28 warning: Without a key, data-computed takes an object of fu
 computed-value 32-41 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
 == dsl: <div data-computed="$a.0 + 1"></div>
 computed-value 106-115 warning: Without a key, data-computed takes an object of functions, such as {total: () => $a + 1}: Datastar declares no signal from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: data-computed:total.
+== html: <div data-on:click="@get('/x', {}"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {},"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, "></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1,"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1, "></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1, ("></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1, (2"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1, (2)"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, 1, (2))"></div>
+action-arity 35-41 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== string: <div data-on:click="@get('/x', {}, 1, (2))"></div>
+action-arity 47-53 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== dsl: <div data-on:click="@get('/x', {}, 1, (2))"></div>
+action-arity 121-127 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== html: <div data-on:click="@get('/x', {}, ("></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, (1"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, (1)"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, (1),"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, (1), "></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, (1), 2"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, (1), 2)"></div>
+action-arity 35-41 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== string: <div data-on:click="@get('/x', {}, (1), 2)"></div>
+action-arity 47-53 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== dsl: <div data-on:click="@get('/x', {}, (1), 2)"></div>
+action-arity 121-127 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== html: <div data-on:click="@get('/x', {}, (("></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, ((1"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, ((1)"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, ((1))"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {}, ((1)))"></div>
+action-arity 35-40 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== string: <div data-on:click="@get('/x', {}, ((1)))"></div>
+action-arity 47-52 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== dsl: <div data-on:click="@get('/x', {}, ((1)))"></div>
+action-arity 121-126 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
 == html: <div data-on:click="@get(function(){}"></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}."></div>
