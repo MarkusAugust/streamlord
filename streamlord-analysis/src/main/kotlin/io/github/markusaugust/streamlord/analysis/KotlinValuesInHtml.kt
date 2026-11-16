@@ -255,6 +255,89 @@ internal fun Analyzer.checkInterpolateSite(
         }
     }
     val mapped = plain && placeholders.size == values.size
+    return judgeInterpolated(
+        s,
+        format,
+        at,
+        values,
+        kinds,
+        mapped,
+        literalPrefixes(site, formatArg),
+        formatArg,
+        src,
+        opts,
+        hyphenated,
+        issues,
+    )
+}
+
+/**
+ * The block form, `interpolate { "<p>${+name}</p>" }`: a template that opens with `+` is a value interpolate takes where it
+ * stands, judged as the value of a `%s` there is; any other template Kotlin fills in before interpolate sees the markup.
+ * [prefixes] are those the call is given, null for none.
+ */
+internal fun Analyzer.checkInterpolateBlock(
+    s: KotlinString,
+    prefixes: List<String>?,
+    src: String,
+    opts: Reading,
+    hyphenated: Set<String>,
+): List<Issue> {
+    val marked = s.interpolations.filter { markedValue(it) != null }
+    val values =
+        marked.map { ip ->
+            val value = markedValue(ip)!!
+            val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
+            Arg(start, start + value.length, null, value, null)
+        }
+    val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
+    val kinds = values.mapIndexed { k, it -> if (known[k].isOther()) null else known[k].argKind() ?: argKind(src, it.text, false, s.start) }
+    val format = s.copy(interpolations = s.interpolations - marked.toSet())
+    return judgeInterpolated(
+        s,
+        format,
+        marked.map { it.decodedStart },
+        values,
+        kinds,
+        true,
+        prefixes,
+        null,
+        src,
+        opts,
+        hyphenated,
+        ArrayList(),
+    )
+}
+
+/** What a template of the block form marks with `+`, as written; null for a template that marks nothing. */
+internal fun markedValue(ip: Interpolation): String? =
+    ip.text
+        .trim()
+        .takeIf { ip.kind == InterpolationKind.BRACED && it.startsWith("+") && !it.startsWith("++") }
+        ?.drop(1)
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+/**
+ * The values of an interpolate, each judged by where it lands in [format]: those at [at], which interpolate takes, against
+ * core's `admits`, and the templates left in the format, which Kotlin fills in first. [formatArg] is the format of the
+ * placeholder form, null for the block form, where a value is taken by its mark.
+ */
+private fun Analyzer.judgeInterpolated(
+    s: KotlinString,
+    format: KotlinString,
+    at: List<Int>,
+    values: List<Arg>,
+    kinds: List<ArgKind?>,
+    mapped: Boolean,
+    prefixes: List<String>?,
+    formatArg: Arg?,
+    src: String,
+    opts: Reading,
+    hyphenated: Set<String>,
+    issues: ArrayList<Issue>,
+): List<Issue> {
+    val block = formatArg == null
     val view = markupView(src, format)
     val starts = format.interpolations.map { it.decodedStart } + at
     // interpolate reads the markup with each Trusted value's text in place: known where the value is a literal.
@@ -271,7 +354,7 @@ internal fun Analyzer.checkInterpolateSite(
         readValues(
             view,
             starts.map { it until it + PLACEHOLDER.length },
-            literalPrefixes(site, formatArg) ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
+            prefixes ?: listOf(opts.prefix, CatalogNames.PREFIX, CatalogNames.ALIASED_PREFIX).distinct(),
             written,
         )
     val landings = reading.landings
@@ -296,9 +379,11 @@ internal fun Analyzer.checkInterpolateSite(
         if (fact.isNullable() && landing.position in ESCAPED_POSITIONS) continue
         // Markup in element text is safe as markup, but interpolate reads it as format: a %s in it is a placeholder.
         val markupText = fact.isMarkup() && landing.markupInPlace
+        // In a block the markup is read with the marks alone taken out, so markup written into it is markup as written.
+        if (block && markupText) continue
         val shown = valueShown(ip)
         // A `%` right before the template would make `%%s` of the placeholder: a per cent sign and an s.
-        val percents = runBefore(format.text, ip.decodedStart, '%')
+        val percents = if (block) 0 else runBefore(format.text, ip.decodedStart, '%')
         // A %s placeholder writes nothing for null, which a template writes as null: the fix is offered, and not put first.
         val nullable = told.isNullableString() || mayBeNull(src, ip.text, s.start)
         // It escapes markup held as a String, so the fix would change the page; an Html or a Trusted it writes as it is.
@@ -318,13 +403,19 @@ internal fun Analyzer.checkInterpolateSite(
         val indentTrimmed = trimAfter(src, format)?.let { it.margin == null } == true
         val asIs = markupText || told == ValueFact.TRUSTED || (!told.isOther() && trustedValue(src, ip.text, s.start))
         val fixes =
-            if (fixable) listOf(placeholderFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed)) else emptyList()
+            when {
+                !fixable -> emptyList()
+                formatArg == null -> listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed))
+                else -> listOf(placeholderFix(ip, shown, at, values, formatArg, asIs, !nullable && !indentTrimmed))
+            }
         val base = "Kotlin fills in $shown before interpolate sees the markup, so interpolate neither escapes nor refuses it."
+        // What to do about it: the value handed to interpolate, as each form hands one over.
+        val handOver = if (block) "mark it with +" else "make it a %s placeholder"
         val message =
             when {
                 loadsAnywhere -> {
                     "$base It lands in ${landing.attribute ?: "the URL"}, which loads code from wherever the value points, and the " +
-                        "markup before it does not fix the host. $CODE_URL_ADVICE, and make it a %s placeholder."
+                        "markup before it does not fix the host. $CODE_URL_ADVICE, and $handOver."
                 }
 
                 // Markup a Kotlin template writes into the format, which interpolate then reads as format.
@@ -335,7 +426,11 @@ internal fun Analyzer.checkInterpolateSite(
                 }
 
                 landing.position in ESCAPED_POSITIONS -> {
-                    "$base Make it a %s placeholder and pass the value to interpolate."
+                    if (block) {
+                        "$base Mark it with +, and interpolate escapes it."
+                    } else {
+                        "$base Make it a %s placeholder and pass the value to interpolate."
+                    }
                 }
 
                 else -> {
@@ -527,6 +622,22 @@ private fun Analyzer.endTagAt(
 ): Boolean {
     val lt = if (at > 0) view.lastIndexOf('<', at - 1) else -1
     return lt >= 0 && END_TAG_ATTRIBUTES.matchEntire(view.substring(lt, at)) != null
+}
+
+/**
+ * The fix that marks the value of [ip] in a block: `$name` and `${name}` become `${+name}`, with
+ * the dollars the literal opens a template with.
+ */
+private fun Analyzer.markFix(
+    format: KotlinString,
+    ip: Interpolation,
+    shown: String,
+    asIs: Boolean,
+    preferred: Boolean,
+): Fix {
+    val expr = if (ip.kind == InterpolationKind.SIMPLE) ip.text else ip.text.trim()
+    val title = "Mark $shown with +, " + if (asIs) "where interpolate writes it as it is" else "which interpolate escapes"
+    return Fix(title, ip.start, ip.end, "$".repeat(format.dollars) + "{+" + expr + "}", preferred = preferred)
 }
 
 /**

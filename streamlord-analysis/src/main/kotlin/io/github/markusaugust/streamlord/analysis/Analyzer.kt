@@ -107,6 +107,17 @@ private const val JAVA_SPACE = " \t\n\u000B\u000C\r"
 
 private val INTERPOLATE = setOf("interpolate")
 
+/** `interpolate {` or `interpolate(prefixes) {`, as a call of its own and no member of anything. */
+private val INTERPOLATE_BLOCK = regex("""(?<![\p{L}\p{Nd}_.])interpolate\s*(?:\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*)?\{""")
+private val PREFIXES_GIVEN =
+    regex("""(?:prefixes\s*=\s*)?(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")
+private val PLAIN_STRING = regex(""""([^"\\$]*)"""")
+
+private class InterpolateBlock(
+    val braces: IntRange,
+    val prefixes: List<String>?,
+)
+
 private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
 
 /** The codes of what Kotlin writes into a string, whatever the client then makes of it. */
@@ -267,6 +278,8 @@ public class Analyzer(
             val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
+        // The block form: every literal in the braces is markup interpolate reads, its marked values taken where they stand.
+        val blocks = if (otherInterpolate) emptyList() else interpolateBlocks(src, lex)
         out += indicatorOrderIssues(src, lex, foreign)
         for (site in findCallSites(src, nonceCalls, lex)) {
             if (foreign(site.name, site.nameStart)) continue
@@ -304,6 +317,12 @@ public class Analyzer(
             // The chain's own literals are read with it; one in a value it joins, or in a template, is a string of its own.
             if (chain != null) for (l in chain.literals) chained += l.start
             if (!isHtmlString(src, s) && !(chain != null && textOpensWithTag(chain.text))) continue
+            val block = blocks.firstOrNull { s.start in it.braces }
+            if (block != null) {
+                val issues = checkInterpolateBlock(whole, block.prefixes, src, opts, hyphenated)
+                if (issues.isNotEmpty()) out += SiteIssues(null, whole, issues)
+                continue
+            }
             val judged = checkFreeHtmlString(whole, opts, src, hyphenated, s.start !in topLevel)
             if (judged.issues.isNotEmpty() || judged.rewrite != null) out += SiteIssues(null, whole, judged.issues, judged.rewrite)
         }
@@ -506,6 +525,22 @@ public class Analyzer(
         }
         return out
     }
+
+    /** The braces of each `interpolate { ... }` and `interpolate(prefixes) { ... }` of the file, with the prefixes written as plain literals. */
+    private fun interpolateBlocks(
+        src: String,
+        lex: KotlinLex,
+    ): List<InterpolateBlock> =
+        INTERPOLATE_BLOCK.findAll(src).filter { lex.mask[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
+            val close = closingBrace(src, lex, m.range.last) ?: return@mapNotNullTo null
+            val list = m.groups[1]?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
+            InterpolateBlock(
+                m.range.last..close,
+                list?.let { l ->
+                    PLAIN_STRING.findAll(l.groupValues[1]).map { it.groupValues[1] }.toList()
+                },
+            )
+        }
 
     /** Where the brace that opens at [open] closes, counting the braces of code alone; null when it never does. */
     private fun closingBrace(

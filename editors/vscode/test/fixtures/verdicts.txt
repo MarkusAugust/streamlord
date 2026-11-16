@@ -11209,6 +11209,48 @@ unsafe-interpolation 97-130 warning: Kotlin writes ${setExpr(name = "x", value =
 == corpus/kotlin-helper-values.json: js with a literal is the author's own
 == corpus/kotlin-helper-values.json: a spread argument is not the author's own
 unsafe-interpolation 105-123 warning: Kotlin writes ${statements(*xs)} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
+== corpus/kotlin-interpolate-block.json: a widget's root, each value marked where it stands
+== corpus/kotlin-interpolate-block.json: a marked String in element text, a quoted attribute and after the start of a URL
+== corpus/kotlin-interpolate-block.json: a marked String where interpolate refuses one
+unsafe-interpolation 238-246 error: interpolate always throws here: name lands in data-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+unsafe-interpolation 255-263 error: interpolate always throws here: name lands in style, which is read as CSS, and only a number is let in there. Pass a number and write the unit in the markup, or choose between classes.
+unsafe-interpolation 274-282 error: interpolate always throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+unsafe-interpolation 296-304 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a marked String for a tag name, an attribute name and an unquoted value
+unsafe-interpolation 225-233 error: interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...).
+unsafe-interpolation 234-242 error: interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...).
+unsafe-interpolation 253-261 error: interpolate always throws here: name lands in the markup's own structure, a tag name, an attribute name or an unquoted value, and only Trusted(...) is let in there. Build that part of the markup from literals, or quote the attribute value; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a marked number and a marked boolean in a Datastar expression
+== corpus/kotlin-interpolate-block.json: a marked URL that loads code, and one a Trusted vouches for
+unsafe-interpolation 236-243 error: interpolate always throws here: src lands in src, which loads code from wherever the value points, and the markup before it does not fix the host. Only Trusted(...) is let in there. Start the value with a path such as /js/ or a whole origin such as https://cdn.example/, so that the value only picks a file there, or wrap a URL you chose yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a String written without the mark
+interpolate-template 235-241 warning: Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $title with +, which interpolate escapes" 235-241 "${+title}"
+interpolate-template 243-251 warning: Kotlin fills in ${title} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark ${title} with +, which interpolate escapes" 243-251 "${+title}"
+== corpus/kotlin-interpolate-block.json: a String written without the mark in a multi-dollar literal
+interpolate-template 249-256 warning: Kotlin fills in $$title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $$title with +, which interpolate escapes" 249-256 "$${+title}"
+== corpus/kotlin-interpolate-block.json: a number, a constant and built markup written without the mark
+== corpus/kotlin-interpolate-block.json: a loop in the block, each row's value marked
+== corpus/kotlin-interpolate-block.json: a loop in the block, a row's value not marked
+interpolate-template 267-270 warning: Kotlin fills in $it before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $it with +, which interpolate escapes" 267-270 "${+it}"
+== corpus/kotlin-interpolate-block.json: a percent sign and the letters of a placeholder in a block are markup
+== corpus/kotlin-interpolate-block.json: the prefixes of an aliased bundle before the block
+unsafe-interpolation 259-267 error: interpolate always throws here: name lands in data-x-text, which Datastar runs as an expression or follows as a signal path, and only a number or a boolean is let in there. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label.
+== corpus/kotlin-interpolate-block.json: without its prefixes an aliased attribute is any attribute
+== corpus/kotlin-interpolate-block.json: a block of somebody else's interpolate is a string like any other
+unescaped-interpolation 71-79 hint: Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, escape it before it goes in, or build this part with kotlinx.html, which escapes text; if it is markup you built, declare it Html or wrap it in Trusted(...).
+== corpus/kotlin-interpolate-block.json: markup held as a String, marked in element text
+unescaped-interpolation 222-227 warning: Kotlin writes $name into the HTML as it is. If it can hold text from outside, build the string with interpolate(...), which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Build this string with interpolate(...), which escapes the values" 217-233 "interpolate(\"<li>%s</li>\", name).text" (not preferred)
+  fix "Mark $name as markup" 222-227 "${Trusted(name)}" (not preferred)
+== corpus/kotlin-interpolate-block.json: a value that may be null, marked and not
+interpolate-template 247-253 warning: Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it. Where $title is null, interpolate writes nothing, and Kotlin writes null.
+  fix "Mark $title with +, which interpolate escapes" 247-253 "${+title}" (not preferred)
+== corpus/kotlin-interpolate-block.json: a template that only looks marked: an increment
+interpolate-template 232-238 warning: Kotlin fills in ${++i} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"
