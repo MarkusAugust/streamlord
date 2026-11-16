@@ -1,6 +1,5 @@
 package io.github.markusaugust.streamlord.analysis
 
-import io.github.markusaugust.streamlord.core.client.clientRewrite
 import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 /*
@@ -11,28 +10,30 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 
 private val EQUALITY = setOf("===", "==", "!==", "!=")
 
-/** `evt.detail.type`, read of the event itself. */
+/** `evt.detail.type`, read of the event itself, with `?.` or without. */
 private fun JsNode.isDetailType(): Boolean {
-    val detail = inner ?: return false
+    val read = if (type == JsKind.CHAIN) inner!! else this
+    val detail = read.inner ?: return false
     val evt = detail.inner ?: return false
-    return type == JsKind.MEMBER && name == "type" && detail.type == JsKind.MEMBER && detail.name == "detail" &&
+    return read.type == JsKind.MEMBER && read.name == "type" && detail.type == JsKind.MEMBER && detail.name == "detail" &&
         evt.type == JsKind.IDENT && evt.name == "evt"
 }
 
 /**
  * The warnings for each string literal [text] compares with `evt.detail.type` that datastar-fetch is never dispatched
  * with: the other side of an equality, and each case of a switch on it, which compares by `===`. A string joined to
- * something or chosen by a condition is the code's.
+ * something or chosen by a condition is the code's. [parsed] is the tree of the text, and [at] says where in [text]
+ * an offset of a node stands.
  */
 internal fun fetchTypeIssues(
     catalog: Catalog,
     text: String,
+    parsed: Parsed,
+    at: (Int) -> Int,
 ): List<Issue> {
-    if ("detail" !in text) return emptyList()
-    val rewritten = clientRewrite(text)
     val compared = ArrayList<JsNode>()
     // What is read to its end is judged while the rest is typed: a comparison, and a case at its colon.
-    for (node in scriptOrLiteral(rewritten.js).finished) {
+    for (node in parsed.finished) {
         if (node.type == JsKind.BINARY && node.name in EQUALITY) {
             val (left, right) = node.items
             if (left!!.isDetailType()) {
@@ -47,9 +48,9 @@ internal fun fetchTypeIssues(
     val out = ArrayList<Issue>()
     for (node in compared.sortedBy { it.start }) {
         if (node.type != JsKind.STRING && !(node.type == JsKind.TEMPLATE && node.items.isEmpty())) continue
-        val start = rewritten.toExpression(node.start)
-        val end = rewritten.toExpression(node.end)
-        val type = text.substring(start + 1, end - 1)
+        val start = at(node.start)
+        val end = at(node.end)
+        val type = writtenString(text, start, end) ?: continue
         // An escape is not read here, and a Kotlin template there is the code's value, not written.
         if ('\\' in type || PLACEHOLDER in type || type in catalog.fetchEvents || type.startsWith("datastar")) continue
         val near =

@@ -679,6 +679,17 @@ private val UNFIXABLE_IN_PATTERN = regex("""[\\'"`&]""")
 private val FILTER_KEYS = setOf("include", "exclude")
 
 /**
+ * What stands between the quotes of the string from [start] to [end] of [text]; null where the author wrote no such
+ * string: an unclosed quote before a `$signal` is no string to the client, which rewrites the signal, and the parser
+ * then reads a string out of what the client wrote.
+ */
+internal fun writtenString(
+    text: String,
+    start: Int,
+    end: Int,
+): String? = if (end - start >= 2 && text[start] in "'\"`" && text[end - 1] == text[start]) text.substring(start + 1, end - 1) else null
+
+/**
  * The `filter-pattern` warnings for the patterns among [properties], those of a filter, that are written as a string
  * with a slash before them and flags after the last one: `include: '/^foo/i'`. The client's `toRegExp` (signals.ts:804
  * in 1.0.5) cuts one `/` from each end and nothing else, so `'/^foo/'` works and `'/^foo/i'` looks for `/i`. A template
@@ -698,7 +709,7 @@ internal fun filterPatternIssues(
         if (value.type != JsKind.STRING && !(value.type == JsKind.TEMPLATE && value.items.isEmpty())) return@mapNotNull null
         val start = at(value.start)
         val end = at(value.end)
-        val content = text.substring(start + 1, end - 1)
+        val content = writtenString(text, start, end) ?: return@mapNotNull null
         // An escaped slash is a slash all the same once the string is read: '\/' is '/'.
         val slash = content.lastIndexOf('/')
         val flags = content.substring(slash + 1)
@@ -760,9 +771,9 @@ public class ExpressionValidator(
         event: String? = null,
         prefix: String = CatalogNames.PREFIX,
     ): List<Issue> =
-        validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals) +
+        validateText(text, returnsValue ?: attribute?.returnsValue, hyphenatedSignals, event) +
             (attribute?.let { scopeNameIssues(text, it, handed, prefix) + computedSideEffects(text, it, prefix) } ?: emptyList()) +
-            (if (event == DATASTAR_FETCH) fetchTypeIssues(catalog, text) else emptyList())
+            emptyList()
 
     /**
      * A signal changed or an action with a side effect called in `data-computed`, which the
@@ -817,6 +828,7 @@ public class ExpressionValidator(
         text: String,
         returnsValue: Boolean?,
         hyphenatedSignals: Set<String>,
+        event: String?,
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         if (text.isBlank()) {
@@ -872,13 +884,17 @@ public class ExpressionValidator(
             val atClosing = closed && rewritten.toExpression(err.pos) >= js.length - 2
             val said = if (atClosing) JsParser.error(rewritten.js.dropLast(2))?.message ?: err.message else err.message
             // `await @post(...)`: the parser stops after a name await, which the browser refuses as such.
-            val before = rewritten.js
-            val awaitAt =
-                err.after
-                    .takeIf {
-                        it + AWAIT.length <= err.pos && before.startsWith(AWAIT, it) && before.getOrNull(it - 1) != '.' &&
-                            !before.getOrNull(it + AWAIT.length).isJsNamePart()
-                    }?.let(::toText)
+            // After a line break the name ends its statement, and as a property it is no name of its own.
+            val awaitEnd = err.after + AWAIT.length
+            val awaited =
+                awaitEnd <= err.pos && rewritten.js.startsWith(AWAIT, err.after) && !rewritten.js.getOrNull(awaitEnd).isJsNamePart() &&
+                    (awaitEnd until err.pos).none { rewritten.js[it] == '\n' || rewritten.js[it] == '\r' } &&
+                    rewritten.js
+                        .substring(0, err.after)
+                        .trimEnd { it.isJsWhitespace() }
+                        .lastOrNull() != '.' &&
+                    parsed.finished.none { it.type == JsKind.MEMBER && it.end == awaitEnd }
+            val awaitAt = if (awaited) toText(err.after) else null
             if (awaitAt != null) {
                 val message =
                     "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
@@ -990,9 +1006,11 @@ public class ExpressionValidator(
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
         if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
-        // The `filterSignals` of an action, which the client reads with the same `toRegExp`; each is judged once it is closed.
+        // An object under `filterSignals`, which the client reads with the same `toRegExp`: its properties are known for
+        // its own once it is closed.
         val filters = parsed.finished.filter { it.key?.name == "filterSignals" && it.inner?.type == JsKind.OBJECT }
         issues += filterPatternIssues(text, filters.flatMap { it.inner!!.items }, ::toText, false, Docs.ACTIONS)
+        if (event == DATASTAR_FETCH) issues += fetchTypeIssues(catalog, text, parsed, ::toText)
         return issues
     }
 
@@ -1219,7 +1237,7 @@ private fun updatedBefore(
  * in `return (...)`, which a script reads as a block: when the script does not parse, such a text
  * is read once more as the one expression it then is.
  */
-internal fun scriptOrLiteral(js: String): Parsed {
+private fun scriptOrLiteral(js: String): Parsed {
     val script = JsParser.parse(js)
     if (script.error == null || !js.trimStart().startsWith("{")) return script
     return JsParser.expression(js).takeIf { it.error == null } ?: script

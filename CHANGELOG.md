@@ -25,13 +25,20 @@ All notable changes to Streamlord are recorded here. The format follows
 - A value of `data-computed` that is complete where the rest is not, `{total: 1 // c, ...}` and
   `1 // c`, is now also said to be no function, beside the syntax error.
 
-- Both editors compare `evt.detail.type` with a string however the two are written: in parentheses or
-  after a comment, `case /* never */ ('nope')` and `switch ((evt.detail.type))`, the type is judged,
-  where it was passed over. A string joined to something or chosen by a condition, `case 'a' + 'b'`,
-  is no longer judged by its first part. While a handler is typed, a case is judged at its colon.
-- `await /* why */ @post(...)` is an error on `await`, with why, as `await @post(...)` is.
+- Both editors compare `evt.detail.type` with a string however the two are written: in parentheses,
+  after a comment or read with `?.`, `case /* never */ ('nope')`, `switch ((evt.detail.type))` and
+  `evt?.detail?.type === 'nope'`, the type is judged, where it was passed over. A string joined to
+  something or chosen by a condition, `case 'a' + 'b'`, is no longer judged by its first part.
+- `await /* why */ @post(...)` is an error on `await`, with why, as `await @post(...)` is. After a
+  line break `await` is a name that ends its statement, and the error is the one of the next line.
 - A filter pattern written as a string with flags is warned of after a comment or in parentheses too,
-  `include /* all */ : '/a/i'`, and the `filterSignals` of an action once its braces are closed.
+  `include /* all */ : '/a/i'`. In a filter attribute only the filter's own `include` and `exclude`
+  are judged, not those of an object deeper in the value.
+- While an expression is typed, these three checks now speak of what is written to its end and
+  before the first syntax error, and no longer of what stands after it: a case is judged at its
+  colon and the `filterSignals` of an action once its braces are closed, where both were judged a
+  little earlier, and a syntax error early in a handler silences the type and pattern warnings after
+  it until the handler parses again.
 
 Side note: the checks of a value now read the tree the JavaScript parser builds of it, in place of
 reading the text again each on its own.

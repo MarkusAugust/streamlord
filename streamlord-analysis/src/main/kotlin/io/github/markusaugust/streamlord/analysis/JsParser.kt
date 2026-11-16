@@ -20,8 +20,11 @@ internal class JsSyntaxError(
     public val pos: Int,
     /** Offset just past it. */
     public val raisedAt: Int,
-    /** Where the token read before it starts, whatever white space and comments stand between the two. */
-    public val after: Int = 0,
+    /**
+     * Where the token before the one being read starts, whatever white space and comments stand between the two: the
+     * token before the offending one where that is the one being read, as for a token nothing can take; -1 for none.
+     */
+    public val after: Int,
 ) : RuntimeException(message)
 
 internal object JsParser {
@@ -50,13 +53,13 @@ internal object JsParser {
         } catch (e: JsSyntaxError) {
             Parsed(emptyList(), e, parser.made)
         } catch (_: StackExhausted) {
-            Parsed(emptyList(), JsSyntaxError("Not enough stack space to parse input", 0, source.length), emptyList())
+            Parsed(emptyList(), JsSyntaxError("Not enough stack space to parse input", 0, source.length, -1), emptyList())
         }
     }
 }
 
 /**
- * What [JsParser.parse] read: the [nodes] of every expression, each after the nodes it holds, so that one pass over
+ * What [JsParser.parse] read: the [nodes] of every expression and every `case`, each after the nodes it holds, so that one pass over
  * the list reads the tree from its leaves up and no reader has to descend it; or the [error] that stopped the parser.
  * A name that is bound or a label is listed as an [JsKind.IDENT] too; a pattern of a declaration or of parameters
  * and a private name are not listed.
@@ -66,7 +69,8 @@ internal class Parsed(
     val error: JsSyntaxError?,
     /**
      * The nodes read to their end, also where an [error] then stopped the parser: what is whole in a text that is
-     * still typed, where [nodes] is empty and no node is the whole of anything.
+     * still typed, where [nodes] is empty. The last of them is the whole of nothing, nothing after the error is among
+     * them, and what opened as an object may have turned out a block or a pattern had the text gone on.
      */
     val finished: List<JsNode>,
 )
@@ -1086,13 +1090,14 @@ private class Parser(
                 val start = tok.start
                 sawCase = true
                 next()
-                val compared = if (isCase) parseExpression() else null
-                if (!isCase) {
+                if (isCase) {
+                    val compared = parseExpression()
+                    // Made at the colon, before the token after it is read: what follows may not be written yet.
+                    if (isPunct(":")) node(JsKind.CASE, start, compared, listOf(subject))
+                } else {
                     if (sawDefault) raise(lastTokStart, "Multiple default clauses")
                     sawDefault = true
                 }
-                // Made at the colon, before the token after it is read: what follows may not be written yet.
-                if (compared != null && isPunct(":")) node(JsKind.CASE, start, compared, listOf(subject))
                 expect(":")
             } else {
                 if (!sawCase) unexpected()
