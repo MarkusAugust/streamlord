@@ -10,7 +10,7 @@ import io.github.markusaugust.streamlord.core.client.codePointString
  * `await` not, as in the function body Datastar compiles), so that both editors, which run this
  * parser, agree on what parses and on where an error sits. It keeps the tree of each expression,
  * which the early errors need (which expressions can be assigned to, which names a pattern binds)
- * and the checks of a value read ([JsParser.parse]); a statement leaves no node of its own.
+ * and the checks of a value read ([JsParser.parse]); of the statements only a `case` leaves a node of its own.
  *
  * A few messages are friendlier than acorn's ("Unexpected end of input"); the verdict is the same.
  */
@@ -20,6 +20,8 @@ internal class JsSyntaxError(
     public val pos: Int,
     /** Offset just past it. */
     public val raisedAt: Int,
+    /** Where the token read before it starts, whatever white space and comments stand between the two. */
+    public val after: Int = 0,
 ) : RuntimeException(message)
 
 internal object JsParser {
@@ -41,14 +43,16 @@ internal object JsParser {
     private fun read(
         source: String,
         how: (Parser) -> List<JsNode>,
-    ): Parsed =
-        try {
-            Parsed(how(Parser(source)), null)
+    ): Parsed {
+        val parser = Parser(source)
+        return try {
+            how(parser).let { Parsed(it, null, it) }
         } catch (e: JsSyntaxError) {
-            Parsed(emptyList(), e)
+            Parsed(emptyList(), e, parser.made)
         } catch (_: StackExhausted) {
-            Parsed(emptyList(), JsSyntaxError("Not enough stack space to parse input", 0, source.length))
+            Parsed(emptyList(), JsSyntaxError("Not enough stack space to parse input", 0, source.length), emptyList())
         }
+    }
 }
 
 /**
@@ -60,6 +64,11 @@ internal object JsParser {
 internal class Parsed(
     val nodes: List<JsNode>,
     val error: JsSyntaxError?,
+    /**
+     * The nodes read to their end, also where an [error] then stopped the parser: what is whole in a text that is
+     * still typed, where [nodes] is empty and no node is the whole of anything.
+     */
+    val finished: List<JsNode>,
 )
 
 private enum class T { NAME, KEYWORD, NUM, STRING, TEMPLATE, REGEX, PUNCT, PRIVATE_NAME, EOF }
@@ -218,6 +227,9 @@ internal enum class JsKind {
     BINARY,
     CONDITIONAL,
     SEQUENCE,
+
+    /** A `case` of a switch, read to its colon: its [JsNode.inner] is what it compares, by `===`, with the one of its [JsNode.items], what the switch is on. */
+    CASE,
     OTHER,
 }
 
@@ -319,7 +331,7 @@ private class Parser(
     private val privateNameStack = ArrayList<PrivateNames>()
 
     /** Every expression read, each after the nodes it holds. */
-    private val made = ArrayList<JsNode>()
+    val made = ArrayList<JsNode>()
 
     fun parseProgram(): List<JsNode> {
         strict = strictDirective(0)
@@ -372,7 +384,7 @@ private class Parser(
     private fun raise(
         at: Int,
         message: String,
-    ): Nothing = throw JsSyntaxError(message, at, pos)
+    ): Nothing = throw JsSyntaxError(message, at, pos, lastTokStart)
 
     private fun unexpected(at: Int = tok.start): Nothing {
         if (at == tok.start) {
@@ -900,10 +912,11 @@ private class Parser(
         if (createScope) exitScope()
     }
 
-    private fun parseParenExpression() {
+    private fun parseParenExpression(): JsNode {
         expect("(")
-        parseExpression()
+        val expr = parseExpression()
         expect(")")
+        return expr
     }
 
     private fun parseFor() {
@@ -1061,7 +1074,7 @@ private class Parser(
 
     private fun parseSwitch() {
         next()
-        parseParenExpression()
+        val subject = parseParenExpression()
         expect("{")
         labels += Label(null, "switch")
         enterScope(SCOPE_SWITCH)
@@ -1070,14 +1083,16 @@ private class Parser(
         while (!isPunct("}")) {
             if (isKeyword("case") || isKeyword("default")) {
                 val isCase = isKeyword("case")
+                val start = tok.start
                 sawCase = true
                 next()
-                if (isCase) {
-                    parseExpression()
-                } else {
+                val compared = if (isCase) parseExpression() else null
+                if (!isCase) {
                     if (sawDefault) raise(lastTokStart, "Multiple default clauses")
                     sawDefault = true
                 }
+                // Made at the colon, before the token after it is read: what follows may not be written yet.
+                if (compared != null && isPunct(":")) node(JsKind.CASE, start, compared, listOf(subject))
                 expect(":")
             } else {
                 if (!sawCase) unexpected()

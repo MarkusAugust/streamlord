@@ -1656,7 +1656,7 @@ public class MarkupValidator(
             out +=
                 filterValueIssues(catalog, text, parsed, ::source, name, link)
         }
-        for (issue in filterPatternIssues(text, jsRegions(text), 0, text.length, json, link)) {
+        for (issue in filterPatternIssues(text, parsed.finished.filter { it.type == JsKind.PROPERTY }, { it }, json, link)) {
             val (start, end) = source(issue.start, issue.end)
             out +=
                 issue.copy(

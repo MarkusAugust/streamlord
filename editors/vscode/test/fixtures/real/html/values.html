@@ -23,5 +23,10 @@
   <div data-signals:constructor="$a ? {x: 1} : 0">an object a conditional may give</div>
   <button data-on:click="@get('/x').then(f)">a call of what an action gives</button>
   <div data-signals:constructor="{x: @peek(() => 1)}">an object that holds an action</div>
+  <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': a(); break; case /* never */ ('nope'): b() }">a case in parentheses after a comment</div>
+  <div data-on:datastar-fetch="switch (evt.detail.type) { case 'fin' + 'ished': a() }">a case joined of two strings</div>
+  <div data-on:datastar-fetch="evt.detail.type == /* never */ 'nope' &amp;&amp; a()">a comparison after a comment</div>
+  <button data-on:click="await /* the answer */ @get('/x')">await before a comment</button>
+  <button data-on:click="@get('/x', {filterSignals: {include /* all */ : '/a/i'}})">a pattern as a string with flags, after a comment</button>
 </body>
 </html>

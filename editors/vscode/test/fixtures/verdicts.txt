@@ -1019,6 +1019,1124 @@ action-arity 35-40 warning: @get takes at most 2 arguments, as in @get(uri, opti
 action-arity 47-52 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
 == dsl: <div data-on:click="@get('/x', {}, ((1)))"></div>
 action-arity 121-126 warning: @get takes at most 2 arguments, as in @get(uri, options?), and Datastar ignores the rest.
+== html: <div data-on:datastar-fetch=""></div>
+missing-value 5-27 error: data-on needs a value; without one Datastar raises ValueRequired.
+== html: <div data-on:datastar-fetch="s"></div>
+== html: <div data-on:datastar-fetch="sw"></div>
+== html: <div data-on:datastar-fetch="swi"></div>
+== html: <div data-on:datastar-fetch="swit"></div>
+== html: <div data-on:datastar-fetch="switc"></div>
+== html: <div data-on:datastar-fetch="switch"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch "></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ("></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (e"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (ev"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt."></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.d"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.de"></div>
+expression-syntax 43-44 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.det"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.deta"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detai"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail"></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail."></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.t"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.ty"></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.typ"></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type)"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) "></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) {"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { "></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { c"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { ca"></div>
+expression-syntax 56-58 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { cas"></div>
+expression-syntax 56-59 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case"></div>
+expression-syntax 60-61 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case "></div>
+expression-syntax 60-61 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case '"></div>
+expression-syntax 61-62 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'n"></div>
+expression-syntax 61-63 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'no"></div>
+expression-syntax 61-64 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nop"></div>
+expression-syntax 61-65 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope"></div>
+expression-syntax 61-66 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'"></div>
+expression-syntax 67-68 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' "></div>
+expression-syntax 67-68 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' +"></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + "></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x"></div>
+expression-syntax 71-72 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x:"></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x: "></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x: 1"></div>
+expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x: 1 "></div>
+expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x: 1 }"></div>
+== string: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x: 1 }"></div>
+== dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' + x: 1 }"></div>
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ?"></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? "></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? '"></div>
+expression-syntax 70-71 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a"></div>
+expression-syntax 70-72 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a'"></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' "></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' :"></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : "></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : '"></div>
+expression-syntax 76-77 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b"></div>
+expression-syntax 76-78 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b'"></div>
+expression-syntax 79-80 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b':"></div>
+expression-syntax 80-81 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b': "></div>
+expression-syntax 80-81 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b': 1"></div>
+expression-syntax 82-83 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b': 1 "></div>
+expression-syntax 82-83 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b': 1 }"></div>
+== string: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b': 1 }"></div>
+== dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' ? 'a' : 'b': 1 }"></div>
+== html: <div data-on:datastar-fetch="e"></div>
+== html: <div data-on:datastar-fetch="ev"></div>
+== html: <div data-on:datastar-fetch="evt"></div>
+== html: <div data-on:datastar-fetch="evt."></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.d"></div>
+== html: <div data-on:datastar-fetch="evt.de"></div>
+== html: <div data-on:datastar-fetch="evt.det"></div>
+== html: <div data-on:datastar-fetch="evt.deta"></div>
+== html: <div data-on:datastar-fetch="evt.detai"></div>
+== html: <div data-on:datastar-fetch="evt.detail"></div>
+== html: <div data-on:datastar-fetch="evt.detail."></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.t"></div>
+== html: <div data-on:datastar-fetch="evt.detail.ty"></div>
+== html: <div data-on:datastar-fetch="evt.detail.typ"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type "></div>
+== html: <div data-on:datastar-fetch="evt.detail.type ="></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type =="></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type == "></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type == '"></div>
+expression-syntax 48-49 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a"></div>
+expression-syntax 48-50 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a'"></div>
+fetch-event-type 48-51 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a' "></div>
+fetch-event-type 48-51 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a' +"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a' + "></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a' + '"></div>
+expression-syntax 54-55 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a' + 'b"></div>
+expression-syntax 54-56 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == 'a' + 'b'"></div>
+== string: <div data-on:datastar-fetch="evt.detail.type == 'a' + 'b'"></div>
+== dsl: <div data-on:datastar-fetch="evt.detail.type == 'a' + 'b'"></div>
+== html: <div data-on:datastar-fetch="x"></div>
+== html: <div data-on:datastar-fetch="x."></div>
+expression-syntax 31-32 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="x.e"></div>
+== html: <div data-on:datastar-fetch="x.ev"></div>
+== html: <div data-on:datastar-fetch="x.evt"></div>
+== html: <div data-on:datastar-fetch="x.evt."></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="x.evt.d"></div>
+== html: <div data-on:datastar-fetch="x.evt.de"></div>
+== html: <div data-on:datastar-fetch="x.evt.det"></div>
+== html: <div data-on:datastar-fetch="x.evt.deta"></div>
+== html: <div data-on:datastar-fetch="x.evt.detai"></div>
+== html: <div data-on:datastar-fetch="x.evt.detail"></div>
+== html: <div data-on:datastar-fetch="x.evt.detail."></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="x.evt.detail.t"></div>
+== html: <div data-on:datastar-fetch="x.evt.detail.ty"></div>
+== html: <div data-on:datastar-fetch="x.evt.detail.typ"></div>
+== html: <div data-on:datastar-fetch="x.evt.detail.type"></div>
+== html: <div data-on:datastar-fetch="x.evt.detail.type "></div>
+== html: <div data-on:datastar-fetch="x.evt.detail.type ="></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="x.evt.detail.type =="></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="x.evt.detail.type == "></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="x.evt.detail.type == '"></div>
+expression-syntax 50-51 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="x.evt.detail.type == 'n"></div>
+expression-syntax 50-52 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="x.evt.detail.type == 'no"></div>
+expression-syntax 50-53 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="x.evt.detail.type == 'nop"></div>
+expression-syntax 50-54 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="x.evt.detail.type == 'nope"></div>
+expression-syntax 50-55 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="x.evt.detail.type == 'nope'"></div>
+== string: <div data-on:datastar-fetch="x.evt.detail.type == 'nope'"></div>
+== dsl: <div data-on:datastar-fetch="x.evt.detail.type == 'nope'"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type."></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type.l"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.le"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.len"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.leng"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.lengt"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.length"></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.length "></div>
+== html: <div data-on:datastar-fetch="evt.detail.type.length ="></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type.length =="></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type.length == "></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type.length == '"></div>
+expression-syntax 55-56 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type.length == 'n"></div>
+expression-syntax 55-57 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type.length == 'no"></div>
+expression-syntax 55-58 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type.length == 'nop"></div>
+expression-syntax 55-59 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type.length == 'nope"></div>
+expression-syntax 55-60 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type.length == 'nope'"></div>
+== string: <div data-on:datastar-fetch="evt.detail.type.length == 'nope'"></div>
+== dsl: <div data-on:datastar-fetch="evt.detail.type.length == 'nope'"></div>
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ("></div>
+expression-syntax 62-63 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('"></div>
+expression-syntax 62-63 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('n"></div>
+expression-syntax 62-64 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('no"></div>
+expression-syntax 62-65 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nop"></div>
+expression-syntax 62-66 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope"></div>
+expression-syntax 62-67 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'"></div>
+expression-syntax 68-69 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope')"></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'):"></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+fetch-event-type 62-68 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): "></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+fetch-event-type 62-68 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1"></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+fetch-event-type 62-68 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 "></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+fetch-event-type 62-68 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 }"></div>
+fetch-event-type 62-68 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 }"></div>
+fetch-event-type 74-80 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 }"></div>
+fetch-event-type 148-154 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (("></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((e"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((ev"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt."></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.d"></div>
+expression-syntax 43-44 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.de"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.det"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.deta"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detai"></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail."></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.t"></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.ty"></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.typ"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)"></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type))"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) "></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) {"></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { "></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { c"></div>
+expression-syntax 58-59 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { ca"></div>
+expression-syntax 58-60 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { cas"></div>
+expression-syntax 58-61 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case"></div>
+expression-syntax 62-63 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case "></div>
+expression-syntax 62-63 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case '"></div>
+expression-syntax 63-64 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'n"></div>
+expression-syntax 63-65 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'no"></div>
+expression-syntax 63-66 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nop"></div>
+expression-syntax 63-67 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope"></div>
+expression-syntax 63-68 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope'"></div>
+expression-syntax 69-70 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope':"></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+fetch-event-type 63-69 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': "></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+fetch-event-type 63-69 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1"></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+fetch-event-type 63-69 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 "></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+fetch-event-type 63-69 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 }"></div>
+fetch-event-type 63-69 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 }"></div>
+fetch-event-type 75-81 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 }"></div>
+fetch-event-type 149-155 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (/"></div>
+expression-syntax 38-39 error: Datastar expression: Unterminated regular expression
+== html: <div data-on:datastar-fetch="switch (/*"></div>
+expression-syntax 37-39 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="switch (/*c"></div>
+expression-syntax 37-39 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="switch (/*c*"></div>
+expression-syntax 37-39 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="switch (/*c*/"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ "></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ e"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ ev"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt."></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.d"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.de"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.det"></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.deta"></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detai"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail."></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.t"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.ty"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.typ"></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type"></div>
+expression-syntax 58-59 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type)"></div>
+expression-syntax 59-60 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) "></div>
+expression-syntax 59-60 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) {"></div>
+expression-syntax 61-62 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { "></div>
+expression-syntax 61-62 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { c"></div>
+expression-syntax 62-63 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { ca"></div>
+expression-syntax 62-64 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { cas"></div>
+expression-syntax 62-65 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case"></div>
+expression-syntax 66-67 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case "></div>
+expression-syntax 66-67 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case '"></div>
+expression-syntax 67-68 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 's"></div>
+expression-syntax 67-69 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'st"></div>
+expression-syntax 67-70 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'sta"></div>
+expression-syntax 67-71 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'star"></div>
+expression-syntax 67-72 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'start"></div>
+expression-syntax 67-73 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'starte"></div>
+expression-syntax 67-74 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started"></div>
+expression-syntax 67-75 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started'"></div>
+expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started':"></div>
+expression-syntax 77-78 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': "></div>
+expression-syntax 77-78 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': c"></div>
+expression-syntax 79-80 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': ca"></div>
+expression-syntax 80-81 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': cas"></div>
+expression-syntax 81-82 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case"></div>
+expression-syntax 82-83 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case "></div>
+expression-syntax 82-83 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case '"></div>
+expression-syntax 83-84 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'n"></div>
+expression-syntax 83-85 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'no"></div>
+expression-syntax 83-86 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nop"></div>
+expression-syntax 83-87 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope"></div>
+expression-syntax 83-88 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope'"></div>
+expression-syntax 89-90 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope':"></div>
+expression-syntax 90-91 error: Datastar expression: Unexpected end of input
+fetch-event-type 83-89 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope': "></div>
+expression-syntax 90-91 error: Datastar expression: Unexpected end of input
+fetch-event-type 83-89 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope': 1"></div>
+expression-syntax 92-93 error: Datastar expression: Unexpected end of input
+fetch-event-type 83-89 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope': 1 "></div>
+expression-syntax 92-93 error: Datastar expression: Unexpected end of input
+fetch-event-type 83-89 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope': 1 }"></div>
+fetch-event-type 83-89 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope': 1 }"></div>
+fetch-event-type 95-101 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="switch (/*c*/ evt.detail.type) { case 'started': case 'nope': 1 }"></div>
+fetch-event-type 169-175 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="evt.detail.type == /"></div>
+expression-syntax 49-50 error: Datastar expression: Unterminated regular expression
+== html: <div data-on:datastar-fetch="evt.detail.type == /*"></div>
+expression-syntax 48-50 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c"></div>
+expression-syntax 48-50 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*"></div>
+expression-syntax 48-50 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ "></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ '"></div>
+expression-syntax 54-55 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'n"></div>
+expression-syntax 54-56 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'no"></div>
+expression-syntax 54-57 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'nop"></div>
+expression-syntax 54-58 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'nope"></div>
+expression-syntax 54-59 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'nope'"></div>
+fetch-event-type 54-60 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'nope'"></div>
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="evt.detail.type == /*c*/ 'nope'"></div>
+fetch-event-type 140-146 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="evt.detail.type ==="></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type === "></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type === ("></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type === ('"></div>
+expression-syntax 50-51 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type === ('n"></div>
+expression-syntax 50-52 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type === ('no"></div>
+expression-syntax 50-53 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type === ('nop"></div>
+expression-syntax 50-54 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type === ('nope"></div>
+expression-syntax 50-55 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="evt.detail.type === ('nope'"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="evt.detail.type === ('nope')"></div>
+fetch-event-type 50-56 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="evt.detail.type === ('nope')"></div>
+fetch-event-type 62-68 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="evt.detail.type === ('nope')"></div>
+fetch-event-type 136-142 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="'"></div>
+expression-syntax 29-30 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="'n"></div>
+expression-syntax 29-31 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="'no"></div>
+expression-syntax 29-32 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="'nop"></div>
+expression-syntax 29-33 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="'nope"></div>
+expression-syntax 29-34 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="'nope'"></div>
+== html: <div data-on:datastar-fetch="'nope' "></div>
+== html: <div data-on:datastar-fetch="'nope' /"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="'nope' /*"></div>
+expression-syntax 36-38 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="'nope' /*c"></div>
+expression-syntax 36-38 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="'nope' /*c*"></div>
+expression-syntax 36-38 error: Datastar expression: Unterminated comment
+== html: <div data-on:datastar-fetch="'nope' /*c*/"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ "></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !="></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !=="></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== "></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== e"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== ev"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt."></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.d"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.de"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.det"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.deta"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detai"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail."></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail.t"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail.ty"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail.typ"></div>
+== html: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail.type"></div>
+fetch-event-type 29-35 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail.type"></div>
+fetch-event-type 41-47 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="'nope' /*c*/ !== evt.detail.type"></div>
+fetch-event-type 115-121 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 's"></div>
+expression-syntax 61-63 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'st"></div>
+expression-syntax 61-64 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'sta"></div>
+expression-syntax 61-65 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'star"></div>
+expression-syntax 61-66 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'start"></div>
+expression-syntax 61-67 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'starte"></div>
+expression-syntax 61-68 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started"></div>
+expression-syntax 61-69 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started'"></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started':"></div>
+expression-syntax 71-72 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': "></div>
+expression-syntax 71-72 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': s"></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': sw"></div>
+expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': swi"></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': swit"></div>
+expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switc"></div>
+expression-syntax 77-78 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch"></div>
+expression-syntax 78-79 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch "></div>
+expression-syntax 78-79 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch ("></div>
+expression-syntax 80-81 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x"></div>
+expression-syntax 81-82 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x)"></div>
+expression-syntax 82-83 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) "></div>
+expression-syntax 82-83 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) {"></div>
+expression-syntax 84-85 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { "></div>
+expression-syntax 84-85 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { c"></div>
+expression-syntax 85-86 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { ca"></div>
+expression-syntax 85-87 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { cas"></div>
+expression-syntax 85-88 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case"></div>
+expression-syntax 89-90 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case "></div>
+expression-syntax 89-90 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case '"></div>
+expression-syntax 90-91 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'n"></div>
+expression-syntax 90-92 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'no"></div>
+expression-syntax 90-93 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nop"></div>
+expression-syntax 90-94 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope"></div>
+expression-syntax 90-95 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope'"></div>
+expression-syntax 96-97 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope':"></div>
+expression-syntax 97-98 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': "></div>
+expression-syntax 97-98 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1"></div>
+expression-syntax 99-100 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1 "></div>
+expression-syntax 99-100 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1 }"></div>
+expression-syntax 101-102 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1 } "></div>
+expression-syntax 101-102 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1 } }"></div>
+== string: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1 } }"></div>
+== dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'started': switch (x) { case 'nope': 1 } }"></div>
+== html: <div data-on:datastar-fetch="switch (x"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x)"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) "></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) {"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { "></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { c"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (x) { ca"></div>
+expression-syntax 42-44 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (x) { cas"></div>
+expression-syntax 42-45 error: Datastar expression: Unexpected token
+== html: <div data-on:datastar-fetch="switch (x) { case"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case "></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case e"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case ev"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt"></div>
+expression-syntax 50-51 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt."></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.d"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.de"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.det"></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.deta"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detai"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail"></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail."></div>
+expression-syntax 58-59 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.t"></div>
+expression-syntax 59-60 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.ty"></div>
+expression-syntax 60-61 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.typ"></div>
+expression-syntax 61-62 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type"></div>
+expression-syntax 62-63 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type "></div>
+expression-syntax 62-63 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type ="></div>
+expression-syntax 64-65 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type =="></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == "></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == '"></div>
+expression-syntax 66-67 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'n"></div>
+expression-syntax 66-68 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'no"></div>
+expression-syntax 66-69 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nop"></div>
+expression-syntax 66-70 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope"></div>
+expression-syntax 66-71 error: Datastar expression: Unterminated string constant
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope'"></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope':"></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope': "></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope': 1"></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope': 1 "></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope': 1 }"></div>
+fetch-event-type 66-72 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== string: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope': 1 }"></div>
+fetch-event-type 78-84 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== dsl: <div data-on:datastar-fetch="switch (x) { case evt.detail.type == 'nope': 1 }"></div>
+fetch-event-type 152-158 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+== html: <div data-on:click="@get('/x', {f"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {fi"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {fil"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filt"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filte"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filter"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterS"></div>
+expression-syntax 39-40 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSi"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSig"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSign"></div>
+expression-syntax 42-43 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSigna"></div>
+expression-syntax 43-44 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignal"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals:"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: "></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {i"></div>
+expression-syntax 49-50 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {in"></div>
+expression-syntax 48-50 error: Datastar expression: Unexpected keyword 'in'
+== html: <div data-on:click="@get('/x', {filterSignals: {inc"></div>
+expression-syntax 51-52 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {incl"></div>
+expression-syntax 52-53 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {inclu"></div>
+expression-syntax 53-54 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {includ"></div>
+expression-syntax 54-55 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include:"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: "></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '"></div>
+expression-syntax 57-58 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/"></div>
+expression-syntax 57-59 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a"></div>
+expression-syntax 57-60 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/"></div>
+expression-syntax 57-61 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i"></div>
+expression-syntax 57-62 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i'"></div>
+expression-syntax 63-64 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i'}"></div>
+expression-syntax 64-65 error: Datastar expression: Unexpected end of input
+filter-pattern 57-63 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 57-63 "/a/i"
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i'}}"></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+filter-pattern 57-63 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 57-63 "/a/i"
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i'}})"></div>
+filter-pattern 57-63 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 57-63 "/a/i"
+== string: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i'}})"></div>
+filter-pattern 69-75 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 69-75 "/a/i"
+== dsl: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i'}})"></div>
+filter-pattern 143-149 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 143-149 "/a/i"
+== html: <div data-on:click="@get('/x', {filterSignals: {include "></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected token
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*"></div>
+expression-syntax 56-58 error: Datastar expression: Unterminated comment
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c"></div>
+expression-syntax 56-58 error: Datastar expression: Unterminated comment
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*"></div>
+expression-syntax 56-58 error: Datastar expression: Unterminated comment
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/"></div>
+expression-syntax 61-62 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ "></div>
+expression-syntax 61-62 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ :"></div>
+expression-syntax 63-64 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : "></div>
+expression-syntax 63-64 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '"></div>
+expression-syntax 64-65 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/"></div>
+expression-syntax 64-66 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a"></div>
+expression-syntax 64-67 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/"></div>
+expression-syntax 64-68 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i"></div>
+expression-syntax 64-69 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i'"></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i',"></div>
+expression-syntax 71-72 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', "></div>
+expression-syntax 71-72 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', e"></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', ex"></div>
+expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exc"></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', excl"></div>
+expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclu"></div>
+expression-syntax 77-78 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclud"></div>
+expression-syntax 78-79 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude"></div>
+expression-syntax 79-80 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude:"></div>
+expression-syntax 80-81 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: "></div>
+expression-syntax 80-81 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `"></div>
+expression-syntax 82-83 error: Datastar expression: Unterminated template literal
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/"></div>
+expression-syntax 82-83 error: Datastar expression: Unterminated template
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b"></div>
+expression-syntax 82-84 error: Datastar expression: Unterminated template
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/"></div>
+expression-syntax 82-85 error: Datastar expression: Unterminated template
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g"></div>
+expression-syntax 82-86 error: Datastar expression: Unterminated template
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g`"></div>
+expression-syntax 87-88 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g`}"></div>
+expression-syntax 88-89 error: Datastar expression: Unexpected end of input
+filter-pattern 64-70 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 64-70 "/a/i"
+filter-pattern 81-87 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 81-87 "/b/g"
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g`}}"></div>
+expression-syntax 89-90 error: Datastar expression: Unexpected end of input
+filter-pattern 64-70 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 64-70 "/a/i"
+filter-pattern 81-87 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 81-87 "/b/g"
+== html: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g`}})"></div>
+filter-pattern 64-70 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 64-70 "/a/i"
+filter-pattern 81-87 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 81-87 "/b/g"
+== string: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g`}})"></div>
+filter-pattern 76-82 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 76-82 "/a/i"
+filter-pattern 93-99 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 93-99 "/b/g"
+== dsl: <div data-on:click="@get('/x', {filterSignals: {include /*c*/ : '/a/i', exclude: `/b/g`}})"></div>
+filter-pattern 150-156 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 150-156 "/a/i"
+filter-pattern 167-173 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 167-173 "/b/g"
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' "></div>
+expression-syntax 63-64 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' +"></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + "></div>
+expression-syntax 65-66 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x"></div>
+expression-syntax 67-68 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x,"></div>
+expression-syntax 68-69 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, "></div>
+expression-syntax 68-69 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, e"></div>
+expression-syntax 70-71 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, ex"></div>
+expression-syntax 71-72 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exc"></div>
+expression-syntax 72-73 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, excl"></div>
+expression-syntax 73-74 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclu"></div>
+expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclud"></div>
+expression-syntax 75-76 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude"></div>
+expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude:"></div>
+expression-syntax 77-78 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: "></div>
+expression-syntax 77-78 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '"></div>
+expression-syntax 78-79 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/"></div>
+expression-syntax 78-80 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b"></div>
+expression-syntax 78-81 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/"></div>
+expression-syntax 78-82 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/'"></div>
+expression-syntax 83-84 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/'}"></div>
+expression-syntax 84-85 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/'}}"></div>
+expression-syntax 85-86 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/'}})"></div>
+== string: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/'}})"></div>
+== dsl: <div data-on:click="@get('/x', {filterSignals: {include: '/a/i' + x, exclude: '/b/'}})"></div>
+== html: <div data-on:click="@get('/x', {o"></div>
+expression-syntax 33-34 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {ot"></div>
+expression-syntax 34-35 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {oth"></div>
+expression-syntax 35-36 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {othe"></div>
+expression-syntax 36-37 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other"></div>
+expression-syntax 37-38 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other:"></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: "></div>
+expression-syntax 38-39 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {"></div>
+expression-syntax 40-41 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {i"></div>
+expression-syntax 41-42 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {in"></div>
+expression-syntax 40-42 error: Datastar expression: Unexpected keyword 'in'
+== html: <div data-on:click="@get('/x', {other: {inc"></div>
+expression-syntax 43-44 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {incl"></div>
+expression-syntax 44-45 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {inclu"></div>
+expression-syntax 45-46 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {includ"></div>
+expression-syntax 46-47 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include"></div>
+expression-syntax 47-48 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include:"></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include: "></div>
+expression-syntax 48-49 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include: '"></div>
+expression-syntax 49-50 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {other: {include: '/"></div>
+expression-syntax 49-51 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {other: {include: '/a"></div>
+expression-syntax 49-52 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {other: {include: '/a/"></div>
+expression-syntax 49-53 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {other: {include: '/a/i"></div>
+expression-syntax 49-54 error: Datastar expression: Unterminated string constant
+== html: <div data-on:click="@get('/x', {other: {include: '/a/i'"></div>
+expression-syntax 55-56 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include: '/a/i'}"></div>
+expression-syntax 56-57 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include: '/a/i'}}"></div>
+expression-syntax 57-58 error: Datastar expression: Unexpected end of input
+== html: <div data-on:click="@get('/x', {other: {include: '/a/i'}})"></div>
+unknown-option 32-37 warning: @get has no option other, so Datastar ignores it.
+== string: <div data-on:click="@get('/x', {other: {include: '/a/i'}})"></div>
+unknown-option 44-49 warning: @get has no option other, so Datastar ignores it.
+== dsl: <div data-on:click="@get('/x', {other: {include: '/a/i'}})"></div>
+unknown-option 118-123 warning: @get has no option other, so Datastar ignores it.
+== html: <div data-json-signals=""></div>
+== html: <div data-json-signals="{"></div>
+expression-syntax 25-25 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{i"></div>
+expression-syntax 26-26 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{in"></div>
+expression-syntax 25-27 error: Datastar filter: Unexpected keyword 'in'
+== html: <div data-json-signals="{inc"></div>
+expression-syntax 28-28 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{incl"></div>
+expression-syntax 29-29 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{inclu"></div>
+expression-syntax 30-30 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{includ"></div>
+expression-syntax 31-31 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include"></div>
+expression-syntax 32-32 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include:"></div>
+expression-syntax 33-33 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: "></div>
+expression-syntax 34-34 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: '"></div>
+expression-syntax 34-35 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: '/"></div>
+expression-syntax 34-36 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: '/a"></div>
+expression-syntax 34-37 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: '/a/"></div>
+expression-syntax 34-38 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: '/a/i"></div>
+expression-syntax 34-39 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: '/a/i'"></div>
+expression-syntax 40-40 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: '/a/i'}"></div>
+filter-pattern 34-40 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 34-40 "/a/i"
+== string: <div data-json-signals="{include: '/a/i'}"></div>
+filter-pattern 46-52 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 46-52 "/a/i"
+== dsl: <div data-json-signals="{include: '/a/i'}"></div>
+filter-pattern 120-126 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 120-126 "/a/i"
+== html: <div data-json-signals="{include: /"></div>
+expression-syntax 35-35 error: Datastar filter: Unterminated regular expression
+== html: <div data-json-signals="{include: /a"></div>
+expression-syntax 35-36 error: Datastar filter: Unterminated regular expression
+== html: <div data-json-signals="{include: /a/"></div>
+expression-syntax 37-37 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/,"></div>
+expression-syntax 38-38 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, "></div>
+expression-syntax 39-39 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, e"></div>
+expression-syntax 40-40 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, ex"></div>
+expression-syntax 41-41 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exc"></div>
+expression-syntax 42-42 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, excl"></div>
+expression-syntax 43-43 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclu"></div>
+expression-syntax 44-44 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclud"></div>
+expression-syntax 45-45 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude"></div>
+expression-syntax 46-46 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude:"></div>
+expression-syntax 47-47 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude: "></div>
+expression-syntax 48-48 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude: ("></div>
+expression-syntax 49-49 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude: ('"></div>
+expression-syntax 49-50 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: /a/, exclude: ('/"></div>
+expression-syntax 49-51 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: /a/, exclude: ('/b"></div>
+expression-syntax 49-52 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: /a/, exclude: ('/b/"></div>
+expression-syntax 49-53 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: /a/, exclude: ('/b/g"></div>
+expression-syntax 49-54 error: Datastar filter: Unterminated string constant
+== html: <div data-json-signals="{include: /a/, exclude: ('/b/g'"></div>
+expression-syntax 55-55 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude: ('/b/g')"></div>
+expression-syntax 56-56 error: Datastar filter: Unexpected end of input
+== html: <div data-json-signals="{include: /a/, exclude: ('/b/g')}"></div>
+filter-pattern 49-55 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 49-55 "/b/g"
+== string: <div data-json-signals="{include: /a/, exclude: ('/b/g')}"></div>
+filter-pattern 61-67 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 61-67 "/b/g"
+== dsl: <div data-json-signals="{include: /a/, exclude: ('/b/g')}"></div>
+filter-pattern 135-141 warning: Datastar cuts one / from each end of a string exclude and takes the rest as the pattern, so /g stays in it and is matched as text, not read as flags. Write the regular expression literal /b/g.
+  fix "Change to /b/g" 135-141 "/b/g"
 == html: <div data-on:click="@get(function(){}"></div>
 expression-syntax 37-38 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get(function(){}."></div>
@@ -1327,46 +2445,6 @@ option-value 39-40 warning: retry takes 'auto' | 'error' | 'always' | 'never', a
 option-value 51-52 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with 1 Datastar retries as with 'auto'.
 == dsl: <div data-on:click="@get('/x', {retry: 1})"></div>
 option-value 125-126 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with 1 Datastar retries as with 'auto'.
-== html: <div data-on:click="@get('/x', {f"></div>
-expression-syntax 33-34 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {fi"></div>
-expression-syntax 34-35 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {fil"></div>
-expression-syntax 35-36 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filt"></div>
-expression-syntax 36-37 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filte"></div>
-expression-syntax 37-38 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filter"></div>
-expression-syntax 38-39 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterS"></div>
-expression-syntax 39-40 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSi"></div>
-expression-syntax 40-41 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSig"></div>
-expression-syntax 41-42 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSign"></div>
-expression-syntax 42-43 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSigna"></div>
-expression-syntax 43-44 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignal"></div>
-expression-syntax 44-45 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals"></div>
-expression-syntax 45-46 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals:"></div>
-expression-syntax 46-47 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals: "></div>
-expression-syntax 46-47 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals: {"></div>
-expression-syntax 48-49 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals: {i"></div>
-expression-syntax 49-50 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals: {in"></div>
-expression-syntax 48-50 error: Datastar expression: Unexpected keyword 'in'
-== html: <div data-on:click="@get('/x', {filterSignals: {inc"></div>
-expression-syntax 51-52 error: Datastar expression: Unexpected end of input
-== html: <div data-on:click="@get('/x', {filterSignals: {incl"></div>
-expression-syntax 52-53 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get('/x', {filterSignals: {incld"></div>
 expression-syntax 53-54 error: Datastar expression: Unexpected end of input
 == html: <div data-on:click="@get('/x', {filterSignals: {incldu"></div>
@@ -2478,29 +3556,29 @@ expression-syntax 20-25 error: Datastar expression: await is only valid in an as
 == html: <div data-on:click="await /*c*/"></div>
 == html: <div data-on:click="await /*c*/ "></div>
 == html: <div data-on:click="await /*c*/ @"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected character '@'
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @g"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected character '@'
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @ge"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected character '@'
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected character '@'
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get("></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected token
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get('"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected token
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get('/"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected token
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get('/x"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected token
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get('/x'"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected token
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="await /*c*/ @get('/x')"></div>
-expression-syntax 32-33 error: Datastar expression: Unexpected token
+expression-syntax 20-25 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == string: <div data-on:click="await /*c*/ @get('/x')"></div>
-expression-syntax 44-45 error: Datastar expression: Unexpected token
+expression-syntax 32-37 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == dsl: <div data-on:click="await /*c*/ @get('/x')"></div>
-expression-syntax 118-119 error: Datastar expression: Unexpected token
+expression-syntax 106-111 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
 == html: <div data-on:click="x"></div>
 == html: <div data-on:click="x."></div>
 expression-syntax 22-23 error: Datastar expression: Unexpected end of input
@@ -6698,8 +7776,6 @@ expression-syntax 38-39 error: Datastar expression: Unexpected end of input
 == html: <div data-computed="{t: {}, u: () => 1}"></div>
 == string: <div data-computed="{t: {}, u: () => 1}"></div>
 == dsl: <div data-computed="{t: {}, u: () => 1}"></div>
-== html: <div data-on:datastar-fetch=""></div>
-missing-value 5-27 error: data-on needs a value; without one Datastar raises ValueRequired.
 == html: <div data-on:datastar-fetch="i"></div>
 == html: <div data-on:datastar-fetch="if"></div>
 expression-syntax 31-32 error: Datastar expression: Unexpected end of input
@@ -6787,67 +7863,6 @@ fetch-event-type 53-64 warning: datastar-fetch is never dispatched with the type
 fetch-event-type 65-76 warning: datastar-fetch is never dispatched with the type 'fetch-err': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="if (evt.detail.type === 'fetch-err') x()"></div>
 fetch-event-type 139-150 warning: datastar-fetch is never dispatched with the type 'fetch-err': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-== html: <div data-on:datastar-fetch="s"></div>
-== html: <div data-on:datastar-fetch="sw"></div>
-== html: <div data-on:datastar-fetch="swi"></div>
-== html: <div data-on:datastar-fetch="swit"></div>
-== html: <div data-on:datastar-fetch="switc"></div>
-== html: <div data-on:datastar-fetch="switch"></div>
-expression-syntax 35-36 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch "></div>
-expression-syntax 35-36 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ("></div>
-expression-syntax 37-38 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (e"></div>
-expression-syntax 38-39 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (ev"></div>
-expression-syntax 39-40 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt"></div>
-expression-syntax 40-41 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt."></div>
-expression-syntax 41-42 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.d"></div>
-expression-syntax 42-43 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.de"></div>
-expression-syntax 43-44 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.det"></div>
-expression-syntax 44-45 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.deta"></div>
-expression-syntax 45-46 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detai"></div>
-expression-syntax 46-47 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail"></div>
-expression-syntax 47-48 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail."></div>
-expression-syntax 48-49 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.t"></div>
-expression-syntax 49-50 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.ty"></div>
-expression-syntax 50-51 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.typ"></div>
-expression-syntax 51-52 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type"></div>
-expression-syntax 52-53 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type)"></div>
-expression-syntax 53-54 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) "></div>
-expression-syntax 53-54 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) {"></div>
-expression-syntax 55-56 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { "></div>
-expression-syntax 55-56 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { c"></div>
-expression-syntax 56-57 error: Datastar expression: Unexpected token
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { ca"></div>
-expression-syntax 56-58 error: Datastar expression: Unexpected token
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { cas"></div>
-expression-syntax 56-59 error: Datastar expression: Unexpected token
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case"></div>
-expression-syntax 60-61 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case "></div>
-expression-syntax 60-61 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case '"></div>
-expression-syntax 61-62 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'f"></div>
 expression-syntax 61-63 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'fe"></div>
@@ -6868,7 +7883,6 @@ expression-syntax 61-70 error: Datastar expression: Unterminated string constant
 expression-syntax 61-71 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'fetch-err'"></div>
 expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-72 warning: datastar-fetch is never dispatched with the type 'fetch-err': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'fetch-err':"></div>
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-72 warning: datastar-fetch is never dispatched with the type 'fetch-err': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -6956,17 +7970,6 @@ fetch-event-type 61-72 warning: datastar-fetch is never dispatched with the type
 fetch-event-type 73-84 warning: datastar-fetch is never dispatched with the type 'fetch-err': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'fetch-err': x(); case 'started': y() }"></div>
 fetch-event-type 147-158 warning: datastar-fetch is never dispatched with the type 'fetch-err': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'n"></div>
-expression-syntax 61-63 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'no"></div>
-expression-syntax 61-64 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nop"></div>
-expression-syntax 61-65 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope"></div>
-expression-syntax 61-66 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'"></div>
-expression-syntax 67-68 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope':"></div>
 expression-syntax 68-69 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7096,7 +8099,6 @@ fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': switch (a) { case 'inner': 1 } case 'zzz'"></div>
 expression-syntax 110-111 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-fetch-event-type 105-110 warning: datastar-fetch is never dispatched with the type 'zzz': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': switch (a) { case 'inner': 1 } case 'zzz':"></div>
 expression-syntax 111-112 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7174,43 +8176,29 @@ fetch-event-type 191-196 warning: datastar-fetch is never dispatched with the ty
 expression-syntax 61-63 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a'"></div>
 expression-syntax 64-65 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' "></div>
 expression-syntax 64-65 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' +"></div>
 expression-syntax 66-67 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + "></div>
 expression-syntax 66-67 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + '"></div>
 expression-syntax 67-68 error: Datastar expression: Unterminated string constant
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b"></div>
 expression-syntax 67-69 error: Datastar expression: Unterminated string constant
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b'"></div>
 expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b':"></div>
 expression-syntax 71-72 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b': "></div>
 expression-syntax 71-72 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b': 1"></div>
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b': 1 "></div>
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b': 1 }"></div>
-fetch-event-type 61-64 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == string: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b': 1 }"></div>
-fetch-event-type 73-76 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'a' + 'b': 1 }"></div>
-fetch-event-type 147-150 warning: datastar-fetch is never dispatched with the type 'a': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type "></div>
 expression-syntax 52-53 error: Datastar expression: Unexpected end of input
 == html: <div data-on:datastar-fetch="switch (evt.detail.type /"></div>
@@ -7255,15 +8243,22 @@ expression-syntax 67-72 error: Datastar expression: Unterminated string constant
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
 == html: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope':"></div>
 expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope': "></div>
 expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope': 1"></div>
 expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope': 1 "></div>
 expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope': 1 }"></div>
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == string: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope': 1 }"></div>
+fetch-event-type 79-85 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type /*c*/) { case 'nope': 1 }"></div>
+fetch-event-type 153-159 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /"></div>
 expression-syntax 62-63 error: Datastar expression: Unterminated regular expression
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*"></div>
@@ -7290,117 +8285,22 @@ expression-syntax 67-72 error: Datastar expression: Unterminated string constant
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope':"></div>
 expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope': "></div>
 expression-syntax 74-75 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope': 1"></div>
 expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope': 1 "></div>
 expression-syntax 76-77 error: Datastar expression: Unexpected end of input
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope': 1 }"></div>
+fetch-event-type 67-73 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == string: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope': 1 }"></div>
+fetch-event-type 79-85 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case /*c*/ 'nope': 1 }"></div>
-== html: <div data-on:datastar-fetch="switch (("></div>
-expression-syntax 38-39 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((e"></div>
-expression-syntax 39-40 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((ev"></div>
-expression-syntax 40-41 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt"></div>
-expression-syntax 41-42 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt."></div>
-expression-syntax 42-43 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.d"></div>
-expression-syntax 43-44 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.de"></div>
-expression-syntax 44-45 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.det"></div>
-expression-syntax 45-46 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.deta"></div>
-expression-syntax 46-47 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detai"></div>
-expression-syntax 47-48 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail"></div>
-expression-syntax 48-49 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail."></div>
-expression-syntax 49-50 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.t"></div>
-expression-syntax 50-51 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.ty"></div>
-expression-syntax 51-52 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.typ"></div>
-expression-syntax 52-53 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type"></div>
-expression-syntax 53-54 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)"></div>
-expression-syntax 54-55 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type))"></div>
-expression-syntax 55-56 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) "></div>
-expression-syntax 55-56 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) {"></div>
-expression-syntax 57-58 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { "></div>
-expression-syntax 57-58 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { c"></div>
-expression-syntax 58-59 error: Datastar expression: Unexpected token
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { ca"></div>
-expression-syntax 58-60 error: Datastar expression: Unexpected token
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { cas"></div>
-expression-syntax 58-61 error: Datastar expression: Unexpected token
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case"></div>
-expression-syntax 62-63 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case "></div>
-expression-syntax 62-63 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case '"></div>
-expression-syntax 63-64 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'n"></div>
-expression-syntax 63-65 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'no"></div>
-expression-syntax 63-66 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nop"></div>
-expression-syntax 63-67 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope"></div>
-expression-syntax 63-68 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope'"></div>
-expression-syntax 69-70 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope':"></div>
-expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': "></div>
-expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1"></div>
-expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 "></div>
-expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 }"></div>
-== string: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 }"></div>
-== dsl: <div data-on:datastar-fetch="switch ((evt.detail.type)) { case 'nope': 1 }"></div>
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ("></div>
-expression-syntax 62-63 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('"></div>
-expression-syntax 62-63 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('n"></div>
-expression-syntax 62-64 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('no"></div>
-expression-syntax 62-65 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nop"></div>
-expression-syntax 62-66 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope"></div>
-expression-syntax 62-67 error: Datastar expression: Unterminated string constant
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'"></div>
-expression-syntax 68-69 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope')"></div>
-expression-syntax 69-70 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'):"></div>
-expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): "></div>
-expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1"></div>
-expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 "></div>
-expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 }"></div>
-== string: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 }"></div>
-== dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case ('nope'): 1 }"></div>
+fetch-event-type 153-159 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case `"></div>
 expression-syntax 62-63 error: Datastar expression: Unterminated template literal
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case `n"></div>
@@ -7413,7 +8313,6 @@ expression-syntax 62-65 error: Datastar expression: Unterminated template
 expression-syntax 62-66 error: Datastar expression: Unterminated template
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case `nope`"></div>
 expression-syntax 67-68 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type `nope`: Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case `nope`:"></div>
 expression-syntax 68-69 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type `nope`: Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7565,18 +8464,12 @@ fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type
 fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': $x = 1 }"></div>
 fetch-event-type 147-153 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-== html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' "></div>
-expression-syntax 67-68 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' }"></div>
 expression-syntax 68-69 error: Datastar expression: Unexpected token
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == string: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' }"></div>
 expression-syntax 80-81 error: Datastar expression: Unexpected token
-fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == dsl: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' }"></div>
 expression-syntax 154-155 error: Datastar expression: Unexpected token
-fetch-event-type 147-153 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': 1;"></div>
 expression-syntax 71-72 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7619,7 +8512,6 @@ fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': 1; case 'nope2'"></div>
 expression-syntax 84-85 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-fetch-event-type 77-84 warning: datastar-fetch is never dispatched with the type 'nope2': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': 1; case 'nope2':"></div>
 expression-syntax 85-86 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7780,7 +8672,6 @@ fetch-event-type 77-84 warning: datastar-fetch is never dispatched with the type
 expression-syntax 124-125 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 fetch-event-type 77-84 warning: datastar-fetch is never dispatched with the type 'nope2': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-fetch-event-type 118-124 warning: datastar-fetch is never dispatched with the type 'deep': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': 1; case 'nope2': switch (evt.detail.type) { case 'deep':"></div>
 expression-syntax 125-126 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7879,7 +8770,6 @@ expression-syntax 57-61 error: Datastar expression: Unterminated string constant
 expression-syntax 57-62 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch(evt.detail.type){case'nope'"></div>
 expression-syntax 63-64 error: Datastar expression: Unexpected end of input
-fetch-event-type 57-63 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch(evt.detail.type){case'nope':"></div>
 expression-syntax 64-65 error: Datastar expression: Unexpected end of input
 fetch-event-type 57-63 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -7938,7 +8828,6 @@ expression-syntax 73-77 error: Datastar expression: Unterminated string constant
 expression-syntax 73-78 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { default: 1; case 'nope'"></div>
 expression-syntax 79-80 error: Datastar expression: Unexpected end of input
-fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { default: 1; case 'nope':"></div>
 expression-syntax 80-81 error: Datastar expression: Unexpected end of input
 fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -8019,7 +8908,6 @@ expression-syntax 65-69 error: Datastar expression: Unterminated string constant
 expression-syntax 65-70 error: Datastar expression: Unterminated string constant
 == html: <div data-on:datastar-fetch="switch (evt . detail . type) { case 'nope'"></div>
 expression-syntax 71-72 error: Datastar expression: Unexpected end of input
-fetch-event-type 65-71 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt . detail . type) { case 'nope':"></div>
 expression-syntax 72-73 error: Datastar expression: Unexpected end of input
 fetch-event-type 65-71 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -8173,7 +9061,6 @@ fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': 1 } switch (evt.detail.type) { case 'nope2'"></div>
 expression-syntax 112-113 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
-fetch-event-type 105-112 warning: datastar-fetch is never dispatched with the type 'nope2': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope': 1 } switch (evt.detail.type) { case 'nope2':"></div>
 expression-syntax 113-114 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -8512,22 +9399,16 @@ completions, alone
 signature "@get(uri, options?)" at 1 of [5-7, 10-17] 32ead304
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /"></div>
 expression-syntax 69-70 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /*"></div>
 expression-syntax 68-70 error: Datastar expression: Unterminated comment
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /*c"></div>
 expression-syntax 68-70 error: Datastar expression: Unterminated comment
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /*c*"></div>
 expression-syntax 68-70 error: Datastar expression: Unterminated comment
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /*c*/"></div>
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /*c*/ "></div>
 expression-syntax 73-74 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' /*c*/ :"></div>
 expression-syntax 75-76 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -8548,16 +9429,12 @@ fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type
 fetch-event-type 147-153 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' //"></div>
 expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' // "></div>
 expression-syntax 70-71 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' // c"></div>
 expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' // c\n"></div>
 expression-syntax 72-73 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope' // c\n:"></div>
 expression-syntax 74-75 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -8578,16 +9455,12 @@ fetch-event-type 73-79 warning: datastar-fetch is never dispatched with the type
 fetch-event-type 147-153 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'/"></div>
 expression-syntax 68-69 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'/*"></div>
 expression-syntax 67-69 error: Datastar expression: Unterminated comment
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'/**"></div>
 expression-syntax 67-69 error: Datastar expression: Unterminated comment
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'/**/"></div>
 expression-syntax 71-72 error: Datastar expression: Unexpected end of input
-fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
 == html: <div data-on:datastar-fetch="switch (evt.detail.type) { case 'nope'/**/:"></div>
 expression-syntax 72-73 error: Datastar expression: Unexpected end of input
 fetch-event-type 61-67 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
@@ -15805,6 +16678,11 @@ indicator-order 1515-1529 warning: data-indicator comes after data-init, which s
 option-value 1748-1749 warning: include takes a regular expression or a string, and 1 is a number, so Datastar throws a TypeError as it matches a signal.
 signal-name 1800-1811 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
 signal-name 1974-1985 error: Datastar's client reads this key as the signal constructor, which has the part constructor, which every object already has: the client holds the signal, but the next request writes the object under it into the built-in one and sends the page's signals without it.
+fetch-event-type 2149-2155 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+fetch-event-type 2393-2399 warning: datastar-fetch is never dispatched with the type 'nope': Datastar dispatches started, finished, error, retrying, retries-failed and the datastar events the response sends.
+expression-syntax 2476-2481 error: Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. An action sends its request without it.
+filter-pattern 2616-2622 warning: Datastar cuts one / from each end of a string include and takes the rest as the pattern, so /i stays in it and is matched as text, not read as flags. Write the regular expression literal /a/i.
+  fix "Change to /a/i" 2616-2622 "/a/i"
 == real/kotlin/ActionChecks.kt
 one-value 509-510 warning: postExpr writes the expression in parentheses, as one value, so JavaScript reads this comma as its comma operator and keeps only what follows it. The options go in the lambda after the call.
 unknown-option 406-411 warning: @get has no option retyr, so Datastar ignores it. Did you mean retry?
