@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.util.concurrent.CompletableFuture
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,7 +27,10 @@ import kotlin.time.Duration.Companion.milliseconds
 class DatastarRequestFactoryTest {
     companion object {
         val streamlord = Streamlord(maxSignalsSize = 32, heartbeat = null)
-        val release = CompletableFuture<Unit>()
+        var release = CompletableFuture<Unit>()
+        val waiting =
+            java.util.concurrent.atomic
+                .AtomicInteger()
     }
 
     @RestController
@@ -78,7 +82,20 @@ class DatastarRequestFactoryTest {
         fun forever(
             request: HttpServletRequest,
             response: HttpServletResponse,
-        ): StreamingResponseBody = response.datastarStream(streamlord, request) { release.get() }
+        ): StreamingResponseBody =
+            response.datastarStream(streamlord, request) {
+                waiting.incrementAndGet()
+                try {
+                    release.get()
+                } finally {
+                    waiting.decrementAndGet()
+                }
+            }
+    }
+
+    @BeforeTest
+    fun reset() {
+        release = CompletableFuture()
     }
 
     private val mvc = MockMvcBuilders.standaloneSetup(Feed()).setControllerAdvice(StreamlordExceptionHandler()).build()
@@ -180,6 +197,40 @@ class DatastarRequestFactoryTest {
                 .returnResult(String::class.java)
 
         assertEquals(500, result.status.value())
+    }
+
+    @Test
+    fun `a timeout that is not positive is refused where the factory is made`() {
+        assertFailsWith<IllegalArgumentException> { mvc.datastarRequestFactory(kotlin.time.Duration.ZERO) }
+    }
+
+    @Test
+    fun `an infinite timeout waits as long as the answer takes`() {
+        val slow = RestTestClient.bindToServer(mvc.datastarRequestFactory(kotlin.time.Duration.INFINITE)).build()
+
+        datastarEvents(
+            slow
+                .get()
+                .uri("/suspended")
+                .exchange()
+                .returnResult(String::class.java)
+                .responseBody
+                .orEmpty(),
+        ).assertSignal("heads", 1)
+    }
+
+    @Test
+    fun `an interrupted test is told so, and the stream is stopped`() {
+        Thread.currentThread().interrupt()
+        try {
+            assertFailsWith<InterruptedException> { client.get().uri("/forever").exchange() }
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+        Thread.sleep(50)
+
+        assertTrue(!release.isDone && waiting.get() == 0, "the stream is still waiting")
     }
 
     @Test

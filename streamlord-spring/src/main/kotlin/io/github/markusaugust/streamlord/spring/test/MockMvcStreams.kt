@@ -20,7 +20,9 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import java.net.URI
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /*
  * A stream runs in an async cycle of its own, and a `suspend` controller adds one before it. MockMvc
@@ -41,16 +43,13 @@ import kotlin.time.Duration.Companion.seconds
  * a failure after a stream's first event among them, answers 500 with it as the body, as Spring's
  * own MockMvc binding does. An answer that has not ended after [asyncTimeout], all its cycles
  * together, is stopped and throws: a stream that stays open needs a real server, and
- * `LiveDatastarStream` from streamlord-test.
- *
- * The JVM names of both helpers stay plain through `@JvmName`, as `datastarStream`'s do.
+ * `LiveDatastarStream` from streamlord-test. An interrupt of the test's thread stops the stream too,
+ * and comes back as an [InterruptedException] with the thread still interrupted.
  */
-@JvmName("datastarRequestFactory")
-public fun MockMvc.datastarRequestFactory(asyncTimeout: Duration = 10.seconds): ClientHttpRequestFactory =
-    ClientHttpRequestFactory { uri, method ->
-        Deadline.check(asyncTimeout)
-        DispatchingRequest(this, asyncTimeout, method, uri)
-    }
+public fun MockMvc.datastarRequestFactory(asyncTimeout: Duration = 10.seconds): ClientHttpRequestFactory {
+    checkTimeout(asyncTimeout)
+    return ClientHttpRequestFactory { uri, method -> DispatchingRequest(this, asyncTimeout, method, uri) }
+}
 
 /**
  * Sends a request the way Datastar's client does, with the `Datastar-Request` header and [signals]
@@ -62,9 +61,8 @@ public fun MockMvc.datastarRequestFactory(asyncTimeout: Duration = 10.seconds): 
  * ```
  *
  * An answer that has not ended after [asyncTimeout] is stopped and throws, as with
- * [datastarRequestFactory].
+ * [datastarRequestFactory], and so does an interrupt.
  */
-@JvmName("datastar")
 public fun MockMvcTester.datastar(
     method: HttpMethod,
     uri: String,
@@ -89,39 +87,51 @@ public fun MockMvcTester.datastar(
     return result
 }
 
+private fun checkTimeout(timeout: Duration) = require(timeout.isPositive()) { "asyncTimeout must be positive, was $timeout" }
+
 /** The time an answer has, all its cycles together, from when it was sent. */
 private class Deadline(
     private val timeout: Duration,
 ) {
-    private val end = System.nanoTime() + check(timeout).inWholeNanoseconds
+    private val end = TimeSource.Monotonic.markNow() + timeout.also(::checkTimeout)
 
-    /** Waits for [started]'s cycle to end; past the deadline, stops the stream and throws. */
+    /**
+     * Waits until MockMvc has dispatched [started]'s cycle, or the request is no longer async; past
+     * the deadline, or on an interrupt, stops the stream and throws. Not through `getAsyncResult`,
+     * which swallows an interrupt and clears the flag, and throws the same way for a timeout and
+     * for a request it cannot wait on; the dispatch that follows reports the second.
+     */
     fun await(started: MvcResult) {
-        val left = end - System.nanoTime()
-        try {
-            // In whole milliseconds rounded up, so a return before the deadline is an interrupt.
-            if (left > 0) {
-                started.getAsyncResult((left + 999_999) / 1_000_000)
-                return
+        val request = started.request
+        val context = request.asyncContext as MockAsyncContext
+        while (request.isAsyncStarted && context.dispatchedPath == null) {
+            val left = -end.elapsedNow()
+            if (!left.isPositive()) {
+                stop(context)
+                throw StreamDidNotEnd(timeout)
             }
-        } catch (_: IllegalStateException) {
+            try {
+                Thread.sleep(minOf(left, POLL).inWholeMilliseconds.coerceAtLeast(1))
+            } catch (e: InterruptedException) {
+                stop(context)
+                Thread.currentThread().interrupt()
+                throw e
+            }
         }
-        // Spring swallows the interrupt while it waits and clears the flag.
-        if (System.nanoTime() < end) {
-            Thread.currentThread().interrupt()
-            throw InterruptedException("Interrupted while waiting for the answer")
-        }
-        // What a server does on its async timeout: Spring hears of it and interrupts the stream's
-        // thread, and the request completes, after which a write to the response throws. The
-        // interrupt alone can be lost in a write under way; the failed write is not.
-        val context = started.request.asyncContext as MockAsyncContext
-        for (listener in context.listeners) listener.onTimeout(AsyncEvent(context))
-        context.complete()
-        throw StreamDidNotEnd(timeout)
     }
 
-    companion object {
-        fun check(timeout: Duration): Duration = timeout.also { require(it.isPositive()) { "asyncTimeout must be positive, was $it" } }
+    /*
+     * What a server does on its async timeout: Spring hears of it and interrupts the stream's
+     * thread, and the request completes, after which a write to the response throws. The interrupt
+     * alone can be lost in a write under way; the failed write is not.
+     */
+    private fun stop(context: MockAsyncContext) {
+        for (listener in context.listeners) listener.onTimeout(AsyncEvent(context))
+        context.complete()
+    }
+
+    private companion object {
+        val POLL = 5.milliseconds
     }
 }
 

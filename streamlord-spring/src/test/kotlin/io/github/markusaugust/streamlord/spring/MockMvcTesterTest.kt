@@ -243,15 +243,43 @@ class MockMvcTesterTest {
     }
 
     @Test
-    fun `an interrupted test is told so, and stays interrupted`() {
+    fun `an interrupted test is told so, stays interrupted, and the stream is stopped`() {
         Thread.currentThread().interrupt()
         try {
-            assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/gated") }
+            assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/endless") }
             assertTrue(Thread.currentThread().isInterrupted)
         } finally {
             Thread.interrupted()
-            gate.complete(Unit)
         }
+        Thread.sleep(50) // a write already under way when the stream was told
+        val after = ticks.get()
+        Thread.sleep(300)
+
+        assertEquals(after, ticks.get(), "the stream kept writing after the interrupt")
+    }
+
+    @Test
+    fun `an infinite timeout waits as long as the answer takes`() {
+        val result = mvc.datastar(HttpMethod.GET, "/slow", asyncTimeout = kotlin.time.Duration.INFINITE)
+
+        assertThat(result).hasStatusOk()
+    }
+
+    @Test
+    fun `a request that goes async outside Spring MVC fails without a false interrupt`() {
+        val tester =
+            MockMvcTester.of(listOf(Feed())) {
+                it
+                    .addFilter<org.springframework.test.web.servlet.setup.StandaloneMockMvcBuilder>(
+                        jakarta.servlet.Filter { request, _, _ -> request.startAsync() },
+                        "/byfilter",
+                    ).build()
+            }
+
+        val failure =
+            assertFailsWith<IllegalStateException> { tester.datastar(HttpMethod.GET, "/byfilter", asyncTimeout = 500.milliseconds) }
+
+        assertTrue(!Thread.currentThread().isInterrupted, failure.message)
     }
 
     @Test
