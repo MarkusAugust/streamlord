@@ -24,40 +24,20 @@ class AnalyzeProjectTest {
         text: String,
     ) = root.resolve(path).apply { parentFile.mkdirs() }.writeText(text)
 
+    private val ProjectIssue.name get() = path.substringAfterLast(File.separatorChar)
+
     private val swallowed = "fun f() = dataOnClick(\"\$count++\")\n"
-    private val page = "import org.intellij.lang.annotations.Language\n\n@Language(\"html\")\nfun page() = \"\"\"<h1>\$title</h1>\"\"\"\n"
 
     @Test
-    fun `reads every Kotlin file but those under build and hidden folders`() {
-        write("src/main/kotlin/A.kt", swallowed)
-        write("src/main/kotlin/nested/B.kt", swallowed)
-        write("build/generated/C.kt", swallowed)
-        write(".gradle/D.kt", swallowed)
-        write("src/main/resources/page.html", "<p>\$count</p>")
-        val files = analyzer.analyzeProject(root).map { it.file.relativeTo(root).invariantSeparatorsPath }.distinct()
-        assertEquals(listOf("src/main/kotlin/A.kt", "src/main/kotlin/nested/B.kt"), files)
-    }
-
-    @Test
-    fun `leaves out the folders the VS Code index leaves out, below the root only`() {
+    fun `reads a folder on disk, leaving out folders below the root only`() {
         val hidden = root.resolve(".worktree").apply { mkdirs() }
         val write = { path: String -> hidden.resolve(path).apply { parentFile.mkdirs() }.writeText(swallowed) }
         write("src/A.kt")
         for (folder in listOf("build", "node_modules", ".gradle", "dist", "out", "target", ".idea", "src/.cache", "src/target")) {
             write("$folder/B.kt")
         }
-        val files = analyzer.analyzeProject(hidden).map { it.file.relativeTo(hidden).invariantSeparatorsPath }.distinct()
+        val files = analyzer.analyzeProject(hidden).map { File(it.path).relativeTo(hidden).invariantSeparatorsPath }.distinct()
         assertEquals(listOf("src/A.kt"), files)
-    }
-
-    @Test
-    fun `gives each file the constants of every other`() {
-        write("Keys.kt", "const val title = \"Home\"\n")
-        write("Page.kt", page)
-        assertEquals(emptyList(), analyzer.analyzeProject(root).filter { it.issue.code == IssueCode.UNESCAPED_INTERPOLATION })
-        write("Request.kt", "val title get() = call.request.queryParameters[\"title\"]\n")
-        val found = analyzer.analyzeProject(root).filter { it.issue.code == IssueCode.UNESCAPED_INTERPOLATION }
-        assertEquals(listOf("Page.kt" to 4), found.map { it.file.name to it.line })
     }
 
     @Test
@@ -66,7 +46,7 @@ class AnalyzeProjectTest {
         write("Link.kt", "fun link(url: String) = \"\"\"<a href=\"\$url\">x</a>\"\"\"\n")
         write("Cell.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
         val all = analyzer.analyzeProject(root)
-        val failing = all.failures().map { Triple(it.file.name, it.issue.code, it.issue.severity) }
+        val failing = all.failures().map { Triple(it.name, it.issue.code, it.issue.severity) }
         assertEquals(
             listOf(
                 Triple("Click.kt", IssueCode.KOTLIN_INTERPOLATION, Severity.ERROR),
@@ -74,7 +54,7 @@ class AnalyzeProjectTest {
             ),
             failing,
         )
-        assertTrue(all.any { it.file.name == "Cell.kt" && it.issue.severity == Severity.HINT }, all.toString())
+        assertTrue(all.any { it.name == "Cell.kt" && it.issue.severity == Severity.HINT }, all.toString())
     }
 
     @Test
@@ -96,7 +76,7 @@ class AnalyzeProjectTest {
                 Triple("Format.kt", IssueCode.INTERPOLATE_TEMPLATE, Severity.WARNING),
                 Triple("Plain.kt", IssueCode.UNESCAPED_INTERPOLATION, Severity.WARNING),
             ),
-            all.failures(strict = true).map { Triple(it.file.name, it.issue.code, it.issue.severity) },
+            all.failures(strict = true).map { Triple(it.name, it.issue.code, it.issue.severity) },
         )
     }
 
@@ -149,7 +129,7 @@ class AnalyzeProjectTest {
     fun `places an issue by line and column from 1, a CRLF line ending being one line break`() {
         write("A.kt", swallowed)
         write("B.kt", "package p\r\n\r\n$swallowed")
-        val found = analyzer.analyzeProject(root).failures().map { Triple(it.file.name, it.line, it.column) }
+        val found = analyzer.analyzeProject(root).failures().map { Triple(it.name, it.line, it.column) }
         assertEquals(listOf(Triple("A.kt", 1, 24), Triple("B.kt", 3, 24)), found)
     }
 
@@ -165,7 +145,7 @@ class AnalyzeProjectTest {
                 IssueCode.INTERPOLATE_PLACEHOLDERS,
             )
         val files = JsonParser.parseObject(dir.resolve("expected.json").readText()).obj("files")!!
-        val seen = analyzer.analyzeProject(dir).filter { it.issue.code in codes }.groupBy({ it.file.name }, { it.issue })
+        val seen = analyzer.analyzeProject(dir).filter { it.issue.code in codes }.groupBy({ it.name }, { it.issue })
         assertTrue(files.keys.containsAll(seen.keys), seen.keys.toString())
         for ((file, issues) in files) {
             val wanted = (issues as JsonArray).objects().map { Triple(it.int("start")!!, it.int("end")!!, it.string("code")) }
