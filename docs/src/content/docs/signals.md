@@ -384,21 +384,13 @@ same holds for every name the HTML DSL writes.
 
 ### Without a stream
 
-An answer that is not a stream sets signals one of two ways. One that holds signals and nothing
-else is JSON, `call.respondSignals(...)` in Ktor and `datastarSignals(...)` in Spring, and Datastar
-merges it as it would a patch. One that holds elements as well carries the signals in its HTML,
-and there the obvious way fails without a word.
+An answer that is not a stream sets signals one of two ways. If it holds nothing but signals, it
+is JSON, `call.respondSignals(...)` in Ktor and `datastarSignals(...)` in Spring, and Datastar
+merges it as it would a patch. If it holds elements, `call.respondElements(...)` or
+`datastarElements(...)`, the signals go in its HTML, as an element that sets them and removes
+itself:
 
-`data-signals` on an element in the answer is read when the element arrives, and again only when
-the attribute's value changes. A morph leaves an attribute whose value is the same as before, so
-an answer that says what the last one said changes nothing, and a signal the reader has moved in
-the meantime stays where they moved it. In Chrome with Datastar 1.0.5, a page set `$orders.page`
-to 9, and an answer with the same `data-signals` as the one before, page 0, left it at 9.
-
-Set them with a `data-init` that removes itself instead. Its element is new in every answer, so it
-runs every time:
-
-```kotlin sample=html
+```kotlin tab="kotlinx.html DSL" group=markup label="Markup style" sample=html
 div {
     id = "orders-signals"
     hidden = true
@@ -406,8 +398,33 @@ div {
 }
 ```
 
-`set` writes the value as a JavaScript literal, so a value from your data cannot become code. The
-same answer, given twice with the page moved to 9 in between, put it back to 0 both times.
+```kotlin tab="String" group=markup sample=declarations
+fun ordersSignalsHtml(page: Int): String =
+    """<div id="orders-signals" hidden><div data-init="${'$'}orders.page = $page; el.remove()"></div></div>"""
+```
+
+```html tab="Template" group=markup
+<div id="orders-signals" hidden>
+    <div data-page="{{ page }}" data-init="$orders.page = Number(el.dataset.page); el.remove()"></div>
+</div>
+```
+
+The empty `<div id="orders-signals" hidden></div>` has to be on the page before the first answer
+comes, so render it with the page: an answer whose element finds no id to match patches nothing,
+and Datastar only logs `PatchElementsNoTargetsFound`. Or put the inner `div` inside an element the
+answer replaces anyway. `hidden` keeps the container out of the layout.
+
+The inner `div` removes itself once it has run, so the next answer's copy is new to the page, and
+it runs again, every time. `set` writes the value as a JavaScript literal, so text from your data
+cannot become code; in a string, write only a number there, as `ordersSignalsHtml` does, and in a
+template read the value from an attribute your engine escapes, as
+[Templates](/templates/#do-not-render-a-value-into-an-expression) shows.
+
+Not `data-signals` on an element in the answer. It is read when the element arrives, and again
+only when the attribute's value changes, and a morph leaves an attribute whose value is the same
+as before. In Chrome with Datastar 1.0.5, a page set `$orders.page` to 9, and an answer with the
+same `data-signals` as the one before, page 0, left it at 9; the element above, given twice with
+the page moved to 9 in between, put it back to 0 both times.
 
 ## Signals that stay in the browser
 

@@ -12,8 +12,8 @@ written down so you can see what is coming, decide whether to wait for it, and k
 today instead. Nothing here changes an API you already call. Two things reach a build that works
 today, and each says so where it stands: [two artifacts get new names](#new-names-for-the-kotlinxhtml-modules),
 and three new warnings appear in the editors, which a
-[strict check](/analysis/#a-test-over-your-own-sources) fails on. A third, the [compiler plugin](#a-compiler-plugin-for-unmarked-values), reaches only a build
-that adds it.
+[strict check](/analysis/#a-test-over-your-own-sources) fails on. The
+[compiler plugin](#a-compiler-plugin-for-unmarked-values) reaches only a build that adds it.
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
@@ -24,7 +24,7 @@ that adds it.
 | 5 | [New names for the kotlinx.html modules](#new-names-for-the-kotlinxhtml-modules) | the coordinates of two artifacts | nothing |
 | 6 | [The front page](#the-front-page) | what a first visit shows of values and of the check | read [Strings](/strings/) and [The analysis](/analysis/) |
 | 7 | [Values from outside, in templates](#values-from-outside-in-templates) | what the editors and the check say about a template tag in an expression | keep the tag out of expression attributes |
-| 8 | [An indicator written after the request](#an-indicator-written-after-the-request) | what the editors and the check say about `data-init` before `data-indicator` | write the indicator first, as [Loading indicators](/loading-indicators/#before-data-init) shows |
+| 8 | [An indicator written after the request](#an-indicator-written-after-the-request) | what the editors and the check say about a `data-init` that sends a request, written before `data-indicator` or `data-on:datastar-fetch` | write the indicator first, as [Loading indicators](/loading-indicators/#before-data-init) shows |
 | 9 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
 | 10 | [The reading of markup, before 1.0](#the-reading-of-markup-before-10) | the narrow places where markup is read otherwise than the browser or the compiler reads it | the notes on [Strings](/strings/#values-from-outside) |
 | 11 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
@@ -317,10 +317,12 @@ sends the request before either listens: the indicator stays `false` for it, and
 page or in the console says why. In Chrome with Datastar 1.0.5, the indicator written second
 missed the request, and the one written first caught it.
 
-Planned: a warning in the editors and the check where, on one element, `data-init` stands before
-`data-indicator` or `data-on:datastar-fetch`, with a fix that moves the `data-init` last. It reads
-one element's attributes in order, which the analysis already has, in all three ways of writing
-markup.
+Planned: a warning in the editors and the check where, on one element, a `data-init` that sends a
+request, `@get` or another backend action, stands before `data-indicator` or
+`data-on:datastar-fetch`, with a fix that moves the `data-init` last. A `data-init` that only sets
+a signal is left alone. It is a warning, so `failures()` lets it through and only
+`failures(strict = true)` keeps it. The analysis already reads an element's attributes in order,
+in all three ways of writing markup.
 
 It comes after the diagnostics for values from outside because it guards against a page that
 looks wrong, not one that runs what it should not.
