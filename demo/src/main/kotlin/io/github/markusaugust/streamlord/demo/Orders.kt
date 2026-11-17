@@ -54,10 +54,11 @@ public data class LogLine(
     val body: String,
 )
 
-/** The log as the stream sends it: the lines, and the last exchange written out for the wire panel. */
+/** The log as the stream sends it: the lines, the last exchange written out for the wire panel, and whether the ledger is gone. */
 public data class LogState(
     val lines: List<LogLine> = emptyList(),
     val exchange: String? = null,
+    val closed: Boolean = false,
 )
 
 /** One answer to a table request: the tag it went out under, its status, and the HTML, or none for a 304 or a 412. */
@@ -82,6 +83,16 @@ public class Ledger internal constructor(
     public val log: StateFlow<LogState> = state
 
     @Volatile internal var lastSeen: Long = 0
+
+    /** Whether a page was ever answered from it; one that never was is the first to go. */
+    internal val used: Boolean
+        @Synchronized get() = lines > 0
+
+    /** Dropped by [Ledgers]: the log stream on it ends, so the page can open one on a new ledger. */
+    @Synchronized
+    internal fun close() {
+        state.value = state.value.copy(closed = true)
+    }
 
     /**
      * The tag, the check and the build under one lock, so a change cannot fall between the tag
@@ -123,7 +134,7 @@ public class Ledger internal constructor(
     ) {
         lines++
         state.value =
-            LogState(
+            state.value.copy(
                 lines = (state.value.lines + LogLine(lines, what, status, result, body)).takeLast(LOG_LINES),
                 exchange = "$asked\n\n$answered",
             )
@@ -151,8 +162,10 @@ private fun response(
 
 /**
  * Every visitor's ledger, held in memory and kept small: a ledger nobody used for [idle] is
- * dropped, and past [capacity] the least recently used one goes. Only the log makes a ledger, so
- * a request that names an id the service does not hold cannot push anyone else's out.
+ * dropped, and past [capacity] one goes: the least recently opened that never answered a page, or
+ * failing that the least recently used. Only the log makes a ledger, so a request that names an id
+ * the service does not hold makes none, and a flood of logs opened and left pushes out its own
+ * ledgers before anyone's in use. A dropped ledger ends its log stream.
  */
 public class Ledgers(
     private val capacity: Int = 1_000,
@@ -173,7 +186,11 @@ public class Ledgers(
         val id = visitor?.takeIf { ID.matches(it) } ?: newId()
         val ledger = byVisitor.getOrPut(id) { Ledger(id) }
         ledger.lastSeen = now
-        while (byVisitor.size > capacity) byVisitor.remove(byVisitor.keys.first())
+        while (byVisitor.size > capacity) {
+            val drop = byVisitor.values.firstOrNull { !it.used && it !== ledger } ?: byVisitor.values.first()
+            byVisitor.remove(drop.visitor)
+            drop.close()
+        }
         return ledger
     }
 
@@ -186,7 +203,9 @@ public class Ledgers(
     }
 
     private fun forget(now: Long) {
-        byVisitor.values.removeIf { now - it.lastSeen > idle.inWholeMilliseconds }
+        byVisitor.values.removeIf { ledger ->
+            (now - ledger.lastSeen > idle.inWholeMilliseconds).also { if (it) ledger.close() }
+        }
     }
 
     private fun newId(): String =
@@ -203,10 +222,12 @@ public class Ledgers(
 
 /**
  * The log, streamed: first the id, then the lines each time one is added, with the exchange behind
- * it for the wire panel, and an end after [quiet] without one. Every request in the panel adds a
- * line, so two quiet minutes means nobody is using it, and the connection stops keeping the
- * service awake. What was in the log before it opened goes to the log and not to the wire panel,
- * which may be showing another demo's frames.
+ * it for the wire panel, and an end after [quiet] without one, or as soon as the ledger is dropped.
+ * Every request in the panel adds a line, so a quiet stretch means nobody is using it, and the
+ * connection stops keeping the service awake. The page tells the log is open by Datastar's own
+ * indicator, which ends with the request however it ends, so nothing here has to say so. What was
+ * in the log before it opened goes to the log and not to the wire panel, which may be showing
+ * another demo's frames.
  */
 public fun orderLog(
     ledger: Ledger,
@@ -214,19 +235,22 @@ public fun orderLog(
     quiet: Duration = 2.minutes,
 ): Flow<DatastarEvent> =
     flow {
-        emit(PatchSignals("""{"visitor": "${ledger.visitor}", "logOpen": true}"""))
+        emit(PatchSignals("""{"visitor": "${ledger.visitor}"}"""))
         emit(state("Open: each line is written by the server as it answers."))
         var shown: LogState? = null
         while (true) {
             val now = withTimeoutOrNull(quiet) { ledger.log.first { it != shown } } ?: break
+            if (now.closed) {
+                emit(state("The server has let this panel go. Press anything in it to open a new log."))
+                return@flow
+            }
             emit(patchElements(selector = "#orders-log", mode = ElementPatchMode.INNER) { logLines(now.lines) })
             if (wire && shown != null && now.exchange != null) {
                 emit(patchElements(selector = "#wire", mode = ElementPatchMode.INNER) { pre("wire__frame") { +now.exchange } })
             }
             shown = now
         }
-        emit(state("Closed after two quiet minutes. Press anything in the panel to open it again."))
-        emit(PatchSignals("""{"logOpen": false}"""))
+        emit(state("Closed after ${quiet.inWholeMinutes} quiet minutes. Press anything in the panel to open it again."))
     }
 
 private fun state(text: String): DatastarEvent =
@@ -296,7 +320,7 @@ public fun TagConsumer<*>.forgotten() {
         id = "orders"
         p("lt-paragraph") {
             attributes["data-size"] = "small"
-            +"The server has forgotten this panel. Scroll it out of view and back to start again."
+            +"The server had let this panel go, and has opened it again. Press the page once more."
         }
     }
 }

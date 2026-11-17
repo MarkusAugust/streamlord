@@ -89,7 +89,7 @@ class OrdersTest {
             client.post("/orders/fedcba9876543210/change")
 
             assertEquals(HttpStatusCode.OK, table.status)
-            assertTrue(table.bodyAsText().contains("forgotten"), table.bodyAsText())
+            assertTrue(table.bodyAsText().contains("let this panel go"), table.bodyAsText())
             assertEquals("no-store", table.headers[HttpHeaders.CacheControl])
             assertEquals(before, ledgers.size)
         }
@@ -100,9 +100,10 @@ class OrdersTest {
             application { live() }
             val visitor = ledgers.open(null).visitor
 
-            val response = client.get("/orders/$visitor?page=1") { header(HttpHeaders.IfNoneMatch, "\"v1-1\";q=0.5") }
-
-            assertEquals(HttpStatusCode.OK, response.status)
+            for (malformed in listOf("\"v1-1\";q=0.5", "\"a b\"", "a\"b", "\"a,b\"")) {
+                val response = client.get("/orders/$visitor?page=1") { header(HttpHeaders.IfNoneMatch, malformed) }
+                assertEquals(HttpStatusCode.OK, response.status, malformed)
+            }
         }
 
     @Test
@@ -162,6 +163,32 @@ class OrdersTest {
     }
 
     @Test
+    fun `past capacity, a ledger nobody pressed a page with goes before one in use`() {
+        val ledgers = Ledgers(capacity = 2)
+        val used = ledgers.open(null)
+        used.answer(1, "GET /orders") { 200 }
+        val idle = ledgers.open(null)
+        ledgers.open(null)
+        assertSame(used, ledgers.find(used.visitor), "the one in use stays, though it is the least recent")
+        assertNull(ledgers.find(idle.visitor))
+    }
+
+    @Test
+    fun `a ledger pushed out ends its log, so the page can open a new one`() =
+        runTest {
+            val ledgers = Ledgers(capacity = 1)
+            val first = ledgers.open(null)
+            val events = mutableListOf<Any>()
+            val log = launch { orderLog(first, wire = false).toList(events) }
+            delay(1.seconds)
+
+            ledgers.open(null)
+            delay(1.seconds)
+
+            assertTrue(log.isCompleted, "the log of a ledger that is gone ends at once, not after the quiet minutes")
+        }
+
+    @Test
     fun `a ledger nobody used for half an hour is gone`() {
         var now = 0L
         val ledgers = Ledgers(clock = { now })
@@ -186,7 +213,7 @@ class OrdersTest {
             delay(61.seconds)
             log.join()
 
-            assertEquals("""{"visitor": "${ledger.visitor}", "logOpen": true}""", (events.first() as PatchSignals).signals)
+            assertEquals("""{"visitor": "${ledger.visitor}"}""", (events.first() as PatchSignals).signals)
             val patches = events.filterIsInstance<PatchElements>()
             val shown = patches.filter { it.selector == "#orders-log" }.map { it.elements.orEmpty() }
             assertTrue(shown[1].contains("built #1"), shown[1])
@@ -194,6 +221,6 @@ class OrdersTest {
             val wire = patches.filter { it.selector == "#wire" }.map { it.elements.orEmpty() }
             assertEquals(2, wire.size, "one exchange per answer, and none for what was there before the log opened")
             assertTrue(wire[1].contains("304 Not Modified") && wire[1].contains("(no body)"), wire[1])
-            assertEquals("""{"logOpen": false}""", (events.last() as PatchSignals).signals)
+            assertTrue((events.last() as PatchElements).elements.orEmpty().contains("Closed after 2 quiet minutes"))
         }
 }

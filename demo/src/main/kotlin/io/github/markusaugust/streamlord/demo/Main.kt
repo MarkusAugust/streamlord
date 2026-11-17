@@ -333,12 +333,9 @@ public fun Application.live() {
                     ?.coerceIn(1, ORDER_PAGES) ?: 1
             val answer =
                 ledger.answer(page, asked(call.request.uri, call.request.headers[HttpHeaders.IfNoneMatch])) { etag ->
-                    // A header Ktor cannot parse, a tag with ;q= after it for one, is no match.
-                    try {
-                        EntityTagVersion(etag).check(call.request.headers).statusCode.value
-                    } catch (_: IllegalStateException) {
-                        HttpStatusCode.OK.value
-                    }
+                    // A header Ktor cannot parse, "a b" or a tag with ;q= after it, is no match.
+                    runCatching { EntityTagVersion(etag).check(call.request.headers).statusCode.value }
+                        .getOrDefault(HttpStatusCode.OK.value)
                 }
             call.response.header(HttpHeaders.CacheControl, ORDERS_CACHE_CONTROL)
             call.response.header(HttpHeaders.ETag, answer.etag)

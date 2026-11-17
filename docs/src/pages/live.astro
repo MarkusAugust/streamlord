@@ -12,7 +12,8 @@ import "../styles/global.css"
 // is written by streamlord-live: the results, the frames, and the signal the count lives in.
 
 // The caching panel's log, opened when the panel is seen or pressed. It needs the id it handed
-// out, and whether the page shows the wire panel, and nothing else of the store.
+// out, and whether the page shows the wire panel, and nothing else of the store. $logOpen is
+// Datastar's indicator on the panel: true while the log's request runs, false however it ends.
 const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include: /^(visitor|wire)$/}})`
 ---
 
@@ -356,7 +357,8 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
         <section
           class="panel panel--wide"
           id="caching"
-          data-signals="{visitor: '', logOpen: false}"
+          data-signals="{visitor: ''}"
+          data-indicator:log-open
           data-on-intersect={LOG}
           data-on:click={LOG}
         >
@@ -412,8 +414,8 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
             search, a muster, a press of a patch mode, or each tick of the counter as it runs.
             Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
             description of them. The frames. The table is no stream, so for a press there the
-            panel shows the request and the answer as the server saw and sent them, a 304 with no
-            body among them.
+            panel shows the request the server got, and the status and caching headers it
+            answered with, a 304 with no body among them.
           </p>
           <div id="wire" class="panel__body">
             <p class="lt-paragraph" data-size="small">Nothing sent yet.</p>

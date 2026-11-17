@@ -144,8 +144,9 @@ anything past the frame it is writing.
 Content Security Policy is on [Security](/security/), including the three lines that put a nonce
 on an exchange from a `WebFilter` of your own.
 
-An answer the browser may keep is one `datastarElements` body, not a stream, with an ETag checked
-on the exchange: it is on [Caching](/caching/).
+An answer the browser may keep is one `text/html` body, not a stream: `datastarElements`, which
+[Spring WebMVC](/spring-webmvc/) shows and which works the same here, with an ETag checked on the
+exchange. It is on [Caching](/caching/).
 
 Backpressure strategy, schedulers and the rest of the reactive toolbox are Spring's, and the
 adapter deliberately does not reach into them. If your flow is hot and fast, the usual

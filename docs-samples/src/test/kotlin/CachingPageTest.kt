@@ -17,6 +17,7 @@ import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.runBlocking
 import kotlinx.html.button
@@ -50,7 +51,7 @@ class CachingPageTest {
     @Test
     fun `Ktor answers 304 with both headers and reads nothing`() {
         val orders = CountingOrders()
-        onKtor({ routing { orderRoutes(orders) } }) { port -> assertCaches(port, orders) }
+        onKtor({ routing { orderRoutes(orders) } }) { port -> assertCaches(port, orders, ktor = true) }
     }
 
     // The page says why the header is set in the route: a CachingHeaders rule on the content type
@@ -82,6 +83,47 @@ class CachingPageTest {
             val again = get(port, "/table", "If-None-Match" to "\"v1\"")
             assertEquals(304, again.statusCode())
             assertEquals(emptySet(), directives(again))
+        }
+    }
+
+    @Test
+    fun `a CachingHeaders rule for every response, on the table's route alone, reaches the 304 and not the streams`() {
+        onKtor({
+            routing {
+                route("/table") {
+                    install(CachingHeaders) {
+                        options { _, _ -> CachingOptions(CacheControl.NoCache(CacheControl.Visibility.Private)) }
+                    }
+                    get {
+                        call.response.header(HttpHeaders.ETag, "\"v1\"")
+                        if (call.request.headers[HttpHeaders.IfNoneMatch] == "\"v1\"") {
+                            call.respond(HttpStatusCode.NotModified)
+                        } else {
+                            call.respondElements(orderTable(emptyList(), 1))
+                        }
+                    }
+                }
+                get("/stream") { call.respondDatastar { patchElements(orderTable(emptyList(), 1)) } }
+            }
+        }) { port ->
+            assertEquals(setOf("private", "no-cache"), directives(get(port, "/table")))
+            assertEquals(setOf("private", "no-cache"), directives(get(port, "/table", "If-None-Match" to "\"v1\"")))
+            assertEquals(setOf("no-cache"), directives(get(port, "/stream")))
+        }
+    }
+
+    // What the page says of a version with a space in it: Ktor refuses the tag, and nothing is a 304.
+    @Test
+    fun `a version with a space in it is answered in full every time on Ktor`() {
+        val spaced =
+            object : Orders {
+                override fun version(page: Int) = "2026-11-17 10:00"
+
+                override fun page(page: Int) = emptyList<Order>()
+            }
+        onKtor({ routing { orderRoutes(spaced) } }) { port ->
+            val etag = get(port, "/orders").headers().firstValue("ETag").orElseThrow()
+            assertEquals(200, get(port, "/orders", "If-None-Match" to etag).statusCode())
         }
     }
 
@@ -132,6 +174,7 @@ class CachingPageTest {
     private fun assertCaches(
         port: Int,
         orders: CountingOrders,
+        ktor: Boolean = false,
     ) {
         val first = get(port, "/orders?page=2")
         assertEquals(200, first.statusCode())
@@ -145,6 +188,12 @@ class CachingPageTest {
         assertEquals(etag, again.headers().firstValue("ETag").orElse(null))
         assertEquals(setOf("private", "no-cache"), directives(again), "the 304 carries the 200's Cache-Control")
         assertEquals(1, orders.reads, "a 304 reads no orders")
+        // RFC 9110, 8.6: a 304 sends no Content-Length, or the 200's. Ktor's engine writes 0 on
+        // every answer without a body (BaseApplicationResponse.commitHeaders), and a cache never
+        // takes Content-Length from a 304 (RFC 9111, 3.2), so there it is let through.
+        val length = again.headers().firstValue("Content-Length").orElse(null)
+        val allowed = listOf(null, first.headers().firstValue("Content-Length").orElse(null)) + listOfNotNull("0".takeIf { ktor })
+        assertContains(allowed, length, "the 304's Content-Length")
 
         orders.version++
         val changed = get(port, "/orders?page=2", "If-None-Match" to etag)
@@ -156,8 +205,10 @@ class CachingPageTest {
 
         // A tag with parameters is no ETag. Spring reads past the parameter, Ktor's parser throws;
         // either way it must not become a 500.
-        val malformed = get(port, "/orders?page=2", "If-None-Match" to "\"v2-2\";q=0.5")
-        assertContains(listOf(200, 304), malformed.statusCode(), "a header the server cannot read is not a failure")
+        for (header in listOf("\"v2-2\";q=0.5", "\"a b\"", "a\"b", "\"a,b\"")) {
+            val malformed = get(port, "/orders?page=2", "If-None-Match" to header)
+            assertContains(listOf(200, 304), malformed.statusCode(), "If-None-Match: $header is not a failure")
+        }
     }
 
     private fun onKtor(

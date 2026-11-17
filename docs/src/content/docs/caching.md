@@ -7,7 +7,7 @@ description: "Answer a table as plain HTML with an ETag, and the browser keeps i
 >
 > Gorvek of Bonereach
 
-A stream is not cached. Every stream Streamlord answers with carries `Cache-Control: no-cache`,
+A stream is not cached. Every stream response Streamlord builds carries `Cache-Control: no-cache`,
 because Datastar's SDK specification requires it, and the browser reads it as it arrives. An
 answer that stays the same until your data changes, such as a page of a table, goes out as one
 `text/html` body instead: `respondElements` in Ktor, `datastarElements` in Spring. Datastar
@@ -24,20 +24,21 @@ adapter, and the [live page](/live/#caching) runs it against the deployed servic
 | none                              | every time                | every time                | every time                | yes            |
 | `no-cache` and an ETag            | every time                | only when it changed      | only when it changed      | yes            |
 | `private, max-age`                | not until it runs out     | not until it runs out     | not until it runs out     | no             |
-| `public, max-age`, behind a CDN   | once for all readers      | once for all readers      | once for all readers      | no             |
+| `public, max-age`, behind a CDN   | once per max-age, for all | once per max-age, for all | once per max-age, for all | no             |
 
 An ETag does not spare the server the request. It spares it the work: reading the rows and
-writing the markup, and sending what it wrote. Fifty orders, as the examples below write them,
-come to 2,952 bytes of HTML on Ktor 3.6.1, and the `304` that stands in for them has headers and
-no body. How much the work weighs depends on your database and your markup, not on Streamlord.
+writing the markup, and sending what it wrote. Fifty rows of three short cells, each one
+`<tr><td>1001</td><td>Gorvek</td><td>three swords</td></tr>`, come to 2,952 bytes of HTML with
+the table around them, and the `304` that stands in for them has headers and no body. How much the work weighs depends on your database and your markup, not on Streamlord.
 Only `max-age` keeps requests from reaching the server at all, and it pays for that in data that
 can be out of date; see [ETag or max-age](#etag-or-max-age).
 
 ## What goes over the wire
 
 An ETag, short for entity tag, is a standard HTTP header, part of HTTP itself and not of
-Streamlord or Datastar. The server puts it on an answer to name the version it holds: any text in
-double quotes, such as `"v42-2"`. The browser's own cache keeps it with the answer and sends it
+Streamlord or Datastar. The server puts it on an answer to name the version it holds: a short text in
+double quotes, such as `"v42-2"`, of letters, digits and punctuation, with no space and no quote
+inside. The browser's own cache keeps it with the answer and sends it
 back, and the server only asks whether it is the one it would send now.
 [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/ETag) has the details.
 
@@ -75,9 +76,10 @@ ETag: "v42-2"
 
 The browser then hands Datastar the table it kept, as a `200`, and Datastar patches it in. Datastar
 reads the body of a `200` and of nothing else, and it never sees the `304`. The `304` has to carry
-the same `ETag` and `Cache-Control` as the `200` (RFC 9110, section 15.4.5), since a cache in
-between takes its rules from them. That is the line the adapters below get right, and the one
-that is easy to miss.
+the same `ETag` and `Cache-Control` as the `200`: RFC 9110 requires it, in section 15.4.5. A
+cache sent a `304` without them keeps the ones it stored, so a browser copes, but the answer
+breaks the RFC, and a cache in between is owed the rules. That is the line the adapters below get right,
+and the one that is easy to miss.
 
 The server still has to tell whether anything changed, so the version has to be cheaper than the
 rows. A counter you raise on every write is the simplest. The time of the newest change on the
@@ -92,21 +94,34 @@ that a deploy that changes the markup changes the tag.
 its cache on, so once a search field or a checkbox on the page has changed, the next press asks
 for a new URL, and nothing is reused. Leave out the signals the answer does not depend on:
 
-```html tab="HTML" group=filter label="Markup"
-<button data-on:click="@get('/orders?page=2', {filterSignals: {exclude: /.*/}})">Page 2</button>
-```
-
-```kotlin tab="DSL" group=filter sample=html
+```kotlin tab="kotlinx.html DSL" group=markup label="Markup style" sample=html
 button {
     dataOnClick(get("/orders?page=2") { filterSignals = SignalFilter.exclude(".*") })
     +"Page 2"
 }
 ```
 
+```kotlin tab="String" group=markup sample=declarations
+val pageTwoButton =
+    """<button data-on:click="@get('/orders?page=2', {filterSignals: {exclude: /.*/}})">Page 2</button>"""
+```
+
+```html tab="Template" group=markup
+<button data-on:click="@get('/orders?page=2', {filterSignals: {exclude: /.*/}})">Page 2</button>
+```
+
 The query string then holds `datastar=%7B%7D`, the same on every press. In Chrome with Datastar
 1.0.5, a field bound to a signal on the same page gave a new URL and a full answer after every
 change without the filter, and the kept table every time with it. If the answer does depend on a
 signal, keep that one: `{filterSignals: {include: /^page$/}}`, or `SignalFilter.include("^page$")`.
+
+A table the reader can sort is the common case. Keep the order in the filter beside the page,
+`{filterSignals: {include: /^(page|sort)$/}}`, and each page in each order is a URL of its own,
+kept on its own. In Chrome with Datastar 1.0.5, sorting another way gave a new URL, and sorting
+back gave the very same URL as the first time, so the table kept for it was used again. The first
+look at each order is a `200`. The ETag needs no sort in it, since the browser keeps each URL
+apart; it changes when the data does. Filter the order out, as `exclude: /.*/` does, and the
+server never hears it: every order is the same URL and the same answer, and sorting does nothing.
 
 ## Ktor
 
@@ -126,11 +141,8 @@ fun Route.orderRoutes(orders: Orders) {
         call.response.header(HttpHeaders.CacheControl, "private, no-cache")
         call.response.header(HttpHeaders.ETag, etag)
         val check =
-            try {
-                EntityTagVersion(etag).check(call.request.headers)
-            } catch (_: IllegalStateException) {
-                VersionCheckResult.OK
-            }
+            runCatching { EntityTagVersion(etag).check(call.request.headers) }
+                .getOrDefault(VersionCheckResult.OK)
         if (check != VersionCheckResult.OK) {
             call.respond(check.statusCode)
             return@get
@@ -143,10 +155,12 @@ fun Route.orderRoutes(orders: Orders) {
 `Orders` stands for your repository: `version(page)` is the cheap question, `page(page)` the
 expensive one, and `orderTable` builds the markup. Both headers are set before the check, so the
 `304` carries them too. `EntityTagVersion` comes with Ktor itself, in `ktor-http`, from Ktor 3.0,
-and its `check` compares the way the RFC asks: it takes a weak tag, `W/"…"`, which promises the
-same content but not the same bytes, and a list of several. A header it cannot read, such as a
-tag with `;q=0.5` after it, makes it throw `IllegalStateException`, which left alone is a `500`;
-the `catch` reads it as no match and answers the table.
+and its `check` compares tags the way the RFC asks: it takes a weak tag, `W/"…"`, which promises
+the same content but not the same bytes, and a list of several. It answers `If-None-Match: *` with
+the table, where the RFC asks for a `304`, but no browser sends that. A header it cannot read,
+such as `"a b"` or a tag with `;q=0.5` after it, makes it throw, and left alone that is a `500`;
+`runCatching` reads it as no match and answers the table. Keep spaces and quotes out of your own
+version too: Ktor refuses such a tag, and every request would then be answered in full.
 
 ## Spring WebMVC
 
@@ -250,8 +264,10 @@ tried with `respondElements` or `datastarElements`, on Spring 7.0.10 and Ktor 3.
 - **Ktor's `ConditionalHeaders`** answers `304` for a version you give it in `version { }`, or for
   an `ETag` already set on the response. Either way it acts after the table is built, so it saves
   sending, not building, and it sets no `Cache-Control`.
-- **Ktor's `CachingHeaders`** sets `Cache-Control` by a rule of your own, and neither kind of rule
-  fits here. A rule on the content type does not reach the `304`, which has none, so the `304`
-  goes out without the `Cache-Control` the `200` had. A rule for every response reaches the
-  streams too: with `max-age=60` for everything, a stream went out with
-  `Cache-Control: no-cache, max-age=60`. Set the header in the route, as above.
+- **Ktor's `CachingHeaders`** sets `Cache-Control` by a rule of your own. A rule on the content
+  type does not reach the `304`, which has none, so the `304` goes out without the
+  `Cache-Control` the `200` had. A rule for every response, installed for the whole application,
+  reaches the streams too: with `max-age=60` for everything, a stream went out with
+  `Cache-Control: no-cache, max-age=60`. A rule for every response installed in the table's
+  `route { }` alone does fit, on the `200` and the `304`; so does the header in the route, as
+  above.
