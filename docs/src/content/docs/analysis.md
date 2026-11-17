@@ -47,19 +47,37 @@ swallowed expression:
 
 ```kotlin sample=test
 @Test
+fun `markup holds`() = Analyzer().checkProject()
+```
+
+`checkProject` reads the project under `src/main` and fails with every finding on a line of its
+own, written as a compiler writes them. It reads the Kotlin files and the HTML and template files
+beside them, each as the editors read that kind of file, leaving out hidden folders and those
+named `build`, `node_modules`, `dist`, `out` or `target`. Hand it another folder as `root` where
+the sources lie elsewhere; a folder that is not there fails too, since a check that read nothing
+would pass for ever.
+
+Each file is told what the others declare. A `const val` counts when another file can see it, so
+not a private one, and when no file declares the same name as something else, a `val` with a
+getter for one. The test gives the verdict VS Code gives. It is milder than IntelliJ, which knows
+the type of every value and not only what the text shows, and so warns on some values this test
+lets through.
+
+For the findings themselves, `analyzeProject` returns them, the warnings and hints among them:
+
+```kotlin sample=test
+@Test
 fun `no source file ships markup the analysis calls unsafe`() {
-    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures()
+    val failures = Analyzer().analyzeProject(java.io.File("src/main")).failures()
 
     assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
 }
 ```
 
-`analyzeProject` reads every `.kt` file under the folder, leaving out hidden folders and those
-named `build`, `node_modules`, `dist`, `out` or `target`, the files the VS Code index reads, and gives each file the `const val` names the others declare, as the VS Code index does. A
-constant counts when another file can see it, so not a private one, and when no file declares
-the same name as something else, a `val` with a getter for one. The test gives the verdict VS
-Code gives. It is milder than IntelliJ, which knows the type of every value and not only what
-the text shows, and so warns on some values this test lets through.
+Among them are the two an editor gives from the whole project: a signal a file reads that none
+defines (`unknown-signal`), and one the server reads that no page declares
+(`signal-never-declared`). Both are warnings and fail no build, since a signal can be defined
+where the analysis does not look.
 
 `failures()` keeps the errors: an interpolated signal, an expression that does not parse, and an
 `interpolate(...)` call that throws when it runs, with a `%s` too many or too few
@@ -75,14 +93,10 @@ for a `String` and for markup outside element text, and fails nothing: it is you
 
 ```kotlin sample=test
 @Test
-fun `no value reaches a page without its mark`() {
-    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures(strict = true)
-
-    assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
-}
+fun `no value reaches a page without its mark`() = Analyzer().checkProject(strict = true)
 ```
 
-`failures(strict = true)` keeps those warnings too. Under `interpolate-template`: a value left
+With `strict`, the check fails on those warnings too, as `failures(strict = true)` keeps them. Under `interpolate-template`: a value left
 without its `+` in the block of `interpolate`, one written as a template into its format, and
 markup held as a `String` that `interpolate` would print as text. Under `unescaped-interpolation`:
 a `String`, or markup outside element text, in an HTML string that is not `interpolate`'s. And

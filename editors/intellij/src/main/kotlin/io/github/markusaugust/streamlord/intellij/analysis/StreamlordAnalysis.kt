@@ -18,6 +18,7 @@ import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Modules
+import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.SignalReference
 import io.github.markusaugust.streamlord.analysis.SiteIssues
 import io.github.markusaugust.streamlord.analysis.Source
@@ -319,14 +320,11 @@ class StreamlordAnalysis(
  * The template engine that writes into [file], from its file type as an engine's plugin names it,
  * or from its extension where IntelliJ reads the file as text.
  */
-fun templateEngine(file: PsiFile): TemplateEngine? {
-    val type = file.fileType.name.lowercase()
-    val extension = file.name.substringAfterLast('.', "").lowercase()
-    return when {
-        type in setOf("jte", "kte") || extension in setOf("jte", "kte") -> TemplateEngine.JTE
-        type in setOf("ftl", "freemarker") || extension in setOf("ftl", "ftlh", "ftlx") -> TemplateEngine.FREEMARKER
-        type in setOf("velocity", "vtl") || extension in setOf("vm", "vtl") -> TemplateEngine.VELOCITY
-        type == "razor" || extension in setOf("cshtml", "razor") -> TemplateEngine.RAZOR
-        else -> null
+fun templateEngine(file: PsiFile): TemplateEngine? =
+    when (file.fileType.name.lowercase()) {
+        "jte", "kte" -> TemplateEngine.JTE
+        "ftl", "freemarker" -> TemplateEngine.FREEMARKER
+        "velocity", "vtl" -> TemplateEngine.VELOCITY
+        "razor" -> TemplateEngine.RAZOR
+        else -> ProjectFiles.engineOf(file.name)
     }
-}

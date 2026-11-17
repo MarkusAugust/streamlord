@@ -18,6 +18,25 @@ public fun Analyzer.analyzeProject(
     prefix: String = CatalogNames.PREFIX,
 ): List<ProjectIssue> = analyzeProject(FolderTree(root), prefix).map { it.copy(path = root.resolve(it.path).path) }
 
+/**
+ * The check a build runs, as one line in a test: `fun markup() = Analyzer().checkProject()`. It reads the
+ * project in [root] as [analyzeProject] does and throws an [AssertionError] where a finding should fail a
+ * build, each on a line of its own in the form compilers write, which an IDE and CI make clickable. What
+ * fails is what [failures] keeps, with [strict] each value written without its mark too. A folder that is
+ * not there fails as well: a check that read nothing would pass for ever.
+ */
+public fun Analyzer.checkProject(
+    root: File = File("src/main"),
+    strict: Boolean = false,
+    prefix: String = CatalogNames.PREFIX,
+) {
+    if (!root.isDirectory) throw AssertionError("${root.path} is no folder, so there is nothing to check")
+    val failing = analyzeProject(root, prefix).failures(strict)
+    if (failing.isEmpty()) return
+    val count = if (failing.size == 1) "1 finding" else "${failing.size} findings"
+    throw AssertionError("$count in ${root.path}\n" + failing.joinToString("\n") { it.format() })
+}
+
 /** A folder on disk as a [ProjectTree]. */
 private class FolderTree(
     private val root: File,

@@ -8,7 +8,9 @@ import com.intellij.openapi.fileEditor.impl.LoadTextUtil
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiFile
@@ -476,8 +478,13 @@ class SignalIndex(
         return files.toList().also { listed = counts to it }
     }
 
-    private fun indexable(vf: VirtualFile): Boolean =
-        vf.isValid && !vf.isDirectory && vf.length <= SIZE_CAP && vf.path.split('/').none { it in ProjectFiles.SKIPPED_FOLDERS }
+    /** Whether [vf] is read: no folder between it and the content root that holds it is one the analysis leaves unread. */
+    private fun indexable(vf: VirtualFile): Boolean {
+        if (!vf.isValid || vf.isDirectory || vf.length > SIZE_CAP) return false
+        val root = ProjectFileIndex.getInstance(project).getContentRootForFile(vf)
+        val path = root?.let { VfsUtilCore.getRelativePath(vf, it, '/') } ?: vf.name
+        return !ProjectFiles.inSkippedFolder(path)
+    }
 
     private fun prefix(): String = StreamlordSettings.getInstance(project).attributePrefix
 

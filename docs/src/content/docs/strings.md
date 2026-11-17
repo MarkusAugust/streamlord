@@ -124,11 +124,7 @@ holds the project to it in one test:
 
 ```kotlin sample=test
 @Test
-fun `no value reaches a page without its mark`() {
-    val failures = Analyzer().analyzeProject(java.io.File("src/main/kotlin")).failures(strict = true)
-
-    assertTrue(failures.isEmpty(), failures.joinToString("\n") { it.format() })
-}
+fun `no value reaches a page without its mark`() = Analyzer().checkProject(strict = true)
 ```
 
 The same rule with the values as arguments, which is the form Java has:

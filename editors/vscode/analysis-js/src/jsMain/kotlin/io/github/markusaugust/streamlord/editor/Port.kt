@@ -250,6 +250,10 @@ fun workspaceFiles(): WorkspaceFiles =
         "markupExtensions" to (ProjectFiles.HTML_EXTENSIONS + ProjectFiles.TEMPLATE_EXTENSIONS).plain(),
     )
 
+/** Whether the file at [path], counted from the workspace folder that holds it, lies in a folder left unread. */
+@JsExport
+fun inSkippedFolder(path: String): Boolean = ProjectFiles.inSkippedFolder(path)
+
 /** What one file gives the workspace: the signals it names and defines, its ids and classes, and what its Kotlin lets other files see. */
 @JsExport
 interface FileSignals {

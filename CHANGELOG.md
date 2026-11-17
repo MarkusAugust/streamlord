@@ -18,6 +18,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- The build check is one line: `fun markup() = Analyzer().checkProject()` reads the project under
+  `src/main` and fails with every finding written as a compiler writes them.
+  `checkProject(strict = true)` fails on what `failures(strict = true)` keeps. See
+  [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
+- `analyzeProject` reads HTML and template files too, each as the editors read that kind of file,
+  where it read `.kt` alone, and gives `unknown-signal` and `signal-never-declared` as the editors
+  do. Both are warnings, which `failures()` does not keep. It also takes a `ProjectTree` in place
+  of a folder, for a project that is not on a disk.
+- **Breaking:** `ProjectIssue.file`, a `File`, is `ProjectIssue.path`, a `String`. `format()` is
+  as it was.
 - **Breaking:** `Issue.code` is an `IssueCode`, an enum of every code the analysis gives, where it
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
@@ -27,6 +37,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Editors
 
+- IntelliJ reads a project that lies under a folder named `build`, `out`, `dist` or `target`,
+  which it took for build output and left unread, so every signal in it was unknown. It now counts
+  folders from the project's own root, as VS Code does, and leaves out hidden folders as VS Code
+  does too.
 - IntelliJ shows `one-value`, as VS Code does: the comma that `postExpr`, `peek` and the other
   helpers that write an expression as one value turn into the comma operator. It is under
   "Datastar expression".

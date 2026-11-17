@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { constantsAcross, driftFactsOf, signalPlaces, signalsOf, workspaceFiles, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
+import { constantsAcross, driftFactsOf, inSkippedFolder as skipped, signalPlaces, signalsOf, workspaceFiles, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
 
 /** The markup files read whatever language an extension gives them, and the folders left unread with every hidden one, as the analysis has them. */
 const { markupExtensions: MARKUP_EXTENSIONS, skippedFolders: SKIPPED_FOLDERS } = workspaceFiles();
@@ -287,12 +287,11 @@ export class SignalIndex implements vscode.Disposable {
   }
 }
 
-/** Whether a folder on the way to the file, below the workspace folder that holds it, is one the index leaves unread. */
+/** Whether a folder on the way to the file, below the workspace folder that holds it, is one the analysis leaves unread. */
 export function inSkippedFolder(uri: vscode.Uri): boolean {
   const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => (f.uri.path.endsWith("/") ? f.uri.path : `${f.uri.path}/`));
   const root = roots.filter((r) => uri.path.startsWith(r)).sort((a, b) => b.length - a.length)[0] ?? "/";
-  const folders = uri.path.slice(root.length).split("/").slice(0, -1);
-  return folders.some((name) => SKIPPED_FOLDERS.includes(name) || name.startsWith("."));
+  return skipped(uri.path.slice(root.length));
 }
 
 function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {

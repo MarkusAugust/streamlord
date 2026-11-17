@@ -7,9 +7,10 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-/** [Analyzer.analyzeProject]: the walk, the constants it gathers, and the issues that fail a build. */
+/** [Analyzer.analyzeProject] and [Analyzer.checkProject] on a folder on disk: what fails a build, and how it is told. */
 class AnalyzeProjectTest {
     private val analyzer = Analyzer()
     private val root = createTempDirectory("streamlord-project").toFile()
@@ -131,6 +132,43 @@ class AnalyzeProjectTest {
         write("B.kt", "package p\r\n\r\n$swallowed")
         val found = analyzer.analyzeProject(root).failures().map { Triple(it.name, it.line, it.column) }
         assertEquals(listOf(Triple("A.kt", 1, 24), Triple("B.kt", 3, 24)), found)
+    }
+
+    @Test
+    fun `checkProject says nothing where nothing fails, a hint and an unknown signal among it`() {
+        write("kotlin/Cell.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
+        write("resources/cart.html", "<p data-text=\"\$total\"></p>\n")
+        analyzer.checkProject(root)
+        analyzer.checkProject(root, strict = true)
+    }
+
+    @Test
+    fun `checkProject throws with each failing finding on a line of its own, as a compiler writes it`() {
+        write("kotlin/Click.kt", "package p\n\n$swallowed")
+        write("resources/cart.html", "<main>\n<button data-on:click=\"1 +\">x</button>\n</main>\n")
+        val lines = assertFailsWith<AssertionError> { analyzer.checkProject(root) }.message!!.lines()
+        assertEquals("2 findings in ${root.path}", lines[0])
+        val click = root.resolve("kotlin/Click.kt").path
+        assertTrue(lines[1].startsWith("$click:3:24: error: Kotlin interpolates") && lines[1].endsWith(" [kotlin-interpolation]"), lines[1])
+        val cart = root.resolve("resources/cart.html").path
+        assertTrue(lines[2].startsWith("$cart:2:27: error: Datastar expression: ") && lines[2].endsWith(" [expression-syntax]"), lines[2])
+        assertEquals(3, lines.size)
+    }
+
+    @Test
+    fun `checkProject fails with strict on a value written without its mark, and not without`() {
+        write("Plain.kt", "fun cell(name: String) = \"<td>\$name</td>\"\n")
+        analyzer.checkProject(root)
+        val lines = assertFailsWith<AssertionError> { analyzer.checkProject(root, strict = true) }.message!!.lines()
+        assertEquals("1 finding in ${root.path}", lines[0])
+        assertTrue(lines[1].endsWith(" [unescaped-interpolation]"), lines[1])
+    }
+
+    @Test
+    fun `checkProject fails on a folder that is not there, which would hold nothing to fail on`() {
+        val missing = root.resolve("src/main")
+        val error = assertFailsWith<AssertionError> { analyzer.checkProject(missing) }
+        assertEquals("${missing.path} is no folder, so there is nothing to check", error.message)
     }
 
     @Test

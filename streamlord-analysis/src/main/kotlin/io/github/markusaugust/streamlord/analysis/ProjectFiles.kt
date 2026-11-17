@@ -20,14 +20,19 @@ public object ProjectFiles {
      * by its extension, and null for any other file and for one in a folder left unread.
      */
     public fun languageOf(path: String): SourceLanguage? {
-        val names = path.split('/')
-        if (names.dropLast(1).any(::skips)) return null
-        return when (names.last().substringAfterLast('.', "").lowercase()) {
+        if (inSkippedFolder(path)) return null
+        return when (path.substringAfterLast('/').substringAfterLast('.', "").lowercase()) {
             "kt" -> SourceLanguage.KOTLIN
             in HTML_EXTENSIONS, in TEMPLATE_EXTENSIONS -> SourceLanguage.HTML
             else -> null
         }
     }
+
+    /**
+     * Whether the file at [path], a path from the project's root, lies in a folder left unread: one of
+     * [SKIPPED_FOLDERS] or a hidden one, anywhere on the way down. A folder above the root is not asked about.
+     */
+    public fun inSkippedFolder(path: String): Boolean = path.split('/').dropLast(1).any(::skips)
 
     /** Whether a folder named [folder] is left unread, with all it holds. */
     private fun skips(folder: String): Boolean = folder in SKIPPED_FOLDERS || folder.startsWith(".")
@@ -36,8 +41,8 @@ public object ProjectFiles {
     public fun engineOf(path: String): TemplateEngine? =
         when (path.substringAfterLast('.', "").lowercase()) {
             "jte", "kte" -> TemplateEngine.JTE
-            "ftl", "ftlh" -> TemplateEngine.FREEMARKER
-            "vm" -> TemplateEngine.VELOCITY
+            "ftl", "ftlh", "ftlx" -> TemplateEngine.FREEMARKER
+            "vm", "vtl" -> TemplateEngine.VELOCITY
             "cshtml", "razor" -> TemplateEngine.RAZOR
             else -> null
         }

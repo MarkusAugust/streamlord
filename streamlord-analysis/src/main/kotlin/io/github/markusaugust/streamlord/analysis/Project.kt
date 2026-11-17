@@ -63,7 +63,6 @@ public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails
  */
 public fun List<ProjectIssue>.failures(strict: Boolean): List<ProjectIssue> = filter { if (strict) it.failsStrict else it.fails }
 
-
 /**
  * Every issue of the project in [tree], read with [prefix]: its Kotlin files, and its HTML and
  * template files, each judged as an editor judges that kind of file, and each told what the
@@ -82,7 +81,10 @@ public fun Analyzer.analyzeProject(
         }
     val constants = projectConstants(files.filter { it.second.first == SourceLanguage.KOTLIN }.map { declaredNames(it.second.second) })
     val sources =
-        files.map { (path, file) -> path to Source(file.second, file.first, prefix, constants = constants, engine = ProjectFiles.engineOf(path)) }
+        files.map { (path, file) ->
+            path to
+                Source(file.second, file.first, prefix, constants = constants, engine = ProjectFiles.engineOf(path))
+        }
     val defined = sources.flatMapTo(HashSet()) { collectSignalDefinitions(it.second) }
     val facts = sources.associate { (path, source) -> path to collectSignalFacts(source) }
     return sources.flatMap { (path, source) ->
