@@ -698,7 +698,7 @@ private fun Analyzer.markFix(
 
             else -> "+$operand"
         }
-    return Fix(title, ip.start, ip.end, marked, preferred = preferred, first = true)
+    return Fix(title, ip.start, ip.end, marked, preferred = preferred, leads = true)
 }
 
 /**

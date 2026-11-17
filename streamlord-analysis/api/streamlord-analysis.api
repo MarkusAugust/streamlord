@@ -343,7 +343,7 @@ public final class io/github/markusaugust/streamlord/analysis/Fix {
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getEdits ()Ljava/util/List;
 	public final fun getEnd ()I
-	public final fun getFirst ()Z
+	public final fun getLeads ()Z
 	public final fun getPreferred ()Z
 	public final fun getReplacements ()Ljava/util/List;
 	public final fun getStart ()I

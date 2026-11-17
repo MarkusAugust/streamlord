@@ -27,6 +27,8 @@ function that returns HTML, a `val` holding a fragment), and in `.html` and temp
   errors, a Kotlin template in its format a warning with a fix that makes it a `%s` placeholder.
 - Datastar expression syntax, checked with a real JavaScript parser, with the error at the
   right column.
+- A comma at the top of an expression that a helper of the DSL writes as one value, which makes it
+  JavaScript's comma operator: `postExpr("'/a', {retry: 'never'}")` sends to no address.
 - Unknown actions (`@Post`), Pro actions and Pro attributes (hint: they need the Pro bundle).
 - An empty `data-nonce` on `<html>`, which makes Datastar throw `NonceRequired` and not start,
   is an error; one that is no base64 value, which a browser ignores in the policy, a warning; one

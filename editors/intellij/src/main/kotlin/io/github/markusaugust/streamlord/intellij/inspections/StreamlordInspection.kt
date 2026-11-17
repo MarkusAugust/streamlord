@@ -25,12 +25,12 @@ import io.github.markusaugust.streamlord.intellij.index.SignalIndex
 import org.jetbrains.kotlin.psi.KtFile
 
 /**
- * One inspection per family of checks, all reading the same cached analysis of the file. The
+ * One inspection per topic of checks, all reading the same cached analysis of the file. The
  * Kotlin side judges Kotlin files, whether the string is handed to a Streamlord call or free-
  * standing; the HTML side judges HTML and template files.
  */
 abstract class StreamlordInspection internal constructor(
-    private val family: Family,
+    private val topic: Topic,
 ) : LocalInspectionTool() {
     /** The issues of the file, or null when the file is neither Kotlin nor markup. */
     protected open fun issues(file: PsiFile): List<Issue>? {
@@ -53,7 +53,7 @@ abstract class StreamlordInspection internal constructor(
 
         fun range(issue: Issue) = TextRange(issue.start, minOf(maxOf(issue.end, issue.start + 1), length))
         return issues
-            .filter { family(it.code) == family && it.start < length }
+            .filter { topicOf(it.code) == topic && it.start < length }
             .map { issue ->
                 val range = range(issue)
                 val chosen = profiled?.takes(issue.severity) == true
@@ -78,7 +78,7 @@ abstract class StreamlordInspection internal constructor(
 
     /**
      * The level the user has given this inspection in the profile, beside the one plugin.xml declares, or null when it is
-     * the declared one. One family mixes severities (a syntax error beside a Pro hint), so by default each issue keeps the one
+     * the declared one. One topic mixes severities (a syntax error beside a Pro hint), so by default each issue keeps the one
      * the analysis gave it.
      */
     private fun profileLevel(file: PsiFile): ProfileLevel? {
@@ -127,7 +127,7 @@ private fun highlightSeverity(severity: Severity): HighlightSeverity =
     }
 
 /**
- * The analysis's fixes, the first at the top of the Alt+Enter list where it is preferred or says it leads: the IDE
+ * The analysis's fixes, the first at the top of the Alt+Enter list where it is preferred or leads: the IDE
  * sorts one problem's other fixes by their titles, and would put "Mark … as markup" above the fix that marks the
  * values with `+`. Where the choice between other fixes is the author's, no fix goes above the others.
  */
@@ -137,7 +137,7 @@ private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
             when {
                 i > 0 -> ReplaceTextFix(fix)
                 fix.preferred -> PreferredReplaceTextFix(fix)
-                fix.first -> FirstReplaceTextFix(fix)
+                fix.leads -> FirstReplaceTextFix(fix)
                 else -> ReplaceTextFix(fix)
             }
         }.toTypedArray()
@@ -185,21 +185,21 @@ class FirstReplaceTextFix(
  * `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. And a
  * Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it.
  */
-class KotlinInterpolationInspection : StreamlordInspection(Family.INTERPOLATION)
+class KotlinInterpolationInspection : StreamlordInspection(Topic.INTERPOLATION)
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, the arguments and options an action is
  * given, the types a datastar-fetch handler compares, kebab-case signals, what the client's own
- * rewrite of an expression does that JavaScript would not, and `patch` where the attribute does not
- * hand it over.
+ * rewrite of an expression does that JavaScript would not, `patch` where the attribute does not
+ * hand it over, and a comma that a helper writing one value turns into the comma operator.
  */
-class DatastarExpressionInspection : StreamlordInspection(Family.EXPRESSION)
+class DatastarExpressionInspection : StreamlordInspection(Topic.EXPRESSION)
 
 /**
  * `data-*` attribute names, keys, modifiers and their arguments, values, an indicator with nothing
  * to show or set up too late, signal names the client cannot hold, and the values it evaluates as filters or computeds.
  */
-class DatastarAttributeInspection : StreamlordInspection(Family.ATTRIBUTE)
+class DatastarAttributeInspection : StreamlordInspection(Topic.ATTRIBUTE)
 
 /**
  * A `$name` no file in the project defines: a misspelt signal, or one renamed on one side only.
@@ -213,7 +213,7 @@ class DatastarAttributeInspection : StreamlordInspection(Family.ATTRIBUTE)
  * it reports in this one only ("operate on one file at a time",
  * https://plugins.jetbrains.com/docs/intellij/code-inspections.html); the index holds the rest.
  */
-class UnknownSignalInspection : StreamlordInspection(Family.UNKNOWN_SIGNAL) {
+class UnknownSignalInspection : StreamlordInspection(Topic.UNKNOWN_SIGNAL) {
     override fun issues(file: PsiFile): List<Issue>? {
         val analysis = StreamlordAnalysis.getInstance(file.project)
         val index = SignalIndex.getInstance(file.project)
@@ -232,23 +232,23 @@ class UnknownSignalInspection : StreamlordInspection(Family.UNKNOWN_SIGNAL) {
  * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
  * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
  */
-class DatastarKeyCaseInspection : StreamlordInspection(Family.KEY_CASE)
+class DatastarKeyCaseInspection : StreamlordInspection(Topic.KEY_CASE)
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts, and the arguments core refuses as it runs. */
-class StreamlordMarkupInspection : StreamlordInspection(Family.MARKUP)
+class StreamlordMarkupInspection : StreamlordInspection(Topic.MARKUP)
 
 /** The six inspections, as the settings list them: each code of the analysis belongs to one. */
-internal enum class Family { INTERPOLATION, EXPRESSION, ATTRIBUTE, UNKNOWN_SIGNAL, KEY_CASE, MARKUP }
+internal enum class Topic { INTERPOLATION, EXPRESSION, ATTRIBUTE, UNKNOWN_SIGNAL, KEY_CASE, MARKUP }
 
 /** The inspection that shows [code]. Without an `else`, so a code the analysis gains stops the build until it is placed. */
-internal fun family(code: IssueCode): Family =
+internal fun topicOf(code: IssueCode): Topic =
     when (code) {
         IssueCode.KOTLIN_INTERPOLATION,
         IssueCode.UNESCAPED_INTERPOLATION,
         IssueCode.UNSAFE_INTERPOLATION,
         IssueCode.INTERPOLATE_TEMPLATE,
         IssueCode.INTERPOLATE_PLACEHOLDERS,
-        -> Family.INTERPOLATION
+        -> Topic.INTERPOLATION
 
         IssueCode.EXPRESSION_SYNTAX,
         IssueCode.EMPTY_EXPRESSION,
@@ -266,7 +266,7 @@ internal fun family(code: IssueCode): Family =
         IssueCode.ACTION_ARITY,
         IssueCode.ACTION_ARGUMENT,
         IssueCode.FETCH_EVENT_TYPE,
-        -> Family.EXPRESSION
+        -> Topic.EXPRESSION
 
         IssueCode.UNKNOWN_ATTRIBUTE,
         IssueCode.UNKNOWN_MODIFIER,
@@ -289,18 +289,18 @@ internal fun family(code: IssueCode): Family =
         IssueCode.SIGNAL_NULL,
         IssueCode.MISSING_NONCE,
         IssueCode.INVALID_NONCE,
-        -> Family.ATTRIBUTE
+        -> Topic.ATTRIBUTE
 
         IssueCode.UNKNOWN_SIGNAL,
         IssueCode.SIGNAL_NEVER_DECLARED,
-        -> Family.UNKNOWN_SIGNAL
+        -> Topic.UNKNOWN_SIGNAL
 
         IssueCode.KEY_CASE,
         IssueCode.KEY_CASE_WIRE,
         IssueCode.SIGNAL_NAME_HYPHEN,
         IssueCode.ATTRIBUTE_NAME_CASE,
         IssueCode.KEY_REFUSED,
-        -> Family.KEY_CASE
+        -> Topic.KEY_CASE
 
         IssueCode.MISSING_ID,
         IssueCode.MODE_NEEDS_SELECTOR,
@@ -311,5 +311,5 @@ internal fun family(code: IssueCode): Family =
         IssueCode.SELECTOR_NEWLINE,
         IssueCode.SCRIPT_CLOSE,
         IssueCode.EVENT_REFUSED,
-        -> Family.MARKUP
+        -> Topic.MARKUP
     }
