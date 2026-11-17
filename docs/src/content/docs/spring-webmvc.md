@@ -240,7 +240,8 @@ on that HTML, pass the bean: `datastarElements(html, streamlord = bean)`. It tak
 [`interpolate`](/strings/#values-from-outside) returns as well; `ResponseEntity.ok(interpolate(...))`
 compiles, but no Spring message converter writes an `Html`, so pass it here or write `.text`.
 It is also the answer the browser can cache: [Caching](/caching/) shows the headers, and the one
-a `304` loses when it is set on the entity.
+a `304` loses when it is set on the entity. Signals in such an answer go in its HTML, the way
+[Signals and codecs](/signals/#signals-in-a-plain-answer) shows.
 
 ## Reading signals
 

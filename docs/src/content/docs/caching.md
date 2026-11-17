@@ -15,7 +15,9 @@ patches it in as it would the elements of a stream, and the browser caches it li
 response, since `@get` calls the browser's own `fetch` and sets no cache mode of its own.
 
 Streamlord sets no cache header on such an answer. This page shows which ones to set, on each
-adapter, and the [live page](/live/#caching) runs it against the deployed service.
+adapter, and the [live page](/live/#caching) runs it against the deployed service. An answer that
+also sets signals carries them in its HTML, and
+[Signals and codecs](/signals/#signals-in-a-plain-answer) shows the way that does not fail quietly.
 
 ## What caching saves
 
