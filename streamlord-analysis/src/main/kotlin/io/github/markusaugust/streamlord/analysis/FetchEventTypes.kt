@@ -67,7 +67,7 @@ internal fun fetchTypeIssues(
                     catalog.fetchEvents.joinToString(", ") + " and the datastar events the response sends." +
                     (near?.let { " Did you mean $it?" } ?: ""),
                 Severity.WARNING,
-                "fetch-event-type",
+                IssueCode.FETCH_EVENT_TYPE,
                 Docs.ACTIONS,
                 listOfNotNull(near?.let { Fix("Change to $it", start + 1, end - 1, it) }),
             )

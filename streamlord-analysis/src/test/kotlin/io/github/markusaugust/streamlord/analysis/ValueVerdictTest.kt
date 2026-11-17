@@ -42,8 +42,8 @@ class ValueVerdictTest {
                 ).singleOrNull()
         return when {
             issue == null -> "SAFE"
-            issue.code == "unescaped-interpolation" -> "ESCAPE"
-            issue.code == "unsafe-interpolation" && "as digits" in issue.message -> "DIGITS"
+            issue.code == IssueCode.UNESCAPED_INTERPOLATION -> "ESCAPE"
+            issue.code == IssueCode.UNSAFE_INTERPOLATION && "as digits" in issue.message -> "DIGITS"
             else -> "UNSAFE"
         }
     }

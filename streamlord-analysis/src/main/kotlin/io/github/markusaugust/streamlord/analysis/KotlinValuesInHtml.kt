@@ -249,7 +249,7 @@ internal fun Analyzer.checkInterpolateSite(
                         advice
                     },
                 Severity.ERROR,
-                "interpolate-placeholders",
+                IssueCode.INTERPOLATE_PLACEHOLDERS,
                 fixes = if (spread) listOf(writtenOut(collections)) else emptyList(),
             )
     } else {
@@ -262,7 +262,7 @@ internal fun Analyzer.checkInterpolateSite(
                     "interpolate takes ${shortened(v.text)} as one value and writes it whole, in brackets, escaped like any text. " +
                         "Write the elements out to pass them as the values.",
                     Severity.HINT,
-                    "interpolate-placeholders",
+                    IssueCode.INTERPOLATE_PLACEHOLDERS,
                     fixes = listOf(writtenOut(listOf(c))),
                 )
         }
@@ -487,7 +487,7 @@ private fun Analyzer.judgeInterpolated(
                     "$base It lands in $where. $instead"
                 }
             } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
-        issues += Issue(ip.start, ip.end, message, Severity.WARNING, "interpolate-template", valueLink(landing), fixes)
+        issues += Issue(ip.start, ip.end, message, Severity.WARNING, IssueCode.INTERPOLATE_TEMPLATE, valueLink(landing), fixes)
     }
     for ((k, d) in at.withIndex()) {
         val landing = landings[format.interpolations.size + k]
@@ -506,7 +506,7 @@ private fun Analyzer.judgeInterpolated(
             fixes: List<Fix> = emptyList(),
         ): Issue {
             val severity = if (certain) Severity.ERROR else Severity.WARNING
-            return Issue(r.first, r.last + 1, message, severity, "unsafe-interpolation", valueLink(landing), fixes)
+            return Issue(r.first, r.last + 1, message, severity, IssueCode.UNSAFE_INTERPOLATION, valueLink(landing), fixes)
         }
         // interpolate refuses everything but Trusted in a URL that loads code, unless what comes before the
         // URL's first value nobody vouched for fixes its host: the markup as written, a literal Trusted's text
@@ -568,7 +568,7 @@ private fun Analyzer.judgeInterpolated(
                     "interpolate escapes ${shortened(arg.text)} here, so the tags it holds are printed as text: it is markup held " +
                         "as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built " +
                         "yourself in Trusted(...)."
-                issues += Issue(r.first, r.last + 1, message, Severity.WARNING, "interpolate-template", valueLink(landing))
+                issues += Issue(r.first, r.last + 1, message, Severity.WARNING, IssueCode.INTERPOLATE_TEMPLATE, valueLink(landing))
             }
             continue
         }
@@ -698,7 +698,7 @@ private fun Analyzer.markFix(
 
             else -> "+$operand"
         }
-    return Fix(title, ip.start, ip.end, marked, preferred = preferred)
+    return Fix(title, ip.start, ip.end, marked, preferred = preferred, leads = true)
 }
 
 /**
@@ -941,7 +941,7 @@ internal fun Analyzer.traps(
                     (if (advisesSignal) "Write signal(\"${ip.text}\"), make" else "Make") +
                     " the literal \$\$\"...\" (Kotlin 2.2+), or escape as \${'$'}${ip.text}.",
             severity = Severity.ERROR,
-            code = "kotlin-interpolation",
+            code = IssueCode.KOTLIN_INTERPOLATION,
             link = Docs.EXPRESSIONS,
             fixes = fixes,
         )
@@ -1132,7 +1132,7 @@ internal fun Analyzer.judgeValues(
         fun issue(
             message: String,
             severity: Severity = Severity.WARNING,
-            code: String = "unsafe-interpolation",
+            code: IssueCode = IssueCode.UNSAFE_INTERPOLATION,
             fixes: List<Fix> = emptyList(),
         ): Issue = Issue(ip.start, ip.end, message, severity, code, valueLink(landing), fixes)
 
@@ -1161,7 +1161,7 @@ internal fun Analyzer.judgeValues(
             // value of unknown type may be markup the author composed; a known String stays a warning.
             val message = unescapedMessage(shown, fact.isMarkup(), text, canInterpolate, canTrust && !opens, opts.modules.coreHtml)
             val level = if (!core && trust && fact == null) Severity.HINT else severity
-            return issue(message + rewriteNote(), level, "unescaped-interpolation", fixes)
+            return issue(message + rewriteNote(), level, IssueCode.UNESCAPED_INTERPOLATION, fixes)
         }
 
         fun schemeIssue(attribute: String): Issue {
@@ -1515,7 +1515,7 @@ internal fun Analyzer.datastarIssue(
             datastarAdvice(attribute, "; ") +
             "only a number or a boolean is safe to write in.",
         Severity.WARNING,
-        "unsafe-interpolation",
+        IssueCode.UNSAFE_INTERPOLATION,
         Docs.EXPRESSIONS,
     )
 

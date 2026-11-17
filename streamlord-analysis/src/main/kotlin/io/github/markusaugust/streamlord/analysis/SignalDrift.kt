@@ -339,7 +339,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
                             "No markup declares the signal '${property.name}', so $type.${property.name} will " +
                                 "always be its default. Check the name against the page, or drop the property.",
                         severity = Severity.WARNING,
-                        code = "signal-never-declared",
+                        code = IssueCode.SIGNAL_NEVER_DECLARED,
                         link = Docs.SIGNALS,
                     )
             }
@@ -356,7 +356,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
                         "No markup declares the signal '${lookup.name}', so this read will always be null. " +
                             "Check the name against the page.",
                     severity = Severity.WARNING,
-                    code = "signal-never-declared",
+                    code = IssueCode.SIGNAL_NEVER_DECLARED,
                     link = Docs.SIGNALS,
                 )
         }

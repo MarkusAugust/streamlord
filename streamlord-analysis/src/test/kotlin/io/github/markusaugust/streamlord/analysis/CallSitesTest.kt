@@ -13,7 +13,7 @@ class CallSitesTest {
             val name = case.string("name")
             val src = case.string("src")!!
             val issues = analyzer.analyzeKotlin(src)
-            case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code }, name) }
+            case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code.id }, name) }
             case.array("spans")?.let { assertEquals(it.strings(), issues.map { i -> src.substring(i.start, i.end) }, name) }
             case.obj("fix")?.let { want ->
                 val on = want.string("on")

@@ -57,11 +57,11 @@ class RewriteAtTest {
     fun `an issue with another fix over the whole literal does not stand for the rewrite`() {
         // The dollar trap's fix to a multi-dollar literal replaces the literal too, and is no rewrite to interpolate.
         val src = "fun f(count: String, name: String) = \"<p data-text=\\\"\$count\\\" title=\\\"\$name\\\">x</p>\""
-        val trap = analyzer.analyzeKotlin(src).single { it.code == "kotlin-interpolation" }
+        val trap = analyzer.analyzeKotlin(src).single { it.code == IssueCode.KOTLIN_INTERPOLATION }
         assertEquals(true, trap.fixes.any { it.start == src.indexOf("\"<p") })
         assertNull(offered(src, "data-text"))
         val plain = "fun f(n: Int, name: String) = \"<p data-text=\\\"\$n\\\" title=\\\"\$name\\\">x</p>\""
-        assertEquals(true, analyzer.analyzeKotlin(plain).any { it.code == "kotlin-interpolation" })
+        assertEquals(true, analyzer.analyzeKotlin(plain).any { it.code == IssueCode.KOTLIN_INTERPOLATION })
         assertEquals("Mark the values with + in interpolate { }, which escapes the values", offered(plain, "\$n\\\"")?.title)
     }
 

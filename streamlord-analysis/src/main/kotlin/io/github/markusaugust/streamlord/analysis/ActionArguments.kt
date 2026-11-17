@@ -141,7 +141,7 @@ private class Judge(
         from: Int,
         to: Int,
         message: String,
-        code: String,
+        code: IssueCode,
         link: String,
         fixes: List<Fix> = emptyList(),
     ) {
@@ -293,7 +293,7 @@ private class Judge(
                     keyRange.first,
                     keyRange.last + 1,
                     unknown(key) + (near?.let { " Did you mean $it?" } ?: ""),
-                    "unknown-option",
+                    IssueCode.UNKNOWN_OPTION,
                     link,
                     listOfNotNull(near?.let { Fix("Change to $it", inner, inner + key.length, it) }),
                 )
@@ -310,14 +310,14 @@ private class Judge(
                         v.start,
                         v.end,
                         "${field.name} takes ${field.type}, and with ${shown(v)} ${field.otherwise}.",
-                        "option-value",
+                        IssueCode.OPTION_VALUE,
                         link,
                     )
                 }
 
                 !field.kind.takes(v) || v.written == Written.NULL -> {
                     wrong(field.kind, v, field.otherwise, filterChanges = false, url = false)?.let {
-                        issue(v.start, v.end, "${field.name} takes ${field.kind.phrase()}, and $it", "option-value", link)
+                        issue(v.start, v.end, "${field.name} takes ${field.kind.phrase()}, and $it", IssueCode.OPTION_VALUE, link)
                     }
                 }
 
@@ -369,7 +369,7 @@ internal fun actionArgumentIssues(
                     at(call.start),
                     at(call.end),
                     "@${spec.name} needs ${count(required)}, as in ${spec.signature}, and is given ${pieces.size}.",
-                    "action-arity",
+                    IssueCode.ACTION_ARITY,
                     link,
                 )
             } else if (pieces.size > parameters.size) {
@@ -377,7 +377,7 @@ internal fun actionArgumentIssues(
                     at(pieces[parameters.size].outerStart),
                     at(pieces.last().outerEnd),
                     "@${spec.name} takes at most ${count(parameters.size)}, as in ${spec.signature}, and Datastar ignores the rest.",
-                    "action-arity",
+                    IssueCode.ACTION_ARITY,
                     link,
                 )
             }
@@ -404,7 +404,7 @@ internal fun actionArgumentIssues(
                             filterChanges = true,
                             url = url,
                             known = !spec.pro,
-                        )?.let { issue(v.start, v.end, takes + it, "action-argument", link) }
+                        )?.let { issue(v.start, v.end, takes + it, IssueCode.ACTION_ARGUMENT, link) }
                     }
 
                     v.written == Written.STRING && v.text != null && values.getOrNull(n).let { !it.isNullOrEmpty() && v.text !in it } -> {
@@ -423,7 +423,7 @@ internal fun actionArgumentIssues(
                                 ", ",
                             ) { "'$it'" }} as $parameter$source, and ${shown(v)} is none of them." +
                                 (near?.let { " Did you mean '$it'?" } ?: ""),
-                            "action-argument",
+                            IssueCode.ACTION_ARGUMENT,
                             link,
                             listOfNotNull(near?.let { Fix("Change to '$it'", v.start, v.end, js[v.start] + it + js[v.start]) }),
                         )
@@ -466,7 +466,7 @@ internal fun filterValueIssues(
         val v = value(root)
         if (!ArgumentKind.FILTER.takes(v) || v.written == Written.NULL) {
             wrong(ArgumentKind.FILTER, v, "", filterChanges = false, url = false)?.let {
-                issue(v.start, v.end, "$name takes ${ArgumentKind.FILTER.phrase()}, and $it", "option-value", link)
+                issue(v.start, v.end, "$name takes ${ArgumentKind.FILTER.phrase()}, and $it", IssueCode.OPTION_VALUE, link)
             }
         } else if (v.written == Written.OBJECT) {
             judgeObject(root, catalog.filterFields, filterKey, link)

@@ -184,7 +184,7 @@ private fun unknownSignalIssue(
             "No markup or code in the project defines the signal '${ref.name}'." +
                 (near?.let { " Did you mean \$$it?" } ?: ""),
         severity = Severity.WARNING,
-        code = "unknown-signal",
+        code = IssueCode.UNKNOWN_SIGNAL,
         link = Docs.SIGNALS,
         fixes = near?.let { listOf(Fix("Change to \$$it", nameStart, nameStart + misspelt.length, it)) } ?: emptyList(),
     )

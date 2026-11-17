@@ -67,7 +67,7 @@ export function activate(context: vscode.ExtensionContext): void {
       found.map((i) => {
         const d = new vscode.Diagnostic(new vscode.Range(document.positionAt(i.start), document.positionAt(i.end)), i.message, severity(i.severity));
         d.source = "streamlord";
-        d.code = i.code && i.link ? { value: i.code, target: vscode.Uri.parse(i.link) } : (i.code ?? undefined);
+        d.code = i.link ? { value: i.code, target: vscode.Uri.parse(i.link) } : i.code;
         return d;
       }),
     );

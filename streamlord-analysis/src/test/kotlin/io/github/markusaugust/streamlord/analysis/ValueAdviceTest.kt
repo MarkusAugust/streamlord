@@ -38,7 +38,7 @@ class ValueAdviceTest {
                     ).sortedWith(
                         compareBy({
                             it.start
-                        }, { it.end }, { it.code }),
+                        }, { it.end }, { it.code.id }),
                     )
             assertEquals(
                 expected.map { "${it.string("code")} ${it.string("text")}" },

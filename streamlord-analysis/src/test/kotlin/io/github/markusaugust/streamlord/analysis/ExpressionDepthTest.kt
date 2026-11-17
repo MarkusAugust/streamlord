@@ -16,22 +16,22 @@ class ExpressionDepthTest {
 
     @Test
     fun `a value the parser reads is judged at its depth`() {
-        assertEquals(listOf("action-argument"), judged("@get(" + "- ".repeat(READ) + "1)"))
-        assertEquals(listOf("action-argument"), judged("@get('/x', " + "[".repeat(READ) + "]".repeat(READ) + ")"))
-        assertEquals(listOf("option-value"), judged("@get('/x', {retry: " + "(".repeat(READ) + "1" + ")".repeat(READ) + "})"))
+        assertEquals(listOf(IssueCode.ACTION_ARGUMENT), judged("@get(" + "- ".repeat(READ) + "1)"))
+        assertEquals(listOf(IssueCode.ACTION_ARGUMENT), judged("@get('/x', " + "[".repeat(READ) + "]".repeat(READ) + ")"))
+        assertEquals(listOf(IssueCode.OPTION_VALUE), judged("@get('/x', {retry: " + "(".repeat(READ) + "1" + ")".repeat(READ) + "})"))
         assertEquals(emptyList(), judged("@get(" + "1 + ".repeat(READ) + "1)"))
     }
 
     @Test
     fun `a value past what the stack holds is refused or judged, and never thrown`() {
-        val refused = listOf("expression-syntax")
+        val refused = listOf(IssueCode.EXPRESSION_SYNTAX)
         for (value in listOf(
             "@get(" + "- ".repeat(DEEP) + "1)",
             "@get('/x', " + "[".repeat(DEEP) + "]".repeat(DEEP) + ")",
             "@get('/x', " + "{retry: ".repeat(DEEP) + "1" + "}".repeat(DEEP) + ")",
         )) {
             val codes = judged(value)
-            assertTrue(codes == refused || codes.all { it == "action-argument" || it == "option-value" }, codes.toString())
+            assertTrue(codes == refused || codes.all { it == IssueCode.ACTION_ARGUMENT || it == IssueCode.OPTION_VALUE }, codes.toString())
         }
         assertTrue(judged("@get(" + "1 + ".repeat(DEEP) + "1)").let { it.isEmpty() || it == refused })
     }

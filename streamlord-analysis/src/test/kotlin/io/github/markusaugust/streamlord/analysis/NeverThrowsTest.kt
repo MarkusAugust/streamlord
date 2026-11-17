@@ -136,7 +136,7 @@ class NeverThrowsTest {
     @Test
     fun `a helper whose name is given by name and is no literal is left alone`() {
         val src = "fun f() = div { dataAttr(name = \"tab-index\".uppercase(), expression = \"0\") }"
-        assertEquals(emptyList(), analyzer.analyzeKotlin(src).filter { it.code == "attribute-case" })
+        assertEquals(emptyList(), analyzer.analyzeKotlin(src).filter { it.code == IssueCode.ATTRIBUTE_NAME_CASE })
     }
 
     @Test

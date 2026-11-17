@@ -11,6 +11,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
+import io.github.markusaugust.streamlord.analysis.IssueCode
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -347,7 +348,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
             ) as KtFile
         val analysis = StreamlordAnalysis.getInstance(project)
         val number = background { analysis.kotlinIssues(file) }.flatMap { it.issues }
-        assertEquals(emptyList<String>(), number.map { it.code })
+        assertEquals(emptyList<IssueCode>(), number.map { it.code })
         val values = myFixture.findFileInTempDir("Values.kt")
         WriteCommandAction.runWriteCommandAction(project) {
             val document = FileDocumentManager.getInstance().getDocument(values)!!
@@ -355,7 +356,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
             PsiDocumentManager.getInstance(project).commitDocument(document)
         }
         val string = background { analysis.kotlinIssues(file) }.flatMap { it.issues }
-        assertEquals(listOf("unescaped-interpolation"), string.map { it.code })
+        assertEquals(listOf(IssueCode.UNESCAPED_INTERPOLATION), string.map { it.code })
     }
 
     fun `test an edit in another file types the placeholders again but does not run the analysis again`() {

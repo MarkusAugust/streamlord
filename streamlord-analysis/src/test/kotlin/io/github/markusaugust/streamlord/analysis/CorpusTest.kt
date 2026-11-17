@@ -84,14 +84,14 @@ class CorpusTest {
             for (case in corpus.array("cases")!!.objects()) {
                 val source = case.string("source")!!
                 val expected = case.array("issues")!!.objects()
-                val actual = run(corpus.string("kind")!!, case).sortedWith(compareBy({ it.start }, { it.end }, { it.code }))
+                val actual = run(corpus.string("kind")!!, case).sortedWith(compareBy({ it.start }, { it.end }, { it.code.id }))
                 val seen =
                     actual.mapIndexed { n, i ->
                         val e = expected.getOrNull(n)
                         val open = e?.let { it.int("start") == null } ?: false
                         val severity = i.severity.name.lowercase()
                         line(
-                            i.code,
+                            i.code.id,
                             if (open) null else i.start to i.end,
                             severity.takeIf { e?.string("severity") != null },
                             i.message.takeIf { e?.string("message") != null },

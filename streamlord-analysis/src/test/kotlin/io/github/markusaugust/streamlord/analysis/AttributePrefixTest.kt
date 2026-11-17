@@ -65,7 +65,7 @@ class AttributePrefixTest {
         fun page(ignore: String) =
             dsl + "fun FlowContent.f() { div { attributes[\"$ignore\"] = \"\"; span { dataText(\"\\\$count +\") } } }"
         assertEquals(emptyList(), kotlin(page("data-ds-ignore"), "data-ds-"))
-        assertEquals(listOf("expression-syntax"), kotlin(page("data-ignore"), "data-star-"))
+        assertEquals(listOf(IssueCode.EXPRESSION_SYNTAX), kotlin(page("data-ignore"), "data-star-"))
         assertEquals(emptyList(), kotlin(page("data-ignore"), "data-"))
     }
 }

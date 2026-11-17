@@ -12,7 +12,7 @@ class SignalNameHyphensTest {
         for (case in sharedCases("signal-name-hyphens.json")) {
             val name = case.string("name")
             val src = case.string("src")!!
-            val issues = analyzer.analyzeKotlin(src).filter { it.code == "signal-name-hyphen" }
+            val issues = analyzer.analyzeKotlin(src).filter { it.code == IssueCode.SIGNAL_NAME_HYPHEN }
             val fixes = issues.flatMap { it.fixes }.sortedByDescending { it.start }
             val fixed = fixes.fold(src) { s, f -> s.replaceRange(f.start, f.end, f.text) }
             case.array("names")?.let { assertEquals(it.strings(), issues.map { i -> src.substring(i.start + 1, i.end - 1) }, name) }

@@ -8,7 +8,6 @@ import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarAttributeInspection
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarExpressionInspection
 import io.github.markusaugust.streamlord.intellij.inspections.DatastarKeyCaseInspection
-import io.github.markusaugust.streamlord.intellij.inspections.InspectionCodes
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.inspections.StreamlordMarkupInspection
 import io.github.markusaugust.streamlord.intellij.inspections.UnknownSignalInspection
@@ -34,6 +33,16 @@ class InspectionTest : StreamlordTestCase() {
         val fix = myFixture.getAllQuickFixes().first { it.text == "Use increment(\"count\")" }
         myFixture.launchAction(fix)
         myFixture.checkResult("import io.github.markusaugust.streamlord.html.increment\n\nfun f() { dataOnClick(increment(\"count\")) }")
+    }
+
+    fun `test a comma at the top of an Expr action is a warning`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "import io.github.markusaugust.streamlord.html.*\nfun f() = elements { div { dataOnClick(postExpr(\"'/a', {retry: 'never'}\")) } }",
+        )
+        val highlights = myFixture.doHighlighting().filter { it.description?.contains("comma operator") == true }
+        assertEquals(listOf(","), highlights.map { it.text })
+        assertEquals(HighlightSeverity.WARNING, highlights.single().severity)
     }
 
     fun `test html strings in kotlin get the attribute checks with offsets`() {
@@ -250,28 +259,6 @@ class InspectionTest : StreamlordTestCase() {
         )
         val highlights = myFixture.doHighlighting().filter { it.description?.contains("defines the signal") == true }
         assertEquals(listOf("\$cuont"), highlights.map { it.text })
-    }
-
-    fun `test every issue code belongs to an inspection`() {
-        val analyzer = StreamlordAnalysis.getInstance(project).analyzer
-        val src =
-            listOf(
-                "dataOnClick(\"\$a\"); dataText(\"@Post('x') + \$b-c +\"); dataOnClick(\"@clipboard(1)\"); dataText(\" \")",
-                "s.patchElements(\"\"\"<div data-onn:x=\"1\" data-on:click__debunce=\"y()\" data-on=\"1\" data-text:k=\"1\" data-persist=\"1\"",
-                " data-bind=\"\$x + 1\" data-star-on:x=\"1\" data-signals:fooBar=\"1\" data-on-intersect__threshold.150=\"y()\"></div><p>x\"\"\")",
-                "s.patchElements(\"<li>x</li>\", mode = ElementPatchMode.APPEND); s.removeElements(\" \"); s.removeElements(\"a\\nb\")",
-                "s.executeScript(\"'</script>'\"); dataSignals(\"fooBar\", \"1\"); s.patchElements(\"text </b>\")",
-                "s.patchElements(\"\"\"<span id=\"busy\" data-indicator:busy></span>\"\"\")",
-                "s.patchElements(\"\"\"<div id=\"n\" data-bind=\"__proto__.x\" data-computed=\"\${'$'}a + 1\" data-json-signals=\"{include: '/a/i'}\"",
-                " data-text=\"`\${'$'}t \${'$'}{ {a: 1}.a }` + ((n) => { n; return n })(1)\" data-on:click=\"x // '\n\${'$'}b = 'y'\"></div>\"\"\")",
-            ).joinToString("\n")
-        val codes = analyzer.analyzeKotlin(src).mapNotNull { it.code }.toSet()
-        val unclaimed = codes - InspectionCodes.all
-        assertEquals(emptySet<String>(), unclaimed)
-        assertTrue(codes.toString(), codes.size > 15)
-        assertTrue(codes.toString(), "indicator-without-action" in codes)
-        val added = setOf("literal-rewritten", "signal-not-read", "statement-split", "signal-name", "computed-value", "filter-pattern")
-        assertEquals(added, codes.intersect(added))
     }
 
     fun `test a modifier datastar ignores is a warning, and one it reads into the event an error`() {

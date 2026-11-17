@@ -213,8 +213,11 @@ internal fun aroundPlaceholders(
     if (PLACEHOLDER !in text) return issues
     val at = generateSequence(text.indexOf(PLACEHOLDER)) { text.indexOf(PLACEHOLDER, it + 1).takeIf { n -> n >= 0 } }.toList()
     val regions by lazy(LazyThreadSafetyMode.NONE) { jsRegions(text) }
-    val syntax = issues.none { it.code == "expression-syntax" } || at.none { regions[it] == Region.CODE && signalMeant(it) }
-    return issues.filter { i -> (syntax || i.code != "expression-syntax") && at.none { i.start < it + PLACEHOLDER.length && i.end > it } }
+    val syntax = issues.none { it.code == IssueCode.EXPRESSION_SYNTAX } || at.none { regions[it] == Region.CODE && signalMeant(it) }
+    return issues.filter { i ->
+        (syntax || i.code != IssueCode.EXPRESSION_SYNTAX) &&
+            at.none { i.start < it + PLACEHOLDER.length && i.end > it }
+    }
 }
 
 /** Whether a template construct starts at [at] in a tag's text, where it cuts the attribute name before it short: `${`, `{{`, `<%`. */
@@ -683,11 +686,12 @@ public class MarkupValidator(
             if (tag.closing) {
                 val idx = stack.indexOfLast { it.name == tag.name }
                 if (idx < 0) {
-                    issues += Issue(tag.start, tag.end, "Stray closing tag </${tag.name}>.", Severity.ERROR, "stray-close")
+                    issues += Issue(tag.start, tag.end, "Stray closing tag </${tag.name}>.", Severity.ERROR, IssueCode.STRAY_CLOSE)
                 } else {
                     for (unclosed in stack.subList(idx + 1, stack.size)) {
                         if (unclosed.name in OPTIONAL_END) continue
-                        issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, "unclosed")
+                        issues +=
+                            Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, IssueCode.UNCLOSED)
                     }
                     while (stack.size > idx) stack.removeAt(stack.size - 1)
                 }
@@ -710,7 +714,7 @@ public class MarkupValidator(
         }
         for (unclosed in stack) {
             if (unclosed.name in OPTIONAL_END) continue
-            issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, "unclosed")
+            issues += Issue(unclosed.start, unclosed.end, "<${unclosed.name}> is never closed.", Severity.ERROR, IssueCode.UNCLOSED)
         }
         for (t in topLevelText) {
             if (TEMPLATE_SYNTAX.containsMatchIn(html.substring(t.start, t.end))) continue
@@ -720,7 +724,7 @@ public class MarkupValidator(
                     t.end,
                     "Datastar patches complete elements, not text fragments. Wrap this in an element.",
                     Severity.WARNING,
-                    "top-level-text",
+                    IssueCode.TOP_LEVEL_TEXT,
                 )
         }
         if (opts.requireIds) {
@@ -736,7 +740,7 @@ public class MarkupValidator(
                                 "<${tag.name}> has no id. Without a selector, Datastar matches top-level elements by id " +
                                     "and silently ignores the rest.",
                             severity = Severity.WARNING,
-                            code = "missing-id",
+                            code = IssueCode.MISSING_ID,
                             link = Docs.SSE,
                             fixes = listOf(Fix("Add id=\"${tag.name}\"", afterName, afterName, " id=\"${tag.name}\"")),
                         )
@@ -839,7 +843,7 @@ public class MarkupValidator(
             attr.nameEnd,
             "The prefix is set to $prefix, so Datastar ignores ${attr.name}. Check $prefixSetting.",
             Severity.WARNING,
-            "prefix-mismatch",
+            IssueCode.PREFIX_MISMATCH,
             fixes = listOf(Fix("Change to $aliased", attr.nameStart, attr.nameStart + CatalogNames.PREFIX.length, prefix)),
         )
     }
@@ -872,7 +876,7 @@ public class MarkupValidator(
                         attr.nameEnd,
                         "This is an aliased Datastar attribute, but the prefix is set to data-. Check $prefixSetting.",
                         Severity.WARNING,
-                        "prefix-mismatch",
+                        IssueCode.PREFIX_MISMATCH,
                     )
                 continue
             }
@@ -911,7 +915,7 @@ public class MarkupValidator(
                         end = nameEnd,
                         message = "$message Did you mean $prefix${meant.name}?",
                         severity = if (sure) Severity.WARNING else Severity.HINT,
-                        code = "unknown-attribute",
+                        code = IssueCode.UNKNOWN_ATTRIBUTE,
                         link = Docs.attribute(meant),
                         fixes = listOf(Fix("Change to $prefix${meant.name}", attr.nameStart, baseEnd, "$prefix${meant.name}")),
                     )
@@ -948,7 +952,7 @@ public class MarkupValidator(
                                         "The key follows a colon: $fixed."
                                     },
                             severity = Severity.WARNING,
-                            code = "unknown-attribute",
+                            code = IssueCode.UNKNOWN_ATTRIBUTE,
                             link = Docs.attribute(if (init) "init" else keyedSpec.name),
                             fixes = listOf(Fix("Change to $fixed", attr.nameStart, baseEnd, fixed)),
                         )
@@ -974,7 +978,7 @@ public class MarkupValidator(
                             "$prefix${spec.name}: has an empty key, so Datastar reads ${spec.name}: as an attribute it does not have " +
                                 "and does nothing with it. " + emptyKeyAdvice(spec, prefix, !attr.value.isNullOrEmpty(), cut),
                         severity = Severity.WARNING,
-                        code = "unknown-attribute",
+                        code = IssueCode.UNKNOWN_ATTRIBUTE,
                         link = link,
                         // Only where the attribute runs without the colon: data-text with no value raises ValueRequired.
                         fixes =
@@ -993,7 +997,7 @@ public class MarkupValidator(
                         nameEnd,
                         "$prefix${spec.name} is a Datastar Pro attribute; it needs the Pro bundle.",
                         Severity.HINT,
-                        "pro-attribute",
+                        IssueCode.PRO_ATTRIBUTE,
                         link,
                     )
             }
@@ -1004,12 +1008,20 @@ public class MarkupValidator(
                         nameEnd,
                         "$prefix${spec.name} needs a key, e.g. ${spec.forms.firstOrNull() ?: ""}.",
                         Severity.ERROR,
-                        "missing-key",
+                        IssueCode.MISSING_KEY,
                         link,
                     )
             }
             if (!spec.keyed && parsed.key != null && parsed.key !in spec.keys && !templated) {
-                issues += Issue(attr.nameStart, nameEnd, "$prefix${spec.name} does not take a key.", Severity.ERROR, "unexpected-key", link)
+                issues +=
+                    Issue(
+                        attr.nameStart,
+                        nameEnd,
+                        "$prefix${spec.name} does not take a key.",
+                        Severity.ERROR,
+                        IssueCode.UNEXPECTED_KEY,
+                        link,
+                    )
             }
             if (parsed.key != null && !templated) issues += validateKeyCase(attr, parsed, spec, prefix, tag.name)
             val named = validateSignalNames(attr, parsed, spec, prefix, templated)
@@ -1024,7 +1036,7 @@ public class MarkupValidator(
                         nameEnd,
                         "$prefix${spec.name} needs a value; without one Datastar raises ValueRequired.",
                         Severity.ERROR,
-                        "missing-value",
+                        IssueCode.MISSING_VALUE,
                         link,
                     )
             }
@@ -1039,7 +1051,7 @@ public class MarkupValidator(
                             "$prefix${spec.name} needs a signal, as a key or as a value; without one Datastar raises KeyOrValueRequired."
                         },
                         Severity.ERROR,
-                        if (hasKey) "key-and-value" else "missing-key-or-value",
+                        if (hasKey) IssueCode.KEY_AND_VALUE else IssueCode.MISSING_KEY_OR_VALUE,
                         link,
                     )
             }
@@ -1050,7 +1062,7 @@ public class MarkupValidator(
                         nameEnd,
                         "$prefix${spec.name} only works on <${spec.onlyOn.joinToString(">, <")}>.",
                         Severity.WARNING,
-                        "wrong-element",
+                        IssueCode.WRONG_ELEMENT,
                         link,
                     )
             }
@@ -1059,7 +1071,7 @@ public class MarkupValidator(
             if (spec.name == "nonce" && tag.name == "html" && !templated) {
                 val raw = attr.value.orEmpty()
                 if (raw.isEmpty()) {
-                    issues += Issue(attr.nameStart, nameEnd, CspNonce.problem("")!!, Severity.ERROR, "missing-nonce", link)
+                    issues += Issue(attr.nameStart, nameEnd, CspNonce.problem("")!!, Severity.ERROR, IssueCode.MISSING_NONCE, link)
                 } else if (!hasTemplateSyntax(raw) && decodeEntities(raw).text.none { it in "\$@{}[]<%#" }) {
                     // No base64 value holds one of these, so a value with one is a template's: `$nonce` in Velocity,
                     // `@nonce` in Razor or Twirl, `{nonce}` in Svelte.
@@ -1070,7 +1082,7 @@ public class MarkupValidator(
                                 attr.valueEnd,
                                 "$problem. A browser ignores such a nonce in the policy and blocks what it would allow.",
                                 Severity.WARNING,
-                                "invalid-nonce",
+                                IssueCode.INVALID_NONCE,
                                 link,
                             )
                     }
@@ -1103,7 +1115,7 @@ public class MarkupValidator(
                                     "Unknown modifier __${mod.name} on $prefix${spec.name}, which Datastar ignores$listensFor. " +
                                         "A modifier's arguments follow a dot: __$dotted.",
                                 severity = Severity.WARNING,
-                                code = "unknown-modifier",
+                                code = IssueCode.UNKNOWN_MODIFIER,
                                 link = link,
                                 fixes = listOf(Fix("Change to __$dotted", mstart, mstart + mod.name.length, dotted)),
                             )
@@ -1118,7 +1130,7 @@ public class MarkupValidator(
                                 "Unknown modifier __${mod.name} on $prefix${spec.name}, which Datastar ignores$listensFor." +
                                     (near?.let { " Did you mean __$it?" } ?: ""),
                             severity = Severity.WARNING,
-                            code = "unknown-modifier",
+                            code = IssueCode.UNKNOWN_MODIFIER,
                             link = link,
                             fixes =
                                 if (near !=
@@ -1141,7 +1153,7 @@ public class MarkupValidator(
                                 mend,
                                 "Datastar reads only the last __${mod.name}, __${last.text}, and ignores this one.",
                                 Severity.WARNING,
-                                "modifier-args",
+                                IssueCode.MODIFIER_ARGS,
                                 link,
                             )
                     }
@@ -1156,7 +1168,7 @@ public class MarkupValidator(
             // An empty value is no value to the client, which raises ValueRequired where one is
             // needed and otherwise runs nothing: an empty expression, as a blank one is.
             if (value == "" && spec.valueKind == ValueKind.EXPRESSION && spec.requires != Requires.VALUE) {
-                issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, "empty-expression", link)
+                issues += Issue(attr.nameStart, nameEnd, "Empty Datastar expression.", Severity.WARNING, IssueCode.EMPTY_EXPRESSION, link)
             }
             // The value as the checks judge it, the file's engine's own syntax masked; null where it waits for rendering.
             val masked = value?.let { judgedValue(it, engine) }
@@ -1195,7 +1207,7 @@ public class MarkupValidator(
                             start = start,
                             end = end,
                             message =
-                                if (issue.code == "expression-syntax" && foreign.isNotEmpty()) {
+                                if (issue.code == IssueCode.EXPRESSION_SYNTAX && foreign.isNotEmpty()) {
                                     issue.message.removeSuffix(".") + "." + foreign
                                 } else {
                                     issue.message
@@ -1220,11 +1232,18 @@ public class MarkupValidator(
                         "$prefix${spec.name} takes a signal name, not an expression." +
                             if (parsed.key == null && parsed.modifiers.isEmpty()) foreignNote(attr.name, prefix, value) else "",
                         Severity.WARNING,
-                        "signal-name-expected",
+                        IssueCode.SIGNAL_NAME_EXPECTED,
                     )
             }
             if (spec.valueKind == ValueKind.NONE && value != null && value.isNotBlank()) {
-                issues += Issue(attr.valueStart, attr.valueEnd, "$prefix${spec.name} takes no value.", Severity.WARNING, "unexpected-value")
+                issues +=
+                    Issue(
+                        attr.valueStart,
+                        attr.valueEnd,
+                        "$prefix${spec.name} takes no value.",
+                        Severity.WARNING,
+                        IssueCode.UNEXPECTED_VALUE,
+                    )
             }
         }
         // attributes["..."] in Kotlin sets one attribute of an element whose others the code around it sets.
@@ -1249,7 +1268,7 @@ public class MarkupValidator(
                 filter.nameEnd,
                 "${prefix}on-signal-patch-filter does nothing without ${prefix}on-signal-patch on the same element, which reads it.",
                 Severity.WARNING,
-                "wrong-element",
+                IssueCode.WRONG_ELEMENT,
                 Docs.attribute("on-signal-patch-filter"),
             ),
         )
@@ -1317,7 +1336,7 @@ public class MarkupValidator(
                 "${prefix}indicator comes after ${prefix}init, which starts its request as Datastar applies it, " +
                     "before the indicator exists, so the signal stays false. Put ${prefix}indicator first.",
                 Severity.WARNING,
-                "indicator-order",
+                IssueCode.INDICATOR_ORDER,
                 Docs.attribute("indicator"),
                 listOfNotNull(fix),
             ),
@@ -1367,7 +1386,7 @@ public class MarkupValidator(
                 "${prefix}indicator tracks the requests this element sends, and nothing on it sends one. " +
                     "Put it on the element whose attribute calls " + backendActions.joinToString(", ") { "@$it" } + ".",
                 Severity.WARNING,
-                "indicator-without-action",
+                IssueCode.INDICATOR_WITHOUT_ACTION,
                 Docs.attribute("indicator"),
             ),
         )
@@ -1399,7 +1418,7 @@ public class MarkupValidator(
                     "Datastar reads $key as ${keyReading(spec, key, key)}, dots and all, so the expression never runs on ${pieces[0]}. " +
                         "A modifier follows two underscores: $prefix${spec.name}:$fixed.",
                 severity = Severity.ERROR,
-                code = "unknown-modifier",
+                code = IssueCode.UNKNOWN_MODIFIER,
                 link = Docs.attribute(spec),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
@@ -1442,7 +1461,7 @@ public class MarkupValidator(
                         keyEnd,
                         "Datastar's client reads this key as the signal $held, which ${path ?: reach}.",
                         if (path != null) Severity.ERROR else Severity.WARNING,
-                        "signal-name",
+                        IssueCode.SIGNAL_NAME,
                         link,
                     )
             }
@@ -1458,7 +1477,7 @@ public class MarkupValidator(
                     attr.valueStart + value.length,
                     "$name declares a signal named by spaces alone, which no expression can read.",
                     Severity.ERROR,
-                    "signal-name",
+                    IssueCode.SIGNAL_NAME,
                     link,
                 )
         }
@@ -1488,7 +1507,7 @@ public class MarkupValidator(
                         end,
                         "$name declares the signal $held, as written, which ${path ?: reach}.",
                         if (path != null) Severity.ERROR else Severity.WARNING,
-                        "signal-name",
+                        IssueCode.SIGNAL_NAME,
                         link,
                         fixes,
                     )
@@ -1510,7 +1529,7 @@ public class MarkupValidator(
                                 end,
                                 "In an object literal __proto__ sets the object's prototype, so Datastar gets no signal from it.",
                                 Severity.WARNING,
-                                "signal-name",
+                                IssueCode.SIGNAL_NAME,
                                 link,
                             )
                     }
@@ -1523,7 +1542,7 @@ public class MarkupValidator(
                                 "Every object already has ${k.key}. The client holds the signal, but the next request writes " +
                                     "the object under it into the built-in one and sends the page's signals without it.",
                                 Severity.ERROR,
-                                "signal-name",
+                                IssueCode.SIGNAL_NAME,
                                 link,
                             )
                     }
@@ -1537,7 +1556,7 @@ public class MarkupValidator(
                                     end,
                                     "This declares the signal ${parts.joinToString(".")}, as written, which $it.",
                                     Severity.WARNING,
-                                    "signal-name",
+                                    IssueCode.SIGNAL_NAME,
                                     link,
                                 )
                         }
@@ -1579,7 +1598,7 @@ public class MarkupValidator(
                     "Without a key, $name takes an object of functions, such as {total: () => \$a + 1}: Datastar declares no signal " +
                         "from this value, and raises ComputedExpectedFunction when it is a string. Name the signal in the key instead: $name:total.",
                     Severity.WARNING,
-                    "computed-value",
+                    IssueCode.COMPUTED_VALUE,
                     link,
                 ),
             )
@@ -1595,7 +1614,7 @@ public class MarkupValidator(
                 "Without a key, each value of $name must be a function, such as ${it.key}: () => ...; " +
                     "Datastar raises ComputedExpectedFunction for ${it.key}.",
                 Severity.ERROR,
-                "computed-value",
+                IssueCode.COMPUTED_VALUE,
                 link,
             )
         }
@@ -1628,7 +1647,7 @@ public class MarkupValidator(
             val err = parsed.error
             if (err != null) {
                 val (start, end) = source(err.pos, err.raisedAt)
-                return listOf(Issue(start, end, "Datastar filter: ${err.message}", Severity.ERROR, "expression-syntax", link))
+                return listOf(Issue(start, end, "Datastar filter: ${err.message}", Severity.ERROR, IssueCode.EXPRESSION_SYNTAX, link))
             }
             val regions = jsRegions(text)
             for (m in FILTER_SIGNAL.findAll(text)) {
@@ -1646,7 +1665,7 @@ public class MarkupValidator(
                         end,
                         "Datastar evaluates the value of $name without signals, so ${m.value} is a JavaScript variable here, which does not exist.",
                         Severity.WARNING,
-                        "signal-not-read",
+                        IssueCode.SIGNAL_NOT_READ,
                         link,
                     )
             }
@@ -1711,7 +1730,7 @@ public class MarkupValidator(
             message: String,
             fix: Fix?,
             severity: Severity = Severity.WARNING,
-        ) = listOf(Issue(keyStart, keyStart + key.length, message, severity, "key-case", Docs.attribute(spec), listOfNotNull(fix)))
+        ) = listOf(Issue(keyStart, keyStart + key.length, message, severity, IssueCode.KEY_CASE, Docs.attribute(spec), listOfNotNull(fix)))
 
         fun changeTo(written: String) = Fix("Change to $written", keyStart, keyStart + key.length, written)
 
@@ -1765,7 +1784,7 @@ public class MarkupValidator(
                         "The browser lowercases attribute names, so this reaches Datastar as $reaches, not $key. " +
                             "$noKey Write it in one case.",
                     severity = Severity.WARNING,
-                    code = "key-case",
+                    code = IssueCode.KEY_CASE,
                     link = Docs.attribute(spec),
                 ),
             )
@@ -1800,7 +1819,7 @@ public class MarkupValidator(
                         key,
                     )}",
                     severity = Severity.WARNING,
-                    code = "key-case",
+                    code = IssueCode.KEY_CASE,
                     link = Docs.attribute(spec),
                     fixes = fixes,
                 ),
@@ -1814,7 +1833,7 @@ public class MarkupValidator(
                     "The browser lowercases attribute names, so this reaches Datastar as $reaches, not $key. " +
                         "Write $name:$fixed$keep: keys are kebab-case$camelNote.",
                 severity = Severity.WARNING,
-                code = "key-case",
+                code = IssueCode.KEY_CASE,
                 link = Docs.attribute(spec),
                 fixes = listOf(Fix("Change to $fixed", keyStart, keyStart + key.length, fixed)),
             ),
@@ -1857,7 +1876,7 @@ public class MarkupValidator(
             message: String,
             fixes: List<Fix> = emptyList(),
         ) {
-            issues += Issue(start, end, message, Severity.ERROR, "modifier-args", fixes = fixes)
+            issues += Issue(start, end, message, Severity.ERROR, IssueCode.MODIFIER_ARGS, fixes = fixes)
         }
 
         // Arguments the client never reads: the modifier still does what it does, so these are warnings.
@@ -1865,7 +1884,7 @@ public class MarkupValidator(
             message: String,
             fixes: List<Fix> = emptyList(),
         ) {
-            issues += Issue(start, end, message, Severity.WARNING, "modifier-args", fixes = fixes)
+            issues += Issue(start, end, message, Severity.WARNING, IssueCode.MODIFIER_ARGS, fixes = fixes)
         }
 
         fun unknownFlag(f: String) {

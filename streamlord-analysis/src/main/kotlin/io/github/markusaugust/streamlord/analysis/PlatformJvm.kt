@@ -18,7 +18,7 @@ public data class ProjectIssue(
 ) {
     /** Whether the issue should fail a build: an error, or an `unsafe-interpolation` warning, which escaping cannot save. */
     public val fails: Boolean
-        get() = issue.severity == Severity.ERROR || (issue.code == "unsafe-interpolation" && issue.severity == Severity.WARNING)
+        get() = issue.severity == Severity.ERROR || (issue.code == IssueCode.UNSAFE_INTERPOLATION && issue.severity == Severity.WARNING)
 
     /**
      * Whether the issue fails a build that asks for no value written without its mark: what [fails], and every other
@@ -35,7 +35,7 @@ public data class ProjectIssue(
  * The codes of a warning of a value in an HTML string that [ProjectIssue.fails] lets through: one not escaped where
  * escaping is enough, markup that will be, and a bare dollar in a Datastar expression, a value or a swallowed signal.
  */
-private val UNMARKED = setOf("interpolate-template", "unescaped-interpolation", "kotlin-interpolation")
+private val UNMARKED = setOf(IssueCode.INTERPOLATE_TEMPLATE, IssueCode.UNESCAPED_INTERPOLATION, IssueCode.KOTLIN_INTERPOLATION)
 
 /** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
 public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }

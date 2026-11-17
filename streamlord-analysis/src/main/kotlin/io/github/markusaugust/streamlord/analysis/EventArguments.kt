@@ -79,7 +79,7 @@ internal fun eventArgumentIssues(
         start: Int,
         end: Int,
         problem: String?,
-        code: String = "event-refused",
+        code: IssueCode = IssueCode.EVENT_REFUSED,
     ) {
         if (problem != null) out += Issue(start, end, "$name throws: $problem.", Severity.ERROR, code, Docs.SSE)
     }
@@ -91,7 +91,7 @@ internal fun eventArgumentIssues(
         s ?: return
         val line = EventRules.selector(s.text, field)
         if (line != null) {
-            refused(s.start, s.end, line, if (s.text.isBlank()) "blank-selector" else "selector-newline")
+            refused(s.start, s.end, line, if (s.text.isBlank()) IssueCode.BLANK_SELECTOR else IssueCode.SELECTOR_NEWLINE)
         } else if (call.response) {
             refused(s.start, s.end, EventRules.headerSelector(s.text))
         }
@@ -163,7 +163,7 @@ internal fun elementsIssue(
     // A selector the code computes is taken to be one, which judges the fewest elements as none.
     val given = selector?.text?.takeIf { it != "null" }?.let { literal(selector)?.text ?: "#" }
     val problem = EventRules.elements(elements.text, mode, given, namespace, call.response) ?: return null
-    return Issue(elements.start, elements.end, "$name throws: $problem.", Severity.ERROR, "event-refused", Docs.SSE)
+    return Issue(elements.start, elements.end, "$name throws: $problem.", Severity.ERROR, IssueCode.EVENT_REFUSED, Docs.SSE)
 }
 
 /** The message of a patch in [mode] that [site] makes without a selector, in core's words. */

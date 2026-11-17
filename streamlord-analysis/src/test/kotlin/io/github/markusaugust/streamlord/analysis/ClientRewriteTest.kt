@@ -15,7 +15,7 @@ class ClientRewriteTest {
     @Test
     fun `an error after a rewritten signal is placed in the expression`() {
         val issues = ExpressionValidator().validate("\$items.map(\$i => \$i.name)", returnsValue = true)
-        val error = issues.single { it.code == "expression-syntax" }
+        val error = issues.single { it.code == IssueCode.EXPRESSION_SYNTAX }
         assertEquals("=>", "\$items.map(\$i => \$i.name)".substring(error.start, error.end))
     }
 

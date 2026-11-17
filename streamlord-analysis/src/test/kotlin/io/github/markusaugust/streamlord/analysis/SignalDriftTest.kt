@@ -66,7 +66,7 @@ class SignalDriftTest {
         val issues = drift("page.html" to html(page), "Routes.kt" to kotlin(renamed))["Routes.kt"]!!
 
         assertEquals(1, issues.size)
-        assertEquals("signal-never-declared", issues[0].code)
+        assertEquals(IssueCode.SIGNAL_NEVER_DECLARED, issues[0].code)
         assertEquals("drafft", renamed.substring(issues[0].start, issues[0].end))
         assertTrue(issues[0].message.contains("SearchSignals.drafft"), issues[0].message)
     }

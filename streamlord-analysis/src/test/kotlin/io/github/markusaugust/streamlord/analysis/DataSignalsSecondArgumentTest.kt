@@ -83,7 +83,7 @@ class DataSignalsSecondArgumentTest {
             val src =
                 "import io.github.markusaugust.streamlord.html.*\n" +
                     "fun p(mode: String, flag: Boolean, expr: String, n: Int) = div { dataSignals(\"a-b\", $argument) }"
-            val reported = analyzer.analyzeKotlin(src).any { it.code == "signal-name-hyphen" }
+            val reported = analyzer.analyzeKotlin(src).any { it.code == IssueCode.SIGNAL_NAME_HYPHEN }
             assertEquals(read == "expression", reported, argument)
         }
     }

@@ -18,10 +18,10 @@ class LargeLiteralTest {
         val started = TimeSource.Monotonic.markNow()
         val issues = Analyzer().analyzeKotlin(src)
         val ms = started.elapsedNow().inWholeMilliseconds
-        assertEquals(3000, issues.count { it.code == "unescaped-interpolation" })
-        assertEquals(1000, issues.count { it.code == "kotlin-interpolation" })
+        assertEquals(3000, issues.count { it.code == IssueCode.UNESCAPED_INTERPOLATION })
+        assertEquals(1000, issues.count { it.code == IssueCode.KOTLIN_INTERPOLATION })
         assertTrue(ms < 10_000, "took $ms ms")
-        val dollars = issues.first { it.code == "kotlin-interpolation" }.fixes.first { it.title.startsWith("Make it") }
+        val dollars = issues.first { it.code == IssueCode.KOTLIN_INTERPOLATION }.fixes.first { it.title.startsWith("Make it") }
         val expected =
             "\$\$\"\"\"<div><p title=\"\$\$q\" data-text=\"\$k\" class=\"\$\${q.trim()}\">\$\$q</p>\n" +
                 "<p title=\"\$\$q\" data-text=\"\$\$k\""
