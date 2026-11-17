@@ -181,7 +181,8 @@ get("/panel") {
 ```
 
 Datastar reads a plain `text/html` response as a patch. This costs one round trip and no
-streaming machinery, and it is often the right answer.
+streaming machinery, and it is often the right answer. It is also the answer the browser can
+cache: [Caching](/caching/) shows the headers.
 
 ## Reading signals
 

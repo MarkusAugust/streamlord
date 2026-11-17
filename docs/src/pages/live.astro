@@ -10,6 +10,34 @@ import "../styles/global.css"
 
 // A page that runs the library rather than describing it. Everything below the search field
 // is written by streamlord-live: the results, the frames, and the signal the count lives in.
+
+// The caching panel's log, opened when the panel is seen or pressed. It needs the id it handed
+// out, and whether the page shows the wire panel, and nothing else of the store. $logOpen is
+// Datastar's indicator on the panel: true while the log's request runs, false however it ends.
+const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include: /^(visitor|wire)$/}})`
+
+// A page of the caching panel's table. The page and the sort are the only signals the table is
+// sent, so each page in each sort is a URL of its own, which is what the browser keys on, and
+// every press goes to one URL as written here, so Datastar cancels the press before it.
+const TABLE = `@get('${SERVICE}/orders/' + $visitor, {filterSignals: {include: /^(page|sort)$/}})`
+// The toolbar over the table: two toggle groups, each bound to the signal it sets, and either
+// one fetches the page and sort they now say.
+const TOGGLES = [
+  {
+    label: "Page",
+    signal: "page",
+    options: ["1", "2", "3"].map((n) => ({ value: n, label: n })),
+  },
+  {
+    label: "Sort by",
+    signal: "sort",
+    options: [
+      { value: "order", label: "Order" },
+      { value: "who", label: "Who" },
+      { value: "what", label: "What" },
+    ],
+  },
+]
 ---
 
 <!doctype html>
@@ -339,13 +367,100 @@ import "../styles/global.css"
           </div>
         </section>
 
+        <!--
+          The caching page, run. Each page of the table is one text/html answer with an ETag,
+          so a page the browser already holds costs a 304 and no build. The log beside it is a
+          stream, the other kind of answer, which no cache keeps.
+
+          The table's path carries the visitor's id, and the page and the sort are the only signals
+          it is sent: its URL is the cache key, and any other signal in it would make every
+          keystroke on this page a new one.
+          The log hands the id out when it opens, which it does when the panel comes into view or
+          is pressed, and the server ends it after two quiet minutes. The id arriving is what
+          fetches the first table, and a log reopened on the same id does not send it again.
+        -->
+        <section
+          class="panel panel--wide"
+          id="caching"
+          data-signals="{visitor: '', page: '1', sort: 'order'}"
+          data-indicator:log-open
+          data-on-intersect={LOG}
+          data-on:click={LOG}
+        >
+          <h2 class="panel__title">A table the browser keeps</h2>
+          <p class="panel__note">
+            Every page is one <code>text/html</code> answer with an ETag, not a stream. Press a
+            page you have seen, and the browser asks with <code>If-None-Match</code>: the server
+            answers 304 and builds nothing. The sort rides in a signal, so each page in each sort
+            is a URL of its own: a new one is a 200, one you have seen a 304. Change the data, and
+            the next press is a 200 again.
+            How it is done is on <a class="lt-link" href="/caching/">Caching</a>.
+          </p>
+
+          <div
+            class="orders"
+            data-on-signal-patch={TABLE}
+            data-on-signal-patch-filter="{include: /^visitor$/}"
+          >
+            <div class="orders__grid">
+              <div class="orders__side">
+                <div class="orders__toolbar">
+                  {TOGGLES.map((toggle) => (
+                    <div class="orders__toggle">
+                      <span class="orders__toggle-label" aria-hidden="true">{toggle.label}</span>
+                      <fieldset class="lt-toggle-group">
+                        <legend class="lt-sr-only">{toggle.label}</legend>
+                        {toggle.options.map((option) => (
+                          <label class="lt-toggle-group__option">
+                            <input
+                              type="radio"
+                              name={`orders-${toggle.signal}`}
+                              value={option.value}
+                              data-bind={toggle.signal}
+                              data-attr:disabled="!$visitor"
+                              data-on:change={TABLE}
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </fieldset>
+                    </div>
+                  ))}
+                </div>
+                <div id="orders" class="orders__table">
+                  <p class="lt-paragraph" data-size="small">
+                    Page 1 comes as soon as the server has handed this panel an id.
+                  </p>
+                </div>
+              </div>
+
+              <div class="orders__side" aria-live="polite">
+                <div class="orders__log-head">
+                  <h3 class="panel__title">What the server did</h3>
+                  <button
+                    class="lt-button"
+                    data-variant="ghost"
+                    type="button"
+                    data-attr:disabled="!$visitor"
+                    data-on:click={`@post('${SERVICE}/orders/' + $visitor + '/change')`}
+                  >Change the data</button>
+                </div>
+                <p id="orders-log-state" class="panel__note">Opens when this panel is on screen.</p>
+                <div id="orders-log"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="panel panel--wide">
           <h2 class="panel__title">On the wire</h2>
           <p class="panel__note">
             The frames behind the last thing you did on this page, whichever demo it was: a
             search, a muster, a press of a patch mode, or each tick of the counter as it runs.
             Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
-            description of them. The frames.
+            description of them. The frames. The table is no stream, so for a press there the
+            panel shows the request the server got, and the status and caching headers it
+            answered with, a 304 with no body among them.
           </p>
           <div id="wire" class="panel__body">
             <p class="lt-paragraph" data-size="small">Nothing sent yet.</p>
@@ -581,6 +696,66 @@ import "../styles/global.css"
       .counter :global(.counter__state) {
         margin: 0;
         color: var(--lt-color-neutral-text-subtle);
+      }
+
+      /* The table beside the log when the panel is wide enough for both, one above the other when not. */
+      .orders {
+        container-type: inline-size;
+      }
+      .orders__grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--lt-spacing-5);
+      }
+      @container (min-width: 40rem) {
+        .orders__grid {
+          grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        }
+      }
+      .orders__side {
+        display: grid;
+        gap: var(--lt-spacing-3);
+        align-content: start;
+      }
+      /* Page and sort on one line over the table, on two when the column is narrow. */
+      .orders__toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--lt-spacing-3) var(--lt-spacing-5);
+      }
+      .orders__toggle {
+        display: flex;
+        align-items: center;
+        gap: var(--lt-spacing-2);
+      }
+      .orders__toggle-label {
+        font-size: var(--lt-font-size-xs);
+        color: var(--lt-color-neutral-text-subtle);
+      }
+      .orders__log-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--lt-spacing-2);
+      }
+      .orders__side :global(.orders__lines) {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--lt-spacing-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--lt-font-size-xs);
+      }
+      .orders__side :global(.orders__lines li) {
+        display: grid;
+        grid-template-columns: 14ch 8ch minmax(0, 1fr) auto;
+        gap: var(--lt-spacing-2);
+      }
+      .orders__side :global(.orders__status) {
+        color: var(--lt-color-accent-fill);
       }
 
       .panel__json,

@@ -55,6 +55,7 @@ export const NAVIGATION: Section[] = [
     pages: [
       { slug: "operations", title: "Operations" },
       { slug: "security", title: "Security" },
+      { slug: "caching", title: "Caching" },
     ],
   },
   {
