@@ -265,9 +265,10 @@ Boot. It needs `assertj-core` next to `spring-test`.
 A stream runs in an async cycle of its own, and the body is empty until the test has waited for
 it and dispatched the result. `exchange()` does that once, which is enough for an ordinary
 controller. A `suspend` controller runs in one async cycle and its stream in a second, and
-`exchange()` returns after the first, while the stream may not have written anything yet. The
-helper below dispatches until no cycle is left, and sends the request the way Datastar's client
-does. It is yours to copy:
+`exchange()` returns after the first, while the stream may not have written anything yet.
+`datastar`, from `io.github.markusaugust.streamlord.spring.test`, dispatches until no cycle is
+left, and sends the request the way Datastar's client does, with the header and the signals in the
+query for GET and DELETE and in the body otherwise:
 
 ```kotlin sample=spring-test
 @RestController
@@ -293,33 +294,6 @@ private val mvc =
     MockMvcTester.of(listOf(Feed())) {
         it.setControllerAdvice(StreamlordExceptionHandler()).build()
     }
-
-/** The header, and the signals where the client puts them: the query for GET and DELETE. */
-private fun MockMvcTester.datastar(
-    method: HttpMethod,
-    uri: String,
-    signals: String? = null,
-): MvcTestResult {
-    var result =
-        method(method)
-            .uri(uri)
-            .header("Datastar-Request", "true")
-            .header("Accept", "text/event-stream, text/html, application/json")
-            .apply {
-                when {
-                    signals == null -> Unit
-                    method == HttpMethod.GET || method == HttpMethod.DELETE ->
-                        param("datastar", signals)
-                    else -> contentType(MediaType.APPLICATION_JSON).content(signals)
-                }
-            }.asyncExchange()
-    while (result.unresolvedException == null && result.request.isAsyncStarted) {
-        val started = result.mvcResult
-        started.getAsyncResult(10_000)
-        result = perform(MockMvcRequestBuilders.asyncDispatch(started))
-    }
-    return result
-}
 
 @Test
 fun `the feed appends one head`() {
@@ -351,7 +325,9 @@ sees it:
   all.
 
 MockMvc never ends a stream on its timeout; that takes a real server, as below. A stream that does
-not end on its own fails the helper's wait after ten seconds, so give a test a stream that ends.
+not end on its own fails the helper's wait after ten seconds, or the `asyncTimeout` you pass, so
+give a test a stream that ends, and read one that stays open as
+[A stream that stays open](#a-stream-that-stays-open) does.
 
 #### A header set while the stream runs
 
@@ -399,6 +375,55 @@ Where none of these can be helped, turn the printing off with
 `@AutoConfigureMockMvc(print = MockMvcPrint.NONE)`. Nothing is printed then, so a failing test
 no longer shows the response it got; `datastarEvents` still prints the stream in its own
 failures.
+
+### With RestTestClient
+
+Spring Framework 7's `RestTestClient` takes the same route. Bound to MockMvc through
+`datastarRequestFactory()`, it runs every cycle as `datastar` does, and the body it hands back is
+the wire:
+
+```kotlin sample=spring-test
+@RestController
+class Heads {
+    @GetMapping("/heads")
+    fun heads(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): StreamingResponseBody {
+        val heads = request.readSignals().int("heads") ?: 0
+        return response.datastarStream(request = request) { patchSignals("heads" to heads + 1) }
+    }
+}
+
+private val client =
+    RestTestClient
+        .bindToServer(MockMvcBuilders.standaloneSetup(Heads()).build().datastarRequestFactory())
+        .build()
+
+@Test
+fun `the count goes up by one`() {
+    val body =
+        client
+            .get()
+            .uri("/heads?datastar={signals}", """{"heads":13}""")
+            .header("Datastar-Request", "true")
+            .exchange()
+            .expectStatus()
+            .isOk
+            .returnResult(String::class.java)
+            .responseBody
+
+    datastarEvents(body.orEmpty()).assertSignal("heads", 14)
+}
+```
+
+Spring's own bindings to MockMvc, `RestTestClient.bindTo(mockMvc)` and `bindToController(...)`,
+run none of the cycles: a stream answers `200` with no body, and a test that checks only the status
+passes though the stream never ran. `MockMvcWebTestClient.bindTo(mockMvc)` runs one, so it misses
+the stream of a `suspend` controller. Against a real server,
+`RestTestClient.bindToServer().baseUrl("http://localhost:$port").build()` reads a stream that ends,
+as any HTTP client does; on Spring Boot,
+`@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the server and `@LocalServerPort` its port.
 
 ### On WebFlux, with WebTestClient
 

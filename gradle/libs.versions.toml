@@ -71,8 +71,8 @@ jetty-bom-oldestKtor = { module = "org.eclipse.jetty:jetty-bom", version.ref = "
 spring-web = { module = "org.springframework:spring-web", version.ref = "spring" }
 spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
-# Test-only, for :streamlord-spring and :docs-samples: MockMvcTester asserts with AssertJ, and the
-# testing page shows it. Spring Boot 4.0 manages the 3.27 line.
+# MockMvcTester asserts with AssertJ: compileOnly for the test helpers in :streamlord-spring, and
+# test-only for its tests and :docs-samples. Spring Boot 4.0 manages the 3.27 line.
 assertj-core = { module = "org.assertj:assertj-core", version = "3.27.7" }
 # Test-only, for :streamlord-spring: WebTestClient bound to a controller, for the WebFlux side.
 # :docs-samples compiles the testing page's WebTestClient example against it.

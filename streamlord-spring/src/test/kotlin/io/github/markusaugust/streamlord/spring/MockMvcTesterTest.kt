@@ -4,16 +4,14 @@ import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.application.Streamlord
 import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
+import io.github.markusaugust.streamlord.spring.test.datastar
 import io.github.markusaugust.streamlord.test.datastarEvents
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.delay
 import org.assertj.core.api.Assertions.assertThat
 import org.springframework.http.HttpMethod
-import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.assertj.MockMvcTester
-import org.springframework.test.web.servlet.assertj.MvcTestResult
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
@@ -27,8 +25,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
-/** The recipe the testing page shows, held to what it says. */
+/** [datastar], the helper the testing page shows, held to what it says. */
 class MockMvcTesterTest {
     companion object {
         val streamlord = Streamlord(maxSignalsSize = 32, heartbeat = null)
@@ -102,31 +101,6 @@ class MockMvcTesterTest {
         gate = CompletableFuture()
     }
 
-    private fun MockMvcTester.datastar(
-        method: HttpMethod,
-        uri: String,
-        signals: String? = null,
-    ): MvcTestResult {
-        var result =
-            method(method)
-                .uri(uri)
-                .header("Datastar-Request", "true")
-                .header("Accept", "text/event-stream, text/html, application/json")
-                .apply {
-                    when {
-                        signals == null -> Unit
-                        method == HttpMethod.GET || method == HttpMethod.DELETE -> param("datastar", signals)
-                        else -> contentType(MediaType.APPLICATION_JSON).content(signals)
-                    }
-                }.asyncExchange()
-        while (result.unresolvedException == null && result.request.isAsyncStarted) {
-            val started = result.mvcResult
-            started.getAsyncResult(10_000)
-            result = perform(MockMvcRequestBuilders.asyncDispatch(started))
-        }
-        return result
-    }
-
     // A suspend controller runs in one async cycle and its stream in a second; exchange() waits
     // for the first alone, and returns while the stream may still be writing. The gate holds the
     // stream until exchange() has returned.
@@ -189,6 +163,18 @@ class MockMvcTesterTest {
         // Wrapped by the DispatcherServlet in a ServletException; the response is out of reach.
         assertIs<SignalsTooLargeException>(result.unresolvedException?.cause)
         assertFailsWith<IllegalStateException> { result.response }
+    }
+
+    @Test
+    fun `a stream that does not end fails the wait, naming the way to read one`() {
+        val failure =
+            try {
+                assertFailsWith<IllegalStateException> { mvc.datastar(HttpMethod.GET, "/gated", asyncTimeout = 200.milliseconds) }
+            } finally {
+                gate.complete(Unit)
+            }
+
+        assertTrue("200ms" in failure.message.orEmpty() && "LiveDatastarStream" in failure.message.orEmpty(), failure.message)
     }
 
     // The test thread reads the first result while the stream's thread runs, as Spring Boot's

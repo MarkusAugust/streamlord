@@ -163,7 +163,7 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import io.github.markusaugust.streamlord.analysis.*\n$imports\n\n" +
                     "class $name {\n$body\n}\n"
             /*
-             * A Spring test class: a controller of its own and MockMvcTester or WebTestClient. Not
+             * A Spring test class: a controller of its own and MockMvcTester, RestTestClient or WebTestClient. Not
              * `test`, whose Ktor client imports bring a `get` and a `post` of their own.
              */
             "spring-test" ->
@@ -176,6 +176,9 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import org.springframework.http.codec.ServerSentEvent\n" +
                     "import org.springframework.test.web.reactive.server.WebTestClient\n" +
                     "import org.springframework.test.web.servlet.assertj.MockMvcTester\n" +
+                    "import org.springframework.test.web.servlet.client.RestTestClient\n" +
+                    "import org.springframework.test.web.servlet.setup.MockMvcBuilders\n" +
+                    "import io.github.markusaugust.streamlord.spring.test.*\n" +
                     "import org.springframework.test.web.servlet.request.MockMvcRequestBuilders\n" +
                     "import org.springframework.test.web.servlet.assertj.MvcTestResult\n" +
                     "import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody\n" +

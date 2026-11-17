@@ -7,6 +7,8 @@ dependencies {
     compileOnly(libs.spring.webmvc)
     compileOnly(libs.jakarta.servlet)
     compileOnly(libs.reactor.core) // the Mono a WebFlux body is joined into; every WebFlux application has it
+    compileOnly(libs.spring.test) // the test helpers in spring.test, for a test classpath that has it
+    compileOnly(libs.assertj.core) // MockMvcTester's results are AssertJ providers
 
     testImplementation(kotlin("test"))
     testImplementation(libs.spring.web)
