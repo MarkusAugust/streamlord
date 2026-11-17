@@ -18,39 +18,55 @@ class LoadingIndicatorsPageTest {
             .toList()
 
     // The Template tabs in page order: 0 the widget, 1 the table (with the engine's own tags, so
-    // compared by eye), 2 export, 3 the indicator before data-init, 4 the search form, 5 the command.
+    // compared by eye), 2 the failure, 3 archive, 4 the indicator before data-init, 5 the search
+    // form, 6 the live view's command.
     @Test
     fun `the widget is the same in every tab`() {
         assertSame(fromDsl { ordersWidget() }, ordersWidgetHtml, templates[0])
     }
 
     @Test
-    fun `the table is the same from the DSL and the string`() {
-        for (page in listOf(1, 3)) {
-            val consumer = createHTML(prettyPrint = false)
-            consumer.ordersTable(page)
-            assertEquals(markup(ordersTableHtml(page)), markup(consumer.finalize()), "page $page")
+    fun `the table is the same from the DSL and the string, escaping included`() {
+        val rows = orderBook.page(1, "who", 10)
+        for ((page, last) in listOf(1 to 1, 1 to 3, 2 to 3, 3 to 3)) {
+            for (sort in listOf("date", "who")) {
+                val consumer = createHTML(prettyPrint = false)
+                consumer.ordersTable(rows, page, last, sort, 25)
+                assertEquals(
+                    markup(ordersTableHtml(rows, page, last, sort, 25).text),
+                    markup(consumer.finalize()),
+                    "page $page of $last, $sort",
+                )
+            }
         }
     }
 
     @Test
-    fun `the export button is the same in every tab`() {
-        assertSame(fromDsl { exportOrders() }, exportOrdersHtml, templates[2])
+    fun `the failure is the same in every tab`() {
+        val consumer = createHTML(prettyPrint = false)
+        consumer.ordersFailed()
+        assertEquals(markup(ordersFailedHtml), markup(consumer.finalize()))
+        assertEquals(markup(ordersFailedHtml), markup(templates[2]))
+    }
+
+    @Test
+    fun `the archive button is the same in every tab`() {
+        assertSame(fromDsl { archiveOrders() }, archiveOrdersHtml, templates[3])
     }
 
     @Test
     fun `the indicator before data-init is the same in every tab`() {
-        assertSame(fromDsl { ordersOnArrival() }, ordersOnArrivalHtml, templates[3])
+        assertSame(fromDsl { ordersOnArrival() }, ordersOnArrivalHtml, templates[4])
     }
 
     @Test
     fun `the search form is the same in every tab`() {
-        assertSame(fromDsl { ordersSearch() }, ordersSearchHtml, templates[4])
+        assertSame(fromDsl { ordersSearch() }, ordersSearchHtml, templates[5])
     }
 
     @Test
     fun `the live view command is the same in every tab`() {
-        assertSame(fromDsl { tallyCommand() }, tallyCommandHtml, templates[5])
+        assertSame(fromDsl { tallyCommand() }, tallyCommandHtml, templates[6])
     }
 
     private fun assertSame(

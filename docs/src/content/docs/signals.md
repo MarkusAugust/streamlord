@@ -388,7 +388,7 @@ An answer that is not a stream sets signals one of two ways. If it holds nothing
 is JSON, `call.respondSignals(...)` in Ktor and `datastarSignals(...)` in Spring, and Datastar
 merges it as it would a patch. If it holds elements, `call.respondElements(...)` or
 `datastarElements(...)`, the signals go in its HTML, as an element that sets them and removes
-itself. Put it inside the element the answer replaces anyway:
+itself. Put it inside the element the answer replaces in any case:
 
 ```kotlin tab="kotlinx.html DSL" group=markup label="Markup style" sample=declarations
 fun TagConsumer<*>.ordersSignals(page: Int) {
@@ -413,7 +413,8 @@ An answer for a table, `div { id = "orders-table"; ...; ordersSignals(page) }` i
 `consumer.ordersSignals(page)`. The element removes itself once it has run, so the next answer's copy is new to the
 page and runs again, every time. `hidden` keeps it out of the layout for the moment it is there. An
 answer that has no element to put it in can patch a container of its own,
-`<div id="orders-signals" hidden></div>`, rendered with the page: an answer whose element finds no
+`elements { div { id = "orders-signals"; hidden = true; ordersSignals(page) } }`, with the empty
+`<div id="orders-signals" hidden></div>` rendered with the page: an answer whose element finds no
 id to match patches nothing, and Datastar only logs `PatchElementsNoTargetsFound`.
 
 `set` writes the value as a JavaScript literal, so text from your data cannot become code. In a

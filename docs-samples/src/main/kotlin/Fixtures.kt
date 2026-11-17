@@ -80,3 +80,17 @@ fun orderTable(
     """<table id="orders"><caption>Page $page</caption>""" +
         rows.joinToString("") { "<tr><td>${it.id}</td><td>${it.who}</td><td>${it.what}</td></tr>" } +
         "</table>"
+
+/** The orders behind the loading-indicators page: a page at a time, in a sort and a size. */
+@Suppress("ktlint:standard:class-naming") // read as a value in the samples
+object orderBook {
+    private val all = listOf(Order(1001, "Gorvek", "three swords"), Order(1002, "Hask & sons", "a <shield>"), Order(1003, "Brann", "rope"))
+
+    fun page(
+        page: Int,
+        sort: String,
+        size: Int,
+    ): List<Order> = (if (sort == "who") all.sortedBy { it.who } else all).drop((page - 1) * size).take(size)
+
+    fun lastPage(size: Int): Int = maxOf(1, (all.size + size - 1) / size)
+}
