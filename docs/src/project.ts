@@ -7,6 +7,9 @@ import differential from "../../conformance/dom/merge-differential.json"
 import versionCatalog from "../../gradle/libs.versions.toml?raw"
 import gradleProperties from "../../gradle.properties?raw"
 
+/** Where the code, the changelog and the issues are. */
+export const REPOSITORY = "https://github.com/MarkusAugust/streamlord"
+
 /** The promise under the name on the landing page: what the reader gets, before what it is. */
 export const CLAIM = "Write Datastar safely in Kotlin."
 
