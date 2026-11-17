@@ -1,16 +1,26 @@
+import io.github.markusaugust.streamlord.html.SignalFilter
+import io.github.markusaugust.streamlord.html.dataOnClick
+import io.github.markusaugust.streamlord.html.get
 import io.github.markusaugust.streamlord.ktor.StreamlordPlugin
 import io.github.markusaugust.streamlord.ktor.respondDatastar
 import io.github.markusaugust.streamlord.ktor.respondElements
 import io.ktor.http.CacheControl
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cachingheaders.CachingHeaders
+import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.runBlocking
+import kotlinx.html.button
+import kotlinx.html.stream.createHTML
 import org.apache.catalina.startup.Tomcat
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean
@@ -43,25 +53,65 @@ class CachingPageTest {
         onKtor({ routing { orderRoutes(orders) } }) { port -> assertCaches(port, orders) }
     }
 
+    // The page says why the header is set in the route: a CachingHeaders rule on the content type
+    // misses the 304, which has none.
     @Test
-    fun `a CachingHeaders rule on the content type leaves the streams alone`() {
+    fun `a CachingHeaders rule on the content type does not reach a 304`() {
         onKtor({
-            cacheTablesOnly()
-            tableAndStream()
+            install(CachingHeaders) {
+                options { _, content ->
+                    if (content.contentType?.withoutParameters() == ContentType.Text.Html) {
+                        CachingOptions(CacheControl.NoCache(CacheControl.Visibility.Private))
+                    } else {
+                        null
+                    }
+                }
+            }
+            routing {
+                get("/table") {
+                    call.response.header(HttpHeaders.ETag, "\"v1\"")
+                    if (call.request.headers[HttpHeaders.IfNoneMatch] == "\"v1\"") {
+                        call.respond(HttpStatusCode.NotModified)
+                    } else {
+                        call.respondElements(orderTable(emptyList(), 1))
+                    }
+                }
+            }
         }) { port ->
             assertEquals(setOf("private", "no-cache"), directives(get(port, "/table")))
-            assertEquals(setOf("no-cache"), directives(get(port, "/stream")))
+            val again = get(port, "/table", "If-None-Match" to "\"v1\"")
+            assertEquals(304, again.statusCode())
+            assertEquals(emptySet(), directives(again))
         }
     }
 
-    // The control: the rule the page warns against does reach a stream, so the test above can tell.
     @Test
     fun `a CachingHeaders rule for every response reaches the streams too`() {
         onKtor({
             install(CachingHeaders) { options { _, _ -> CachingOptions(CacheControl.MaxAge(60)) } }
-            tableAndStream()
+            routing { get("/stream") { call.respondDatastar { patchElements(orderTable(emptyList(), 1)) } } }
         }) { port ->
             assertEquals(setOf("no-cache", "max-age=60"), directives(get(port, "/stream")))
+        }
+    }
+
+    // The two tabs of the filter on the page: the DSL has to write what the HTML tab shows.
+    @Test
+    fun `the DSL filter writes the attribute the HTML tab shows`() {
+        val button =
+            createHTML(prettyPrint = false).button {
+                dataOnClick(get("/orders?page=2") { filterSignals = SignalFilter.exclude(".*") })
+            }
+        assertContains(button, "@get('/orders?page=2', {filterSignals: {exclude: /.*/}})")
+    }
+
+    // The number the page gives for what a 304 saves: fifty orders as orderTable writes them.
+    @Test
+    fun `a page of fifty orders is the size the page says`() {
+        val fifty = (1..50).map { Order(1000 + it, "Gorvek", "three swords") }
+        onKtor({ routing { get("/fifty") { call.respondElements(orderTable(fifty, 1)) } } }) { port ->
+            val response = get(port, "/fifty")
+            assertEquals(FIFTY_ORDERS_BYTES, response.headers().firstValueAsLong("Content-Length").orElse(-1))
         }
     }
 
@@ -103,13 +153,11 @@ class CachingPageTest {
         assertEquals(2, orders.reads)
 
         assertContains(get(port, "/orders").body(), "Page 1", message = "the page defaults to the first")
-    }
 
-    private fun Application.tableAndStream() {
-        routing {
-            get("/table") { call.respondElements(orderTable(emptyList(), 1)) }
-            get("/stream") { call.respondDatastar { patchElements(orderTable(emptyList(), 1)) } }
-        }
+        // A tag with parameters is no ETag. Spring reads past the parameter, Ktor's parser throws;
+        // either way it must not become a 500.
+        val malformed = get(port, "/orders?page=2", "If-None-Match" to "\"v2-2\";q=0.5")
+        assertContains(listOf(200, 304), malformed.statusCode(), "a header the server cannot read is not a failure")
     }
 
     private fun onKtor(
@@ -197,6 +245,9 @@ class CachingPageTest {
 }
 
 private const val LOOPBACK = "127.0.0.1"
+
+/** What docs/src/content/docs/caching.md says fifty orders come to. */
+private const val FIFTY_ORDERS_BYTES = 2_952L
 
 // Spring builds the controllers from its own configuration classes, so they reach the orders here.
 private lateinit var mvcOrders: CountingOrders

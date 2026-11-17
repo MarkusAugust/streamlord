@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.demo
 import io.github.markusaugust.streamlord.core.domain.DatastarEvent
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
+import io.github.markusaugust.streamlord.html.elements
 import io.github.markusaugust.streamlord.html.patchElements
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ import kotlinx.html.div
 import kotlinx.html.id
 import kotlinx.html.li
 import kotlinx.html.p
+import kotlinx.html.pre
 import kotlinx.html.span
 import kotlinx.html.table
 import kotlinx.html.tbody
@@ -33,17 +35,36 @@ import kotlin.time.Duration.Companion.minutes
 public const val ORDER_PAGES: Int = 3
 private const val LOG_LINES = 12
 
-/** The one signal the log reads back: the id it handed out, so a reopened log keeps it. */
+/** The Cache-Control of every table, the 200 and the 304 alike; the wire panel shows it as sent. */
+public const val ORDERS_CACHE_CONTROL: String = "private, no-cache"
+
+/** The signals the log reads back: the id it handed out, so a reopened log keeps it, and whether the page shows the wire. */
 @Serializable
 public data class OrdersSignals(
     val visitor: String = "",
+    val wire: Boolean = false,
 )
 
-/** What the server did with one request, as the log shows it. */
+/** What the server did with one request. [n] tells two equal lines apart, so each one reaches the log. */
 public data class LogLine(
+    val n: Int,
     val what: String,
     val status: String,
     val result: String,
+    val body: String,
+)
+
+/** The log as the stream sends it: the lines, and the last exchange written out for the wire panel. */
+public data class LogState(
+    val lines: List<LogLine> = emptyList(),
+    val exchange: String? = null,
+)
+
+/** One answer to a table request: the tag it went out under, its status, and the HTML, or none for a 304 or a 412. */
+public data class Answer(
+    val etag: String,
+    val status: Int,
+    val body: String?,
 )
 
 /**
@@ -55,46 +76,83 @@ public class Ledger internal constructor(
 ) {
     private var version = 1
     private var builds = 0
-    private val log = MutableStateFlow<List<LogLine>>(emptyList())
+    private var lines = 0
+    private val state = MutableStateFlow(LogState())
 
-    /** A new list on every line, which is how the log stream tells there is something to send. */
-    public val lines: StateFlow<List<LogLine>> = log
+    public val log: StateFlow<LogState> = state
 
     @Volatile internal var lastSeen: Long = 0
 
-    /** The cheap question: what a page is at, without building it. */
+    /**
+     * The tag, the check and the build under one lock, so a change cannot fall between the tag
+     * and the body it names. [check] answers the status the request's conditional headers ask
+     * for; [asked] is the request as the wire panel shows it.
+     */
     @Synchronized
-    public fun etag(page: Int): String = "\"v$version-$page\""
-
-    /** The expensive answer: the rows of a page, and the build it was. */
-    @Synchronized
-    public fun built(page: Int): OrderPage {
+    public fun answer(
+        page: Int,
+        asked: String,
+        check: (etag: String) -> Int,
+    ): Answer {
+        val etag = "\"v$version-$page\""
+        val status = check(etag)
+        if (status != 200) {
+            say("page $page", "$status", "not built", "0 B", asked, response(status, etag, null))
+            return Answer(etag, status, null)
+        }
         builds++
-        say(LogLine("page $page", "200", "built #$builds"))
-        return OrderPage(page, version, builds, rows(page, version))
+        val html = elements { orderTable(OrderPage(page, version, rows(page, version))) }
+        val bytes = html.toByteArray().size
+        say("page $page", "200", "built #$builds", "$bytes B", asked, response(200, etag, bytes))
+        return Answer(etag, 200, html)
     }
 
     @Synchronized
-    public fun notBuilt(page: Int) {
-        say(LogLine("page $page", "304", "not built"))
-    }
-
-    @Synchronized
-    public fun change(): Int {
+    public fun change(asked: String) {
         version++
-        say(LogLine("data", "changed", "now version $version"))
-        return version
+        say("data", "changed", "now version $version", "", asked, "200 OK\nContent-Type: application/json\n\n{}")
     }
 
-    private fun say(line: LogLine) {
-        log.value = (log.value + line).takeLast(LOG_LINES)
+    private fun say(
+        what: String,
+        status: String,
+        result: String,
+        body: String,
+        asked: String,
+        answered: String,
+    ) {
+        lines++
+        state.value =
+            LogState(
+                lines = (state.value.lines + LogLine(lines, what, status, result, body)).takeLast(LOG_LINES),
+                exchange = "$asked\n\n$answered",
+            )
     }
 }
 
+private fun response(
+    status: Int,
+    etag: String,
+    bytes: Int?,
+): String =
+    buildString {
+        append(
+            when (status) {
+                200 -> "200 OK"
+                304 -> "304 Not Modified"
+                412 -> "412 Precondition Failed"
+                else -> "$status"
+            },
+        )
+        if (bytes != null) append("\nContent-Type: text/html; charset=utf-8")
+        append("\nCache-Control: $ORDERS_CACHE_CONTROL\nETag: $etag\n\n")
+        append(if (bytes != null) "($bytes bytes of HTML)" else "(no body)")
+    }
+
 /**
  * Every visitor's ledger, held in memory and kept small: a ledger nobody used for [idle] is
- * dropped, and past [capacity] the least recently used one goes. The service holds nothing else
- * per visitor, and nothing of theirs but the version they changed.
+ * dropped, and past [capacity] the least recently used one goes. Only the log makes a ledger, so
+ * a request that names an id the service does not hold cannot push anyone else's out.
  */
 public class Ledgers(
     private val capacity: Int = 1_000,
@@ -107,16 +165,28 @@ public class Ledgers(
     public val size: Int
         @Synchronized get() = byVisitor.size
 
-    /** The visitor's ledger, or a new one under a new id when [visitor] is not one this service could have made. */
+    /** The visitor's ledger, made when the service does not hold it; under a new id when [visitor] is not one it could have made. */
     @Synchronized
     public fun open(visitor: String?): Ledger {
         val now = clock()
-        byVisitor.values.removeIf { now - it.lastSeen > idle.inWholeMilliseconds }
+        forget(now)
         val id = visitor?.takeIf { ID.matches(it) } ?: newId()
         val ledger = byVisitor.getOrPut(id) { Ledger(id) }
         ledger.lastSeen = now
         while (byVisitor.size > capacity) byVisitor.remove(byVisitor.keys.first())
         return ledger
+    }
+
+    /** The visitor's ledger if the service holds it, and nothing made if not. */
+    @Synchronized
+    public fun find(visitor: String?): Ledger? {
+        val now = clock()
+        forget(now)
+        return visitor?.let { byVisitor[it] }?.also { it.lastSeen = now }
+    }
+
+    private fun forget(now: Long) {
+        byVisitor.values.removeIf { now - it.lastSeen > idle.inWholeMilliseconds }
     }
 
     private fun newId(): String =
@@ -132,40 +202,42 @@ public class Ledgers(
 }
 
 /**
- * The log, streamed: first the id, then the whole list each time a line is added, and an end
- * after [quiet] without one. Every request in the panel adds a line, so two quiet minutes means
- * nobody is using it, and the connection stops keeping the service awake.
+ * The log, streamed: first the id, then the lines each time one is added, with the exchange behind
+ * it for the wire panel, and an end after [quiet] without one. Every request in the panel adds a
+ * line, so two quiet minutes means nobody is using it, and the connection stops keeping the
+ * service awake. What was in the log before it opened goes to the log and not to the wire panel,
+ * which may be showing another demo's frames.
  */
 public fun orderLog(
     ledger: Ledger,
+    wire: Boolean,
     quiet: Duration = 2.minutes,
 ): Flow<DatastarEvent> =
     flow {
         emit(PatchSignals("""{"visitor": "${ledger.visitor}", "logOpen": true}"""))
-        emit(
-            patchElements(selector = "#orders-log-state", mode = ElementPatchMode.INNER) {
-                span { +"Open: each line is written by the server as it answers." }
-            },
-        )
-        var shown: List<LogLine>? = null
+        emit(state("Open: each line is written by the server as it answers."))
+        var shown: LogState? = null
         while (true) {
-            val lines = withTimeoutOrNull(quiet) { ledger.lines.first { it !== shown } } ?: break
-            shown = lines
-            emit(patchElements(selector = "#orders-log", mode = ElementPatchMode.INNER) { logLines(lines) })
+            val now = withTimeoutOrNull(quiet) { ledger.log.first { it != shown } } ?: break
+            emit(patchElements(selector = "#orders-log", mode = ElementPatchMode.INNER) { logLines(now.lines) })
+            if (wire && shown != null && now.exchange != null) {
+                emit(patchElements(selector = "#wire", mode = ElementPatchMode.INNER) { pre("wire__frame") { +now.exchange } })
+            }
+            shown = now
         }
-        emit(
-            patchElements(selector = "#orders-log-state", mode = ElementPatchMode.INNER) {
-                span { +"Closed after two quiet minutes. Press anything in the panel to open it again." }
-            },
-        )
+        emit(state("Closed after two quiet minutes. Press anything in the panel to open it again."))
         emit(PatchSignals("""{"logOpen": false}"""))
+    }
+
+private fun state(text: String): DatastarEvent =
+    patchElements(selector = "#orders-log-state", mode = ElementPatchMode.INNER) {
+        span { +text }
     }
 
 /** One page of orders, as built. */
 public data class OrderPage(
     val page: Int,
     val version: Int,
-    val build: Int,
     val rows: List<OrderRow>,
 )
 
@@ -188,9 +260,13 @@ private fun rows(
         OrderRow(1040 + n, WHO[n], "${n % 4 + version} ${WHAT[n]}")
     }
 
-/** The table, with the build it came from under it. Its id is what Datastar patches it in by. */
+/**
+ * The table. Its id is what Datastar patches it in by. It holds nothing the tag does not name, so
+ * the same tag is always the same bytes, as a strong ETag promises; how often it was built is the
+ * log's to say.
+ */
 public fun TagConsumer<*>.orderTable(page: OrderPage) {
-    div("lt-table-scroll orders__table") {
+    div("lt-table-scroll") {
         id = "orders"
         table("lt-table") {
             caption { +"Page ${page.page} of $ORDER_PAGES, version ${page.version}" }
@@ -211,9 +287,16 @@ public fun TagConsumer<*>.orderTable(page: OrderPage) {
                 }
             }
         }
-        p("lt-paragraph orders__build") {
+    }
+}
+
+/** What the table and the change answer for an id the service no longer holds. */
+public fun TagConsumer<*>.forgotten() {
+    div {
+        id = "orders"
+        p("lt-paragraph") {
             attributes["data-size"] = "small"
-            +"Built #${page.build}"
+            +"The server has forgotten this panel. Scroll it out of view and back to start again."
         }
     }
 }
@@ -222,7 +305,7 @@ private fun TagConsumer<*>.logLines(lines: List<LogLine>) {
     if (lines.isEmpty()) {
         p("lt-paragraph") {
             attributes["data-size"] = "small"
-            +"Open. Press a page, and what the server did with it shows here."
+            +"Press a page, and what the server did with it shows here."
         }
         return
     }
@@ -232,6 +315,7 @@ private fun TagConsumer<*>.logLines(lines: List<LogLine>) {
                 span { +line.what }
                 span("orders__status") { +line.status }
                 span { +line.result }
+                span { +line.body }
             }
         }
     }

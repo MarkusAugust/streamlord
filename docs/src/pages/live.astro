@@ -11,9 +11,9 @@ import "../styles/global.css"
 // A page that runs the library rather than describing it. Everything below the search field
 // is written by streamlord-live: the results, the frames, and the signal the count lives in.
 
-// The caching panel's log, opened when the panel is seen or pressed. Only the id goes with it,
-// so the log's URL stays the same and Datastar does not open a second one beside the first.
-const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include: /^visitor$/}})`
+// The caching panel's log, opened when the panel is seen or pressed. It needs the id it handed
+// out, and whether the page shows the wire panel, and nothing else of the store.
+const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include: /^(visitor|wire)$/}})`
 ---
 
 <!doctype html>
@@ -356,7 +356,7 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
         <section
           class="panel panel--wide"
           id="caching"
-          data-signals="{visitor: '', logOpen: false, ordersVersion: 1}"
+          data-signals="{visitor: '', logOpen: false}"
           data-on-intersect={LOG}
           data-on:click={LOG}
         >
@@ -365,7 +365,7 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
             Every page is one <code>text/html</code> answer with an ETag, not a stream. Press a
             page you have seen, and the browser asks with <code>If-None-Match</code>: the server
             answers 304 and builds nothing. Change the data, and the next press is a 200 again.
-            How it is done is on <a href="/caching/">Caching</a>.
+            How it is done is on <a class="lt-link" href="/caching/">Caching</a>.
           </p>
 
           <div class="orders">
@@ -410,8 +410,10 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
           <p class="panel__note">
             The frames behind the last thing you did on this page, whichever demo it was: a
             search, a muster, a press of a patch mode, or each tick of the counter as it runs.
-            The table above has none, since it is not a stream. Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
-            description of them. The frames.
+            Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
+            description of them. The frames. The table is no stream, so for a press there the
+            panel shows the request and the answer as the server saw and sent them, a 304 with no
+            body among them.
           </p>
           <div id="wire" class="panel__body">
             <p class="lt-paragraph" data-size="small">Nothing sent yet.</p>
@@ -673,10 +675,6 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
         flex-wrap: wrap;
         gap: var(--lt-spacing-2);
       }
-      .orders__side :global(.orders__build) {
-        margin: var(--lt-spacing-2) 0 0;
-        color: var(--lt-color-neutral-text-subtle);
-      }
       .orders__side :global(.orders__lines) {
         margin: 0;
         padding: 0;
@@ -688,7 +686,7 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
       }
       .orders__side :global(.orders__lines li) {
         display: grid;
-        grid-template-columns: 7ch 8ch minmax(0, 1fr);
+        grid-template-columns: 7ch 8ch minmax(0, 1fr) auto;
         gap: var(--lt-spacing-2);
       }
       .orders__side :global(.orders__status) {

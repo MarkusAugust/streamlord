@@ -39,7 +39,6 @@ dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.status.pages)
     implementation(libs.ktor.server.cio)
-    implementation(libs.ktor.server.caching.headers)
     implementation(libs.spring.web)
     implementation(libs.spring.webmvc)
     implementation(libs.jakarta.servlet)
@@ -51,6 +50,8 @@ dependencies {
     // The caching page's handlers run on a real Tomcat, for what MockMvc and the test host do not
     // show: the headers an engine writes on a 304.
     testImplementation(libs.tomcat.embed.core)
+    // And CachingHeaders, for the two rules the page says do not fit.
+    testImplementation(libs.ktor.server.caching.headers)
 }
 
 /**

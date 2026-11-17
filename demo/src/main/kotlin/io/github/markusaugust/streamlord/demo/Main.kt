@@ -21,7 +21,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.EntityTagVersion
-import io.ktor.http.content.VersionCheckResult
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.application.log
@@ -30,6 +29,7 @@ import io.ktor.server.engine.defaultExceptionStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.uri
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -83,6 +83,12 @@ private val BUILD: String = System.getenv("BUILD_SHA") ?: "dev"
 
 /** The caching demo's visitors, one ledger each; see Orders.kt. */
 internal val ledgers = Ledgers()
+
+/** A table request as the wire panel shows it: the request line, and the tag the browser sent. */
+private fun asked(
+    uri: String,
+    ifNoneMatch: String?,
+): String = "GET $uri" + (ifNoneMatch?.let { "\nIf-None-Match: $it" } ?: "")
 
 /**
  * streamlord-live: the service the documentation talks to.
@@ -310,30 +316,47 @@ public fun Application.live() {
          */
         get("/orders/log") {
             val signals = call.readSignalsOr(OrdersSignals())
-            call.respondDatastar(orderLog(ledgers.open(signals.visitor)))
+            call.respondDatastar(orderLog(ledgers.open(signals.visitor), signals.wire))
         }
 
+        // Only the log makes a ledger: an id the service does not hold is told so, and makes none.
         get("/orders/{visitor}") {
-            val ledger = ledgers.open(call.parameters["visitor"])
+            val ledger = ledgers.find(call.parameters["visitor"])
+            if (ledger == null) {
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                call.respondElements(elements { forgotten() })
+                return@get
+            }
             val page =
                 call.request.queryParameters["page"]
                     ?.toIntOrNull()
                     ?.coerceIn(1, ORDER_PAGES) ?: 1
-            val etag = ledger.etag(page)
-            call.response.header(HttpHeaders.CacheControl, "private, no-cache")
-            call.response.header(HttpHeaders.ETag, etag)
-            val check = EntityTagVersion(etag).check(call.request.headers)
-            if (check != VersionCheckResult.OK) {
-                ledger.notBuilt(page)
-                call.respond(check.statusCode)
-                return@get
+            val answer =
+                ledger.answer(page, asked(call.request.uri, call.request.headers[HttpHeaders.IfNoneMatch])) { etag ->
+                    // A header Ktor cannot parse, a tag with ;q= after it for one, is no match.
+                    try {
+                        EntityTagVersion(etag).check(call.request.headers).statusCode.value
+                    } catch (_: IllegalStateException) {
+                        HttpStatusCode.OK.value
+                    }
+                }
+            call.response.header(HttpHeaders.CacheControl, ORDERS_CACHE_CONTROL)
+            call.response.header(HttpHeaders.ETag, answer.etag)
+            if (answer.body == null) {
+                call.respond(HttpStatusCode.fromValue(answer.status))
+            } else {
+                call.respondElements(answer.body)
             }
-            call.respondElements(elements { orderTable(ledger.built(page)) })
         }
 
         post("/orders/{visitor}/change") {
-            val version = ledgers.open(call.parameters["visitor"]).change()
-            call.respondSignals("""{"ordersVersion": $version}""")
+            val ledger = ledgers.find(call.parameters["visitor"])
+            if (ledger == null) {
+                call.respondElements(elements { forgotten() })
+                return@post
+            }
+            ledger.change("POST ${call.request.uri}")
+            call.respondSignals("{}")
         }
 
         get("/search") {
