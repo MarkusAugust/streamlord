@@ -24,8 +24,8 @@ fun FlowContent.nextPage() {
         +"Next page"
     }
     p {
-        dataShow(signal("orders._loading"))
-        style = "display: none"
+        hidden = true
+        dataAttr("hidden", "!" + signal("orders._loading"))
         +"Loading…"
     }
 }
@@ -35,13 +35,13 @@ fun FlowContent.nextPage() {
 val nextPageHtml =
     $$"""
     <button data-indicator="orders._loading" data-on:click="@get('/orders?page=2')">Next page</button>
-    <p data-show="$orders._loading" style="display: none">Loading…</p>
+    <p hidden data-attr:hidden="!$orders._loading">Loading…</p>
     """.trimIndent()
 ```
 
 ```html tab="Template" group=markup
 <button data-indicator="orders._loading" data-on:click="@get('/orders?page=2')">Next page</button>
-<p data-show="$orders._loading" style="display: none">Loading…</p>
+<p hidden data-attr:hidden="!$orders._loading">Loading…</p>
 ```
 
 The signal is `false` until the button's request starts, `true` while it runs, and `false` again
@@ -52,8 +52,15 @@ too; the few that never are come [further down](#requests-that-never-end).
 
 It follows the requests of its own element and no other: the client skips any request whose
 element is not the one the attribute stands on. Put on a `div` around the button, it stayed `false`
-while the button's request ran. The `style="display: none"` keeps the message hidden in the moment
-before Datastar has read the page.
+while the button's request ran.
+
+The message starts out `hidden`, so it stays out of sight in the moment before Datastar has read
+the page, and `data-attr:hidden` takes over from there. Not `data-show`, which sets `display` and
+leaves the `hidden` attribute where it is: with both, the message stayed hidden while the request
+ran. And not a `style` attribute either, which a Content Security Policy without
+`'unsafe-inline'` for styles refuses: on the page
+[Security](/security/#a-page-that-really-runs-under-one) shows running under one, a
+`style="display: none"` was ignored and the message stood in plain view.
 
 ## One name, one element
 
@@ -129,8 +136,8 @@ fun FlowContent.ordersWidget() {
         id = "orders"
         loadingCounter("orders._loading")
         p {
-            dataShow(signal("orders._loading") + " > 0")
-            style = "display: none"
+            hidden = true
+            dataAttr("hidden", signal("orders._loading") + " === 0")
             +"Loading…"
         }
         div {
@@ -159,7 +166,7 @@ fun TagConsumer<*>.ordersPage(page: Int) {
 val ordersWidgetHtml =
     $$"""
     <div id="orders" data-signals:orders._loading="0" data-on:datastar-fetch="evt.detail.type === 'started' && el.contains(evt.detail.el) && (evt.detail.el.__counter = el); evt.detail.el.__counter === el && ($orders._loading = Math.max(0, $orders._loading + (evt.detail.type === 'started' ? 1 : evt.detail.type === 'finished' ? -1 : 0)))" data-attr:aria-busy="$orders._loading > 0 ? 'true' : 'false'">
-        <p data-show="$orders._loading > 0" style="display: none">Loading…</p>
+        <p hidden data-attr:hidden="$orders._loading === 0">Loading…</p>
         <div id="orders-table" data-init="@get('/orders?page=1')">Loading the orders…</div>
     </div>
     """.trimIndent()
@@ -172,7 +179,7 @@ fun ordersPageHtml(page: Int): String =
 
 ```html tab="Template" group=markup
 <div id="orders" data-signals:orders._loading="0" data-on:datastar-fetch="evt.detail.type === 'started' && el.contains(evt.detail.el) && (evt.detail.el.__counter = el); evt.detail.el.__counter === el && ($orders._loading = Math.max(0, $orders._loading + (evt.detail.type === 'started' ? 1 : evt.detail.type === 'finished' ? -1 : 0)))" data-attr:aria-busy="$orders._loading > 0 ? 'true' : 'false'">
-    <p data-show="$orders._loading > 0" style="display: none">Loading…</p>
+    <p hidden data-attr:hidden="$orders._loading === 0">Loading…</p>
     <div id="orders-table" data-init="@get('/orders?page=1')">Loading the orders…</div>
 </div>
 ```
@@ -244,5 +251,5 @@ a widget's counter, or the count never comes back to zero.
 
 Before Datastar has read the page there is no signal to show, and the first request starts only
 once it has. So the waiting text of the first view is part of the markup, as in `#orders-table`
-above, `Loading the orders…`, and the first answer replaces it. The counter's own message waits
-behind `data-show` for the presses after that.
+above, `Loading the orders…`, and the first answer replaces it. The counter's own message waits,
+`hidden`, for the presses after that.

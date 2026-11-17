@@ -91,10 +91,16 @@ class LoadingIndicatorsPageTest {
         val attributes =
             Regex("""([^\s=]+)(?:="([^"]*)")?""")
                 .findAll(inside.drop(name.length))
-                .map { m -> m.groupValues[1] + (if (m.groups[2] != null) "=" + unescape(m.groupValues[2]) else "") }
+                .map { m -> attribute(m.groupValues[1], m.groups[2]?.value?.let(::unescape)) }
                 .toList()
         return "<$name ${attributes.joinToString(" | ")}>"
     }
+
+    // A boolean attribute reads the same bare, empty or holding its own name, as kotlinx.html writes it.
+    private fun attribute(
+        name: String,
+        value: String?,
+    ): String = if (value == null || value == "" || value == name) name else "$name=$value"
 
     private fun unescape(text: String): String =
         text
