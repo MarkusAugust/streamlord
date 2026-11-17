@@ -16,12 +16,14 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.util.concurrent.CompletableFuture
+import kotlin.concurrent.thread
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** RestTestClient over MockMvc, with every async cycle of a stream run before the answer. */
 class DatastarRequestFactoryTest {
@@ -70,6 +72,26 @@ class DatastarRequestFactoryTest {
             response.datastarStream(streamlord, request) {
                 patchSignals("heads" to (request.readSignals(streamlord).int("heads") ?: 0))
             }
+
+        @GetMapping("/raw")
+        fun raw(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) {
+            val context = request.startAsync()
+            thread {
+                Thread.sleep(50)
+                response.writer.write("done")
+                response.flushBuffer()
+                context.complete()
+            }
+        }
+
+        @GetMapping("/eager")
+        suspend fun eager(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
 
         @GetMapping("/who")
         fun who(
@@ -205,7 +227,7 @@ class DatastarRequestFactoryTest {
     }
 
     @Test
-    fun `an infinite timeout waits as long as the answer takes`() {
+    fun `an infinite timeout is taken, and waits for the answer`() {
         val slow = RestTestClient.bindToServer(mvc.datastarRequestFactory(kotlin.time.Duration.INFINITE)).build()
 
         datastarEvents(
@@ -221,7 +243,11 @@ class DatastarRequestFactoryTest {
 
     @Test
     fun `an interrupted test is told so, and the stream is stopped`() {
-        Thread.currentThread().interrupt()
+        val test = Thread.currentThread()
+        thread {
+            while (waiting.get() == 0) Thread.sleep(1)
+            test.interrupt()
+        }
         try {
             assertFailsWith<InterruptedException> { client.get().uri("/forever").exchange() }
             assertTrue(Thread.currentThread().isInterrupted)
@@ -231,6 +257,34 @@ class DatastarRequestFactoryTest {
         Thread.sleep(50)
 
         assertTrue(!release.isDone && waiting.get() == 0, "the stream is still waiting")
+    }
+
+    @Test
+    fun `an interrupt is not lost when the cycle has already ended`() {
+        Thread.currentThread().interrupt()
+        try {
+            assertFailsWith<InterruptedException> { client.get().uri("/eager").exchange() }
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun `a request completed without a dispatch is answered as it stands`() {
+        val quick = RestTestClient.bindToServer(mvc.datastarRequestFactory(5.seconds)).build()
+        val started = System.nanoTime()
+
+        assertEquals(
+            "done",
+            quick
+                .get()
+                .uri("/raw")
+                .exchange()
+                .returnResult(String::class.java)
+                .responseBody,
+        )
+        assertTrue(System.nanoTime() - started < 2_000_000_000, "took ${(System.nanoTime() - started) / 1_000_000} ms")
     }
 
     @Test

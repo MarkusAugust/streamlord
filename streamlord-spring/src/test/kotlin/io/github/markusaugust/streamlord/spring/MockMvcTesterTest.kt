@@ -21,6 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,6 +30,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** [datastar], the helper the testing page shows, held to what it says. */
 class MockMvcTesterTest {
@@ -103,6 +105,26 @@ class MockMvcTesterTest {
                 )
             return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
         }
+
+        @GetMapping("/raw")
+        fun raw(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) {
+            val context = request.startAsync()
+            thread {
+                Thread.sleep(50)
+                response.writer.write("done")
+                response.flushBuffer()
+                context.complete()
+            }
+        }
+
+        @GetMapping("/eager")
+        suspend fun eager(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody = response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
 
         @GetMapping("/endless")
         fun endless(
@@ -239,12 +261,47 @@ class MockMvcTesterTest {
 
     @Test
     fun `the timeout is for the whole answer, every cycle together`() {
-        assertFailsWith<IllegalStateException> { mvc.datastar(HttpMethod.GET, "/slow", asyncTimeout = 200.milliseconds) }
+        val failure = assertFailsWith<IllegalStateException> { mvc.datastar(HttpMethod.GET, "/slow", asyncTimeout = 200.milliseconds) }
+
+        assertTrue("had not ended after 200ms" in failure.message.orEmpty(), failure.message)
+    }
+
+    @Test
+    fun `an interrupt is not lost when the cycle has already ended`() {
+        Thread.currentThread().interrupt()
+        try {
+            assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/eager") }
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun `a request completed without a dispatch is answered as it stands`() {
+        val started = System.nanoTime()
+        val result = mvc.datastar(HttpMethod.GET, "/raw", asyncTimeout = 5.seconds)
+
+        assertEquals("done", result.response.contentAsString)
+        assertTrue(System.nanoTime() - started < 2_000_000_000, "took ${(System.nanoTime() - started) / 1_000_000} ms")
+    }
+
+    @Test
+    fun `the helper answers as soon as the stream has ended`() {
+        mvc.datastar(HttpMethod.GET, "/feed")
+        val started = System.nanoTime()
+        repeat(50) { mvc.datastar(HttpMethod.GET, "/feed") }
+
+        assertTrue(System.nanoTime() - started < 2_000_000_000, "50 answers took ${(System.nanoTime() - started) / 1_000_000} ms")
     }
 
     @Test
     fun `an interrupted test is told so, stays interrupted, and the stream is stopped`() {
-        Thread.currentThread().interrupt()
+        val test = Thread.currentThread()
+        thread {
+            while (ticks.get() == 0) Thread.sleep(1)
+            test.interrupt()
+        }
         try {
             assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/endless") }
             assertTrue(Thread.currentThread().isInterrupted)
@@ -259,7 +316,7 @@ class MockMvcTesterTest {
     }
 
     @Test
-    fun `an infinite timeout waits as long as the answer takes`() {
+    fun `an infinite timeout is taken, and waits for the answer`() {
         val result = mvc.datastar(HttpMethod.GET, "/slow", asyncTimeout = kotlin.time.Duration.INFINITE)
 
         assertThat(result).hasStatusOk()
@@ -280,6 +337,7 @@ class MockMvcTesterTest {
             assertFailsWith<IllegalStateException> { tester.datastar(HttpMethod.GET, "/byfilter", asyncTimeout = 500.milliseconds) }
 
         assertTrue(!Thread.currentThread().isInterrupted, failure.message)
+        assertTrue("had not ended" in failure.message.orEmpty(), failure.message)
     }
 
     @Test

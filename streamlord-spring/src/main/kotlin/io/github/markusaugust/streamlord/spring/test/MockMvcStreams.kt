@@ -3,6 +3,7 @@ package io.github.markusaugust.streamlord.spring.test
 import io.github.markusaugust.streamlord.core.client.ClientRequest
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 import jakarta.servlet.AsyncEvent
+import jakarta.servlet.AsyncListener
 import jakarta.servlet.http.Cookie
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
@@ -19,8 +20,10 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester
 import org.springframework.test.web.servlet.assertj.MvcTestResult
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import java.net.URI
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -45,6 +48,8 @@ import kotlin.time.TimeSource
  * together, is stopped and throws: a stream that stays open needs a real server, and
  * `LiveDatastarStream` from streamlord-test. An interrupt of the test's thread stops the stream too,
  * and comes back as an [InterruptedException] with the thread still interrupted.
+ *
+ * Both helpers are for Kotlin: the `Duration` parameter gives them JVM names Java cannot call.
  */
 public fun MockMvc.datastarRequestFactory(asyncTimeout: Duration = 10.seconds): ClientHttpRequestFactory {
     checkTimeout(asyncTimeout)
@@ -81,7 +86,7 @@ public fun MockMvcTester.datastar(
                 }
             }.asyncExchange()
     while (result.unresolvedException == null && result.request.isAsyncStarted) {
-        deadline.await(result.mvcResult)
+        if (!deadline.await(result.mvcResult)) break
         result = perform(MockMvcRequestBuilders.asyncDispatch(result.mvcResult))
     }
     return result
@@ -96,28 +101,43 @@ private class Deadline(
     private val end = TimeSource.Monotonic.markNow() + timeout.also(::checkTimeout)
 
     /**
-     * Waits until MockMvc has dispatched [started]'s cycle, or the request is no longer async; past
-     * the deadline, or on an interrupt, stops the stream and throws. Not through `getAsyncResult`,
-     * which swallows an interrupt and clears the flag, and throws the same way for a timeout and
-     * for a request it cannot wait on; the dispatch that follows reports the second.
+     * Waits for [started]'s cycle to end, and says whether it ended in a dispatch, which the caller
+     * then performs, or in a `complete()`, after which the response stands as it is. Past the
+     * deadline, or on an interrupt, it stops the stream and throws. Not through `getAsyncResult`,
+     * which swallows an interrupt and clears the flag, and waits out its own timeout for a cycle
+     * that completes without a dispatch.
      */
-    fun await(started: MvcResult) {
+    fun await(started: MvcResult): Boolean {
         val request = started.request
         val context = request.asyncContext as MockAsyncContext
-        while (request.isAsyncStarted && context.dispatchedPath == null) {
-            val left = -end.elapsedNow()
-            if (!left.isPositive()) {
-                stop(context)
-                throw StreamDidNotEnd(timeout)
-            }
+        val ended = CountDownLatch(1)
+        val dispatched = AtomicBoolean()
+        // A dispatch handler runs at once when the cycle has dispatched already.
+        context.addDispatchHandler {
+            dispatched.set(true)
+            ended.countDown()
+        }
+        context.addListener(Completion(ended))
+        if (!request.isAsyncStarted) ended.countDown()
+        val left = -end.elapsedNow()
+        val done =
             try {
-                Thread.sleep(minOf(left, POLL).inWholeMilliseconds.coerceAtLeast(1))
+                // await throws on an interrupt even when the count is already down.
+                when {
+                    left.isInfinite() -> true.also { ended.await() }
+                    left.isPositive() -> ended.await(left.inWholeNanoseconds, TimeUnit.NANOSECONDS)
+                    else -> false
+                }
             } catch (e: InterruptedException) {
                 stop(context)
                 Thread.currentThread().interrupt()
                 throw e
             }
+        if (!done) {
+            stop(context)
+            throw StreamDidNotEnd(timeout)
         }
+        return dispatched.get()
     }
 
     /*
@@ -130,8 +150,16 @@ private class Deadline(
         context.complete()
     }
 
-    private companion object {
-        val POLL = 5.milliseconds
+    private class Completion(
+        private val ended: CountDownLatch,
+    ) : AsyncListener {
+        override fun onComplete(event: AsyncEvent) = ended.countDown()
+
+        override fun onTimeout(event: AsyncEvent) = Unit
+
+        override fun onError(event: AsyncEvent) = Unit
+
+        override fun onStartAsync(event: AsyncEvent) = Unit
     }
 }
 
@@ -160,7 +188,7 @@ private class DispatchingRequest(
                 }
                 var result = mvc.perform(request).andReturn()
                 while (result.request.isAsyncStarted) {
-                    deadline.await(result)
+                    if (!deadline.await(result)) break
                     result = mvc.perform(MockMvcRequestBuilders.asyncDispatch(result)).andReturn()
                 }
                 result

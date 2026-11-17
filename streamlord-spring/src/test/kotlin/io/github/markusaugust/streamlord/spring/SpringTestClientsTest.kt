@@ -17,6 +17,7 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -27,8 +28,9 @@ import kotlin.test.assertTrue
  * What Spring's own test clients make of a stream. Against MockMvc they hand back what was there
  * before the async dispatch: RestTestClient never dispatches, WebTestClient dispatches once, which
  * leaves a `suspend` controller's stream unread. When one of these starts failing, Spring has
- * changed, and the testing page's note on them goes. The gate holds each stream until the client
- * has answered, since what it reads is what the stream had written by then.
+ * changed, and the testing page's note on them goes. The gate holds each stream for half a second,
+ * long after a client that runs too few cycles has answered: what it reads is what the stream had
+ * written by then. A client that ran them all would read the stream, and the test would fail on it.
  */
 class SpringTestClientsTest {
     companion object {
@@ -74,6 +76,13 @@ class SpringTestClientsTest {
         gate.complete(Unit)
     }
 
+    private fun openGateSoon() {
+        thread {
+            Thread.sleep(500)
+            gate.complete(Unit)
+        }
+    }
+
     private fun mockMvc() = MockMvcBuilders.standaloneSetup(Feed()).build()
 
     private fun RestTestClient.body(path: String): String? =
@@ -102,11 +111,13 @@ class SpringTestClientsTest {
 
     @Test
     fun `RestTestClient bound to a controller answers 200 with no body`() {
+        openGateSoon()
         assertEquals(null, RestTestClient.bindToController(Feed()).build().body("/feed"))
     }
 
     @Test
     fun `RestTestClient bound to MockMvc answers 200 with no body`() {
+        openGateSoon()
         assertEquals(null, RestTestClient.bindTo(mockMvc()).build().body("/feed"))
     }
 
@@ -119,6 +130,7 @@ class SpringTestClientsTest {
 
     @Test
     fun `WebTestClient bound to MockMvc misses a suspend controller's stream`() {
+        openGateSoon()
         val body = MockMvcWebTestClient.bindTo(mockMvc()).build().body("/suspended")
         assertTrue("heads" !in body.orEmpty(), "$body")
     }
