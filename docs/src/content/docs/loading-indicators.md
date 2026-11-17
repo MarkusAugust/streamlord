@@ -60,7 +60,9 @@ leaves the `hidden` attribute where it is: with both, the message stayed hidden 
 ran. And not a `style` attribute either, which a Content Security Policy without
 `'unsafe-inline'` for styles refuses: on the page
 [Security](/security/#a-page-that-really-runs-under-one) shows running under one, a
-`style="display: none"` was ignored and the message stood in plain view.
+`style="display: none"` was ignored and the message stood in plain view. If a class on the message sets
+`display`, give it `[hidden] { display: none }` too: a class rule outranks the browser's own rule
+for `hidden`, and in Chrome a `display: flex` class showed the message despite it.
 
 ## One name, one element
 
