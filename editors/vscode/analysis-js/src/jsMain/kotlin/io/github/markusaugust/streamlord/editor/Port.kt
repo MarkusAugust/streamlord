@@ -75,7 +75,7 @@ interface Issue {
 
     /** `error`, `warning`, `info` or `hint`. */
     val severity: String
-    val code: String?
+    val code: String
     val link: String?
     val fixes: Array<Fix>?
 }
@@ -110,7 +110,7 @@ private fun plain(issue: AnalysedIssue): Issue =
         "end" to issue.end,
         "message" to issue.message,
         "severity" to issue.severity.name.lowercase(),
-        "code" to issue.code,
+        "code" to issue.code.id,
         "link" to issue.link,
         "fixes" to
             issue.fixes

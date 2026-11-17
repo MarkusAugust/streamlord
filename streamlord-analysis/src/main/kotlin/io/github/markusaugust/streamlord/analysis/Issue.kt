@@ -21,6 +21,11 @@ public class Fix private constructor(
      * choice between the fixes is the author's, so none of them is preferred.
      */
     public val preferred: Boolean,
+    /**
+     * Whether the fix leads the list where none is [preferred]: the one most authors want, though the choice is
+     * theirs. An editor that sorts the fixes itself keeps it at the top. A preferred fix leads as it is.
+     */
+    public val first: Boolean,
 ) {
     public constructor(
         title: String,
@@ -29,7 +34,8 @@ public class Fix private constructor(
         text: String,
         edits: List<Edit> = emptyList(),
         preferred: Boolean = true,
-    ) : this(title, start, end, lazyOf(text), edits, preferred)
+        first: Boolean = false,
+    ) : this(title, start, end, lazyOf(text), edits, preferred, first)
 
     /** What `[start, end)` becomes. */
     public val text: String get() = made.value
@@ -49,15 +55,17 @@ public class Fix private constructor(
         text: String? = null,
         edits: List<Edit> = this.edits,
         preferred: Boolean = this.preferred,
-    ): Fix = Fix(title, start, end, if (text != null) lazyOf(text) else made, edits, preferred)
+        first: Boolean = this.first,
+    ): Fix = Fix(title, start, end, if (text != null) lazyOf(text) else made, edits, preferred, first)
 
     override fun equals(other: Any?): Boolean =
         other is Fix && title == other.title && start == other.start && end == other.end && text == other.text &&
-            edits == other.edits && preferred == other.preferred
+            edits == other.edits && preferred == other.preferred && first == other.first
 
-    override fun hashCode(): Int = listOf(title, start, end, text, edits, preferred).hashCode()
+    override fun hashCode(): Int = listOf(title, start, end, text, edits, preferred, first).hashCode()
 
-    override fun toString(): String = "Fix(title=$title, start=$start, end=$end, text=$text, edits=$edits, preferred=$preferred)"
+    override fun toString(): String =
+        "Fix(title=$title, start=$start, end=$end, text=$text, edits=$edits, preferred=$preferred, first=$first)"
 
     /** Whether this fix and [other] write the same text, made once for both: the rewrite of a literal, of which each value offers a [copy]. */
     internal fun sharesTextWith(other: Fix): Boolean = made === other.made
@@ -70,8 +78,9 @@ public class Fix private constructor(
             end: Int,
             edits: List<Edit> = emptyList(),
             preferred: Boolean = true,
+            first: Boolean = false,
             text: () -> String,
-        ): Fix = Fix(title, start, end, lazy(LazyThreadSafetyMode.PUBLICATION, text), edits, preferred)
+        ): Fix = Fix(title, start, end, lazy(LazyThreadSafetyMode.PUBLICATION, text), edits, preferred, first)
     }
 }
 
@@ -82,13 +91,95 @@ public data class Edit(
     val text: String,
 )
 
+/**
+ * What an [Issue] is about, one for each kind of finding the analysis gives. [id] is the name
+ * [Issue.format] writes in brackets and the editors show beside the message.
+ */
+public enum class IssueCode(
+    public val id: String,
+) {
+    // A Kotlin value written into a string.
+    KOTLIN_INTERPOLATION("kotlin-interpolation"),
+    UNESCAPED_INTERPOLATION("unescaped-interpolation"),
+    UNSAFE_INTERPOLATION("unsafe-interpolation"),
+    INTERPOLATE_TEMPLATE("interpolate-template"),
+    INTERPOLATE_PLACEHOLDERS("interpolate-placeholders"),
+
+    // A Datastar expression and the actions it calls.
+    EXPRESSION_SYNTAX("expression-syntax"),
+    EMPTY_EXPRESSION("empty-expression"),
+    ONE_VALUE("one-value"),
+    UNKNOWN_ACTION("unknown-action"),
+    ACTION_SPACE("action-space"),
+    PRO_ACTION("pro-action"),
+    SIGNAL_KEBAB("signal-kebab"),
+    LITERAL_REWRITTEN("literal-rewritten"),
+    SIGNAL_NOT_READ("signal-not-read"),
+    STATEMENT_SPLIT("statement-split"),
+    SCOPE_NAME("scope-name"),
+    UNKNOWN_OPTION("unknown-option"),
+    OPTION_VALUE("option-value"),
+    ACTION_ARITY("action-arity"),
+    ACTION_ARGUMENT("action-argument"),
+    FETCH_EVENT_TYPE("fetch-event-type"),
+
+    // A `data-*` attribute: its name, key, modifiers and value.
+    UNKNOWN_ATTRIBUTE("unknown-attribute"),
+    UNKNOWN_MODIFIER("unknown-modifier"),
+    MODIFIER_ARGS("modifier-args"),
+    MISSING_KEY("missing-key"),
+    UNEXPECTED_KEY("unexpected-key"),
+    WRONG_ELEMENT("wrong-element"),
+    SIGNAL_NAME_EXPECTED("signal-name-expected"),
+    UNEXPECTED_VALUE("unexpected-value"),
+    MISSING_VALUE("missing-value"),
+    KEY_AND_VALUE("key-and-value"),
+    MISSING_KEY_OR_VALUE("missing-key-or-value"),
+    PRO_ATTRIBUTE("pro-attribute"),
+    PREFIX_MISMATCH("prefix-mismatch"),
+    INDICATOR_WITHOUT_ACTION("indicator-without-action"),
+    INDICATOR_ORDER("indicator-order"),
+    SIGNAL_NAME("signal-name"),
+    COMPUTED_VALUE("computed-value"),
+    FILTER_PATTERN("filter-pattern"),
+    SIGNAL_NULL("signal-null"),
+    MISSING_NONCE("missing-nonce"),
+    INVALID_NONCE("invalid-nonce"),
+
+    // A signal read on one side of the project and never defined on the other.
+    UNKNOWN_SIGNAL("unknown-signal"),
+    SIGNAL_NEVER_DECLARED("signal-never-declared"),
+
+    // The casing of a key or a name.
+    KEY_CASE("key-case"),
+    KEY_CASE_WIRE("key-case-wire"),
+    SIGNAL_NAME_HYPHEN("signal-name-hyphen"),
+    ATTRIBUTE_NAME_CASE("attribute-name-case"),
+    KEY_REFUSED("key-refused"),
+
+    // The markup of a patch and the arguments of an SSE event.
+    MISSING_ID("missing-id"),
+    MODE_NEEDS_SELECTOR("mode-needs-selector"),
+    UNCLOSED("unclosed"),
+    STRAY_CLOSE("stray-close"),
+    TOP_LEVEL_TEXT("top-level-text"),
+    BLANK_SELECTOR("blank-selector"),
+    SELECTOR_NEWLINE("selector-newline"),
+    SCRIPT_CLOSE("script-close"),
+    EVENT_REFUSED("event-refused"),
+    ;
+
+    /** The [id], so a code reads the same in a message as in [Issue.format]. */
+    override fun toString(): String = id
+}
+
 /** One finding of the analysis: a range in the source, a message, and what to do about it. */
 public data class Issue(
     val start: Int,
     val end: Int,
     val message: String,
     val severity: Severity,
-    val code: String? = null,
+    val code: IssueCode,
     /** Documentation the diagnostic links to. */
     val link: String? = null,
     /** Quick fixes, the preferred one first. */
@@ -110,10 +201,7 @@ public data class Issue(
     internal fun format(
         file: String,
         at: SourcePosition,
-    ): String {
-        val tag = if (code != null) " [$code]" else ""
-        return "$file:${at.line}:${at.column}: ${severity.name.lowercase()}: $message$tag"
-    }
+    ): String = "$file:${at.line}:${at.column}: ${severity.name.lowercase()}: $message [${code.id}]"
 }
 
 /**

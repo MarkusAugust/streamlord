@@ -16,6 +16,21 @@ All notable changes to Streamlord are recorded here. The format follows
   testing page gave to copy. See
   [Testing](https://streamlord-docs.netlify.app/testing/#through-the-controller-with-mockmvctester).
 
+### The analysis
+
+- **Breaking:** `Issue.code` is an `IssueCode`, an enum of every code the analysis gives, where it
+  was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`.
+  Every issue has a code. `format()` writes `[kotlin-interpolation]` as before.
+- `Fix.first` says a fix leads the list though it is not preferred, as the fixes that mark a value
+  with `+` do.
+
+### Editors
+
+- IntelliJ shows `one-value`, the comma that `postExpr`, `peek` and the other helpers that write an
+  expression as one value turn into the comma operator. The analysis has given it since 0.22.0 and
+  VS Code has shown it; no inspection of the plugin claimed the code. It belongs to "Datastar
+  expression". A code the analysis gains now stops the plugin's build until an inspection has it.
+
 ## [0.23.0] - 2026-11-16
 
 This release lets a Kotlin value be written into an HTML string where it stands. Mark it with `+`

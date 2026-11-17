@@ -16,6 +16,7 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import io.github.markusaugust.streamlord.analysis.Fix
 import io.github.markusaugust.streamlord.analysis.Issue
+import io.github.markusaugust.streamlord.analysis.IssueCode
 import io.github.markusaugust.streamlord.analysis.Severity
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.projectSignalIssues
@@ -28,8 +29,8 @@ import org.jetbrains.kotlin.psi.KtFile
  * Kotlin side judges Kotlin files, whether the string is handed to a Streamlord call or free-
  * standing; the HTML side judges HTML and template files.
  */
-abstract class StreamlordInspection(
-    private val codes: Set<String>,
+abstract class StreamlordInspection internal constructor(
+    private val family: Family,
 ) : LocalInspectionTool() {
     /** The issues of the file, or null when the file is neither Kotlin nor markup. */
     protected open fun issues(file: PsiFile): List<Issue>? {
@@ -52,7 +53,7 @@ abstract class StreamlordInspection(
 
         fun range(issue: Issue) = TextRange(issue.start, minOf(maxOf(issue.end, issue.start + 1), length))
         return issues
-            .filter { it.code in codes && it.start < length }
+            .filter { family(it.code) == family && it.start < length }
             .map { issue ->
                 val range = range(issue)
                 val chosen = profiled?.takes(issue.severity) == true
@@ -126,9 +127,9 @@ private fun highlightSeverity(severity: Severity): HighlightSeverity =
     }
 
 /**
- * The analysis's fixes, the first at the top of the Alt+Enter list where it is preferred or marks values with `+`: the
- * IDE sorts one problem's other fixes by their titles, and would put "Mark … as markup" above the fix that marks the
- * values. Where the choice between other fixes is the author's, no fix goes above the others.
+ * The analysis's fixes, the first at the top of the Alt+Enter list where it is preferred or says it leads: the IDE
+ * sorts one problem's other fixes by their titles, and would put "Mark … as markup" above the fix that marks the
+ * values with `+`. Where the choice between other fixes is the author's, no fix goes above the others.
  */
 private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
     fixes
@@ -136,13 +137,10 @@ private fun quickFixes(fixes: List<Fix>): Array<LocalQuickFix> =
             when {
                 i > 0 -> ReplaceTextFix(fix)
                 fix.preferred -> PreferredReplaceTextFix(fix)
-                MARKS_WITH_PLUS.containsMatchIn(fix.title) -> FirstReplaceTextFix(fix)
+                fix.first -> FirstReplaceTextFix(fix)
                 else -> ReplaceTextFix(fix)
             }
         }.toTypedArray()
-
-/** The titles of the two fixes that mark a value with `+`: the one of a string, and the one of a value in a block. */
-private val MARKS_WITH_PLUS = Regex("""^Mark .* with \+[ ,]""")
 
 /**
  * The fix and its further edits (an import) made in [document], from the end backwards so no offset
@@ -177,7 +175,7 @@ class PreferredReplaceTextFix(
 ) : ReplaceTextFix(fix),
     HighPriorityAction
 
-/** The fix that marks values with `+`, listed first without being preferred: at the top of the list all the same. */
+/** A fix the analysis lists first without preferring it: at the top of the list all the same. */
 class FirstReplaceTextFix(
     fix: Fix,
 ) : ReplaceTextFix(fix),
@@ -187,10 +185,7 @@ class FirstReplaceTextFix(
  * `$count` in a Kotlin string is a Kotlin template, not a signal: the interpolation trap. And a
  * Kotlin value in an HTML string, judged by where it lands as `interpolate` judges it.
  */
-class KotlinInterpolationInspection : StreamlordInspection(INTERPOLATION_CODES)
-
-private val INTERPOLATION_CODES =
-    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
+class KotlinInterpolationInspection : StreamlordInspection(Family.INTERPOLATION)
 
 /**
  * Datastar expression syntax, unknown actions, Pro actions, the arguments and options an action is
@@ -198,58 +193,13 @@ private val INTERPOLATION_CODES =
  * rewrite of an expression does that JavaScript would not, and `patch` where the attribute does not
  * hand it over.
  */
-class DatastarExpressionInspection : StreamlordInspection(EXPRESSION_CODES)
-
-private val EXPRESSION_CODES =
-    setOf(
-        "expression-syntax",
-        "one-value",
-        "empty-expression",
-        "unknown-action",
-        "action-space",
-        "pro-action",
-        "signal-kebab",
-        "literal-rewritten",
-        "signal-not-read",
-        "statement-split",
-        "scope-name",
-        "unknown-option",
-        "option-value",
-        "action-arity",
-        "action-argument",
-        "fetch-event-type",
-    )
+class DatastarExpressionInspection : StreamlordInspection(Family.EXPRESSION)
 
 /**
  * `data-*` attribute names, keys, modifiers and their arguments, values, an indicator with nothing
  * to show or set up too late, signal names the client cannot hold, and the values it evaluates as filters or computeds.
  */
-class DatastarAttributeInspection : StreamlordInspection(ATTRIBUTE_CODES)
-
-private val ATTRIBUTE_CODES =
-    setOf(
-        "unknown-attribute",
-        "unknown-modifier",
-        "modifier-args",
-        "missing-key",
-        "unexpected-key",
-        "wrong-element",
-        "signal-name-expected",
-        "unexpected-value",
-        "missing-value",
-        "key-and-value",
-        "missing-key-or-value",
-        "pro-attribute",
-        "prefix-mismatch",
-        "indicator-without-action",
-        "indicator-order",
-        "signal-name",
-        "computed-value",
-        "filter-pattern",
-        "signal-null",
-        "missing-nonce",
-        "invalid-nonce",
-    )
+class DatastarAttributeInspection : StreamlordInspection(Family.ATTRIBUTE)
 
 /**
  * A `$name` no file in the project defines: a misspelt signal, or one renamed on one side only.
@@ -263,7 +213,7 @@ private val ATTRIBUTE_CODES =
  * it reports in this one only ("operate on one file at a time",
  * https://plugins.jetbrains.com/docs/intellij/code-inspections.html); the index holds the rest.
  */
-class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
+class UnknownSignalInspection : StreamlordInspection(Family.UNKNOWN_SIGNAL) {
     override fun issues(file: PsiFile): List<Issue>? {
         val analysis = StreamlordAnalysis.getInstance(file.project)
         val index = SignalIndex.getInstance(file.project)
@@ -278,33 +228,88 @@ class UnknownSignalInspection : StreamlordInspection(UNKNOWN_SIGNAL_CODES) {
     }
 }
 
-private val UNKNOWN_SIGNAL_CODES = setOf("unknown-signal", "signal-never-declared")
-
 /**
  * Capitals in keys, which the browser lowercases, what the DSL writes on the wire, a key the DSL
  * refuses, a hyphen in a signal name, and a capital in the name of an attribute.
  */
-class DatastarKeyCaseInspection : StreamlordInspection(KEY_CASE_CODES)
-
-private val KEY_CASE_CODES = setOf("key-case", "key-case-wire", "signal-name-hyphen", "attribute-name-case", "key-refused")
+class DatastarKeyCaseInspection : StreamlordInspection(Family.KEY_CASE)
 
 /** The markup of a patch: complete elements, ids, selectors and modes, scripts, and the arguments core refuses as it runs. */
-class StreamlordMarkupInspection : StreamlordInspection(MARKUP_CODES)
+class StreamlordMarkupInspection : StreamlordInspection(Family.MARKUP)
 
-private val MARKUP_CODES =
-    setOf(
-        "missing-id",
-        "mode-needs-selector",
-        "unclosed",
-        "stray-close",
-        "top-level-text",
-        "blank-selector",
-        "selector-newline",
-        "script-close",
-        "event-refused",
-    )
+/** The six inspections, as the settings list them: each code of the analysis belongs to one. */
+internal enum class Family { INTERPOLATION, EXPRESSION, ATTRIBUTE, UNKNOWN_SIGNAL, KEY_CASE, MARKUP }
 
-/** Every code an inspection claims, so a test can prove the analysis leaves none unclaimed. */
-object InspectionCodes {
-    val all: Set<String> = INTERPOLATION_CODES + UNKNOWN_SIGNAL_CODES + EXPRESSION_CODES + ATTRIBUTE_CODES + KEY_CASE_CODES + MARKUP_CODES
-}
+/** The inspection that shows [code]. Without an `else`, so a code the analysis gains stops the build until it is placed. */
+internal fun family(code: IssueCode): Family =
+    when (code) {
+        IssueCode.KOTLIN_INTERPOLATION,
+        IssueCode.UNESCAPED_INTERPOLATION,
+        IssueCode.UNSAFE_INTERPOLATION,
+        IssueCode.INTERPOLATE_TEMPLATE,
+        IssueCode.INTERPOLATE_PLACEHOLDERS,
+        -> Family.INTERPOLATION
+
+        IssueCode.EXPRESSION_SYNTAX,
+        IssueCode.EMPTY_EXPRESSION,
+        IssueCode.ONE_VALUE,
+        IssueCode.UNKNOWN_ACTION,
+        IssueCode.ACTION_SPACE,
+        IssueCode.PRO_ACTION,
+        IssueCode.SIGNAL_KEBAB,
+        IssueCode.LITERAL_REWRITTEN,
+        IssueCode.SIGNAL_NOT_READ,
+        IssueCode.STATEMENT_SPLIT,
+        IssueCode.SCOPE_NAME,
+        IssueCode.UNKNOWN_OPTION,
+        IssueCode.OPTION_VALUE,
+        IssueCode.ACTION_ARITY,
+        IssueCode.ACTION_ARGUMENT,
+        IssueCode.FETCH_EVENT_TYPE,
+        -> Family.EXPRESSION
+
+        IssueCode.UNKNOWN_ATTRIBUTE,
+        IssueCode.UNKNOWN_MODIFIER,
+        IssueCode.MODIFIER_ARGS,
+        IssueCode.MISSING_KEY,
+        IssueCode.UNEXPECTED_KEY,
+        IssueCode.WRONG_ELEMENT,
+        IssueCode.SIGNAL_NAME_EXPECTED,
+        IssueCode.UNEXPECTED_VALUE,
+        IssueCode.MISSING_VALUE,
+        IssueCode.KEY_AND_VALUE,
+        IssueCode.MISSING_KEY_OR_VALUE,
+        IssueCode.PRO_ATTRIBUTE,
+        IssueCode.PREFIX_MISMATCH,
+        IssueCode.INDICATOR_WITHOUT_ACTION,
+        IssueCode.INDICATOR_ORDER,
+        IssueCode.SIGNAL_NAME,
+        IssueCode.COMPUTED_VALUE,
+        IssueCode.FILTER_PATTERN,
+        IssueCode.SIGNAL_NULL,
+        IssueCode.MISSING_NONCE,
+        IssueCode.INVALID_NONCE,
+        -> Family.ATTRIBUTE
+
+        IssueCode.UNKNOWN_SIGNAL,
+        IssueCode.SIGNAL_NEVER_DECLARED,
+        -> Family.UNKNOWN_SIGNAL
+
+        IssueCode.KEY_CASE,
+        IssueCode.KEY_CASE_WIRE,
+        IssueCode.SIGNAL_NAME_HYPHEN,
+        IssueCode.ATTRIBUTE_NAME_CASE,
+        IssueCode.KEY_REFUSED,
+        -> Family.KEY_CASE
+
+        IssueCode.MISSING_ID,
+        IssueCode.MODE_NEEDS_SELECTOR,
+        IssueCode.UNCLOSED,
+        IssueCode.STRAY_CLOSE,
+        IssueCode.TOP_LEVEL_TEXT,
+        IssueCode.BLANK_SELECTOR,
+        IssueCode.SELECTOR_NEWLINE,
+        IssueCode.SCRIPT_CLOSE,
+        IssueCode.EVENT_REFUSED,
+        -> Family.MARKUP
+    }

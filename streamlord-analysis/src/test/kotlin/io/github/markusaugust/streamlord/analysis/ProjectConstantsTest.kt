@@ -64,7 +64,7 @@ class ProjectConstantsTest {
             analyzer.analyzeKotlin(
                 Source(c, SourceLanguage.KOTLIN, constants = projectConstants(listOf(a, b, c).map(::declaredNames))),
             )
-        assertTrue(issues.any { it.code == "unescaped-interpolation" }, issues.toString())
+        assertTrue(issues.any { it.code == IssueCode.UNESCAPED_INTERPOLATION }, issues.toString())
         val silent =
             analyzer.analyzeKotlin(
                 Source(
@@ -73,6 +73,6 @@ class ProjectConstantsTest {
                     constants = projectConstants(listOf("const val title = \"Home\"", c).map(::declaredNames)),
                 ),
             )
-        assertEquals(emptyList(), silent.filter { it.code == "unescaped-interpolation" })
+        assertEquals(emptyList(), silent.filter { it.code == IssueCode.UNESCAPED_INTERPOLATION })
     }
 }

@@ -213,7 +213,7 @@ private fun hyphenIssue(
             "A signal name holds no hyphen: Datastar's client reads one as a capital in an attribute key and as a hyphen " +
                 "in an expression or a patch, so Streamlord refuses \"$written\" at runtime. $advice.",
         severity = Severity.ERROR,
-        code = "signal-name-hyphen",
+        code = IssueCode.SIGNAL_NAME_HYPHEN,
         link = Docs.CASING,
         fixes = if (plain) listOf(Fix("Change to $text", s.contentStart, s.contentEnd, text)) else emptyList(),
     )

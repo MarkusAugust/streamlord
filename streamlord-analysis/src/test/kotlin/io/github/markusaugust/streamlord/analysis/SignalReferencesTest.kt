@@ -43,7 +43,7 @@ class SignalReferencesTest {
             val issues = unknown(refs, defined)
             case["refs"]?.let { assertEquals(it.toKotlin(), refs.map { r -> listOf(src.substring(r.start, r.end), r.name) }, name) }
             case.array("unknown")?.let { assertEquals(it.strings(), issues.map { i -> src.substring(i.start, i.end) }, name) }
-            case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code }, name) }
+            case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code.id }, name) }
             case.array("messages")?.let { assertEquals(it.strings(), issues.map { i -> i.message }, name) }
             case["fixes"]?.let { expected ->
                 val fixes = issues.map { i -> i.fixes.map { f -> listOf(src.substring(f.start, f.end), f.text) } }

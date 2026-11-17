@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.probes
 
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Fix
+import io.github.markusaugust.streamlord.analysis.IssueCode
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.ValueFact
@@ -13,7 +14,7 @@ private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 private const val PACKAGE = "io.github.markusaugust.streamlord.probes"
 
 /** The issues whose fixes keep what the string writes; a fix for the dollar trap changes it on purpose. */
-private val JUDGED = setOf("unescaped-interpolation", "unsafe-interpolation", "interpolate-template")
+private val JUDGED = setOf(IssueCode.UNESCAPED_INTERPOLATION, IssueCode.UNSAFE_INTERPOLATION, IssueCode.INTERPOLATE_TEMPLATE)
 
 /** One function to probe: `fun f(params) = body`, with what the file imports and declares beside it. */
 private class Case(

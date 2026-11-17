@@ -312,10 +312,8 @@ public fun TagConsumer<*>.verdict(judgement: Judgement) {
                     }
                     +" "
                     +finding.issue.message
-                    finding.issue.code?.let { code ->
-                        +" "
-                        code("judge__code") { +"[$code]" }
-                    }
+                    +" "
+                    code("judge__code") { +"[${finding.issue.code.id}]" }
                     finding.fixed.forEach { fixed ->
                         button(classes = "lt-button judge__fix") {
                             type = ButtonType.button

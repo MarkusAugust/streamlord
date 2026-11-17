@@ -35,7 +35,7 @@ fun `an interpolated signal is an error`() {
     val issue =
         Analyzer()
             .analyzeKotlin(source)
-            .single { it.code == "kotlin-interpolation" }
+            .single { it.code == IssueCode.KOTLIN_INTERPOLATION }
 
     assertEquals(Severity.ERROR, issue.severity)
     assertTrue(issue.fixes.isNotEmpty(), "the analysis offers a fix")
@@ -99,8 +99,8 @@ line and column.
 `analyzeHtml(source)` does for template and HTML files what `analyzeKotlin` does for Kotlin,
 checking attributes and expressions; the id and completeness rules belong to `validateMarkup`. Both
 return a list of `Issue`, each carrying the range it covers as `start` and `end`, a `severity`, a
-`code`, a `message`, its quick fixes and, where the Datastar reference has a page for it, a `link`,
-which is exactly what the two editors render.
+`code` from the enum `IssueCode`, a `message`, its quick fixes and, where the Datastar reference
+has a page for it, a `link`, which is exactly what the two editors render.
 
 ## Signals the pages never declare
 

@@ -54,9 +54,9 @@ class AnalyzeProjectTest {
     fun `gives each file the constants of every other`() {
         write("Keys.kt", "const val title = \"Home\"\n")
         write("Page.kt", page)
-        assertEquals(emptyList(), analyzer.analyzeProject(root).filter { it.issue.code == "unescaped-interpolation" })
+        assertEquals(emptyList(), analyzer.analyzeProject(root).filter { it.issue.code == IssueCode.UNESCAPED_INTERPOLATION })
         write("Request.kt", "val title get() = call.request.queryParameters[\"title\"]\n")
-        val found = analyzer.analyzeProject(root).filter { it.issue.code == "unescaped-interpolation" }
+        val found = analyzer.analyzeProject(root).filter { it.issue.code == IssueCode.UNESCAPED_INTERPOLATION }
         assertEquals(listOf("Page.kt" to 4), found.map { it.file.name to it.line })
     }
 
@@ -69,8 +69,8 @@ class AnalyzeProjectTest {
         val failing = all.failures().map { Triple(it.file.name, it.issue.code, it.issue.severity) }
         assertEquals(
             listOf(
-                Triple("Click.kt", "kotlin-interpolation", Severity.ERROR),
-                Triple("Link.kt", "unsafe-interpolation", Severity.WARNING),
+                Triple("Click.kt", IssueCode.KOTLIN_INTERPOLATION, Severity.ERROR),
+                Triple("Link.kt", IssueCode.UNSAFE_INTERPOLATION, Severity.WARNING),
             ),
             failing,
         )
@@ -92,9 +92,9 @@ class AnalyzeProjectTest {
         assertEquals(emptyList(), all.failures(strict = false))
         assertEquals(
             listOf(
-                Triple("Block.kt", "interpolate-template", Severity.WARNING),
-                Triple("Format.kt", "interpolate-template", Severity.WARNING),
-                Triple("Plain.kt", "unescaped-interpolation", Severity.WARNING),
+                Triple("Block.kt", IssueCode.INTERPOLATE_TEMPLATE, Severity.WARNING),
+                Triple("Format.kt", IssueCode.INTERPOLATE_TEMPLATE, Severity.WARNING),
+                Triple("Plain.kt", IssueCode.UNESCAPED_INTERPOLATION, Severity.WARNING),
             ),
             all.failures(strict = true).map { Triple(it.file.name, it.issue.code, it.issue.severity) },
         )
@@ -108,7 +108,7 @@ class AnalyzeProjectTest {
         val all = analyzer.analyzeProject(root)
         assertEquals(emptyList(), all.failures())
         assertEquals(
-            listOf("interpolate-template" to Severity.WARNING),
+            listOf(IssueCode.INTERPOLATE_TEMPLATE to Severity.WARNING),
             all.failures(strict = true).map {
                 it.issue.code to
                     it.issue.severity
@@ -122,7 +122,7 @@ class AnalyzeProjectTest {
         write("Text.kt", head + "fun f(name: String) = interpolate { \"\"\"<div data-text=\"\$name\"></div>\"\"\" }\n")
         val all = analyzer.analyzeProject(root)
         val strict = all.failures(strict = true).map { it.issue.code to it.issue.severity }
-        assertEquals(listOf("kotlin-interpolation" to Severity.WARNING), strict)
+        assertEquals(listOf(IssueCode.KOTLIN_INTERPOLATION to Severity.WARNING), strict)
         assertEquals(emptyList(), all.failures())
     }
 
@@ -158,11 +158,11 @@ class AnalyzeProjectTest {
         val dir = File("../editors/vscode/test/fixtures/interpolationtests")
         val codes =
             setOf(
-                "kotlin-interpolation",
-                "unescaped-interpolation",
-                "unsafe-interpolation",
-                "interpolate-template",
-                "interpolate-placeholders",
+                IssueCode.KOTLIN_INTERPOLATION,
+                IssueCode.UNESCAPED_INTERPOLATION,
+                IssueCode.UNSAFE_INTERPOLATION,
+                IssueCode.INTERPOLATE_TEMPLATE,
+                IssueCode.INTERPOLATE_PLACEHOLDERS,
             )
         val files = JsonParser.parseObject(dir.resolve("expected.json").readText()).obj("files")!!
         val seen = analyzer.analyzeProject(dir).filter { it.issue.code in codes }.groupBy({ it.file.name }, { it.issue })
@@ -173,8 +173,8 @@ class AnalyzeProjectTest {
                 seen[file]
                     .orEmpty()
                     .sortedWith(
-                        compareBy({ it.start }, { it.end }, { it.code }),
-                    ).map { Triple(it.start, it.end, it.code) }
+                        compareBy({ it.start }, { it.end }, { it.code.id }),
+                    ).map { Triple(it.start, it.end, it.code.id) }
             assertEquals(wanted, got, file)
         }
     }

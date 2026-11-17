@@ -32,10 +32,10 @@ class FixesTest {
                     else -> analyzer.analyzeKotlin(source)
                 }
             val seen =
-                issues.sortedWith(compareBy({ it.start }, { it.end }, { it.code })).mapIndexed { n, i ->
+                issues.sortedWith(compareBy({ it.start }, { it.end }, { it.code.id })).mapIndexed { n, i ->
                     val link = i.link.takeIf { expected.getOrNull(n)?.string("link") != null }
                     line(
-                        i.code,
+                        i.code.id,
                         source.substring(i.start, i.end),
                         i.fixes.map { it.title + if (it.preferred) "" else " (not preferred)" },
                         link,

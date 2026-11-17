@@ -138,7 +138,7 @@ class ClientOracleTest {
     }
 
     /** What the check reports under another code than `expression-syntax`, each with the one it uses. */
-    private val brokenUnderAnotherCode = mapOf("@get ('/x')" to "action-space")
+    private val brokenUnderAnotherCode = mapOf("@get ('/x')" to IssueCode.ACTION_SPACE)
 
     /**
      * `expressions.json`: `compiles` says whether JavaScript took the body `genRx` wrote. The check
@@ -159,7 +159,7 @@ class ClientOracleTest {
                 assertContains(codes, other, expression)
                 continue
             }
-            if (("expression-syntax" in codes) == compiles) {
+            if ((IssueCode.EXPRESSION_SYNTAX in codes) == compiles) {
                 val verdict = if (compiles) "compiles" else "does not compile"
                 wrong += "$expression with returnsValue $returnsValue: the client's body $verdict: ${case.string("js")}"
             }
@@ -175,7 +175,7 @@ class ClientOracleTest {
         for (case in group("expressions.json", "rewrites")) {
             val expression = case.string("expression")!!
             val (html, issues) = judged(expression, case.boolean("returnsValue")!!)
-            for (issue in issues.filter { it.code == "signal-not-read" }) {
+            for (issue in issues.filter { it.code == IssueCode.SIGNAL_NOT_READ }) {
                 said++
                 val reference = html.substring(issue.start, issue.end)
                 if (reference !in case.string("js")!!) wrong += "$expression: the client rewrote $reference: ${case.string("js")}"
@@ -198,7 +198,7 @@ class ClientOracleTest {
         var warned = 0
         for (case in cases.filter { it.boolean("returnsValue") == true }) {
             val expression = case.string("expression")!!
-            if (judged(expression, true).second.none { it.code == "statement-split" }) continue
+            if (judged(expression, true).second.none { it.code == IssueCode.STATEMENT_SPLIT }) continue
             warned++
             if (case.string("js") == run.getValue(expression)) wrong += "$expression: the client compiles it whole: ${case.string("js")}"
         }

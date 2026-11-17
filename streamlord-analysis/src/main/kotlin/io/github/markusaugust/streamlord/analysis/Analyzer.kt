@@ -132,7 +132,13 @@ private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
 
 /** The codes of what Kotlin writes into a string, whatever the client then makes of it. */
 private val KOTLIN_OWN =
-    setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
+    setOf(
+        IssueCode.KOTLIN_INTERPOLATION,
+        IssueCode.UNESCAPED_INTERPOLATION,
+        IssueCode.UNSAFE_INTERPOLATION,
+        IssueCode.INTERPOLATE_TEMPLATE,
+        IssueCode.INTERPOLATE_PLACEHOLDERS,
+    )
 
 /** The words every message of a refusal of the DSL's as the page renders has. */
 private val STREAMLORD_REFUSES = regex("""Streamlord (?:refuses|throws)|as the page renders""")
@@ -443,7 +449,7 @@ public class Analyzer(
                             "dataIndicator comes after dataInit, which starts its request as Datastar applies it, " +
                                 "before the indicator exists, so the signal stays false. Call dataIndicator first.",
                             Severity.WARNING,
-                            "indicator-order",
+                            IssueCode.INDICATOR_ORDER,
                             Docs.attribute("indicator"),
                         ),
                     ),
@@ -463,7 +469,7 @@ public class Analyzer(
                 end = if (empty) s.end else s.contentEnd,
                 message = problem.removeSuffix(".") + ". ${site.name} refuses it as the page renders.",
                 severity = Severity.ERROR,
-                code = if (empty) "missing-nonce" else "invalid-nonce",
+                code = if (empty) IssueCode.MISSING_NONCE else IssueCode.INVALID_NONCE,
                 link = Docs.attribute(catalog.attributesByName.getValue("nonce")),
             ),
         )
@@ -725,7 +731,7 @@ public class Analyzer(
                         message =
                             "Kotlin interpolates \$${ip.text} here, and $attribute takes a signal name, not an expression. Write $written.",
                         severity = Severity.ERROR,
-                        code = "kotlin-interpolation",
+                        code = IssueCode.KOTLIN_INTERPOLATION,
                         link = Docs.EXPRESSIONS,
                         fixes = listOf(Fix("Write $written", s.contentStart, s.contentEnd, written)),
                     )
@@ -970,7 +976,7 @@ public class Analyzer(
                         s.end,
                         "${site.name} throws as the page renders: Streamlord refuses an empty expression.",
                         Severity.ERROR,
-                        "empty-expression",
+                        IssueCode.EMPTY_EXPRESSION,
                         Docs.attribute(attribute),
                     ),
                 )
@@ -999,7 +1005,7 @@ public class Analyzer(
                 "operator and keeps only what follows it." +
                 if (backend) " The options go in the lambda after the call." else "",
             Severity.WARNING,
-            "one-value",
+            IssueCode.ONE_VALUE,
             Docs.EXPRESSIONS,
         )
     }
@@ -1118,7 +1124,7 @@ public class Analyzer(
                     end = site.openParen,
                     message = needsSelector,
                     severity = Severity.ERROR,
-                    code = "mode-needs-selector",
+                    code = IssueCode.MODE_NEEDS_SELECTOR,
                     link = Docs.SSE,
                     fixes = if (modeArg.named != null) listOf(Fix("Add selector = \"\"", at, at, "selector = \"\", ")) else emptyList(),
                 )
@@ -1224,7 +1230,7 @@ public class Analyzer(
                     end = key.end,
                     message = "${site.name}(\"$name\") listens for $name, which no browser fires: the event is $mixed.",
                     severity = Severity.WARNING,
-                    code = "key-case-wire",
+                    code = IssueCode.KEY_CASE_WIRE,
                     link = Docs.attribute(spec),
                     fixes = listOf(Fix("Change to $mixed", key.contentStart, key.contentEnd, mixed)),
                 ),
@@ -1239,7 +1245,7 @@ public class Analyzer(
                     end = key.end,
                     message = "${site.name}(\"$name\") listens for $name, which no browser fires: the DOM event is $dom.",
                     severity = Severity.WARNING,
-                    code = "key-case-wire",
+                    code = IssueCode.KEY_CASE_WIRE,
                     link = Docs.attribute(spec),
                     fixes = listOf(Fix("Change to $dom", key.contentStart, key.contentEnd, dom)),
                 ),
@@ -1257,7 +1263,7 @@ public class Analyzer(
                             )}. " +
                             "Write it in one case.",
                     severity = Severity.HINT,
-                    code = "key-case-wire",
+                    code = IssueCode.KEY_CASE_WIRE,
                     link = Docs.attribute(spec),
                 ),
             )
@@ -1273,7 +1279,7 @@ public class Analyzer(
                         "In HTML or a template you write it that way yourself." +
                         rawKeyNote(spec, prefix, name),
                 severity = Severity.HINT,
-                code = "key-case-wire",
+                code = IssueCode.KEY_CASE_WIRE,
                 link = Docs.attribute(spec),
             ),
         )
@@ -1345,7 +1351,7 @@ public class Analyzer(
             why: String,
         ) {
             val end = m.range.first + m.value.trimEnd().length
-            out += Issue(start + m.range.first, start + end, "Streamlord throws at render: $why.", Severity.ERROR, "modifier-args")
+            out += Issue(start + m.range.first, start + end, "Streamlord throws at render: $why.", Severity.ERROR, IssueCode.MODIFIER_ARGS)
         }
 
         fun on(name: String) = set[name]?.takeIf { value(name) == "true" }
@@ -1387,7 +1393,7 @@ public class Analyzer(
             end = key.end,
             message = "Streamlord refuses \"$name\" at runtime: it $reason.",
             severity = Severity.ERROR,
-            code = "key-refused",
+            code = IssueCode.KEY_REFUSED,
             link = Docs.attribute(spec),
         )
 
@@ -1419,7 +1425,7 @@ public class Analyzer(
         val plain = src.substring(key.contentStart, key.contentEnd) == name
         return listOf(
             refusedKey(spec, key, name, reason).copy(
-                code = "attribute-name-case",
+                code = IssueCode.ATTRIBUTE_NAME_CASE,
                 fixes =
                     if (plain) {
                         AttributeKeys
@@ -1468,7 +1474,7 @@ public class Analyzer(
                 r.last + 1,
                 "`</script` inside a script body. Streamlord escapes it to `<\\/script`, which only works inside a JavaScript string or regex.",
                 Severity.WARNING,
-                "script-close",
+                IssueCode.SCRIPT_CLOSE,
             ),
         )
     }

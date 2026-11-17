@@ -36,7 +36,9 @@ internal fun interpolateFix(
     val named = trusted.keys.joinToString(" and ") { valueShown(s.interpolations[it]) }
     val title = if (trusted.isEmpty()) ESCAPES_TITLE else "$REWRITE_TITLE, with $named as Trusted(...)"
     val imports = coreImports(src, listOfNotNull("Trusted".takeIf { trusted.isNotEmpty() }, "interpolate"))
-    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false) { interpolateText(src, s, trim, trusted, kept) }
+    return Fix.later(title, s.start, s.end + trim.length, imports, preferred = false, first = true) {
+        interpolateText(src, s, trim, trusted, kept)
+    }
 }
 
 /**

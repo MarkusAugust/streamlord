@@ -93,7 +93,7 @@ class AnalyzerTest {
                         "ftl" to TemplateEngine.FREEMARKER,
                         "vm" to TemplateEngine.VELOCITY,
                     )[file?.substringAfterLast('.')]
-                mapOf("codes" to analyzer.analyzeHtml(Source(text, SourceLanguage.HTML, engine = engine)).map { it.code })
+                mapOf("codes" to analyzer.analyzeHtml(Source(text, SourceLanguage.HTML, engine = engine)).map { it.code.id })
             }
 
             else -> {
@@ -136,7 +136,7 @@ class AnalyzerTest {
         val html = "<div data-star-on:click=\"x()\"></div>"
         val kotlin = "fun f() = \"\"\"<p data-star-text=\"1\"></p>\"\"\""
 
-        fun message(issues: List<Issue>) = issues.single { it.code == "prefix-mismatch" }.message
+        fun message(issues: List<Issue>) = issues.single { it.code == IssueCode.PREFIX_MISMATCH }.message
 
         assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeHtml(html)))
         assertEquals("$said the Streamlord attribute prefix setting.", message(analyzer.analyzeKotlin(kotlin)))

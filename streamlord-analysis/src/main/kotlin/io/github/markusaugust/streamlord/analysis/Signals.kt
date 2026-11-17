@@ -1012,7 +1012,7 @@ internal fun dataSignalsPairIssues(
                 end = key.end,
                 message = "Streamlord refuses \"${key.text}\" at runtime: it $reason.",
                 severity = Severity.ERROR,
-                code = "key-refused",
+                code = IssueCode.KEY_REFUSED,
                 link = Docs.attribute("signals"),
             )
         }
@@ -1029,7 +1029,7 @@ internal fun dataSignalsPairIssues(
                 "Datastar's client holds no null: a null among the signals removes the key, so \"${key.text}\" is not declared, " +
                     "and an expression that reads it gets \"\". Declare it with the value it starts as, such as \"\".",
             severity = Severity.WARNING,
-            code = "signal-null",
+            code = IssueCode.SIGNAL_NULL,
             link = Docs.SIGNALS,
         )
     }

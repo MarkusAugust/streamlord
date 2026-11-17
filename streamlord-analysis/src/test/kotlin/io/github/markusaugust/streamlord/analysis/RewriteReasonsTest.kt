@@ -20,7 +20,7 @@ class RewriteReasonsTest {
             val issues =
                 ExpressionValidator()
                     .validate(source, returnsValue = true)
-                    .filter { it.code == code && source.substring(it.start, it.end) == written }
+                    .filter { it.code.id == code && source.substring(it.start, it.end) == written }
             assertEquals(1, issues.size, "$name: $code on $written")
             val message = issues.single().message
             for (words in case.array("holds")!!.strings()) {

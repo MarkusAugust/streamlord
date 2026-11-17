@@ -24,7 +24,7 @@ class KotlinStringsTest {
                 assertEquals(expected.toKotlin(), sites.map { site -> site.args.map { a -> a.string?.text } }, name)
             }
             val issues = analyzer.analyzeKotlin(src)
-            case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code }, name) }
+            case.array("codes")?.let { assertEquals(it.strings(), issues.map { i -> i.code.id }, name) }
             case["starts"]?.let { assertEquals(it.toKotlin(), issues.map { i -> i.start.toLong() }, name) }
         }
     }

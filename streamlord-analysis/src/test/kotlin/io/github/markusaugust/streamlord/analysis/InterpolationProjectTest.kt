@@ -15,7 +15,13 @@ class InterpolationProjectTest {
     private val analyzer = Analyzer()
     private val dir = "editors/vscode/test/fixtures/interpolationtests"
     private val codes =
-        setOf("kotlin-interpolation", "unescaped-interpolation", "unsafe-interpolation", "interpolate-template", "interpolate-placeholders")
+        setOf(
+            IssueCode.KOTLIN_INTERPOLATION,
+            IssueCode.UNESCAPED_INTERPOLATION,
+            IssueCode.UNSAFE_INTERPOLATION,
+            IssueCode.INTERPOLATE_TEMPLATE,
+            IssueCode.INTERPOLATE_PLACEHOLDERS,
+        )
 
     private fun line(
         start: Int,
@@ -43,14 +49,14 @@ class InterpolationProjectTest {
             val seen =
                 all
                     .filter { it.code in codes }
-                    .sortedWith(compareBy({ it.start }, { it.end }, { it.code }))
-                    .map { line(it.start, it.end, it.code, it.severity.name.lowercase(), it.message) }
+                    .sortedWith(compareBy({ it.start }, { it.end }, { it.code.id }))
+                    .map { line(it.start, it.end, it.code.id, it.severity.name.lowercase(), it.message) }
             val wanted =
                 (issues as JsonArray).objects().map {
                     line(it.int("start")!!, it.int("end")!!, it.string("code"), it.string("severity")!!, it.string("message")!!)
                 }
             assertEquals(wanted, seen, file)
-            assertEquals(emptyList(), all.filter { it.code == "missing-id" || it.code == "top-level-text" }, file)
+            assertEquals(emptyList(), all.filter { it.code == IssueCode.MISSING_ID || it.code == IssueCode.TOP_LEVEL_TEXT }, file)
         }
     }
 }

@@ -213,7 +213,7 @@ private fun scopeNameIssues(
                     "${m.value} is not defined in $prefix${spec.name}: Datastar hands an expression ${m.value} only in $where, " +
                         "so here it throws a ReferenceError.",
                 severity = Severity.WARNING,
-                code = "scope-name",
+                code = IssueCode.SCOPE_NAME,
                 link = Docs.EXPRESSIONS,
             )
         }.toList() + undefinedNameIssues(text, spec, handed, regions, prefix)
@@ -240,7 +240,7 @@ private fun undefinedNameIssues(
                     "${m.value} is undefined in $prefix${spec.name}: Datastar hands an expression the event only in $where, " +
                         "so reading from it throws a TypeError.",
                 severity = Severity.WARNING,
-                code = "scope-name",
+                code = IssueCode.SCOPE_NAME,
                 link = Docs.EXPRESSIONS,
             )
         }.toList()
@@ -741,7 +741,7 @@ internal fun filterPatternIssues(
             "Datastar cuts one / from each end of a string $key and takes the rest as the pattern, " +
                 "so /$flags stays in it and is matched as text, not read as flags. $advice",
             Severity.WARNING,
-            "filter-pattern",
+            IssueCode.FILTER_PATTERN,
             link,
             if (fixable) listOf(Fix("Change to $literal", start, end, literal)) else emptyList(),
         )
@@ -817,7 +817,7 @@ public class ExpressionValidator(
                     r.start + written.length,
                     "$message: Datastar runs it again each time a signal it reads changes. Use ${prefix}effect for a side effect.",
                     Severity.WARNING,
-                    "computed-value",
+                    IssueCode.COMPUTED_VALUE,
                     Docs.attribute("computed"),
                 )
         }
@@ -832,7 +832,7 @@ public class ExpressionValidator(
     ): List<Issue> {
         val issues = ArrayList<Issue>()
         if (text.isBlank()) {
-            return listOf(Issue(0, maxOf(text.length, 1), "Empty Datastar expression.", Severity.WARNING, "empty-expression"))
+            return listOf(Issue(0, maxOf(text.length, 1), "Empty Datastar expression.", Severity.WARNING, IssueCode.EMPTY_EXPRESSION))
         }
         // As the client does it: the statements split and wrapped first, the signals and actions rewritten after.
         val script = returnsValue?.let { clientScript(text, it) } ?: ClientScript(text, IntArray(text.length + 1) { it })
@@ -866,7 +866,7 @@ public class ExpressionValidator(
                         "Datastar reads an action only as @$name( with nothing before the parenthesis. " +
                             "With a space the @ reaches the browser, which cannot parse it.",
                     severity = Severity.ERROR,
-                    code = "action-space",
+                    code = IssueCode.ACTION_SPACE,
                     link = Docs.ACTIONS,
                     fixes = listOf(Fix("Remove the space", end, paren, "")),
                 )
@@ -899,9 +899,9 @@ public class ExpressionValidator(
                 val message =
                     "Datastar expression: await is only valid in an async function, and Datastar compiles an expression as a plain one. " +
                         "An action sends its request without it."
-                issues += Issue(awaitAt, awaitAt + AWAIT.length, message, Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+                issues += Issue(awaitAt, awaitAt + AWAIT.length, message, Severity.ERROR, IssueCode.EXPRESSION_SYNTAX, Docs.EXPRESSIONS)
             } else if (pos !in spaced) {
-                issues += Issue(pos, end, "Datastar expression: $said", Severity.ERROR, "expression-syntax", Docs.EXPRESSIONS)
+                issues += Issue(pos, end, "Datastar expression: $said", Severity.ERROR, IssueCode.EXPRESSION_SYNTAX, Docs.EXPRESSIONS)
             }
         }
 
@@ -955,7 +955,7 @@ public class ExpressionValidator(
                         "Datastar rewrites $signal and leaves the $extra before it, so the browser reads $extra$ " +
                             "as a JavaScript variable and throws a ReferenceError.",
                         Severity.WARNING,
-                        "signal-not-read",
+                        IssueCode.SIGNAL_NOT_READ,
                         Docs.EXPRESSIONS,
                         fixes = listOf(Fix("Remove the extra $extra", start, end, "")),
                     )
@@ -983,7 +983,7 @@ public class ExpressionValidator(
                         end,
                         "Datastar does not rewrite $written$why. The browser reads $written as a JavaScript variable, not as the signal.",
                         Severity.WARNING,
-                        "signal-not-read",
+                        IssueCode.SIGNAL_NOT_READ,
                         Docs.EXPRESSIONS,
                     )
             } else if (next.isJsNamePart()) {
@@ -998,7 +998,7 @@ public class ExpressionValidator(
                         "Datastar reads only ASCII letters, digits and _ after a \$, so $written is no signal: " +
                             "the browser looks for a JavaScript variable named $written and fails.",
                         Severity.WARNING,
-                        "signal-not-read",
+                        IssueCode.SIGNAL_NOT_READ,
                         Docs.SIGNALS,
                     )
             }
@@ -1068,7 +1068,7 @@ public class ExpressionValidator(
             end,
             "Datastar rewrites $written${placeOf(region)} into $becomes$why.$advice",
             Severity.WARNING,
-            "literal-rewritten",
+            IssueCode.LITERAL_REWRITTEN,
             Docs.EXPRESSIONS,
         )
     }
@@ -1117,7 +1117,7 @@ public class ExpressionValidator(
                     }
                 },
             severity = Severity.WARNING,
-            code = "signal-kebab",
+            code = IssueCode.SIGNAL_KEBAB,
             link = Docs.SIGNALS,
             fixes = fixes,
         )
@@ -1142,7 +1142,7 @@ public class ExpressionValidator(
                     end = end,
                     message = if (near != null) "Unknown action @$name. Did you mean @$near?" else "Unknown action @$name.",
                     severity = Severity.WARNING,
-                    code = "unknown-action",
+                    code = IssueCode.UNKNOWN_ACTION,
                     link = Docs.ACTIONS,
                     fixes = if (near != null) listOf(Fix("Change to @$near", start, end, "@$near")) else emptyList(),
                 ),
@@ -1150,7 +1150,14 @@ public class ExpressionValidator(
         }
         if (spec.pro) {
             return listOf(
-                Issue(start, end, "@$name is a Datastar Pro action; it needs the Pro bundle.", Severity.HINT, "pro-action", Docs.ACTIONS),
+                Issue(
+                    start,
+                    end,
+                    "@$name is a Datastar Pro action; it needs the Pro bundle.",
+                    Severity.HINT,
+                    IssueCode.PRO_ACTION,
+                    Docs.ACTIONS,
+                ),
             )
         }
         return emptyList()
@@ -1170,7 +1177,7 @@ public class ExpressionValidator(
                             "and returns only what the last piece gives: the value is lost. " +
                             "A function without parameters called at once, (() => { ... })(), is kept whole.",
                         Severity.WARNING,
-                        "statement-split",
+                        IssueCode.STATEMENT_SPLIT,
                         Docs.EXPRESSIONS,
                     ),
                 )

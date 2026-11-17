@@ -15,7 +15,7 @@ class ValueJudgementTest {
     private fun interpolation(
         src: String,
         opts: Source,
-    ) = analyzer.analyzeKotlin(opts.copy(text = src)).filter { it.code == "unescaped-interpolation" }.map { it.severity }
+    ) = analyzer.analyzeKotlin(opts.copy(text = src)).filter { it.code == IssueCode.UNESCAPED_INTERPOLATION }.map { it.severity }
 
     @Test
     fun `a value looked up in a map may be null, so marking it is offered and not preferred, and the message says why`() {
@@ -45,13 +45,16 @@ class ValueJudgementTest {
         val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
         val unmarked = head + "fun f(name: String) = interpolate({ \"<p title=\\\"\$name\\\">x</p>\" })"
         val issue = analyzer.analyzeKotlin(unmarked).single()
-        assertEquals("interpolate-template", issue.code)
+        assertEquals(IssueCode.INTERPOLATE_TEMPLATE, issue.code)
         assertEquals(
             head + "fun f(name: String) = interpolate({ \"<p title=\\\"\${+name}\\\">x</p>\" })",
             issue.fixes.single().apply(unmarked),
         )
         val refused = head + "fun f(name: String) = interpolate( { \"<p data-text=\\\"\${+name}\\\"></p>\" } )"
-        assertEquals(listOf("unsafe-interpolation" to Severity.ERROR), analyzer.analyzeKotlin(refused).map { it.code to it.severity })
+        assertEquals(
+            listOf(IssueCode.UNSAFE_INTERPOLATION to Severity.ERROR),
+            analyzer.analyzeKotlin(refused).map { it.code to it.severity },
+        )
         val marked = head + "fun f(name: String) = interpolate({ \"<p title=\\\"\${+name}\\\">x</p>\" })"
         assertEquals(emptyList(), analyzer.analyzeKotlin(marked))
     }
@@ -79,9 +82,9 @@ class ValueJudgementTest {
     fun `a block after the prefixes in the parentheses, or passed by name, is read as a block`() {
         val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
         val after = head + "fun f(name: String) = interpolate(listOf(\"data-x-\"), { \"<p data-x-text=\\\"\${+name}\\\"></p>\" })"
-        assertEquals(listOf("unsafe-interpolation" to Severity.ERROR), analyzer.analyzeKotlin(after).map { it.code to it.severity })
+        assertEquals(listOf(IssueCode.UNSAFE_INTERPOLATION to Severity.ERROR), analyzer.analyzeKotlin(after).map { it.code to it.severity })
         val named = head + "fun f(name: String) = interpolate(block = { \"<p title=\\\"\$name\\\">x</p>\" })"
-        assertEquals(listOf("interpolate-template"), analyzer.analyzeKotlin(named).map { it.code })
+        assertEquals(listOf(IssueCode.INTERPOLATE_TEMPLATE), analyzer.analyzeKotlin(named).map { it.code })
     }
 
     @Test
@@ -152,7 +155,7 @@ class ValueJudgementTest {
         src: String,
         value: String,
         fact: ValueFact,
-    ): List<Pair<String, String>> {
+    ): List<Pair<IssueCode, String>> {
         val at = src.lastIndexOf(value)
         val opts =
             Source(src, SourceLanguage.KOTLIN, valueFact = { start, end ->
@@ -164,16 +167,16 @@ class ValueJudgementTest {
                     null
                 }
             })
-        return analyzer.analyzeKotlin(opts).map { (it.code ?: "") to src.substring(it.start, it.end) }
+        return analyzer.analyzeKotlin(opts).map { it.code to src.substring(it.start, it.end) }
     }
 
     @Test
     fun `a Trusted the editor resolves to another package is no markup the text reads in place`() {
         // A star import leaves the name Streamlord's to the text, which reads the literal as an open <a href=.
         val src = "import com.acme.*\n\nfun f(x: String) = \"<div>\${Trusted(\"<a href=\")}\$x</div>\""
-        assertEquals(listOf("unsafe-interpolation" to "\$x"), told(src, "", ValueFact.STRING))
+        assertEquals(listOf(IssueCode.UNSAFE_INTERPOLATION to "\$x"), told(src, "", ValueFact.STRING))
         assertEquals(
-            listOf("unescaped-interpolation" to "\${Trusted(\"<a href=\")}", "unescaped-interpolation" to "\$x"),
+            listOf(IssueCode.UNESCAPED_INTERPOLATION to "\${Trusted(\"<a href=\")}", IssueCode.UNESCAPED_INTERPOLATION to "\$x"),
             told(src, "\${Trusted(\"<a href=\")}", ValueFact.OTHER),
         )
     }
@@ -182,7 +185,7 @@ class ValueJudgementTest {
     fun `a Trusted the editor resolves to another package is not let into a script`() {
         val src = "import com.acme.*\n\nfun f(x: String) = interpolate(\"<script>%s</script>\", Trusted(x))"
         assertEquals(emptyList(), told(src, "", ValueFact.STRING))
-        assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "Trusted(x)", ValueFact.OTHER))
+        assertEquals(listOf(IssueCode.UNSAFE_INTERPOLATION to "%s"), told(src, "Trusted(x)", ValueFact.OTHER))
     }
 
     @Test
@@ -207,7 +210,7 @@ class ValueJudgementTest {
     fun `the editor is asked about a value without the comment after it`() {
         // Only the editor knows the value is a number, which a style takes.
         val src = "fun f(n: Any) = interpolate(\"<div style=\\\"%s\\\"></div>\", n /* id */ // id\n)"
-        assertEquals(listOf("unsafe-interpolation" to "%s"), told(src, "", ValueFact.NUMBER))
+        assertEquals(listOf(IssueCode.UNSAFE_INTERPOLATION to "%s"), told(src, "", ValueFact.NUMBER))
         assertEquals(emptyList(), told(src, "n", ValueFact.NUMBER))
     }
 
@@ -226,7 +229,13 @@ class ValueJudgementTest {
             }
         }
         assertGrowsLinearly("functions with HTML", 100, file) { src ->
-            assertTrue(analyzer.analyzeKotlin(src).count { it.code == "unescaped-interpolation" || it.code == "unsafe-interpolation" } > 0)
+            assertTrue(
+                analyzer.analyzeKotlin(src).count {
+                    it.code == IssueCode.UNESCAPED_INTERPOLATION ||
+                        it.code == IssueCode.UNSAFE_INTERPOLATION
+                } >
+                    0,
+            )
         }
     }
 }
