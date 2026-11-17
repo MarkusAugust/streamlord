@@ -217,9 +217,12 @@ JavaScript is the `<script>` the client appends to the head, with the attributes
 comes back as the element patch that appends it, as a script on a stream comes back as the one that
 appends it to the body. An answer of any other type is read as a stream, as the client reads it.
 On Spring, hand over `response::getHeader` of the `MockHttpServletResponse` that `MockMvcTester`
-gives you, or `result.responseHeaders::getFirst` of WebTestClient's result.
+gives you, or `result.responseHeaders::getFirst` of WebTestClient's or RestTestClient's result.
 
 ## The same, in Spring WebMVC
+
+Needs `spring-test` and `streamlord-test` in `testImplementation`; on Spring Boot,
+`spring-boot-starter-test` brings `spring-test` and `assertj-core`.
 
 No server at all. `MockHttpServletResponse` from `spring-test` takes the `StreamingResponseBody`
 and hands you back the text.
@@ -266,7 +269,8 @@ A stream runs in an async cycle of its own, and the body is empty until the test
 it and dispatched the result. `exchange()` does that once, which is enough for an ordinary
 controller. A `suspend` controller runs in one async cycle and its stream in a second, and
 `exchange()` returns after the first, while the stream may not have written anything yet.
-`datastar`, from `io.github.markusaugust.streamlord.spring.test`, dispatches until no cycle is
+`datastar`, which ships in `streamlord-spring` itself
+(`import io.github.markusaugust.streamlord.spring.test.datastar`), dispatches until no cycle is
 left, and sends the request the way Datastar's client does, with the header and the signals in the
 query for GET and DELETE and in the body otherwise:
 
@@ -315,17 +319,18 @@ Where the controller reads the signals decides when a bad request fails, and so 
 sees it:
 
 - **Read before `datastarStream`**, as above, signals over the limit or not JSON fail on the
-  request itself, and the helper hands back the `413`, `400` or `415` at once.
+  request itself, and `datastar` hands back the `413`, `400` or `415` at once.
 - **Read inside the stream's block**, they fail on the stream's thread, before its first event.
   The request has started async with a `200` by then; the status comes with the dispatch, and
-  the helper hands it back all the same.
+  `datastar` hands it back all the same.
 - **A failure after the first event** has no status to give: the stream has started, and
   `StreamlordExceptionHandler` throws the exception on, so that a real server cuts the
   connection. `assertThat(result).hasFailed()` passes, and `result.response` throws, events and
   all.
 
-MockMvc never ends a stream on its timeout; that takes a real server, as below. A stream that does
-not end on its own fails the helper's wait after ten seconds, or the `asyncTimeout` you pass, so
+MockMvc never ends a stream on its timeout; that takes a real server. A stream that does
+not end on its own is stopped and fails `datastar`'s wait after ten seconds for the whole answer,
+or the `asyncTimeout` you pass, so
 give a test a stream that ends, and read one that stays open as
 [A stream that stays open](#a-stream-that-stays-open) does.
 
@@ -378,9 +383,13 @@ failures.
 
 ### With RestTestClient
 
-Spring Framework 7's `RestTestClient` takes the same route. Bound to MockMvc through
-`datastarRequestFactory()`, it runs every cycle as `datastar` does, and the body it hands back is
-the wire:
+Spring Framework 7's `RestTestClient` goes through MockMvc too, with
+`datastarRequestFactory()` from the same package
+(`import io.github.markusaugust.streamlord.spring.test.datastarRequestFactory`), which needs
+`spring-test` alone. It runs every cycle as `datastar` does, and the body it hands back is the
+wire. Unlike `datastar`, it sends only what you write: the `Datastar-Request` header, the signals
+in the `datastar` query parameter for GET and DELETE, and otherwise a body with
+`contentType(MediaType.APPLICATION_JSON)`, without which reading the signals answers `415`:
 
 ```kotlin sample=spring-test
 @RestController
@@ -397,8 +406,13 @@ class Heads {
 
 private val client =
     RestTestClient
-        .bindToServer(MockMvcBuilders.standaloneSetup(Heads()).build().datastarRequestFactory())
-        .build()
+        .bindToServer(
+            MockMvcBuilders
+                .standaloneSetup(Heads())
+                .setControllerAdvice(StreamlordExceptionHandler())
+                .build()
+                .datastarRequestFactory(),
+        ).build()
 
 @Test
 fun `the count goes up by one`() {
@@ -418,12 +432,25 @@ fun `the count goes up by one`() {
 ```
 
 Spring's own bindings to MockMvc, `RestTestClient.bindTo(mockMvc)` and `bindToController(...)`,
-run none of the cycles: a stream answers `200` with no body, and a test that checks only the status
-passes though the stream never ran. `MockMvcWebTestClient.bindTo(mockMvc)` runs one, so it misses
-the stream of a `suspend` controller. Against a real server,
-`RestTestClient.bindToServer().baseUrl("http://localhost:$port").build()` reads a stream that ends,
-as any HTTP client does; on Spring Boot,
+run none of the cycles: a stream answers `200` with what it had written by then, most often nothing,
+and a test that checks only the status passes though the stream never ran. On Spring Boot, the `RestTestClient` that
+`@AutoConfigureRestTestClient` injects next to MockMvc is that binding: build your own from the
+injected MockMvc, `RestTestClient.bindToServer(mockMvc.datastarRequestFactory()).build()`.
+`MockMvcWebTestClient.bindTo(mockMvc)` runs one cycle, so it misses the stream of a `suspend`
+controller.
+
+A failure after the first event comes back through `RestTestClient` as a `500` whose body is the
+exception, and the events written before it are gone. With `datastar` they are out of reach too,
+but the test can assert the failure itself with `assertThat(result).hasFailed()`.
+
+Against a real server, `RestTestClient.bindToServer().baseUrl("http://localhost:$port").build()`
+reads a stream that ends, as any HTTP client does. On Spring Boot,
 `@SpringBootTest(webEnvironment = RANDOM_PORT)` gives the server and `@LocalServerPort` its port.
+
+Which to choose: `datastar` on `MockMvcTester` sends Datastar's request for you and asserts the
+status, the headers and a failure after the first event. `RestTestClient` with the factory suits
+tests that already use it, and the same test runs against a real server when only the binding
+changes. A stream that stays open needs a real server and `LiveDatastarStream`.
 
 ### On WebFlux, with WebTestClient
 

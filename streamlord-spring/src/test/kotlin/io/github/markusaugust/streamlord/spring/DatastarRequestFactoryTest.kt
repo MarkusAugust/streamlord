@@ -58,6 +58,15 @@ class DatastarRequestFactoryTest {
             return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
         }
 
+        @GetMapping("/inside")
+        fun inside(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody =
+            response.datastarStream(streamlord, request) {
+                patchSignals("heads" to (request.readSignals(streamlord).int("heads") ?: 0))
+            }
+
         @GetMapping("/who")
         fun who(
             @CookieValue("who") who: String,
@@ -145,6 +154,32 @@ class DatastarRequestFactoryTest {
                 .status
 
         assertEquals(413, status.value())
+    }
+
+    @Test
+    fun `a failure inside the stream, before its first event, keeps its status`() {
+        val status =
+            client
+                .get()
+                .uri("/inside?datastar={s}", """{"heads":13,"far":"too long for the limit"}""")
+                .exchange()
+                .returnResult(String::class.java)
+                .status
+
+        assertEquals(413, status.value())
+    }
+
+    @Test
+    fun `a cookie the servlet API refuses answers 500, as Spring's binding does`() {
+        val result =
+            client
+                .get()
+                .uri("/who")
+                .cookie("a b", "1")
+                .exchange()
+                .returnResult(String::class.java)
+
+        assertEquals(500, result.status.value())
     }
 
     @Test

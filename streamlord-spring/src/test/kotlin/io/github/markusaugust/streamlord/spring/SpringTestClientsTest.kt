@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.config.annotation.EnableWebMvc
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -23,13 +27,22 @@ import kotlin.test.assertTrue
  * What Spring's own test clients make of a stream. Against MockMvc they hand back what was there
  * before the async dispatch: RestTestClient never dispatches, WebTestClient dispatches once, which
  * leaves a `suspend` controller's stream unread. When one of these starts failing, Spring has
- * changed, and the testing page's note on them goes.
+ * changed, and the testing page's note on them goes. The gate holds each stream until the client
+ * has answered, since what it reads is what the stream had written by then.
  */
 class SpringTestClientsTest {
+    companion object {
+        var gate = CompletableFuture<Unit>()
+    }
+
     @RestController
     class Feed {
         @GetMapping("/feed")
-        fun feed(response: HttpServletResponse): StreamingResponseBody = response.datastarStream { patchSignals("heads" to 1) }
+        fun feed(response: HttpServletResponse): StreamingResponseBody =
+            response.datastarStream {
+                gate.get(10, TimeUnit.SECONDS)
+                patchSignals("heads" to 1)
+            }
 
         @GetMapping("/suspended")
         suspend fun suspended(
@@ -37,7 +50,10 @@ class SpringTestClientsTest {
             response: HttpServletResponse,
         ): StreamingResponseBody {
             delay(1)
-            return response.datastarStream(request = request) { patchSignals("heads" to 1) }
+            return response.datastarStream(request = request) {
+                gate.get(10, TimeUnit.SECONDS)
+                patchSignals("heads" to 1)
+            }
         }
     }
 
@@ -46,6 +62,16 @@ class SpringTestClientsTest {
     class Mvc {
         @Bean
         fun feed() = Feed()
+    }
+
+    @BeforeTest
+    fun close() {
+        gate = CompletableFuture()
+    }
+
+    @AfterTest
+    fun open() {
+        gate.complete(Unit)
     }
 
     private fun mockMvc() = MockMvcBuilders.standaloneSetup(Feed()).build()
@@ -86,6 +112,7 @@ class SpringTestClientsTest {
 
     @Test
     fun `WebTestClient bound to MockMvc reads a stream`() {
+        gate.complete(Unit)
         val body = MockMvcWebTestClient.bindTo(mockMvc()).build().body("/feed")
         assertTrue("heads" in body.orEmpty(), "$body")
     }
@@ -98,6 +125,7 @@ class SpringTestClientsTest {
 
     @Test
     fun `RestTestClient against a real server reads a stream that ends`() {
+        gate.complete(Unit)
         RealTomcat(Mvc::class.java).use { tomcat ->
             val client = RestTestClient.bindToServer().baseUrl("http://$LOOPBACK:${tomcat.port}").build()
             for (path in listOf("/feed", "/suspended")) {

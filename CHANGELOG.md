@@ -8,13 +8,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### SDK
 
-- streamlord-spring: `mockMvc.datastarRequestFactory()`, for `RestTestClient.bindToServer(...)`,
-  and `MockMvcTester.datastar(method, uri, signals)` run every async cycle of a request before
-  they answer, so a stream comes back whole through MockMvc, a `suspend` controller's too. Spring's
-  own `RestTestClient.bindTo(mockMvc)` runs none and answers `200` with no body. A stream that has
-  not ended after `asyncTimeout`, ten seconds by default, fails with a message that names
-  `LiveDatastarStream`. Both are in `io.github.markusaugust.streamlord.spring.test`, need
-  `spring-test` and `assertj-core` on the test classpath, and replace the helper the testing page
+- streamlord-spring: `MockMvcTester.datastar(method, uri, signals)` and
+  `mockMvc.datastarRequestFactory()`, for `RestTestClient.bindToServer(...)`, run every async
+  cycle, so a stream comes back whole through MockMvc, a `suspend` controller's too. An answer still
+  open after `asyncTimeout`, ten seconds by default, is stopped and fails, naming
+  `LiveDatastarStream`. In
+  `io.github.markusaugust.streamlord.spring.test`; `datastar` replaces the helper the testing page
   gave to copy. See [Testing](https://streamlord-docs.netlify.app/testing/#with-resttestclient).
 
 ## [0.23.0] - 2026-11-16

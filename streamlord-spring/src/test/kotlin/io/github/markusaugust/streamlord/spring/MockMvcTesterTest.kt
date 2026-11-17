@@ -14,10 +14,13 @@ import org.springframework.http.HttpMethod
 import org.springframework.test.web.servlet.assertj.MockMvcTester
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestMethod
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,6 +35,8 @@ class MockMvcTesterTest {
     companion object {
         val streamlord = Streamlord(maxSignalsSize = 32, heartbeat = null)
         var gate = CompletableFuture<Unit>()
+        var seen: Map<String, String?> = emptyMap()
+        val ticks = AtomicInteger()
     }
 
     @RestController
@@ -83,6 +88,46 @@ class MockMvcTesterTest {
                 throw SignalsTooLargeException(2, 1)
             }
 
+        @RequestMapping("/echo", method = [RequestMethod.GET, RequestMethod.POST])
+        fun echo(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
+            seen =
+                mapOf(
+                    "Accept" to request.getHeader("Accept"),
+                    "Datastar-Request" to request.getHeader("Datastar-Request"),
+                    "Content-Type" to request.getHeader("Content-Type"),
+                    "datastar" to request.getParameter("datastar"),
+                    "body" to request.inputStream.readAllBytes().decodeToString(),
+                )
+            return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
+        }
+
+        @GetMapping("/endless")
+        fun endless(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody =
+            response.datastarStream(streamlord, request) {
+                while (true) {
+                    patchSignals("tick" to ticks.incrementAndGet())
+                    delay(10)
+                }
+            }
+
+        @GetMapping("/slow")
+        suspend fun slow(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
+            delay(150)
+            return response.datastarStream(streamlord, request) {
+                Thread.sleep(150)
+                patchSignals("heads" to 1)
+            }
+        }
+
         @GetMapping("/gated")
         fun gated(
             request: HttpServletRequest,
@@ -122,11 +167,28 @@ class MockMvcTesterTest {
         datastarEvents(result.response.contentAsString).assertSignal("heads", 14)
     }
 
+    // What Datastar 1.0.5's fetch.ts sends, as the controller receives it.
     @Test
     fun `the helper sends what Datastar's client sends`() {
-        assertEquals(DatastarProtocol.ACCEPT, "text/event-stream, text/html, application/json")
-        assertEquals(DatastarProtocol.BODYLESS_METHODS, setOf("GET", "DELETE"))
-        assertEquals(DatastarProtocol.SIGNALS_PARAMETER, "datastar")
+        mvc.datastar(HttpMethod.GET, "/echo", """{"heads":13}""")
+        assertEquals(
+            mapOf(
+                "Accept" to "text/event-stream, text/html, application/json",
+                "Datastar-Request" to "true",
+                "Content-Type" to null,
+                "datastar" to """{"heads":13}""",
+                "body" to "",
+            ),
+            seen,
+        )
+
+        mvc.datastar(HttpMethod.POST, "/echo", """{"heads":13}""")
+        assertEquals("application/json", seen["Content-Type"])
+        assertEquals("""{"heads":13}""", seen["body"])
+        assertEquals(null, seen["datastar"])
+
+        mvc.datastar(HttpMethod.POST, "/echo")
+        assertEquals("application/json", seen["Content-Type"])
     }
 
     @Test
@@ -163,6 +225,38 @@ class MockMvcTesterTest {
         // Wrapped by the DispatcherServlet in a ServletException; the response is out of reach.
         assertIs<SignalsTooLargeException>(result.unresolvedException?.cause)
         assertFailsWith<IllegalStateException> { result.response }
+    }
+
+    @Test
+    fun `a stream that does not end is stopped when the wait fails`() {
+        assertFailsWith<IllegalStateException> { mvc.datastar(HttpMethod.GET, "/endless", asyncTimeout = 200.milliseconds) }
+        Thread.sleep(50) // a write already under way when the stream was told
+        val after = ticks.get()
+        Thread.sleep(300)
+
+        assertEquals(after, ticks.get(), "the stream kept writing after the wait gave up")
+    }
+
+    @Test
+    fun `the timeout is for the whole answer, every cycle together`() {
+        assertFailsWith<IllegalStateException> { mvc.datastar(HttpMethod.GET, "/slow", asyncTimeout = 200.milliseconds) }
+    }
+
+    @Test
+    fun `an interrupted test is told so, and stays interrupted`() {
+        Thread.currentThread().interrupt()
+        try {
+            assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/gated") }
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+            gate.complete(Unit)
+        }
+    }
+
+    @Test
+    fun `a timeout that is not positive is refused`() {
+        assertFailsWith<IllegalArgumentException> { mvc.datastar(HttpMethod.GET, "/feed", asyncTimeout = kotlin.time.Duration.ZERO) }
     }
 
     @Test
