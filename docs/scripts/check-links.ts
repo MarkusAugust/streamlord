@@ -94,6 +94,16 @@ for (const name of ["llms.txt", "llms-full.txt"]) {
   }
 }
 
+// llms-full.txt is what a model writes code from, so it holds what has shipped: the
+// roadmap is in the index, with what it is, and its text is not in the full file.
+const full = readFileSync(join(DIST, "llms-full.txt"), "utf8")
+if (full.includes(`Source: ${new URL("/roadmap/", SITE).href}`))
+  problems.push(
+    "/llms-full.txt holds the roadmap, which describes what has not shipped",
+  )
+if (!readFileSync(join(DIST, "llms.txt"), "utf8").includes("/roadmap/"))
+  problems.push("/llms.txt does not list the roadmap")
+
 if (problems.length > 0) {
   console.error("Broken internal links:")
   for (const problem of [...new Set(problems)].sort())

@@ -1,8 +1,8 @@
 /**
  * The documentation for language models, after https://llmstxt.org: `llms.txt` is
  * the index, a page per line with what it is about, and `llms-full.txt` is every
- * page in one file. Both follow the navigation, so a page is listed here when it
- * is in the sidebar and in the order it is read.
+ * page of what has shipped in one file. Both follow the navigation, so a page is
+ * listed here when it is in the sidebar and in the order it is read.
  */
 import { getCollection } from "astro:content"
 import { href, NAVIGATION } from "./navigation"
@@ -13,6 +13,9 @@ const SUMMARY = `${TAGLINE} ${DESCRIPTION}`
 const ABOUT = `The SDK speaks the Datastar ${DATASTAR_VERSION} Server-Sent Events protocol and is published to Maven Central under \`${MAVEN_GROUP}\`. The editors, a VS Code extension and an IntelliJ plugin, read Datastar as a language wherever it is written and need no part of the SDK.`
 
 type Page = { slug: string; title: string; description: string; body: string }
+
+/** Pages of what is planned: listed in the index, and left out of the file a model writes code from. */
+const PLANNED = new Set(["roadmap"])
 
 async function pages(): Promise<Map<string, Page>> {
   const entries = await getCollection("docs")
@@ -47,13 +50,13 @@ export async function llmsTxt(site: URL): Promise<string> {
   return `# Streamlord\n\n> ${SUMMARY}\n\n${ABOUT} Every page in one file: ${full}\n\n${sections.join("\n\n")}\n`
 }
 
-/** Every page in reading order, as the Markdown it is written in. */
+/** Every page of what has shipped in reading order, as the Markdown it is written in. */
 export async function llmsFullTxt(site: URL): Promise<string> {
   const all = await pages()
   const bodies = NAVIGATION.flatMap((section) => section.pages).flatMap(
     ({ slug }) => {
       const page = all.get(slug)
-      if (!page) return []
+      if (!page || PLANNED.has(slug)) return []
       return [
         `# ${page.title}\n\nSource: ${url(site, slug)}\n\n> ${page.description}\n\n${plain(page.body, site).trim()}`,
       ]

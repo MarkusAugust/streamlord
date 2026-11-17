@@ -3,6 +3,7 @@ import { Code } from "astro:components"
 import sobernetics from "../assets/sobernetics.svg?raw"
 import CodeBlock from "../components/CodeBlock.astro"
 import Logo from "../components/Logo.astro"
+import SiteLinks from "../components/SiteLinks.astro"
 import VersionBadge from "../components/VersionBadge.astro"
 import { SERVICE } from "../config"
 import { fence } from "../fences"
@@ -204,6 +205,7 @@ const TOOLS = [
     />
     <link rel="canonical" href={Astro.site} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
     <!--
       Datastar, because the page runs the example rather than printing it. The tabs, the
       buttons and the judge's field are attributes and signals against streamlord-live, and
@@ -229,7 +231,11 @@ const TOOLS = [
         <div class="hero__brand">
           <Logo size={72} />
           <h1 class="hero__word">Streamlord</h1>
-          <VersionBadge />
+          <!-- The version, and beside it in its shape the site's ways out. -->
+          <div class="hero__badges">
+            <VersionBadge />
+            <SiteLinks badges />
+          </div>
         </div>
         <div class="hero__main">
           <p class="hero__line">{CLAIM}</p>
@@ -704,6 +710,13 @@ const TOOLS = [
         color: var(--lt-color-neutral-text-strong);
         border-block-end: 1px solid rgba(0, 177, 250, 0.25);
       }
+      .hero__badges {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--lt-spacing-2);
+      }
+
       /* The name across the top. Under it, where there is room, two columns: the promise down
          the left and the creed beside it, both from the same line. One column on anything narrower, the
          creed after the buttons. */
