@@ -9,34 +9,4 @@ import { VERSION } from "../project"
  */
 ---
 
-<a class="version-badge" href="/changelog/" aria-label={`v${VERSION}, changelog`} translate="no">v{VERSION}</a>
-
-<style>
-  .version-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--lt-spacing-0-5) var(--lt-spacing-2);
-    border: 1px solid var(--lt-color-neutral-border-subtle);
-    border-radius: 999px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: var(--lt-font-size-xs);
-    font-weight: var(--lt-font-weight-medium);
-    line-height: 1.4;
-    color: inherit;
-    opacity: 0.75;
-    text-decoration: none;
-    white-space: nowrap;
-    transition: opacity 150ms, border-color 150ms;
-  }
-
-  .version-badge:hover {
-    opacity: 1;
-    border-color: var(--lt-color-neutral-border-strong);
-  }
-
-  .version-badge:focus-visible {
-    opacity: 1;
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
-  }
-</style>
+<a class="badge" href="/changelog/" aria-label={`v${VERSION}, changelog`} translate="no">v{VERSION}</a>

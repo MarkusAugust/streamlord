@@ -5,6 +5,7 @@ import Logo from "../components/Logo.astro"
 import Pager from "../components/Pager.astro"
 import Search from "../components/Search.astro"
 import Sidebar from "../components/Sidebar.astro"
+import SiteLinks from "../components/SiteLinks.astro"
 import ThemeRestore from "../components/ThemeRestore.astro"
 import ThemeToggle from "../components/ThemeToggle.astro"
 import Toc from "../components/Toc.astro"
@@ -32,6 +33,7 @@ const { title, description, slug, headings } = Astro.props
     <meta name="description" content={description} />
     <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
     <!--
       Datastar, on every page, because the search in the masthead is on every page. It is the
       only script the documentation loads that is not its own, and it is the library this
@@ -60,6 +62,7 @@ const { title, description, slug, headings } = Astro.props
            without pushing the theme button down with it. -->
       <Search />
       <div class="masthead__tools">
+        <SiteLinks />
         <ThemeToggle />
       </div>
     </header>
@@ -252,7 +255,7 @@ const { title, description, slug, headings } = Astro.props
       }
       .masthead__tools {
         display: flex;
-        gap: var(--lt-spacing-2) var(--lt-spacing-3);
+        gap: var(--lt-spacing-2) var(--lt-spacing-5);
         align-items: center;
       }
 
