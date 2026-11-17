@@ -1,6 +1,7 @@
 ---
 import { lt } from "@lo-tek/interfaces"
 import Logo from "../components/Logo.astro"
+import SiteLinks from "../components/SiteLinks.astro"
 import ThemeRestore from "../components/ThemeRestore.astro"
 import ThemeToggle from "../components/ThemeToggle.astro"
 import { SERVICE } from "../config"
@@ -22,6 +23,7 @@ import "../styles/global.css"
       content="The documentation's search, answered by Streamlord over Server-Sent Events, with the frames it sent beside it."
     />
     <link rel="icon" href={FAVICON} type="image/svg+xml" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
     <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.5/bundles/datastar.js"
     ></script>
 
@@ -38,6 +40,7 @@ import "../styles/global.css"
       </a>
       <span class="masthead__where">Live</span>
       <div class="masthead__tools">
+        <SiteLinks />
         <ThemeToggle />
       </div>
     </header>
@@ -373,6 +376,9 @@ import "../styles/global.css"
       }
       .masthead__tools {
         margin-inline-start: auto;
+        display: flex;
+        align-items: center;
+        gap: var(--lt-spacing-2) var(--lt-spacing-5);
       }
       /* Same swap as the shell's masthead, and for the same reason. */
       .masthead .lt-button[data-variant="ghost"]:hover {

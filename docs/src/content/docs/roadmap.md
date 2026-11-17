@@ -12,21 +12,23 @@ written down so you can see what is coming, decide whether to wait for it, and k
 today instead. Nothing here changes an API you already call. Two things reach a build that works
 today, and each says so where it stands: [two artifacts get new names](#new-names-for-the-kotlinxhtml-modules),
 and two new warnings appear in the editors, which a
-[strict check](/analysis/#a-test-over-your-own-sources) fails on.
+[strict check](/analysis/#a-test-over-your-own-sources) fails on. A third, the [compiler plugin](#a-compiler-plugin-for-unmarked-values), reaches only a build
+that adds it.
 
 | Order | Planned | What it changes | What you do today |
 |---|---|---|---|
 | 1 | [The check for your build, in one line](#the-check-for-your-build-in-one-line) | how much you write to have CI read your markup, and that it reads your templates too | the test that calls `analyzeProject` |
-| 2 | [Values from outside, in the DSL](#values-from-outside-in-the-dsl) | what the editors and the check say about `dataText(userName)` | keep request data out of expression attributes |
-| 3 | [New names for the kotlinx.html modules](#new-names-for-the-kotlinxhtml-modules) | the coordinates of two artifacts | nothing |
-| 4 | [The front page](#the-front-page) | what a first visit shows of values and of the check | read [Strings](/strings/) and [The analysis](/analysis/) |
-| 5 | [Values from outside, in templates](#values-from-outside-in-templates) | what the editors and the check say about a template tag in an expression | keep the tag out of expression attributes |
-| 6 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
-| 7 | [The reading of markup, before 1.0](#the-reading-of-markup-before-10) | the narrow places where markup is read otherwise than the browser or the compiler reads it | the notes on [Strings](/strings/#values-from-outside) |
-| 8 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
+| 2 | [A command and the rules, for coding agents](#a-command-and-the-rules-for-coding-agents) | what an agent is told as it writes, and what it reads first | point the agent at `llms.txt`, and have it and CI run the strict test |
+| 3 | [Values from outside, in the DSL](#values-from-outside-in-the-dsl) | what the editors and the check say about `dataText(userName)` | keep request data out of expression attributes |
+| 4 | [A compiler plugin for unmarked values](#a-compiler-plugin-for-unmarked-values) | whether the compiler warns of a value written without its `+`, or with `strict` refuses it | the strict test, IntelliJ, and `Html` for markup you built |
+| 5 | [New names for the kotlinx.html modules](#new-names-for-the-kotlinxhtml-modules) | the coordinates of two artifacts | nothing |
+| 6 | [The front page](#the-front-page) | what a first visit shows of values and of the check | read [Strings](/strings/) and [The analysis](/analysis/) |
+| 7 | [Values from outside, in templates](#values-from-outside-in-templates) | what the editors and the check say about a template tag in an expression | keep the tag out of expression attributes |
+| 8 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
+| 9 | [The reading of markup, before 1.0](#the-reading-of-markup-before-10) | the narrow places where markup is read otherwise than the browser or the compiler reads it | the notes on [Strings](/strings/#values-from-outside) |
+| 10 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
 
-The order is the order of the work. The first four are meant for the next release, and nothing
-has a date.
+The order is the order of the work, and nothing has a date.
 
 ## The check for your build, in one line
 
@@ -50,6 +52,10 @@ fun `markup holds`() = Analyzer().checkProject()
 sources under `src/main` and the markup beside them, the HTML and template files the editors read,
 each with the rules the editor gives that kind of file. `analyzeProject` and `failures()` stay as
 they are.
+
+It is one way in for every caller. The test, [the command for agents](#a-command-and-the-rules-for-coding-agents)
+and both editors read a project through it, so they find the same files and hold them to the same
+rules. IntelliJ still says more than the others where it knows a value's type.
 
 No Gradle or Maven plugin is planned; [Considered, not prioritised](#considered-not-prioritised)
 says why.
@@ -83,6 +89,84 @@ fun `no template ships markup the analysis calls an error`() {
 A JTE, FreeMarker, Velocity or Razor file has syntax of its own that the analysis must be told of:
 give `analyzeHtml` a `Source(text, SourceLanguage.HTML, engine = TemplateEngine.JTE)` in place of
 the text.
+
+## A command and the rules, for coding agents
+
+A coding agent writes the mistakes on this site as readily as a person does, and faster: a `$count`
+that Kotlin fills in where a signal was meant, [the `$` trap](/dollar-trap/); a value from a request
+written into an expression; a value in an HTML string left without the `+` that
+[marks it for `interpolate`](/strings/#values-from-outside). Each can compile.
+
+Telling the agent the rules is advice: a page it may not have read, a skill it may not follow.
+What does not wait to be followed is what runs whether the agent chooses it or not: the compiler
+when it builds, the test when it tests, and CI whatever it does. An agent can take a test or a
+build setting out as easily as it wrote them, so CI, and a person reading the change, is where
+that shows. And an agent that is told of a mistake as it writes makes fewer of them to stop.
+
+Planned, three things.
+
+**A command.** `streamlord-analysis` gets an entry point that reads a project as
+[the one-line check](#the-check-for-your-build-in-one-line) does and writes each finding as JSON:
+its code, severity, file, line and column, the message, the link, and the fixes as edits to apply.
+It ends with 0 when nothing fails and 1 when something does, and with `--strict` it fails on what
+`failures(strict = true)` keeps. It is no new artifact. A project that has the analysis for its
+tests already has all the command needs, and runs it with its own build tool, in the module that
+has the dependency:
+
+```sh
+mvn -q exec:java -Dexec.classpathScope=test \
+  -Dexec.mainClass=io.github.markusaugust.streamlord.analysis.Check \
+  -Dexec.args=--strict
+```
+
+```kotlin sample=none
+// build.gradle.kts: the classpath of the tests' dependencies, so the project's own code need not compile
+tasks.register<JavaExec>("checkMarkup") {
+    classpath = configurations.testRuntimeClasspath.get()
+    mainClass.set("io.github.markusaugust.streamlord.analysis.Check")
+}
+```
+
+```sh
+./gradlew -q checkMarkup --args=--strict
+```
+
+That is quick enough to run after every edit. **Measured**, on a laptop, with an entry point
+written for the measurement, the analysis of 0.23.0, and Kotlin sources of 1 700 and of 17 000
+lines. The time is the whole command:
+
+| Run through | 1 700 lines | 17 000 lines |
+|---|---|---|
+| `java` with the classpath in hand | 193 ms | 548 ms |
+| Gradle, its daemon running | 449 ms | 834 ms |
+| Maven, `exec:java` | 690 ms | 1 002 ms |
+| Gradle, no daemon | 1 860 ms | not measured |
+
+**Feedback as the agent writes.** A coding agent's harness can run a command of yours at set
+moments, which Claude Code calls a hook. The documentation will show the few lines that run the
+command after each edit and hand the findings to the model, and run it once more before the agent
+says it is done. That is feedback and no stop, since the lines are in a settings file the agent
+can edit. Other harnesses with such a moment take the same command.
+
+**The rules in one file.** The site already serves [`llms.txt`](/llms.txt), an index of these
+pages, and [`llms-full.txt`](/llms-full.txt), every page of what has shipped in one file, built
+from the sources of the pages. The second is some 90 000 tokens, more than an agent reads before
+it writes. Planned beside them is a short file of the rules alone, linked first from the index:
+what the `$` trap is, how a value is marked, where a value must never stand, what throws at run
+time, the test that fails a build, and how to read a finding, with the list of codes made from the
+analysis and not by hand.
+
+After those, two more ways to call the command. `explain` with a finding's code prints that rule,
+with a wrong form and the right one. `--fix` applies a fix only where the analysis says there is
+one right answer, a misspelt attribute for one, which is a mark the fixes do not carry today. A fix
+that is a choice of yours is printed and never applied: above all one that wraps a value in
+[`Trusted`](/strings/#when-you-mean-it-to-be-markup), which says the value is safe.
+
+### Until then
+
+Point the agent at [`llms.txt`](/llms.txt). Put the strict test from
+[The analysis](/analysis/#a-test-over-your-own-sources) in the project, tell the agent to run the
+tests before it finishes, and have CI run them whatever the agent does.
 
 ## Values from outside, in the DSL
 
@@ -118,6 +202,45 @@ span {
 
 When a value really has to reach an expression, patch it into a signal from the server rather than
 writing it into the markup, which is what signals are for.
+
+## A compiler plugin for unmarked values
+
+The analysis reads text. It sees that `$name` stands without its `+` in the block of
+`interpolate`, and often cannot see what `name` is: a number, a `String`, markup that was built.
+IntelliJ knows the type of every value and judges by it, and the test in the build does not. So
+the test is milder than the editor, and it runs only when something runs it. The compiler knows
+the types too, and runs on every build.
+
+Planned: a Kotlin compiler plugin that gives the build what IntelliJ has, for the two findings
+that need types.
+
+- A `String` that is no constant, written without its `+` in the block of `interpolate`.
+- An argument that is no constant, no literal and none of Streamlord's expression helpers, such as
+  `signal("count")`, handed to a DSL attribute that takes an expression: `dataText(userName)`.
+
+A type tells a `String` from a number, and not your `String` from a request's. So the plugin warns
+of some code that is right, as IntelliJ does, and each finding is a warning that fails nothing.
+With the plugin's `strict` option each is an error, and then the compiler refuses the code. It is
+a plugin you add to a build yourself, and nothing changes for a build that does not.
+
+It starts with a trial, because three things are not known and each decides its shape:
+
+- whether the analysis can run inside the compiler and be handed the types, so that the plugin
+  holds no rules of its own;
+- whether the compiler's own switches can make a plugin's warning an error, or the plugin needs
+  its option for that;
+- how it is added to a Maven build and to a Gradle build with no build plugin of Streamlord's.
+
+What the trial finds goes on this page. One cost is known already: the Kotlin compiler promises a
+plugin no stable interface, so the plugin is built for each Kotlin version it supports, and has to
+be brought along when a new one arrives.
+
+### Until then
+
+The strict test fails on every unmarked value the text shows in an HTML string, and IntelliJ warns
+by type as you write. Declare markup you built as `Html`, and the editors and the test know that
+it stands unmarked on purpose. For `dataText(userName)` nothing warns yet:
+[keep request data out of expression attributes](#values-from-outside-in-the-dsl).
 
 ## New names for the kotlinx.html modules
 
@@ -263,6 +386,15 @@ Weighed and set aside for now, with the reason, so the same ground is not covere
   with every release, to save a test that [will be one line](#the-check-for-your-build-in-one-line).
   The test runs where your tests run, in either build tool, with nothing but the analysis on the
   test classpath.
+- **A package of its own for the command.** A jar that holds everything, or the analysis as
+  JavaScript in an npm package run with `npx`. Set aside: the command is quick enough on the
+  classpath a project has. Measured on the 1 700 lines of [the table above](#a-command-and-the-rules-for-coding-agents),
+  the analysis as JavaScript in Node took 129 ms, a third of a second less than through Gradle and
+  half a second less than through Maven. That is too little to earn one more thing to publish. It
+  is the same analysis in either case, so this can be taken up again without loss.
+- **An MCP server for agents.** It would offer the check as a tool an agent may call. An agent
+  chooses whether to call a tool, as it chooses whether to follow a skill. The compiler, the test
+  and CI do not wait for it to choose.
 - **A limit on concurrent streams.** An open stream holds a socket and a coroutine for as long as
   it lasts, and a limiter that counts arrivals misses that: five streams a minute is five
   connections held. Streamlord knows which responses are streams, so it could count them, but a

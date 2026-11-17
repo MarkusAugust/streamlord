@@ -1,0 +1,57 @@
+---
+/**
+ * The ways out of the site: the documentation for a language model and the repository. In the
+ * masthead of the documentation they are small capitals in the version badge's monospace, so
+ * they read as the site's own navigation. On the landing page they are badges beside the version,
+ * in its shape, on the line the name stands on.
+ *
+ * It is drawn on a dark ground only, the landing page's hero and the masthead, so it reads the
+ * dark theme's tokens.
+ */
+import { REPOSITORY } from "../project"
+
+interface Props {
+  /** Badges in the version's shape, where the version badge stands beside them. */
+  badges?: boolean
+}
+
+const { badges = false } = Astro.props
+const link = badges ? "badge" : undefined
+---
+
+<nav class:list={["site-links", { "site-links--badges": badges }]} aria-label="Elsewhere">
+  <ul>
+    <li><a class={link} href="/llms.txt" title="These pages for a language model">llms.txt</a></li>
+    <li><a class={link} href={REPOSITORY} rel="noreferrer">GitHub</a></li>
+  </ul>
+</nav>
+
+<style>
+  .site-links ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lt-spacing-2) var(--lt-spacing-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .site-links:not(.site-links--badges) a {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--lt-font-size-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--lt-color-neutral-text-subtle);
+  }
+  .site-links:not(.site-links--badges) a:hover {
+    color: var(--lt-color-neutral-text-strong);
+  }
+  .site-links:not(.site-links--badges) a:focus-visible {
+    outline: 2px solid var(--lt-color-accent-fill);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  .site-links--badges ul {
+    gap: var(--lt-spacing-2);
+  }
+</style>
