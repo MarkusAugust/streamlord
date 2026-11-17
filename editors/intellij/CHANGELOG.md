@@ -118,7 +118,7 @@ All notable changes to the Streamlord plugin for IntelliJ IDEA are recorded here
 - A value that blocks the rewrite is named in the other values' messages; a constant of yours stays
   a template and blocks nothing. A number or a boolean, nullable or not, in a script is no warning.
 - A list handed to `interpolate` is one value, with a hint and a fix for `listOf(...)`. A value in
-  `data-match-media` is a warning. The warnings link to [Strings](https://streamlord-docs.netlify.app/strings/).
+  `data-match-media` is a warning. The warnings link to [Strings](https://streamlord.sobernetics.no/strings/).
 
 **Completion, hover and colours**
 

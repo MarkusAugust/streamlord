@@ -2,7 +2,7 @@
 
 Issues are always welcome. Pull requests are taken after a conversation, so open an issue first
 and say what you have in mind. Contributors sign the [CLA](CLA.md), and
-[the licence page](https://streamlord-docs.netlify.app/licence/) has the whole picture.
+[the licence page](https://streamlord.sobernetics.no/licence/) has the whole picture.
 
 A security flaw goes through [SECURITY.md](SECURITY.md), never a public issue.
 

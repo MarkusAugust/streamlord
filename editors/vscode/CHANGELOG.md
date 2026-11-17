@@ -121,7 +121,7 @@ All notable changes to the Streamlord extension are recorded here.
   a template and blocks nothing. A number or a boolean, nullable or not, in a script is no warning.
 - A comparison, arithmetic of declared numbers and an enum's `name` are read as IntelliJ reads them.
 - A list handed to `interpolate` is one value, with a hint and a fix for `listOf(...)`. A value in
-  `data-match-media` is a warning. The warnings link to [Strings](https://streamlord-docs.netlify.app/strings/).
+  `data-match-media` is a warning. The warnings link to [Strings](https://streamlord.sobernetics.no/strings/).
 
 **Completion and hover**
 
