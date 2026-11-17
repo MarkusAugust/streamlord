@@ -7,7 +7,8 @@ import kotlin.test.assertEquals
 /**
  * The loading-indicators page shows each sample in three tabs. A reader copies one, so the three
  * have to be the same markup: the same tags, the same attributes in the same order, since the order
- * is one of the page's rules, and the same text. The Template tabs are read from the page itself.
+ * is one of the page's rules, and the same text. A value broken over lines reads as it would on one.
+ * The Template tabs are read from the page itself.
  */
 class LoadingIndicatorsPageTest {
     private val templates =
@@ -32,12 +33,13 @@ class LoadingIndicatorsPageTest {
     }
 
     @Test
-    fun `the answer is the same from the DSL and the string`() {
+    fun `the answer is the same in every tab`() {
         for (page in listOf(1, 3)) {
             val consumer = createHTML(prettyPrint = false)
             consumer.ordersPage(page)
             assertEquals(markup(ordersPageHtml(page)), markup(consumer.finalize()), "page $page")
         }
+        assertEquals(markup(ordersPageHtml(1)), markup(templates[3]), "the Template tab shows page 1")
     }
 
     private fun assertSame(
@@ -91,7 +93,7 @@ class LoadingIndicatorsPageTest {
         val attributes =
             Regex("""([^\s=]+)(?:="([^"]*)")?""")
                 .findAll(inside.drop(name.length))
-                .map { m -> attribute(m.groupValues[1], m.groups[2]?.value?.let(::unescape)) }
+                .map { m -> attribute(m.groupValues[1], m.groups[2]?.value?.let { unescape(it).replace(Regex("""\s+"""), " ") }) }
                 .toList()
         return "<$name ${attributes.joinToString(" | ")}>"
     }

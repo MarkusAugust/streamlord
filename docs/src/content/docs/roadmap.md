@@ -24,7 +24,7 @@ and three new warnings appear in the editors, which a
 | 5 | [New names for the kotlinx.html modules](#new-names-for-the-kotlinxhtml-modules) | the coordinates of two artifacts | nothing |
 | 6 | [The front page](#the-front-page) | what a first visit shows of values and of the check | read [Strings](/strings/) and [The analysis](/analysis/) |
 | 7 | [Values from outside, in templates](#values-from-outside-in-templates) | what the editors and the check say about a template tag in an expression | keep the tag out of expression attributes |
-| 8 | [An indicator written after the request](#an-indicator-written-after-the-request) | what the editors and the check say about a `data-init` that sends a request, written before `data-indicator` or `data-on:datastar-fetch` | write the indicator first, as [Loading indicators](/loading-indicators/#before-data-init) shows |
+| 8 | [An indicator written after the request](#an-indicator-written-after-the-request) | what the editors and the check say about a `data-init` that sends a request, written before `data-indicator` or `data-on:datastar-fetch` | write the indicator first, as [Loading indicators](/loading-indicators/#the-indicator-before-data-init) shows |
 | 9 | [Replay in the Stream Inspector](#replay-in-the-stream-inspector) | what you can see of a stream after it ran | watch it arrive live |
 | 10 | [The reading of markup, before 1.0](#the-reading-of-markup-before-10) | the narrow places where markup is read otherwise than the browser or the compiler reads it | the notes on [Strings](/strings/#values-from-outside) |
 | 11 | [Starter templates](#starter-templates) | how long it takes to get a first page running | copy the `demo` module |
@@ -330,7 +330,7 @@ looks wrong, not one that runs what it should not.
 ### Until then
 
 Write `data-indicator` and `data-on:datastar-fetch` before `data-init`, as
-[Loading indicators](/loading-indicators/#before-data-init) shows.
+[Loading indicators](/loading-indicators/#the-indicator-before-data-init) shows.
 
 ## Replay in the Stream Inspector
 
