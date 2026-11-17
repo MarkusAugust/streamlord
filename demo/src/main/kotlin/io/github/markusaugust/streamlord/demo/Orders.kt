@@ -239,7 +239,7 @@ public class Ledgers(
 }
 
 /**
- * The log, streamed: first the id, then the lines each time one is added, with the exchange behind
+ * The log, streamed: first the id if the page does not hold it yet ([sent] is the one it sent), then the lines each time one is added, with the exchange behind
  * it for the wire panel, and an end after [quiet] without one, or as soon as the ledger is dropped.
  * Every request in the panel adds a line, so a quiet stretch means nobody is using it, and the
  * connection stops keeping the service awake. The page tells the log is open by Datastar's own
@@ -250,10 +250,12 @@ public class Ledgers(
 public fun orderLog(
     ledger: Ledger,
     wire: Boolean,
+    sent: String,
     quiet: Duration = 2.minutes,
 ): Flow<DatastarEvent> =
     flow {
-        emit(PatchSignals("""{"visitor": "${ledger.visitor}"}"""))
+        // The page fetches the first table when the id arrives, so only a new one is sent.
+        if (sent != ledger.visitor) emit(PatchSignals("""{"visitor": "${ledger.visitor}"}"""))
         emit(state("Open: each line is written by the server as it answers."))
         var shown: LogState? = null
         while (true) {
@@ -323,7 +325,8 @@ public fun TagConsumer<*>.orderTable(page: OrderPage) {
     div("lt-table-scroll") {
         id = "orders"
         table("lt-table") {
-            caption { +"Page ${page.page} of $ORDER_PAGES, by ${page.sort}, version ${page.version}" }
+            // Page and sort are in the panel's toolbar; the version is shown nowhere else.
+            caption { +"Version ${page.version}" }
             thead {
                 tr {
                     th { +"Order" }

@@ -20,10 +20,23 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
 // table is sent, so each page in each sort is a URL of its own, which is what the browser keys on.
 const TABLE = (page: string) =>
   `@get('${SERVICE}/orders/' + $visitor + '?page=' + ${page}, {filterSignals: {include: /^sort$/}})`
-const SORTS = [
-  { value: "order", label: "Order" },
-  { value: "who", label: "Who" },
-  { value: "what", label: "What" },
+// The toolbar over the table: two toggle groups, each bound to the signal it sets, and either
+// one fetches the page and sort they now say.
+const TOGGLES = [
+  {
+    label: "Page",
+    signal: "page",
+    options: ["1", "2", "3"].map((n) => ({ value: n, label: n })),
+  },
+  {
+    label: "Sort by",
+    signal: "sort",
+    options: [
+      { value: "order", label: "Order" },
+      { value: "who", label: "Who" },
+      { value: "what", label: "What" },
+    ],
+  },
 ]
 ---
 
@@ -362,12 +375,13 @@ const SORTS = [
           The table's path carries the visitor's id, because the table sends no signals: its URL
           is the cache key, and a signal in it would make every keystroke on this page a new one.
           The log hands the id out when it opens, which it does when the panel comes into view or
-          is pressed, and the server ends it after two quiet minutes.
+          is pressed, and the server ends it after two quiet minutes. The id arriving is what
+          fetches the first table, and a log reopened on the same id does not send it again.
         -->
         <section
           class="panel panel--wide"
           id="caching"
-          data-signals="{visitor: '', page: 1, sort: 'order'}"
+          data-signals="{visitor: '', page: '1', sort: 'order'}"
           data-indicator:log-open
           data-on-intersect={LOG}
           data-on:click={LOG}
@@ -382,19 +396,46 @@ const SORTS = [
             How it is done is on <a class="lt-link" href="/caching/">Caching</a>.
           </p>
 
-          <div class="orders">
+          <div
+            class="orders"
+            data-on-signal-patch={TABLE("$page")}
+            data-on-signal-patch-filter="{include: /^visitor$/}"
+          >
             <div class="orders__grid">
               <div class="orders__side">
-                <div class="orders__buttons">
-                  {[1, 2, 3].map((n) => (
-                    <button
-                      class="lt-button"
-                      data-variant="secondary"
-                      type="button"
-                      data-attr:disabled="!$visitor"
-                      data-on:click={`$page = ${n}; ${TABLE("$page")}`}
-                    >Page {n}</button>
+                <div class="orders__toolbar">
+                  {TOGGLES.map((toggle) => (
+                    <div class="orders__toggle">
+                      <span class="orders__toggle-label" aria-hidden="true">{toggle.label}</span>
+                      <fieldset class="lt-toggle-group">
+                        <legend class="lt-sr-only">{toggle.label}</legend>
+                        {toggle.options.map((option) => (
+                          <label class="lt-toggle-group__option">
+                            <input
+                              type="radio"
+                              name={`orders-${toggle.signal}`}
+                              value={option.value}
+                              data-bind={toggle.signal}
+                              data-attr:disabled="!$visitor"
+                              data-on:change={TABLE("$page")}
+                            />
+                            {option.label}
+                          </label>
+                        ))}
+                      </fieldset>
+                    </div>
                   ))}
+                </div>
+                <div id="orders" class="orders__table">
+                  <p class="lt-paragraph" data-size="small">
+                    Page 1 comes as soon as the server has handed this panel an id.
+                  </p>
+                </div>
+              </div>
+
+              <div class="orders__side" aria-live="polite">
+                <div class="orders__log-head">
+                  <h3 class="panel__title">What the server did</h3>
                   <button
                     class="lt-button"
                     data-variant="ghost"
@@ -403,34 +444,6 @@ const SORTS = [
                     data-on:click={`@post('${SERVICE}/orders/' + $visitor + '/change')`}
                   >Change the data</button>
                 </div>
-                <div class="orders__sort">
-                  <span class="orders__sort-label" aria-hidden="true">Sort by</span>
-                  <fieldset class="lt-toggle-group">
-                    <legend class="lt-sr-only">Sort by</legend>
-                    {SORTS.map((sort) => (
-                      <label class="lt-toggle-group__option">
-                        <input
-                          type="radio"
-                          name="orders-sort"
-                          value={sort.value}
-                          data-bind:sort
-                          data-attr:disabled="!$visitor"
-                          data-on:change={TABLE("$page")}
-                        />
-                        {sort.label}
-                      </label>
-                    ))}
-                  </fieldset>
-                </div>
-                <div id="orders" class="orders__table">
-                  <p class="lt-paragraph" data-size="small">
-                    The pages open once the server has handed this panel an id.
-                  </p>
-                </div>
-              </div>
-
-              <div class="orders__side" aria-live="polite">
-                <h3 class="panel__title">What the server did</h3>
                 <p id="orders-log-state" class="panel__note">Opens when this panel is on screen.</p>
                 <div id="orders-log"></div>
               </div>
@@ -703,11 +716,39 @@ const SORTS = [
         gap: var(--lt-spacing-3);
         align-content: start;
       }
-      .orders__buttons {
+      /* Page and sort on one line over the table, on two when the column is narrow. */
+      .orders__toolbar {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
+        gap: var(--lt-spacing-3) var(--lt-spacing-5);
+      }
+      .orders__toggle {
+        display: flex;
+        align-items: center;
         gap: var(--lt-spacing-2);
       }
+      .orders__toggle-label {
+        font-size: var(--lt-font-size-xs);
+        color: var(--lt-color-neutral-text-subtle);
+      }
+      .orders__log-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--lt-spacing-2);
+      }
+      .orders__side :global(.orders__lines) {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--lt-spacing-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--lt-font-size-xs);
+      }
+      /* The label beside the group, and the group only as wide as its three options. */
       .orders__side :global(.orders__lines) {
         margin: 0;
         padding: 0;

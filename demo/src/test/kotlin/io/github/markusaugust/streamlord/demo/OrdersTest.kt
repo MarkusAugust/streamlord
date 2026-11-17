@@ -82,7 +82,7 @@ class OrdersTest {
                 "the browser keeps each URL apart, so the tag needs no sort",
             )
             assertNotEquals(plain.bodyAsText(), sorted.bodyAsText())
-            assertTrue(sorted.bodyAsText().contains("by who"), sorted.bodyAsText())
+            assertTrue(sorted.bodyAsText().contains("Ashe"), "the first of the table by who: ${sorted.bodyAsText()}")
             assertEquals(plain.bodyAsText(), nonsense.bodyAsText(), "a sort the table does not have is the default one")
             assertEquals(
                 "page 1, who",
@@ -214,13 +214,27 @@ class OrdersTest {
             val ledgers = Ledgers(capacity = 1)
             val first = ledgers.open(null)
             val events = mutableListOf<Any>()
-            val log = launch { orderLog(first, wire = false).toList(events) }
+            val log = launch { orderLog(first, wire = false, sent = "").toList(events) }
             delay(1.seconds)
 
             ledgers.open(null)
             delay(1.seconds)
 
             assertTrue(log.isCompleted, "the log of a ledger that is gone ends at once, not after the quiet minutes")
+        }
+
+    // The page fetches the first table when the id arrives, so a log reopened on the same id must
+    // not send it again, or the table would jump back to page one.
+    @Test
+    fun `a log reopened on the id the page holds does not send it again`() =
+        runTest {
+            val ledger = Ledgers().open(null)
+            val events = mutableListOf<Any>()
+            val log = launch { orderLog(ledger, wire = false, sent = ledger.visitor).toList(events) }
+            delay(1.seconds)
+            log.cancel()
+
+            assertTrue(events.none { it is PatchSignals }, events.toString())
         }
 
     @Test
@@ -237,7 +251,7 @@ class OrdersTest {
         runTest {
             val ledger = Ledgers().open(null)
             val events = mutableListOf<Any>()
-            val log = launch { orderLog(ledger, wire = true).toList(events) }
+            val log = launch { orderLog(ledger, wire = true, sent = "").toList(events) }
 
             delay(1.seconds)
             ledger.answer(1, "order", "GET /orders/x?page=1") { 200 }

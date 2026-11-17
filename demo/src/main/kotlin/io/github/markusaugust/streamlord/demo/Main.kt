@@ -317,7 +317,7 @@ public fun Application.live() {
          */
         get("/orders/log") {
             val signals = call.readSignalsOr(OrdersSignals())
-            call.respondDatastar(orderLog(ledgers.open(signals.visitor), signals.wire))
+            call.respondDatastar(orderLog(ledgers.open(signals.visitor), signals.wire, signals.visitor))
         }
 
         // Only the log makes a ledger: an id the service does not hold is told so, and makes none.
