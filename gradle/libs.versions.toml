@@ -64,6 +64,8 @@ ktor-server-tomcat = { module = "io.ktor:ktor-server-tomcat", version.ref = "kto
 ktor-server-jetty-jakarta = { module = "io.ktor:ktor-server-jetty-jakarta", version.ref = "ktor" }
 ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
+# Docs-only, for :docs-samples: the caching page shows a CachingHeaders rule kept off the streams.
+ktor-server-caching-headers = { module = "io.ktor:ktor-server-caching-headers", version.ref = "ktor" }
 ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
 # Test-only, for :streamlord-ktor's testOldestKtor; see nettyOldestKtor.
 netty-bom-oldestKtor = { module = "io.netty:netty-bom", version.ref = "nettyOldestKtor" }

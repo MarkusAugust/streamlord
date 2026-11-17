@@ -10,6 +10,10 @@ import "../styles/global.css"
 
 // A page that runs the library rather than describing it. Everything below the search field
 // is written by streamlord-live: the results, the frames, and the signal the count lives in.
+
+// The caching panel's log, opened when the panel is seen or pressed. Only the id goes with it,
+// so the log's URL stays the same and Datastar does not open a second one beside the first.
+const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include: /^visitor$/}})`
 ---
 
 <!doctype html>
@@ -339,12 +343,74 @@ import "../styles/global.css"
           </div>
         </section>
 
+        <!--
+          The caching page, run. Each page of the table is one text/html answer with an ETag,
+          so a page the browser already holds costs a 304 and no build. The log beside it is a
+          stream, the other kind of answer, which no cache keeps.
+
+          The table's path carries the visitor's id, because the table sends no signals: its URL
+          is the cache key, and a signal in it would make every keystroke on this page a new one.
+          The log hands the id out when it opens, which it does when the panel comes into view or
+          is pressed, and the server ends it after two quiet minutes.
+        -->
+        <section
+          class="panel panel--wide"
+          id="caching"
+          data-signals="{visitor: '', logOpen: false, ordersVersion: 1}"
+          data-on-intersect={LOG}
+          data-on:click={LOG}
+        >
+          <h2 class="panel__title">A table the browser keeps</h2>
+          <p class="panel__note">
+            Every page is one <code>text/html</code> answer with an ETag, not a stream. Press a
+            page you have seen, and the browser asks with <code>If-None-Match</code>: the server
+            answers 304 and builds nothing. Change the data, and the next press is a 200 again.
+            How it is done is on <a href="/caching/">Caching</a>.
+          </p>
+
+          <div class="orders">
+            <div class="orders__grid">
+              <div class="orders__side">
+                <div class="orders__buttons">
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      class="lt-button"
+                      data-variant="secondary"
+                      type="button"
+                      data-attr:disabled="!$visitor"
+                      data-on:click={`@get('${SERVICE}/orders/' + $visitor + '?page=${n}', {filterSignals: {exclude: /.*/}})`}
+                    >Page {n}</button>
+                  ))}
+                  <button
+                    class="lt-button"
+                    data-variant="ghost"
+                    type="button"
+                    data-attr:disabled="!$visitor"
+                    data-on:click={`@post('${SERVICE}/orders/' + $visitor + '/change')`}
+                  >Change the data</button>
+                </div>
+                <div id="orders" class="orders__table">
+                  <p class="lt-paragraph" data-size="small">
+                    The pages open once the server has handed this panel an id.
+                  </p>
+                </div>
+              </div>
+
+              <div class="orders__side" aria-live="polite">
+                <h3 class="panel__title">What the server did</h3>
+                <p id="orders-log-state" class="panel__note">Opens when this panel is on screen.</p>
+                <div id="orders-log"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="panel panel--wide">
           <h2 class="panel__title">On the wire</h2>
           <p class="panel__note">
             The frames behind the last thing you did on this page, whichever demo it was: a
             search, a muster, a press of a patch mode, or each tick of the counter as it runs.
-            Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
+            The table above has none, since it is not a stream. Encoded by the same <code>SseEncoder</code> the golden-file tests verify. Not a
             description of them. The frames.
           </p>
           <div id="wire" class="panel__body">
@@ -581,6 +647,52 @@ import "../styles/global.css"
       .counter :global(.counter__state) {
         margin: 0;
         color: var(--lt-color-neutral-text-subtle);
+      }
+
+      /* The table beside the log when the panel is wide enough for both, one above the other when not. */
+      .orders {
+        container-type: inline-size;
+      }
+      .orders__grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--lt-spacing-5);
+      }
+      @container (min-width: 40rem) {
+        .orders__grid {
+          grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        }
+      }
+      .orders__side {
+        display: grid;
+        gap: var(--lt-spacing-3);
+        align-content: start;
+      }
+      .orders__buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--lt-spacing-2);
+      }
+      .orders__side :global(.orders__build) {
+        margin: var(--lt-spacing-2) 0 0;
+        color: var(--lt-color-neutral-text-subtle);
+      }
+      .orders__side :global(.orders__lines) {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: var(--lt-spacing-1);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: var(--lt-font-size-xs);
+      }
+      .orders__side :global(.orders__lines li) {
+        display: grid;
+        grid-template-columns: 7ch 8ch minmax(0, 1fr);
+        gap: var(--lt-spacing-2);
+      }
+      .orders__side :global(.orders__status) {
+        color: var(--lt-color-accent-fill);
       }
 
       .panel__json,

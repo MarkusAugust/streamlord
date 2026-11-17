@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import io.github.markusaugust.streamlord.html.elements
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
 import io.github.markusaugust.streamlord.ktor.CspNoncePlugin
@@ -14,9 +15,13 @@ import io.github.markusaugust.streamlord.ktor.StreamlordPlugin
 import io.github.markusaugust.streamlord.ktor.cspNonce
 import io.github.markusaugust.streamlord.ktor.readSignalsOr
 import io.github.markusaugust.streamlord.ktor.respondDatastar
+import io.github.markusaugust.streamlord.ktor.respondElements
+import io.github.markusaugust.streamlord.ktor.respondSignals
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.EntityTagVersion
+import io.ktor.http.content.VersionCheckResult
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.application.log
@@ -25,6 +30,8 @@ import io.ktor.server.engine.defaultExceptionStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -74,6 +81,9 @@ private val DOCS_HOSTS = listOf("streamlord.sobernetics.no", "streamlord-docs.ne
  */
 private val BUILD: String = System.getenv("BUILD_SHA") ?: "dev"
 
+/** The caching demo's visitors, one ledger each; see Orders.kt. */
+internal val ledgers = Ledgers()
+
 /**
  * streamlord-live: the service the documentation talks to.
  *
@@ -110,6 +120,7 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<FeedSignals>() to FeedSignals.serializer(),
                 typeOf<JudgeSignals>() to JudgeSignals.serializer(),
                 typeOf<AssertSignals>() to AssertSignals.serializer(),
+                typeOf<OrdersSignals>() to OrdersSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -288,6 +299,41 @@ public fun Application.live() {
                     tooLargeEvents()
                 }
             call.respondDatastar(events.asFlow())
+        }
+
+        /*
+         * The caching page, run. The table is one text/html answer with an ETag, built the way
+         * the page shows it, so a press the browser already holds the answer to costs a 304 and
+         * no build. The log beside it is a stream, the other kind of answer, which no cache keeps.
+         * The visitor's id is in the table's path rather than in its signals, because the page
+         * sends none: the URL is the cache key.
+         */
+        get("/orders/log") {
+            val signals = call.readSignalsOr(OrdersSignals())
+            call.respondDatastar(orderLog(ledgers.open(signals.visitor)))
+        }
+
+        get("/orders/{visitor}") {
+            val ledger = ledgers.open(call.parameters["visitor"])
+            val page =
+                call.request.queryParameters["page"]
+                    ?.toIntOrNull()
+                    ?.coerceIn(1, ORDER_PAGES) ?: 1
+            val etag = ledger.etag(page)
+            call.response.header(HttpHeaders.CacheControl, "private, no-cache")
+            call.response.header(HttpHeaders.ETag, etag)
+            val check = EntityTagVersion(etag).check(call.request.headers)
+            if (check != VersionCheckResult.OK) {
+                ledger.notBuilt(page)
+                call.respond(check.statusCode)
+                return@get
+            }
+            call.respondElements(elements { orderTable(ledger.built(page)) })
+        }
+
+        post("/orders/{visitor}/change") {
+            val version = ledgers.open(call.parameters["visitor"]).change()
+            call.respondSignals("""{"ordersVersion": $version}""")
         }
 
         get("/search") {
