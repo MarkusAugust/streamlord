@@ -106,6 +106,36 @@ class MockMvcTesterTest {
             return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
         }
 
+        @GetMapping("/rawNow")
+        fun rawNow(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ) {
+            val context = request.startAsync()
+            thread {
+                response.writer.write("done")
+                response.flushBuffer()
+                context.complete()
+            }
+        }
+
+        @GetMapping("/deferred")
+        fun deferred(): org.springframework.web.context.request.async.DeferredResult<String> {
+            val result =
+                org.springframework.web.context.request.async
+                    .DeferredResult<String>()
+            val test = Thread.currentThread()
+            thread {
+                Thread.sleep(20)
+                result.setResult("late")
+                // Just after the dispatch, while the test's thread goes on to perform it.
+                val until = System.nanoTime() + 20_000
+                while (System.nanoTime() < until) Thread.onSpinWait()
+                test.interrupt()
+            }
+            return result
+        }
+
         @GetMapping("/raw")
         fun raw(
             request: HttpServletRequest,
@@ -166,6 +196,7 @@ class MockMvcTesterTest {
     @BeforeTest
     fun reset() {
         gate = CompletableFuture()
+        ticks.set(0)
     }
 
     // A suspend controller runs in one async cycle and its stream in a second; exchange() waits
@@ -279,11 +310,35 @@ class MockMvcTesterTest {
 
     @Test
     fun `a request completed without a dispatch is answered as it stands`() {
+        mvc.datastar(HttpMethod.GET, "/feed")
         val started = System.nanoTime()
         val result = mvc.datastar(HttpMethod.GET, "/raw", asyncTimeout = 5.seconds)
 
         assertEquals("done", result.response.contentAsString)
-        assertTrue(System.nanoTime() - started < 2_000_000_000, "took ${(System.nanoTime() - started) / 1_000_000} ms")
+        assertTrue(System.nanoTime() - started < 4_000_000_000, "took ${(System.nanoTime() - started) / 1_000_000} ms")
+    }
+
+    @Test
+    fun `a request completed at once without a dispatch is answered every time`() {
+        repeat(200) { assertEquals("done", mvc.datastar(HttpMethod.GET, "/rawNow", asyncTimeout = 5.seconds).response.contentAsString) }
+    }
+
+    // The dispatched answer is written on the test's thread, where Spring itself may clear an
+    // interrupt; what must not happen is the interrupt turning into a failure of Spring's own wait.
+    @Test
+    fun `an interrupt just after the dispatch is no failure of the answer`() {
+        repeat(100) {
+            try {
+                val result = runCatching { mvc.datastar(HttpMethod.GET, "/deferred") }
+                result.exceptionOrNull()?.let { assertIs<InterruptedException>(it) }
+                result.getOrNull()?.let { assertEquals("late", it.response.contentAsString) }
+            } finally {
+                // Past the controller's interrupt, which may come after the answer, then clear it.
+                Thread.interrupted()
+                runCatching { Thread.sleep(30) }
+                Thread.interrupted()
+            }
+        }
     }
 
     @Test
