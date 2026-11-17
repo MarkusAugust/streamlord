@@ -35,19 +35,19 @@ class OrdersTest {
             application { live() }
             val visitor = ledgers.open(null).visitor
 
-            val first = client.get("/orders/$visitor?page=2")
+            val first = client.get("/orders/$visitor${table(2)}")
             assertEquals(HttpStatusCode.OK, first.status)
             assertTrue(first.bodyAsText().contains("""id="orders""""), first.bodyAsText())
             val etag = first.headers[HttpHeaders.ETag]!!
             assertEquals("private, no-cache", first.headers[HttpHeaders.CacheControl])
 
-            val again = client.get("/orders/$visitor?page=2") { header(HttpHeaders.IfNoneMatch, etag) }
+            val again = client.get("/orders/$visitor${table(2)}") { header(HttpHeaders.IfNoneMatch, etag) }
             assertEquals(HttpStatusCode.NotModified, again.status)
             assertEquals(etag, again.headers[HttpHeaders.ETag])
             assertEquals("private, no-cache", again.headers[HttpHeaders.CacheControl])
 
             client.post("/orders/$visitor/change")
-            val changed = client.get("/orders/$visitor?page=2") { header(HttpHeaders.IfNoneMatch, etag) }
+            val changed = client.get("/orders/$visitor${table(2)}") { header(HttpHeaders.IfNoneMatch, etag) }
             assertEquals(HttpStatusCode.OK, changed.status)
             assertNotEquals(etag, changed.headers[HttpHeaders.ETag])
 
@@ -70,11 +70,9 @@ class OrdersTest {
         testApplication {
             application { live() }
             val visitor = ledgers.open(null).visitor
-            val byWho = "datastar=" + java.net.URLEncoder.encode("""{"sort":"who"}""", Charsets.UTF_8)
-
-            val plain = client.get("/orders/$visitor?page=1")
-            val sorted = client.get("/orders/$visitor?page=1&$byWho")
-            val nonsense = client.get("/orders/$visitor?page=1&datastar=" + java.net.URLEncoder.encode("""{"sort":"x"}""", Charsets.UTF_8))
+            val plain = client.get("/orders/$visitor${table(1)}")
+            val sorted = client.get("/orders/$visitor${table(1, "who")}")
+            val nonsense = client.get("/orders/$visitor${table(1, "x")}")
 
             assertEquals(
                 plain.headers[HttpHeaders.ETag],
@@ -98,6 +96,16 @@ class OrdersTest {
         val byWho = (1..ORDER_PAGES).flatMap { orderRows(it, 1, "who") }.map { it.who }
         assertEquals(byWho.sorted(), byWho)
         assertEquals(9, byWho.toSet().size)
+        val byWhat = (1..ORDER_PAGES).flatMap { orderRows(it, 1, "what") }.map { it.item }
+        assertEquals(byWhat.sorted(), byWhat)
+        val byOrder = (1..ORDER_PAGES).flatMap { orderRows(it, 1, "order") }.map { it.id }
+        assertEquals(byOrder.sorted(), byOrder)
+    }
+
+    @Test
+    fun `a sort the table does not have is the default`() {
+        assertEquals("order", sortOf("x"))
+        assertEquals("who", sortOf("who"))
     }
 
     @Test
@@ -106,9 +114,9 @@ class OrdersTest {
             application { live() }
             val visitor = ledgers.open(null).visitor
 
-            val page1 = client.get("/orders/$visitor?page=1")
-            client.get("/orders/$visitor?page=2")
-            val page1Again = client.get("/orders/$visitor?page=1")
+            val page1 = client.get("/orders/$visitor${table(1)}")
+            client.get("/orders/$visitor${table(2)}")
+            val page1Again = client.get("/orders/$visitor${table(1)}")
 
             assertEquals(page1.headers[HttpHeaders.ETag], page1Again.headers[HttpHeaders.ETag])
             assertEquals(page1.bodyAsText(), page1Again.bodyAsText())
@@ -120,7 +128,7 @@ class OrdersTest {
             application { live() }
             val before = ledgers.size
 
-            val table = client.get("/orders/0123456789abcdef?page=1")
+            val table = client.get("/orders/0123456789abcdef${table(1)}")
             client.post("/orders/fedcba9876543210/change")
 
             assertEquals(HttpStatusCode.OK, table.status)
@@ -136,7 +144,7 @@ class OrdersTest {
             val visitor = ledgers.open(null).visitor
 
             for (malformed in listOf("\"v1-1\";q=0.5", "\"a b\"", "a\"b", "\"a,b\"")) {
-                val response = client.get("/orders/$visitor?page=1") { header(HttpHeaders.IfNoneMatch, malformed) }
+                val response = client.get("/orders/$visitor${table(1)}") { header(HttpHeaders.IfNoneMatch, malformed) }
                 assertEquals(HttpStatusCode.OK, response.status, malformed)
             }
         }
@@ -147,7 +155,7 @@ class OrdersTest {
             application { live() }
             val ledger = ledgers.open(null)
 
-            val response = client.get("/orders/${ledger.visitor}?page=1") { header(HttpHeaders.IfMatch, "\"nope\"") }
+            val response = client.get("/orders/${ledger.visitor}${table(1)}") { header(HttpHeaders.IfMatch, "\"nope\"") }
 
             assertEquals(HttpStatusCode.PreconditionFailed, response.status)
             assertEquals(
@@ -214,7 +222,7 @@ class OrdersTest {
             val ledgers = Ledgers(capacity = 1)
             val first = ledgers.open(null)
             val events = mutableListOf<Any>()
-            val log = launch { orderLog(first, wire = false, sent = "").toList(events) }
+            val log = launch { orderLog(first, wire = false).toList(events) }
             delay(1.seconds)
 
             ledgers.open(null)
@@ -223,19 +231,15 @@ class OrdersTest {
             assertTrue(log.isCompleted, "the log of a ledger that is gone ends at once, not after the quiet minutes")
         }
 
-    // The page fetches the first table when the id arrives, so a log reopened on the same id must
-    // not send it again, or the table would jump back to page one.
+    // The page fetches its table when the id changes, so a log on an id the service no longer
+    // holds, after a restart or once it was let go, hands out a new one rather than reusing it.
     @Test
-    fun `a log reopened on the id the page holds does not send it again`() =
-        runTest {
-            val ledger = Ledgers().open(null)
-            val events = mutableListOf<Any>()
-            val log = launch { orderLog(ledger, wire = false, sent = ledger.visitor).toList(events) }
-            delay(1.seconds)
-            log.cancel()
-
-            assertTrue(events.none { it is PatchSignals }, events.toString())
-        }
+    fun `a log on an id the service does not hold hands out a new one`() {
+        val ledgers = Ledgers()
+        val ledger = ledgers.open("0123456789abcdef")
+        assertNotEquals("0123456789abcdef", ledger.visitor)
+        assertSame(ledger, ledgers.open(ledger.visitor))
+    }
 
     @Test
     fun `a ledger nobody used for half an hour is gone`() {
@@ -251,10 +255,10 @@ class OrdersTest {
         runTest {
             val ledger = Ledgers().open(null)
             val events = mutableListOf<Any>()
-            val log = launch { orderLog(ledger, wire = true, sent = "").toList(events) }
+            val log = launch { orderLog(ledger, wire = true).toList(events) }
 
             delay(1.seconds)
-            ledger.answer(1, "order", "GET /orders/x?page=1") { 200 }
+            ledger.answer(1, "order", "GET /orders/x${table(1)}") { 200 }
             delay(119.seconds)
             ledger.answer(1, "order", "GET /orders/x?page=1\nIf-None-Match: \"v1-1\"") { 304 }
             delay(1.minutes)
@@ -272,4 +276,10 @@ class OrdersTest {
             assertTrue(wire[1].contains("304 Not Modified") && wire[1].contains("(no body)"), wire[1])
             assertTrue((events.last() as PatchElements).elements.orEmpty().contains("Closed after 2 quiet minutes"))
         }
+
+    /** The table's query as the page sends it: page and sort in the signals, the page's only ones. */
+    private fun table(
+        page: Int,
+        sort: String = "order",
+    ): String = "?datastar=" + java.net.URLEncoder.encode("""{"page":"$page","sort":"$sort"}""", Charsets.UTF_8)
 }

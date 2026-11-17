@@ -42,11 +42,14 @@ public const val ORDERS_CACHE_CONTROL: String = "private, no-cache"
 public val ORDER_SORTS: List<String> = listOf("order", "who", "what")
 
 /**
- * The one signal the table reads: how it is sorted. The page sends it and no other, so each sort of
- * each page is a URL of its own in the browser's cache, as the caching page shows.
+ * The signals the table reads, the page and the sort, and the only ones the page sends it: each
+ * page in each sort is then a URL of its own in the browser's cache, as the caching page shows.
+ * Both ride in the signals rather than the path, so every table request is one URL string to
+ * Datastar, which cancels the one before it instead of letting a slow answer land last.
  */
 @Serializable
 public data class TableSignals(
+    val page: String = "1",
     val sort: String = ORDER_SORTS.first(),
 )
 
@@ -196,13 +199,16 @@ public class Ledgers(
     public val size: Int
         @Synchronized get() = byVisitor.size
 
-    /** The visitor's ledger, made when the service does not hold it; under a new id when [visitor] is not one it could have made. */
+    /**
+     * The visitor's ledger, or a new one under a new id when the service does not hold [visitor]:
+     * after a restart, or once it was let go. The page fetches its table when the id changes, so a
+     * new id is what brings the table back.
+     */
     @Synchronized
     public fun open(visitor: String?): Ledger {
         val now = clock()
         forget(now)
-        val id = visitor?.takeIf { ID.matches(it) } ?: newId()
-        val ledger = byVisitor.getOrPut(id) { Ledger(id) }
+        val ledger = visitor?.let { byVisitor[it] } ?: newId().let { id -> Ledger(id).also { byVisitor[id] = it } }
         ledger.lastSeen = now
         while (byVisitor.size > capacity) {
             val drop = byVisitor.values.firstOrNull { !it.used && it !== ledger } ?: byVisitor.values.first()
@@ -232,14 +238,10 @@ public class Ledgers(
             .toString()
             .replace("-", "")
             .take(16)
-
-    private companion object {
-        val ID = Regex("[0-9a-f]{16}")
-    }
 }
 
 /**
- * The log, streamed: first the id if the page does not hold it yet ([sent] is the one it sent), then the lines each time one is added, with the exchange behind
+ * The log, streamed: first the id, then the lines each time one is added, with the exchange behind
  * it for the wire panel, and an end after [quiet] without one, or as soon as the ledger is dropped.
  * Every request in the panel adds a line, so a quiet stretch means nobody is using it, and the
  * connection stops keeping the service awake. The page tells the log is open by Datastar's own
@@ -250,12 +252,11 @@ public class Ledgers(
 public fun orderLog(
     ledger: Ledger,
     wire: Boolean,
-    sent: String,
     quiet: Duration = 2.minutes,
 ): Flow<DatastarEvent> =
     flow {
-        // The page fetches the first table when the id arrives, so only a new one is sent.
-        if (sent != ledger.visitor) emit(PatchSignals("""{"visitor": "${ledger.visitor}"}"""))
+        // The same id again changes no signal on the page, so it fetches nothing; a new one fetches the table.
+        emit(PatchSignals("""{"visitor": "${ledger.visitor}"}"""))
         emit(state("Open: each line is written by the server as it answers."))
         var shown: LogState? = null
         while (true) {
@@ -317,9 +318,9 @@ internal fun orderRows(
 }
 
 /**
- * The table. Its id is what Datastar patches it in by. It holds nothing the tag does not name, so
- * the same tag is always the same bytes, as a strong ETag promises; how often it was built is the
- * log's to say.
+ * The table. Its id is what Datastar patches it in by. At any one URL it holds nothing the tag
+ * does not name, so there the same tag is always the same bytes, as a strong ETag promises; the
+ * sort is in the URL and not the tag, and how often it was built is the log's to say.
  */
 public fun TagConsumer<*>.orderTable(page: OrderPage) {
     div("lt-table-scroll") {
@@ -353,7 +354,7 @@ public fun TagConsumer<*>.forgotten() {
         id = "orders"
         p("lt-paragraph") {
             attributes["data-size"] = "small"
-            +"The server had let this panel go, and has opened it again. Press the page once more."
+            +"The server had let this panel go. It hands out a new id, and the table follows."
         }
     }
 }

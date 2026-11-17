@@ -29,9 +29,9 @@ adapter, and the [live page](/live/#caching) runs it against the deployed servic
 An ETag does not spare the server the request. It spares it the work: reading the rows and
 writing the markup, and sending what it wrote. Fifty rows of three short cells, each one
 `<tr><td>1001</td><td>Gorvek</td><td>three swords</td></tr>`, come to 2,952 bytes of HTML with
-the table around them, and the `304` that stands in for them has headers and no body. How much the work weighs depends on your database and your markup, not on Streamlord.
-Only `max-age` keeps requests from reaching the server at all, and it pays for that in data that
-can be out of date; see [ETag or max-age](#etag-or-max-age).
+the table around them, and the `304` that stands in for them has headers and no body. How much
+the work weighs depends on your database and your markup, not on Streamlord. Only `max-age` keeps requests from reaching the server at
+all, and it pays for that in data that can be out of date; see [ETag or max-age](#etag-or-max-age).
 
 ## What goes over the wire
 
@@ -78,8 +78,8 @@ The browser then hands Datastar the table it kept, as a `200`, and Datastar patc
 reads the body of a `200` and of nothing else, and it never sees the `304`. The `304` has to carry
 the same `ETag` and `Cache-Control` as the `200`: RFC 9110 requires it, in section 15.4.5. A
 cache sent a `304` without them keeps the ones it stored, so a browser copes, but the answer
-breaks the RFC, and a cache in between is owed the rules. That is the line the adapters below get right,
-and the one that is easy to miss.
+breaks the RFC, and a cache in between is owed the rules. That is the line the adapters below get
+right, and the one that is easy to miss.
 
 The server still has to tell whether anything changed, so the version has to be cheaper than the
 rows. A counter you raise on every write is the simplest. The time of the newest change on the
@@ -112,16 +112,38 @@ val pageTwoButton =
 
 The query string then holds `datastar=%7B%7D`, the same on every press. In Chrome with Datastar
 1.0.5, a field bound to a signal on the same page gave a new URL and a full answer after every
-change without the filter, and the kept table every time with it. If the answer does depend on a
-signal, keep that one: `{filterSignals: {include: /^page$/}}`, or `SignalFilter.include("^page$")`.
+change without the filter, and the kept table every time with it.
 
-A table the reader can sort is the common case. Keep the order in the filter beside the page,
-`{filterSignals: {include: /^(page|sort)$/}}`, and each page in each order is a URL of its own,
-kept on its own. In Chrome with Datastar 1.0.5, sorting another way gave a new URL, and sorting
-back gave the very same URL as the first time, so the table kept for it was used again. The first
-look at each order is a `200`. The ETag needs no sort in it, since the browser keeps each URL
-apart; it changes when the data does. Filter the order out, as `exclude: /.*/` does, and the
-server never hears it: every order is the same URL and the same answer, and sorting does nothing.
+If the answer does depend on a signal, send that one and no other. A table the reader can sort
+is the common case:
+
+```html
+<div data-signals="{sort: 'order'}">
+    <select data-bind:sort
+            data-on:change="@get('/orders?page=2', {filterSignals: {include: /^sort$/}})">
+        <option value="order">Order</option>
+        <option value="who">Who</option>
+    </select>
+</div>
+```
+
+The handler reads it with the rest of the signals, `call.readSignals().string("sort")` in Ktor,
+as [Signals and codecs](/signals/) shows. Each page in each sort is then a URL of its own, kept
+on its own. In Chrome with Datastar 1.0.5, sorting another way gave a new URL, and sorting back
+gave the very same URL as the first time, so the table kept for it was used again. The first look
+at each sort is a `200`. The ETag needs no sort in it, since the browser keeps each URL apart; it
+changes when the data does. Filter the sort out, as `exclude: /.*/` does, and the server never
+hears it: every sort is the same URL and the same answer, and sorting does nothing.
+
+One more thing decides where the page goes. Datastar cancels a request still running when another
+goes to the same URL as written in `@get`, before the signals are added to it. With the page in
+that URL, page 2 and then page 3 are two URLs, both run, and if page 2 answers last the table shows
+page 2 while the reader asked for page 3. In Chrome with Datastar 1.0.5, two presses on two such
+URLs both ran to the end, and two on one URL with different signals ended the first at once. So
+when presses can come fast, send the page as a signal too, `{filterSignals: {include:
+/^(page|sort)$/}}`, and read it from the signals: every press goes to one URL and cancels the one
+before, and the cache works as before, since it keys on the URL with the signals in it. The
+[live page](/live/#caching) does it this way.
 
 ## Ktor
 
@@ -255,7 +277,8 @@ work out as the table: a stream, or no cache at all, is the honest answer there.
 ## What the plugins do not do
 
 The frameworks have filters and plugins that look as if they did this for you. Each one was
-tried with `respondElements` or `datastarElements`, on Spring 7.0.10 and Ktor 3.6.1.
+tried by hand with `respondElements` or `datastarElements`, on Spring 7.0.10 and Ktor 3.6.1, and
+what is said of `CachingHeaders` is also held by the tests that run this page's examples.
 
 - **Spring's `ShallowEtagHeaderFilter`** makes the ETag from a hash of the finished body and
   answers `304` when it matches. The table is built every time, so it saves sending, not building.

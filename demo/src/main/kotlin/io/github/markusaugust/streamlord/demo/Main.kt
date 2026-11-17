@@ -312,12 +312,12 @@ public fun Application.live() {
          * The caching page, run. The table is one text/html answer with an ETag, built the way
          * the page shows it, so a press the browser already holds the answer to costs a 304 and
          * no build. The log beside it is a stream, the other kind of answer, which no cache keeps.
-         * The visitor's id is in the table's path rather than in its signals, because the page
-         * sends none: the URL is the cache key.
+         * The visitor's id is in the table's path; the page and the sort are the only signals the
+         * table is sent, so each page in each sort is a URL of its own, the browser's cache key.
          */
         get("/orders/log") {
             val signals = call.readSignalsOr(OrdersSignals())
-            call.respondDatastar(orderLog(ledgers.open(signals.visitor), signals.wire, signals.visitor))
+            call.respondDatastar(orderLog(ledgers.open(signals.visitor), signals.wire))
         }
 
         // Only the log makes a ledger: an id the service does not hold is told so, and makes none.
@@ -328,11 +328,9 @@ public fun Application.live() {
                 call.respondElements(elements { forgotten() })
                 return@get
             }
-            val page =
-                call.request.queryParameters["page"]
-                    ?.toIntOrNull()
-                    ?.coerceIn(1, ORDER_PAGES) ?: 1
-            val sort = sortOf(call.readSignalsOr(TableSignals()).sort)
+            val signals = call.readSignalsOr(TableSignals())
+            val page = signals.page.toIntOrNull()?.coerceIn(1, ORDER_PAGES) ?: 1
+            val sort = sortOf(signals.sort)
             val answer =
                 ledger.answer(page, sort, asked(call.request.uri, call.request.headers[HttpHeaders.IfNoneMatch])) { etag ->
                     // A header Ktor cannot parse, "a b" or a tag with ;q= after it, is no match.

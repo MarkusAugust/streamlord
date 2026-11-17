@@ -66,7 +66,7 @@ class SignalsTest {
 
     @Test
     fun `the caching table reads its signals`() {
-        assertEquals(TableSignals(sort = "who"), SIGNALS.decode("""{"sort":"who"}"""))
+        assertEquals(TableSignals(page = "2", sort = "who"), SIGNALS.decode("""{"page":"2","sort":"who"}"""))
     }
 
     @Test
