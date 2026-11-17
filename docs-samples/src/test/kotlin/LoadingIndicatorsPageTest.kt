@@ -28,8 +28,13 @@ class LoadingIndicatorsPageTest {
     }
 
     @Test
-    fun `the widget with its counter is the same in every tab`() {
+    fun `the widget that sends for its buttons is the same in every tab`() {
         assertSame(fromDsl { ordersWidget() }, ordersWidgetHtml, templates[2])
+    }
+
+    @Test
+    fun `the live view and its command are the same in every tab`() {
+        assertSame(fromDsl { ordersView() }, ordersViewHtml, templates[4])
     }
 
     @Test
