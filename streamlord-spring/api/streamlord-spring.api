@@ -111,3 +111,10 @@ public final class io/github/markusaugust/streamlord/spring/WebFluxIncomingReque
 	public fun queryParameter (Ljava/lang/String;)Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/spring/test/MockMvcStreamsKt {
+	public static final fun datastar-9VgGkz4 (Lorg/springframework/test/web/servlet/assertj/MockMvcTester;Lorg/springframework/http/HttpMethod;Ljava/lang/String;Ljava/lang/String;J)Lorg/springframework/test/web/servlet/assertj/MvcTestResult;
+	public static synthetic fun datastar-9VgGkz4$default (Lorg/springframework/test/web/servlet/assertj/MockMvcTester;Lorg/springframework/http/HttpMethod;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lorg/springframework/test/web/servlet/assertj/MvcTestResult;
+	public static final fun datastarRequestFactory-HG0u8IE (Lorg/springframework/test/web/servlet/MockMvc;J)Lorg/springframework/http/client/ClientHttpRequestFactory;
+	public static synthetic fun datastarRequestFactory-HG0u8IE$default (Lorg/springframework/test/web/servlet/MockMvc;JILjava/lang/Object;)Lorg/springframework/http/client/ClientHttpRequestFactory;
+}
+

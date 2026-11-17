@@ -6,6 +6,16 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ## [Unreleased]
 
+### SDK
+
+- streamlord-spring: two test helpers in `io.github.markusaugust.streamlord.spring.test` read a
+  whole stream through MockMvc, a `suspend` controller's too. `MockMvcTester.datastar(method, uri,
+  signals)` sends the request as Datastar's client does, and `mockMvc.datastarRequestFactory()`
+  gives `RestTestClient.bindToServer(...)` the same reading. An answer still open after
+  `asyncTimeout`, ten seconds by default, is stopped and fails. `datastar` replaces the helper the
+  testing page gave to copy. See
+  [Testing](https://streamlord-docs.netlify.app/testing/#through-the-controller-with-mockmvctester).
+
 ## [0.23.0] - 2026-11-16
 
 This release lets a Kotlin value be written into an HTML string where it stands. Mark it with `+`
