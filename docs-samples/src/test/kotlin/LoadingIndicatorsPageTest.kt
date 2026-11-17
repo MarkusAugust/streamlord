@@ -17,34 +17,40 @@ class LoadingIndicatorsPageTest {
             .map { it.groupValues[1] }
             .toList()
 
+    // The Template tabs in page order: 0 the widget, 1 the table (with the engine's own tags, so
+    // compared by eye), 2 export, 3 the indicator before data-init, 4 the search form, 5 the command.
     @Test
-    fun `the button and its message are the same in every tab`() {
-        assertSame(fromDsl { nextPage() }, nextPageHtml, templates[0])
+    fun `the widget is the same in every tab`() {
+        assertSame(fromDsl { ordersWidget() }, ordersWidgetHtml, templates[0])
+    }
+
+    @Test
+    fun `the table is the same from the DSL and the string`() {
+        for (page in listOf(1, 3)) {
+            val consumer = createHTML(prettyPrint = false)
+            consumer.ordersTable(page)
+            assertEquals(markup(ordersTableHtml(page)), markup(consumer.finalize()), "page $page")
+        }
+    }
+
+    @Test
+    fun `the export button is the same in every tab`() {
+        assertSame(fromDsl { exportOrders() }, exportOrdersHtml, templates[2])
     }
 
     @Test
     fun `the indicator before data-init is the same in every tab`() {
-        assertSame(fromDsl { ordersOnArrival() }, ordersOnArrivalHtml, templates[1])
+        assertSame(fromDsl { ordersOnArrival() }, ordersOnArrivalHtml, templates[3])
     }
 
     @Test
-    fun `the widget that sends for its buttons is the same in every tab`() {
-        assertSame(fromDsl { ordersWidget() }, ordersWidgetHtml, templates[2])
+    fun `the search form is the same in every tab`() {
+        assertSame(fromDsl { ordersSearch() }, ordersSearchHtml, templates[4])
     }
 
     @Test
-    fun `the live view and its command are the same in every tab`() {
-        assertSame(fromDsl { ordersView() }, ordersViewHtml, templates[4])
-    }
-
-    @Test
-    fun `the answer is the same in every tab`() {
-        for (page in listOf(1, 3)) {
-            val consumer = createHTML(prettyPrint = false)
-            consumer.ordersPage(page)
-            assertEquals(markup(ordersPageHtml(page)), markup(consumer.finalize()), "page $page")
-        }
-        assertEquals(markup(ordersPageHtml(1)), markup(templates[3]), "the Template tab shows page 1")
+    fun `the live view command is the same in every tab`() {
+        assertSame(fromDsl { tallyCommand() }, tallyCommandHtml, templates[5])
     }
 
     private fun assertSame(

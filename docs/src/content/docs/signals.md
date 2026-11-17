@@ -408,8 +408,9 @@ fun ordersSignalsHtml(page: Int): String =
 <div hidden data-page="{{ page }}" data-init="$orders.page = Number(el.dataset.page); el.remove()"></div>
 ```
 
-An answer for a table, `div { id = "orders-table"; ...; ordersSignals(page) }`, then carries the
-page it shows. The element removes itself once it has run, so the next answer's copy is new to the
+An answer for a table, `div { id = "orders-table"; ...; ordersSignals(page) }` inside
+`elements { }`, then carries the page it shows; from a `FlowContent` function, call it as
+`consumer.ordersSignals(page)`. The element removes itself once it has run, so the next answer's copy is new to the
 page and runs again, every time. `hidden` keeps it out of the layout for the moment it is there. An
 answer that has no element to put it in can patch a container of its own,
 `<div id="orders-signals" hidden></div>`, rendered with the page: an answer whose element finds no
