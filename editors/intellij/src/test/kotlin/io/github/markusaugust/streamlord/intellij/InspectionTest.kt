@@ -36,6 +36,16 @@ class InspectionTest : StreamlordTestCase() {
         myFixture.checkResult("import io.github.markusaugust.streamlord.html.increment\n\nfun f() { dataOnClick(increment(\"count\")) }")
     }
 
+    fun `test a comma at the top of an Expr action is a warning`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "import io.github.markusaugust.streamlord.html.*\nfun f() = elements { div { dataOnClick(postExpr(\"'/a', {retry: 'never'}\")) } }",
+        )
+        val highlights = myFixture.doHighlighting().filter { it.description?.contains("comma operator") == true }
+        assertEquals(listOf(","), highlights.map { it.text })
+        assertEquals(HighlightSeverity.WARNING, highlights.single().severity)
+    }
+
     fun `test html strings in kotlin get the attribute checks with offsets`() {
         myFixture.configureByText(
             "View.kt",

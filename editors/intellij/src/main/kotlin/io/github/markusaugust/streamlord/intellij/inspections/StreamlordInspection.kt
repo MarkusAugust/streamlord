@@ -203,6 +203,7 @@ class DatastarExpressionInspection : StreamlordInspection(EXPRESSION_CODES)
 private val EXPRESSION_CODES =
     setOf(
         "expression-syntax",
+        "one-value",
         "empty-expression",
         "unknown-action",
         "action-space",
