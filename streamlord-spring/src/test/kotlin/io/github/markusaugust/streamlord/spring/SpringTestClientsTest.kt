@@ -76,10 +76,12 @@ class SpringTestClientsTest {
         gate.complete(Unit)
     }
 
+    // This test's gate, not whichever is current in half a second.
     private fun openGateSoon() {
+        val mine = gate
         thread {
             Thread.sleep(500)
-            gate.complete(Unit)
+            mine.complete(Unit)
         }
     }
 
@@ -119,6 +121,23 @@ class SpringTestClientsTest {
     fun `RestTestClient bound to MockMvc answers 200 with no body`() {
         openGateSoon()
         assertEquals(null, RestTestClient.bindTo(mockMvc()).build().body("/feed"))
+    }
+
+    // What Boot's injected client is bound to without a running server and without a MockMvc bean.
+    @Test
+    fun `RestTestClient bound to an application context answers 200 with no body`() {
+        val context =
+            org.springframework.web.context.support.AnnotationConfigWebApplicationContext().apply {
+                register(Mvc::class.java)
+                servletContext =
+                    org.springframework.mock.web
+                        .MockServletContext()
+                refresh()
+            }
+        context.use {
+            openGateSoon()
+            assertEquals(null, RestTestClient.bindToApplicationContext(it).build().body("/feed"))
+        }
     }
 
     @Test

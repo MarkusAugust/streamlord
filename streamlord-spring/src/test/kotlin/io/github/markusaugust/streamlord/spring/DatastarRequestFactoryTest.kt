@@ -104,6 +104,27 @@ class DatastarRequestFactoryTest {
             return result
         }
 
+        @GetMapping("/interruptsCaller")
+        fun interruptsCaller(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
+            // MockMvc runs the controller on the test's thread.
+            Thread.currentThread().interrupt()
+            return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
+        }
+
+        @GetMapping("/after")
+        fun after(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody =
+            response.datastarStream(streamlord, request) {
+                patchSignals("heads" to 1)
+                throw io.github.markusaugust.streamlord.core
+                    .SignalsTooLargeException(2, 1)
+            }
+
         @GetMapping("/raw")
         fun raw(
             request: HttpServletRequest,
@@ -291,7 +312,30 @@ class DatastarRequestFactoryTest {
     }
 
     @Test
-    fun `an interrupt is not lost when the cycle has already ended`() {
+    fun `an interrupt during the request is not lost when its cycle has already ended`() {
+        try {
+            assertFailsWith<InterruptedException> { client.get().uri("/interruptsCaller").exchange() }
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun `a failure after the first event answers 500 with the exception, as Spring's binding does`() {
+        val result =
+            client
+                .get()
+                .uri("/after")
+                .exchange()
+                .returnResult(String::class.java)
+
+        assertEquals(500, result.status.value())
+        assertTrue("SignalsTooLargeException" in result.responseBody.orEmpty(), result.responseBody)
+    }
+
+    @Test
+    fun `a thread interrupted before the call sends nothing`() {
         Thread.currentThread().interrupt()
         try {
             assertFailsWith<InterruptedException> { client.get().uri("/eager").exchange() }

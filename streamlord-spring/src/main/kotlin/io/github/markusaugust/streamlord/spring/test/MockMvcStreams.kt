@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.RequestBuilder
 import org.springframework.test.web.servlet.assertj.MockMvcTester
 import org.springframework.test.web.servlet.assertj.MvcTestResult
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+import org.springframework.web.util.UriComponentsBuilder
 import java.net.URI
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -61,9 +62,11 @@ public fun MockMvc.datastarRequestFactory(asyncTimeout: Duration = 10.seconds): 
 }
 
 /**
- * Sends a request the way Datastar's client does, with the `Datastar-Request` header and [signals]
- * where it puts them, the query for GET and DELETE and a JSON body otherwise, and returns once
- * every async cycle has run. The status, the headers and the events are all in the result:
+ * Sends a request the way Datastar's client does, with its headers, `Accept`, `Datastar-Request`
+ * and `Content-Type: application/json` for a method with a body, and [signals] where it puts them:
+ * in the query string for GET and DELETE, in place of a `datastar` parameter [uri] already has,
+ * and in the body otherwise. Returns once every async cycle has run, with the status, the headers
+ * and the events in the result:
  *
  * ```kotlin
  * val events = datastarEvents(mvc.datastar(HttpMethod.GET, "/feed", """{"heads":13}""").response.contentAsString)
@@ -81,13 +84,26 @@ public fun MockMvcTester.datastar(
     val deadline = Deadline(asyncTimeout)
     throwIfInterrupted()
     val name = method.name()
+    val inQuery = signals != null && ClientRequest.bodyless(name)
+    val target =
+        if (inQuery) {
+            UriComponentsBuilder
+                .fromUriString(uri)
+                .replaceQueryParam(DatastarProtocol.SIGNALS_PARAMETER)
+                .build()
+                .toUriString()
+        } else {
+            uri
+        }
     var result =
         method(method)
-            .uri(uri)
+            .uri(target)
             .apply {
                 for ((header, value) in ClientRequest.headers(name)) header(header, value)
-                if (signals != null) {
-                    if (ClientRequest.bodyless(name)) param(DatastarProtocol.SIGNALS_PARAMETER, signals) else content(signals)
+                when {
+                    signals == null -> Unit
+                    inQuery -> queryParam(DatastarProtocol.SIGNALS_PARAMETER, signals)
+                    else -> content(signals)
                 }
             }.asyncExchange()
     while (result.unresolvedException == null && result.request.isAsyncStarted) {

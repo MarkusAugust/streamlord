@@ -100,7 +100,8 @@ class MockMvcTesterTest {
                     "Accept" to request.getHeader("Accept"),
                     "Datastar-Request" to request.getHeader("Datastar-Request"),
                     "Content-Type" to request.getHeader("Content-Type"),
-                    "datastar" to request.getParameter("datastar"),
+                    "datastar" to request.getParameterValues("datastar")?.single(),
+                    "query" to request.queryString,
                     "body" to request.inputStream.readAllBytes().decodeToString(),
                 )
             return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
@@ -134,6 +135,16 @@ class MockMvcTesterTest {
                 test.interrupt()
             }
             return result
+        }
+
+        @GetMapping("/interruptsCaller")
+        fun interruptsCaller(
+            request: HttpServletRequest,
+            response: HttpServletResponse,
+        ): StreamingResponseBody {
+            // MockMvc runs the controller on the test's thread.
+            Thread.currentThread().interrupt()
+            return response.datastarStream(streamlord, request) { patchSignals("heads" to 1) }
         }
 
         @GetMapping("/raw")
@@ -230,10 +241,16 @@ class MockMvcTesterTest {
                 "Datastar-Request" to "true",
                 "Content-Type" to null,
                 "datastar" to """{"heads":13}""",
+                "query" to "datastar=%7B%22heads%22:13%7D",
                 "body" to "",
             ),
             seen,
         )
+
+        // In the query string, where the client puts them, in place of one the URI already has.
+        mvc.datastar(HttpMethod.GET, "/echo?x=1&datastar=%7B%7D", """{"heads":13}""")
+        assertEquals("""{"heads":13}""", seen["datastar"])
+        assertEquals("x=1&datastar=%7B%22heads%22:13%7D", seen["query"])
 
         mvc.datastar(HttpMethod.POST, "/echo", """{"heads":13}""")
         assertEquals("application/json", seen["Content-Type"])
@@ -298,7 +315,17 @@ class MockMvcTesterTest {
     }
 
     @Test
-    fun `an interrupt is not lost when the cycle has already ended`() {
+    fun `an interrupt during the request is not lost when its cycle has already ended`() {
+        try {
+            assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/interruptsCaller") }
+            assertTrue(Thread.currentThread().isInterrupted)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
+    @Test
+    fun `a thread interrupted before the call sends nothing`() {
         Thread.currentThread().interrupt()
         try {
             assertFailsWith<InterruptedException> { mvc.datastar(HttpMethod.GET, "/eager") }

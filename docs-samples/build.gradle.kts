@@ -163,8 +163,9 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import io.github.markusaugust.streamlord.analysis.*\n$imports\n\n" +
                     "class $name {\n$body\n}\n"
             /*
-             * A Spring test class: a controller of its own and MockMvcTester, RestTestClient or WebTestClient. Not
-             * `test`, whose Ktor client imports bring a `get` and a `post` of their own.
+             * A Spring test class: a controller of its own and MockMvcTester, RestTestClient or
+             * WebTestClient. Not `test`, whose Ktor client imports bring a `get` and a `post` of
+             * their own.
              */
             "spring-test" ->
                 "import kotlin.test.*\n" +

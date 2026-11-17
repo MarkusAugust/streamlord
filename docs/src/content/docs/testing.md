@@ -232,17 +232,29 @@ already use it, and the same test runs against a real server when only the bindi
 stream that stays open needs a real server and `LiveDatastarStream`, as
 [A stream that stays open](#a-stream-that-stays-open) shows.
 
-Each example below is the body of a test class, with these imports:
+Each WebMVC example below is the body of a test class, with these imports. Both helpers are
+Kotlin functions; Java cannot call them.
 
-```kotlin sample=none
+```kotlin sample=declarations
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
-import io.github.markusaugust.streamlord.core.port.driving.patchElements
-import io.github.markusaugust.streamlord.core.port.driving.patchSignals
 import io.github.markusaugust.streamlord.spring.*
 import io.github.markusaugust.streamlord.spring.test.datastar
 import io.github.markusaugust.streamlord.spring.test.datastarRequestFactory
 import io.github.markusaugust.streamlord.test.datastarEvents
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.springframework.http.HttpMethod
+import org.springframework.http.MediaType
+import org.springframework.mock.web.MockHttpServletResponse
+import org.springframework.test.web.servlet.assertj.MockMvcTester
+import org.springframework.test.web.servlet.client.RestTestClient
+import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 ```
 
 No server at all. `MockHttpServletResponse` from `spring-test` takes the `StreamingResponseBody`
@@ -349,8 +361,9 @@ sees it:
   connection. `assertThat(result).hasFailed()` passes, and `result.response` throws, events and
   all.
 
-`datastar` gives the whole answer, every cycle together, ten seconds. A stream still open then is
-stopped, and the test fails with an `IllegalStateException` that names `LiveDatastarStream`. Pass
+`datastar` waits up to ten seconds for the whole answer, all its cycles together. A stream still
+open then is stopped, and the test fails with an `IllegalStateException` that names
+`LiveDatastarStream`. Pass
 `asyncTimeout = 30.seconds` for longer; `datastarRequestFactory(asyncTimeout = ...)` takes the
 same. Give a test a stream that ends.
 
@@ -450,12 +463,13 @@ fun `the count goes up by one`() {
 }
 ```
 
-Spring's own bindings to MockMvc, `RestTestClient.bindTo(mockMvc)` and `bindToController(...)`,
-run none of the cycles: a stream answers `200` with what it had written by then, most often
-nothing, and a test that checks only the status passes though the stream never ran. On Spring Boot, the `RestTestClient` that
-`@AutoConfigureRestTestClient` injects next to MockMvc is that binding. Build your own from the
-injected MockMvc instead, `RestTestClient.bindToServer(mockMvc.datastarRequestFactory()).build()`;
-it prints as `MockMvcTester` does, so
+Spring's own bindings to MockMvc, `RestTestClient.bindTo(mockMvc)`, `bindToController(...)` and
+`bindToApplicationContext(...)`, run none of the cycles: a stream answers `200` with what it had
+written by then, most often nothing, and a test that checks only the status passes though the
+stream never ran. On Spring Boot, the `RestTestClient` that `@AutoConfigureRestTestClient` injects
+without a running server is one of these. Build your own from the injected MockMvc instead,
+`RestTestClient.bindToServer(mockMvc.datastarRequestFactory()).build()`; it prints as
+`MockMvcTester` does, so
 [A header set while the stream runs](#a-header-set-while-the-stream-runs) holds for it too.
 `MockMvcWebTestClient.bindTo(mockMvc)` runs one cycle, so it misses the stream of a `suspend`
 controller.
