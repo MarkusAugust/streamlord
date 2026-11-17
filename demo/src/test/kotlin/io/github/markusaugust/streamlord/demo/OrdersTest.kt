@@ -53,10 +53,10 @@ class OrdersTest {
 
             assertEquals(
                 listOf(
-                    Triple("page 2", "200", "built #1"),
-                    Triple("page 2", "304", "not built"),
+                    Triple("page 2, order", "200", "built #1"),
+                    Triple("page 2, order", "304", "not built"),
                     Triple("data", "changed", "now version 2"),
-                    Triple("page 2", "200", "built #2"),
+                    Triple("page 2, order", "200", "built #2"),
                 ),
                 ledgers
                     .open(visitor)
@@ -64,6 +64,41 @@ class OrdersTest {
                     .map { Triple(it.what, it.status, it.result) },
             )
         }
+
+    @Test
+    fun `the sort rides in the signals, each sort is its own answer, and the tag does not name it`() =
+        testApplication {
+            application { live() }
+            val visitor = ledgers.open(null).visitor
+            val byWho = "datastar=" + java.net.URLEncoder.encode("""{"sort":"who"}""", Charsets.UTF_8)
+
+            val plain = client.get("/orders/$visitor?page=1")
+            val sorted = client.get("/orders/$visitor?page=1&$byWho")
+            val nonsense = client.get("/orders/$visitor?page=1&datastar=" + java.net.URLEncoder.encode("""{"sort":"x"}""", Charsets.UTF_8))
+
+            assertEquals(
+                plain.headers[HttpHeaders.ETag],
+                sorted.headers[HttpHeaders.ETag],
+                "the browser keeps each URL apart, so the tag needs no sort",
+            )
+            assertNotEquals(plain.bodyAsText(), sorted.bodyAsText())
+            assertTrue(sorted.bodyAsText().contains("by who"), sorted.bodyAsText())
+            assertEquals(plain.bodyAsText(), nonsense.bodyAsText(), "a sort the table does not have is the default one")
+            assertEquals(
+                "page 1, who",
+                ledgers
+                    .open(visitor)
+                    .log.value.lines[1]
+                    .what,
+            )
+        }
+
+    @Test
+    fun `sorting orders the whole table before it is cut into pages`() {
+        val byWho = (1..ORDER_PAGES).flatMap { orderRows(it, 1, "who") }.map { it.who }
+        assertEquals(byWho.sorted(), byWho)
+        assertEquals(9, byWho.toSet().size)
+    }
 
     @Test
     fun `the same tag is always the same bytes`() =
@@ -126,9 +161,9 @@ class OrdersTest {
     @Test
     fun `the same line twice is still two lines`() {
         val ledger = Ledgers().open(null)
-        repeat(20) { ledger.answer(1, "GET /orders") { 304 } }
+        repeat(20) { ledger.answer(1, "order", "GET /orders") { 304 } }
         val before = ledger.log.value
-        ledger.answer(1, "GET /orders") { 304 }
+        ledger.answer(1, "order", "GET /orders") { 304 }
         assertNotEquals(before, ledger.log.value, "an equal state would not reach the log stream")
     }
 
@@ -166,7 +201,7 @@ class OrdersTest {
     fun `past capacity, a ledger nobody pressed a page with goes before one in use`() {
         val ledgers = Ledgers(capacity = 2)
         val used = ledgers.open(null)
-        used.answer(1, "GET /orders") { 200 }
+        used.answer(1, "order", "GET /orders") { 200 }
         val idle = ledgers.open(null)
         ledgers.open(null)
         assertSame(used, ledgers.find(used.visitor), "the one in use stays, though it is the least recent")
@@ -205,9 +240,9 @@ class OrdersTest {
             val log = launch { orderLog(ledger, wire = true).toList(events) }
 
             delay(1.seconds)
-            ledger.answer(1, "GET /orders/x?page=1") { 200 }
+            ledger.answer(1, "order", "GET /orders/x?page=1") { 200 }
             delay(119.seconds)
-            ledger.answer(1, "GET /orders/x?page=1\nIf-None-Match: \"v1-1\"") { 304 }
+            ledger.answer(1, "order", "GET /orders/x?page=1\nIf-None-Match: \"v1-1\"") { 304 }
             delay(1.minutes)
             assertTrue(log.isActive, "a line keeps it open")
             delay(61.seconds)

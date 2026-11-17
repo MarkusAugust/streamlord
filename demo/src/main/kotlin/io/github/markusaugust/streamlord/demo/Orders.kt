@@ -38,6 +38,21 @@ private const val LOG_LINES = 12
 /** The Cache-Control of every table, the 200 and the 304 alike; the wire panel shows it as sent. */
 public const val ORDERS_CACHE_CONTROL: String = "private, no-cache"
 
+/** The ways the table sorts, the first of them the default. */
+public val ORDER_SORTS: List<String> = listOf("order", "who", "what")
+
+/**
+ * The one signal the table reads: how it is sorted. The page sends it and no other, so each sort of
+ * each page is a URL of its own in the browser's cache, as the caching page shows.
+ */
+@Serializable
+public data class TableSignals(
+    val sort: String = ORDER_SORTS.first(),
+)
+
+/** A sort the table has, or the default for anything else. */
+public fun sortOf(sort: String): String = sort.takeIf { it in ORDER_SORTS } ?: ORDER_SORTS.first()
+
 /** The signals the log reads back: the id it handed out, so a reopened log keeps it, and whether the page shows the wire. */
 @Serializable
 public data class OrdersSignals(
@@ -102,19 +117,22 @@ public class Ledger internal constructor(
     @Synchronized
     public fun answer(
         page: Int,
+        sort: String,
         asked: String,
         check: (etag: String) -> Int,
     ): Answer {
+        // No sort in the tag: the browser keeps each sort's URL apart, so the tag only has to change with the data.
         val etag = "\"v$version-$page\""
+        val what = "page $page, $sort"
         val status = check(etag)
         if (status != 200) {
-            say("page $page", "$status", "not built", "0 B", asked, response(status, etag, null))
+            say(what, "$status", "not built", "0 B", asked, response(status, etag, null))
             return Answer(etag, status, null)
         }
         builds++
-        val html = elements { orderTable(OrderPage(page, version, rows(page, version))) }
+        val html = elements { orderTable(OrderPage(page, sort, version, orderRows(page, version, sort))) }
         val bytes = html.toByteArray().size
-        say("page $page", "200", "built #$builds", "$bytes B", asked, response(200, etag, bytes))
+        say(what, "200", "built #$builds", "$bytes B", asked, response(200, etag, bytes))
         return Answer(etag, 200, html)
     }
 
@@ -261,6 +279,7 @@ private fun state(text: String): DatastarEvent =
 /** One page of orders, as built. */
 public data class OrderPage(
     val page: Int,
+    val sort: String,
     val version: Int,
     val rows: List<OrderRow>,
 )
@@ -268,21 +287,32 @@ public data class OrderPage(
 public data class OrderRow(
     val id: Int,
     val who: String,
-    val what: String,
+    val count: Int,
+    val item: String,
 )
 
 private val WHO = listOf("Gorvek", "Hask", "Brann", "Sarn", "Ulla", "Tor", "Mirk", "Ashe", "Kell")
-private val WHAT = listOf("swords", "shields", "torches", "ropes", "axes", "cloaks", "lamps", "spears", "horns")
+private val ITEM = listOf("swords", "shields", "torches", "ropes", "axes", "cloaks", "lamps", "spears", "horns")
 
-// The version is in the counts, so a change shows in the rows and not only in the caption.
-private fun rows(
+/**
+ * A page of the table, sorted as a whole and then cut, as a real one is. The version is in the
+ * counts, so a change shows in the rows and not only in the caption.
+ */
+internal fun orderRows(
     page: Int,
     version: Int,
-): List<OrderRow> =
-    (0 until 3).map {
-        val n = (page - 1) * 3 + it
-        OrderRow(1040 + n, WHO[n], "${n % 4 + version} ${WHAT[n]}")
-    }
+    sort: String,
+): List<OrderRow> {
+    // From two up, so the plural always fits.
+    val all = WHO.indices.map { OrderRow(1040 + it, WHO[it], it % 4 + version + 1, ITEM[it]) }
+    val sorted =
+        when (sort) {
+            "who" -> all.sortedBy { it.who }
+            "what" -> all.sortedBy { it.item }
+            else -> all
+        }
+    return sorted.drop((page - 1) * 3).take(3)
+}
 
 /**
  * The table. Its id is what Datastar patches it in by. It holds nothing the tag does not name, so
@@ -293,7 +323,7 @@ public fun TagConsumer<*>.orderTable(page: OrderPage) {
     div("lt-table-scroll") {
         id = "orders"
         table("lt-table") {
-            caption { +"Page ${page.page} of $ORDER_PAGES, version ${page.version}" }
+            caption { +"Page ${page.page} of $ORDER_PAGES, by ${page.sort}, version ${page.version}" }
             thead {
                 tr {
                     th { +"Order" }
@@ -306,7 +336,7 @@ public fun TagConsumer<*>.orderTable(page: OrderPage) {
                     tr {
                         td { +"#${row.id}" }
                         td { +row.who }
-                        td { +row.what }
+                        td { +"${row.count} ${row.item}" }
                     }
                 }
             }

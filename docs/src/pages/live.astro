@@ -15,6 +15,16 @@ import "../styles/global.css"
 // out, and whether the page shows the wire panel, and nothing else of the store. $logOpen is
 // Datastar's indicator on the panel: true while the log's request runs, false however it ends.
 const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include: /^(visitor|wire)$/}})`
+
+// A page of the caching panel's table. The page is in the path and the sort in the one signal the
+// table is sent, so each page in each sort is a URL of its own, which is what the browser keys on.
+const TABLE = (page: string) =>
+  `@get('${SERVICE}/orders/' + $visitor + '?page=' + ${page}, {filterSignals: {include: /^sort$/}})`
+const SORTS = [
+  { value: "order", label: "Order" },
+  { value: "who", label: "Who" },
+  { value: "what", label: "What" },
+]
 ---
 
 <!doctype html>
@@ -357,7 +367,7 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
         <section
           class="panel panel--wide"
           id="caching"
-          data-signals="{visitor: ''}"
+          data-signals="{visitor: '', page: 1, sort: 'order'}"
           data-indicator:log-open
           data-on-intersect={LOG}
           data-on:click={LOG}
@@ -366,7 +376,9 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
           <p class="panel__note">
             Every page is one <code>text/html</code> answer with an ETag, not a stream. Press a
             page you have seen, and the browser asks with <code>If-None-Match</code>: the server
-            answers 304 and builds nothing. Change the data, and the next press is a 200 again.
+            answers 304 and builds nothing. The sort rides in a signal, so each page in each sort
+            is a URL of its own: a new one is a 200, one you have seen a 304. Change the data, and
+            the next press is a 200 again.
             How it is done is on <a class="lt-link" href="/caching/">Caching</a>.
           </p>
 
@@ -380,7 +392,7 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
                       data-variant="secondary"
                       type="button"
                       data-attr:disabled="!$visitor"
-                      data-on:click={`@get('${SERVICE}/orders/' + $visitor + '?page=${n}', {filterSignals: {exclude: /.*/}})`}
+                      data-on:click={`$page = ${n}; ${TABLE("$page")}`}
                     >Page {n}</button>
                   ))}
                   <button
@@ -390,6 +402,25 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
                     data-attr:disabled="!$visitor"
                     data-on:click={`@post('${SERVICE}/orders/' + $visitor + '/change')`}
                   >Change the data</button>
+                </div>
+                <div class="orders__sort">
+                  <span class="orders__sort-label" aria-hidden="true">Sort by</span>
+                  <fieldset class="lt-toggle-group">
+                    <legend class="lt-sr-only">Sort by</legend>
+                    {SORTS.map((sort) => (
+                      <label class="lt-toggle-group__option">
+                        <input
+                          type="radio"
+                          name="orders-sort"
+                          value={sort.value}
+                          data-bind:sort
+                          data-attr:disabled="!$visitor"
+                          data-on:change={TABLE("$page")}
+                        />
+                        {sort.label}
+                      </label>
+                    ))}
+                  </fieldset>
                 </div>
                 <div id="orders" class="orders__table">
                   <p class="lt-paragraph" data-size="small">
@@ -686,9 +717,20 @@ const LOG = `$logOpen || @get('${SERVICE}/orders/log', {filterSignals: {include:
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: var(--lt-font-size-xs);
       }
+      /* The label beside the group, and the group only as wide as its three options. */
+      .orders__sort {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--lt-spacing-3);
+      }
+      .orders__sort-label {
+        font-size: var(--lt-font-size-xs);
+        color: var(--lt-color-neutral-text-subtle);
+      }
       .orders__side :global(.orders__lines li) {
         display: grid;
-        grid-template-columns: 7ch 8ch minmax(0, 1fr) auto;
+        grid-template-columns: 14ch 8ch minmax(0, 1fr) auto;
         gap: var(--lt-spacing-2);
       }
       .orders__side :global(.orders__status) {

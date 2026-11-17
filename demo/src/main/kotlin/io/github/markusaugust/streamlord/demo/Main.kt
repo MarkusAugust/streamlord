@@ -127,6 +127,7 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<JudgeSignals>() to JudgeSignals.serializer(),
                 typeOf<AssertSignals>() to AssertSignals.serializer(),
                 typeOf<OrdersSignals>() to OrdersSignals.serializer(),
+                typeOf<TableSignals>() to TableSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -331,8 +332,9 @@ public fun Application.live() {
                 call.request.queryParameters["page"]
                     ?.toIntOrNull()
                     ?.coerceIn(1, ORDER_PAGES) ?: 1
+            val sort = sortOf(call.readSignalsOr(TableSignals()).sort)
             val answer =
-                ledger.answer(page, asked(call.request.uri, call.request.headers[HttpHeaders.IfNoneMatch])) { etag ->
+                ledger.answer(page, sort, asked(call.request.uri, call.request.headers[HttpHeaders.IfNoneMatch])) { etag ->
                     // A header Ktor cannot parse, "a b" or a tag with ;q= after it, is no match.
                     runCatching { EntityTagVersion(etag).check(call.request.headers).statusCode.value }
                         .getOrDefault(HttpStatusCode.OK.value)
