@@ -9,9 +9,13 @@ class ValueTypesTest {
     private val cases = sharedCases("value-types.json")
 
     @Test
-    fun `every case asks one of the three`() {
+    fun `every case asks one of the four`() {
         for (c in cases) {
-            val asked = listOf("type" to "fact", "collection" to "markup", "content" to "tag").filter { (q, _) -> q in c }
+            val asked =
+                listOf("type" to "fact", "resolved" to "fact", "collection" to "markup", "content" to "tag").filter { (q, _) ->
+                    q in
+                        c
+                }
             assertEquals(1, asked.size, c.string("name"))
             assertTrue(asked.single().second in c, "${c.string("name")} gives no ${asked.single().second}")
         }
@@ -20,9 +24,21 @@ class ValueTypesTest {
     @Test
     fun `the fact of a declared type`() {
         for (c in cases.filter { it.string("type") != null }) {
-            val fact = c.string("fact")?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }
-            assertEquals(fact, ValueFact.ofTypeName(c.string("type")!!), c.string("name"))
+            assertEquals(c.string("fact")?.let(::factNamed), ValueFact.ofTypeName(c.string("type")!!), c.string("name"))
         }
+    }
+
+    @Test
+    fun `the fact of what an editor answers`() {
+        eachCase(cases.filter { "resolved" in it }, { it.string("name")!! }) { c ->
+            val answer = ValueAnswer(c.string("resolved"), c.boolean("constant") == true, c.string("read")?.let(::factNamed))
+            assertEquals(c.string("fact")?.let(::factNamed), answer.fact())
+        }
+    }
+
+    @Test
+    fun `every fact has an answer that gives it`() {
+        for (fact in ValueFact.entries) assertEquals(fact, answerGiving(fact).fact())
     }
 
     // A collection of markup joined in element text is markup, and says nothing; any other is text written as it is.

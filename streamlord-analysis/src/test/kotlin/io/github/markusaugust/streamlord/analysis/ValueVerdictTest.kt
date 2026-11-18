@@ -33,11 +33,11 @@ class ValueVerdictTest {
         val issue =
             analyzer
                 .analyzeKotlin(
-                    Source(src, SourceLanguage.KOTLIN, valueFact = {
+                    Source(src, SourceLanguage.KOTLIN, valueAnswer = {
                         s,
                         e,
                         ->
-                        fact.takeIf { src.substring(s, e).trim() == "\${v}" }
+                        fact?.let(::answerGiving).takeIf { src.substring(s, e).trim() == "\${v}" }
                     }),
                 ).singleOrNull()
         return when {
@@ -51,7 +51,7 @@ class ValueVerdictTest {
     @Test
     fun `the verdict on a fact in each position`() {
         for (c in sharedCases("value-verdict.json")) {
-            val fact = c.string("fact")?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }
+            val fact = c.string("fact")?.let(::factNamed)
             val verdicts = c["verdicts"] as JsonObject
             assertEquals(Position.entries.map { it.name }.toSet(), verdicts.keys, c.string("name"))
             for ((position, markup) in places) {

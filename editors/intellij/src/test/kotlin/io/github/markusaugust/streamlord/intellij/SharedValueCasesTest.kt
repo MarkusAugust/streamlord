@@ -13,8 +13,8 @@ import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
 
 /**
- * The cases of `cases/value-questions.json`, which the analysis reads with the facts each case gives: here the Kotlin
- * plugin's own types answer, and the editor must show the same.
+ * The cases of `cases/value-questions.json`, which the analysis reads with the answers each case gives: here the Kotlin
+ * plugin's own types answer, and the editor must answer and show the same.
  */
 class SharedValueCasesTest : StreamlordTestCase() {
     private val cases = File(System.getProperty("streamlord.repo"), "editors/vscode/test/fixtures/cases/value-questions.json")
@@ -22,9 +22,13 @@ class SharedValueCasesTest : StreamlordTestCase() {
     override fun setUp() {
         super.setUp()
         myFixture.enableInspections(KotlinInterpolationInspection())
+        myFixture.addFileToProject(
+            "stubs/Language.kt",
+            "package org.intellij.lang.annotations\nannotation class Language(val value: String)",
+        )
     }
 
-    fun `test the types answer each case as its facts do`() {
+    fun `test the types answer each case as it answers`() {
         val failed = ArrayList<String>()
         val analysis = StreamlordAnalysis.getInstance(project)
         for ((k, case) in JsonParser
@@ -41,12 +45,19 @@ class SharedValueCasesTest : StreamlordTestCase() {
                     .map { "${it.text} ${severity(it.severity)}" }
             val wanted = (case["issues"] as JsonArray).strings()
             if (shown != wanted) failed += "${case.string("name")}: expected $wanted but was $shown"
-            // Each value by the fact the types gave it, in the order the analysis asks: a wrong type is told from a range that met nothing.
+            // Each value by what the types answered, in the order the analysis asks: a wrong type is told from a range that met nothing.
             val asked = analysis.analyzer.valueQuestions(analysis.source(file.text, SourceLanguage.KOTLIN, file))
-            val facts = background { analysis.valueFacts(file) }
-            val given = asked.map { "${file.text.substring(it.start, it.end)}=${facts[TextRange(it.start, it.end)]?.name?.lowercase()}" }
-            val facted = (case["questions"] as JsonArray).objects().map { "${it.string("text")}=${it.string("fact")}" }
-            if (given != facted) failed += "${case.string("name")}: expected the facts $facted but they were $given"
+            val answers = background { analysis.valueAnswers(file) }
+            val given =
+                asked.map {
+                    val answer = answers[TextRange(it.start, it.end)]
+                    listOf(file.text.substring(it.start, it.end), answer?.type, answer?.constant == true, answer?.read?.name?.lowercase())
+                }
+            val answered =
+                (case["questions"] as JsonArray).objects().map {
+                    listOf(it.string("text"), it.string("type"), it.boolean("constant") == true, it.string("read"))
+                }
+            if (given != answered) failed += "${case.string("name")}: expected the answers $answered but they were $given"
         }
         assertTrue(failed.joinToString("\n"), failed.isEmpty())
     }

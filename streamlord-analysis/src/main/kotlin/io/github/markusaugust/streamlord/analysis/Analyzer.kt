@@ -32,7 +32,8 @@ internal class Reading(
     val constants: Set<String> get() = source.constants
 
     /**
-     * What the editor knows of the value at [start] to [end], one handed to `interpolate(...)` when [argument]. Asked
+     * What the editor knows of the value at [start] to [end]. Of one handed to `interpolate(...)`, an [argument], only that
+     * its class is somebody else's is taken: the rest is read from the text. Asked
      * whatever the answers to the others are, so a reading with no answers notes every value one with answers asks about.
      */
     fun fact(
@@ -41,14 +42,17 @@ internal class Reading(
         argument: Boolean = false,
     ): ValueFact? {
         asked?.getOrPut(start to end) { ValueQuestion(start, end, argument) }
-        return source.valueFact?.invoke(start, end)
+        return source.valueAnswer
+            ?.invoke(start, end)
+            ?.fact()
+            ?.takeIf { !argument || it == ValueFact.OTHER }
     }
 }
 
 /**
  * A value of a Kotlin file the analysis asks the editor about, by where it stands: a template of an HTML string, an
  * operand of a `+` chain, or a value marked with `+` in `interpolate { }`. Of an [argument] of `interpolate(...)` the
- * analysis reads the rest from the text, and wants only [ValueFact.OTHER] where the class is somebody else's.
+ * analysis takes only that its class is somebody else's, [ValueFact.OTHER], and reads the rest from the text.
  */
 public class ValueQuestion internal constructor(
     public val start: Int,
@@ -57,15 +61,16 @@ public class ValueQuestion internal constructor(
 )
 
 /**
- * What the editor knows of a value: its type, or that it is a constant or markup. [NULLABLE] is a
+ * What is known of a value, from the text or from what an editor answered ([ValueAnswer.fact]): its type, or that it
+ * is a constant or markup. [NULLABLE] is a
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
  * a `UInt`, `ULong`, `UShort` or `UByte`: digits, but not a `kotlin.Number`, so `interpolate`
  * refuses it where only a number is let in. [TRUSTED] is core's `Trusted`, judged as [MARKUP] is,
  * which `interpolate` writes as it stands wherever it lands, so a rewrite escapes nothing of it.
  * [OTHER] is a class the editor resolved whose name the
- * text alone would take for Streamlord's markup, an `Html` or a `Trusted` of another package
- * ([ofResolvedClass]): nothing about it is known, and no reading of the text makes it markup. Only
+ * text alone would take for Streamlord's markup, an `Html` or a `Trusted` of another package:
+ * nothing about it is known, and no reading of the text makes it markup. Only
  * IntelliJ gives it; VS Code has no resolver.
  */
 public enum class ValueFact {
@@ -267,14 +272,14 @@ public class Analyzer(
     public fun analyzeKotlinSites(source: Source): List<SiteIssues> = kotlinSites(Reading(source, settle(source)))
 
     /**
-     * The values of the Kotlin file [source] the analysis asks the editor about through [Source.valueFact], in the order it
-     * asks: an editor works out a fact for each of these and for nothing else, and so answers by the very range it is asked by.
+     * The values of the Kotlin file [source] the analysis asks the editor about through [Source.valueAnswer], in the order it
+     * asks: an editor answers for each of these and for nothing else, by the very range it is asked by.
      * The file is read as [analyzeKotlinSites] reads it, and costs as much. A call [Source.foreign] names is read as that
      * reading reads it, so its string may ask what it did not ask as Streamlord's.
      */
     public fun valueQuestions(source: Source): List<ValueQuestion> {
         val asked = LinkedHashMap<Pair<Int, Int>, ValueQuestion>()
-        kotlinSites(Reading(source.copy(valueFact = null), settle(source), asked))
+        kotlinSites(Reading(source.copy(valueAnswer = null), settle(source), asked))
         return asked.values.toList()
     }
 

@@ -194,13 +194,13 @@ internal class ValueMatrix(
 
         /** The issues of [text], the cell's source or what a fix left of it, with the editor's fact given for the value wherever it stands. */
         fun analyse(text: String): List<Issue> {
-            val fact = (value.string("kotlinFact") ?: value.string("fact"))?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }
+            val fact = (value.string("kotlinFact") ?: value.string("fact"))?.let(::factNamed)
             return analyzer.analyzeKotlin(
-                Source(text, SourceLanguage.KOTLIN, valueFact = {
+                Source(text, SourceLanguage.KOTLIN, valueAnswer = {
                     start,
                     end,
                     ->
-                    fact.takeIf { text.substring(start, end).trim() in WRITTEN }
+                    fact?.let(::answerGiving).takeIf { text.substring(start, end).trim() in WRITTEN }
                 }),
             )
         }

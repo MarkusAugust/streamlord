@@ -6,18 +6,24 @@ import kotlin.test.assertEquals
 
 /**
  * The cases of `cases/value-questions.json`: the analysis says which values it wants to know about, is
- * answered with the case's facts, and shows what the case expects. The IntelliJ plugin reads the same
+ * answered as the case answers, and shows what the case expects. The IntelliJ plugin reads the same
  * cases with real types.
  */
 class ValueQuestionsTest {
     private val analyzer = Analyzer()
+
+    private fun shown(source: Source): List<String> =
+        analyzer
+            .analyzeKotlin(source)
+            .sortedBy { it.start }
+            .map { "${source.text.substring(it.start, it.end)} ${it.severity.name.lowercase()}" }
 
     @Test
     fun `asks about each value of a case in order, and judges it by the answer`() {
         eachCase(sharedCases("value-questions.json"), { it.string("name")!! }) { c ->
             val src = c.string("kotlin")!!
             val wanted = (c["questions"] as JsonArray).objects()
-            val source = Source(src, SourceLanguage.KOTLIN)
+            val source = Source(src, SourceLanguage.KOTLIN, modules = Modules.known(core = true, htmlDsl = true))
             val asked = analyzer.valueQuestions(source)
             assertEquals(
                 wanted.map { it.string("text") to (it.boolean("argument") == true) },
@@ -26,15 +32,19 @@ class ValueQuestionsTest {
             )
             val answers =
                 asked.zip(wanted).associate { (q, w) ->
-                    (q.start to q.end) to w.string("fact")?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) }
+                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant") == true, w.string("read")?.let(::factNamed))
                 }
-            val answered = source.copy(valueFact = { start, end -> answers[start to end] })
-            val shown =
-                analyzer
-                    .analyzeKotlin(answered)
-                    .sortedBy { it.start }
-                    .map { "${src.substring(it.start, it.end)} ${it.severity.name.lowercase()}" }
-            assertEquals((c["issues"] as JsonArray).strings(), shown)
+            assertEquals(
+                wanted.map { "${it.string("text")}=${it.string("fact")}" },
+                asked.zip(wanted).map { (q, w) ->
+                    "${w.string("text")}=${answers.getValue(q.start to q.end).fact()?.name?.lowercase()?.replace('_', '-')}"
+                },
+                "the facts",
+            )
+            val answered = source.copy(valueAnswer = { start, end -> answers[start to end] })
+            assertEquals((c["issues"] as JsonArray).strings(), shown(answered), "answered")
+            // As an editor that resolves nothing reads the file, VS Code among them.
+            assertEquals((c["unanswered"] as JsonArray).strings(), shown(source), "unanswered")
             // What is asked hangs on no answer, so an editor that has answered is asked nothing it was not told of.
             assertEquals(
                 asked.map { it.start to it.end },

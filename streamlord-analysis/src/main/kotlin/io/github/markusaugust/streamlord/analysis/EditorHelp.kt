@@ -27,11 +27,35 @@ public data class Source(
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
     val foreign: (name: String, nameStart: Int) -> Boolean = NOT_FOREIGN,
     /** What the editor knows of a Kotlin value the analysis asks about, from types the text cannot show: see [Analyzer.valueQuestions]. */
-    val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
+    val valueAnswer: ((start: Int, end: Int) -> ValueAnswer?)? = null,
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,
     /** The engine that writes into the file before the browser reads it, where its rules are its own, as the editor knows it from the file's type. */
     val engine: TemplateEngine? = null,
+)
+
+/**
+ * What an editor that resolves types answers of a value the analysis asks about, which the analysis then judges: plain
+ * values, so nothing of the editor's own outlives the answer, and two answers that say the same are equal.
+ */
+public data class ValueAnswer(
+    /**
+     * The type the value resolves to, or null where it resolves to no class. Written as Kotlin writes it, with every class
+     * by its qualified name and no space: its type arguments in `<>` with a comma between them, without `in` or `out`, `*`
+     * for one that is no class, and a `?` where it may be null, as a value of a type of Java's may:
+     * `kotlin.Int?`, `kotlin.collections.Map<kotlin.String,com.acme.Row>`.
+     */
+    public val type: String?,
+    /**
+     * Whether what the value writes is fixed where it is written: the compiler folds it into a constant, or it is an
+     * entry of an enum that does not override `toString`, or the `name` of an entry.
+     */
+    public val constant: Boolean = false,
+    /**
+     * What the type alone cannot say and the editor read of how the value is written: [ValueFact.MARKUP], or
+     * [ValueFact.CONSTANT] for a value the author wrote. An editor that reads no structure leaves it null.
+     */
+    public val read: ValueFact? = null,
 )
 
 /** No call is somebody else's: what a host that resolves nothing says. */

@@ -4,11 +4,12 @@ import io.github.markusaugust.streamlord.core.client.regex
 
 /*
  * What a Kotlin type or string literal, as the source writes it, tells of a value joined into
- * HTML. The analysis reads declarations with these, and the IntelliJ plugin reads with them the
- * types and literals it finds, so each rule is written once. The cases are in cases/value-types.json.
+ * HTML. The analysis reads declarations with these, and the types an editor resolved, and the IntelliJ
+ * plugin reads with them the literals it finds, so each rule is written once. The cases are in cases/value-types.json.
  */
 
 /** Streamlord's own markup types, bare as an import gives them or written out in full. */
+private const val CORE_PACKAGE = "io.github.markusaugust.streamlord.core.domain."
 private const val CORE_DOMAIN = """(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?"""
 
 private val NUMBER_TYPE = regex("""(?:kotlin\.)?(?:Int|Long|Short|Byte|Double|Float)""")
@@ -23,14 +24,31 @@ private val STRING_TYPE = regex("""(?:kotlin\.)?(?:String|CharSequence)""")
 private val HTML_TYPE = regex("${CORE_DOMAIN}Html")
 private val TRUSTED_TYPE = regex("${CORE_DOMAIN}Trusted")
 
+/** The collections and arrays the analysis knows, by qualified name: Kotlin's, by its own names and by Java's that they stand for. */
+private val COLLECTIONS: Set<String> =
+    (
+        listOf(
+            "List",
+            "Set",
+            "Map",
+            "Collection",
+            "Iterable",
+        ).flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
+            listOf("ArrayList", "HashSet", "LinkedHashSet", "HashMap", "LinkedHashMap", "ArrayDeque").flatMap {
+                listOf("kotlin.collections.$it", "java.util.$it")
+            } +
+            listOf("TreeMap", "TreeSet", "LinkedList").map { "java.util.$it" } +
+            listOf("", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char").map { "kotlin.${it}Array" } +
+            "kotlin.sequences.Sequence"
+    ).toSet()
+
 /**
- * A collection of markup: what `joinToString` over Html or Trusted is called on. An Html that may be
- * null is markup as it is on its own, and `out` changes nothing a read sees.
+ * A collection of markup: what `joinToString` over Html or Trusted is called on, one of [COLLECTIONS] by its name alone
+ * or in full. An Html that may be null is markup as it is on its own, and `out` changes nothing a read sees.
  */
 private val MARKUP_COLLECTION =
     regex(
-        """(?:kotlin\.collections\.|kotlin\.sequences\.)?""" +
-            """(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)""" +
+        "(?:" + COLLECTIONS.flatMap { listOf(it.replace(".", """\."""), it.substringAfterLast('.')) }.distinct().joinToString("|") + ")" +
             """<$CORE_DOMAIN(?:Html\??|Trusted)>\??""",
     )
 
@@ -50,19 +68,39 @@ private val TEXT_TAG_START = tagStart("__kt__")
 private val MARGIN_START = regex("""^\s*\|""")
 
 /**
- * The fact of a class the editor resolved, by its qualified name, where the text alone would read
- * its name as Streamlord's markup: [ValueFact.OTHER] for an `Html` or a `Trusted` that is not
- * Streamlord's, of another package or of none. Null for any other class, Streamlord's own among them.
+ * The fact of what an editor answered of a value. A constant is one whatever its type, and markup by its type is markup
+ * whatever the editor read of it; what it read is else taken over a type that says less.
  */
-public fun ValueFact.Companion.ofResolvedClass(qualified: String): ValueFact? {
+public fun ValueAnswer.fact(): ValueFact? {
+    if (constant) return ValueFact.CONSTANT
+    val typed = type?.let(::resolvedFact)
+    return if (typed.isMarkup()) typed else read ?: typed
+}
+
+/**
+ * The fact of a type an editor resolved, [ValueAnswer.type]: as [ofTypeName] reads one a declaration writes, a collection
+ * by its class, and [ValueFact.OTHER] for an `Html` or a `Trusted` that is not Streamlord's, of another package or of
+ * none, which the text alone would take for Streamlord's.
+ */
+private fun resolvedFact(type: String): ValueFact? {
+    val qualified = type.substringBefore('<').removeSuffix("?")
     val name = qualified.substringAfterLast('.')
-    return if ((name == "Html" || name == "Trusted") &&
-        qualified != "io.github.markusaugust.streamlord.core.domain.$name"
-    ) {
-        ValueFact.OTHER
-    } else {
-        null
+    return when {
+        name == "Html" || name == "Trusted" -> if (qualified == CORE_PACKAGE + name) ValueFact.ofTypeName(type) else ValueFact.OTHER
+
+        // A class of no package is none of Kotlin's, whatever it is named.
+        '.' !in qualified -> null
+
+        qualified in COLLECTIONS -> if (resolvedMarkupElements(type)) ValueFact.MARKUP else ValueFact.COLLECTION
+
+        else -> ValueFact.ofTypeName(type)
     }
+}
+
+/** Whether the one type argument of a resolved [type] is Streamlord's Html, which may be null, or its Trusted, by its name in full. */
+private fun resolvedMarkupElements(type: String): Boolean {
+    val element = type.substringAfter('<', "").substringBeforeLast('>')
+    return element == CORE_PACKAGE + "Trusted" || element.removeSuffix("?") == CORE_PACKAGE + "Html"
 }
 
 /**
