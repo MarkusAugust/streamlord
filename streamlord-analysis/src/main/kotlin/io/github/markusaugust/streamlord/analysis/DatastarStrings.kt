@@ -7,6 +7,12 @@ package io.github.markusaugust.streamlord.analysis
 public sealed interface DatastarString {
     public val string: KotlinString
 
+    /** The parts of each Datastar attribute's name in the string. */
+    public val parts: List<NameToken> get() = emptyList()
+
+    /** The tokens of what Datastar reads in the string: an expression's, or a signal's name. */
+    public val tokens: List<Token> get() = emptyList()
+
     /**
      * An expression: handed to a DSL call, set as an option of a backend action, or assigned to
      * `attributes["data-..."]`. Its [prose] is the text of its string literals, which is all a spell checker reads of it.
@@ -16,7 +22,7 @@ public sealed interface DatastarString {
         tokens: () -> List<Token>,
         prose: () -> List<IntRange>,
     ) : DatastarString {
-        public val tokens: List<Token> by lazy(tokens)
+        override val tokens: List<Token> by lazy(tokens)
         public val prose: List<IntRange> by lazy(prose)
     }
 
@@ -25,34 +31,32 @@ public sealed interface DatastarString {
         override val string: KotlinString,
         tokens: () -> List<Token>,
     ) : DatastarString {
-        public val tokens: List<Token> by lazy(tokens)
+        override val tokens: List<Token> by lazy(tokens)
     }
 
     /** The key of `attributes["data-..."]`, one of the catalog's attributes. */
     public class AttributeName internal constructor(
         override val string: KotlinString,
-        public val parts: List<NameToken>,
+        override val parts: List<NameToken>,
     ) : DatastarString
 
-    /**
-     * Markup: the [parts] of each Datastar attribute's name in it and the [tokens] of their values. It is HTML [byLook]
-     * when it reads as HTML wherever it stands, and otherwise only because the call it is handed to takes markup.
-     */
+    /** Markup, with the names of its Datastar attributes and what Datastar reads in their values. */
     public class Html internal constructor(
         override val string: KotlinString,
-        public val byLook: Boolean,
         painted: () -> Pair<List<NameToken>, List<Token>>,
     ) : DatastarString {
         private val painted by lazy(painted)
-        public val parts: List<NameToken> get() = painted.first
-        public val tokens: List<Token> get() = painted.second
+        override val parts: List<NameToken> get() = painted.first
+        override val tokens: List<Token> get() = painted.second
     }
 }
 
 /**
- * Every string of the Kotlin file [source] that is Datastar's, in the order of the file: what colouring, spelling and
- * injection ask of a string. kotlinx.html's `attributes["data-..."]` is Datastar whatever the file can call; a DSL
- * call's string is where the file can call the DSL and [Source.foreign] does not say the call is somebody else's.
+ * Every string of the Kotlin file [source] that is Datastar's, in the order of the file: what colouring and spelling
+ * ask of a string. kotlinx.html's `attributes["data-..."]` is Datastar whatever the file can call, and so is a string
+ * that reads as HTML; the markup handed to a call is where the file has core. A DSL call's string is where the file can
+ * call the DSL and [Source.foreign] does not say the call is somebody else's; an option such as `payloadExpr` is taken by
+ * its name, wherever the file can call the DSL.
  */
 public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
     val src = source.text
@@ -63,7 +67,7 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
     val modules = settle(source)
     val dsl = modules.dsl
     val html = htmlStrings(src, lex)
-    val names = if (dsl) signalNameStrings(source).mapTo(HashSet()) { it.start } else emptySet()
+    val names = signalNameStrings(source).mapTo(HashSet()) { it.start }
     val options = if (dsl) expressionOptions(src, lex).mapTo(HashSet()) { it.value.start } else emptySet()
     // A string is the expression of the call it is an argument of, so of the innermost: `dataOnClick(getExpr("..."))` is getExpr's.
     val handed = HashMap<Int, CallSite>()
@@ -82,7 +86,7 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
                     val kind = datastarName(value.name, source.prefix)?.spec?.valueKind
                     when {
                         !value.whole -> null
-                        kind == ValueKind.EXPRESSION -> expression(src, s)
+                        kind in EXPRESSIONS -> expression(src, s)
                         kind == ValueKind.SIGNAL -> DatastarString.SignalName(s) { signalNameTokens(s, 0, s.text) }
                         else -> null
                     }
@@ -99,7 +103,7 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
 
                 // Markup that only a call makes HTML is that where the file has core: elsewhere the call is somebody else's.
                 html(s) && (modules.core || isHtmlString(src, s)) -> {
-                    DatastarString.Html(s, isHtmlString(src, s)) { paintedHtml(src, s, source.prefix) }
+                    DatastarString.Html(s) { paintedHtml(src, s, source.prefix) }
                 }
 
                 s.start in names -> {
@@ -118,15 +122,44 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
     return out
 }
 
-/** A Datastar attribute's name: its [spec] in the catalog and the [parts] to colour, as offsets into the name. */
+/** The kinds of value Datastar reads as an expression: a filter is an object literal. */
+private val EXPRESSIONS = setOf(ValueKind.EXPRESSION, ValueKind.FILTER)
+
+/** A Datastar attribute's name: the [parts] to colour, as offsets into the name, and how its value is read. */
 public class DatastarName internal constructor(
-    public val spec: AttributeSpec,
+    internal val spec: AttributeSpec,
     public val parts: List<NameToken>,
-)
+) {
+    /**
+     * The tokens of [value] as it is written in markup, as offsets into it: an expression's, or a signal's name. What
+     * [opaque] covers is a template engine's, and gets none.
+     */
+    public fun valueTokens(
+        value: String,
+        opaque: List<IntRange> = emptyList(),
+    ): List<Token> =
+        when {
+            value.isBlank() -> emptyList()
+            spec.valueKind in EXPRESSIONS -> tokenizeExpression(value, opaque)
+            spec.valueKind == ValueKind.SIGNAL -> tokenizeSignalName(value)
+            else -> emptyList()
+        }
+
+    /**
+     * What a spell checker reads of [value], as offsets into it: the strings of an expression, and nothing of a signal's
+     * name. Null where the value is not Datastar's to read, a duration or the like, and is spelled as any attribute's.
+     */
+    public fun prose(value: String): List<IntRange>? =
+        when (spec.valueKind) {
+            in EXPRESSIONS -> proseRanges(value)
+            ValueKind.SIGNAL -> emptyList()
+            else -> null
+        }
+}
 
 /**
- * [name] as one of the catalog's attributes, under [prefix] or under either bundle's, `data-` and `data-star-`: the VS Code
- * grammar knows both, and so do colours and spelling. Null for the page's own `data-color`, or a typo.
+ * [name] as one of the catalog's attributes, under [prefix] or under either bundle's, `data-` and `data-star-`, which are
+ * Datastar's whatever the project's own is. Null for the page's own `data-color`, or a typo.
  */
 public fun Analyzer.datastarName(
     name: String,
@@ -156,7 +189,7 @@ private fun expressionTokens(
     val range = s.toSource(from, to)
     val start = range.first
     val end = if (to >= s.text.length) s.contentEnd else range.last + 1
-    if (end <= start || src.substring(start, end).isBlank()) return emptyList()
+    if (end <= start || s.text.substring(minOf(from, s.text.length), minOf(to, s.text.length)).isBlank()) return emptyList()
     // A Kotlin template is Kotlin's: its own highlighter colours it, and Datastar never sees it as written.
     val templates = s.interpolations.filter { it.start < end && start < it.end }.map { (it.start - start) until (it.end - start) }
     return tokenizeExpression(src.substring(start, end), templates).map { Token(start + it.start, start + it.end, it.kind) }
@@ -191,9 +224,8 @@ private fun Analyzer.paintedHtml(
             }
             val value = attr.value?.takeIf { it.isNotBlank() } ?: continue
             when (name.spec.valueKind) {
-                ValueKind.EXPRESSION, ValueKind.FILTER -> {
-                    tokens +=
-                        expressionTokens(src, s, attr.valueStart, attr.valueStart + value.length)
+                in EXPRESSIONS -> {
+                    tokens += expressionTokens(src, s, attr.valueStart, attr.valueStart + value.length)
                 }
 
                 ValueKind.SIGNAL -> {
@@ -214,12 +246,12 @@ private fun prose(
 ): List<IntRange> {
     val out = ArrayList<IntRange>()
     for (range in proseRanges(src.substring(s.contentStart, s.contentEnd))) {
-        // `\n` ends a word, as a new line does.
         var start = s.contentStart + range.first
         val end = s.contentStart + range.last + 1
         var i = start
         val pieces = ArrayList<IntRange>()
         while (i < end) {
+            // `\n` ends a word, as a new line does: Kotlin's escape, or in a raw string JavaScript's own.
             if (src[i] != '\\') {
                 i++
                 continue

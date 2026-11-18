@@ -12,9 +12,7 @@ import com.intellij.spellchecker.tokenizer.SpellcheckingStrategy
 import com.intellij.spellchecker.tokenizer.TokenConsumer
 import com.intellij.spellchecker.tokenizer.Tokenizer
 import io.github.markusaugust.streamlord.analysis.DatastarString
-import io.github.markusaugust.streamlord.analysis.ValueKind
 import io.github.markusaugust.streamlord.analysis.datastarName
-import io.github.markusaugust.streamlord.analysis.proseRanges
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtFile
@@ -51,13 +49,12 @@ class DatastarSpellcheckingStrategy :
         }
         PsiTreeUtil.getParentOfType(element, XmlAttributeValue::class.java, false)?.let { value ->
             if (!value.containingFile.language.isKindOf(HTMLLanguage.INSTANCE)) return null
-            val kind = valueKind(value) ?: return null
-            return value.takeIf { kind == ValueKind.EXPRESSION || kind == ValueKind.SIGNAL }
+            return value.takeIf { prose(it) != null }
         }
         return null
     }
 
-    /** The strings of an expression, read from its text as written: a signal's name has none. */
+    /** The strings of an expression: a signal's name has none. */
     private object Prose : Tokenizer<PsiElement>() {
         override fun tokenize(
             element: PsiElement,
@@ -72,23 +69,18 @@ class DatastarSpellcheckingStrategy :
                     found?.prose.orEmpty().map { TextRange(it.first - base, it.last + 1 - base) }
                 } else {
                     val value = element as? XmlAttributeValue ?: return
-                    if (valueKind(value) != ValueKind.EXPRESSION) return
-                    val content = value.valueTextRange.shiftLeft(value.textRange.startOffset)
-                    proseRanges(
-                        content.substring(text),
-                    ).map { TextRange(content.startOffset + it.first, content.startOffset + it.last + 1) }
+                    val start = value.valueTextRange.startOffset - value.textRange.startOffset
+                    prose(value).orEmpty().map { TextRange(start + it.first, start + it.last + 1) }
                 }
             for (range in ranges) consumer.consumeToken(element, text, false, 0, range, PlainTextSplitter.getInstance())
         }
     }
 }
 
-/** What the value of the attribute [value] belongs to is to Datastar, or null when the attribute is not Datastar's. */
-private fun valueKind(value: XmlAttributeValue): ValueKind? {
+/** What is spelled of [value] where its attribute is Datastar's and reads the value itself, as offsets into the value's text. */
+private fun prose(value: XmlAttributeValue): List<IntRange>? {
     val attribute = value.parent as? XmlAttribute ?: return null
     val analysis = StreamlordAnalysis.getInstance(value.project)
-    return analysis.analyzer
-        .datastarName(attribute.name, analysis.prefix)
-        ?.spec
-        ?.valueKind
+    val written = value.valueTextRange.shiftLeft(value.textRange.startOffset).substring(value.text)
+    return analysis.analyzer.datastarName(attribute.name, analysis.prefix)?.prose(written)
 }

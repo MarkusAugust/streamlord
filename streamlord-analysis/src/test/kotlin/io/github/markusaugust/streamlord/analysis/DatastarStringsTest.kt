@@ -3,7 +3,6 @@ package io.github.markusaugust.streamlord.analysis
 import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /** [datastarStrings] as an editor uses it: which Kotlin strings are Datastar's, and what is coloured and spelled in each. */
 class DatastarStringsTest {
@@ -21,17 +20,19 @@ class DatastarStringsTest {
     private fun roles(
         text: String,
         found: List<DatastarString> = strings(text),
-    ) = found.map { it::class.simpleName to text.substring(it.string.contentStart, it.string.contentEnd) }
+    ) = found.map {
+        when (it) {
+            is DatastarString.Expression -> "Expression"
+            is DatastarString.SignalName -> "SignalName"
+            is DatastarString.AttributeName -> "AttributeName"
+            is DatastarString.Html -> "Html"
+        } to text.substring(it.string.contentStart, it.string.contentEnd)
+    }
 
     private fun tokens(
         text: String,
         s: DatastarString,
-    ) = when (s) {
-        is DatastarString.Expression -> s.tokens
-        is DatastarString.SignalName -> s.tokens
-        is DatastarString.Html -> s.tokens
-        is DatastarString.AttributeName -> emptyList()
-    }.map { text.substring(it.start, it.end) to it.kind }
+    ) = s.tokens.map { text.substring(it.start, it.end) to it.kind }
 
     private fun parts(
         text: String,
@@ -99,34 +100,41 @@ class DatastarStringsTest {
                 "__" to NamePart.MODIFIER_SIGIL,
                 "once" to NamePart.MODIFIER,
             ),
-            parts(text, (found[0] as DatastarString.AttributeName).parts),
+            parts(text, found[0].parts),
         )
     }
 
     @Test
     fun `gives an html string its datastar names and values, each escape counted`() {
         val text = "fun g(n: Int) = \"<p class=\\\"a\\\" data-text=\\\"${d}n + \\${d}m\\\" data-bind=\\\"q\\\"></p>\""
-        val found = strings(text).single() as DatastarString.Html
+        val found = strings(text).single()
         assertEquals(
             listOf("data-" to NamePart.PREFIX, "text" to NamePart.PLUGIN, "data-" to NamePart.PREFIX, "bind" to NamePart.PLUGIN),
             parts(text, found.parts),
         )
         assertEquals(listOf("+" to TokenKind.OPERATOR, "${d}m" to TokenKind.SIGNAL, "q" to TokenKind.SIGNAL), tokens(text, found))
-        assertTrue(found.byLook)
     }
 
     @Test
-    fun `tells markup that only a call makes html from markup that looks it`() {
-        val text = "suspend fun f(call: Call) { call.patchElements(\"hello\") }"
-        val found = strings(text).single() as DatastarString.Html
-        assertEquals(false, found.byLook)
+    fun `takes the markup handed to a call for html where the file has core, and a string that reads as html anywhere`() {
+        val text = "suspend fun f(call: Call) { call.patchElements(\"hello\"); val p = \"<p id=\\\"a\\\">x</p>\" }"
+        assertEquals(listOf("Html" to "hello", "Html" to "<p id=\\\"a\\\">x</p>"), roles(text))
+        assertEquals(listOf("Html" to "<p id=\\\"a\\\">x</p>"), roles(text, strings(text, modules = Modules.known(false, false))))
+    }
+
+    @Test
+    fun `reads a string that looks like html as html though a dsl call is handed it`() {
+        val text = "fun T.f() { dataOnClick(\"<p data-text=\\\"1\\\"></p>\") }"
+        assertEquals(listOf("Html" to "<p data-text=\\\"1\\\"></p>"), roles(text))
     }
 
     @Test
     fun `gives an expression its prose, without a kotlin template and broken at an escape`() {
         val text = "fun f(who: String) { dataText(\"${d}m + 'Hello $d{who} and\\nmore' + \\\"x y\\\"\") }"
         val found = strings(text).single() as DatastarString.Expression
-        assertEquals(listOf("'Hello ", " and", "more'", "\"x y"), found.prose.map { text.substring(it.first, it.last + 1) })
+        // The words a speller is left with: a quote is no letter, the template and the escape are gone.
+        val words = found.prose.flatMap { Regex("[A-Za-z]+").findAll(text.substring(it.first, it.last + 1)).map { m -> m.value } }
+        assertEquals(listOf("Hello", "and", "more", "x", "y"), words)
     }
 
     @Test
@@ -152,5 +160,60 @@ class DatastarStringsTest {
     fun `gives nothing for the value of an attribute that takes no expression, and nothing for half a concatenation`() {
         val text = "fun T.f(x: String) { attributes[\"data-ignore\"] = \"a\"; attributes[\"data-text\"] = \"1 + \" + x }"
         assertEquals(listOf("AttributeName" to "data-ignore", "AttributeName" to "data-text"), roles(text))
+    }
+
+    @Test
+    fun `reads a filter as the expression it is, and each value of a map option`() {
+        val text =
+            "fun T.f() { attributes[\"data-persist\"] = \"{include: /^a/}\"; " +
+                "dataOnClick(get(\"/x\") { headerExprs = mapOf(\"X-Id\" to \"$d{'$d'}id\") }) }"
+        val found = strings(text)
+        assertEquals(
+            listOf("AttributeName" to "data-persist", "Expression" to "{include: /^a/}", "Expression" to "$d{'$d'}id"),
+            roles(text, found),
+        )
+        assertEquals(listOf("include" to TokenKind.OPTION_KEY, "/^a/" to TokenKind.REGEX), tokens(text, found[1]))
+    }
+
+    @Test
+    fun `counts the dollars before a multi-dollar literal into it, and reads a raw string trimmed as written`() {
+        val text = "fun T.f(id: Int) { dataShow($d$d\"${d}open && $d$d{id} > 0\"); dataText(\"\"\"$d{'$d'}n + 'Hey'\"\"\".trimIndent()) }"
+        val found = strings(text)
+        assertEquals(text.indexOf("$d$d\""), found[0].string.start)
+        assertEquals(
+            listOf("${d}open" to TokenKind.SIGNAL, "&&" to TokenKind.OPERATOR, ">" to TokenKind.OPERATOR, "0" to TokenKind.NUMBER),
+            tokens(text, found[0]),
+        )
+        val prose = (found[1] as DatastarString.Expression).prose.joinToString(" ") { text.substring(it.first, it.last + 1) }
+        assertEquals(listOf("Hey"), Regex("[A-Za-z]+").findAll(prose).map { it.value }.toList())
+    }
+
+    @Test
+    fun `gives no tokens for a signal's name with a kotlin template in it, nor for a blank expression`() {
+        val text = "fun T.f(i: Int) { dataBind(\"row${d}i\"); dataText(\" \\n\") }"
+        val found = strings(text)
+        assertEquals(listOf("SignalName", "Expression"), roles(text, found).map { it.first })
+        assertEquals(emptyList(), tokens(text, found[0]) + tokens(text, found[1]))
+    }
+
+    @Test
+    fun `reads an attribute's name under the prefix given and either bundle's, and its value by its kind`() {
+        val text = analyzer.datastarName("DATA-ON:click", "x-")!!
+        assertEquals(listOf(NamePart.PREFIX, NamePart.PLUGIN, NamePart.KEY_SEPARATOR, NamePart.KEY), text.parts.map { it.part })
+        assertEquals(null, analyzer.datastarName("data-color", "data-"))
+        assertEquals(null, analyzer.datastarName("x-nothing", "x-"))
+
+        val expression = analyzer.datastarName("x-text", "x-")!!
+        // The signal and the operator; what the engine writes gets no token.
+        assertEquals(listOf(0 to 6, 7 to 8), expression.valueTokens("${d}count + {{ x }}", listOf(9..15)).map { it.start to it.end })
+        assertEquals(listOf(9..12), expression.prose("${d}count + 'Hi'"))
+
+        val signal = analyzer.datastarName("data-bind", "data-")!!
+        assertEquals(listOf(TokenKind.SIGNAL), signal.valueTokens("name").map { it.kind })
+        assertEquals(emptyList(), signal.prose("name"))
+
+        val other = analyzer.datastarName("data-ignore", "data-")!!
+        assertEquals(emptyList(), other.valueTokens("anything"))
+        assertEquals(null, other.prose("anything"))
     }
 }

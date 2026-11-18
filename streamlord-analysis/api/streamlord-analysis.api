@@ -228,34 +228,45 @@ public final class io/github/markusaugust/streamlord/analysis/DatastarFrame {
 
 public final class io/github/markusaugust/streamlord/analysis/DatastarName {
 	public final fun getParts ()Ljava/util/List;
-	public final fun getSpec ()Lio/github/markusaugust/streamlord/analysis/AttributeSpec;
+	public final fun prose (Ljava/lang/String;)Ljava/util/List;
+	public final fun valueTokens (Ljava/lang/String;Ljava/util/List;)Ljava/util/List;
+	public static synthetic fun valueTokens$default (Lio/github/markusaugust/streamlord/analysis/DatastarName;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Ljava/util/List;
 }
 
 public abstract interface class io/github/markusaugust/streamlord/analysis/DatastarString {
+	public fun getParts ()Ljava/util/List;
 	public abstract fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public fun getTokens ()Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/DatastarString$AttributeName : io/github/markusaugust/streamlord/analysis/DatastarString {
-	public final fun getParts ()Ljava/util/List;
+	public fun getParts ()Ljava/util/List;
 	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public fun getTokens ()Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DatastarString$DefaultImpls {
+	public static fun getParts (Lio/github/markusaugust/streamlord/analysis/DatastarString;)Ljava/util/List;
+	public static fun getTokens (Lio/github/markusaugust/streamlord/analysis/DatastarString;)Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/DatastarString$Expression : io/github/markusaugust/streamlord/analysis/DatastarString {
+	public fun getParts ()Ljava/util/List;
 	public final fun getProse ()Ljava/util/List;
 	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
-	public final fun getTokens ()Ljava/util/List;
+	public fun getTokens ()Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/DatastarString$Html : io/github/markusaugust/streamlord/analysis/DatastarString {
-	public final fun getByLook ()Z
-	public final fun getParts ()Ljava/util/List;
+	public fun getParts ()Ljava/util/List;
 	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
-	public final fun getTokens ()Ljava/util/List;
+	public fun getTokens ()Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/DatastarString$SignalName : io/github/markusaugust/streamlord/analysis/DatastarString {
+	public fun getParts ()Ljava/util/List;
 	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
-	public final fun getTokens ()Ljava/util/List;
+	public fun getTokens ()Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/DatastarStringsKt {

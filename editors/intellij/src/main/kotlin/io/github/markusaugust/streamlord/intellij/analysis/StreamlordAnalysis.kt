@@ -186,25 +186,25 @@ class StreamlordAnalysis(
     /**
      * The strings of [file] that are Datastar's, by where each starts and where each ends: what colouring and spelling ask of a
      * string. Found once for each version of the file, of the settings and of the project's modules, as the calls are resolved.
+     * What the UI thread finds is kept apart: nothing is resolved there, so it must not answer for a highlighting pass.
      */
     private fun datastarStrings(file: KtFile): Pair<Map<Int, DatastarString>, Map<Int, DatastarString>> =
-        CachedValuesManager.getCachedValue(file) {
-            val src = file.text
-            // The calls of one name are found once, however many of them the analysis asks about.
-            val sites = HashMap<String, Map<Int, CallSite>>()
-            val foreign = { name: String, at: Int ->
-                val site = sites.getOrPut(name) { findCallSites(src, setOf(name), analyzer.lex(src)).associateBy { it.nameStart } }[at]
-                site != null && foreignAmong(file, listOf(site)).isNotEmpty()
-            }
-            val found = analyzer.datastarStrings(source(src, SourceLanguage.KOTLIN, file).copy(foreign = foreign))
-            CachedValueProvider.Result.create(
-                found.associateBy { it.string.start } to found.associateBy { it.string.end },
-                file,
-                settings.tracker,
-                ProjectRootManager.getInstance(project),
-                DumbService.getInstance(project).modificationTracker,
-            )
+        if (ApplicationManager.getApplication().isDispatchThread) {
+            CachedValuesManager.getCachedValue(file) { findDatastarStrings(file) }
+        } else {
+            CachedValuesManager.getCachedValue(file) { findDatastarStrings(file) }
         }
+
+    private fun findDatastarStrings(file: KtFile): CachedValueProvider.Result<Pair<Map<Int, DatastarString>, Map<Int, DatastarString>>> {
+        val found = analyzer.datastarStrings(source(file.text, SourceLanguage.KOTLIN, file).copy(foreign = foreignIn(file)))
+        return CachedValueProvider.Result.create(
+            found.associateBy { it.string.start } to found.associateBy { it.string.end },
+            file,
+            settings.tracker,
+            ProjectRootManager.getInstance(project),
+            DumbService.getInstance(project).modificationTracker,
+        )
+    }
 
     /** What [string] is to Datastar, or null when it is nothing to it. */
     fun datastarString(string: KtStringTemplateExpression): DatastarString? {
@@ -215,16 +215,25 @@ class StreamlordAnalysis(
         return byStart[range.startOffset] ?: byEnd[range.endOffset]?.takeIf { it.string.start < range.startOffset }
     }
 
+    /**
+     * Whether the call of a name, its name starting at an offset of [file], resolves to something other than Streamlord: what
+     * the analysis asks through [Source.foreign]. The calls of one name are found once, however many of them it asks about.
+     */
+    fun foreignIn(file: KtFile): (name: String, nameStart: Int) -> Boolean {
+        val src = file.text
+        val sites = ConcurrentHashMap<String, Map<Int, CallSite>>()
+        return { name, at ->
+            val site = sites.computeIfAbsent(name) { findCallSites(src, setOf(it), analyzer.lex(src)).associateBy { s -> s.nameStart } }[at]
+            site != null && foreignAmong(file, listOf(site)).isNotEmpty()
+        }
+    }
+
     /** Whether the call named [name], its name starting at [nameStart], resolves to something other than Streamlord. */
     fun isForeign(
         file: KtFile,
         name: String,
         nameStart: Int,
-    ): Boolean {
-        val src = file.text
-        val site = findCallSites(src, setOf(name), analyzer.lex(src)).firstOrNull { it.nameStart == nameStart } ?: return false
-        return foreignAmong(file, listOf(site)).isNotEmpty()
-    }
+    ): Boolean = foreignIn(file)(name, nameStart)
 
     /** Whether the call whose name starts at [nameStart] is made on a receiver: `tag.dataText(...)`. */
     private fun onReceiver(

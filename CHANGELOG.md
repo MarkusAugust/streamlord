@@ -47,7 +47,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - `datastarStrings(source)` gives every string of a Kotlin file that is Datastar's, for a tool that
   colours or spells: each is an expression, a signal's name, the key of `attributes["data-..."]` or
   HTML, with its tokens and, for an expression, the prose in it, at the offsets of the source.
-  `datastarName(name, prefix)` reads an attribute's name under the prefix given or either bundle's.
+  `datastarName(name, prefix)` reads an attribute's name under the prefix given or either bundle's,
+  and gives the tokens and the prose of a value written to it.
 - **Breaking:** `attributesIndexes`, `expressionOptions`, `signalNameStrings`, `htmlStringAt` and
   `tokenizeAttributeName` are no longer public, nor `AttributesIndex`, `ExpressionOption` and
   `SignalNameString`: `datastarStrings` and `datastarName` answer what they were put together for.
@@ -61,6 +62,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - IntelliJ colours the value of `attributes["data-bind"] = "name"` as the signal's name it is, and
   no longer spell checks a signal's name in a DSL call, `dataBind("usrnm")`, as it never did in an
   attribute.
+- IntelliJ reads a filter, `data-persist="{include: /^a/}"`, as the object literal it is wherever
+  it is written: coloured in `attributes[...]` too, and only its strings spell checked.
 - IntelliJ spell checks an expression written under the other bundle's prefix as an expression,
   only its strings, as it already coloured it: `data-star-text` in a project whose prefix is
   `data-`, in HTML and in `attributes[...]`.

@@ -123,6 +123,13 @@ class NeverThrowsTest {
             for (at in 0..src.length step 5) rewriteAt(sites, at)?.apply(src)
             analyzer.signalReferences(opts.copy(text = src))
         }
+        for (opts in OPTIONS) {
+            for (s in analyzer.datastarStrings(opts.copy(text = src))) {
+                s.parts
+                s.tokens
+                (s as? DatastarString.Expression)?.prose
+            }
+        }
         analyzer.attributesIndexes(src)
         for (at in 0..src.length step 5) analyzer.htmlStringAt(src, at)
         collectSignals(Source(src, SourceLanguage.KOTLIN))

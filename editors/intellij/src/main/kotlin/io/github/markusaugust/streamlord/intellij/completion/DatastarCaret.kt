@@ -47,8 +47,7 @@ object DatastarCaret {
         file: KtFile,
         offset: Int,
     ): Asked {
-        val foreign = { name: String, at: Int -> analysis.isForeign(file, name, at) }
-        val source = analysis.source(file.text, SourceLanguage.KOTLIN, file).copy(foreign = foreign)
+        val source = analysis.source(file.text, SourceLanguage.KOTLIN, file).copy(foreign = analysis.foreignIn(file))
         return Asked(file, source, offset)
     }
 }

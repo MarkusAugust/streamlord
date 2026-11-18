@@ -118,7 +118,20 @@ class SpellcheckTest : StreamlordTestCase() {
 
     // A signal's name is no word, in a DSL call as in an attribute's value.
     fun `test a signal's name in a dsl call is no word`() {
-        val found = typos("Bind.kt", "fun FlowContent.f() { input { dataBind(\"usrnm\") }; attributes[\"data-bind\"] = \"psswd\" }")
+        val found =
+            typos(
+                "Bind.kt",
+                "fun FlowContent.f() { input { dataBind(\"usrnm\") }; attributes[\"data-bind\"] = \"psswd\" }\nval prose = \"Wrongg\"",
+            )
         assertTrue(found.toString(), found.none { "usrnm" in it || "psswd" in it })
+        assertTrue(found.toString(), found.any { "Wrongg" in it })
+    }
+
+    // A filter is an object literal: its keys are code, in HTML and in the attributes form.
+    fun `test only the strings of a filter are spelled`() {
+        val html = typos("filter.html", "<div data-persist=\"{inclde: 'Lagree'}\"></div>")
+        assertTrue(html.toString(), html.any { "Lagree" in it } && html.none { "inclde" in it })
+        val kt = typos("Filter.kt", "fun T.f() { attributes[\"data-persist\"] = \"{inclde: 'Lagree'}\" }")
+        assertTrue(kt.toString(), kt.any { "Lagree" in it } && kt.none { "inclde" in it })
     }
 }
