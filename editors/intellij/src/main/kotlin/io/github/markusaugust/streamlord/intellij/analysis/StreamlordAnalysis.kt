@@ -16,6 +16,7 @@ import com.intellij.psi.util.PsiModificationTracker
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
+import io.github.markusaugust.streamlord.analysis.DatastarString
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
@@ -25,9 +26,11 @@ import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.datastarStrings
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -178,6 +181,38 @@ class StreamlordAnalysis(
         val doubted = sites.filter { it.nameStart !in known && (it.name in elsewhere || onReceiver(src, it.nameStart)) }
         if (doubted.isEmpty()) return known
         return known + foreignCalls(file, resolved, doubted)
+    }
+
+    /**
+     * The strings of [file] that are Datastar's, by where each starts and where each ends: what colouring and spelling ask of a
+     * string. Found once for each version of the file, of the settings and of the project's modules, as the calls are resolved.
+     */
+    private fun datastarStrings(file: KtFile): Pair<Map<Int, DatastarString>, Map<Int, DatastarString>> =
+        CachedValuesManager.getCachedValue(file) {
+            val src = file.text
+            // The calls of one name are found once, however many of them the analysis asks about.
+            val sites = HashMap<String, Map<Int, CallSite>>()
+            val foreign = { name: String, at: Int ->
+                val site = sites.getOrPut(name) { findCallSites(src, setOf(name), analyzer.lex(src)).associateBy { it.nameStart } }[at]
+                site != null && foreignAmong(file, listOf(site)).isNotEmpty()
+            }
+            val found = analyzer.datastarStrings(source(src, SourceLanguage.KOTLIN, file).copy(foreign = foreign))
+            CachedValueProvider.Result.create(
+                found.associateBy { it.string.start } to found.associateBy { it.string.end },
+                file,
+                settings.tracker,
+                ProjectRootManager.getInstance(project),
+                DumbService.getInstance(project).modificationTracker,
+            )
+        }
+
+    /** What [string] is to Datastar, or null when it is nothing to it. */
+    fun datastarString(string: KtStringTemplateExpression): DatastarString? {
+        val file = string.containingFile as? KtFile ?: return null
+        val (byStart, byEnd) = datastarStrings(file)
+        val range = string.textRange
+        // The analysis counts the dollars before a multi-dollar literal's quote into it.
+        return byStart[range.startOffset] ?: byEnd[range.endOffset]?.takeIf { it.string.start < range.startOffset }
     }
 
     /** Whether the call named [name], its name starting at [nameStart], resolves to something other than Streamlord. */
