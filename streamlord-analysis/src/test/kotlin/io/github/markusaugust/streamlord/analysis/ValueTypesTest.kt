@@ -31,7 +31,7 @@ class ValueTypesTest {
     @Test
     fun `the fact of what an editor answers`() {
         eachCase(cases.filter { "resolved" in it }, { it.string("name")!! }) { c ->
-            val answer = ValueAnswer(c.string("resolved"), c.boolean("constant"), c.string("read")?.let(::factNamed))
+            val answer = ValueAnswer(c.string("resolved"), c.boolean("constant") == true, c.string("read")?.let(::factNamed))
             assertEquals(c.string("fact")?.let(::factNamed), answer.fact())
         }
     }

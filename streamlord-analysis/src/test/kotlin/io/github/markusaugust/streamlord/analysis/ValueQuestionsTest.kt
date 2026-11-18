@@ -32,7 +32,7 @@ class ValueQuestionsTest {
             )
             val answers =
                 asked.zip(wanted).associate { (q, w) ->
-                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant"), w.string("read")?.let(::factNamed))
+                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant") == true, w.string("read")?.let(::factNamed))
                 }
             assertEquals(
                 wanted.map { "${it.string("text")}=${it.string("fact")}" },

@@ -40,16 +40,20 @@ public data class Source(
  */
 public data class ValueAnswer(
     /**
-     * The type the value resolves to, written as Kotlin writes it with every class by its qualified name, its type
-     * arguments too: `kotlin.Int?`, `kotlin.collections.List<com.acme.Row>`. A type of Java's may be null, and is written
-     * with its `?`. Null where the value resolves to no class.
+     * The type the value resolves to, or null where it resolves to no class. Written as Kotlin writes it, with every class
+     * by its qualified name and no space: its type arguments in `<>` with a comma between them, without `in` or `out`, `*`
+     * for one that is no class, and a `?` where it may be null, as a value of a type of Java's may:
+     * `kotlin.Int?`, `kotlin.collections.Map<kotlin.String,com.acme.Row>`.
      */
     public val type: String?,
-    /** Whether the compiler folds the value into a constant, or it is an entry of an enum: null where the editor could not tell. */
-    public val constant: Boolean? = null,
     /**
-     * What the editor read of how the value is written, [ValueFact.MARKUP] or [ValueFact.CONSTANT], where its type alone
-     * says less. The analysis is to read this itself, and the answer then loses it.
+     * Whether what the value writes is fixed where it is written: the compiler folds it into a constant, or it is an
+     * entry of an enum that does not override `toString`, or the `name` of an entry.
+     */
+    public val constant: Boolean = false,
+    /**
+     * What the type alone cannot say and the editor read of how the value is written: [ValueFact.MARKUP], or
+     * [ValueFact.CONSTANT] for a value the author wrote. An editor that reads no structure leaves it null.
      */
     public val read: ValueFact? = null,
 )

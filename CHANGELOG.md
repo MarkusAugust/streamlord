@@ -57,7 +57,7 @@ All notable changes to Streamlord are recorded here. The format follows
   `kotlin.collections.List<com.acme.Row>`), and whether it is a constant. The analysis makes the
   `ValueFact` of it, `ValueAnswer.fact()`, by the one table it reads a declared type with.
   `Source.valueFact` is gone, and `ValueFact.ofResolvedClass` is no longer public.
-- A declared `HashSet<Html>`, `MutableCollection<Trusted>`, `LinkedList<Html>` or another of
+- A declared `HashSet<Html>`, `MutableCollection<Trusted>`, `ArrayDeque<Html>` or another of
   Kotlin's and Java's collections is a collection of markup, as `List<Html>` is, so
   `rows.joinToString("")` over one says nothing.
 - **Breaking:** `attributesIndexes`, `expressionOptions`, `signalNameStrings`, `htmlStringAt` and
@@ -77,6 +77,10 @@ All notable changes to Streamlord are recorded here. The format follows
   or of an option such as `payloadExpr`.
 - IntelliJ no longer takes a `List<Trusted?>` for markup, joined or as it is: a `Trusted?` writes
   `null`, as the analysis already read it from the text.
+- IntelliJ takes a collection for one of markup by the list of collections the analysis holds:
+  Kotlin's and Java's own, an `ArrayDeque` among them. `rows.joinToString("")` over a class of
+  another library or of your own, `PersistentList<Html>`, is judged by the `String` it gives, and
+  is a warning where it said nothing.
 - IntelliJ colours the value of `attributes["data-bind"] = "name"` as the signal's name it is, and
   no longer spell checks a signal's name in a DSL call, `dataBind("usrnm")`, as it never did in an
   attribute.

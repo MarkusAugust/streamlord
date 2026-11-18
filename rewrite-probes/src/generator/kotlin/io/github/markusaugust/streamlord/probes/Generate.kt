@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.analysis.Fix
 import io.github.markusaugust.streamlord.analysis.IssueCode
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
+import io.github.markusaugust.streamlord.analysis.ValueAnswer
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.rewriteAt
 import io.github.markusaugust.streamlord.core.json.JsonParser
@@ -95,6 +96,23 @@ private fun matrix(file: File): List<Case> {
 
 private val analyzer = Analyzer()
 
+/** An answer of an editor that the analysis reads as [fact]: the matrix says what the editor knows by the fact itself. */
+private fun answerGiving(fact: ValueFact): ValueAnswer =
+    when (fact) {
+        ValueFact.STRING -> ValueAnswer("kotlin.String")
+        ValueFact.NULLABLE_STRING -> ValueAnswer("kotlin.String?")
+        ValueFact.NUMBER -> ValueAnswer("kotlin.Int")
+        ValueFact.BOOLEAN -> ValueAnswer("kotlin.Boolean")
+        ValueFact.NULLABLE -> ValueAnswer("kotlin.Int?")
+        ValueFact.CONSTANT -> ValueAnswer(null, constant = true)
+        ValueFact.MARKUP -> ValueAnswer("io.github.markusaugust.streamlord.core.domain.Html")
+        ValueFact.TRUSTED -> ValueAnswer("io.github.markusaugust.streamlord.core.domain.Trusted")
+        ValueFact.UNSIGNED -> ValueAnswer("kotlin.UInt")
+        ValueFact.OTHER -> ValueAnswer("com.acme.Html")
+        ValueFact.COLLECTION -> ValueAnswer("kotlin.collections.List<kotlin.String>")
+        ValueFact.OPEN_NUMBER -> ValueAnswer("kotlin.Number")
+    }
+
 /** The object of one case: the function as written, and as each fix and each context action leaves it. */
 private fun render(
     n: Int,
@@ -103,9 +121,12 @@ private fun render(
     val header = case.imports.joinToString("") { "import $it\n" } + "\n"
     val declares = if (case.declares.isEmpty()) "" else case.declares.trimEnd() + "\n"
     val source = header + declares + "fun f(${case.params}) = ${case.body}\n"
-    // The matrix gives the fact an editor that types the values would; any other case is read by its text alone.
-    val facts = { start: Int, end: Int -> case.fact.takeIf { source.substring(start, end).trim() in case.written } }
-    val sites = analyzer.analyzeKotlinSites(Source(source, SourceLanguage.KOTLIN, valueFact = facts.takeIf { case.written.isNotEmpty() }))
+    // The matrix names the fact an editor that types the values would bring about; any other case is read by its text alone.
+    val answers = { start: Int, end: Int -> case.fact?.let(::answerGiving).takeIf { source.substring(start, end).trim() in case.written } }
+    val sites =
+        analyzer.analyzeKotlinSites(
+            Source(source, SourceLanguage.KOTLIN, valueAnswer = answers.takeIf { case.written.isNotEmpty() }),
+        )
     val issues = sites.flatMap { it.issues }.sortedBy { it.start }
     val variants = ArrayList<Triple<String, Fix, Boolean>>()
     for (issue in issues.filter { it.code in JUDGED }) for (fix in issue.fixes) variants += Triple(fix.title, fix, false)

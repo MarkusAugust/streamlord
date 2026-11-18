@@ -205,10 +205,8 @@ class ValueJudgementTest {
 
     @Test
     fun `the editor is asked about a value without the comment after it`() {
-        // Only the editor knows the value is a number, which a style takes.
         val src = "fun f(n: Any) = interpolate(\"<div style=\\\"%s\\\"></div>\", n /* id */ // id\n)"
-        assertEquals(listOf(IssueCode.UNSAFE_INTERPOLATION to "%s"), told(src, "", ValueFact.NUMBER))
-        assertEquals(emptyList(), told(src, "n", ValueFact.NUMBER))
+        assertEquals(listOf("n"), analyzer.valueQuestions(Source(src, SourceLanguage.KOTLIN)).map { src.substring(it.start, it.end) })
     }
 
     @Test

@@ -60,10 +60,7 @@ object ValueAnswers {
     /** How many calls deep a function's body is read for the markup it returns. */
     private const val CALL_DEPTH = 3
 
-    /**
-     * The answer to each value the analysis asks about in [file], by the range it asks by. An argument of
-     * `interpolate(...)` is answered only where its class is somebody else's: the analysis reads the rest of it from the text.
-     */
+    /** The answer to each value the analysis asks about in [file], by the range it asks by. */
     fun of(
         file: KtFile,
         questions: List<ValueQuestion>,
@@ -74,18 +71,9 @@ object ValueAnswers {
             val constant = { e: KtExpression -> e.evaluate() != null || enumEntry(e) }
             val type = { e: KtExpression -> written(e.expressionType) }
             val markup = Markup({ ValueAnswer(type(it)).fact() == ValueFact.MARKUP }, { ValueAnswer(written(it.type)).fact().isMarkup() })
-            buildMap {
-                for ((q, e) in asked) {
-                    val answer =
-                        if (q.argument) {
-                            ValueAnswer(
-                                type(e),
-                            ).takeIf { it.fact() == ValueFact.OTHER }
-                        } else {
-                            answer(e, constant, type, markup)
-                        }
-                    answer?.let { put(TextRange(q.start, q.end), it) }
-                }
+            asked.associate { (q, e) ->
+                // Of an argument of `interpolate(...)` the analysis takes the type alone.
+                TextRange(q.start, q.end) to if (q.argument) ValueAnswer(type(e)) else answer(e, constant, type, markup)
             }
         }
     }
@@ -114,14 +102,18 @@ object ValueAnswers {
     }
 
     /**
-     * The type as Kotlin writes it, every class by its qualified name: `kotlin.collections.List<kotlin.String>?`. A type of
-     * Java's may be null, and is written so. Null for a type that is no class, and `*` for such a type argument.
+     * The type as [ValueAnswer.type] has it: `kotlin.collections.List<kotlin.String>?`. A value of a type of Java's may be
+     * null, and is written so; a type argument of Java's is written as the class it names. Null for a type that is no
+     * class, and `*` for such a type argument, a star among them.
      */
-    private fun KaSession.written(type: KaType?): String? {
+    private fun KaSession.written(
+        type: KaType?,
+        argument: Boolean = false,
+    ): String? {
         if (type == null) return null
         val cls = ((type as? KaFlexibleType)?.lowerBound ?: type) as? KaClassType ?: return null
-        val arguments = cls.typeArguments.takeIf { it.isNotEmpty() }?.joinToString(",", "<", ">") { written(it.type) ?: "*" }
-        val nullable = type is KaFlexibleType || type.isMarkedNullable
+        val arguments = cls.typeArguments.takeIf { it.isNotEmpty() }?.joinToString(",", "<", ">") { written(it.type, true) ?: "*" }
+        val nullable = if (type is KaFlexibleType) !argument else type.isMarkedNullable
         return cls.classId.asFqNameString() + arguments.orEmpty() + if (nullable) "?" else ""
     }
 
@@ -136,7 +128,7 @@ object ValueAnswers {
         markup: Markup,
     ): ValueAnswer {
         val typed = ValueAnswer(type(expr), constant(expr))
-        if (typed.constant == true || typed.fact().isMarkup()) return typed
+        if (typed.constant || typed.fact().isMarkup()) return typed
         val read =
             when {
                 isHelper(expr) && ownArguments(expr, constant, type) -> ValueFact.CONSTANT
