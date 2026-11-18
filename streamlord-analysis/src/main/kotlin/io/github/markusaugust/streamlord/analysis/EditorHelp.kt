@@ -26,7 +26,7 @@ public data class Source(
     val constants: Set<String> = emptySet(),
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
     val foreign: (name: String, nameStart: Int) -> Boolean = NOT_FOREIGN,
-    /** What the editor knows of a Kotlin value written into an HTML string, from types the text cannot show (IntelliJ). */
+    /** What the editor knows of a Kotlin value the analysis asks about, from types the text cannot show: see [Analyzer.valueQuestions]. */
     val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,

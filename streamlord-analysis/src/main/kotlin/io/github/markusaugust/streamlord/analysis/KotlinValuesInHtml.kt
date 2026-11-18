@@ -194,7 +194,7 @@ internal fun Analyzer.checkInterpolateSite(
     val values = site.args.filter { it.start > formatArg.start && it.named == null }.map { uncommented(src, it) }
     // The values one by one, as the vararg overload takes them: no spread and nothing by name.
     val plain = site.args.all { it.named == null || it.start == formatArg.start } && values.none { it.text.startsWith("*") }
-    val known = values.map { opts.valueFact?.invoke(it.start, it.end) }
+    val known = values.map { opts.fact(it.start, it.end, argument = true) }
     val kinds =
         values.mapIndexed { k, it ->
             if (known[k].isOther()) null else known[k].argKind() ?: argKind(src, it.text, it.string != null, s.start)
@@ -304,7 +304,7 @@ internal fun Analyzer.checkInterpolateBlock(
             val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
             Arg(start, start + value.length, null, value, null)
         }
-    val facts = read.map { opts.valueFact?.invoke(it.start, it.end) }
+    val facts = read.map { opts.fact(it.start, it.end) }
     val told =
         read.mapIndexed { k, it ->
             if (facts[k].isOther()) null else facts[k].argKind() ?: argKind(src, it.text, it.text.startsWith("\""), s.start)
@@ -974,7 +974,7 @@ internal fun Analyzer.judgeValues(
     val written = HashMap<Int, String>()
     for ((k, ip) in s.interpolations.withIndex()) {
         // A Trusted the editor resolves to another package is none of core's, whatever the text says.
-        if (ip.kind == InterpolationKind.OPERAND || !core || opts.valueFact?.invoke(ip.start, ip.end).isOther()) continue
+        if (ip.kind == InterpolationKind.OPERAND || !core || opts.fact(ip.start, ip.end).isOther()) continue
         trustedLiteral(src, ip.text, s.start)?.let { written[k] = it }
     }
     val reading =
@@ -1461,7 +1461,7 @@ internal fun Analyzer.factOf(
     opts: Reading,
     ip: Interpolation,
 ): ValueFact? {
-    opts.valueFact?.invoke(ip.start, ip.end)?.let { return it }
+    opts.fact(ip.start, ip.end)?.let { return it }
     val sdk = opts.modules
     val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(TemplateValue(ip.text, false)) else templateValues(ip.text)
     val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }

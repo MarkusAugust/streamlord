@@ -1,0 +1,163 @@
+{
+  "$comment": "Kotlin files with values written into markup: the values the analysis asks an editor about, in the order it asks (see valueQuestions), each by its text with the fact an editor that resolves types gives for it, null where it gives none; and what is then shown, the text of each issue and its severity in the order of the file. The analysis reads each case with those answers (ValueQuestionsTest.kt). The IntelliJ plugin reads the same file with the Kotlin plugin's own types, and must give the same facts and show the same (SharedValueCasesTest.kt).",
+  "cases": [
+    {
+      "name": "a string in a template is a warning, a number silent",
+      "kotlin": "fun page(name: String, count: Int) = \"<p>$name $count</p>\"",
+      "questions": [
+        {
+          "text": "$name",
+          "fact": "string"
+        },
+        {
+          "text": "$count",
+          "fact": "number"
+        }
+      ],
+      "issues": [
+        "$name warning"
+      ]
+    },
+    {
+      "name": "a leading sum is one value, asked about as one",
+      "kotlin": "fun page(x: String, y: String) = x + y + \"<p>a</p>\"",
+      "questions": [
+        {
+          "text": "x + y",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "x + y warning"
+      ]
+    },
+    {
+      "name": "a product in a leading sum is part of the one value",
+      "kotlin": "fun page(a: Int, b: Int, s: String) = s + a * b + \"<p>x</p>\"",
+      "questions": [
+        {
+          "text": "s + a * b",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "s + a * b warning"
+      ]
+    },
+    {
+      "name": "each operand after the first literal is a value of its own, the same one twice too",
+      "kotlin": "fun page(name: String, count: Int) = \"<p>\" + name + \"</p><b>\" + count + \"</b><i>\" + name + \"</i>\"",
+      "questions": [
+        {
+          "text": "name",
+          "fact": "string"
+        },
+        {
+          "text": "count",
+          "fact": "number"
+        },
+        {
+          "text": "name",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "name warning",
+        "name warning"
+      ]
+    },
+    {
+      "name": "a marked value in two pairs of parentheses is the value inside them",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun page(count: Int) = interpolate { \"<p onclick=\\\"f(${+((count))})\\\"></p>\" }",
+      "questions": [
+        {
+          "text": "(count)",
+          "fact": "number"
+        }
+      ],
+      "issues": []
+    },
+    {
+      "name": "a marked string where the browser runs code is refused for certain",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun page(name: String) = interpolate { \"<p onclick=\\\"f(${+((name))})\\\"></p>\" }",
+      "questions": [
+        {
+          "text": "(name)",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "${+((name))} error"
+      ]
+    },
+    {
+      "name": "a value in a multi-dollar literal is asked about with all its dollars",
+      "kotlin": "fun page(name: String, count: Int) = $$\"<p>$$name $${count}</p>\"",
+      "questions": [
+        {
+          "text": "$$name",
+          "fact": "string"
+        },
+        {
+          "text": "$${count}",
+          "fact": "number"
+        }
+      ],
+      "issues": [
+        "$$name warning"
+      ]
+    },
+    {
+      "name": "a value in the expression of the attributes form, and in an option's, is judged by its type",
+      "kotlin": "import io.github.markusaugust.streamlord.html.*\nimport kotlinx.html.*\n\nfun FlowContent.f(name: String, count: Int) {\n    attributes[\"data-text\"] = \"1 + ${name}\"\n    attributes[\"data-show\"] = \"1 + ${count}\"\n    dataOnClick(post(\"/x\") { payloadExpr = \"1 + ${name}\" })\n}",
+      "questions": [
+        {
+          "text": "${name}",
+          "fact": "string"
+        },
+        {
+          "text": "${count}",
+          "fact": "number"
+        },
+        {
+          "text": "${name}",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "${name} warning",
+        "${name} warning"
+      ]
+    },
+    {
+      "name": "of an argument of interpolate only a class that is somebody else's is told",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.interpolate\n\nclass Html(val text: String)\n\nfun page(name: String, mine: Html) = interpolate(\"<p>%s</p><div>%s</div>\", name, mine)",
+      "questions": [
+        {
+          "text": "name",
+          "fact": null,
+          "argument": true
+        },
+        {
+          "text": "mine",
+          "fact": "other",
+          "argument": true
+        }
+      ],
+      "issues": []
+    },
+    {
+      "name": "a bare this joined to markup is the receiver",
+      "kotlin": "fun String.page() = \"<p>\" + this + \"</p>\"",
+      "questions": [
+        {
+          "text": "this",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "this warning"
+      ]
+    }
+  ]
+}

@@ -24,12 +24,37 @@ internal const val PREFIX_SETTING: String = "the Streamlord attribute prefix set
 internal class Reading(
     val source: Source,
     val modules: FileModules,
+    /** Where each value the editor is asked about is noted, when the questions themselves are what is wanted. */
+    private val asked: MutableMap<Pair<Int, Int>, ValueQuestion>? = null,
 ) {
     val prefix: String get() = source.prefix
     val prefixSetting: String get() = source.prefixSetting
     val constants: Set<String> get() = source.constants
-    val valueFact: ((start: Int, end: Int) -> ValueFact?)? get() = source.valueFact
+
+    /**
+     * What the editor knows of the value at [start] to [end], one handed to `interpolate(...)` when [argument]. Asked
+     * whatever the answers to the others are, so a reading with no answers notes every value one with answers asks about.
+     */
+    fun fact(
+        start: Int,
+        end: Int,
+        argument: Boolean = false,
+    ): ValueFact? {
+        asked?.getOrPut(start to end) { ValueQuestion(start, end, argument) }
+        return source.valueFact?.invoke(start, end)
+    }
 }
+
+/**
+ * A value of a Kotlin file the analysis asks the editor about, by where it stands: a template of an HTML string, an
+ * operand of a `+` chain, or a value marked with `+` in `interpolate { }`. Of an [argument] of `interpolate(...)` the
+ * analysis reads the rest from the text, and wants only [ValueFact.OTHER] where the class is somebody else's.
+ */
+public class ValueQuestion internal constructor(
+    public val start: Int,
+    public val end: Int,
+    public val argument: Boolean,
+)
 
 /**
  * What the editor knows of a value: its type, or that it is a constant or markup. [NULLABLE] is a
@@ -239,9 +264,23 @@ public class Analyzer(
     public fun analyzeKotlin(source: Source): List<Issue> = analyzeKotlinSites(source).flatMap { it.issues }
 
     /** The issues of a Kotlin file grouped by the string or call they belong to, so a host can veto a call it knows is not Streamlord's. */
-    public fun analyzeKotlinSites(source: Source): List<SiteIssues> {
+    public fun analyzeKotlinSites(source: Source): List<SiteIssues> = kotlinSites(Reading(source, settle(source)))
+
+    /**
+     * The values of the Kotlin file [source] the analysis asks the editor about through [Source.valueFact], in the order it
+     * asks: an editor works out a fact for each of these and for nothing else, and so answers by the very range it is asked by.
+     * The file is read as [analyzeKotlinSites] reads it, and costs as much. A call [Source.foreign] names is read as that
+     * reading reads it, so its string may ask what it did not ask as Streamlord's.
+     */
+    public fun valueQuestions(source: Source): List<ValueQuestion> {
+        val asked = LinkedHashMap<Pair<Int, Int>, ValueQuestion>()
+        kotlinSites(Reading(source.copy(valueFact = null), settle(source), asked))
+        return asked.values.toList()
+    }
+
+    private fun kotlinSites(opts: Reading): List<SiteIssues> {
+        val source = opts.source
         val src = source.text
-        val opts = Reading(source, settle(source))
         val out = ArrayList<SiteIssues>()
         val claimed = HashSet<Int>()
         val lex = lex(src)

@@ -26,6 +26,7 @@ import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.ValueQuestion
 import io.github.markusaugust.streamlord.analysis.datastarStrings
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
@@ -68,8 +69,9 @@ class StreamlordAnalysis(
     /**
      * The issues of a Kotlin file, by call site or HTML string, each value joined into an HTML string judged by what the Kotlin
      * plugin knows of its type. A call that resolves to something other than Streamlord is read as any call is, its HTML string
-     * a free one. The text is judged again when the file, the settings or the project's modules change; an edit elsewhere types
-     * the placeholders again, and judges them again only when a fact comes out different.
+     * a free one. The text is judged again when the file, the settings or the project's modules change, after one reading
+     * more of it for the values the analysis asks about; an edit elsewhere types those again, and judges them again only when a
+     * fact comes out different.
      */
     fun kotlinIssues(file: KtFile): List<SiteIssues> {
         val judged = judgedText(file)
@@ -78,9 +80,11 @@ class StreamlordAnalysis(
         val foreign = foreignCalls(file, resolved, judged.issues.mapNotNull { it.site })
         if (foreign.isEmpty()) return judged.issues
         resolved.issues?.takeIf { it.first === judged && it.second == foreign }?.let { return it.third }
-        val facts = judged.facts
-        val source = judged.source.copy(foreign = { _, at -> at in foreign }, valueFact = { start, end -> facts[TextRange(start, end)] })
-        val kept = analyzer.analyzeKotlinSites(source)
+        val read = judged.source.copy(foreign = { _, at -> at in foreign })
+        // The string of a call that is somebody else's is a free one, read anew: what it asks about may not have been asked before.
+        val facts =
+            judged.facts + ValueFacts.of(file, analyzer.valueQuestions(read).filter { TextRange(it.start, it.end) !in judged.facts })
+        val kept = analyzer.analyzeKotlinSites(read.copy(valueFact = { start, end -> facts[TextRange(start, end)] }))
         resolved.issues = Triple(judged, foreign, kept)
         return kept
     }
@@ -266,9 +270,20 @@ class StreamlordAnalysis(
     internal fun valueFacts(file: KtFile): Map<TextRange, ValueFact> =
         CachedValuesManager.getCachedValue(file) {
             val dumb = DumbService.getInstance(project)
-            val facts = if (dumb.isDumb) emptyMap() else ValueFacts.of(file)
+            val facts = if (dumb.isDumb) emptyMap() else ValueFacts.of(file, valueQuestions(file))
             CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
+
+    /** The values of [file] the analysis asks about, found once for each reading of its text: an edit elsewhere asks nothing new. */
+    private fun valueQuestions(file: KtFile): List<ValueQuestion> {
+        val source = source(file.text, SourceLanguage.KOTLIN, file)
+        val memo =
+            CachedValuesManager.getCachedValue(file) {
+                CachedValueProvider.Result.create(AtomicReference<Pair<Source, List<ValueQuestion>>>(), file, settings.tracker)
+            }
+        memo.get()?.takeIf { it.first == source }?.let { return it.second }
+        return analyzer.valueQuestions(source).also { memo.set(source to it) }
+    }
 
     /** A first pass: the facts and the file as it was read, and the issues they gave. */
     private class Judged(
