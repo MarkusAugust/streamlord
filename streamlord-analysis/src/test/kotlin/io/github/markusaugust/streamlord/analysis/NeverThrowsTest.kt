@@ -156,12 +156,19 @@ class NeverThrowsTest {
         val OPTIONS =
             listOf(
                 Source("", SourceLanguage.KOTLIN),
-                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, true), valueFact = { _, _ -> ValueFact.STRING }),
-                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, false), valueFact = { start, _ ->
-                    ValueFact.entries[
-                        start %
-                            ValueFact.entries.size,
-                    ]
+                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, true), valueAnswer = {
+                    _,
+                    _,
+                    ->
+                    answerGiving(ValueFact.STRING)
+                }),
+                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, false), valueAnswer = { start, _ ->
+                    answerGiving(
+                        ValueFact.entries[
+                            start %
+                                ValueFact.entries.size,
+                        ],
+                    )
                 }),
                 Source("", SourceLanguage.KOTLIN, modules = Modules.known(false, false)),
             )

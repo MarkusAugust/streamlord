@@ -12,7 +12,6 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
 import io.github.markusaugust.streamlord.analysis.IssueCode
-import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
@@ -102,132 +101,13 @@ class TemplateValueTypesTest : StreamlordTestCase() {
         assertEquals(emptyList<String>(), seen)
     }
 
-    fun `test a placeholder is markup only when its whole value is`() {
-        val facts = facts(MARKUP_PAGE)
-        val wanted =
-            mapOf(
-                "\${\"<b>\" + q}" to ValueFact.STRING,
-                "\${q + \"<b>\"}" to ValueFact.STRING,
-                "\${\"<p>\" + h + \"</p>\"}" to ValueFact.MARKUP,
-                "\${bold(q)}" to ValueFact.STRING,
-                "\${badge()}" to ValueFact.MARKUP,
-                "\${deep2()}" to ValueFact.MARKUP,
-                "\${deep1()}" to ValueFact.STRING,
-                "\${either(c)}" to ValueFact.MARKUP,
-                "\${mixed(c, q)}" to ValueFact.STRING,
-                "\${annotated()}" to ValueFact.MARKUP,
-                "\$frag" to ValueFact.MARKUP,
-                "\$h" to ValueFact.MARKUP,
-                "\${h.text}" to ValueFact.MARKUP,
-                "\$built" to ValueFact.MARKUP,
-                "\$fragment" to ValueFact.MARKUP,
-                "\${Trusted(q)}" to ValueFact.TRUSTED,
-                "\${\"<li>\$q</li>\".trimIndent()}" to ValueFact.MARKUP,
-                "\${items.joinToString(\"\") { \"<li>\$it</li>\" }}" to ValueFact.MARKUP,
-                "\${items.map { \"<li>\$it</li>\" }.joinToString(\"\")}" to ValueFact.MARKUP,
-                "\${items.joinToString(\"\")}" to ValueFact.STRING,
-                "\${listOf(\"<b>a</b>\", q).joinToString()}" to ValueFact.STRING,
-                "\${if (c) \"<b>a</b>\" else q}" to ValueFact.STRING,
-                "\${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}" to ValueFact.MARKUP,
-                "\${createHTML().div { +q }}" to ValueFact.MARKUP,
-                "\${elements { span { +q } }}" to ValueFact.MARKUP,
-                "\${buildString { appendHTML().div { +q } }}" to ValueFact.MARKUP,
-                "\${post(\"/save\")}" to ValueFact.CONSTANT,
-                "\${signal(\"count\")}" to ValueFact.CONSTANT,
-                "\${increment(\"n\")}" to ValueFact.CONSTANT,
-                "\${n}" to ValueFact.NUMBER,
-            )
-        val seen = wanted.keys.associateWith { facts[it] }
-        assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
-        // A string with no tag in it is not HTML, so nothing in it is typed.
-        assertNull(facts["\$who"])
-    }
-
-    fun `test a Trusted is markup by its resolved type, and a class of the same name is not`() {
-        val facts =
-            facts(
-                "import io.github.markusaugust.streamlord.core.domain.Trusted as Vouched\n" +
-                    "class Trusted(val s: String)\n" +
-                    "fun f(own: Trusted, v: Vouched, vs: List<Vouched>) = \"<p>\$own \$v \${vs.first()}</p>\"",
-            )
-        assertEquals(ValueFact.OTHER, facts["\$own"])
-        assertEquals(ValueFact.TRUSTED, facts["\$v"])
-        assertEquals(ValueFact.TRUSTED, facts["\${vs.first()}"])
-    }
-
-    fun `test the html of a Trusted is markup, as the text of an Html is`() {
-        val facts =
-            facts(
-                "import io.github.markusaugust.streamlord.core.domain.Trusted\n" +
-                    "class Page(val html: String)\n" +
-                    "fun f(t: Trusted, p: Page) = \"<ul>\${t.html}\${p.html}</ul>\"",
-            )
-        assertEquals(ValueFact.MARKUP, facts["\${t.html}"])
-        assertEquals(ValueFact.STRING, facts["\${p.html}"])
-    }
-
-    fun `test a collection is one by its type, and a collection of Html is markup`() {
-        myFixture.addFileToProject("Users.kt", "package users\nclass U(val tags: List<String>)")
-        val facts =
-            facts(
-                "import io.github.markusaugust.streamlord.core.domain.Html\nimport users.U\n" +
-                    "fun f(u: U, m: Map<String, Int>, a: IntArray, s: Set<String>, rows: List<Html>) = " +
-                    "\"<style>\${u.tags} \$m \$a \$s</style><ul>\$rows</ul>\"",
-            )
-        for (placeholder in listOf("\${u.tags}", "\$m", "\$a", "\$s")) assertEquals(placeholder, ValueFact.COLLECTION, facts[placeholder])
-        assertEquals(ValueFact.MARKUP, facts["\$rows"])
-        // No Trusted vouches for a collection, which a template writes in brackets.
-        myFixture.doHighlighting()
+    fun `test no Trusted is offered for a collection, which a template writes in brackets`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "fun f(m: Map<String, Int>, a: IntArray, s: Set<String>) = \"<style>\$m \$a \$s</style>\"",
+        )
+        assertEquals(3, myFixture.doHighlighting().count { it.inspectionToolId == "KotlinInterpolationInspection" })
         assertEmpty(myFixture.getAllQuickFixes().mapNotNull { (QuickFixWrapper.unwrap(it) as? ReplaceTextFix)?.familyName })
-    }
-
-    fun `test a margin is passed over only where trimMargin is called on the literal`() {
-        val facts = facts("fun f(q: String) = \"<div>\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}\${\"|<u>\" + q}</div>\"")
-        assertEquals(ValueFact.MARKUP, facts["\${(\"\"\"|<b>x</b>\"\"\").trimMargin()}"])
-        assertEquals(ValueFact.STRING, facts["\${\"|<u>\" + q}"])
-    }
-
-    fun `test a helper is the author's own only with the author's own arguments`() {
-        val facts = facts(HELPER_PAGE)
-        val wanted =
-            mapOf(
-                "\${signal(\"count\")}" to ValueFact.CONSTANT,
-                "\${signal(KEY)}" to ValueFact.CONSTANT,
-                "\${signal(q)}" to ValueFact.STRING,
-                "\${signal(\"a\" + q)}" to ValueFact.STRING,
-                "\${statements(increment(\"a\"), toggle(\"b\"))}" to ValueFact.CONSTANT,
-                "\${statements(increment(\"a\"), signal(q))}" to ValueFact.STRING,
-                "\${post(\"/save\") { contentType = ContentType.FORM }}" to ValueFact.CONSTANT,
-                "\${post(\"/save\") { selector = q }}" to ValueFact.STRING,
-                "\${post(url)}" to ValueFact.STRING,
-                "\${signal(Tab.HOME.name)}" to ValueFact.CONSTANT,
-                "\${Tab.HOME}" to ValueFact.CONSTANT,
-                "\${Tab.HOME.name}" to ValueFact.CONSTANT,
-                "\${maybe}" to ValueFact.NULLABLE_STRING,
-                "\$q" to ValueFact.STRING,
-                "\${set(\"n\", n)}" to ValueFact.CONSTANT,
-            )
-        val seen = wanted.keys.associateWith { facts[it] }
-        assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
-        // An enum that writes something other than its name is not the author's own.
-        assertNull(facts["\${Shown.ONE}"])
-    }
-
-    fun `test an unsigned number is not a Number, and a collection of Html is markup`() {
-        val facts = facts(UNSIGNED_PAGE)
-        val wanted =
-            mapOf(
-                "\${u}" to ValueFact.UNSIGNED,
-                "\${w}" to ValueFact.UNSIGNED,
-                "\${maybe}" to ValueFact.NULLABLE,
-                "\${n}" to ValueFact.OPEN_NUMBER,
-                "\${rows.joinToString(\"\")}" to ValueFact.MARKUP,
-                "\${built.joinToString(\"\")}" to ValueFact.MARKUP,
-                "\${trusted.joinToString(\"\")}" to ValueFact.MARKUP,
-                "\${names.joinToString(\"\")}" to ValueFact.STRING,
-            )
-        val seen = wanted.keys.associateWith { facts[it] }
-        assertEquals(wanted.entries.joinToString("\n"), seen.entries.joinToString("\n"))
     }
 
     fun `test interpolate refuses an unsigned number and rereads an Html in the format, and a pattern is no tag`() {
@@ -387,12 +267,6 @@ class TemplateValueTypesTest : StreamlordTestCase() {
             .executeOnPooledThread<T> { ReadAction.nonBlocking<T>(block).executeSynchronously() }
             .get()
 
-    /** The facts of a page, by the text of each placeholder. */
-    private fun facts(text: String): Map<String, ValueFact> {
-        val file = myFixture.configureByText("Page.kt", text) as KtFile
-        return background { StreamlordAnalysis.getInstance(project).valueFacts(file) }.mapKeys { (range, _) -> range.substring(file.text) }
-    }
-
     private fun severity(s: HighlightSeverity): String =
         when (s) {
             HighlightSeverity.ERROR -> "error"
@@ -402,102 +276,6 @@ class TemplateValueTypesTest : StreamlordTestCase() {
         }
 
     private companion object {
-        /** Every way of building markup the facts know, and a near miss of each; `¤` is a `$`. */
-        val MARKUP_PAGE =
-            """
-            package page
-            import io.github.markusaugust.streamlord.core.domain.Html
-            import io.github.markusaugust.streamlord.core.domain.Trusted
-            import io.github.markusaugust.streamlord.core.domain.interpolate
-            import io.github.markusaugust.streamlord.html.elements
-            import io.github.markusaugust.streamlord.html.increment
-            import io.github.markusaugust.streamlord.html.post
-            import io.github.markusaugust.streamlord.html.signal
-            import kotlinx.html.div
-            import kotlinx.html.span
-            import kotlinx.html.stream.appendHTML
-            import kotlinx.html.stream.createHTML
-            import org.intellij.lang.annotations.Language
-
-            fun bold(q: String) = "<b>" + q
-            fun badge(): String = "<span>new</span>"
-            fun deep1() = deep2()
-            fun deep2() = deep3()
-            fun deep3() = deep4()
-            fun deep4() = "<i>x</i>"
-            fun either(c: Boolean): String {
-                if (c) return "<b>a</b>"
-                return "<i>b</i>"
-            }
-            fun mixed(c: Boolean, q: String): String {
-                if (c) return "<b>a</b>"
-                return q
-            }
-            @Language("HTML") fun annotated(): String = load()
-            fun load(): String = ""
-            fun plain(who: String) = "hello ¤who"
-
-            fun page(q: String, items: List<String>, n: Int, c: Boolean, @Language("HTML") frag: String, h: Html): String {
-                val built = interpolate("<b>%s</b>", q)
-                val fragment = "<b>¤q</b>"
-                return ""${'"'}
-                    <div>
-                    ¤{"<b>" + q}
-                    ¤{q + "<b>"}
-                    ¤{"<p>" + h + "</p>"}
-                    ¤{bold(q)}
-                    ¤{badge()}
-                    ¤{deep2()}
-                    ¤{deep1()}
-                    ¤{either(c)}
-                    ¤{mixed(c, q)}
-                    ¤{annotated()}
-                    ¤frag
-                    ¤h
-                    ¤{h.text}
-                    ¤built
-                    ¤fragment
-                    ¤{Trusted(q)}
-                    ¤{"<li>¤q</li>".trimIndent()}
-                    ¤{items.joinToString("") { "<li>¤it</li>" }}
-                    ¤{items.map { "<li>¤it</li>" }.joinToString("")}
-                    ¤{items.joinToString("")}
-                    ¤{listOf("<b>a</b>", q).joinToString()}
-                    ¤{if (c) "<b>a</b>" else q}
-                    ¤{when { c -> "<b>a</b>"; else -> "<i>b</i>" }}
-                    ¤{createHTML().div { +q }}
-                    ¤{elements { span { +q } }}
-                    ¤{buildString { appendHTML().div { +q } }}
-                    <button data-on:click="¤{post("/save")}" data-text="¤{signal("count")}" data-on:keydown="¤{increment("n")}">x</button>
-                    ¤{n}
-                    </div>
-                ""${'"'}
-            }
-            """.trimIndent().replace('¤', '$')
-
-        /** Unsigned numbers, a Number, and collections of Html, written or inferred; `¤` is a `$`. */
-        val UNSIGNED_PAGE =
-            """
-            package page
-            import io.github.markusaugust.streamlord.core.domain.Html
-            import io.github.markusaugust.streamlord.core.domain.Trusted
-            import io.github.markusaugust.streamlord.core.domain.interpolate
-
-            fun page(u: UInt, maybe: UShort?, n: Number, rows: List<Html>, names: List<String>, q: String): String {
-                val w = u.toULong()
-                val built = names.map { interpolate("<li>%s</li>", it) }
-                val trusted = sequenceOf(Trusted(q))
-                return ""${'"'}
-                    <div data-signals="{a: ¤{u}, b: ¤{w}, c: ¤{maybe}, d: ¤{n}}">
-                    ¤{rows.joinToString("")}
-                    ¤{built.joinToString("")}
-                    ¤{trusted.joinToString("")}
-                    ¤{names.joinToString("")}
-                    </div>
-                ""${'"'}
-            }
-            """.trimIndent().replace('¤', '$')
-
         /** The block form: a widget whose values are safe by types only the editor sees, `k.css` and `k.pageId`; `¤` is a `$`. */
         val BLOCK_CALLS =
             """
@@ -542,38 +320,6 @@ class TemplateValueTypesTest : StreamlordTestCase() {
                 val empty = interpolate("<p>%s</p>")
                 return "<p data-text=\"¤count\">¤name</p>"
             }
-            """.trimIndent().replace('¤', '$')
-
-        /** Helpers with arguments of every origin, enum entries and strings that may be null; `¤` is a `$`. */
-        val HELPER_PAGE =
-            """
-            package page
-            import io.github.markusaugust.streamlord.html.FetchOptions.ContentType
-            import io.github.markusaugust.streamlord.html.increment
-            import io.github.markusaugust.streamlord.html.post
-            import io.github.markusaugust.streamlord.html.set
-            import io.github.markusaugust.streamlord.html.signal
-            import io.github.markusaugust.streamlord.html.statements
-            import io.github.markusaugust.streamlord.html.toggle
-
-            const val KEY = "count"
-            enum class Tab { HOME }
-            enum class Shown { ONE; override fun toString() = "<b>one</b>" }
-
-            fun page(q: String, url: String, maybe: String?, n: Int): String =
-                ""${'"'}
-                <div>
-                <button data-text="¤{signal("count")}" data-show="¤{signal(KEY)}" data-class="¤{signal(q)}">x</button>
-                <button data-text="¤{signal("a" + q)}" data-on:click="¤{statements(increment("a"), toggle("b"))}">x</button>
-                <button data-on:click="¤{statements(increment("a"), signal(q))}">x</button>
-                <button data-on:click="¤{post("/save") { contentType = ContentType.FORM }}">x</button>
-                <button data-on:click="¤{post("/save") { selector = q }}" data-on:keydown="¤{post(url)}">x</button>
-                <button data-text="¤{signal(Tab.HOME.name)}" data-show="¤{Tab.HOME}" data-class="¤{Tab.HOME.name}">x</button>
-                <button data-text="¤{Shown.ONE}">x</button>
-                <p>¤{maybe} ¤q</p>
-                <button data-on:click="¤{set("n", n)}">x</button>
-                </div>
-                ""${'"'}
             """.trimIndent().replace('¤', '$')
 
         /** Just enough of Ktor, Streamlord's Ktor module and the annotations for the fixture files to resolve. */

@@ -4,10 +4,11 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
+import io.github.markusaugust.streamlord.analysis.ValueAnswer
 import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.ValueQuestion
+import io.github.markusaugust.streamlord.analysis.fact
 import io.github.markusaugust.streamlord.analysis.isMarkup
-import io.github.markusaugust.streamlord.analysis.ofResolvedClass
 import io.github.markusaugust.streamlord.analysis.opensWithTag
 import io.github.markusaugust.streamlord.analysis.writesItself
 import org.jetbrains.kotlin.analysis.api.KaSession
@@ -17,7 +18,6 @@ import org.jetbrains.kotlin.analysis.api.types.KaFlexibleType
 import org.jetbrains.kotlin.analysis.api.types.KaType
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.lexer.KtTokens
-import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.psi.KtAnnotated
 import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtCallExpression
@@ -42,45 +42,17 @@ import org.jetbrains.kotlin.psi.KtTypeReference
 import org.jetbrains.kotlin.psi.KtWhenExpression
 
 /**
- * What the Kotlin plugin knows of each value the analysis asks about, for it to
- * judge the value by: a constant, markup, a number or a boolean, or a string, by the types the
- * Analysis API gives. The analysis takes these over what the text shows, so markup is only a placeholder
- * whose whole value is markup. Plain values out, so nothing of an analysis session outlives the call.
+ * What the Kotlin plugin answers of each value the analysis asks about: the type the Analysis API resolves it to, whether
+ * it is a constant, and what its source shows of markup and of the author's own. The analysis judges the value by these.
+ * Plain values out, so nothing of an analysis session outlives the call.
  */
-object ValueFacts {
-    private val HTML_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Html")
-    private val TRUSTED_CLASS = ClassId.fromString("io/github/markusaugust/streamlord/core/domain/Trusted")
-    private val NUMBER_CLASS = ClassId.fromString("kotlin/Number")
+object ValueAnswers {
     private const val HTML_PACKAGE = "io.github.markusaugust.streamlord.html"
     private const val KOTLINX_STREAM = "kotlinx.html.stream"
 
     private val TRIMS = setOf("trimIndent", "trimMargin")
     private val LISTS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
     private val MARKUP_CALLS = setOf("interpolate", "Trusted")
-
-    /** The collections a template writes in brackets, by their qualified names, Java's that Kotlin's aliases expand to among them. */
-    private val COLLECTIONS: Set<String> =
-        (
-            listOf(
-                "List",
-                "Set",
-                "Map",
-                "Collection",
-                "Iterable",
-            ).flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
-                listOf(
-                    "ArrayList",
-                    "HashSet",
-                    "LinkedHashSet",
-                    "HashMap",
-                    "LinkedHashMap",
-                    "TreeMap",
-                    "TreeSet",
-                    "LinkedList",
-                ).map { "java.util.$it" } +
-                listOf("", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char").map { "kotlin.${it}Array" } +
-                "kotlin.sequences.Sequence"
-        ).toSet()
 
     /** The expression helpers by name, for a call the Kotlin plugin cannot resolve. */
     private val HELPERS: Set<String> = Catalog.default.signalNameHelpers.keys
@@ -89,24 +61,32 @@ object ValueFacts {
     private const val CALL_DEPTH = 3
 
     /**
-     * The fact of each value the analysis asks about in [file], by the range it asks by. An argument of `interpolate(...)`
-     * is answered only where its class is somebody else's: the analysis reads the rest of it from the text.
+     * The answer to each value the analysis asks about in [file], by the range it asks by. An argument of
+     * `interpolate(...)` is answered only where its class is somebody else's: the analysis reads the rest of it from the text.
      */
     fun of(
         file: KtFile,
         questions: List<ValueQuestion>,
-    ): Map<TextRange, ValueFact> {
-        val asked = questions.mapNotNull { q -> expressionAt(file, q.start, q.end)?.let { Triple(q, TextRange(q.start, q.end), it) } }
+    ): Map<TextRange, ValueAnswer> {
+        val asked = questions.mapNotNull { q -> expressionAt(file, q.start, q.end)?.let { q to it } }
         if (asked.isEmpty()) return emptyMap()
-        val (arguments, values) = asked.partition { it.first.argument }
         return analyze(file) {
-            judge(
-                values.map { it.second to it.third },
-                { it.evaluate() != null || enumEntry(it) },
-                { typeFact(it.expressionType) },
-                { markupElements(it.expressionType) },
-                { typeFact(it.type).isMarkup() },
-            ) + resolved(arguments.map { it.second to it.third }) { classOf(it.expressionType) }
+            val constant = { e: KtExpression -> e.evaluate() != null || enumEntry(e) }
+            val type = { e: KtExpression -> written(e.expressionType) }
+            val markup = Markup({ ValueAnswer(type(it)).fact() == ValueFact.MARKUP }, { ValueAnswer(written(it.type)).fact().isMarkup() })
+            buildMap {
+                for ((q, e) in asked) {
+                    val answer =
+                        if (q.argument) {
+                            ValueAnswer(
+                                type(e),
+                            ).takeIf { it.fact() == ValueFact.OTHER }
+                        } else {
+                            answer(e, constant, type, markup)
+                        }
+                    answer?.let { put(TextRange(q.start, q.end), it) }
+                }
+            }
         }
     }
 
@@ -133,48 +113,38 @@ object ValueFacts {
         return null
     }
 
-    /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */
-    private fun resolved(
-        values: List<Pair<TextRange, KtExpression>>,
-        qualified: (KtExpression) -> String?,
-    ): Map<TextRange, ValueFact> =
-        buildMap { for ((range, expr) in values) qualified(expr)?.let { ValueFact.ofResolvedClass(it) }?.let { put(range, it) } }
-
-    /** The qualified name of the class of [type], or null where it is none. */
-    private fun classOf(type: KaType?): String? {
-        val lower = (type as? KaFlexibleType)?.lowerBound ?: type
-        return (lower as? KaClassType)?.classId?.asFqNameString()
+    /**
+     * The type as Kotlin writes it, every class by its qualified name: `kotlin.collections.List<kotlin.String>?`. A type of
+     * Java's may be null, and is written so. Null for a type that is no class, and `*` for such a type argument.
+     */
+    private fun KaSession.written(type: KaType?): String? {
+        if (type == null) return null
+        val cls = ((type as? KaFlexibleType)?.lowerBound ?: type) as? KaClassType ?: return null
+        val arguments = cls.typeArguments.takeIf { it.isNotEmpty() }?.joinToString(",", "<", ">") { written(it.type) ?: "*" }
+        val nullable = type is KaFlexibleType || type.isMarkedNullable
+        return cls.classId.asFqNameString() + arguments.orEmpty() + if (nullable) "?" else ""
     }
 
     /**
-     * Each placeholder by what [constant] and [typed] say of it, and what its source shows: a constant, a
-     * call to a helper with the author's own arguments, markup, a literal only, or its type.
+     * What [constant] and [type] say of a value, and where they leave it open, what its source shows: a call to a helper
+     * with the author's own arguments, markup, or a literal only.
      */
-    private fun judge(
-        placeholders: List<Pair<TextRange, KtExpression>>,
+    private fun answer(
+        expr: KtExpression,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> ValueFact?,
-        markupElements: (KtExpression) -> Boolean,
-        markupType: (KtTypeReference) -> Boolean,
-    ): Map<TextRange, ValueFact> {
-        val facts = HashMap<TextRange, ValueFact>()
-        val markup = Markup(markupElements, markupType)
-        for ((range, expr) in placeholders) {
-            if (constant(expr)) {
-                facts[range] = ValueFact.CONSTANT
-                continue
+        type: (KtExpression) -> String?,
+        markup: Markup,
+    ): ValueAnswer {
+        val typed = ValueAnswer(type(expr), constant(expr))
+        if (typed.constant == true || typed.fact().isMarkup()) return typed
+        val read =
+            when {
+                isHelper(expr) && ownArguments(expr, constant, type) -> ValueFact.CONSTANT
+                markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
+                literalOnly(expr) -> ValueFact.CONSTANT
+                else -> return typed
             }
-            val fact = typed(expr)
-            facts[range] =
-                when {
-                    fact != null && fact.isMarkup() -> fact
-                    isHelper(expr) && ownArguments(expr, constant, typed) -> ValueFact.CONSTANT
-                    markup.isMarkup(expr, CALL_DEPTH) -> ValueFact.MARKUP
-                    literalOnly(expr) -> ValueFact.CONSTANT
-                    else -> fact ?: continue
-                }
-        }
-        return facts
+        return typed.copy(read = read)
     }
 
     /**
@@ -185,13 +155,12 @@ object ValueFacts {
     private fun authorsOwn(
         expr: KtExpression?,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> ValueFact?,
+        type: (KtExpression) -> String?,
     ): Boolean {
         val e = expr?.let { KtPsiUtil.safeDeparenthesize(it) } ?: return false
-        if (constant(e) || literalOnly(e) || enumEntry(e)) return true
-        if (isHelper(e)) return ownArguments(e, constant, typed)
-        val fact = typed(e)
-        return fact.writesItself()
+        if (constant(e) || literalOnly(e)) return true
+        if (isHelper(e)) return ownArguments(e, constant, type)
+        return ValueAnswer(type(e)).fact().writesItself()
     }
 
     /**
@@ -201,17 +170,17 @@ object ValueFacts {
     private fun ownArguments(
         expr: KtExpression,
         constant: (KtExpression) -> Boolean,
-        typed: (KtExpression) -> ValueFact?,
+        type: (KtExpression) -> String?,
     ): Boolean {
         val call = KtPsiUtil.safeDeparenthesize(expr) as? KtCallExpression ?: return false
         return call.valueArguments.all { argument ->
             val value = argument.getArgumentExpression()
             val lambda = value?.let { KtPsiUtil.safeDeparenthesize(it) } as? KtLambdaExpression
             if (lambda == null) {
-                authorsOwn(value, constant, typed)
+                authorsOwn(value, constant, type)
             } else {
                 lambda.bodyExpression?.statements.orEmpty().all { s ->
-                    s is KtBinaryExpression && s.operationToken == KtTokens.EQ && authorsOwn(s.right, constant, typed)
+                    s is KtBinaryExpression && s.operationToken == KtTokens.EQ && authorsOwn(s.right, constant, type)
                 }
             }
         }
@@ -250,68 +219,6 @@ object ValueFacts {
         } else {
             out += e
         }
-    }
-
-    private fun KaSession.typeFact(type: KaType?): ValueFact? {
-        if (type == null) return null
-        // A Java String may be null, and is a string all the same; a Java Integer is not a number that is safe.
-        val lower = (type as? KaFlexibleType)?.lowerBound ?: type
-        val definite = type !is KaFlexibleType && !type.isMarkedNullable
-        return when {
-            // A String? or a Java String: a Kotlin template writes null as "null", interpolate as nothing.
-            lower.isStringType || lower.isCharSequenceType -> {
-                if (definite) ValueFact.STRING else ValueFact.NULLABLE_STRING
-            }
-
-            lower.isClass(HTML_CLASS) -> {
-                ValueFact.MARKUP
-            }
-
-            // Markup the author vouched for, which a Kotlin template writes as it stands; `null` if it may be.
-            definite && lower.isClass(TRUSTED_CLASS) -> {
-                ValueFact.TRUSTED
-            }
-
-            // A number or a boolean that may be null prints digits, true, false or null: safe where escaping is.
-            lower.isIntType || lower.isLongType || lower.isShortType || lower.isByteType || lower.isDoubleType || lower.isFloatType -> {
-                if (definite) ValueFact.NUMBER else ValueFact.NULLABLE
-            }
-
-            // A Number of no closed type, whose class may write anything; one that may be null is not known.
-            lower.isClass(NUMBER_CLASS) -> {
-                if (definite) ValueFact.OPEN_NUMBER else null
-            }
-
-            // Digits too, but not a kotlin.Number: interpolate refuses one where only a number is let in.
-            lower.isUIntType || lower.isULongType || lower.isUShortType || lower.isUByteType -> {
-                if (definite) ValueFact.UNSIGNED else ValueFact.NULLABLE
-            }
-
-            lower.isBooleanType -> {
-                if (definite) ValueFact.BOOLEAN else ValueFact.NULLABLE
-            }
-
-            // A collection of markup is markup the author built; any other a template writes in brackets.
-            classOf(lower) in COLLECTIONS -> {
-                if (markupElements(lower)) ValueFact.MARKUP else ValueFact.COLLECTION
-            }
-
-            // An Html or a Trusted of another package, which the text alone would take for Streamlord's.
-            else -> {
-                classOf(lower)?.let { ValueFact.ofResolvedClass(it) }
-            }
-        }
-    }
-
-    // KaType.isClassType is deprecated in 2026.3; the cast answers the same in every version.
-    private fun KaType.isClass(classId: ClassId): Boolean = (this as? KaClassType)?.classId == classId
-
-    /** Whether a collection's elements are Html or Trusted, by its one type argument: `List<Html>`, `Sequence<Trusted>`. */
-    private fun KaSession.markupElements(type: KaType?): Boolean {
-        val lower = (type as? KaFlexibleType)?.lowerBound ?: type
-        val element = (lower as? KaClassType)?.typeArguments?.singleOrNull()?.type ?: return false
-        val bare = (element as? KaFlexibleType)?.lowerBound ?: element
-        return bare.isClass(HTML_CLASS) || bare.isClass(TRUSTED_CLASS)
     }
 
     /** Whether `.trimMargin()` is called on [literal], which then starts past its first `|`. */

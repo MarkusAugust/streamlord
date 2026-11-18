@@ -27,11 +27,31 @@ public data class Source(
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
     val foreign: (name: String, nameStart: Int) -> Boolean = NOT_FOREIGN,
     /** What the editor knows of a Kotlin value the analysis asks about, from types the text cannot show: see [Analyzer.valueQuestions]. */
-    val valueFact: ((start: Int, end: Int) -> ValueFact?)? = null,
+    val valueAnswer: ((start: Int, end: Int) -> ValueAnswer?)? = null,
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,
     /** The engine that writes into the file before the browser reads it, where its rules are its own, as the editor knows it from the file's type. */
     val engine: TemplateEngine? = null,
+)
+
+/**
+ * What an editor that resolves types answers of a value the analysis asks about, which the analysis then judges: plain
+ * values, so nothing of the editor's own outlives the answer, and two answers that say the same are equal.
+ */
+public data class ValueAnswer(
+    /**
+     * The type the value resolves to, written as Kotlin writes it with every class by its qualified name, its type
+     * arguments too: `kotlin.Int?`, `kotlin.collections.List<com.acme.Row>`. A type of Java's may be null, and is written
+     * with its `?`. Null where the value resolves to no class.
+     */
+    public val type: String?,
+    /** Whether the compiler folds the value into a constant, or it is an entry of an enum: null where the editor could not tell. */
+    public val constant: Boolean? = null,
+    /**
+     * What the editor read of how the value is written, [ValueFact.MARKUP] or [ValueFact.CONSTANT], where its type alone
+     * says less. The analysis is to read this itself, and the answer then loses it.
+     */
+    public val read: ValueFact? = null,
 )
 
 /** No call is somebody else's: what a host that resolves nothing says. */

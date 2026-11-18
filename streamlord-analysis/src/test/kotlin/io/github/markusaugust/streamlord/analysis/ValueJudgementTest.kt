@@ -93,7 +93,7 @@ class ValueJudgementTest {
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
         val text = Source("", SourceLanguage.KOTLIN, constants = setOf("LABEL"))
         assertEquals(emptyList(), interpolation(src, text))
-        val typed = text.copy(valueFact = { _, _ -> ValueFact.STRING })
+        val typed = text.copy(valueAnswer = { _, _ -> answerGiving(ValueFact.STRING) })
         assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
     }
 
@@ -158,13 +158,10 @@ class ValueJudgementTest {
     ): List<Pair<IssueCode, String>> {
         val at = src.lastIndexOf(value)
         val opts =
-            Source(src, SourceLanguage.KOTLIN, valueFact = { start, end ->
-                if (start == at &&
-                    end == at + value.length
-                ) {
-                    fact
-                } else {
-                    null
+            Source(src, SourceLanguage.KOTLIN, valueAnswer = { start, end ->
+                answerGiving(fact).takeIf {
+                    start == at &&
+                        end == at + value.length
                 }
             })
         return analyzer.analyzeKotlin(opts).map { it.code to src.substring(it.start, it.end) }

@@ -49,9 +49,17 @@ All notable changes to Streamlord are recorded here. The format follows
   HTML, with its tokens and, for an expression, the prose in it, at the offsets of the source.
   `datastarName(name, prefix)` reads an attribute's name under the prefix given or either bundle's,
   and gives the tokens and the prose of a value written to it.
-- `valueQuestions(source)` lists the values of a Kotlin file the analysis asks an editor about
-  through `Source.valueFact`, each by the range it asks by, so an editor that resolves types works
-  out a fact for those and need not find the values itself.
+- `valueQuestions(source)` lists the values of a Kotlin file the analysis asks an editor about,
+  each by the range it asks by, so an editor that resolves types answers for those and need not
+  find the values itself.
+- **Breaking:** an editor answers through `Source.valueAnswer` with a `ValueAnswer`: the type the
+  value resolves to, written with every class by its qualified name (`kotlin.Int?`,
+  `kotlin.collections.List<com.acme.Row>`), and whether it is a constant. The analysis makes the
+  `ValueFact` of it, `ValueAnswer.fact()`, by the one table it reads a declared type with.
+  `Source.valueFact` is gone, and `ValueFact.ofResolvedClass` is no longer public.
+- A declared `HashSet<Html>`, `MutableCollection<Trusted>`, `LinkedList<Html>` or another of
+  Kotlin's and Java's collections is a collection of markup, as `List<Html>` is, so
+  `rows.joinToString("")` over one says nothing.
 - **Breaking:** `attributesIndexes`, `expressionOptions`, `signalNameStrings`, `htmlStringAt` and
   `tokenizeAttributeName` are no longer public, nor `AttributesIndex`, `ExpressionOption` and
   `SignalNameString`: `datastarStrings` and `datastarName` answer what they were put together for.
@@ -67,6 +75,8 @@ All notable changes to Streamlord are recorded here. The format follows
   is a warning where it holds a string and was a hint; a value marked inside two pairs of
   parentheses, `${+((count))}`; and a value in the expression of `attributes["data-text"] = "..."`
   or of an option such as `payloadExpr`.
+- IntelliJ no longer takes a `List<Trusted?>` for markup, joined or as it is: a `Trusted?` writes
+  `null`, as the analysis already read it from the text.
 - IntelliJ colours the value of `attributes["data-bind"] = "name"` as the signal's name it is, and
   no longer spell checks a signal's name in a DSL call, `dataBind("usrnm")`, as it never did in an
   attribute.

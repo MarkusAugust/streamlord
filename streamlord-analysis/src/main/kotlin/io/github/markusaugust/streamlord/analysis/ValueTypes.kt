@@ -23,14 +23,37 @@ private val STRING_TYPE = regex("""(?:kotlin\.)?(?:String|CharSequence)""")
 private val HTML_TYPE = regex("${CORE_DOMAIN}Html")
 private val TRUSTED_TYPE = regex("${CORE_DOMAIN}Trusted")
 
+/** What a template writes in brackets, by qualified name: Kotlin's collections, Java's that its aliases expand to, and the arrays. */
+private val COLLECTIONS: Set<String> =
+    (
+        listOf(
+            "List",
+            "Set",
+            "Map",
+            "Collection",
+            "Iterable",
+        ).flatMap { listOf("kotlin.collections.$it", "kotlin.collections.Mutable$it") } +
+            listOf(
+                "ArrayList",
+                "HashSet",
+                "LinkedHashSet",
+                "HashMap",
+                "LinkedHashMap",
+                "TreeMap",
+                "TreeSet",
+                "LinkedList",
+            ).map { "java.util.$it" } +
+            listOf("", "Int", "Long", "Short", "Byte", "Double", "Float", "Boolean", "Char").map { "kotlin.${it}Array" } +
+            "kotlin.sequences.Sequence"
+    ).toSet()
+
 /**
- * A collection of markup: what `joinToString` over Html or Trusted is called on. An Html that may be
- * null is markup as it is on its own, and `out` changes nothing a read sees.
+ * A collection of markup: what `joinToString` over Html or Trusted is called on, one of [COLLECTIONS] by its name alone
+ * or in full. An Html that may be null is markup as it is on its own, and `out` changes nothing a read sees.
  */
 private val MARKUP_COLLECTION =
     regex(
-        """(?:kotlin\.collections\.|kotlin\.sequences\.)?""" +
-            """(?:List|MutableList|ArrayList|Collection|Iterable|Set|MutableSet|Sequence|Array)""" +
+        "(?:" + COLLECTIONS.flatMap { listOf(it.replace(".", """\."""), it.substringAfterLast('.')) }.distinct().joinToString("|") + ")" +
             """<$CORE_DOMAIN(?:Html\??|Trusted)>\??""",
     )
 
@@ -50,18 +73,38 @@ private val TEXT_TAG_START = tagStart("__kt__")
 private val MARGIN_START = regex("""^\s*\|""")
 
 /**
- * The fact of a class the editor resolved, by its qualified name, where the text alone would read
- * its name as Streamlord's markup: [ValueFact.OTHER] for an `Html` or a `Trusted` that is not
- * Streamlord's, of another package or of none. Null for any other class, Streamlord's own among them.
+ * [ValueFact.OTHER] for a class an editor resolved, by its qualified name, where the text alone would read its name as
+ * Streamlord's markup: an `Html` or a `Trusted` that is not Streamlord's, of another package or of none. Null for any
+ * other class, Streamlord's own among them.
  */
-public fun ValueFact.Companion.ofResolvedClass(qualified: String): ValueFact? {
+private fun otherClass(type: String): ValueFact? {
+    val qualified = type.substringBefore('<').removeSuffix("?")
     val name = qualified.substringAfterLast('.')
-    return if ((name == "Html" || name == "Trusted") &&
-        qualified != "io.github.markusaugust.streamlord.core.domain.$name"
-    ) {
-        ValueFact.OTHER
-    } else {
-        null
+    val markup = name == "Html" || name == "Trusted"
+    return ValueFact.OTHER.takeIf { markup && qualified != "io.github.markusaugust.streamlord.core.domain.$name" }
+}
+
+/**
+ * The fact of what an editor answered of a value. A constant is one whatever its type, and markup by its type is markup
+ * whatever the editor read of it; what it read is else taken over a type that says less.
+ */
+public fun ValueAnswer.fact(): ValueFact? {
+    if (constant == true) return ValueFact.CONSTANT
+    val typed = type?.let(::resolvedFact)
+    return if (typed.isMarkup()) typed else read ?: typed
+}
+
+/** The fact of a type an editor resolved, [ValueAnswer.type]: as [ofTypeName] reads one a declaration writes, and a collection by its class. */
+private fun resolvedFact(type: String): ValueFact? {
+    otherClass(type)?.let { return it }
+    val qualified = type.substringBefore('<').removeSuffix("?")
+    return when {
+        // A class of no package is none of Kotlin's, whatever it is named.
+        '.' !in qualified -> null
+
+        qualified in COLLECTIONS -> if (isMarkupCollection(type)) ValueFact.MARKUP else ValueFact.COLLECTION
+
+        else -> ValueFact.ofTypeName(type)
     }
 }
 
