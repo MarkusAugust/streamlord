@@ -523,7 +523,7 @@ private val DIGITS = regex("""\d+""")
  * Split an attribute name such as `data-on:click__debounce.500ms` into coloured parts; null when it
  * is not a Datastar attribute. The prefix is matched in any case, as the browser lowercases a name.
  */
-public fun tokenizeAttributeName(
+internal fun tokenizeAttributeName(
     name: String,
     prefix: String,
 ): List<NameToken>? {

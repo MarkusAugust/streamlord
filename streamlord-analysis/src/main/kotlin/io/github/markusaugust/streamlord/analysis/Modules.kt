@@ -123,7 +123,7 @@ private fun importsDsl(
 }
 
 /** The HTML string at [offset] of [source]: one that looks like HTML, or the markup handed to a Streamlord call where the file has core. */
-public fun Analyzer.htmlStringAt(
+internal fun Analyzer.htmlStringAt(
     source: Source,
     offset: Int,
 ): KotlinString? = htmlStringAt(source.text, offset, settle(source))

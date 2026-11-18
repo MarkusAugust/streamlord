@@ -479,7 +479,7 @@ public class Analyzer(
      * Each `attributes["data-..."] = "..."` in [src], kotlinx.html's own way to write an attribute, for completion and colouring:
      * the name, where it starts, and the literal that follows the `=`, unterminated while it is typed.
      */
-    public fun attributesIndexes(src: String): List<AttributesIndex> {
+    internal fun attributesIndexes(src: String): List<AttributesIndex> {
         lastIndexes?.takeIf { it.first == src }?.let { return it.second }
         return readAttributesIndexes(src).also { lastIndexes = src to it }
     }
@@ -511,7 +511,7 @@ public class Analyzer(
      * completion and colouring: `payloadExpr = "..."`, a literal that is the whole value, unterminated
      * while it is typed, and each value of a map option, `headerExprs = mapOf("X-Id" to "...")`.
      */
-    public fun expressionOptions(
+    internal fun expressionOptions(
         src: String,
         lex: KotlinLex = lex(src),
     ): List<ExpressionOption> {
@@ -747,7 +747,7 @@ public class Analyzer(
      * format of core's `interpolate`, however it opens, or a free-standing literal that looks like
      * HTML (see [isHtmlString]). Completion, hover and colours use it to give Kotlin the HTML side.
      */
-    public fun htmlStringAt(
+    internal fun htmlStringAt(
         src: String,
         offset: Int,
     ): KotlinString? {
@@ -1499,7 +1499,7 @@ public class Analyzer(
 }
 
 /** An option of FetchOptions set to an expression: its [name], where the name starts, and the literal that is the expression. */
-public data class ExpressionOption(
+internal data class ExpressionOption(
     val name: String,
     val nameStart: Int,
     val value: KotlinString,
@@ -1509,7 +1509,7 @@ public data class ExpressionOption(
  * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
  * diagnostics judge the value only when it is [whole], the full statement and not the first half of a concatenation.
  */
-public data class AttributesIndex(
+internal data class AttributesIndex(
     val name: String,
     val nameStart: Int,
     val value: KotlinString?,

@@ -63,7 +63,7 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
     val modules = settle(source)
     val dsl = modules.dsl
     val html = htmlStrings(src, lex)
-    val names = if (dsl) signalNameStrings(source).mapTo(HashSet()) { it.string.start } else emptySet()
+    val names = if (dsl) signalNameStrings(source).mapTo(HashSet()) { it.start } else emptySet()
     val options = if (dsl) expressionOptions(src, lex).mapTo(HashSet()) { it.value.start } else emptySet()
     // A string is the expression of the call it is an argument of, so of the innermost: `dataOnClick(getExpr("..."))` is getExpr's.
     val handed = HashMap<Int, CallSite>()
