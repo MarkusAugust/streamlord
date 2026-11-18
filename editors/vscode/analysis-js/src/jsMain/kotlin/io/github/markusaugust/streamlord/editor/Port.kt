@@ -166,7 +166,8 @@ private fun setOf(names: Array<String>): Set<String> {
  * `const val` names of the workspace. With [defined], the signals the workspace defines, a read of
  * a signal that is none of them is reported too; with [others], what the workspace's other files
  * say about signals, so is a signal the server reads that no page declares. [languageId] is VS
- * Code's for the document, which names the template engine that writes into it.
+ * Code's for the document, which names the template engine that writes into it; where it names
+ * none, the file's [path] does, as in IntelliJ and a build.
  */
 @JsExport
 fun diagnose(
@@ -177,8 +178,9 @@ fun diagnose(
     defined: Array<String>?,
     others: Array<DriftFacts>?,
     languageId: String? = null,
+    path: String? = null,
 ): Array<Issue> {
-    val file = source(src, kotlin, prefix, constants, engineOf(languageId))
+    val file = source(src, kotlin, prefix, constants, engineOf(languageId) ?: path?.let(ProjectFiles::engineOf))
     val found = if (kotlin) sites(file).flatMap { it.issues } else analyzer.analyzeHtml(file)
     val workspace =
         object : ProjectSignals {
