@@ -79,7 +79,7 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
         out +=
             when {
                 value != null -> {
-                    val kind = datastarName(value.name, source.prefix)?.first?.valueKind
+                    val kind = datastarName(value.name, source.prefix)?.spec?.valueKind
                     when {
                         !value.whole -> null
                         kind == ValueKind.EXPRESSION -> expression(src, s)
@@ -89,8 +89,11 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
                 }
 
                 key != null -> {
-                    datastarName(key.name, source.prefix)?.let { (_, parts) ->
-                        DatastarString.AttributeName(s, parts.map { NameToken(key.nameStart + it.start, key.nameStart + it.end, it.part) })
+                    datastarName(key.name, source.prefix)?.let { name ->
+                        DatastarString.AttributeName(
+                            s,
+                            name.parts.map { NameToken(key.nameStart + it.start, key.nameStart + it.end, it.part) },
+                        )
                     }
                 }
 
@@ -115,18 +118,24 @@ public fun Analyzer.datastarStrings(source: Source): List<DatastarString> {
     return out
 }
 
+/** A Datastar attribute's name: its [spec] in the catalog and the [parts] to colour, as offsets into the name. */
+public class DatastarName internal constructor(
+    public val spec: AttributeSpec,
+    public val parts: List<NameToken>,
+)
+
 /**
- * The spec and the coloured parts of [name] when it is one of the catalog's attributes, under [prefix] or either
- * bundle's: the VS Code grammar knows both, and so do the colours.
+ * [name] as one of the catalog's attributes, under [prefix] or under either bundle's, `data-` and `data-star-`: the VS Code
+ * grammar knows both, and so do colours and spelling. Null for the page's own `data-color`, or a typo.
  */
-private fun Analyzer.datastarName(
+public fun Analyzer.datastarName(
     name: String,
     prefix: String,
-): Pair<AttributeSpec, List<NameToken>>? {
+): DatastarName? {
     for (p in listOf(prefix, "data-", "data-star-").distinct()) {
         val spec = catalog.parseAttributeName(name.lowercase(), p)?.spec ?: continue
         val parts = tokenizeAttributeName(name, p) ?: continue
-        return spec to parts
+        return DatastarName(spec, parts)
     }
     return null
 }
@@ -175,13 +184,13 @@ private fun Analyzer.paintedHtml(
     val tokens = ArrayList<Token>()
     for (tag in tokenize(s.text, templates = false).tags) {
         for (attr in tag.attributes) {
-            val (spec, parts) = datastarName(attr.name, prefix) ?: continue
-            for (p in parts) {
+            val name = datastarName(attr.name, prefix) ?: continue
+            for (p in name.parts) {
                 val r = s.toSource(attr.nameStart + p.start, attr.nameStart + p.end)
                 names += NameToken(r.first, r.last + 1, p.part)
             }
             val value = attr.value?.takeIf { it.isNotBlank() } ?: continue
-            when (spec.valueKind) {
+            when (name.spec.valueKind) {
                 ValueKind.EXPRESSION, ValueKind.FILTER -> {
                     tokens +=
                         expressionTokens(src, s, attr.valueStart, attr.valueStart + value.length)
