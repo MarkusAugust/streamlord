@@ -49,6 +49,9 @@ All notable changes to Streamlord are recorded here. The format follows
   HTML, with its tokens and, for an expression, the prose in it, at the offsets of the source.
   `datastarName(name, prefix)` reads an attribute's name under the prefix given or either bundle's,
   and gives the tokens and the prose of a value written to it.
+- `valueQuestions(source)` lists the values of a Kotlin file the analysis asks an editor about
+  through `Source.valueFact`, each by the range it asks by, so an editor that resolves types works
+  out a fact for those and need not find the values itself.
 - **Breaking:** `attributesIndexes`, `expressionOptions`, `signalNameStrings`, `htmlStringAt` and
   `tokenizeAttributeName` are no longer public, nor `AttributesIndex`, `ExpressionOption` and
   `SignalNameString`: `datastarStrings` and `datastarName` answer what they were put together for.
@@ -59,6 +62,9 @@ All notable changes to Streamlord are recorded here. The format follows
   which it took for build output and left unread, so every signal in it was unknown. It now counts
   folders from the outermost content root that holds the file, and leaves out hidden folders, as
   VS Code does.
+- IntelliJ judges two values by their type that it judged by the text alone: the sum that leads a
+  chain, `first + last + "<p>...</p>"`, which is a warning where it holds a string and was a hint,
+  and a value marked inside two pairs of parentheses, `${+((count))}`.
 - IntelliJ colours the value of `attributes["data-bind"] = "name"` as the signal's name it is, and
   no longer spell checks a signal's name in a DSL call, `dataBind("usrnm")`, as it never did in an
   attribute.

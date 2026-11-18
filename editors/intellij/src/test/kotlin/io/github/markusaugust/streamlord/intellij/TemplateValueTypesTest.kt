@@ -16,7 +16,6 @@ import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.core.json.JsonArray
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
-import io.github.markusaugust.streamlord.intellij.analysis.ValueFacts
 import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.inspections.ReplaceTextFix
 import org.jetbrains.kotlin.psi.KtFile
@@ -391,7 +390,7 @@ class TemplateValueTypesTest : StreamlordTestCase() {
     /** The facts of a page, by the text of each placeholder. */
     private fun facts(text: String): Map<String, ValueFact> {
         val file = myFixture.configureByText("Page.kt", text) as KtFile
-        return background { ValueFacts.of(file) }.mapKeys { (range, _) -> range.substring(file.text) }
+        return background { StreamlordAnalysis.getInstance(project).valueFacts(file) }.mapKeys { (range, _) -> range.substring(file.text) }
     }
 
     private fun severity(s: HighlightSeverity): String =

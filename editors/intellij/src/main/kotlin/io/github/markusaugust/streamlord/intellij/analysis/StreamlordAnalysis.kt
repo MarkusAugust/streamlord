@@ -26,6 +26,7 @@ import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.ValueQuestion
 import io.github.markusaugust.streamlord.analysis.datastarStrings
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
@@ -266,9 +267,20 @@ class StreamlordAnalysis(
     internal fun valueFacts(file: KtFile): Map<TextRange, ValueFact> =
         CachedValuesManager.getCachedValue(file) {
             val dumb = DumbService.getInstance(project)
-            val facts = if (dumb.isDumb) emptyMap() else ValueFacts.of(file)
+            val facts = if (dumb.isDumb) emptyMap() else ValueFacts.of(file, valueQuestions(file))
             CachedValueProvider.Result.create(facts, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
+
+    /** The values of [file] the analysis asks about, found once for each reading of its text: an edit elsewhere asks nothing new. */
+    private fun valueQuestions(file: KtFile): List<ValueQuestion> {
+        val source = source(file.text, SourceLanguage.KOTLIN, file)
+        val memo =
+            CachedValuesManager.getCachedValue(file) {
+                CachedValueProvider.Result.create(AtomicReference<Pair<Source, List<ValueQuestion>>>(), file, settings.tracker)
+            }
+        memo.get()?.takeIf { it.first == source }?.let { return it.second }
+        return analyzer.valueQuestions(source).also { memo.set(source to it) }
+    }
 
     /** A first pass: the facts and the file as it was read, and the issues they gave. */
     private class Judged(

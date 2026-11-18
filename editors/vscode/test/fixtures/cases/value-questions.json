@@ -1,0 +1,44 @@
+{
+  "$comment": "Kotlin files with values written into markup, what an editor that resolves types says of each value the analysis asks about, and what is then shown: the text of each issue and its severity, in the order of the file. `facts` is keyed by the text of a value as the analysis asks about it (see valueQuestions). The analysis reads each case with those answers (ValueQuestionsTest.kt); the IntelliJ plugin reads the same file with the Kotlin plugin's own types and must show the same (SharedValueCasesTest.kt).",
+  "cases": [
+    {
+      "name": "a string in a template is a warning, a number silent",
+      "kotlin": "fun page(name: String, count: Int) = \"<p>$name $count</p>\"",
+      "facts": {
+        "$name": "string",
+        "$count": "number"
+      },
+      "issues": [
+        "$name warning"
+      ]
+    },
+    {
+      "name": "a leading sum is one value, asked about as one",
+      "kotlin": "fun page(x: String, y: String) = x + y + \"<p>a</p>\"",
+      "facts": {
+        "x + y": "string"
+      },
+      "issues": [
+        "x + y warning"
+      ]
+    },
+    {
+      "name": "a product in a leading sum is part of the one value",
+      "kotlin": "fun page(a: Int, b: Int, s: String) = s + a * b + \"<p>x</p>\"",
+      "facts": {
+        "s + a * b": "string"
+      },
+      "issues": [
+        "s + a * b warning"
+      ]
+    },
+    {
+      "name": "a marked value in two pairs of parentheses is the value inside them",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.interpolate\n\nfun page(count: Int) = interpolate { \"<p onclick=\\\"f(${+((count))})\\\"></p>\" }",
+      "facts": {
+        "(count)": "number"
+      },
+      "issues": []
+    }
+  ]
+}

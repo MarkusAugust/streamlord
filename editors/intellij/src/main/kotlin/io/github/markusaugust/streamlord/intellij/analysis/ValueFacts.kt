@@ -5,6 +5,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import io.github.markusaugust.streamlord.analysis.Catalog
 import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.ValueQuestion
 import io.github.markusaugust.streamlord.analysis.isMarkup
 import io.github.markusaugust.streamlord.analysis.ofResolvedClass
 import io.github.markusaugust.streamlord.analysis.opensWithTag
@@ -90,52 +91,50 @@ object ValueFacts {
     /** How many calls deep a function's body is read for the markup it returns. */
     private const val CALL_DEPTH = 3
 
-    /** The fact of every value in an HTML template or `+` chain, by the range the analysis gives its placeholder. */
-    fun of(file: KtFile): Map<TextRange, ValueFact> {
-        val placeholders = placeholders(file) + markedValues(file)
-        val arguments = interpolateArguments(file)
-        if (placeholders.isEmpty() && arguments.isEmpty()) return emptyMap()
+    /**
+     * The fact of each value the analysis asks about in [file], by the range it asks by. An argument of `interpolate(...)`
+     * is answered only where its class is somebody else's: the analysis reads the rest of it from the text.
+     */
+    fun of(
+        file: KtFile,
+        questions: List<ValueQuestion>,
+    ): Map<TextRange, ValueFact> {
+        val asked = questions.mapNotNull { q -> expressionAt(file, q.start, q.end)?.let { Triple(q, TextRange(q.start, q.end), it) } }
+        if (asked.isEmpty()) return emptyMap()
+        val (arguments, values) = asked.partition { it.first.argument }
         return analyze(file) {
             judge(
-                placeholders,
+                values.map { it.second to it.third },
                 { it.evaluate() != null || enumEntry(it) },
                 { typeFact(it.expressionType) },
                 { markupElements(it.expressionType) },
                 { typeFact(it.type).isMarkup() },
-            ) + resolved(arguments) { classOf(it.expressionType) }
+            ) + resolved(arguments.map { it.second to it.third }) { classOf(it.expressionType) }
         }
     }
 
     /**
-     * The values handed to each `interpolate(...)` after its format, by their own range: the
-     * analysis reads them from the text, and is told only where the class says otherwise.
+     * The expression that stands at exactly [start] to [end]: a template's own, or what is written there, without the
+     * parentheses around all of it. Null where the analysis asks by a range that is no expression's, as it does for a value
+     * it could not read whole.
      */
-    private fun interpolateArguments(file: KtFile): List<Pair<TextRange, KtExpression>> =
-        PsiTreeUtil
-            .collectElementsOfType(file, KtCallExpression::class.java)
-            .filter { it.calleeExpression?.text == "interpolate" }
-            .flatMap { call -> call.valueArguments.drop(1).mapNotNull { a -> a.getArgumentExpression()?.let { it.textRange to it } } }
-
-    /**
-     * What the block of an `interpolate { ... }` marks with `+`, in a template or joined to a string, by the range
-     * of what stands after the mark, and by the range inside its parentheses where it has them, which is the one
-     * the analysis asks by: a value judged by its type, as a template's is.
-     */
-    private fun markedValues(file: KtFile): List<Pair<TextRange, KtExpression>> =
-        PsiTreeUtil
-            .collectElementsOfType(file, KtCallExpression::class.java)
-            .filter { it.calleeExpression?.text == "interpolate" }
-            // The block after the call, or in its parentheses.
-            .mapNotNull { call ->
-                call.lambdaArguments.firstOrNull()?.getLambdaExpression()
-                    ?: call.valueArguments.firstNotNullOfOrNull { it.getArgumentExpression() as? KtLambdaExpression }
-            }.flatMap { PsiTreeUtil.collectElementsOfType(it, KtPrefixExpression::class.java) }
-            .filter { it.operationToken == KtTokens.PLUS }
-            .flatMap { mark ->
-                val value = mark.baseExpression ?: return@flatMap emptyList()
-                val inner = KtPsiUtil.deparenthesize(value) ?: value
-                listOf(value.textRange to inner, inner.textRange to inner).distinct()
+    private fun expressionAt(
+        file: KtFile,
+        start: Int,
+        end: Int,
+    ): KtExpression? {
+        var element: PsiElement? = file.findElementAt(start)
+        while (element != null && element !is KtFile) {
+            val range = element.textRange
+            if (range.startOffset != start || range.endOffset > end) return null
+            if (range.endOffset == end) {
+                if (element is KtStringTemplateEntryWithExpression) return element.expression
+                if (element is KtExpression) return KtPsiUtil.safeDeparenthesize(element)
             }
+            element = element.parent
+        }
+        return null
+    }
 
     /** The fact of each value by the class [qualified] resolves it to, where the text alone would read the class wrong. */
     private fun resolved(
@@ -240,36 +239,6 @@ object ValueFacts {
         val ref = (if (e is KtQualifiedExpression) e.selectorExpression else e) as? KtNameReferenceExpression ?: return null
         return ref.mainReference.resolve() as? KtEnumEntry
     }
-
-    /**
-     * `$x` and `${...}` by the entry's range, and each operand of `+` that is not a literal by its
-     * own, in the strings that may be HTML: a literal with a `<`, or one handed straight to a call.
-     */
-    private fun placeholders(file: KtFile): List<Pair<TextRange, KtExpression>> {
-        val out = ArrayList<Pair<TextRange, KtExpression>>()
-        val chained = HashSet<KtStringTemplateExpression>()
-        for (plus in PsiTreeUtil.collectElementsOfType(file, KtBinaryExpression::class.java)) {
-            if (!isPlus(plus) || isPlus(plus.parent)) continue
-            val operands = ArrayList<KtExpression>()
-            flatten(plus, operands)
-            val literals = operands.filterIsInstance<KtStringTemplateExpression>()
-            if (literals.isEmpty() || (literals.none(::hasTag) && plus.parent !is KtValueArgument)) continue
-            chained += literals
-            for (o in operands) if (o !is KtStringTemplateExpression) out += o.textRange to o
-        }
-        for (template in PsiTreeUtil.collectElementsOfType(file, KtStringTemplateExpression::class.java)) {
-            if (template !in chained && !hasTag(template) && template.parent !is KtValueArgument) continue
-            for (entry in template.entries) {
-                if (entry !is KtStringTemplateEntryWithExpression) continue
-                val expr = entry.expression ?: continue
-                out += entry.textRange to expr
-            }
-        }
-        return out
-    }
-
-    private fun hasTag(template: KtStringTemplateExpression): Boolean =
-        template.entries.any { it is KtLiteralStringTemplateEntry && '<' in it.text }
 
     private fun isPlus(e: Any?): Boolean = e is KtBinaryExpression && e.operationToken == KtTokens.PLUS
 
