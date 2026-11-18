@@ -752,20 +752,38 @@ public class Analyzer(
         offset: Int,
     ): KotlinString? {
         val lex = lex(src)
-        val s = lex.stringAt(offset) ?: return null
-        if (isHtmlString(src, s)) return s
-        val around = { names: Set<String> ->
-            findCallSites(src, names, lex).firstOrNull {
-                it.openParen < s.start &&
-                    s.end <= it.closeParen + 1
-            }
+        return lex.stringAt(offset)?.takeIf(htmlStrings(src, lex))
+    }
+
+    /** Whether a string literal of [src] holds HTML, as [htmlStringAt] has it, with the calls of the file found once for them all. */
+    internal fun htmlStrings(
+        src: String,
+        lex: KotlinLex,
+    ): (KotlinString) -> Boolean {
+        val formats by lazy(LazyThreadSafetyMode.NONE) {
+            if (shadowsCore(src, "interpolate")) emptyList() else outermost(findCallSites(src, INTERPOLATE, lex))
         }
-        val formatOf = around(INTERPOLATE)?.takeUnless { shadowsCore(src, "interpolate") }?.let { interpolateFormat(it, src) }
-        if (formatOf?.second?.start == s.start) return s
-        val site = around(htmlSiteNames) ?: return null
-        val spec = catalog.htmlCallSites[site.name] ?: return null
-        val arg = markupString(site, spec)
-        return if (arg != null && arg.start == s.start) s else null
+        val calls by lazy(LazyThreadSafetyMode.NONE) { outermost(findCallSites(src, htmlSiteNames, lex)) }
+        return { s ->
+            isHtmlString(src, s) ||
+                around(formats, s)?.let { interpolateFormat(it, src) }?.second?.start == s.start ||
+                around(calls, s)?.let { site -> catalog.htmlCallSites[site.name]?.let { markupString(site, it) } }?.start == s.start
+        }
+    }
+
+    /** Those of [sites], in the order of the file, that none before them holds. */
+    private fun outermost(sites: List<CallSite>): List<CallSite> {
+        var end = -1
+        return sites.filter { site -> (site.openParen > end).also { if (it) end = site.closeParen } }
+    }
+
+    /** The one of [outermost] calls that holds [s] between its parentheses. */
+    private fun around(
+        outermost: List<CallSite>,
+        s: KotlinString,
+    ): CallSite? {
+        val before = outermost.binarySearch { if (it.openParen < s.start) -1 else 1 }.let { -it - 2 }
+        return outermost.getOrNull(before)?.takeIf { s.end <= it.closeParen + 1 }
     }
 
     /**

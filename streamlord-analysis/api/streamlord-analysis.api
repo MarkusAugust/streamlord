@@ -247,6 +247,37 @@ public final class io/github/markusaugust/streamlord/analysis/DatastarFrame {
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class io/github/markusaugust/streamlord/analysis/DatastarString {
+	public abstract fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DatastarString$AttributeName : io/github/markusaugust/streamlord/analysis/DatastarString {
+	public final fun getParts ()Ljava/util/List;
+	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DatastarString$Expression : io/github/markusaugust/streamlord/analysis/DatastarString {
+	public final fun getProse ()Ljava/util/List;
+	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public final fun getTokens ()Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DatastarString$Html : io/github/markusaugust/streamlord/analysis/DatastarString {
+	public final fun getByLook ()Z
+	public final fun getParts ()Ljava/util/List;
+	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public final fun getTokens ()Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DatastarString$SignalName : io/github/markusaugust/streamlord/analysis/DatastarString {
+	public fun getString ()Lio/github/markusaugust/streamlord/analysis/KotlinString;
+	public final fun getTokens ()Ljava/util/List;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/DatastarStringsKt {
+	public static final fun datastarStrings (Lio/github/markusaugust/streamlord/analysis/Analyzer;Lio/github/markusaugust/streamlord/analysis/Source;)Ljava/util/List;
+}
+
 public final class io/github/markusaugust/streamlord/analysis/DeclaredNames {
 	public fun <init> (Ljava/util/Set;Ljava/util/Set;)V
 	public final fun getConstants ()Ljava/util/Set;

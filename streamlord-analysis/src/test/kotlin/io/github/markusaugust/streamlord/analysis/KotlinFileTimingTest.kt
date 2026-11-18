@@ -47,6 +47,18 @@ class KotlinFileTimingTest {
     }
 
     @Test
+    fun `the strings that are datastar's are named without reading the file again for each`() {
+        val lines =
+            file {
+                "fun T.f$it() { dataOnClick(\"\\\$n$it++\"); dataBind(\"s$it\"); attributes[\"data-text\"] = \"\\\$n$it\"; " +
+                    "patchElements(\"<p id=\\\"p$it\\\" data-show=\\\"\\\$n$it\\\">x</p>\"); val s = \"plain $it\" }"
+            }
+        assertGrowsLinearly("datastar strings named", 40, lines) { src ->
+            analyzer.datastarStrings(Source(src, SourceLanguage.KOTLIN, modules = Modules.known(true, true)))
+        }
+    }
+
+    @Test
     fun `a call handed a variable does not lex the file again`() {
         grows(
             "patchElements calls with a mode and no selector",
