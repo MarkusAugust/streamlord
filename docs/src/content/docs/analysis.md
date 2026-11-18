@@ -96,14 +96,14 @@ for a `String` and for markup outside element text, and fails nothing: it is you
 fun `no value reaches a page without its mark`() = Analyzer().checkProject(strict = true)
 ```
 
-With `strict`, the check fails on those warnings too, as `failures(strict = true)` keeps them. Under `interpolate-template`: a value left
-without its `+` in the block of `interpolate`, one written as a template into its format, and
-markup held as a `String` that `interpolate` would print as text. Under `unescaped-interpolation`:
-a `String`, or markup outside element text, in an HTML string that is not `interpolate`'s. And
-under `kotlin-interpolation`: a value written with a bare dollar into a `data-*` expression of an
-HTML string, `data-text="$name"`, which may be the server's value or a signal Kotlin swallowed. A
-value that is meant to stand as it is says so by its type, `Html`, or by `Trusted(...)`. A hint
-still fails nothing.
+With `strict`, the check fails on those warnings too, as `failures(strict = true)` keeps them.
+Under `interpolate-template`: a value left without its `+` in the block of `interpolate`, one
+written as a template into its format, and markup held as a `String` that `interpolate` would print
+as text. Under `unescaped-interpolation`: a `String`, or markup outside element text, in an HTML
+string that is not `interpolate`'s. And under `kotlin-interpolation`: a value written with a bare
+dollar into a `data-*` expression of an HTML string, `data-text="$name"`, which may be the server's
+value or a signal Kotlin swallowed. A value that is meant to stand as it is says so by its type,
+`Html`, or by `Trusted(...)`. A hint still fails nothing.
 
 `format()` writes each finding as `src/main/kotlin/Page.kt:12:5: error: ... [kotlin-interpolation]`,
 the form IDEs and CI logs turn into a link to the line; `line` and `column` give the place alone.
