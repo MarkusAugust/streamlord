@@ -41,8 +41,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - `ProjectIndex` holds what a project's files give each other, for a tool that keeps a project in
   memory as an editor does: `put(path, text, language)` when a file changes, `remove(path)` when it
   is gone, and then the signals the project defines, its constants, ids and classes, and
-  `signalsFor(path)` for `projectSignalIssues`. `put` answers whether the other files are to be
-  judged again. Both editors and `analyzeProject` ask the same one, where each kept its own.
+  `signalsFor(path)` for `projectSignalIssues`. `put` and `remove` answer whether the other files
+  are to be judged again. Both editors and `analyzeProject` keep their files in one, where each
+  kept its own. `ProjectFiles.FILE_CAP` and `SIZE_CAP` name how much of a project an editor lists.
 
 ### Editors
 

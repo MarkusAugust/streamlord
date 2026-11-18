@@ -3,6 +3,8 @@ package io.github.markusaugust.streamlord.analysis
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotSame
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** [ProjectIndex] as an editor uses it: files put in and taken out, and what the project then knows. */
@@ -139,12 +141,17 @@ class ProjectIndexTest {
     fun `what a file says of the server's reads can wait until it is judged`() {
         kotlin("Search.kt", handler)
         val page = """<p data-text="${'$'}query"></p>"""
-        assertTrue(index.put("a.html", page, SourceLanguage.HTML, facts = false))
+        // The page defines nothing, and what it says of the server's reads waits.
+        assertFalse(index.put("a.html", page, SourceLanguage.HTML, facts = false))
         assertEquals(listOf(emptySet<String>()), index.signalsFor("Search.kt").others().map { it.declared })
         // A second edit keeps waiting, and what it said before stands.
         assertFalse(index.put("a.html", "$page ", SourceLanguage.HTML, facts = false))
         assertEquals(listOf(emptySet<String>()), index.signalsFor("Search.kt").others().map { it.declared })
         assertEquals(listOf("a.html"), index.waiting())
+        // A text that is not the one put in is not read: the file keeps waiting for its own.
+        assertFalse(index.readFacts("a.html", page))
+        assertEquals(listOf("a.html"), index.waiting())
+        assertFalse(index.readFacts("never-there.html", page))
         assertTrue(index.readFacts("a.html", "$page "))
         assertEquals(emptyList(), index.waiting())
         assertEquals(listOf(setOf("query")), index.signalsFor("Search.kt").others().map { it.declared })
@@ -217,5 +224,38 @@ class ProjectIndexTest {
         html("a.html", "<p></p>")
         kotlin("src/B.kt", "fun b() = 1")
         assertEquals(setOf("a.html", "src/B.kt"), index.paths())
+    }
+
+    @Test
+    fun `a new file that gives the others nothing leaves them as they were judged`() {
+        kotlin("Search.kt", handler)
+        assertFalse(html("plain.html", "<p>nothing</p>"))
+        assertFalse(html("other.html", """<p data-text="${'$'}page"></p>"""))
+        assertTrue(html("search.html", """<p data-text="${'$'}query"></p>"""))
+    }
+
+    @Test
+    fun `hands out the same definitions and the same constants until one of them changes`() {
+        html("a.html", """<div data-signals:count="0"></div>""")
+        kotlin("Keys.kt", "const val title = \"Home\"")
+        val definitions = index.definitions()
+        val constants = index.constants()
+        html("b.html", "<p>nothing</p>")
+        html("a.html", """<div data-signals:count="1"></div>""")
+        assertSame(definitions, index.definitions())
+        kotlin("Keys.kt", "const val title = \"Home\"\nconst val label = \"Name\"")
+        assertSame(definitions, index.definitions())
+        assertNotSame(constants, index.constants())
+        val more = index.constants()
+        html("a.html", """<div data-signals:total="1"></div>""")
+        assertNotSame(definitions, index.definitions())
+        assertSame(more, index.constants())
+    }
+
+    @Test
+    fun `a text that newly calls a short helper is read without it where its file has no DSL`() {
+        val index = ProjectIndex(hasDsl = { false })
+        index.put("Other.kt", "fun FlowContent.x() {\n    input { dataBind(\"own\") }\n}", SourceLanguage.KOTLIN)
+        assertEquals(listOf("own"), index.declarations("Other.kt") { helper }?.map { it.name })
     }
 }

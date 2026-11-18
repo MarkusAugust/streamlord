@@ -12,8 +12,9 @@ import io.github.markusaugust.streamlord.core.client.regex
  *
  * The DSL's short helpers, `set`, `toggle`, `signal` and their kin, share their names with other APIs.
  * With no [hasDsl] a Kotlin file's imports say whether they are the DSL's. An editor that sees the
- * classpath gives [hasDsl], which answers for the file at a path each time it is asked, null while it
- * cannot tell: a file moved to another module changes no text. It says so with [modulesChanged].
+ * classpath gives [hasDsl], which answers for the file at a path, null while it cannot tell. A file
+ * moved to another module changes no text, so the answer is asked for anew by every question but
+ * [definitions], which keeps its set: the editor calls [modulesChanged] when the answers may differ.
  *
  * Not safe to use from two threads at once.
  */
@@ -59,7 +60,7 @@ public class ProjectIndex(
 
     /**
      * Reads [text] as the file at [path]. True where what the other files are told has changed, so
-     * that they are to be judged again. Without [facts], what the file says about the signals the
+     * that they are to be judged again: a new file that gives them nothing leaves them as they were. Without [facts], what the file says about the signals the
      * server reads is left as it was until [readFacts]: an editor reads it when it judges the file,
      * not on each keystroke.
      */
@@ -92,26 +93,27 @@ public class ProjectIndex(
                 stale = !facts,
             )
         entries[path] = next
-        val changed =
-            previous == null ||
-                previous.names.definitions != next.names.definitions ||
-                previous.withoutDsl?.definitions != next.withoutDsl?.definitions ||
-                previous.declared?.constants != next.declared?.constants ||
-                previous.declared?.others != next.declared?.others ||
-                (facts && factsMatter(path, previous.facts, next.facts))
-        if (changed) dropUnions()
-        return changed
+        val defines =
+            previous?.names?.definitions.orEmpty() != next.names.definitions ||
+                previous?.withoutDsl?.definitions != next.withoutDsl?.definitions
+        val declares =
+            previous?.declared?.constants.orEmpty() != next.declared?.constants.orEmpty() ||
+                previous?.declared?.others.orEmpty() != next.declared?.others.orEmpty()
+        if (defines) definitionsUnion = null
+        if (declares) constantsUnion = null
+        return defines || declares || (facts && factsMatter(path, previous?.facts ?: NO_FACTS, next.facts))
     }
 
     /**
-     * Reads what [text], the text the file at [path] was last put in with, says about the signals the
-     * server reads, where a [put] left it waiting. True where the other files are to be judged again.
+     * Reads what [text] says about the signals the server reads, where a [put] left the file at [path]
+     * waiting and [text] is the text it was put in with; any other text is left unread, and the file
+     * waits on. True where the other files are to be judged again.
      */
     public fun readFacts(
         path: String,
         text: String,
     ): Boolean {
-        val e = entries[path]?.takeIf { it.stale } ?: return false
+        val e = entries[path]?.takeIf { it.stale && it.readFrom(text) } ?: return false
         val before = e.facts
         e.facts = collectSignalFacts(source(text, e.language))
         e.stale = false
@@ -146,14 +148,15 @@ public class ProjectIndex(
     public fun signals(): Set<String> = entries.flatMapTo(LinkedHashSet()) { (path, e) -> namesOf(path, e).signals }
 
     /**
-     * Every signal some file defines, which a `$name` is checked against. The same set until one
-     * changes, entries that are no names among them, as [collectSignalDefinitions] has them.
+     * Every signal some file defines, which a `$name` is checked against, entries that are no names
+     * among them, as [collectSignalDefinitions] has them. The same set, not only an equal one, until
+     * what some file defines changes: a caller may know by that whether it has read it before.
      */
     public fun definitions(): Set<String> =
         definitionsUnion
             ?: entries.flatMapTo(HashSet<String>()) { (path, e) -> namesOf(path, e).definitions }.also { definitionsUnion = it }
 
-    /** The constants of the project's Kotlin, as [projectConstants] has them. The same set until one changes. */
+    /** The constants of the project's Kotlin, as [projectConstants] has them. The same set until what a file declares changes. */
     public fun constants(): Set<String> =
         constantsUnion ?: projectConstants(entries.values.mapNotNull { it.declared }).also { constantsUnion = it }
 
@@ -168,8 +171,8 @@ public class ProjectIndex(
         return Selectors(ids, classes)
     }
 
-    /** The paths of the files held. */
-    public fun paths(): Set<String> = entries.keys
+    /** The paths of the files held now: a later [put] or [remove] does not change the set handed out. */
+    public fun paths(): Set<String> = entries.keys.toSet()
 
     /** The signals the file at [path] names. */
     public fun signalsOf(path: String): Set<String> = entries[path]?.let { namesOf(path, it).signals }.orEmpty()
@@ -184,9 +187,14 @@ public class ProjectIndex(
         text: () -> String?,
     ): List<SignalDeclaration>? {
         val e = entries[path] ?: return null
-        val without = e.withoutDsl != null && hasDsl?.invoke(path) == false
+        var without = e.withoutDsl != null && hasDsl?.invoke(path) == false
         (if (without) e.declarationsWithoutDsl else e.declarations)?.let { return it }
         val current = text() ?: return null
+        // A text that is not the one put in may call a short helper that one did not.
+        if (!e.readFrom(current)) {
+            without =
+                e.language == SourceLanguage.KOTLIN && callsShortHelper(current) && hasDsl?.invoke(path) == false
+        }
         val found = signalDeclarations(source(current, e.language).let { if (without) it.copy(modules = WITHOUT_DSL) else it })
         if (e.readFrom(current)) {
             if (without) {
@@ -200,7 +208,7 @@ public class ProjectIndex(
 
     /**
      * Where the file at [path] reads signals, from [source], the file as the editor describes it now, asked
-     * for and kept as [declarations] has it. Calls to something other than Streamlord are among them.
+     * for and kept as [declarations] has it, for the modules and constants of the [source] first given. Calls to something other than Streamlord are among them.
      */
     public fun reads(
         path: String,
@@ -254,7 +262,7 @@ public class ProjectIndex(
         }
     }
 
-    /** To be called when what [hasDsl] answers may have changed. */
+    /** To be called when what [hasDsl] answers may have changed: [definitions] is then worked out again. */
     public fun modulesChanged() {
         definitionsUnion = null
     }
@@ -296,7 +304,7 @@ public class ProjectIndex(
         }
     }
 
-    public companion object {
+    private companion object {
         private val WITHOUT_DSL = Modules.known(core = true, htmlDsl = false)
         private val ANALYZER = Analyzer()
         private val NO_FACTS = SignalFacts(emptySet(), emptySet(), emptyMap(), emptyList())

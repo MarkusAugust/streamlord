@@ -745,7 +745,6 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectIndex {
-	public static final field Companion Lio/github/markusaugust/streamlord/analysis/ProjectIndex$Companion;
 	public fun <init> ()V
 	public fun <init> (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
 	public synthetic fun <init> (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -766,9 +765,6 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectIndex {
 	public final fun signalsFor (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ProjectSignals;
 	public final fun signalsOf (Ljava/lang/String;)Ljava/util/Set;
 	public final fun waiting ()Ljava/util/List;
-}
-
-public final class io/github/markusaugust/streamlord/analysis/ProjectIndex$Companion {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectIssue {

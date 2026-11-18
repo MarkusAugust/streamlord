@@ -26,7 +26,6 @@ import io.github.markusaugust.streamlord.analysis.Selectors
 import io.github.markusaugust.streamlord.analysis.SignalDeclaration
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalReference
-import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
@@ -35,7 +34,6 @@ import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.CancellationException
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -73,11 +71,12 @@ class SignalIndex(
         val name: String,
     )
 
-    private val files = ConcurrentHashMap<String, Held>()
-
-    /** What the files give the project, read with the prefix beside it. Used under [lock]: highlighting asks from several threads. */
-    @Volatile
-    private var held: Pair<String, ProjectIndex> = "" to ProjectIndex()
+    /**
+     * The files read, and what they give the project, read with the prefix beside it. The two are kept in step and
+     * used under [lock]: highlighting asks from several threads, and a file is read or forgotten in both or in neither.
+     */
+    private val files = HashMap<String, Held>()
+    private var held: Pair<String, ProjectIndex>? = null
     private val lock = Any()
 
     /** The file whose module [hasDsl] is being asked for through its tree, which knows an injected fragment's host. */
@@ -164,9 +163,9 @@ class SignalIndex(
             override fun others(): Iterable<SignalFacts> {
                 if (key == null) return emptyList()
                 refresh()
-                for (waiting in locked { waiting() }) {
+                for ((waiting, vf) in locked { waiting().mapNotNull { path -> files[path]?.file?.let { path to it } } }) {
                     ProgressManager.checkCanceled()
-                    val text = files[waiting]?.file?.let(::textOf) ?: continue
+                    val text = textOf(vf) ?: continue
                     locked { readFacts(waiting, text) }
                 }
                 return locked { signalsFor(key).others() }
@@ -177,8 +176,7 @@ class SignalIndex(
     /** What [of] finds in each file held, as places in it. */
     private fun places(of: ProjectIndex.(String, VirtualFile) -> List<Triple<Int, Int, String>>?): List<Place> {
         val out = ArrayList<Place>()
-        for ((key, h) in files) {
-            // Reading a file is no PSI work, so nothing else asks: a write that waits must be able to stop this read.
+        for ((key, h) in locked { files.toList() }) {
             ProgressManager.checkCanceled()
             val file = h.file?.takeIf { it.isValid } ?: continue
             for ((start, end, name) in locked { of(key, file) } ?: continue) out += Place(file, start, end, name)
@@ -224,8 +222,10 @@ class SignalIndex(
     /** Forget everything, so the next question reads the project again. Apart from the reading, which a write may stop and start over. */
     fun forget() {
         forgotten.incrementAndGet()
-        files.clear()
-        locked { clear() }
+        locked {
+            files.clear()
+            clear()
+        }
         refreshedAt = emptyList()
         listed = emptyList<Long>() to emptyList()
     }
@@ -256,31 +256,33 @@ class SignalIndex(
         val key = keyOf(file) ?: return null
         val text = file.text
         val stamp = file.modificationStamp
-        val index = index()
-        val cached = files[key]
-        if (cached == null || cached.stamp != stamp || cached.length != text.length) {
-            put(key, file.virtualFile, stamp, text, languageOf(vfOf(file))!!)
-        }
         asking.set(key to file)
         try {
-            return synchronized(lock) { index.action(key) }
+            // Read and asked in one go: a file another thread reads or forgets meanwhile is not answered for by halves.
+            return locked {
+                val cached = files[key]
+                if (cached == null || cached.stamp != stamp || cached.length != text.length) {
+                    read(key, file.virtualFile, stamp, text, languageOf(vfOf(file))!!)
+                }
+                action(key)
+            }
         } finally {
             asking.remove()
         }
     }
 
-    private fun <T> locked(action: ProjectIndex.() -> T): T = index().let { synchronized(lock) { it.action() } }
-
-    /** The index for the prefix in the settings: another prefix reads every file anew. */
-    private fun index(): ProjectIndex {
-        val prefix = StreamlordSettings.getInstance(project).attributePrefix
-        held.let { (at, index) -> if (at == prefix) return index }
-        return synchronized(lock) {
-            files.clear()
-            refreshedAt = emptyList()
-            ProjectIndex(prefix, ::hasDsl).also { held = prefix to it }
+    /** [action] on the index for the prefix in the settings, under [lock]; another prefix reads every file anew. */
+    private fun <T> locked(action: ProjectIndex.() -> T): T =
+        synchronized(lock) {
+            val prefix = StreamlordSettings.getInstance(project).attributePrefix
+            val index =
+                held?.takeIf { it.first == prefix }?.second ?: ProjectIndex(prefix, ::hasDsl).also {
+                    files.clear()
+                    refreshedAt = emptyList()
+                    held = prefix to it
+                }
+            index.action()
         }
-    }
 
     /** Whether the module of the file [key] has streamlord-html; null while the IDE indexes, when the calls count. */
     private fun hasDsl(key: String): Boolean? {
@@ -288,16 +290,16 @@ class SignalIndex(
         return files[key]?.file?.let { ProjectLibraries.known(project, it, StreamlordLibrary.HTML) }
     }
 
-    private fun put(
+    /** Reads [text] as the file [key]. What it says of the server's reads waits until the check asks. Under [lock]. */
+    private fun ProjectIndex.read(
         key: String,
         file: VirtualFile?,
         stamp: Long,
         text: String,
         language: SourceLanguage,
     ) {
-        val index = index()
+        put(key, text, language, facts = false)
         files[key] = Held(file, stamp, text.length)
-        synchronized(lock) { index.put(key, text, language, facts = false) }
     }
 
     /** Read every project file the index does not know at its current stamp. Callers hold a read action (completion, inspections). */
@@ -318,7 +320,6 @@ class SignalIndex(
                 ForcefulReparseModificationTracker.getInstance().modificationCount,
                 DumbService.getInstance(project).modificationTracker.modificationCount,
             )
-        index()
         if (counts == refreshedAt) return
         UiThreadWork.note()
         val forgottenAt = forgotten.get()
@@ -331,14 +332,16 @@ class SignalIndex(
             seen += vf.path
             val document = FileDocumentManager.getInstance().getCachedDocument(vf)
             val stamp = document?.modificationStamp ?: vf.modificationStamp
-            if (files[vf.path]?.stamp == stamp) continue
+            if (locked { files[vf.path]?.stamp } == stamp) continue
             val text = document?.text ?: loadText(vf) ?: continue
-            put(vf.path, vf, stamp, text, language)
+            locked { read(vf.path, vf, stamp, text, language) }
         }
         // A file deleted, renamed or moved out of the project defines nothing any more.
-        for (key in files.keys - seen) {
-            files.remove(key)
-            locked { remove(key) }
+        locked {
+            for (key in files.keys - seen) {
+                files.remove(key)
+                remove(key)
+            }
         }
         // A read that [forget] emptied half way has not read everything, so it leaves the next one to.
         if (forgotten.get() == forgottenAt) refreshedAt = counts
@@ -354,12 +357,12 @@ class SignalIndex(
         // A template file is markup whatever type the IDE gives it, so it is found by its extension.
         for (extension in markupExtensions()) markup += FilenameIndex.getAllFilesByExt(project, extension, scope)
         val files =
-            markup.asSequence().filter(::indexable).take(FILE_CAP) +
+            markup.asSequence().filter(::indexable).take(ProjectFiles.FILE_CAP) +
                 FileTypeIndex
                     .getFiles(KotlinFileType.INSTANCE, scope)
                     .asSequence()
                     .filter(::indexable)
-                    .take(FILE_CAP)
+                    .take(ProjectFiles.FILE_CAP)
         return files.toList().also { listed = counts to it }
     }
 
@@ -368,7 +371,7 @@ class SignalIndex(
      * leaves unread. The outermost, since Gradle makes a generated source folder under `build` a content root of its own.
      */
     private fun indexable(vf: VirtualFile): Boolean {
-        if (!vf.isValid || vf.isDirectory || vf.length > SIZE_CAP) return false
+        if (!vf.isValid || vf.isDirectory || vf.length > ProjectFiles.SIZE_CAP) return false
         val index = ProjectFileIndex.getInstance(project)
         var root = index.getContentRootForFile(vf)
         while (true) root = root?.parent?.let(index::getContentRootForFile) ?: break
@@ -388,9 +391,6 @@ class SignalIndex(
         }
 
     companion object {
-        private const val FILE_CAP = ProjectFiles.FILE_CAP
-        private const val SIZE_CAP = ProjectFiles.SIZE_CAP
-
         fun getInstance(project: Project): SignalIndex = project.service()
     }
 }
