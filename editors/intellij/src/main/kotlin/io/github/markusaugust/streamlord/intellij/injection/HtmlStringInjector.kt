@@ -40,7 +40,7 @@ class HtmlStringInjector : MultiHostInjector {
         if (s.unterminated || !isHtmlString(src, s)) return
         // Strings the Kotlin plugin injects itself: `@Language("HTML")` just before, or handed to a Streamlord call, whose
         // parameters carry the annotation. Two injections would fight; only the marker-less, free-standing ones are ours.
-        if (analyzer.htmlStringAt(src, s.contentStart + 1)?.start == s.start && hasMarker(src, s.start)) return
+        if (hasMarker(src, s.start)) return
         if (isCallArgument(host)) return
         val entries = host.entries
         val ranges = ArrayList<TextRange>()

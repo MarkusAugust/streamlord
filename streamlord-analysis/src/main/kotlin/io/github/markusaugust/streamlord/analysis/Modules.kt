@@ -122,15 +122,10 @@ private fun importsDsl(
     return USES_HTML_DSL.findAll(text).any { m -> mask[m.range.first + IMPORT_OR_PACKAGE.find(m.value)!!.range.first] }
 }
 
-/** The HTML string at [offset] of [source]: one that looks like HTML, or the markup handed to a Streamlord call where the file has core. */
-public fun Analyzer.htmlStringAt(
-    source: Source,
-    offset: Int,
-): KotlinString? = htmlStringAt(source.text, offset, settle(source))
-
 /** Whether [source] may call the DSL, as its modules settle it: what colouring and spelling read a DSL call's string by. */
 public fun Analyzer.readsDsl(source: Source): Boolean = settle(source).dsl
 
+/** The HTML string at [offset]: one that looks like HTML, or the markup handed to a Streamlord call where the file has core. */
 internal fun Analyzer.htmlStringAt(
     src: String,
     offset: Int,

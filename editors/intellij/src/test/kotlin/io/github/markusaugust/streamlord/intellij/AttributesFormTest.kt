@@ -14,6 +14,7 @@ import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocume
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
 /** kotlinx.html's own way to write Datastar, `attributes["data-text"] = "..."`, is read as Datastar whatever the project has. */
 abstract class AttributesFormTestCase : BasePlatformTestCase() {
@@ -155,6 +156,15 @@ class ForeignDslCallTest : StreamlordTestCase() {
         val at = file.text.indexOf("dataOnClick(\"@post")
         assertFalse(analysis.isForeign(file, "dataOnClick", at))
         assertTrue(inBackground { analysis.isForeign(file, "dataOnClick", at) })
+    }
+
+    // What the UI thread took by its name must not be what the highlighting is then answered with.
+    fun `test a string the ui thread asked about first is still somebody else's to the highlighting`() {
+        val file = myFixture.configureByText("Other.kt", onReceiver) as KtFile
+        val analysis = StreamlordAnalysis.getInstance(project)
+        val string = PsiTreeUtil.findChildrenOfType(file, KtStringTemplateExpression::class.java).first { "@post" in it.text }
+        assertNotNull(analysis.datastarString(string))
+        assertNull(inBackground { analysis.datastarString(string) })
     }
 
     /** What [block] gives in a read action off the UI thread, where the platform runs highlighting, hover and spelling. */

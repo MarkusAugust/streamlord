@@ -16,6 +16,7 @@ import com.intellij.psi.util.PsiModificationTracker
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.CallSite
 import io.github.markusaugust.streamlord.analysis.Catalog
+import io.github.markusaugust.streamlord.analysis.DatastarString
 import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
@@ -25,9 +26,11 @@ import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.TemplateEngine
 import io.github.markusaugust.streamlord.analysis.ValueFact
+import io.github.markusaugust.streamlord.analysis.datastarStrings
 import io.github.markusaugust.streamlord.analysis.findCallSites
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -180,16 +183,57 @@ class StreamlordAnalysis(
         return known + foreignCalls(file, resolved, doubted)
     }
 
+    /**
+     * The strings of [file] that are Datastar's, by where each starts and where each ends: what colouring and spelling ask of a
+     * string. Found once for each version of the file, of the settings and of the project's modules, as the calls are resolved.
+     * What the UI thread finds is kept apart: nothing is resolved there, so it must not answer for a highlighting pass.
+     */
+    private fun datastarStrings(file: KtFile): Pair<Map<Int, DatastarString>, Map<Int, DatastarString>> =
+        if (ApplicationManager.getApplication().isDispatchThread) {
+            CachedValuesManager.getCachedValue(file) { findDatastarStrings(file) }
+        } else {
+            CachedValuesManager.getCachedValue(file) { findDatastarStrings(file) }
+        }
+
+    private fun findDatastarStrings(file: KtFile): CachedValueProvider.Result<Pair<Map<Int, DatastarString>, Map<Int, DatastarString>>> {
+        val found = analyzer.datastarStrings(source(file.text, SourceLanguage.KOTLIN, file).copy(foreign = foreignIn(file)))
+        return CachedValueProvider.Result.create(
+            found.associateBy { it.string.start } to found.associateBy { it.string.end },
+            file,
+            settings.tracker,
+            ProjectRootManager.getInstance(project),
+            DumbService.getInstance(project).modificationTracker,
+        )
+    }
+
+    /** What [string] is to Datastar, or null when it is nothing to it. */
+    fun datastarString(string: KtStringTemplateExpression): DatastarString? {
+        val file = string.containingFile as? KtFile ?: return null
+        val (byStart, byEnd) = datastarStrings(file)
+        val range = string.textRange
+        // The analysis counts the dollars before a multi-dollar literal's quote into it.
+        return byStart[range.startOffset] ?: byEnd[range.endOffset]?.takeIf { it.string.start < range.startOffset }
+    }
+
+    /**
+     * Whether the call of a name, its name starting at an offset of [file], resolves to something other than Streamlord: what
+     * the analysis asks through [Source.foreign]. The calls of one name are found once, however many of them it asks about.
+     */
+    fun foreignIn(file: KtFile): (name: String, nameStart: Int) -> Boolean {
+        val src = file.text
+        val sites = ConcurrentHashMap<String, Map<Int, CallSite>>()
+        return { name, at ->
+            val site = sites.computeIfAbsent(name) { findCallSites(src, setOf(it), analyzer.lex(src)).associateBy { s -> s.nameStart } }[at]
+            site != null && foreignAmong(file, listOf(site)).isNotEmpty()
+        }
+    }
+
     /** Whether the call named [name], its name starting at [nameStart], resolves to something other than Streamlord. */
     fun isForeign(
         file: KtFile,
         name: String,
         nameStart: Int,
-    ): Boolean {
-        val src = file.text
-        val site = findCallSites(src, setOf(name), analyzer.lex(src)).firstOrNull { it.nameStart == nameStart } ?: return false
-        return foreignAmong(file, listOf(site)).isNotEmpty()
-    }
+    ): Boolean = foreignIn(file)(name, nameStart)
 
     /** Whether the call whose name starts at [nameStart] is made on a receiver: `tag.dataText(...)`. */
     private fun onReceiver(

@@ -479,7 +479,7 @@ public class Analyzer(
      * Each `attributes["data-..."] = "..."` in [src], kotlinx.html's own way to write an attribute, for completion and colouring:
      * the name, where it starts, and the literal that follows the `=`, unterminated while it is typed.
      */
-    public fun attributesIndexes(src: String): List<AttributesIndex> {
+    internal fun attributesIndexes(src: String): List<AttributesIndex> {
         lastIndexes?.takeIf { it.first == src }?.let { return it.second }
         return readAttributesIndexes(src).also { lastIndexes = src to it }
     }
@@ -511,7 +511,7 @@ public class Analyzer(
      * completion and colouring: `payloadExpr = "..."`, a literal that is the whole value, unterminated
      * while it is typed, and each value of a map option, `headerExprs = mapOf("X-Id" to "...")`.
      */
-    public fun expressionOptions(
+    internal fun expressionOptions(
         src: String,
         lex: KotlinLex = lex(src),
     ): List<ExpressionOption> {
@@ -747,25 +747,43 @@ public class Analyzer(
      * format of core's `interpolate`, however it opens, or a free-standing literal that looks like
      * HTML (see [isHtmlString]). Completion, hover and colours use it to give Kotlin the HTML side.
      */
-    public fun htmlStringAt(
+    internal fun htmlStringAt(
         src: String,
         offset: Int,
     ): KotlinString? {
         val lex = lex(src)
-        val s = lex.stringAt(offset) ?: return null
-        if (isHtmlString(src, s)) return s
-        val around = { names: Set<String> ->
-            findCallSites(src, names, lex).firstOrNull {
-                it.openParen < s.start &&
-                    s.end <= it.closeParen + 1
-            }
+        return lex.stringAt(offset)?.takeIf(htmlStrings(src, lex))
+    }
+
+    /** Whether a string literal of [src] holds HTML, as [htmlStringAt] has it, with the calls of the file found once for them all. */
+    internal fun htmlStrings(
+        src: String,
+        lex: KotlinLex,
+    ): (KotlinString) -> Boolean {
+        val formats by lazy(LazyThreadSafetyMode.NONE) {
+            if (shadowsCore(src, "interpolate")) emptyList() else outermost(findCallSites(src, INTERPOLATE, lex))
         }
-        val formatOf = around(INTERPOLATE)?.takeUnless { shadowsCore(src, "interpolate") }?.let { interpolateFormat(it, src) }
-        if (formatOf?.second?.start == s.start) return s
-        val site = around(htmlSiteNames) ?: return null
-        val spec = catalog.htmlCallSites[site.name] ?: return null
-        val arg = markupString(site, spec)
-        return if (arg != null && arg.start == s.start) s else null
+        val calls by lazy(LazyThreadSafetyMode.NONE) { outermost(findCallSites(src, htmlSiteNames, lex)) }
+        return { s ->
+            isHtmlString(src, s) ||
+                around(formats, s)?.let { interpolateFormat(it, src) }?.second?.start == s.start ||
+                around(calls, s)?.let { site -> catalog.htmlCallSites[site.name]?.let { markupString(site, it) } }?.start == s.start
+        }
+    }
+
+    /** Those of [sites], in the order of the file, that none before them holds. */
+    private fun outermost(sites: List<CallSite>): List<CallSite> {
+        var end = -1
+        return sites.filter { site -> (site.openParen > end).also { if (it) end = site.closeParen } }
+    }
+
+    /** The one of [outermost] calls that holds [s] between its parentheses. */
+    private fun around(
+        outermost: List<CallSite>,
+        s: KotlinString,
+    ): CallSite? {
+        val before = outermost.binarySearch { if (it.openParen < s.start) -1 else 1 }.let { -it - 2 }
+        return outermost.getOrNull(before)?.takeIf { s.end <= it.closeParen + 1 }
     }
 
     /**
@@ -1481,7 +1499,7 @@ public class Analyzer(
 }
 
 /** An option of FetchOptions set to an expression: its [name], where the name starts, and the literal that is the expression. */
-public data class ExpressionOption(
+internal data class ExpressionOption(
     val name: String,
     val nameStart: Int,
     val value: KotlinString,
@@ -1491,7 +1509,7 @@ public data class ExpressionOption(
  * An `attributes["data-..."] = "..."`: the attribute's [name], where it starts in the source, and the literal assigned. The
  * diagnostics judge the value only when it is [whole], the full statement and not the first half of a concatenation.
  */
-public data class AttributesIndex(
+internal data class AttributesIndex(
     val name: String,
     val nameStart: Int,
     val value: KotlinString?,

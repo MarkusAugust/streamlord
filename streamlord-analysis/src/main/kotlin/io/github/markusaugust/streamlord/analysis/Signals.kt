@@ -1035,19 +1035,13 @@ internal fun dataSignalsPairIssues(
     }
 }
 
-/** A string a DSL call names a signal with, and the [call]: what a highlighter colours as a signal's name. */
-public class SignalNameString internal constructor(
-    public val string: KotlinString,
-    public val call: CallSite,
-)
-
 /**
  * The strings the DSL's calls name a signal with in [source]: the first argument of `dataBind`,
  * `dataRef` and `dataIndicator`, and of `dataSignals` and `dataComputed` where a string expression
  * follows it. None where the file cannot call the DSL, nor for a call [Source.foreign] says is
  * somebody else's.
  */
-public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
+internal fun Analyzer.signalNameStrings(source: Source): List<KotlinString> {
     if (!readsDsl(source)) return emptyList()
     val src = source.text
     return findCallSites(src, catalog.signalNameCalls, lex(src)).mapNotNull { site ->
@@ -1056,7 +1050,6 @@ public fun Analyzer.signalNameStrings(source: Source): List<SignalNameString> {
             .firstOrNull()
             ?.string
             ?.takeIf { named }
-            ?.let { SignalNameString(it, site) }
     }
 }
 

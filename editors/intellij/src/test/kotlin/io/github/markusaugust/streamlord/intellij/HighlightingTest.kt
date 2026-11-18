@@ -229,6 +229,19 @@ class HighlightingTest : StreamlordTestCase() {
         )
     }
 
+    // kotlinx.html's own form names a signal as the DSL's call does.
+    fun `test a signal's name in the attributes form`() {
+        val kt = painted("View.kt", "fun FlowContent.f() { input { attributes[\"data-bind\"] = \"name\" } }")
+        assertEquals(
+            listOf(
+                "data-" to DatastarColors.ATTRIBUTE_PREFIX,
+                "bind" to DatastarColors.ATTRIBUTE_PLUGIN,
+                "name" to DatastarColors.SIGNAL,
+            ),
+            kt,
+        )
+    }
+
     fun `test the dsl's signal names keep their colour after an edit above them`() {
         painted("View.kt", "<caret>fun FlowContent.f() {\n    input { dataBind(\"name\") }\n}")
         myFixture.type("// typed\n")
