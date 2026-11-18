@@ -29,11 +29,9 @@ import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtIfExpression
 import org.jetbrains.kotlin.psi.KtLambdaExpression
-import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtParenthesizedExpression
-import org.jetbrains.kotlin.psi.KtPrefixExpression
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
@@ -41,12 +39,11 @@ import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 import org.jetbrains.kotlin.psi.KtTypeReference
-import org.jetbrains.kotlin.psi.KtValueArgument
 import org.jetbrains.kotlin.psi.KtWhenExpression
 
 /**
- * What the Kotlin plugin knows of each value joined into an HTML string, for the analysis to
- * judge the placeholder by: a constant, markup, a number or a boolean, or a string, by the types the
+ * What the Kotlin plugin knows of each value the analysis asks about, for it to
+ * judge the value by: a constant, markup, a number or a boolean, or a string, by the types the
  * Analysis API gives. The analysis takes these over what the text shows, so markup is only a placeholder
  * whose whole value is markup. Plain values out, so nothing of an analysis session outlives the call.
  */

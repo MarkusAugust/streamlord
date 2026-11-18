@@ -62,9 +62,11 @@ All notable changes to Streamlord are recorded here. The format follows
   which it took for build output and left unread, so every signal in it was unknown. It now counts
   folders from the outermost content root that holds the file, and leaves out hidden folders, as
   VS Code does.
-- IntelliJ judges two values by their type that it judged by the text alone: the sum that leads a
-  chain, `first + last + "<p>...</p>"`, which is a warning where it holds a string and was a hint,
-  and a value marked inside two pairs of parentheses, `${+((count))}`.
+- IntelliJ judges by their type the values it judged by the text alone, where it looked for the
+  values itself and missed them: the sum that leads a chain, `first + last + "<p>...</p>"`, which
+  is a warning where it holds a string and was a hint; a value marked inside two pairs of
+  parentheses, `${+((count))}`; and a value in the expression of `attributes["data-text"] = "..."`
+  or of an option such as `payloadExpr`.
 - IntelliJ colours the value of `attributes["data-bind"] = "name"` as the signal's name it is, and
   no longer spell checks a signal's name in a DSL call, `dataBind("usrnm")`, as it never did in an
   attribute.

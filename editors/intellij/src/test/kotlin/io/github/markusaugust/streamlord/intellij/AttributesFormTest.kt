@@ -12,6 +12,7 @@ import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.completion.DatastarCompletionConfidence
 import io.github.markusaugust.streamlord.intellij.documentation.StreamlordDocumentation
 import io.github.markusaugust.streamlord.intellij.highlighting.DatastarColors
+import io.github.markusaugust.streamlord.intellij.inspections.KotlinInterpolationInspection
 import io.github.markusaugust.streamlord.intellij.spelling.DatastarSpellcheckingStrategy
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
@@ -156,6 +157,19 @@ class ForeignDslCallTest : StreamlordTestCase() {
         val at = file.text.indexOf("dataOnClick(\"@post")
         assertFalse(analysis.isForeign(file, "dataOnClick", at))
         assertTrue(inBackground { analysis.isForeign(file, "dataOnClick", at) })
+    }
+
+    // The string of a call that is somebody else's is a free one, and its values are judged by their types as any free string's.
+    fun `test a value in the string of somebody else's call is judged by its type`() {
+        myFixture.enableInspections(KotlinInterpolationInspection())
+        // A number the text cannot see is one, in a template the call's own reading stops at before it asks.
+        myFixture.configureByText(
+            "Other.kt",
+            "class Other { fun dataText(s: String) {} }\nclass Cart(val count: Int)\n" +
+                "fun f(other: Other, cart: Cart) { val count = cart.count; other.dataText(\"<p>\$count</p>\") }",
+        )
+        val shown = myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text }
+        assertEquals(emptyList<String>(), shown)
     }
 
     // What the UI thread took by its name must not be what the highlighting is then answered with.

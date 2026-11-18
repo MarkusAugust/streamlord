@@ -31,7 +31,10 @@ internal class Reading(
     val prefixSetting: String get() = source.prefixSetting
     val constants: Set<String> get() = source.constants
 
-    /** What the editor knows of the value at [start] to [end], one handed to `interpolate(...)` when [argument]. */
+    /**
+     * What the editor knows of the value at [start] to [end], one handed to `interpolate(...)` when [argument]. Asked
+     * whatever the answers to the others are, so a reading with no answers notes every value one with answers asks about.
+     */
     fun fact(
         start: Int,
         end: Int,
@@ -266,6 +269,8 @@ public class Analyzer(
     /**
      * The values of the Kotlin file [source] the analysis asks the editor about through [Source.valueFact], in the order it
      * asks: an editor works out a fact for each of these and for nothing else, and so answers by the very range it is asked by.
+     * The file is read as [analyzeKotlinSites] reads it, and costs as much. A call [Source.foreign] names is read as that
+     * reading reads it, so its string may ask what it did not ask as Streamlord's.
      */
     public fun valueQuestions(source: Source): List<ValueQuestion> {
         val asked = LinkedHashMap<Pair<Int, Int>, ValueQuestion>()
