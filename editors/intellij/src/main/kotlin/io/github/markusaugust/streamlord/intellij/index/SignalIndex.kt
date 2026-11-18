@@ -478,10 +478,15 @@ class SignalIndex(
         return files.toList().also { listed = counts to it }
     }
 
-    /** Whether [vf] is read: no folder between it and the content root that holds it is one the analysis leaves unread. */
+    /**
+     * Whether [vf] is read: no folder between it and the outermost content root that holds it is one the analysis
+     * leaves unread. The outermost, since Gradle makes a generated source folder under `build` a content root of its own.
+     */
     private fun indexable(vf: VirtualFile): Boolean {
         if (!vf.isValid || vf.isDirectory || vf.length > SIZE_CAP) return false
-        val root = ProjectFileIndex.getInstance(project).getContentRootForFile(vf)
+        val index = ProjectFileIndex.getInstance(project)
+        var root = index.getContentRootForFile(vf)
+        while (true) root = root?.parent?.let(index::getContentRootForFile) ?: break
         val path = root?.let { VfsUtilCore.getRelativePath(vf, it, '/') } ?: vf.name
         return !ProjectFiles.inSkippedFolder(path)
     }

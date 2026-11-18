@@ -254,6 +254,15 @@ fun workspaceFiles(): WorkspaceFiles =
 @JsExport
 fun inSkippedFolder(path: String): Boolean = ProjectFiles.inSkippedFolder(path)
 
+/** How a file named [name] is read where VS Code gives it no language the extension reads: `kotlin`, `html`, or null for a file left unread. */
+@JsExport
+fun languageOfFile(name: String): String? =
+    when (ProjectFiles.languageOf(name)) {
+        SourceLanguage.KOTLIN -> "kotlin"
+        SourceLanguage.HTML -> "html"
+        else -> null
+    }
+
 /** What one file gives the workspace: the signals it names and defines, its ids and classes, and what its Kotlin lets other files see. */
 @JsExport
 interface FileSignals {

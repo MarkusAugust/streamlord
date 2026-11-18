@@ -21,23 +21,24 @@ public fun Analyzer.analyzeProject(
 /**
  * The check a build runs, as one line in a test: `fun markup() = Analyzer().checkProject()`. It reads the
  * project in [root] as [analyzeProject] does and throws an [AssertionError] where a finding should fail a
- * build, each on a line of its own in the form compilers write, which an IDE and CI make clickable. What
- * fails is what [failures] keeps, with [strict] each value written without its mark too. A folder that is
- * not there fails as well: a check that read nothing would pass for ever.
+ * build: a line that counts them, then each on a line of its own in the form compilers write, which an IDE
+ * and CI make clickable. What fails is what [failures] keeps, with [strict] each value written without its
+ * mark too. A folder that is not there fails as well, and so does a file that cannot be read: a check that
+ * read nothing would pass for ever.
  */
 public fun Analyzer.checkProject(
     root: File = File("src/main"),
     strict: Boolean = false,
     prefix: String = CatalogNames.PREFIX,
 ) {
-    if (!root.isDirectory) throw AssertionError("${root.path} is no folder, so there is nothing to check")
+    if (!root.isDirectory) throw AssertionError("${root.absolutePath} is no folder, so there is nothing to check")
     val failing = analyzeProject(root, prefix).failures(strict)
     if (failing.isEmpty()) return
     val count = if (failing.size == 1) "1 finding" else "${failing.size} findings"
     throw AssertionError("$count in ${root.path}\n" + failing.joinToString("\n") { it.format() })
 }
 
-/** A folder on disk as a [ProjectTree]. */
+/** A folder on disk as a [ProjectTree]. What is neither a file nor a folder is not listed, and a file that cannot be read throws. */
 private class FolderTree(
     private val root: File,
 ) : ProjectTree {
@@ -46,9 +47,15 @@ private class FolderTree(
             .resolve(folder)
             .listFiles()
             .orEmpty()
-            .map { if (it.isDirectory) it.name + "/" else it.name }
+            .mapNotNull {
+                when {
+                    it.isDirectory -> it.name + "/"
+                    it.isFile -> it.name
+                    else -> null
+                }
+            }
 
-    override fun read(file: String): String? = runCatching { root.resolve(file).readText() }.getOrNull()
+    override fun read(file: String): String = root.resolve(file).readText()
 }
 
 /** A map two threads may fill at once. */

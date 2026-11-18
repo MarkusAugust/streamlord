@@ -34,4 +34,18 @@ class SkippedFoldersTest : StreamlordTestCase() {
             PsiTestUtil.removeContentEntry(module, root)
         }
     }
+
+    // Gradle makes a generated source folder a content root of its own, under the project's.
+    fun `test a root of its own under a folder named build is still build output`() {
+        myFixture.addFileToProject("build/generated/page.html", "<div data-signals:total=\"0\"></div>")
+        val root = myFixture.findFileInTempDir("build/generated")
+        PsiTestUtil.addContentRoot(module, root)
+        try {
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            myFixture.configureByText("cart.html", "<p data-text=\"\$total\"></p>")
+            assertEquals(listOf("\$total"), unknown())
+        } finally {
+            PsiTestUtil.removeContentEntry(module, root)
+        }
+    }
 }

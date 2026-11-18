@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { constantsAcross, driftFactsOf, inSkippedFolder as skipped, signalPlaces, signalsOf, workspaceFiles, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
+import { constantsAcross, driftFactsOf, inSkippedFolder as skipped, languageOfFile, signalPlaces, signalsOf, workspaceFiles, type DriftFacts, type FileSignals, type SignalPlaces } from "./analysis.ts";
 
 /** The markup files read whatever language an extension gives them, and the folders left unread with every hidden one, as the analysis has them. */
 const { markupExtensions: MARKUP_EXTENSIONS, skippedFolders: SKIPPED_FOLDERS } = workspaceFiles();
@@ -104,7 +104,7 @@ export class SignalIndex implements vscode.Disposable {
       files.map(async (uri) => {
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
-          next.set(uri.toString(), entry(Buffer.from(bytes).toString("utf8"), uri.path.endsWith(".kt") ? "kotlin" : "html", null, null, this.prefix()));
+          next.set(uri.toString(), entry(Buffer.from(bytes).toString("utf8"), languageByExtension(uri) ?? "html", null, null, this.prefix()));
         } catch {
           // unreadable file: skip
         }
@@ -295,9 +295,7 @@ export function inSkippedFolder(uri: vscode.Uri): boolean {
 }
 
 function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
-  const extension = uri.path.slice(uri.path.lastIndexOf(".") + 1).toLowerCase();
-  if (extension === "kt") return "kotlin";
-  return MARKUP_EXTENSIONS.includes(extension) ? "html" : null;
+  return languageOfFile(uri.path.slice(uri.path.lastIndexOf("/") + 1)) as "kotlin" | "html" | null;
 }
 
 /** The text of a file: an open document's, which may hold edits the disk does not, or else the disk's. */

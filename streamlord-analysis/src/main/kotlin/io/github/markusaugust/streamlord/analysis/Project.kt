@@ -4,14 +4,15 @@ import io.github.markusaugust.streamlord.core.catalog.CatalogNames
 
 /*
  * A whole project judged in one call: which files are read, what each is told of the others, and
- * what comes back. A build, a command and an editor's index read a project through here, each
- * with its own [ProjectTree].
+ * what comes back.
  */
 
 /**
  * The files of a project, as the analysis asks for them: the driven port of [Analyzer.analyzeProject].
  * A path is counted from the project's root, with `/` between its folders and none at either end;
- * the root itself is the empty string.
+ * the root itself is the empty string. For a project of `README.md` and `src/main/Page.kt`:
+ * `list("")` gives `["src/", "README.md"]`, `list("src")` gives `["main/"]`, and the file is read
+ * as `read("src/main/Page.kt")`.
  */
 public interface ProjectTree {
     /** The names in [folder], in any order, a folder's own name ending in `/`. Empty where there is no such folder. */
@@ -22,8 +23,9 @@ public interface ProjectTree {
 }
 
 /**
- * An [Issue] of a project's sources, as [Analyzer.analyzeProject] finds them: the [path] of its file as the
- * [ProjectTree] names it, with `/` between its folders, and the [line] and [column] where it starts.
+ * An [Issue] of a project's sources, as [Analyzer.analyzeProject] finds them: the [path] of its file, as the
+ * [ProjectTree] names it or, where a folder was given, with that folder before it, and the [line] and
+ * [column] where it starts.
  */
 public data class ProjectIssue(
     val path: String,
@@ -74,20 +76,19 @@ public fun Analyzer.analyzeProject(
     tree: ProjectTree,
     prefix: String = CatalogNames.PREFIX,
 ): List<ProjectIssue> {
-    val files =
+    val sources =
         ProjectFiles.under(tree).mapNotNull { path ->
             val language = ProjectFiles.languageOf(path) ?: return@mapNotNull null
-            tree.read(path)?.let { path to (language to it) }
+            tree.read(path)?.let { path to Source(it, language, prefix, engine = ProjectFiles.engineOf(path)) }
         }
-    val constants = projectConstants(files.filter { it.second.first == SourceLanguage.KOTLIN }.map { declaredNames(it.second.second) })
-    val sources =
-        files.map { (path, file) ->
-            path to
-                Source(file.second, file.first, prefix, constants = constants, engine = ProjectFiles.engineOf(path))
-        }
-    val defined = sources.flatMapTo(HashSet()) { collectSignalDefinitions(it.second) }
-    val facts = sources.associate { (path, source) -> path to collectSignalFacts(source) }
-    return sources.flatMap { (path, source) ->
+    val constants = projectConstants(sources.filter { it.second.language == SourceLanguage.KOTLIN }.map { declaredNames(it.second.text) })
+    // What a file gives the others is read from its imports, as an editor with no classpath reads it:
+    // a short helper of the DSL defines a signal only where the file names the DSL.
+    val shared = sources.associate { (path, source) -> path to source.copy(modules = Modules.FROM_IMPORTS) }
+    val defined = shared.values.flatMapTo(HashSet()) { collectSignalDefinitions(it) }
+    val facts = shared.mapValues { collectSignalFacts(it.value) }
+    return sources.flatMap { (path, file) ->
+        val source = file.copy(constants = constants)
         val own = if (source.language == SourceLanguage.KOTLIN) analyzeKotlin(source) else analyzeHtml(source)
         val signals =
             object : ProjectSignals {
@@ -95,7 +96,14 @@ public fun Analyzer.analyzeProject(
 
                 override fun own() = facts[path]
 
-                override fun others() = facts.filterKeys { it != path }.values
+                override fun others() =
+                    Iterable {
+                        facts.entries
+                            .asSequence()
+                            .filter { it.key != path }
+                            .map { it.value }
+                            .iterator()
+                    }
             }
         val told = projectSignalIssues(source.language, signalReferences(source), signals)
         (own + told).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->

@@ -19,15 +19,19 @@ All notable changes to Streamlord are recorded here. The format follows
 ### The analysis
 
 - The build check is one line: `fun markup() = Analyzer().checkProject()` reads the project under
-  `src/main` and fails with every finding written as a compiler writes them.
-  `checkProject(strict = true)` fails on what `failures(strict = true)` keeps. See
+  `src/main` and fails with every finding that fails a build, each written as a compiler writes
+  it. `checkProject(strict = true)` fails on what `failures(strict = true)` keeps. See
   [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
 - `analyzeProject` reads HTML and template files too, each as the editors read that kind of file,
   where it read `.kt` alone, and gives `unknown-signal` and `signal-never-declared` as the editors
-  do. Both are warnings, which `failures()` does not keep. It also takes a `ProjectTree` in place
-  of a folder, for a project that is not on a disk.
-- **Breaking:** `ProjectIssue.file`, a `File`, is `ProjectIssue.path`, a `String`. `format()` is
-  as it was.
+  do. Both are warnings, which `failures()` does not keep. Hand it `src/main` where you gave
+  `src/main/kotlin` to have the templates read; a test that already gives a folder with HTML in it
+  can now fail on that HTML. It reads the template extensions the editors read by default, not
+  ones added in an editor's settings. It also takes a `ProjectTree` in place of a folder, for a
+  project that is not on a disk.
+- **Breaking:** `ProjectIssue.file`, a `File`, is `ProjectIssue.path`, a `String`: `it.file` is
+  `File(it.path)`. `format()` is as it was. `failures()` is source compatible; Java and compiled
+  callers find it in `ProjectKt` where it was in `PlatformJvmKt`.
 - **Breaking:** `Issue.code` is an `IssueCode`, an enum of every code the analysis gives, where it
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
@@ -39,8 +43,8 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - IntelliJ reads a project that lies under a folder named `build`, `out`, `dist` or `target`,
   which it took for build output and left unread, so every signal in it was unknown. It now counts
-  folders from the project's own root, as VS Code does, and leaves out hidden folders as VS Code
-  does too.
+  folders from the outermost content root that holds the file, and leaves out hidden folders, as
+  VS Code does.
 - IntelliJ shows `one-value`, as VS Code does: the comma that `postExpr`, `peek` and the other
   helpers that write an expression as one value turn into the comma operator. It is under
   "Datastar expression".

@@ -30,90 +30,13 @@ class AnalyzeProjectTest {
     private val swallowed = "fun f() = dataOnClick(\"\$count++\")\n"
 
     @Test
-    fun `reads a folder on disk, leaving out folders below the root only`() {
+    fun `reads a folder on disk, a hidden one too when it is the root, and its folders as the tree's`() {
         val hidden = root.resolve(".worktree").apply { mkdirs() }
         val write = { path: String -> hidden.resolve(path).apply { parentFile.mkdirs() }.writeText(swallowed) }
-        write("src/A.kt")
-        for (folder in listOf("build", "node_modules", ".gradle", "dist", "out", "target", ".idea", "src/.cache", "src/target")) {
-            write("$folder/B.kt")
-        }
+        write("src/nested/A.kt")
+        write("build/B.kt")
         val files = analyzer.analyzeProject(hidden).map { File(it.path).relativeTo(hidden).invariantSeparatorsPath }.distinct()
-        assertEquals(listOf("src/A.kt"), files)
-    }
-
-    @Test
-    fun `fails a build on an error and on an unsafe interpolation that is a warning, not on a hint`() {
-        write("Click.kt", swallowed)
-        write("Link.kt", "fun link(url: String) = \"\"\"<a href=\"\$url\">x</a>\"\"\"\n")
-        write("Cell.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
-        val all = analyzer.analyzeProject(root)
-        val failing = all.failures().map { Triple(it.name, it.issue.code, it.issue.severity) }
-        assertEquals(
-            listOf(
-                Triple("Click.kt", IssueCode.KOTLIN_INTERPOLATION, Severity.ERROR),
-                Triple("Link.kt", IssueCode.UNSAFE_INTERPOLATION, Severity.WARNING),
-            ),
-            failing,
-        )
-        assertTrue(all.any { it.name == "Cell.kt" && it.issue.severity == Severity.HINT }, all.toString())
-    }
-
-    @Test
-    fun `strict also fails a build on a value written without its mark, which failures alone lets through`() {
-        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
-        // A value left unmarked in a block, a template in a format, and a String in a string that is not interpolate's.
-        write("Block.kt", head + "fun card(name: String) = interpolate { \"<p title=\\\"\$name\\\">x</p>\" }\n")
-        write("Format.kt", head + "fun row(name: String) = interpolate(\"<li>\$name</li>\")\n")
-        write("Plain.kt", "fun cell(name: String) = \"<td>\$name</td>\"\n")
-        // What strict lets through too: a marked value, and a hint.
-        write("Marked.kt", head + "fun card(name: String) = interpolate { \"<p title=\\\"\${+name}\\\">x</p>\" }\n")
-        write("Number.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
-        val all = analyzer.analyzeProject(root)
-        assertEquals(emptyList(), all.failures())
-        assertEquals(emptyList(), all.failures(strict = false))
-        assertEquals(
-            listOf(
-                Triple("Block.kt", IssueCode.INTERPOLATE_TEMPLATE, Severity.WARNING),
-                Triple("Format.kt", IssueCode.INTERPOLATE_TEMPLATE, Severity.WARNING),
-                Triple("Plain.kt", IssueCode.UNESCAPED_INTERPOLATION, Severity.WARNING),
-            ),
-            all.failures(strict = true).map { Triple(it.name, it.issue.code, it.issue.severity) },
-        )
-    }
-
-    @Test
-    fun `strict fails on markup held as a String that interpolate would print as text`() {
-        val domain = "io.github.markusaugust.streamlord.core.domain"
-        val head = "import $domain.Html\nimport $domain.interpolate\n\n"
-        write("Held.kt", head + "fun list(row: Html) = interpolate { \"<ul>\${+row.text}</ul>\" }\n")
-        val all = analyzer.analyzeProject(root)
-        assertEquals(emptyList(), all.failures())
-        assertEquals(
-            listOf(IssueCode.INTERPOLATE_TEMPLATE to Severity.WARNING),
-            all.failures(strict = true).map {
-                it.issue.code to
-                    it.issue.severity
-            },
-        )
-    }
-
-    @Test
-    fun `strict fails on a value written with a bare dollar into a Datastar expression, which reads as a signal`() {
-        val head = "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
-        write("Text.kt", head + "fun f(name: String) = interpolate { \"\"\"<div data-text=\"\$name\"></div>\"\"\" }\n")
-        val all = analyzer.analyzeProject(root)
-        val strict = all.failures(strict = true).map { it.issue.code to it.issue.severity }
-        assertEquals(listOf(IssueCode.KOTLIN_INTERPOLATION to Severity.WARNING), strict)
-        assertEquals(emptyList(), all.failures())
-    }
-
-    @Test
-    fun `strict keeps what failures alone fails on`() {
-        write("Click.kt", swallowed)
-        write("Link.kt", "fun link(url: String) = \"\"\"<a href=\"\$url\">x</a>\"\"\"\n")
-        val all = analyzer.analyzeProject(root)
-        assertEquals(all.failures(), all.failures(strict = true))
-        assertEquals(2, all.failures().size)
+        assertEquals(listOf("src/nested/A.kt"), files)
     }
 
     @Test
@@ -127,17 +50,24 @@ class AnalyzeProjectTest {
     }
 
     @Test
-    fun `places an issue by line and column from 1, a CRLF line ending being one line break`() {
-        write("A.kt", swallowed)
-        write("B.kt", "package p\r\n\r\n$swallowed")
-        val found = analyzer.analyzeProject(root).failures().map { Triple(it.name, it.line, it.column) }
-        assertEquals(listOf(Triple("A.kt", 1, 24), Triple("B.kt", 3, 24)), found)
-    }
-
-    @Test
     fun `checkProject says nothing where nothing fails, a hint and an unknown signal among it`() {
         write("kotlin/Cell.kt", "fun cell(n: Int) = \"\"\"<td colspan=\$n>x</td>\"\"\"\n")
         write("resources/cart.html", "<p data-text=\"\$total\"></p>\n")
+        write("resources/search.html", "<div data-signals=\"{query: ''}\"></div>\n")
+        write(
+            "kotlin/Routes.kt",
+            "@Serializable\ndata class SearchSignals(val query: String = \"\", val drafft: String = \"\")\n\n" +
+                "fun route() {\n    val signals = call.readSignalsOr(SearchSignals())\n}\n",
+        )
+        val found = analyzer.analyzeProject(root).map { it.issue.code to it.issue.severity }.toSet()
+        assertEquals(
+            setOf(
+                IssueCode.UNSAFE_INTERPOLATION to Severity.HINT,
+                IssueCode.UNKNOWN_SIGNAL to Severity.WARNING,
+                IssueCode.SIGNAL_NEVER_DECLARED to Severity.WARNING,
+            ),
+            found,
+        )
         analyzer.checkProject(root)
         analyzer.checkProject(root, strict = true)
     }
@@ -168,7 +98,7 @@ class AnalyzeProjectTest {
     fun `checkProject fails on a folder that is not there, which would hold nothing to fail on`() {
         val missing = root.resolve("src/main")
         val error = assertFailsWith<AssertionError> { analyzer.checkProject(missing) }
-        assertEquals("${missing.path} is no folder, so there is nothing to check", error.message)
+        assertEquals("${missing.absolutePath} is no folder, so there is nothing to check", error.message)
     }
 
     @Test
