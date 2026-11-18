@@ -102,4 +102,23 @@ class SpellcheckTest : StreamlordTestCase() {
         assertTrue(found.toString(), found.any { "Wrongg" in it })
         assertTrue(found.toString(), found.none { "usrnm" in it })
     }
+
+    // The other bundle's prefix is Datastar's too, as the colours have it.
+    fun `test an expression under the other bundle's prefix is spelled as one`() {
+        val found = typos("Alias.kt", "fun T.f() { attributes[\"data-star-on:click\"] = \"\\\$usrnm = ' Lagree'\" }")
+        assertTrue(found.toString(), found.any { "Lagree" in it })
+        assertTrue(found.toString(), found.none { "usrnm" in it })
+    }
+
+    fun `test an expression under the other bundle's prefix in html is spelled as one`() {
+        val found = typos("alias.html", "<div data-star-text=\"\$usrnm + ' Lagree'\"></div>")
+        assertTrue(found.toString(), found.any { "Lagree" in it })
+        assertTrue(found.toString(), found.none { "usrnm" in it })
+    }
+
+    // A signal's name is no word, in a DSL call as in an attribute's value.
+    fun `test a signal's name in a dsl call is no word`() {
+        val found = typos("Bind.kt", "fun FlowContent.f() { input { dataBind(\"usrnm\") }; attributes[\"data-bind\"] = \"psswd\" }")
+        assertTrue(found.toString(), found.none { "usrnm" in it || "psswd" in it })
+    }
 }
