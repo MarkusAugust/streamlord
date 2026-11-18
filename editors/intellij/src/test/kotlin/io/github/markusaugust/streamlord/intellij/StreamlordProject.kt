@@ -2,10 +2,14 @@ package io.github.markusaugust.streamlord.intellij
 
 import com.intellij.codeInsight.template.TemplateActionContext
 import com.intellij.codeInsight.template.impl.TemplateManagerImpl
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.module.Module
+import com.intellij.openapi.projectRoots.JavaSdk
+import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ContentEntry
 import com.intellij.openapi.roots.ModifiableRootModel
+import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess
 import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -115,6 +119,16 @@ fun markerJar(library: StreamlordLibrary): File? =
     PathManager
         .getResourceRoot(StreamlordProject::class.java.classLoader, library.marker.replace('.', '/') + ".class")
         ?.let { File(it) }
+
+/** [StreamlordProject] with the JDK the tests run on, so Java's own classes resolve. */
+object StreamlordJdkProject : LibrariesProject(*StreamlordProject.libraries.toTypedArray()) {
+    private val home: String = System.getProperty("java.home")
+
+    override fun getSdk(): Sdk {
+        VfsRootAccess.allowRootAccess(ApplicationManager.getApplication(), home)
+        return JavaSdk.getInstance().createJdk("tests", home, false)
+    }
+}
 
 /** A platform test in [StreamlordProject]. */
 abstract class StreamlordTestCase : BasePlatformTestCase() {
