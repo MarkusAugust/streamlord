@@ -81,31 +81,13 @@ public fun Analyzer.analyzeProject(
             val language = ProjectFiles.languageOf(path) ?: return@mapNotNull null
             tree.read(path)?.let { path to Source(it, language, prefix, engine = ProjectFiles.engineOf(path)) }
         }
-    val constants = projectConstants(sources.filter { it.second.language == SourceLanguage.KOTLIN }.map { declaredNames(it.second.text) })
-    // What a file gives the others is read from its imports, as an editor with no classpath reads it:
-    // a short helper of the DSL defines a signal only where the file names the DSL.
-    val shared = sources.associate { (path, source) -> path to source.copy(modules = Modules.FROM_IMPORTS) }
-    val defined = shared.values.flatMapTo(HashSet()) { collectSignalDefinitions(it) }
-    val facts = shared.mapValues { collectSignalFacts(it.value) }
+    val index = ProjectIndex(prefix)
+    for ((path, source) in sources) index.put(path, source.text, source.language)
+    val constants = index.constants()
     return sources.flatMap { (path, file) ->
         val source = file.copy(constants = constants)
         val own = if (source.language == SourceLanguage.KOTLIN) analyzeKotlin(source) else analyzeHtml(source)
-        val signals =
-            object : ProjectSignals {
-                override fun defined() = defined
-
-                override fun own() = facts[path]
-
-                override fun others() =
-                    Iterable {
-                        facts.entries
-                            .asSequence()
-                            .filter { it.key != path }
-                            .map { it.value }
-                            .iterator()
-                    }
-            }
-        val told = projectSignalIssues(source.language, signalReferences(source), signals)
+        val told = projectSignalIssues(source.language, signalReferences(source), index.signalsFor(path))
         (own + told).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
             val (line, column) = issue.position(source.text)
             ProjectIssue(path, line, column, issue)

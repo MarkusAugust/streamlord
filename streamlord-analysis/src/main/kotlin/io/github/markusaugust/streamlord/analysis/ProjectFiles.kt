@@ -5,6 +5,14 @@ public object ProjectFiles {
     /** The folders left unread below a project's root, with every hidden one: build output and dependencies. */
     public val SKIPPED_FOLDERS: Set<String> = setOf("build", "node_modules", ".gradle", "dist", "out", "target")
 
+    /**
+     * How many markup files and how many Kotlin files an editor lists to read a project, each counted apart
+     * so that the pages are not crowded out by sources, and the size above which it leaves a listed file unread.
+     * A build reads every file.
+     */
+    public const val FILE_CAP: Int = 5000
+    public const val SIZE_CAP: Int = 1_000_000
+
     /** HTML's own extensions. */
     public val HTML_EXTENSIONS: Set<String> = setOf("html", "htm", "xhtml")
 
