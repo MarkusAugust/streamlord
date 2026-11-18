@@ -38,6 +38,12 @@ All notable changes to Streamlord are recorded here. The format follows
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
 - `Fix.leads` says an editor that sorts fixes itself keeps the fix at the top though it is not
   preferred, as the fixes that mark a value with `+` are.
+- `ProjectIndex` holds what a project's files give each other, for a tool that keeps a project in
+  memory as an editor does: `put(path, text, language)` when a file changes, `remove(path)` when it
+  is gone, and then the signals the project defines, its constants, ids and classes, and
+  `signalsFor(path)` for `projectSignalIssues`. `put` and `remove` answer whether the other files
+  are to be judged again. Both editors and `analyzeProject` keep their files in one, where each
+  kept its own. `ProjectFiles.FILE_CAP` and `SIZE_CAP` name how much of a project an editor lists.
 
 ### Editors
 
@@ -45,6 +51,11 @@ All notable changes to Streamlord are recorded here. The format follows
   which it took for build output and left unread, so every signal in it was unknown. It now counts
   folders from the outermost content root that holds the file, and leaves out hidden folders, as
   VS Code does.
+- VS Code leaves a file on disk over 1 MB out of what it reads of the workspace, as IntelliJ does.
+  An open document is read whatever its size.
+- VS Code names a file's template engine by the file's name where its language names none, as
+  IntelliJ does: a `.ftl` or `.jte` file that VS Code calls HTML gets its engine's rules, where its
+  placeholders were judged as JavaScript.
 - IntelliJ shows `one-value`, as VS Code does: the comma that `postExpr`, `peek` and the other
   helpers that write an expression as one value turn into the comma operator. It is under
   "Datastar expression".

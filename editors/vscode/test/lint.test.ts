@@ -28,7 +28,7 @@ describe("what the analysis finds in the open documents", () => {
     assert.equal(lines.length, 2);
   });
 
-  // Each editor names the file's engine from its own language id, so a file associated with an engine, or untitled, gets its rules.
+  // The engine is named by VS Code's language id, so a file associated with an engine, or untitled, gets its rules, and else by the file's name.
   it("leaves each engine's own syntax out of the checks, and judges the rest", () => {
     const lint = new Lint(() => {});
     const issues = (language: string, page: string, key = "file:///page.x") => lint.issues(key, page, false, "data-", [], null, null, language).map((i) => i.code);
@@ -36,6 +36,7 @@ describe("what the analysis finds in the open documents", () => {
     assert.deepEqual(issues("freemarker", backtick), [], "FreeMarker writes ${} inside a JavaScript template");
     assert.deepEqual(issues("freemarker", backtick, "untitled:Untitled-1"), [], "an untitled FreeMarker file");
     assert.deepEqual(issues("html", backtick), ["expression-syntax"], "JavaScript's own in an HTML file");
+    assert.deepEqual(issues("html", backtick, "file:///t/page.ftl"), [], "a FreeMarker file VS Code calls HTML, by its name");
     assert.deepEqual(issues("freemarker", `<div data-text="<#if a>$a<#else>$b</#if>"></div>`), [], "a FreeMarker directive");
     assert.deepEqual(issues("php", `<div data-text="<?= htmlspecialchars("a") ?>"></div>`), [], "PHP");
     assert.deepEqual(issues("razor", `<div data-on:click="@@post('/save')" data-text="@Model.Name" data-show="@(Model.A + 1)"></div>`), [], "Razor");
