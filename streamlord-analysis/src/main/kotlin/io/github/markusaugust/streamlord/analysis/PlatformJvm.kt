@@ -9,74 +9,53 @@ import java.util.concurrent.ConcurrentHashMap
  * editors/vscode/analysis-js, with the same declarations.
  */
 
-/** An [Issue] of a project's sources, as [Analyzer.analyzeProject] finds them: the [file], and the [line] and [column] where it starts. */
-public data class ProjectIssue(
-    val file: File,
-    val line: Int,
-    val column: Int,
-    val issue: Issue,
-) {
-    /** Whether the issue should fail a build: an error, or an `unsafe-interpolation` warning, which escaping cannot save. */
-    public val fails: Boolean
-        get() = issue.severity == Severity.ERROR || (issue.code == IssueCode.UNSAFE_INTERPOLATION && issue.severity == Severity.WARNING)
-
-    /**
-     * Whether the issue fails a build that asks for no value written without its mark: what [fails], and every other
-     * warning of a Kotlin value in an HTML string, in a block or a format of `interpolate` or in a string of its own.
-     */
-    public val failsStrict: Boolean
-        get() = fails || (issue.code in UNMARKED && issue.severity == Severity.WARNING)
-
-    /** The issue as one line in the form compilers write, as [Issue.format] has it: `src/main/kotlin/Page.kt:12:5: error: ... [code]`. */
-    public fun format(): String = issue.format(file.path, SourcePosition(line, column))
-}
-
 /**
- * The codes of a warning of a value in an HTML string that [ProjectIssue.fails] lets through: one not escaped where
- * escaping is enough, markup that will be, and a bare dollar in a Datastar expression, a value or a swallowed signal.
- */
-private val UNMARKED = setOf(IssueCode.INTERPOLATE_TEMPLATE, IssueCode.UNESCAPED_INTERPOLATION, IssueCode.KOTLIN_INTERPOLATION)
-
-/** The issues that should fail a build: each error, and each `unsafe-interpolation` warning. A hint never does. */
-public fun List<ProjectIssue>.failures(): List<ProjectIssue> = filter { it.fails }
-
-/**
- * The issues that should fail a build, and with [strict] each warning of a value written without its mark too: one left
- * unmarked in the block of `interpolate`, a template in its format, markup held as a `String` that `interpolate` would
- * print as text, and a `String` or markup outside element text in an HTML string that is not `interpolate`'s. A value
- * that is meant to stand so is declared `Html` or wrapped in `Trusted`. A hint never fails.
- */
-public fun List<ProjectIssue>.failures(strict: Boolean): List<ProjectIssue> = filter { if (strict) it.failsStrict else it.fails }
-
-/**
- * Every `.kt` file under [root] that VS Code indexes, read with [prefix] and the constants the
- * files declare between them ([projectConstants]): the verdict VS Code gives the
- * same workspace. Below [root], folders named `build`, `node_modules`, `.gradle`, `dist`, `out`
- * or `target`, and hidden ones, are left out. The issues come in path order, then by offset;
- * [failures] keeps those that should fail a build. On the JVM alone: an editor hands the analysis text, never a folder.
+ * The project in the folder [root], as [analyzeProject] reads any [ProjectTree], each issue's path
+ * with the root before it, so a build's output names the file from where the build runs.
  */
 public fun Analyzer.analyzeProject(
     root: File,
     prefix: String = CatalogNames.PREFIX,
-): List<ProjectIssue> {
-    val skipped = ProjectFiles.SKIPPED_FOLDERS
-    val files =
+): List<ProjectIssue> = analyzeProject(FolderTree(root), prefix).map { it.copy(path = root.resolve(it.path).path) }
+
+/**
+ * The check a build runs, as one line in a test: `fun markup() = Analyzer().checkProject()`. It reads the
+ * project in [root] as [analyzeProject] does and throws an [AssertionError] where a finding should fail a
+ * build: a line that counts them, then each on a line of its own in the form compilers write, which an IDE
+ * and CI make clickable. What fails is what [failures] keeps, with [strict] each value written without its
+ * mark too. A folder that is not there fails as well, and so does a file that cannot be read: a check that
+ * read nothing would pass for ever.
+ */
+public fun Analyzer.checkProject(
+    root: File = File("src/main"),
+    strict: Boolean = false,
+    prefix: String = CatalogNames.PREFIX,
+) {
+    if (!root.isDirectory) throw AssertionError("${root.absolutePath} is no folder, so there is nothing to check")
+    val failing = analyzeProject(root, prefix).failures(strict)
+    if (failing.isEmpty()) return
+    val count = if (failing.size == 1) "1 finding" else "${failing.size} findings"
+    throw AssertionError("$count in ${root.path}\n" + failing.joinToString("\n") { it.format() })
+}
+
+/** A folder on disk as a [ProjectTree]. What is neither a file nor a folder is not listed, and a file that cannot be read throws. */
+private class FolderTree(
+    private val root: File,
+) : ProjectTree {
+    override fun list(folder: String): List<String> =
         root
-            .walkTopDown()
-            .onEnter { it == root || (it.name !in skipped && !it.name.startsWith(".")) }
-            .filter { it.isFile && it.extension == "kt" }
-            .sortedBy { it.invariantSeparatorsPath }
-            .map { it to it.readText() }
-            .toList()
-    val constants = projectConstants(files.map { declaredNames(it.second) })
-    return files.flatMap { (file, source) ->
-        analyzeKotlin(
-            Source(source, SourceLanguage.KOTLIN, prefix, constants = constants),
-        ).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
-            val (line, column) = issue.position(source)
-            ProjectIssue(file, line, column, issue)
-        }
-    }
+            .resolve(folder)
+            .listFiles()
+            .orEmpty()
+            .mapNotNull {
+                when {
+                    it.isDirectory -> it.name + "/"
+                    it.isFile -> it.name
+                    else -> null
+                }
+            }
+
+    override fun read(file: String): String = root.resolve(file).readText()
 }
 
 /** A map two threads may fill at once. */
