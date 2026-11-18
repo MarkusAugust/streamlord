@@ -144,7 +144,9 @@ class ProjectIndexTest {
         // A second edit keeps waiting, and what it said before stands.
         assertFalse(index.put("a.html", "$page ", SourceLanguage.HTML, facts = false))
         assertEquals(listOf(emptySet<String>()), index.signalsFor("Search.kt").others().map { it.declared })
+        assertEquals(listOf("a.html"), index.waiting())
         assertTrue(index.readFacts("a.html", "$page "))
+        assertEquals(emptyList(), index.waiting())
         assertEquals(listOf(setOf("query")), index.signalsFor("Search.kt").others().map { it.declared })
         assertFalse(index.readFacts("a.html", "$page "))
     }

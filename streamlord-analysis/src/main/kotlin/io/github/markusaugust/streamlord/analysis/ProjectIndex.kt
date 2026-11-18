@@ -118,6 +118,9 @@ public class ProjectIndex(
         return factsMatter(path, before, e.facts)
     }
 
+    /** The paths of the files whose facts wait for [readFacts]. */
+    public fun waiting(): List<String> = entries.filter { it.value.stale }.keys.toList()
+
     /** Forgets the file at [path], or every file under the folder there. True where the other files are to be judged again. */
     public fun remove(path: String): Boolean {
         val folder = if (path.endsWith("/")) path else "$path/"

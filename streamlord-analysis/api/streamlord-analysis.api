@@ -765,6 +765,7 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectIndex {
 	public final fun signals ()Ljava/util/Set;
 	public final fun signalsFor (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ProjectSignals;
 	public final fun signalsOf (Ljava/lang/String;)Ljava/util/Set;
+	public final fun waiting ()Ljava/util/List;
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectIndex$Companion {
