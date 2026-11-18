@@ -733,13 +733,41 @@ public final class io/github/markusaugust/streamlord/analysis/PlatformJvmKt {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {
+	public static final field FILE_CAP I
 	public static final field INSTANCE Lio/github/markusaugust/streamlord/analysis/ProjectFiles;
+	public static final field SIZE_CAP I
 	public final fun engineOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/TemplateEngine;
 	public final fun getHTML_EXTENSIONS ()Ljava/util/Set;
 	public final fun getSKIPPED_FOLDERS ()Ljava/util/Set;
 	public final fun getTEMPLATE_EXTENSIONS ()Ljava/util/List;
 	public final fun inSkippedFolder (Ljava/lang/String;)Z
 	public final fun languageOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ProjectIndex {
+	public static final field Companion Lio/github/markusaugust/streamlord/analysis/ProjectIndex$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public synthetic fun <init> (Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun clear ()V
+	public final fun constants ()Ljava/util/Set;
+	public final fun declarations (Ljava/lang/String;Lkotlin/jvm/functions/Function0;)Ljava/util/List;
+	public final fun definitions ()Ljava/util/Set;
+	public final fun modulesChanged ()V
+	public final fun paths ()Ljava/util/Set;
+	public final fun put (Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SourceLanguage;Z)Z
+	public static synthetic fun put$default (Lio/github/markusaugust/streamlord/analysis/ProjectIndex;Ljava/lang/String;Ljava/lang/String;Lio/github/markusaugust/streamlord/analysis/SourceLanguage;ZILjava/lang/Object;)Z
+	public final fun readFacts (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun reads (Ljava/lang/String;Lkotlin/jvm/functions/Function0;)Ljava/util/List;
+	public final fun remove (Ljava/lang/String;)Z
+	public final fun selectors ()Lio/github/markusaugust/streamlord/analysis/Selectors;
+	public final fun selectorsOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/Selectors;
+	public final fun signals ()Ljava/util/Set;
+	public final fun signalsFor (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ProjectSignals;
+	public final fun signalsOf (Ljava/lang/String;)Ljava/util/Set;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ProjectIndex$Companion {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ProjectIssue {
