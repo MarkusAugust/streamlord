@@ -4,9 +4,9 @@ package io.github.markusaugust.streamlord.editor
 
 import io.github.markusaugust.streamlord.analysis.Analyzer
 import io.github.markusaugust.streamlord.analysis.Completion
-import io.github.markusaugust.streamlord.analysis.DeclaredNames
 import io.github.markusaugust.streamlord.analysis.Modules
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
+import io.github.markusaugust.streamlord.analysis.ProjectIndex
 import io.github.markusaugust.streamlord.analysis.ProjectSignals
 import io.github.markusaugust.streamlord.analysis.SignalFacts
 import io.github.markusaugust.streamlord.analysis.SignalProperty
@@ -23,7 +23,6 @@ import io.github.markusaugust.streamlord.analysis.collectSignals
 import io.github.markusaugust.streamlord.analysis.complete
 import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
-import io.github.markusaugust.streamlord.analysis.projectConstants
 import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
 import io.github.markusaugust.streamlord.analysis.signalSites
@@ -241,6 +240,10 @@ interface WorkspaceFiles {
 
     /** HTML's own extensions and the template files', read as markup whatever language an extension gives them. */
     val markupExtensions: Array<String>
+
+    /** How many markup files and how many Kotlin files are listed, and the size above which a listed file is left unread. */
+    val fileCap: Int
+    val sizeCap: Int
 }
 
 @JsExport
@@ -248,6 +251,8 @@ fun workspaceFiles(): WorkspaceFiles =
     plain(
         "skippedFolders" to ProjectFiles.SKIPPED_FOLDERS.plain(),
         "markupExtensions" to (ProjectFiles.HTML_EXTENSIONS + ProjectFiles.TEMPLATE_EXTENSIONS).plain(),
+        "fileCap" to ProjectFiles.FILE_CAP,
+        "sizeCap" to ProjectFiles.SIZE_CAP,
     )
 
 /** Whether the file at [path], counted from the workspace folder that holds it, lies in a folder left unread. */
@@ -348,10 +353,63 @@ fun signalsOf(
     )
 }
 
-/** The constants of the workspace: each file's, less every name some file declares as anything else. */
+/**
+ * The workspace's files as the analysis holds them, each known by the key the extension gives it: a
+ * Kotlin file's imports say which modules it has. [put] and [remove] answer whether the other files are
+ * to be judged again.
+ */
 @JsExport
-fun constantsAcross(files: Array<FileSignals>): Array<String> =
-    projectConstants(files.map { DeclaredNames(it.constants.toSet(), it.others.toSet()) }).plain()
+class WorkspaceIndex(
+    prefix: String,
+) {
+    private val index = ProjectIndex(prefix)
+
+    // The analysis hands the same set until one changes, and so do these: `diagnose` knows an array it has read.
+    private var definitions: Pair<Set<String>, Array<String>>? = null
+    private var constants: Pair<Set<String>, Array<String>>? = null
+    private val drift = HashMap<String, Pair<SignalFacts, DriftFacts>>()
+
+    /** Reads [text] as the file [key]; without [facts], what it says of the server's reads waits for [readFacts]. */
+    fun put(
+        key: String,
+        text: String,
+        kotlin: Boolean,
+        facts: Boolean,
+    ): Boolean = index.put(key, text, if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML, facts)
+
+    fun readFacts(
+        key: String,
+        text: String,
+    ): Boolean = index.readFacts(key, text)
+
+    /** Forgets the file [key], or every file under the folder there. */
+    fun remove(key: String): Boolean = index.remove(key).also { drift.keys.retainAll(index.paths()) }
+
+    fun signals(): Array<String> = index.signals().plain()
+
+    fun definitions(): Array<String> = same(definitions, index.definitions()).also { definitions = it }.second
+
+    fun constants(): Array<String> = same(constants, index.constants()).also { constants = it }.second
+
+    fun ids(): Array<String> = index.selectors().ids.plain()
+
+    fun classes(): Array<String> = index.selectors().classes.plain()
+
+    /** What every file but [key] tells it about the signals the server reads. */
+    fun driftExcept(key: String): Array<DriftFacts> =
+        index
+            .paths()
+            .filter { it != key }
+            .map { path ->
+                val facts = index.signalsFor(path).own()!!
+                (drift[path]?.takeIf { it.first === facts } ?: (facts to plain(facts)).also { drift[path] = it }).second
+            }.toTypedArray()
+
+    private fun same(
+        last: Pair<Set<String>, Array<String>>?,
+        now: Set<String>,
+    ) = last?.takeIf { it.first === now } ?: (now to now.plain())
+}
 
 // ---- Navigation and rename ---------------------------------------------------------------------
 

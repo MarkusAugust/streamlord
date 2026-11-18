@@ -135,6 +135,21 @@ describe("signal index", () => {
     }
   });
 
+  it("leaves a file on disk over the size cap unread, as IntelliJ does", async () => {
+    files.set("/big/huge.html", encode(`<div data-signals:huge="1"></div>${" ".repeat(1_000_000)}`));
+    files.set("/big/small.html", encode(`<div data-signals:small="1"></div>`));
+    const findFiles = workspace.findFiles;
+    workspace.findFiles = async () => [Uri.file("/big/huge.html"), Uri.file("/big/small.html")];
+    try {
+      const index = new SignalIndex(new Set());
+      await index.rebuild();
+      assert.deepEqual([...index.allDefinitions()], ["small"]);
+    } finally {
+      workspace.findFiles = findFiles;
+      files.clear();
+    }
+  });
+
   it("reads a renamed file under its new name", async () => {
     const rename = capture<{ files: { oldUri: unknown; newUri: unknown }[] }>("onDidRenameFiles");
     try {
