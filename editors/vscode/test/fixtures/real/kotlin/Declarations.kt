@@ -1,0 +1,67 @@
+import org.intellij.lang.annotations.Language
+
+// What is written before a declaration, and where its value ends, as the editor reads them.
+
+// A mark behind another annotation and a comment: nothing is said of $marked.
+@Language("HTML")
+@JvmName("markedName")
+// the head of the page
+val marked: String = load()
+
+fun marks() = "<p>$marked</p>"
+
+// A mark in a comment is none: $loose is told.
+// @Language("HTML")
+val loose: String = load()
+
+fun comments() = "<p>$loose</p>"
+
+// `open` in `door.open` is a name, and `open` behind an annotation is a modifier: $title is told, $plain is not.
+abstract class Page(door: Door) {
+    val isOpen = door.open
+    val plain = "<b>x</b>"
+
+    @Suppress("unused")
+    open val title = "<b>x</b>"
+
+    fun render() = "<p>$plain $title</p>"
+}
+
+// A getter far behind its val is one, and a function named get is none: $far is told, $near is not.
+class Getters(val q: String) {
+    val far: String = "<b>x</b>"
+        @Since(Version(1))
+        get() = field + q
+    val near = "<b>x</b>"
+
+    operator fun get(i: Int) = near
+
+    fun page() = "<p>$far $near</p>"
+}
+
+// A call of get after a val is a route: nothing is said of $badge.
+fun Route.routes() {
+    val badge = "<b>x</b>"
+    get("/") { call.respondText("<p>$badge</p>") }
+}
+
+// A function's parameters are in sight in the object its expression is: nothing is said of $n.
+fun row(n: Int) = object : Row {
+    fun cell() = "<p>$n</p>"
+}
+
+// A constructor behind an annotation with arguments declares its parameters: $name is told, $id is not.
+class Line @Named("x") constructor(val id: Int, val name: String) {
+    fun page() = "<p>$id $name</p>"
+}
+
+// Members on one line, and a private fun interface: $shown is told, since another may stand in for it.
+open class Narrow { fun a() {} open val shown = "<b>x</b>"; fun page() = "<p>$shown</p>" }
+
+// A function that returns to a label is not followed: ${labelled(rows)} is told.
+fun labelled(rows: List<Int>): String {
+    rows.forEach { return@forEach }
+    return "<b>x</b>"
+}
+
+fun caller(rows: List<Int>) = "<p>${labelled(rows)}</p>"
