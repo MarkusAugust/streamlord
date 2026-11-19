@@ -841,7 +841,11 @@ private fun declaredMarkup(
     val name = m.groupValues[2]
     val at = m.range.last + 1 - name.length
     if (m.groupValues[1] != "fun") return markupValue(text, name, at, depth, sdk)
-    val f = facts.functions[name].orEmpty().filter { it.open > at }.minByOrNull { it.open } ?: return false
+    val f =
+        facts.functions[name]
+            .orEmpty()
+            .filter { it.open > at }
+            .minByOrNull { it.open } ?: return false
     return functionMarkup(text, functionResult(text, f), depth, sdk)
 }
 
