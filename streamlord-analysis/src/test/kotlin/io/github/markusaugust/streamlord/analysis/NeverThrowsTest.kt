@@ -162,7 +162,7 @@ class NeverThrowsTest {
                     ->
                     answerGiving(ValueFact.STRING)
                 }),
-                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, false), valueAnswer = { start, _ ->
+                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, true), valueAnswer = { start, _ ->
                     answerGiving(
                         ValueFact.entries[
                             start %

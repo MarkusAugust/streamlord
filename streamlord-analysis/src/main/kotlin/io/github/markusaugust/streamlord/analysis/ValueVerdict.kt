@@ -137,6 +137,7 @@ internal fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP || this =
 /** Each kind from the one safe in the fewest places to the one safe everywhere. */
 private val WEAKEST_FIRST =
     listOf(
+        ValueFact.NULLABLE_STRING,
         ValueFact.STRING,
         null,
         ValueFact.COLLECTION,

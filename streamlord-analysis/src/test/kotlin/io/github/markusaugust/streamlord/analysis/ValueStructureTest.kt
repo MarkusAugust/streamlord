@@ -538,4 +538,19 @@ class ValueStructureTest {
             ),
         )
     }
+
+    @Test
+    fun `a part is judged whatever fact the editor's type gives it`() {
+        val src = "fun f(row: Row) = \"<b data-text=\\\"\${signal(row.key)}\\\">\${if (row.open) row.key else \"\"}</b>\""
+        val both = listOf("\${signal(row.key)}", "\${if (row.open) row.key else \"\"}")
+        val told = { type: String -> told(src, mapOf("row.key" to ValueAnswer(type))) }
+        assertEquals(both, told("kotlin.String?"))
+        assertEquals(both, told("com.acme.Row"))
+        assertEquals(both, told("kotlin.collections.List<kotlin.String>"))
+        // A number or a literal: the whole is an Any to the editor, and safe whichever it is.
+        val any = "if (row.open) row.key else \"\"" to ValueAnswer("kotlin.Any")
+        assertEquals(emptyList(), told(src, mapOf("row.key" to ValueAnswer("kotlin.Int"), any)))
+        assertEquals(listOf(both[0]), told("$core.Html"))
+        for (type in listOf("kotlin.Int?", "kotlin.UInt", "kotlin.Number", "$core.Trusted")) told(type)
+    }
 }
