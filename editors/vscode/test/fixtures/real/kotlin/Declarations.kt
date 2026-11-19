@@ -4,7 +4,7 @@ import org.intellij.lang.annotations.Language
 
 // A mark behind another annotation and a comment: nothing is said of $marked.
 @Language("HTML")
-@JvmName("markedName")
+@get:JvmName("markedName")
 // the head of the page
 val marked: String = load()
 
