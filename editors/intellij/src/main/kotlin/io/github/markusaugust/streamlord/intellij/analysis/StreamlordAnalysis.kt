@@ -82,8 +82,8 @@ class StreamlordAnalysis(
         resolved.issues?.takeIf { it.first === judged && it.second == foreign }?.let { return it.third }
         val read = judged.source.copy(foreign = { _, at -> at in foreign })
         // The string of a call that is somebody else's is a free one, read anew: what it asks about may not have been asked before.
-        val answers =
-            judged.answers + ValueAnswers.of(file, analyzer.valueQuestions(read).filter { TextRange(it.start, it.end) !in judged.answers })
+        val asked = analyzer.valueQuestions(read).filter { TextRange(it.start, it.end) !in judged.answers }
+        val answers = followed(file, read, judged.answers + ValueAnswers.of(file, asked))
         val kept = analyzer.analyzeKotlinSites(read.copy(valueAnswer = { start, end -> answers[TextRange(start, end)] }))
         resolved.issues = Triple(judged, foreign, kept)
         return kept
@@ -270,18 +270,34 @@ class StreamlordAnalysis(
     internal fun valueAnswers(file: KtFile): Map<TextRange, ValueAnswer> =
         CachedValuesManager.getCachedValue(file) {
             val dumb = DumbService.getInstance(project)
-            var answers = if (dumb.isDumb) emptyMap() else ValueAnswers.of(file, valueQuestions(file))
-            // A declaration an answer places in the file leads on to values of its own, a few calls deep at most.
-            for (round in 1..FOLLOWED) {
-                if (answers.values.none { it.declaredAt != null }) break
-                val known = answers
-                val read = source(file.text, SourceLanguage.KOTLIN, file).copy(valueAnswer = { start, end -> known[TextRange(start, end)] })
-                val more = analyzer.valueQuestions(read).filter { TextRange(it.start, it.end) !in known }
-                if (more.isEmpty()) break
-                answers = known + ValueAnswers.of(file, more)
-            }
+            val read = source(file.text, SourceLanguage.KOTLIN, file)
+            val answers = if (dumb.isDumb) emptyMap() else followed(file, read, ValueAnswers.of(file, valueQuestions(file)))
             CachedValueProvider.Result.create(answers, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
+
+    /**
+     * [answers] with those to what they lead on to in [read]: a declaration an answer places in the file has values of
+     * its own, asked about until nothing new is, a few calls deep at most.
+     */
+    private fun followed(
+        file: KtFile,
+        read: Source,
+        answers: Map<TextRange, ValueAnswer>,
+    ): Map<TextRange, ValueAnswer> {
+        var known = answers
+        for (round in 1..FOLLOWED) {
+            if (known.values.none { it.declaredAt != null }) break
+            val so = known
+            val more =
+                analyzer.valueQuestions(read.copy(valueAnswer = { start, end -> so[TextRange(start, end)] })).filter {
+                    TextRange(it.start, it.end) !in
+                        so
+                }
+            if (more.isEmpty()) break
+            known = so + ValueAnswers.of(file, more)
+        }
+        return known
+    }
 
     /** The values of [file] the analysis asks about, found once for each reading of its text: an edit elsewhere asks nothing new. */
     private fun valueQuestions(file: KtFile): List<ValueQuestion> {
@@ -347,7 +363,7 @@ class StreamlordAnalysis(
         }
 
     companion object {
-        /** How many times the analysis is asked what the answers given so far lead on to. */
+        /** How many times the analysis is asked what the answers given so far lead on to: as deep as it follows a call. */
         private const val FOLLOWED = 3
 
         /** The name of a function declared: `fun dataText(`, `fun HTMLTag.dataText(`, `fun <T> T.dataText(`. */

@@ -40,12 +40,15 @@ internal class Reading(
         start: Int,
         end: Int,
         argument: Boolean = false,
-    ): ValueFact? {
+    ): ValueFact? = answer(start, end)?.fact()?.takeIf { !argument || it == ValueFact.OTHER }
+
+    /** All the editor answered of the value at [start] to [end], which is noted as asked about. */
+    private fun answer(
+        start: Int,
+        end: Int,
+    ): ValueAnswer? {
         asked?.getOrPut(start to end) { ValueQuestion(start, end) }
-        return source.valueAnswer
-            ?.invoke(start, end)
-            ?.fact()
-            ?.takeIf { !argument || it == ValueFact.OTHER }
+        return source.valueAnswer?.invoke(start, end)
     }
 
     /**
@@ -93,7 +96,7 @@ internal class Reading(
         ): T? = ranges(part).map { answer(it.first, it.second) }.distinct().singleOrNull()
         return Editor(
             { part -> agreed(part) { from, to -> fact(from, to) } },
-            { part -> agreed(part) { from, to -> source.valueAnswer?.invoke(from, to) } },
+            { part -> agreed(part) { from, to -> answer(from, to) } },
             { from, to -> parts(from, to) },
         )
     }

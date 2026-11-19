@@ -392,7 +392,7 @@ internal fun valueKind(
     }
     callKind(src, t, at, constants, sdk, editor)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return ValueFact.CONSTANT
-    shapeKind(src, t, at, constants, sdk)?.let { return it }
+    shapeKind(src, t, at, constants, sdk, editor)?.let { return it }
     if (KOTLIN_NAME.matchEntire(t) == null) return null
     if (constantAt(src, t, at, constants)) return ValueFact.CONSTANT
     return declaredKind(src, t, at, nonNull, sdk.core)
@@ -467,13 +467,6 @@ private fun wholeOperand(e: String): Boolean {
     val d = depths(e)
     return e.indices.all { d[it] != 0 || OPERAND_CHAR.matchEntire(e[it].toString()) != null }
 }
-
-/** Whether [name] means, at [at], a parameter or value marked `@Language("HTML")`. */
-internal fun htmlNamed(
-    src: String,
-    name: String,
-    at: Int,
-): Boolean = declarationOf(src, name, at)?.html ?: false
 
 private val TRIM_CALL = regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
 
@@ -679,7 +672,7 @@ internal fun markupValue(
     if (found != null && depth < CALL_DEPTH && declaresMarkup(src, found, sdk, depth, editor)) return true
     if (KOTLIN_NAME.matchEntire(t) != null) {
         if (found != null) return false
-        if ((told == null && declaredKind(src, t, at, core = sdk.core).isMarkup()) || htmlNamed(src, t, at)) return true
+        if ((told == null && declaredKind(src, t, at, core = sdk.core).isMarkup()) || declarationOf(src, t, at)?.html == true) return true
         // `val e = elements { }`: the name stands for what it is set to.
         val d = declarationOf(src, t, at) ?: return false
         val init = valueOf(src, d) ?: return false
@@ -994,6 +987,7 @@ private fun shapeKind(
     at: Int,
     constants: Set<String>,
     sdk: FileModules,
+    editor: Editor?,
 ): ValueFact? {
     val e = unparen(value)
     val d = depths(e)
@@ -1016,7 +1010,7 @@ private fun shapeKind(
         operands.all { o ->
             val operand = o.trim()
             KOTLIN_NUMBER.matchEntire(operand.removePrefix("-")) != null ||
-                valueKind(src, operand, at, constants, sdk = sdk) == ValueFact.NUMBER
+                valueKind(src, operand, at, constants, sdk = sdk, editor = editor) == ValueFact.NUMBER
         }
     }
 }
