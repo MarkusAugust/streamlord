@@ -656,6 +656,8 @@ class ValueStructureTest {
             assertEquals(listOf("\$id"), told("$first    fun render() = \"<p>\$id</p>\"\n}"), end)
             assertEquals(listOf("\$id"), told("$first    object O { fun render() = \"<p>\$id</p>\" }\n}"), end)
             assertEquals(listOf("\$id"), told("$first    companion object { fun render(id: String) = \"<p>\$id</p>\" }\n}"), end)
+            // A receiver in brackets is no parameter list, and its function has a name.
+            assertEquals(listOf("\$id"), told("$first    fun (String.() -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
         }
         // The function after it is one of its own.
         assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
@@ -677,5 +679,21 @@ class ValueStructureTest {
             listOf("\$title"),
             told("abstract class Page {\n    open @[A B] val title = \"<b>x</b>\"\n    fun render() = \"<p>\$title</p>\"\n}"),
         )
+    }
+
+    @Test
+    fun `a modifier is read on the line of the bracket that closes what stands before it`() {
+        val render = "fun render() = \"<p>\$title</p>\""
+        assertEquals(listOf("\$title"), told("open class Page { fun a() {} open val title = \"<b>x</b>\"; $render }"))
+        val called = "fun render() = \"<p>\${title()}</p>\""
+        assertEquals(
+            listOf("\${title()}"),
+            told("open class Page {\n    fun a() {} open fun title(): String = \"<b>x</b>\"\n    $called\n}"),
+        )
+        val marked = "@Language(\"HTML\") private val title: String = load()"
+        assertEquals(emptyList(), told("object O { init { } $marked; $render }"))
+        assertEquals(emptyList(), told("context(Raise<String>) $marked\n$render"))
+        val seen = declaredNames("object O { fun a() {} private const val K = \"k\"; class N {} private class H { val x = 1 } }")
+        assertEquals(emptySet<String>() to emptySet(), seen.constants to seen.others)
     }
 }

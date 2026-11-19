@@ -457,8 +457,8 @@ private const val OVERRIDES = 8
 private const val HTML = 16
 private const val COMPANION = 32
 
-/** What follows an `object` or a `fun` that has no name. */
-private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
+/** What follows an `object` or a `fun` that has no name: of a `fun` its parameters, and no receiver in brackets. */
+private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\((?!(?:[^()]|\([^()]*\))*\)\s*\.)"""))
 
 /** The words that may stand before a declaration, each with what it says of it. */
 private val MODIFIER_WORDS: Map<String, Int> =
@@ -864,6 +864,8 @@ private fun declarations(
             }
             val g = stack.removeAt(stack.size - 1)
             val outer = stack.last()
+            // `fun a() {} open val b`: a declaration may begin on the line of the bracket that closes the one before it.
+            if (c != ']') outer.after = 0
 
             fun handOver(p: PendingScope) {
                 outer.pending?.let { settle(it, i + 1) }
