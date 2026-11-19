@@ -78,10 +78,6 @@
     {"name":"no type resolved","resolved":null,"fact":null},
     {"name":"a constant is one whatever its type","resolved":"kotlin.String","constant":true,"fact":"constant"},
     {"name":"a value that is no constant is its type","resolved":"kotlin.String","constant":false,"fact":"string"},
-    {"name":"what the editor read of a string is taken over its type","resolved":"kotlin.String","read":"markup","fact":"markup"},
-    {"name":"what the editor read of a value of no known type","resolved":"com.acme.Page","read":"constant","fact":"constant"},
-    {"name":"markup by its type is markup whatever the editor read","resolved":"io.github.markusaugust.streamlord.core.domain.Trusted","read":"constant","fact":"trusted"},
-    {"name":"a constant is one whatever the editor read","resolved":"kotlin.String","constant":true,"read":"markup","fact":"constant"},
     {"name":"a hash set of Html","collection":"HashSet<Html>","markup":true},
     {"name":"a mutable collection of Trusted","collection":"MutableCollection<Trusted>","markup":true},
     {"name":"a list of Java's written out in full","collection":"java.util.LinkedList<Html>","markup":true},
@@ -94,6 +90,8 @@
     {"name":"a type that is only its question mark","resolved":"?","fact":null},
     {"name":"a type cut short","resolved":"kotlin.collections.List<","fact":"collection"},
     {"name":"another package's Html with a type argument, that may be null","resolved":"com.acme.Html<kotlin.String>?","fact":"other"},
+    {"name":"an ArrayList of Java's of Html","resolved":"java.util.ArrayList<io.github.markusaugust.streamlord.core.domain.Html>","fact":"markup"},
+    {"name":"a list from Java of Trusted, which may be null as a whole","resolved":"kotlin.collections.MutableList<io.github.markusaugust.streamlord.core.domain.Trusted>?","fact":"markup"},
     {"name":"a resolved deque of Java's of Html","resolved":"java.util.ArrayDeque<io.github.markusaugust.streamlord.core.domain.Html>","fact":"markup"}
   ]
 }

@@ -738,10 +738,13 @@ internal class FunctionResult(
     val values: List<Pair<String, Int>>,
 )
 
+/** The type an extension is declared on, with the dot after it: `List<T>.` of `fun <T> List<T>.joined()`. */
+internal const val RECEIVER = """[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>]|<[^<>]*>)*>)?\??\s*\.\s*"""
+
 private val RETURN = regex("""\breturn\b(?!@)""")
 
 /**
- * The functions [src] declares by [name] and calls without a receiver, `fun name(...)`. A `return` of a function declared
+ * The functions [src] declares by [name], `fun name(...)`, an extension among them. A `return` of a function declared
  * inside one counts as its own, which can only make it less of what every result is.
  */
 internal fun functionResults(
@@ -749,7 +752,7 @@ internal fun functionResults(
     name: String,
 ): List<FunctionResult> {
     val code = fileFacts(src).code
-    val head = regex("""\bfun\s+(?:<[^<>]*>\s*)?${Regex.escape(name)}\s*\(""")
+    val head = regex("""\bfun\s+(?:<[^<>]*>\s*)?(?:$RECEIVER)?${Regex.escape(name)}\s*\(""")
     val after = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
     return head
         .findAll(src)

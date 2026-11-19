@@ -3,8 +3,6 @@ package io.github.markusaugust.streamlord.intellij
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.testFramework.LightProjectDescriptor
-import io.github.markusaugust.streamlord.analysis.ValueFact
-import io.github.markusaugust.streamlord.analysis.fact
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import org.jetbrains.kotlin.psi.KtFile
 
@@ -29,29 +27,29 @@ class JavaValueTypesTest : StreamlordTestCase() {
         val answers =
             ApplicationManager
                 .getApplication()
-                .executeOnPooledThread<Map<String, Pair<String?, ValueFact?>>> {
+                .executeOnPooledThread<Map<String, String?>> {
                     ReadAction
-                        .nonBlocking<Map<String, Pair<String?, ValueFact?>>> {
+                        .nonBlocking<Map<String, String?>> {
                             StreamlordAnalysis
                                 .getInstance(project)
                                 .valueAnswers(file)
                                 .entries
-                                .associate { (range, answer) -> range.substring(file.text) to (answer.type to answer.fact()) }
+                                .associate { (range, answer) -> range.substring(file.text) to answer.type }
                         }.executeSynchronously()
                 }.get()
         val html = "io.github.markusaugust.streamlord.core.domain.Html"
         val trusted = "io.github.markusaugust.streamlord.core.domain.Trusted"
         val wanted =
             mapOf(
-                "\$list" to ("java.util.ArrayList<$html>" to ValueFact.MARKUP),
-                "\$set" to ("java.util.HashSet<$html>" to ValueFact.MARKUP),
-                "\$deque" to ("kotlin.collections.ArrayDeque<$html>" to ValueFact.MARKUP),
-                "\$any" to ("kotlin.collections.List<*>" to ValueFact.COLLECTION),
-                "\$t" to (null to null),
-                "\$ts" to ("kotlin.collections.List<*>" to ValueFact.COLLECTION),
-                "\${j.name()}" to ("kotlin.String?" to ValueFact.NULLABLE_STRING),
-                "\${j.rows()}" to ("kotlin.collections.MutableList<$trusted>?" to ValueFact.MARKUP),
-                "\${System.getProperty(\"a\")}" to ("kotlin.String?" to ValueFact.NULLABLE_STRING),
+                "\$list" to "java.util.ArrayList<$html>",
+                "\$set" to "java.util.HashSet<$html>",
+                "\$deque" to "kotlin.collections.ArrayDeque<$html>",
+                "\$any" to "kotlin.collections.List<*>",
+                "\$t" to null,
+                "\$ts" to "kotlin.collections.List<*>",
+                "\${j.name()}" to "kotlin.String?",
+                "\${j.rows()}" to "kotlin.collections.MutableList<$trusted>?",
+                "\${System.getProperty(\"a\")}" to "kotlin.String?",
             )
         assertEquals(wanted.entries.joinToString("\n"), answers.entries.joinToString("\n"))
     }

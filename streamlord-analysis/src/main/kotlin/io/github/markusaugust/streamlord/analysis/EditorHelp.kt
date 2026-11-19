@@ -48,14 +48,15 @@ public data class ValueAnswer(
     public val type: String?,
     /**
      * Whether what the value writes is fixed where it is written: the compiler folds it into a constant, or it is an
-     * entry of an enum that does not override `toString`, or the `name` of an entry.
+     * entry of an enum, or the `name` of one.
      */
     public val constant: Boolean = false,
     /**
-     * What the type alone cannot say and the editor read of how the value is written: [ValueFact.MARKUP], or
-     * [ValueFact.CONSTANT] for a value the author wrote. An editor that reads no structure leaves it null.
+     * The declaration the value names, as its file writes it, where the whole value is a name or a call and the editor
+     * finds what it means in Kotlin source: `fun badge(): String = "<b>new</b>"`, with its annotations. The analysis reads
+     * of it what it reads of a declaration of the file it judges. Null for any other value.
      */
-    public val read: ValueFact? = null,
+    public val declaration: String? = null,
 )
 
 /** No call is somebody else's: what a host that resolves nothing says. */

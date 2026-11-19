@@ -67,15 +67,8 @@ private val TAG_START = tagStart("""__kt__|\$(?:\{[^{}]*\}|[\p{L}_][\p{L}\p{Nd}_
 private val TEXT_TAG_START = tagStart("__kt__")
 private val MARGIN_START = regex("""^\s*\|""")
 
-/**
- * The fact of what an editor answered of a value. A constant is one whatever its type, and markup by its type is markup
- * whatever the editor read of it; what it read is else taken over a type that says less.
- */
-public fun ValueAnswer.fact(): ValueFact? {
-    if (constant) return ValueFact.CONSTANT
-    val typed = type?.let(::resolvedFact)
-    return if (typed.isMarkup()) typed else read ?: typed
-}
+/** The fact of what an editor answered of a value: a constant is one whatever its type, and any other value is what its type says. */
+internal fun ValueAnswer.fact(): ValueFact? = if (constant) ValueFact.CONSTANT else type?.let(::resolvedFact)
 
 /**
  * The fact of a type an editor resolved, [ValueAnswer.type]: as [ofTypeName] reads one a declaration writes, a collection
@@ -166,7 +159,7 @@ private val OUT_PROJECTION = regex("""<\s*out\s+""")
  * Whether the content of a string literal, past its opening quotes, starts with a tag, a comment
  * or a doctype, as markup does. [trimMargin] reads it as `.trimMargin()` leaves it, past the first `|`.
  */
-public fun opensWithTag(
+internal fun opensWithTag(
     content: String,
     trimMargin: Boolean = false,
 ): Boolean = TAG_START.containsMatchIn(if (trimMargin) content.replaceFirst(MARGIN_START, "") else content)

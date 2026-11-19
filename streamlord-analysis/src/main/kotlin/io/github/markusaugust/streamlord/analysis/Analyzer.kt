@@ -41,27 +41,31 @@ internal class Reading(
         end: Int,
         argument: Boolean = false,
     ): ValueFact? {
-        asked?.getOrPut(start to end) { ValueQuestion(start, end, argument) }
+        asked?.getOrPut(start to end) { ValueQuestion(start, end) }
         return source.valueAnswer
             ?.invoke(start, end)
             ?.fact()
             ?.takeIf { !argument || it == ValueFact.OTHER }
     }
+
+    /** The declaration the editor found for the value at [start] to [end], of one it was asked the [fact] of. */
+    fun declaration(
+        start: Int,
+        end: Int,
+    ): String? = source.valueAnswer?.invoke(start, end)?.declaration
 }
 
 /**
  * A value of a Kotlin file the analysis asks the editor about, by where it stands: a template of an HTML string, an
- * operand of a `+` chain, or a value marked with `+` in `interpolate { }`. Of an [argument] of `interpolate(...)` the
- * analysis takes only that its class is somebody else's, [ValueFact.OTHER], and reads the rest from the text.
+ * operand of a `+` chain, a value marked with `+` in `interpolate { }`, or an argument of `interpolate(...)`.
  */
 public class ValueQuestion internal constructor(
     public val start: Int,
     public val end: Int,
-    public val argument: Boolean,
 )
 
 /**
- * What is known of a value, from the text or from what an editor answered ([ValueAnswer.fact]): its type, or that it
+ * What is known of a value, from the text or from what an editor answered ([ValueAnswer]): its type, or that it
  * is a constant or markup. [NULLABLE] is a
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is

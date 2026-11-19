@@ -26,13 +26,13 @@ class ValueQuestionsTest {
             val source = Source(src, SourceLanguage.KOTLIN, modules = Modules.known(core = true, htmlDsl = true))
             val asked = analyzer.valueQuestions(source)
             assertEquals(
-                wanted.map { it.string("text") to (it.boolean("argument") == true) },
-                asked.map { src.substring(it.start, it.end) to it.argument },
+                wanted.map { it.string("text") },
+                asked.map { src.substring(it.start, it.end) },
                 "asked about",
             )
             val answers =
                 asked.zip(wanted).associate { (q, w) ->
-                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant") == true, w.string("read")?.let(::factNamed))
+                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant") == true)
                 }
             assertEquals(
                 wanted.map { "${it.string("text")}=${it.string("fact")}" },

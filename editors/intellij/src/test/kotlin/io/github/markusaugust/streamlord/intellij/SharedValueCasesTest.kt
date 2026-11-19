@@ -51,11 +51,11 @@ class SharedValueCasesTest : StreamlordTestCase() {
             val given =
                 asked.map {
                     val answer = answers[TextRange(it.start, it.end)]
-                    listOf(file.text.substring(it.start, it.end), answer?.type, answer?.constant == true, answer?.read?.name?.lowercase())
+                    listOf(file.text.substring(it.start, it.end), answer?.type, answer?.constant == true)
                 }
             val answered =
                 (case["questions"] as JsonArray).objects().map {
-                    listOf(it.string("text"), it.string("type"), it.boolean("constant") == true, it.string("read"))
+                    listOf(it.string("text"), it.string("type"), it.boolean("constant") == true)
                 }
             if (given != answered) failed += "${case.string("name")}: expected the answers $answered but they were $given"
         }

@@ -1500,16 +1500,16 @@ public final class io/github/markusaugust/streamlord/analysis/TokensKt {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ValueAnswer {
-	public fun <init> (Ljava/lang/String;ZLio/github/markusaugust/streamlord/analysis/ValueFact;)V
-	public synthetic fun <init> (Ljava/lang/String;ZLio/github/markusaugust/streamlord/analysis/ValueFact;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;ZLjava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Z
-	public final fun component3 ()Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public final fun copy (Ljava/lang/String;ZLio/github/markusaugust/streamlord/analysis/ValueFact;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ValueAnswer;Ljava/lang/String;ZLio/github/markusaugust/streamlord/analysis/ValueFact;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;ZLjava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ValueAnswer;Ljava/lang/String;ZLjava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getConstant ()Z
-	public final fun getRead ()Lio/github/markusaugust/streamlord/analysis/ValueFact;
+	public final fun getDeclaration ()Ljava/lang/String;
 	public final fun getType ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
@@ -1549,20 +1549,8 @@ public final class io/github/markusaugust/streamlord/analysis/ValueKind : java/l
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ValueQuestion {
-	public final fun getArgument ()Z
 	public final fun getEnd ()I
 	public final fun getStart ()I
-}
-
-public final class io/github/markusaugust/streamlord/analysis/ValueTypesKt {
-	public static final fun fact (Lio/github/markusaugust/streamlord/analysis/ValueAnswer;)Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final fun opensWithTag (Ljava/lang/String;Z)Z
-	public static synthetic fun opensWithTag$default (Ljava/lang/String;ZILjava/lang/Object;)Z
-}
-
-public final class io/github/markusaugust/streamlord/analysis/ValueVerdictKt {
-	public static final fun isMarkup (Lio/github/markusaugust/streamlord/analysis/ValueFact;)Z
-	public static final fun writesItself (Lio/github/markusaugust/streamlord/analysis/ValueFact;)Z
 }
 
 public final class io/github/markusaugust/streamlord/analysis/Workspace {

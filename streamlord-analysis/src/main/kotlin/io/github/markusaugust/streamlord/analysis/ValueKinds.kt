@@ -732,6 +732,22 @@ internal fun valueFrom(
     return src.substring(from, k).trim().takeIf { it.isNotEmpty() }
 }
 
+private val DECLARED = regex("""\b(fun|va[lr])\s+(?:<[^<>]*>\s*)?(?:$RECEIVER)?([\p{L}_][\p{L}\p{Nd}_]*)(?![\p{L}\p{Nd}_]|\s*[.<])""")
+
+/**
+ * Whether [declaration], a `val` or a function as the file that holds it writes it, gives markup: read as a file of its
+ * own, so of what it names only what it declares itself is known.
+ */
+internal fun declaresMarkup(
+    declaration: String,
+    sdk: FileModules,
+): Boolean {
+    val code = fileFacts(declaration).code
+    val m = DECLARED.findAll(declaration).firstOrNull { code[it.range.first] } ?: return false
+    val name = m.groupValues[2]
+    return markupValue(declaration, if (m.groupValues[1] == "fun") "$name()" else name, declaration.length, sdk = sdk)
+}
+
 /** Whether a placeholder's value is markup the author built; see [markupValue]. */
 internal fun isMarkup(
     src: String,

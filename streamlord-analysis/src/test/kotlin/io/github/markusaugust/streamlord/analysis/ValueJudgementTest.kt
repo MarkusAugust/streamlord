@@ -98,6 +98,31 @@ class ValueJudgementTest {
     }
 
     @Test
+    fun `a declaration the editor found in another file is read as one of this file is`() {
+        val src = "fun f() = \"<p>\${badge()}</p>\""
+        val shown = { declaration: String? ->
+            val answered =
+                Source(src, SourceLanguage.KOTLIN, valueAnswer = {
+                    _,
+                    _,
+                    ->
+                    ValueAnswer("kotlin.String", declaration = declaration)
+                })
+            analyzer.analyzeKotlin(answered).map { it.severity }
+        }
+        assertEquals(listOf(Severity.WARNING), shown(null))
+        assertEquals(emptyList(), shown("fun badge(): String = \"<b>new</b>\""))
+        assertEquals(emptyList(), shown("@Language(\"HTML\") fun badge(): String = load()"))
+        assertEquals(emptyList(), shown("@Language(\"HTML\")\nval badge: String = load()"))
+        assertEquals(emptyList(), shown("private val badge = \"<b>new</b>\""))
+        assertEquals(emptyList(), shown("fun badge(): String {\n    if (open) return \"<b>a</b>\"\n    return \"<i>b</i>\"\n}"))
+        assertEquals(emptyList(), shown("fun <T> List<T>.badge() = \"<p>\" + this + \"</p>\""))
+        assertEquals(listOf(Severity.WARNING), shown("fun badge(): String = load()"))
+        assertEquals(listOf(Severity.WARNING), shown("fun badge(q: String): String {\n    if (open) return \"<b>a</b>\"\n    return q\n}"))
+        assertEquals(listOf(Severity.WARNING), shown("class Badge"))
+    }
+
+    @Test
     fun `a message that advises interpolate without offering the rewrite says why`() {
         val src = "fun card(title: String) = \"<h2>\${title.escaped()}</h2>\""
         val issue = analyzer.analyzeKotlin(src).single()

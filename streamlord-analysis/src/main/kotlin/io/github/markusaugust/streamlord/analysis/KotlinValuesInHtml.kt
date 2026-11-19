@@ -1471,6 +1471,7 @@ internal fun Analyzer.factOf(
     val resolved = told != null && PROPERTY_CHAIN.matchEntire(ip.text.trim()) != null
     if (!resolved && kinds.all { it.isConstant() }) return ValueFact.CONSTANT
     if (isMarkup(src, s, ip, sdk) || markupCollection(src, ip.text, s.start, sdk)) return ValueFact.MARKUP
+    if (opts.declaration(ip.start, ip.end)?.let { declaresMarkup(it, sdk) } == true) return ValueFact.MARKUP
     return told ?: weakest(kinds)
 }
 
