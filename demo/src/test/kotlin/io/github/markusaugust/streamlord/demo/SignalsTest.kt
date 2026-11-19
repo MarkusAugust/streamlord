@@ -65,6 +65,19 @@ class SignalsTest {
     }
 
     @Test
+    fun `the caching table reads its signals`() {
+        assertEquals(TableSignals(page = "2", sort = "who"), SIGNALS.decode("""{"page":"2","sort":"who"}"""))
+    }
+
+    @Test
+    fun `the caching log reads its signals`() {
+        assertEquals(
+            OrdersSignals(visitor = "0123456789abcdef", wire = true),
+            SIGNALS.decode("""{"visitor":"0123456789abcdef","wire":true}"""),
+        )
+    }
+
+    @Test
     fun `the judge reads its signals`() {
         assertEquals(
             JudgeSignals(source = "<div></div>"),

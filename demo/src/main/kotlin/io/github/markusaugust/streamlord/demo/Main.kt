@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.SignalsTooLargeException
 import io.github.markusaugust.streamlord.core.domain.ElementPatchMode
 import io.github.markusaugust.streamlord.core.domain.PatchSignals
 import io.github.markusaugust.streamlord.core.protocol.SseEncoder
+import io.github.markusaugust.streamlord.html.elements
 import io.github.markusaugust.streamlord.html.patchElements
 import io.github.markusaugust.streamlord.json.kotlinx.KotlinxSignalsCodec
 import io.github.markusaugust.streamlord.ktor.CspNoncePlugin
@@ -14,9 +15,12 @@ import io.github.markusaugust.streamlord.ktor.StreamlordPlugin
 import io.github.markusaugust.streamlord.ktor.cspNonce
 import io.github.markusaugust.streamlord.ktor.readSignalsOr
 import io.github.markusaugust.streamlord.ktor.respondDatastar
+import io.github.markusaugust.streamlord.ktor.respondElements
+import io.github.markusaugust.streamlord.ktor.respondSignals
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.EntityTagVersion
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.application.log
@@ -25,6 +29,9 @@ import io.ktor.server.engine.defaultExceptionStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.uri
+import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -74,6 +81,15 @@ private val DOCS_HOSTS = listOf("streamlord.sobernetics.no", "streamlord-docs.ne
  */
 private val BUILD: String = System.getenv("BUILD_SHA") ?: "dev"
 
+/** The caching demo's visitors, one ledger each; see Orders.kt. */
+internal val ledgers = Ledgers()
+
+/** A table request as the wire panel shows it: the request line, and the tag the browser sent. */
+private fun asked(
+    uri: String,
+    ifNoneMatch: String?,
+): String = "GET $uri" + (ifNoneMatch?.let { "\nIf-None-Match: $it" } ?: "")
+
 /**
  * streamlord-live: the service the documentation talks to.
  *
@@ -110,6 +126,8 @@ internal val SIGNALS: KotlinxSignalsCodec =
                 typeOf<FeedSignals>() to FeedSignals.serializer(),
                 typeOf<JudgeSignals>() to JudgeSignals.serializer(),
                 typeOf<AssertSignals>() to AssertSignals.serializer(),
+                typeOf<OrdersSignals>() to OrdersSignals.serializer(),
+                typeOf<TableSignals>() to TableSignals.serializer(),
             ),
         requireNamedSerializers = true,
     )
@@ -288,6 +306,54 @@ public fun Application.live() {
                     tooLargeEvents()
                 }
             call.respondDatastar(events.asFlow())
+        }
+
+        /*
+         * The caching page, run. The table is one text/html answer with an ETag, built the way
+         * the page shows it, so a press the browser already holds the answer to costs a 304 and
+         * no build. The log beside it is a stream, the other kind of answer, which no cache keeps.
+         * The visitor's id is in the table's path; the page and the sort are the only signals the
+         * table is sent, so each page in each sort is a URL of its own, the browser's cache key.
+         */
+        get("/orders/log") {
+            val signals = call.readSignalsOr(OrdersSignals())
+            call.respondDatastar(orderLog(ledgers.open(signals.visitor), signals.wire))
+        }
+
+        // Only the log makes a ledger: an id the service does not hold is told so, and makes none.
+        get("/orders/{visitor}") {
+            val ledger = ledgers.find(call.parameters["visitor"])
+            if (ledger == null) {
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                call.respondElements(elements { forgotten() })
+                return@get
+            }
+            val signals = call.readSignalsOr(TableSignals())
+            val page = signals.page.toIntOrNull()?.coerceIn(1, ORDER_PAGES) ?: 1
+            val sort = sortOf(signals.sort)
+            val answer =
+                ledger.answer(page, sort, asked(call.request.uri, call.request.headers[HttpHeaders.IfNoneMatch])) { etag ->
+                    // A header Ktor cannot parse, "a b" or a tag with ;q= after it, is no match.
+                    runCatching { EntityTagVersion(etag).check(call.request.headers).statusCode.value }
+                        .getOrDefault(HttpStatusCode.OK.value)
+                }
+            call.response.header(HttpHeaders.CacheControl, ORDERS_CACHE_CONTROL)
+            call.response.header(HttpHeaders.ETag, answer.etag)
+            if (answer.body == null) {
+                call.respond(HttpStatusCode.fromValue(answer.status))
+            } else {
+                call.respondElements(answer.body)
+            }
+        }
+
+        post("/orders/{visitor}/change") {
+            val ledger = ledgers.find(call.parameters["visitor"])
+            if (ledger == null) {
+                call.respondElements(elements { forgotten() })
+                return@post
+            }
+            ledger.change("POST ${call.request.uri}")
+            call.respondSignals("{}")
         }
 
         get("/search") {
