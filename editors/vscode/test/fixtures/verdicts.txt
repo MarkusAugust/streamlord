@@ -17216,6 +17216,27 @@ key-case-wire 322-331 warning: dataOn("keyDown") listens for keyDown, which no b
   fix "Change to keydown" 323-330 "keydown"
 empty-expression 359-361 error: dataShow throws as the page renders: Streamlord refuses an empty expression.
 indicator-order 269-282 warning: dataIndicator comes after dataInit, which starts its request as Datastar applies it, before the indicator exists, so the signal stays false. Call dataIndicator first.
+== real/kotlin/Declarations.kt
+unescaped-interpolation 468-474 warning: Kotlin writes $loose into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark the values with + in interpolate { }, which escapes the values" 464-479 "interpolate { \"<p>${+loose}</p>\" }.text" (not preferred)
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
+  fix "Mark $loose as markup" 468-474 "${Trusted(loose)}" (not preferred)
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
+unescaped-interpolation 771-777 hint: Kotlin writes $title into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape $plain, which may be markup you built.
+unescaped-interpolation 1089-1093 warning: Kotlin writes $far into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape $near, which may be markup you built.
+  fix "Mark $far as markup" 1089-1093 "${Trusted(far)}" (not preferred)
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
+unescaped-interpolation 1637-1642 warning: Kotlin writes $name into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark the values with + in interpolate { }, which escapes the values" 1629-1647 "interpolate { \"<p>${+id} ${+name}</p>\" }.text" (not preferred)
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
+  fix "Mark $name as markup" 1637-1642 "${Trusted(name)}" (not preferred)
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
+unescaped-interpolation 1832-1838 hint: Kotlin writes $shown into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark the values with + in interpolate { }, which escapes the values" 1828-1843 "interpolate { \"<p>${+shown}</p>\" }.text"
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
+unescaped-interpolation 2064-2081 hint: Kotlin writes ${labelled(rows)} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
+  fix "Mark ${labelled(rows)} as markup" 2064-2081 "${Trusted(labelled(rows))}" (not preferred)
+    edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
 == real/kotlin/FragmentMistakes.kt
 interpolate-template 1438-1444 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 1438-1444 "%s"
