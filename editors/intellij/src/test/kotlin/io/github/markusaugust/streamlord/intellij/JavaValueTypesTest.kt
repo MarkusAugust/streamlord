@@ -53,4 +53,21 @@ class JavaValueTypesTest : StreamlordTestCase() {
             )
         assertEquals(wanted.entries.joinToString("\n"), answers.entries.joinToString("\n"))
     }
+
+    fun `test a method of Java's that has a helper's name is no helper`() {
+        myFixture.enableInspections(
+            io.github.markusaugust.streamlord.intellij.inspections
+                .KotlinInterpolationInspection(),
+        )
+        myFixture.configureByText(
+            "Titles.kt",
+            "import io.github.markusaugust.streamlord.html.signal\n" +
+                "class Titles : java.util.HashMap<String, String>() {\n" +
+                "    fun page() = \"<b data-text=\\\"\${signal(\"a\")}\\\">\${get(\"title\")}</b>\"\n}",
+        )
+        assertEquals(
+            listOf("\${get(\"title\")}"),
+            myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text },
+        )
+    }
 }

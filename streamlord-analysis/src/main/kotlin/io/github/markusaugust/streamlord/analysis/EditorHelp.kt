@@ -53,11 +53,13 @@ public data class ValueAnswer(
     public val constant: Boolean = false,
     /**
      * The declaration the value names, where the whole value is a name or a call and the editor finds what it means in
-     * Kotlin source: `fun badge(): String = "<b>new</b>"`, with its annotations. One of the file being judged is given as
-     * it stands there, so the analysis finds it and reads it in its place; one of another file follows that file's
-     * `package` and `import` lines, which say what its names mean. Null for any other value.
+     * another Kotlin file: `fun badge(): String = "<b>new</b>"` with its annotations, after that file's `package` and
+     * `import` lines, which say what its names mean. Of a compiled declaration the `package` line alone. The analysis
+     * reads it only of a value whose type is a String or unknown. Null for any other value.
      */
     public val declaration: String? = null,
+    /** Where the declaration the value names starts, its annotations included, when it stands in the file being judged. */
+    public val declaredAt: Int? = null,
 )
 
 /** No call is somebody else's: what a host that resolves nothing says. */

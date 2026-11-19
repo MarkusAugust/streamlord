@@ -409,6 +409,26 @@
           "fact": "markup"
         },
         {
+          "text": "deep3()",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "deep4()",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "deep2()",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
           "text": "h",
           "type": "io.github.markusaugust.streamlord.core.domain.Html",
           "fact": "markup"
@@ -838,6 +858,11 @@
           "fact": "string"
         },
         {
+          "text": "u.toULong()",
+          "type": "kotlin.ULong",
+          "fact": "unsigned"
+        },
+        {
           "text": "rows",
           "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
           "fact": "markup"
@@ -848,9 +873,29 @@
           "fact": "markup"
         },
         {
+          "text": "names.map { interpolate(\"<li>%s</li>\", it) }",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        },
+        {
+          "text": "interpolate(\"<li>%s</li>\", it)",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
           "text": "trusted",
           "type": "kotlin.sequences.Sequence<io.github.markusaugust.streamlord.core.domain.Trusted>",
           "fact": "markup"
+        },
+        {
+          "text": "sequenceOf(Trusted(q))",
+          "type": "kotlin.sequences.Sequence<io.github.markusaugust.streamlord.core.domain.Trusted>",
+          "fact": "markup"
+        },
+        {
+          "text": "Trusted(q)",
+          "type": "io.github.markusaugust.streamlord.core.domain.Trusted",
+          "fact": "trusted"
         },
         {
           "text": "names",
@@ -938,6 +983,31 @@
           "text": "${buildString { appendHTML().div { +q }; appendHTML().div { +q } }}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "h.text",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
         }
       ],
       "issues": [

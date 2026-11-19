@@ -52,20 +52,26 @@ All notable changes to Streamlord are recorded here. The format follows
 - `valueQuestions(source)` lists the values of a Kotlin file the analysis asks an editor about,
   each by the range it asks by, so an editor that resolves types answers for those and need not
   find the values itself. The parts of a value are among them where their type decides: the
-  arguments of a helper, the branches of an `if`, and what `joinToString` or `.text` is called on.
+  arguments of a helper, the branches of an `if`, what `joinToString` or `.text` is called on, and
+  what a `val` or a function of the file is set to.
 - **Breaking:** an editor answers through `Source.valueAnswer` with a `ValueAnswer`: the type the
   value resolves to, written with every class by its qualified name (`kotlin.Int?`,
-  `kotlin.collections.List<com.acme.Row>`), whether it is a constant, and the declaration it names
-  as its file writes it. The analysis judges the value by these and reads the rest from the text,
-  for every editor alike. `Source.valueFact` is gone, and `ValueFact.ofResolvedClass`,
-  `opensWithTag`, `isMarkup` and `writesItself` are no longer public.
+  `kotlin.collections.List<com.acme.Row>`), whether it is a constant, and the declaration it names:
+  where it stands in the file, or its text when it is another file's. The analysis judges the
+  value by these and reads the rest from the text, for every editor alike. `Source.valueFact` is
+  gone, and `ValueFact`, `opensWithTag`, `isMarkup` and `writesItself` are no longer public.
 - The analysis reads more of how a value is built, so VS Code says nothing of these where it gave
   a hint: a function of the file whose every result is markup, `fun badge() = "<b>new</b>"`, or
-  that is marked `@Language("HTML")`; a `val` set to an HTML literal or to the `text` of an `Html`;
+  that is marked `@Language("HTML")`, with a `prefix`, a `value =` or a use site such as `@param:`
+  too; a `val` set to an HTML literal or to the `text` of an `Html`;
   `trimMargin()` on a literal in parentheses; a collection made with `setOf`, `sequenceOf` or
   `listOfNotNull`; and `"by " + author` where `author` is an `Html`. A helper with a lambda of
   options, `post("/save") { contentType = ContentType.FORM }`, is the author's own when each
   option is.
+- A function or a `val` another may stand in for is not followed to what it gives: one that is
+  `open` or `abstract`, a member of an interface, or an `override` in a class that is not final. A
+  call that a function declared inside another, or a value of the same name, may mean is not
+  followed either.
 - A sum is markup where one part is and the others are judged where they stand, beside an HTML
   literal, or are plain literals: `"<b>" + q` and `q + "<b>"` say nothing of the whole, and `q`
   has its warning. `buildString { }` is markup only when every statement in it writes

@@ -230,23 +230,26 @@ private val VALUE_HELPERS: Set<String> =
 
 /**
  * What an editor that resolves answers of a part of the value being read, by the part as it is written: the fact of its
- * type, and the declaration it names. Null of a part it was not asked about or could not find.
+ * type, and all it answered, the declaration the part names in it. Null of a part it was not asked about or could not find.
  */
 internal class Editor(
     val fact: (part: String) -> ValueFact?,
-    val declaration: (part: String) -> String?,
+    val answer: (part: String) -> ValueAnswer?,
+    /** The same editor for what is written elsewhere in the file, a `val`'s value or a function's result. */
+    val elsewhere: (from: Int, to: Int) -> Editor?,
 )
 
 private val HTML_DSL_PACKAGE = regex("""(?:^|\n)[ \t]*package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_.])""")
 
 /**
  * The arguments of [t] when it is one call to a helper of Streamlord's DSL, in a file that uses
- * the DSL and neither declares nor imports another function of that name, and that the [editor] finds declared nowhere
- * but in the DSL; null when it is not one.
+ * the DSL and imports no other function of that name, where the call can mean no function of the file and the [editor]
+ * finds it declared nowhere but in the DSL; null when it is not one.
  */
 private fun helperArguments(
     src: String,
     t: String,
+    at: Int,
     sdk: FileModules,
     editor: Editor?,
 ): List<String>? {
@@ -255,8 +258,9 @@ private fun helperArguments(
     val facts = fileFacts(src)
     if (!(sdk.htmlDsl ?: facts.usesDsl)) return null
     val helpers = facts.helpers ?: unshadowed(src, VALUE_HELPERS).also { facts.helpers = it }
-    if (name !in helpers || name in facts.functions) return null
-    if (editor?.declaration(t)?.let { HTML_DSL_PACKAGE.containsMatchIn(it) } == false) return null
+    if (name !in helpers || functionsNamed(src, name, at)?.isEmpty() != true) return null
+    val found = editor?.answer(t)
+    if (found?.declaredAt != null || found?.declaration?.let { HTML_DSL_PACKAGE.containsMatchIn(it) } == false) return null
     // `post("/save") { openWhenHidden = true }`: each option the lambda sets is given as an argument is.
     val options = lastCall(t)?.takeIf { it.receiver == null && it.name == name }?.lambda
     val call = if (options == null) t else t.substring(0, t.lastIndexOf(options) - 1).trimEnd()
@@ -376,7 +380,7 @@ internal fun valueKind(
             told.takeUnless { nonNull && it == ValueFact.NULLABLE }
         }
     }
-    helperArguments(src, t, sdk, editor)?.let { args ->
+    helperArguments(src, t, at, sdk, editor)?.let { args ->
         // Each is read, so an editor is asked of every one whatever it answers of the first.
         return if (args.map { ownArgument(src, it, at, constants, sdk, editor) }.all { it }) ValueFact.CONSTANT else ValueFact.STRING
     }
@@ -483,6 +487,7 @@ private val USES_ELEMENTS =
     )
 internal val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*(?:text|html)$""")
 private val CREATE_HTML = regex("""^createHTML\s*\(""")
+private val RETURN_TO_LABEL = regex("""\breturn@""")
 private val NEW_BUILDER = regex("""\s*StringBuilder\s*\(\s*\)\s*""")
 private val WRITES_HTML = regex("""^\s*appendHTML\s*\(""")
 private val NAME_AT_END = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
@@ -554,6 +559,8 @@ internal fun lastCall(t: String): Call? {
 private fun statements(body: String): List<String> {
     val b = body.replaceFirst(LAMBDA_HEAD, "")
     val d = depths(b)
+    // A lambda that returns to its label gives more than its last statement: it is not read.
+    if (RETURN_TO_LABEL.findAll(b).any { d[it.range.first] != -1 }) return emptyList()
     val out = ArrayList<String>()
     var from = 0
     for (k in b.indices) {
@@ -626,7 +633,9 @@ internal fun markupValue(
         val judged = sum.firstOrNull { QUOTE_OPENING.containsMatchIn(it.trimStart()) }?.let { htmlLiteral(it.trim()) } == true
         return markup.any { it } && (judged || sum.indices.all { markup[it] || plainString(sum[it].trim()) })
     }
-    val told = if (QUOTE_OPENING.containsMatchIn(t)) null else editor?.fact(t)
+    // A literal is what it says, and an editor is asked nothing of it.
+    val asked = editor.takeUnless { QUOTE_OPENING.containsMatchIn(t.trimStart()) }
+    val told = asked?.fact(t)
     if (told.isMarkup()) return true
     // A type that is no String is no markup, whatever the text reads the value as.
     if (told != null && told != ValueFact.STRING && told != ValueFact.NULLABLE_STRING) return false
@@ -646,13 +655,15 @@ internal fun markupValue(
         }
     }
     // What the editor found the value to name is read where it is declared, and the file's own of that name is not.
-    editor?.declaration(t)?.let { return depth < CALL_DEPTH && declaresMarkup(src, it, sdk, depth) }
+    val found = asked?.answer(t)?.takeIf { it.declaredAt != null || it.declaration != null }
+    if (found != null && depth < CALL_DEPTH && declaresMarkup(src, found, sdk, depth, editor)) return true
     if (KOTLIN_NAME.matchEntire(t) != null) {
+        if (found != null) return false
         if ((told == null && declaredKind(src, t, at, core = sdk.core).isMarkup()) || htmlNamed(src, t, at)) return true
         // `val e = elements { }`: the name stands for what it is set to.
-        val d = declarationOf(src, t, at) ?: return false
-        val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && markupValue(src, init, d.at, depth + 1, sdk)
+        val d = declarationOf(src, t, at)?.takeIf { it.valueAt >= 0 && !overridable(src, valKeyword(src, it.at), null) } ?: return false
+        val init = valueFrom(src, d.valueAt) ?: return false
+        return depth < VALUE_DEPTH && markupValue(src, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
     }
     if (CREATE_HTML.containsMatchIn(t)) return true
     val call = lastCall(t) ?: return false
@@ -665,15 +676,16 @@ internal fun markupValue(
     // `StringBuilder().appendHTML().div { }.toString()`: what kotlinx.html wrote into the builder.
     if (call.name == "toString" && call.receiver != null && lambda == null && call.args.isBlank()) {
         val chain = splitTop(call.receiver, ".")
-        return chain.size > 1 && NEW_BUILDER.matchEntire(chain[0]) != null && WRITES_HTML.containsMatchIn(chain[1])
+        return chain.size == 3 && NEW_BUILDER.matchEntire(chain[0]) != null && WRITES_HTML.containsMatchIn(chain[1])
     }
     if (call.name == "buildString" && call.receiver == null && lambda != null) {
         val written = statements(lambda)
-        return written.isNotEmpty() && written.all { WRITES_HTML.containsMatchIn(it) }
+        // `appendHTML().div { }` and no more: what is called on the tag's result may write anything.
+        return written.isNotEmpty() && written.all { WRITES_HTML.containsMatchIn(it) && splitTop(it, ".").size == 2 }
     }
-    if (call.receiver == null && lambda == null && depth < CALL_DEPTH) {
-        val declared = functionsNamed(src, call.name, at)
-        if (declared.isNotEmpty()) return declared.all { functionMarkup(src, functionResult(src, it), depth, sdk) }
+    if (found == null && call.receiver == null && lambda == null && depth < CALL_DEPTH) {
+        val declared = functionsNamed(src, call.name, at) ?: return false
+        if (declared.isNotEmpty()) return declared.all { functionMarkup(src, functionResult(src, it), depth, sdk, editor) }
     }
     val elements = call.name == "elements" && call.receiver == null && lambda != null
     if (elements) return sdk.htmlDsl != false && USES_ELEMENTS.containsMatchIn(src)
@@ -682,6 +694,14 @@ internal fun markupValue(
     if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk, editor)
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk, editor)
 }
+
+private val VAL_BEFORE = regex("""\bval\s+$""")
+
+/** Where the `val` that declares the name at [at] is written, or [at] where no `val` stands before it. */
+private fun valKeyword(
+    src: String,
+    at: Int,
+): Int = VAL_BEFORE.find(src.substring(maxOf(0, at - 40), at))?.let { at - minOf(40, at) + it.range.first } ?: at
 
 /** How many calls deep a function is followed to what it returns. */
 private const val CALL_DEPTH = 3
@@ -692,6 +712,7 @@ private fun functionMarkup(
     f: FunctionResult,
     depth: Int,
     sdk: FileModules,
+    editor: Editor?,
 ): Boolean {
     if (f.html) return true
     if (f.type != null && sdk.core && !markupTypeShadowed(src, f.type) &&
@@ -699,7 +720,8 @@ private fun functionMarkup(
     ) {
         return true
     }
-    return f.values.isNotEmpty() && f.values.all { (value, at) -> markupValue(src, value, at, depth + 1, sdk) }
+    return f.values.isNotEmpty() &&
+        f.values.map { markupValue(src, it.text, it.start, depth + 1, sdk, editor?.elsewhere(it.start, it.end)) }.all { it }
 }
 
 /**
@@ -743,8 +765,8 @@ private fun markupElements(
                     !markupTypeShadowed(src, it) && isMarkupCollection("${type.removeSuffix("?")}<${coreType(src, it)}>")
                 } == true
         }
-        val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk, null)
+        val init = valueFrom(src, d.valueAt.takeIf { it >= 0 } ?: return false) ?: return false
+        return depth < VALUE_DEPTH && markupElements(src, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
     }
     val r = lastCall(t) ?: return false
     val lambda = r.lambda
@@ -767,13 +789,13 @@ private fun markupElements(
 internal fun initialiser(
     src: String,
     d: Declaration,
-): String? = if (d.valueAt < 0) null else valueFrom(src, d.valueAt)
+): String? = if (d.valueAt < 0) null else valueFrom(src, d.valueAt)?.text
 
 /** The value written from [from], to where its statement ends as [initialiser] has it, each comment in it left out. */
 internal fun valueFrom(
     src: String,
     from: Int,
-): String? {
+): ValueText? {
     val code = fileFacts(src).code
     val out = StringBuilder()
     var depth = 0
@@ -806,47 +828,58 @@ internal fun valueFrom(
         out.append(c)
         k++
     }
-    return out.toString().trim().takeIf { it.isNotEmpty() }
+    return out
+        .toString()
+        .trim()
+        .takeIf { it.isNotEmpty() }
+        ?.let { ValueText(it, from, k) }
 }
 
 private val DECLARED = regex("""\b(fun|va[lr])\s+(?:<[^<>]*>\s*)?(?:$RECEIVER)?([\p{L}_][\p{L}\p{Nd}_]*)(?![\p{L}\p{Nd}_]|\s*[.<])""")
 
 /**
- * Whether [declaration], a `val` or a function as an editor found it, gives markup. One of [src] is read where it
+ * Whether the `val` or the function an editor [found] a value to name gives markup. One of [src] is read where it
  * stands there; one of another file is read as a file of its own, so of what it names only what it declares or imports
  * itself is known.
  */
 internal fun declaresMarkup(
     src: String,
-    declaration: String,
+    found: ValueAnswer,
     sdk: FileModules,
     depth: Int = 0,
+    editor: Editor? = null,
 ): Boolean {
-    val own = src.indexOf(declaration)
-    if (own < 0) return besideFile(declaration) { declaredMarkup(declaration, 0, declaration.length, it, sdk, depth) }
-    return declaredMarkup(src, own, own + declaration.length, fileFacts(src), sdk, depth)
+    val at = found.declaredAt
+    if (at != null) return at in src.indices && declaredMarkup(src, at, fileFacts(src), sdk, depth, editor)
+    val text = found.declaration ?: return false
+    return besideFile(text) { declaredMarkup(text, 0, it, sdk, depth, null) }
 }
 
-/** [declaresMarkup] of the declaration written from [from] to [to] of [text]. */
+/** [declaresMarkup] of the first declaration written from [from] of [text]. */
 private fun declaredMarkup(
     text: String,
     from: Int,
-    to: Int,
     facts: FileFacts,
     sdk: FileModules,
     depth: Int,
+    editor: Editor?,
 ): Boolean {
-    val m = DECLARED.findAll(text, from).firstOrNull { facts.code[it.range.first] }?.takeIf { it.range.last < to } ?: return false
+    val m = DECLARED.findAll(text, from).firstOrNull { facts.code[it.range.first] } ?: return false
     // The name ends the match.
     val name = m.groupValues[2]
     val at = m.range.last + 1 - name.length
-    if (m.groupValues[1] != "fun") return markupValue(text, name, at, depth, sdk)
-    val f =
-        facts.functions[name]
-            .orEmpty()
-            .filter { it.open > at }
-            .minByOrNull { it.open } ?: return false
-    return functionMarkup(text, functionResult(text, f), depth, sdk)
+    if (m.groupValues[1] == "fun") {
+        val f =
+            facts.functions[name]
+                .orEmpty()
+                .filter { it.open > at }
+                .minByOrNull { it.open } ?: return false
+        return functionMarkup(text, functionResult(text, f), depth, sdk, editor)
+    }
+    if (htmlNamed(text, name, at)) return true
+    val d = declarationOf(text, name, at)?.takeIf { it.valueAt >= 0 && !overridable(text, m.range.first, null) } ?: return false
+    val init = valueFrom(text, d.valueAt) ?: return false
+    return markupValue(text, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
 }
 
 /** Whether a placeholder's value is markup the author built; see [markupValue]. */

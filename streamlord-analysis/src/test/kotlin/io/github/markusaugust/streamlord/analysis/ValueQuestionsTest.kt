@@ -45,6 +45,21 @@ class ValueQuestionsTest {
             assertEquals((c["issues"] as JsonArray).strings(), shown(answered), "answered")
             // As an editor that resolves nothing reads the file, VS Code among them.
             assertEquals((c["unanswered"] as JsonArray).strings(), shown(source), "unanswered")
+            // An editor is asked of nothing it was not told of, so it can answer all in one go.
+            val listed = asked.mapTo(HashSet()) { it.start to it.end }
+            val unlisted = ArrayList<String>()
+            shown(
+                source.copy(valueAnswer = { start, end ->
+                    answers[start to end].also {
+                        if (start to end !in
+                            listed
+                        ) {
+                            unlisted += src.substring(start, end)
+                        }
+                    }
+                }),
+            )
+            assertEquals(emptyList(), unlisted, "asked about though not listed")
         }
     }
 }

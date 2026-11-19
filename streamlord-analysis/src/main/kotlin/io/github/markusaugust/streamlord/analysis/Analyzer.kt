@@ -49,40 +49,52 @@ internal class Reading(
     }
 
     /**
-     * The editor's answers of the parts of the value at [start] to [end], each found by its text between the two: the
-     * first place it is written there, which names what any later one does. The whole value is asked about by its own range.
+     * The editor's answers of the parts of what is written at [start] to [end], a value or what a declaration is set to,
+     * each found by its text between the two, wherever it is written there as code and as a whole: not after a dot, where
+     * it is a member of something, nor before `->`, where a lambda names it. One written twice is answered for only where
+     * the editor says the same of both, as `it` of two lambdas may be two things. A template is asked about by its own range.
      */
     fun parts(
         start: Int,
         end: Int,
     ): Editor {
         val text = source.text
-        val whole =
-            text
-                .substring(start, end)
-                .trimStart('$')
-                .removeSurrounding("{", "}")
-                .trim()
+        val template = text[start] == '$'
+        val region = text.substring(start, end)
+        val whole = region.trimStart('$').removeSurrounding("{", "}").trim()
 
-        fun range(part: String): Pair<Int, Int>? {
+        fun ranges(part: String): List<Pair<Int, Int>> {
             val t = part.trim()
-            if (t.isEmpty()) return null
-            if (t == whole) return start to end
+            if (t.isEmpty()) return emptyList()
+            if (template && t == whole) return listOf(start to end)
+            val code = fileFacts(text).code
+            val name = isWordPart(t.first())
 
             // Not the letters of a longer name, `it` of `items`, nor the text of a literal, `n` of `"n"`.
-            val code = fileFacts(text).code
-
-            fun elsewhere(at: Int) =
-                (!code[at] && t.first() != '"') ||
-                    (isWordPart(text.getOrNull(at - 1)) && isWordPart(t.first())) ||
-                    (isWordPart(text.getOrNull(at + t.length)) && isWordPart(t.last()))
-            var at = text.indexOf(t, start)
-            while (at >= 0 && at + t.length <= end && elsewhere(at)) at = text.indexOf(t, at + 1)
-            return if (at < 0 || at + t.length > end) null else at to at + t.length
+            fun elsewhere(at: Int): Boolean {
+                if (!code[at] && t.first() != '"') return true
+                if (name && isWordPart(text.getOrNull(at - 1))) return true
+                if (isWordPart(t.last()) && isWordPart(text.getOrNull(at + t.length))) return true
+                val before = text.substring(start, at).trimEnd().lastOrNull()
+                return name && (before == '.' || before == ':' || text.substring(at + t.length, end).trimStart().startsWith("->"))
+            }
+            val out = ArrayList<Pair<Int, Int>>()
+            var at = region.indexOf(t)
+            while (at >= 0) {
+                if (!elsewhere(start + at)) out += start + at to start + at + t.length
+                at = region.indexOf(t, at + 1)
+            }
+            return out
         }
+
+        fun <T> agreed(
+            part: String,
+            answer: (Int, Int) -> T?,
+        ): T? = ranges(part).map { answer(it.first, it.second) }.distinct().singleOrNull()
         return Editor(
-            { part -> range(part)?.let { fact(it.first, it.second) } },
-            { part -> range(part)?.let { source.valueAnswer?.invoke(it.first, it.second)?.declaration } },
+            { part -> agreed(part) { from, to -> fact(from, to) } },
+            { part -> agreed(part) { from, to -> source.valueAnswer?.invoke(from, to) } },
+            { from, to -> if (from in 0 until to && to <= text.length) parts(from, to) else null },
         )
     }
 }
@@ -110,7 +122,7 @@ public class ValueQuestion internal constructor(
  * nothing about it is known, and no reading of the text makes it markup. Only
  * IntelliJ gives it; VS Code has no resolver.
  */
-public enum class ValueFact {
+internal enum class ValueFact {
     STRING,
     NULLABLE_STRING,
     NUMBER,
@@ -130,7 +142,7 @@ public enum class ValueFact {
     ;
 
     /** What [ofTypeName] in ValueTypes.kt hangs on. */
-    public companion object
+    companion object
 }
 
 private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")

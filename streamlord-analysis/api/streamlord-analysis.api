@@ -1500,41 +1500,21 @@ public final class io/github/markusaugust/streamlord/analysis/TokensKt {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ValueAnswer {
-	public fun <init> (Ljava/lang/String;ZLjava/lang/String;)V
-	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/lang/String;
 	public final fun component2 ()Z
 	public final fun component3 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;ZLjava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ValueAnswer;Ljava/lang/String;ZLjava/lang/String;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun copy (Ljava/lang/String;ZLjava/lang/String;Ljava/lang/Integer;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/ValueAnswer;Ljava/lang/String;ZLjava/lang/String;Ljava/lang/Integer;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/ValueAnswer;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getConstant ()Z
 	public final fun getDeclaration ()Ljava/lang/String;
+	public final fun getDeclaredAt ()Ljava/lang/Integer;
 	public final fun getType ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class io/github/markusaugust/streamlord/analysis/ValueFact : java/lang/Enum {
-	public static final field BOOLEAN Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field COLLECTION Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field CONSTANT Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field Companion Lio/github/markusaugust/streamlord/analysis/ValueFact$Companion;
-	public static final field MARKUP Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field NULLABLE Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field NULLABLE_STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field NUMBER Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field OPEN_NUMBER Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field OTHER Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field STRING Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field TRUSTED Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static final field UNSIGNED Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/ValueFact;
-	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/ValueFact;
-}
-
-public final class io/github/markusaugust/streamlord/analysis/ValueFact$Companion {
 }
 
 public final class io/github/markusaugust/streamlord/analysis/ValueKind : java/lang/Enum {

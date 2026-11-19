@@ -227,7 +227,9 @@ private val VAL_AFTER =
 private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
 private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
 private val PARAMETER =
-    regex("""^\s*(?:@[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""")
+    regex(
+        """^\s*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
+    )
 private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
@@ -765,7 +767,14 @@ internal class FunctionResult(
     /** The type it is declared to return, where it writes one. */
     val type: String?,
     /** Each value it can give, with where that is written: its expression, or what each `return` of its block gives. */
-    val values: List<Pair<String, Int>>,
+    val values: List<ValueText>,
+)
+
+/** A value as the file writes it, comments left out, from [start] to [end]. */
+internal class ValueText(
+    val text: String,
+    val start: Int,
+    val end: Int,
 )
 
 /** The type an extension is declared on, with the dot after it: `List<T>.` of `fun <T> List<T>.joined()`. */
@@ -774,6 +783,29 @@ internal const val RECEIVER = """[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>]|<[^<>]*>)*
 private val RETURN = regex("""\breturn\b(@?)""")
 private val FUN_BEFORE = regex("""\bfun\b(?![\s\S]*\bfun\b)[^(){}=;]*$""")
 private val BODY_AFTER = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
+
+private val MODIFIERS_BEFORE = regex("""((?:\b[a-z]+\s+)*)$""")
+private val CLASS_BEFORE = regex("""((?:\b[a-z]+\s+)*)\b(class|interface|object)\b[^{}]*$""")
+private val OPEN = regex("""\b(?:open|abstract|sealed)\b""")
+private val OVERRIDES = regex("""\boverride\b""")
+
+/**
+ * Whether another declaration may stand in for the one whose keyword is at [keyword], a member of the class whose body
+ * is [owner]: it is `open` or `abstract`, a member of an interface, or an `override` in a class that is not final or not
+ * shown.
+ */
+internal fun overridable(
+    src: String,
+    keyword: Int,
+    owner: IntRange?,
+): Boolean {
+    val modifiers = MODIFIERS_BEFORE.find(src.substring(maxOf(0, keyword - 160), keyword))?.value.orEmpty()
+    if (OPEN.containsMatchIn(modifiers)) return true
+    val held = owner?.let { CLASS_BEFORE.find(src.substring(maxOf(0, it.first - 300), it.first)) }
+    if (held?.groupValues?.get(2) == "interface") return true
+    val final = held != null && (held.groupValues[2] == "object" || !OPEN.containsMatchIn(held.groupValues[1]))
+    return OVERRIDES.containsMatchIn(modifiers) && !final
+}
 
 /** Nothing known of a function: no result of it is markup. */
 private val UNREAD = FunctionResult(false, null, emptyList())
@@ -795,27 +827,24 @@ private fun closingInCode(
 
 /**
  * The functions [name] can mean at [at] where it is called without a receiver: the members of the class the call is in,
- * before those of the top level. One declared inside another function is none of them.
+ * before those of the top level. Null where the text cannot say which it means: the file declares a function of that
+ * name inside another, or a value of that name is in sight.
  */
 internal fun functionsNamed(
     src: String,
     name: String,
     at: Int,
-): List<FunctionDeclaration> {
-    val candidates = fileFacts(src).functions[name].orEmpty().filter { !it.local }
-    val members = candidates.filter { f -> f.owner?.let { at in it } == true }
+): List<FunctionDeclaration>? {
+    val all = fileFacts(src).functions[name].orEmpty()
+    if (all.any { it.local } || declarationOf(src, name, at) != null) return null
+    val members = all.filter { f -> f.owner?.let { at in it } == true }
     val innermost = members.minOfOrNull { it.owner!!.last - it.owner.first }
-    return if (innermost ==
-        null
-    ) {
-        candidates.filter { it.owner == null }
-    } else {
-        members.filter { it.owner!!.last - it.owner.first == innermost }
-    }
+    return if (innermost == null) all.filter { it.owner == null } else members.filter { it.owner!!.last - it.owner.first == innermost }
 }
 
 /**
- * What [f] shows of its result. One whose body the text does not show, or that returns to a label, shows nothing. A
+ * What [f] shows of its result. One whose body the text does not show, that returns to a label, or that another may
+ * stand in for ([overridable]), shows nothing. A
  * `return` of a function declared inside it counts as its own, which can only make it less of what every result is.
  */
 internal fun functionResult(
@@ -838,9 +867,10 @@ internal fun functionResult(
             }
         val head = src.substring(maxOf(0, f.open - 300), f.open)
         val fn = FUN_BEFORE.find(head)?.let { f.open - head.length + it.range.first } ?: return@getOrPut UNREAD
+        if (overridable(src, fn, f.owner)) return@getOrPut UNREAD
         val before = maxOf(0, fn - 160)
         val html = HTML_BEFORE.find(src.substring(before, fn))?.let { code[before + it.range.first] } == true
-        val read = values.map { at -> valueFrom(src, at)?.let { it to at } }
+        val read = values.map { at -> valueFrom(src, at) }
         FunctionResult(html, body.groups[1]?.value, if (null in read) emptyList() else read.filterNotNull())
     }
 }

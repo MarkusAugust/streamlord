@@ -80,4 +80,49 @@ class DeclarationElsewhereTest : StreamlordTestCase() {
         assertEquals(emptyList<String>(), shown("\${q.wrapped()}"))
         assertEquals(listOf("\${q.shouted()}"), shown("\${q.shouted()}"))
     }
+
+    fun `test a declaration of this file is the one the value names, whatever else is spelled the same`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "import org.intellij.lang.annotations.Language\n" +
+                "class B(@Language(\"HTML\") val body: String)\nclass A(val body: String)\n" +
+                "fun page(a: A, b: B) = \"<div>\${a.body} \${b.body}</div>\"",
+        )
+        assertEquals(
+            listOf("\${a.body}"),
+            myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text },
+        )
+    }
+
+    fun `test what a val or a function of this file is set to is read through to another file`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "import parts.*\nfun wrapped() = badge()\nfun bare(q: String) = plain(q)\n" +
+                "fun page(q: String): String {\n    val row = badge()\n    val stamp = Marks.stamp\n    val word = plain(q)\n" +
+                "    return \"<div>\$row \$stamp \$word \${wrapped()} \${bare(q)}</div>\"\n}",
+        )
+        assertEquals(
+            listOf("\$word", "\${bare(q)}"),
+            myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text },
+        )
+    }
+
+    fun `test a helper's argument, an enum and a collection declared in another file are what resolving says`() {
+        myFixture.addFileToProject(
+            "parts/Keys.kt",
+            "package parts\nimport io.github.markusaugust.streamlord.core.domain.Html\n" +
+                "object Keys {\n    const val id = \"id\"\n    val loaded = System.getenv(\"K\")\n}\nenum class Tab { HOME }\n" +
+                "class Repo {\n    fun rows(): List<Html> = emptyList()\n    fun names(): List<String> = emptyList()\n}\n",
+        )
+        myFixture.configureByText(
+            "Page.kt",
+            "import parts.*\nimport io.github.markusaugust.streamlord.html.signal\n" +
+                "fun page(repo: Repo) = \"\"\"<b data-text=\"\${signal(Keys.id)}\" data-show=\"\${signal(Tab.HOME.name)}\" " +
+                "data-class=\"\${signal(Keys.loaded)}\">\${Tab.HOME}</b>\${repo.rows().joinToString(\"\")}\${repo.names().joinToString(\"\")}\"\"\"",
+        )
+        assertEquals(
+            listOf("\${signal(Keys.loaded)}", "\${repo.names().joinToString(\"\")}"),
+            myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text },
+        )
+    }
 }
