@@ -793,4 +793,17 @@ class ValueStructureTest {
         val src = "fun re() = Regex(\"\"\"id=\"([^\"]*)\"\"\"\")\nfun bold() = \"<b>x</b>\"\nfun p() = \"<p>\${bold()}</p>\""
         assertEquals(emptyList(), told(src))
     }
+
+    @Test
+    fun `a modifier after a block is one with the declaration on the next line, and a long line of words is read`() {
+        val page = "    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
+        assertEquals(listOf("\$title"), told("open class P {\n    fun a() {} open\n$page"))
+        assertEquals(emptyList(), told("val a = b open" + " a".repeat(20_000)))
+    }
+
+    @Test
+    fun `a private fun interface keeps its members out of other files' sight`() {
+        val seen = declaredNames("private fun interface Q {\n    fun run()\n    val title: String get() = \"<b>x</b>\"\n}")
+        assertEquals(emptySet(), seen.others)
+    }
 }

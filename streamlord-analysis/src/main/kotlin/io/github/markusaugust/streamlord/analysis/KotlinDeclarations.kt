@@ -455,7 +455,6 @@ private const val OVERRIDES = 8
 private const val HTML = 16
 private const val COMPANION = 32
 
-/** What follows an `object` or a `fun` that has no name. */
 private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
 private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
 
@@ -470,7 +469,7 @@ private val QUOTED = regex("`[^`\n]+`")
 private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
 
 /** What stands between a modifier and the declaration it is written before on its line: modifiers and annotations alone. */
-private val DECLARES_AFTER = regex("""(?:[ \t]+(?:[a-z]+|@[^\s(]+(?:\([^()\n]*\))?))*[ \t]+(?:va[lr]|fun|class|interface|object)\b""")
+private val DECLARES_AFTER = regex("""(?:[ \t]+(?:[a-z]+|@[^\s(]+(?:\([^()\n]*\))?)){0,12}[ \t]+(?:va[lr]|fun|class|interface|object)\b""")
 
 /** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
 private fun annotationEnd(
@@ -482,7 +481,7 @@ private fun annotationEnd(
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
     val depth = IntArray(3)
-    for (k in open until if (src.getOrNull(open) == '(' || open < name) minOf(src.length, open + 20_000) else open) {
+    for (k in open until if (src.getOrNull(open) == '(' || open < name) minOf(src.length, open + 5_000) else open) {
         if (code[k] && src[k] in "([{") depth["([{".indexOf(src[k])]++
         val closes = if (code[k]) ")]}".indexOf(src[k]) else -1
         // A bracket that closes none of its kind is past an annotation left open.
@@ -660,6 +659,7 @@ private fun declarations(
                 word == "fun" || (word == "constructor" && !ctorOfClass) -> {
                     f.fn = true
                     f.funModifiers = f.modifiers
+                    f.lastValues = emptyList()
                 }
 
                 word == "return" -> {
@@ -763,7 +763,7 @@ private fun declarations(
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
             val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 || DECLARES_AFTER.matchAt(src, end) != null }
-            if (says == null) f.reset()
+            if (says == null && word != "fun") f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
             i = end
@@ -858,7 +858,6 @@ private fun declarations(
             continue
         }
         if (!c.isWhitespace()) f.reset(if (c in "=.,") 2 else 1)
-        if (c == ';') f.after = 0
         if (c == ')' || c == ']' || c == '}') {
             if (stack.size == 1) {
                 f.endValues(i)
@@ -878,6 +877,8 @@ private fun declarations(
             }
             endPending(g, i + 1)
             g.endValues(i)
+            // `fun a() {} open` then a line break: a declaration may begin after a block.
+            if (c == '}') outer.after = 0
             g.function?.body?.end = i + 1
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1
