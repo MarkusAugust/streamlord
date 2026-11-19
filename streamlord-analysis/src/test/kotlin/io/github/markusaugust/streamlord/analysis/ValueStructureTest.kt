@@ -581,4 +581,247 @@ class ValueStructureTest {
             )
         }
     }
+
+    @Test
+    fun `what is written before a declaration is read however much of it there is, in code alone`() {
+        val long = "x".repeat(200)
+        val use = "\nfun page() = \"<div>\${a()}\$b</div>\""
+        for (between in listOf(" @JvmName(\"c\")", "\n// The badge.\n", " @Suppress(\"$long\")", " @Since(Version(1))")) {
+            assertEquals(
+                emptyList(),
+                told("@Language(\"HTML\")$between fun a(): String = load()\n@Language(\"HTML\")$between val b: String = load()$use"),
+                between,
+            )
+        }
+        // A mark in a comment is none.
+        assertEquals(listOf("\$b"), told("// @Language(\"HTML\")\nval b: String = load()\nfun page() = \"<div>\$b</div>\""))
+        // A mark on a value is none on the declaration after it.
+        assertEquals(
+            listOf("\$b"),
+            told("val a = @Language(\"HTML\") \"x\"\nval b: String = load()\nfun page() = \"<div>\$b</div>\""),
+        )
+        for (between in listOf("@Since(Version(1))", "@Deprecated(\"$long\")", "/* $long */")) {
+            assertEquals(
+                listOf("\${head()}", "\$title"),
+                told(
+                    "abstract class Page {\n    open $between fun head(): String = \"<title>x</title>\"\n" +
+                        "    open $between val title = \"<b>x</b>\"\n    fun render() = \"<html>\${head()}\$title</html>\"\n}",
+                ),
+                between,
+            )
+        }
+    }
+
+    @Test
+    fun `a getter is seen however far behind the value it is written`() {
+        for (getter in listOf("@Since(Version(1)) get()", "// ${"x".repeat(400)}\n        get()")) {
+            assertEquals(
+                listOf("\$title"),
+                told(
+                    "class P(val q: String) {\n    val title: String = \"<b>x</b>\"\n        $getter = field + q\n    fun page() = \"<p>\$title</p>\"\n}",
+                ),
+                getter,
+            )
+        }
+    }
+
+    @Test
+    fun `a getter is seen on the line of its val`() {
+        assertEquals(
+            listOf("\$title"),
+            told(
+                "class P(val q: String) {\n    val title: String = \"<b>x</b>\"; get() = field + q\n    fun page() = \"<p>\$title</p>\"\n}",
+            ),
+        )
+    }
+
+    @Test
+    fun `a call of a function named get after a val is no getter of it`() {
+        assertEquals(
+            emptyList(),
+            told("fun Route.page() {\n    val badge = \"<b>x</b>\"\n    get(\"/\") { call.respondText(\"<p>\$badge</p>\") }\n}"),
+        )
+    }
+
+    @Test
+    fun `a function's parameters are in sight in the object or the function its expression is`() {
+        assertEquals(emptyList(), told("fun f(n: Int) = object : R {\n    fun r() = \"<p>\$n</p>\"\n}"))
+        assertEquals(listOf("\$q"), told("fun f(q: String) = object : R {\n    fun r() = \"<p>\$q</p>\"\n}"))
+        assertEquals(emptyList(), told("fun f(n: Int): () -> String = fun(): String = \"<p>\$n</p>\""))
+        assertEquals(emptyList(), told("fun f(n: Int): () -> String = fun(): String {\n    return \"<p>\$n</p>\"\n}"))
+        assertEquals(emptyList(), told("fun f(n: Int) = object : R(n) {\n    fun r() = \"<p>\$n</p>\"\n}"))
+        // A declaration after an expression whose line could go on is one of its own.
+        for (end in listOf("rows[id]!!", "rows[id] as String?", "rows[id] as List<Int>")) {
+            val first = "class Page(val id: String) {\n    fun row(id: Int) = $end\n\n"
+            assertEquals(listOf("\$id"), told("$first    fun render() = \"<p>\$id</p>\"\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    object O { fun render() = \"<p>\$id</p>\" }\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    companion object { fun render() = \"<p>\$id</p>\" }\n}"), end)
+            // A receiver in brackets is no parameter list, and its function has a name.
+            assertEquals(listOf("\$id"), told("$first    fun (String.() -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    fun (((Int) -> Unit) -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    fun ((Int) -> Unit)?.ext() = \"<p>\$id</p>\"\n}"), end)
+        }
+        // The function after it is one of its own.
+        assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
+    }
+
+    @Test
+    fun `a modifier's word that is a name in a value says nothing of the declaration after it`() {
+        val page = "\nval q: String = load()\nfun page() = \"<p>\$q</p>\""
+        assertEquals(listOf("\$q"), told("val const = load()\nval c = const$page"))
+        assertEquals(listOf("\$q"), told("fun f(door: Door) = door.const$page"))
+        val member = "    val title = \"<b>x</b>\"\n    fun render() = \"<p>\$title</p>\"\n}"
+        assertEquals(emptyList(), told("class Page(door: Door) {\n    val isOpen = door.open\n$member"))
+        // A line that ends in `!!` ends its statement, and the modifier after it is one.
+        assertEquals(
+            listOf("\$title"),
+            told("abstract class Page(q: String?) {\n    val a = q!!\n    open$member".replace("open    val", "open val")),
+        )
+        assertEquals(
+            listOf("\$title"),
+            told("abstract class Page {\n    open @[A B] val title = \"<b>x</b>\"\n    fun render() = \"<p>\$title</p>\"\n}"),
+        )
+    }
+
+    @Test
+    fun `a modifier is read on the line of the bracket that closes what stands before it`() {
+        val render = "fun render() = \"<p>\$title</p>\""
+        assertEquals(listOf("\$title"), told("open class Page { fun a() {} open val title = \"<b>x</b>\"; $render }"))
+        val called = "fun render() = \"<p>\${title()}</p>\""
+        assertEquals(
+            listOf("\${title()}"),
+            told("open class Page {\n    fun a() {} open fun title(): String = \"<b>x</b>\"\n    $called\n}"),
+        )
+        val marked = "@Language(\"HTML\") private val title: String = load()"
+        assertEquals(emptyList(), told("object O { init { } $marked; $render }"))
+        assertEquals(emptyList(), told("context(Raise<String>) $marked\n$render"))
+        val seen = declaredNames("object O { fun a() {} private const val K = \"k\"; class N {} private class H { val x = 1 } }")
+        assertEquals(emptySet<String>() to emptySet(), seen.constants to seen.others)
+    }
+
+    @Test
+    fun `an annotation that begins a function's expression is part of it`() {
+        val src = "fun outer(n: String) {\n    fun size(n: Int) = @Suppress(\"X\") pad(n)\n    println(\"<p>\$n</p>\")\n}"
+        assertEquals(listOf("\$n"), told(src))
+    }
+
+    @Test
+    fun `a getter is its val's where the value holds a function with an expression of its own`() {
+        val src = "class P(val q: String) {\n    val title = fun() = \"<b>x</b>\"\n        get() = { q }\n}"
+        assertEquals(true, declarationOf(src, "title", src.length - 2)?.value?.getter)
+    }
+
+    @Test
+    fun `a name in backticks is a name whatever it holds, and an annotation left open takes nothing with it`() {
+        val page = "    fun other() = \"<b>x</b>\"\n    fun page() = \"<p>\${other()}</p>\"\n}"
+        assertEquals(emptyList(), told("class T {\n    fun `reads @get(x`() {}\n$page"))
+        assertEquals(setOf("other", "page"), fileFacts("class T {\n    @Suppress(\n$page").functions.keys)
+    }
+
+    @Test
+    fun `a function without a name left open is read however much follows it`() {
+        val src = "class P {\n    fun style(n: Int) = fun(\n" + "    val row1 = \"<b>1</b>\"\n".repeat(400) + "}"
+        assertEquals(emptyList(), told(src))
+        assertEquals(emptyList(), told("class P {\n    @A<" + "String, ".repeat(9000)))
+    }
+
+    @Test
+    fun `a modifier is read behind an annotation named in backticks or with type arguments`() {
+        val more = listOf("@A<B<C<D>>>", "@A<(Int) -> Unit>", "@A <String>", "@a.`b`", "abstract fun f(): List<String>")
+        for (annotation in listOf("@`A`", "@A<String>", "@A<List<String>>") + more) {
+            val src = "abstract class P {\n    $annotation open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
+            assertEquals(listOf("\$title"), told(src), annotation)
+        }
+    }
+
+    @Test
+    fun `a name after a condition is no modifier of the declaration on the next line`() {
+        val body = "    if (door.locked) const\n    val title: String = load()\n    println(\"<p>\$title</p>\")"
+        assertEquals(listOf("\$title"), told("fun f(door: Door, const: Int) {\n$body\n}"))
+        assertEquals(
+            listOf("\$title"),
+            told("fun f(door: List<Door>, const: Int) {\n${body.replace("if (door.locked)", "for (d in door)")}\n}"),
+        )
+    }
+
+    @Test
+    fun `a loop variable is out of sight after its statement where an annotation stands in the loop`() {
+        for (loop in listOf("for (n in @A rows) println(n)", "for (n in rows) @A println(n)")) {
+            assertEquals(emptyList(), told("fun f(n: Int, rows: List<String>) {\n    $loop\n    println(\"<p>\$n</p>\")\n}"), loop)
+        }
+    }
+
+    @Test
+    fun `a label after type arguments is no annotation`() {
+        val call = "super<A>@C.f(x, { n: String -> \"<p>\$n</p>\" })"
+        assertEquals(listOf("\$n"), told("class C(val n: Int) : A() {\n    fun i(x: Int) = $call\n}"))
+    }
+
+    @Test
+    fun `a bracket that closes nothing ends the value before it`() {
+        assertEquals(emptyList(), told("val a = \"<b>a</b>\" }\nfun p() = \"<p>\$a</p>\""))
+    }
+
+    @Test
+    fun `a type too long to be one is not read, and the file is`() {
+        val src = "fun f(): List<" + "x".repeat(8000) + "> = 1\nval a = \"<b>a</b>\"\nfun p() = \"<p>\$a</p>\""
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a function named get declared after a val is no getter of it`() {
+        val page = "    fun page() = \"<p>\$html</p>\"\n}"
+        for (get in listOf("override fun get() = html", "operator fun get(i: Int) = html")) {
+            assertEquals(emptyList(), told("class Holder {\n    private val html = \"<b>x</b>\"\n    $get\n$page"), get)
+        }
+    }
+
+    @Test
+    fun `a constructor behind an annotation with arguments declares its parameters`() {
+        val src = "class Row @Named(\"x\") constructor(val id: Int, val name: String) {\n    fun page() = \"<p>\$id \$name</p>\"\n}"
+        assertEquals(listOf("\$name"), told(src))
+    }
+
+    @Test
+    fun `a function that returns to a label is not followed`() {
+        val f = "fun f(rows: List<Int>): String {\n    rows.forEach { return@forEach }\n    return \"<b>x</b>\"\n}"
+        assertEquals(listOf("\${f(rows)}"), told("$f\nfun p(rows: List<Int>) = \"<p>\${f(rows)}</p>\""))
+    }
+
+    @Test
+    fun `a raw string that closes with four quotes ends the value it is`() {
+        val src = "fun re() = Regex(\"\"\"id=\"([^\"]*)\"\"\"\")\nfun bold() = \"<b>x</b>\"\nfun p() = \"<p>\${bold()}</p>\""
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a modifier after a block is one with the declaration on the next line, and a long line of words is read`() {
+        val page = "    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
+        assertEquals(listOf("\$title"), told("open class P {\n    fun a() {} open\n$page"))
+        assertEquals(emptyList(), told("val a = b open" + " a".repeat(20_000)))
+        val seen = declaredNames("class P {\n    fun a() {} private @Suppress(\"a b\") val title = 1\n}")
+        assertEquals(emptySet(), seen.others)
+        // A word after `=` is a name on whatever line it stands.
+        assertEquals(setOf("o", "next"), declaredNames("val o =\n    private\nval next = 1").others)
+    }
+
+    @Test
+    fun `a private fun interface keeps its members out of other files' sight`() {
+        val seen = declaredNames("private fun interface Q {\n    fun run()\n    val title: String get() = \"<b>x</b>\"\n}")
+        assertEquals(emptySet(), seen.others)
+        // A function half written keeps its modifiers to itself.
+        assertEquals(setOf("title"), declaredNames("class P {\n    private fun\n    val title = 1\n}").others)
+    }
+
+    @Test
+    fun `a modifier after a semicolon is one with the declaration on the next line`() {
+        val page = "    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
+        assertEquals(listOf("\$title"), told("open class P {\n    val a = 1; open\n$page"))
+    }
+
+    @Test
+    fun `a group of annotations too long to read closes nothing but itself`() {
+        val group = "@[A Query(\"\"\"" + "x".repeat(6000) + "\"\"\")]"
+        assertEquals(emptySet(), declaredNames("private class P { $group val title = \"<b>x</b>\" }").others)
+    }
 }
