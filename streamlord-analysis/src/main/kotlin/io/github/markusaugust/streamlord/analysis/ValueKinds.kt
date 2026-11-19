@@ -837,13 +837,11 @@ private fun declaredMarkup(
     depth: Int,
 ): Boolean {
     val m = DECLARED.findAll(text, from).firstOrNull { facts.code[it.range.first] }?.takeIf { it.range.last < to } ?: return false
-    val name = m.groups[2]!!
-    if (m.groupValues[1] != "fun") return markupValue(text, name.value, name.range.first, depth, sdk)
-    val f =
-        facts.functions[name.value]
-            .orEmpty()
-            .filter { it.open > name.range.first }
-            .minByOrNull { it.open } ?: return false
+    // The name ends the match.
+    val name = m.groupValues[2]
+    val at = m.range.last + 1 - name.length
+    if (m.groupValues[1] != "fun") return markupValue(text, name, at, depth, sdk)
+    val f = facts.functions[name].orEmpty().filter { it.open > at }.minByOrNull { it.open } ?: return false
     return functionMarkup(text, functionResult(text, f), depth, sdk)
 }
 
