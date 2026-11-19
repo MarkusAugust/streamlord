@@ -6,7 +6,7 @@ import { remarkTabs } from "./src/plugins/remark-tabs.mjs"
 import { datastarLangs, hangingIndent, shikiThemes } from "./src/shiki"
 
 export default defineConfig({
-  site: "https://streamlord-docs.netlify.app",
+  site: "https://streamlord.sobernetics.no",
   markdown: {
     remarkPlugins: [remarkTabs],
     rehypePlugins: [rehypeTables, rehypeCodeBreaks],

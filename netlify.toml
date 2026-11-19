@@ -38,3 +38,13 @@
   # Keep in step with bun-version in the docs job of .github/workflows/ci.yml.
   BUN_VERSION = "1.4.3"
   NODE_VERSION = "22.23.0"
+
+# The site's own address is streamlord.sobernetics.no, its primary domain. Netlify keeps serving
+# the site on its own name as well and sends no one on, so a link to the old name, in a released
+# editor's message or anywhere else, is sent to the same page on the own address. A deploy
+# preview has a name of its own and is not touched.
+[[redirects]]
+  from = "https://streamlord-docs.netlify.app/*"
+  to = "https://streamlord.sobernetics.no/:splat"
+  status = 301
+  force = true

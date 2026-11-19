@@ -55,3 +55,42 @@ val wire: String =
 /** A markup string and a Kotlin file, for the page that shows the analysis being called directly. */
 val html: String = """<div id="a" data-text="${'$'}count"></div>"""
 val source: String = """fun row() = div { dataText(signal("count")) }"""
+
+/**
+ * The orders behind the caching page. [version] is the cheap question, whether a page changed;
+ * [page] is the expensive one, the rows themselves.
+ */
+interface Orders {
+    fun version(page: Int): String
+
+    fun page(page: Int): List<Order>
+}
+
+data class Order(
+    val id: Int,
+    val who: String,
+    val what: String,
+)
+
+/** The table the caching page answers with, built somewhere else like [renderResults]. */
+fun orderTable(
+    rows: List<Order>,
+    page: Int,
+): String =
+    """<table id="orders"><caption>Page $page</caption>""" +
+        rows.joinToString("") { "<tr><td>${it.id}</td><td>${it.who}</td><td>${it.what}</td></tr>" } +
+        "</table>"
+
+/** The orders behind the loading-indicators page: a page at a time, in a sort and a size. */
+@Suppress("ktlint:standard:class-naming") // read as a value in the samples
+object orderBook {
+    private val all = listOf(Order(1001, "Gorvek", "three swords"), Order(1002, "Hask & sons", "a <shield>"), Order(1003, "Brann", "rope"))
+
+    fun page(
+        page: Int,
+        sort: String,
+        size: Int,
+    ): List<Order> = (if (sort == "who") all.sortedBy { it.who } else all).drop((page - 1) * size).take(size)
+
+    fun lastPage(size: Int): Int = maxOf(1, (all.size + size - 1) / size)
+}

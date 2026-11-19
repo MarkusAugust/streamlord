@@ -160,7 +160,7 @@ Nothing breaks: the placeholder form of `interpolate` and `failures()` are as th
   escaped or refused by where it landed, as the value of a `%s` is. A loop may stand in the block,
   a trim call runs before the values go in, and a value without the mark is written by Kotlin as in
   any string. The placeholder form stays, and is the one Java has.
-  See [Strings](https://streamlord-docs.netlify.app/strings/#values-from-outside).
+  See [Strings](https://streamlord.sobernetics.no/strings/#values-from-outside).
 - streamlord-core: `interpolate(prefixes) { }` takes the prefixes of an aliased bundle. The block's
   receiver is an `InterpolationScope` and a mark a `Placed`.
 - streamlord-core: a mark of another block, or one in a string cut or changed after its values were
@@ -176,7 +176,7 @@ Nothing breaks: the placeholder form of `interpolate` and `failures()` are as th
   without `+` in the block of `interpolate`, a template in its format, a `String` in an HTML string
   that is not `interpolate`'s, and a bare dollar in a `data-*` expression of one. `failures()` is as
   it was, and `ProjectIssue.failsStrict` says it of one issue.
-  See [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
+  See [The analysis](https://streamlord.sobernetics.no/analysis/#a-test-over-your-own-sources).
 
 ### Editors
 
@@ -255,7 +255,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
   for an HTML element in the `svg` or `mathml` namespace, and for an SVG or MathML element in `html`
   outside its root. Put HTML in a `<foreignObject>`, or send shapes with
   `namespace = ElementNamespace.SVG` or inside an `<svg>`.
-  See [SVG and MathML](https://streamlord-docs.netlify.app/protocol/#svg-and-mathml).
+  See [SVG and MathML](https://streamlord.sobernetics.no/protocol/#svg-and-mathml).
 - streamlord-core: with `guardElements` on, a patch without a selector in `outer` or `replace` mode
   whose top-level element has no id throws `DatastarEventValidationException` (the client skips
   it), and a `data-*` name with a key or a modifier and two letters swapped, `data-no:click`, throws
@@ -265,7 +265,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
   `CspNonce.TRUSTED_TYPES_POLICY`. Other code that writes into the DOM as markup or a script is
   refused, and so is a patch with an inline `on*` attribute or a `<script src>`. A page that needs
   either, or a library that creates a policy of its own, sets its own policy.
-  See [the policy is yours](https://streamlord-docs.netlify.app/security/#the-policy-is-yours).
+  See [the policy is yours](https://streamlord.sobernetics.no/security/#the-policy-is-yours).
 - `ElementsResponse`, `respondElements` (Ktor), `datastarElements` (Spring), `elementsResponse`
   (streamlord-html), `PatchElements.remove` and `removeElements` take `viewTransitionSelector` after
   `useViewTransition`. Name the arguments that follow it (`eventId` and `retry` of a removal, the
@@ -360,7 +360,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
 - Both editors: with the aliased prefix set, a plain `data-*` Datastar attribute with a key, a
   modifier or a Datastar value is a warning with a fix that writes the alias. Knockout's
   `data-bind="text: $data.name"` says nothing.
-  See [the aliased bundle](https://streamlord-docs.netlify.app/html-dsl/#the-aliased-bundle).
+  See [the aliased bundle](https://streamlord.sobernetics.no/html-dsl/#the-aliased-bundle).
 - Both editors read a page with the prefix you set throughout: `data-ds-signals:my-value__case.kebab`
   defines `$my-value`, and completion and messages use it. VS Code takes a blank prefix as `data-`.
 - Both editors leave `data-star-rating` and other `data-star-*` names that are no Datastar attribute
@@ -424,7 +424,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
   keeps only what follows it.
 - Both editors, the DSL and the operations page document `retry`, `retryInterval` and
   `retryMaxCount` as 1.0.5 runs them.
-  See [reconnects](https://streamlord-docs.netlify.app/operations/#when-datastar-reconnects-and-when-it-does-not).
+  See [reconnects](https://streamlord.sobernetics.no/operations/#when-datastar-reconnects-and-when-it-does-not).
 
 **Expressions**
 - Both editors judge an expression as Datastar 1.0.5 compiles it: a template literal's text is no
@@ -446,7 +446,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
 **Signals**
 - Both editors warn on a signal the server reads, through `Signals` or a `@Serializable` class, that
   no page declares: `signal-never-declared`.
-  See [the analysis](https://streamlord-docs.netlify.app/analysis/#signals-the-pages-never-declare).
+  See [the analysis](https://streamlord.sobernetics.no/analysis/#signals-the-pages-never-declare).
 - IntelliJ: the inspection "Signal no file defines" is "Unknown signals", as the VS Code setting
   `streamlord.diagnostics.unknownSignals` is. Both turn this warning and the unknown-signal warning
   on and off. The inspection's settings in a profile are kept.
@@ -485,7 +485,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
 **Kotlin values in HTML**
 - Both editors link a warning about a Kotlin value in HTML to the page on HTML strings, and advise
   an attribute of its own read with `el.dataset` where they advised a signal.
-  See [Strings](https://streamlord-docs.netlify.app/strings/).
+  See [Strings](https://streamlord.sobernetics.no/strings/).
 - Both editors title the rewrite "Build this string with interpolate(...)", the same wherever it is
   offered, naming a value it passes as `Trusted(...)`, a URL it refuses, or the inner string.
 - Both editors offer the rewrite as a context action anywhere in a string with a value to escape: an
@@ -567,7 +567,7 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
 - Both editors leave `${...}` in a value of a jte, kte, FreeMarker or Velocity file, also inside a
   JavaScript template, FreeMarker's `<#if>` and `<@macro>` and PHP's `<?= ?>` to the engine, with no
   expression error. In Razor every `@` is Razor's, and `@@post(...)` reads as `@post(...)`.
-  See [templates](https://streamlord-docs.netlify.app/templates/).
+  See [templates](https://streamlord.sobernetics.no/templates/).
 - IntelliJ's colours fall back to standard keys of your scheme: an attribute name takes the HTML
   attribute colour, an action the function declaration's, a modifier argument the constant's.
 - IntelliJ colours actions in the classic Default scheme and globals in Darcula and the New UI's
@@ -609,14 +609,14 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
   `catalog/datastar-1.0.5.json`, and the docs and the demo load 1.0.5. A 1.0.4 page works as before.
 - streamlord-core: `ExecuteScript.redirect`, `replaceUrl`, `pushUrl` and `PatchSignals.remove` build
   the events for a `Flow` on WebFlux or `respondDatastar(flow)` on Ktor.
-  See [Spring WebFlux](https://streamlord-docs.netlify.app/spring-webflux/#redirects-the-address-bar-and-removing-signals).
+  See [Spring WebFlux](https://streamlord.sobernetics.no/spring-webflux/#redirects-the-address-bar-and-removing-signals).
 - streamlord-core: an answer of elements that is no stream can name `viewTransitionSelector`, sent
   with `useViewTransition` as `DatastarProtocol.Headers.VIEW_TRANSITION_SELECTOR`.
-  See [view transitions](https://streamlord-docs.netlify.app/protocol/#view-transitions).
+  See [view transitions](https://streamlord.sobernetics.no/protocol/#view-transitions).
 - streamlord-spring: WebFlux reads signals with `exchange.readSignals()`, `readSignals<T>()`,
   `readSignalsOr(default)` and `readSignalsJson()`, each `suspend`, with the limits and checks of
   the others, and has `WebFluxIncomingRequest` and `exchange.isDatastarRequest`.
-  See [reading signals](https://streamlord-docs.netlify.app/spring-webflux/#reading-signals).
+  See [reading signals](https://streamlord.sobernetics.no/spring-webflux/#reading-signals).
 - streamlord-spring takes reactor-core as `compileOnly`, which every WebFlux application has.
 - streamlord-html: the backend actions take expressions: `getExpr`, `postExpr`, `putExpr`,
   `patchExpr`, `deleteExpr`, `queryExpr`, `headerExprs`, `requestCancellationExpr` and `setAllExpr`.
@@ -648,16 +648,16 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
   Sorcerer.`, where it gave the qualified name, and `null` for a local class.
 - streamlord-core: `JsonParseException.limit` says the text is JSON past one of the parser's limits.
 - The `415` that `readSignals` answers a form with says to read the fields as form parameters.
-  See [a form](https://streamlord-docs.netlify.app/signals/#a-form).
+  See [a form](https://streamlord.sobernetics.no/signals/#a-form).
 - streamlord-test: `datastarEvents(body, header)` reads an answer that is no stream, by its content
   type and headers.
-  See [Testing](https://streamlord-docs.netlify.app/testing/#an-answer-that-is-no-stream).
-- Docs: [Spring WebFlux](https://streamlord-docs.netlify.app/spring-webflux/#heartbeats) says a flow
+  See [Testing](https://streamlord.sobernetics.no/testing/#an-answer-that-is-no-stream).
+- Docs: [Spring WebFlux](https://streamlord.sobernetics.no/spring-webflux/#heartbeats) says a flow
   has no heartbeat, whatever the bean says, and shows the ticker that keeps it from being silent.
-- Docs: [Security](https://streamlord-docs.netlify.app/security/) says that a relative URL may lead
+- Docs: [Security](https://streamlord.sobernetics.no/security/) says that a relative URL may lead
   to another host, that CSP mode does not make an expression safe and a page without it needs
   `'unsafe-eval'`, that the aliased bundle reads `data-star-nonce`, and that signals hold no secret.
-- Docs: [Strings](https://streamlord-docs.netlify.app/strings/) names every URL attribute
+- Docs: [Strings](https://streamlord.sobernetics.no/strings/) names every URL attribute
   `interpolate` holds to a safe scheme, `formaction` and `xlink:href` among them.
 
 ### Analysis API

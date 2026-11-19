@@ -32,13 +32,13 @@ Each of these compiles, and without Streamlord you find out in the browser:
 | `patchElements(html, mode = ElementPatchMode.APPEND)` with no selector | The browser rejects the event | The SDK, before a byte is sent |
 | An event written by hand without `flush()` | It waits in a buffer, on an open stream for minutes | The SDK, on every event |
 
-The first is [the $ trap](https://streamlord-docs.netlify.app/dollar-trap/), and the sections
+The first is [the $ trap](https://streamlord.sobernetics.no/dollar-trap/), and the sections
 below follow it through all four tools, on one feed.
 
 ## The SDK: build the feed
 
-Adapters for Ktor and Spring, both [Spring MVC](https://streamlord-docs.netlify.app/spring-webmvc/)
-and [WebFlux](https://streamlord-docs.netlify.app/spring-webflux/), over one core that imports
+Adapters for Ktor and Spring, both [Spring MVC](https://streamlord.sobernetics.no/spring-webmvc/)
+and [WebFlux](https://streamlord.sobernetics.no/spring-webflux/), over one core that imports
 no framework. Here is a route that adds a line to a list and updates a counter, first written
 by hand against the protocol:
 
@@ -77,7 +77,7 @@ get("/feed") {
 
 Both send the same events. By hand, the flushing, the line splitting, the selector rules, the
 JSON and the headers are yours to get right, and
-[the introduction](https://streamlord-docs.netlify.app/introduction/) shows what each of them
+[the introduction](https://streamlord.sobernetics.no/introduction/) shows what each of them
 costs.
 
 ## Assertions: test the feed
@@ -95,7 +95,7 @@ events.assertPatchElements(
 events.assertSignal("heads", 13)
 ```
 
-[Testing](https://streamlord-docs.netlify.app/testing/) has the whole test.
+[Testing](https://streamlord.sobernetics.no/testing/) has the whole test.
 
 ## The editors: break it by accident
 
@@ -132,7 +132,7 @@ document an action such as `@post` there and colour it, the value only where it 
 expression.
 VS Code checks a template file once an extension for that engine is installed, since that is
 what tells VS Code the file's language.
-[The editors page](https://streamlord-docs.netlify.app/editors/) has the rest.
+[The editors page](https://streamlord.sobernetics.no/editors/) has the rest.
 
 ## The analysis: CI stops it anyway
 
@@ -160,7 +160,7 @@ fun `no source file interpolates a signal into Datastar`() {
 }
 ```
 
-[The analysis](https://streamlord-docs.netlify.app/analysis/) has the rest, including a check
+[The analysis](https://streamlord.sobernetics.no/analysis/) has the rest, including a check
 for signals a handler reads that no page declares.
 
 ## Three ways to write markup
@@ -169,7 +169,7 @@ Write HTML with the kotlinx.html DSL above, as a Kotlin string, or with a templa
 (Pebble, Thymeleaf, JTE, kte, FreeMarker, Velocity, Mustache).
 Every entry point that takes HTML takes a
 `String`, so all three are equals, and both editors check Datastar in all three.
-[Choosing a style](https://streamlord-docs.netlify.app/choosing-a-style/) helps you pick.
+[Choosing a style](https://streamlord.sobernetics.no/choosing-a-style/) helps you pick.
 
 ## Install
 
@@ -194,27 +194,27 @@ dependencies {
 
 The assertions and the analysis are `streamlord-test` and `streamlord-analysis`, both in
 `testImplementation`. There are ten modules and you will never want all of them.
-[Install and modules](https://streamlord-docs.netlify.app/install/) explains which and why, with
+[Install and modules](https://streamlord.sobernetics.no/install/) explains which and why, with
 Maven as well as Gradle.
 
 ## Documentation
 
-[The documentation](https://streamlord-docs.netlify.app) has the protocol, both adapters, the
+[The documentation](https://streamlord.sobernetics.no) has the protocol, both adapters, the
 security model, the editors and the architecture, as well as
-[live views](https://streamlord-docs.netlify.app/live-views/),
-[GraalVM native image](https://streamlord-docs.netlify.app/native-image/) and
-[Datastar Pro](https://streamlord-docs.netlify.app/datastar-pro/), whose attributes Streamlord
+[live views](https://streamlord.sobernetics.no/live-views/),
+[GraalVM native image](https://streamlord.sobernetics.no/native-image/) and
+[Datastar Pro](https://streamlord.sobernetics.no/datastar-pro/), whose attributes Streamlord
 writes without shipping any Pro code. To begin,
-[write your first stream](https://streamlord-docs.netlify.app/first-stream/).
+[write your first stream](https://streamlord.sobernetics.no/first-stream/).
 
-What is coming is on [the roadmap](https://streamlord-docs.netlify.app/roadmap/).
+What is coming is on [the roadmap](https://streamlord.sobernetics.no/roadmap/).
 
 ## Licence
 
 MIT. Take it, wield it, and may your streams never buffer. Every released version stays MIT, but
 the name Streamlord and the mark are not part of the grant: fork freely, under another name.
 Issues are always welcome and pull requests start with a conversation; see
-[CONTRIBUTING.md](CONTRIBUTING.md) and [the licence page](https://streamlord-docs.netlify.app/licence/).
+[CONTRIBUTING.md](CONTRIBUTING.md) and [the licence page](https://streamlord.sobernetics.no/licence/).
 
 > *The elders of Bonereach asked Gorvek what a warrior wants of a stream.*
 >
