@@ -799,6 +799,10 @@ class ValueStructureTest {
         val page = "    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
         assertEquals(listOf("\$title"), told("open class P {\n    fun a() {} open\n$page"))
         assertEquals(emptyList(), told("val a = b open" + " a".repeat(20_000)))
+        val seen = declaredNames("class P {\n    fun a() {} private @Suppress(\"a b\") val title = 1\n}")
+        assertEquals(emptySet(), seen.others)
+        // A word after `=` is a name on whatever line it stands.
+        assertEquals(setOf("o", "next"), declaredNames("val o =\n    private\nval next = 1").others)
     }
 
     @Test

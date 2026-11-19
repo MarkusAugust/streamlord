@@ -49,10 +49,9 @@ internal class Declaration(
 /** Where a value is written: from [start] to just past it, [end], -1 until its statement has ended; [getter] where a `val` has a getter after it. */
 internal class Span(
     val start: Int,
-) {
-    var end: Int = -1
-    var getter: Boolean = false
-}
+    var end: Int = -1,
+    var getter: Boolean = false,
+)
 
 /**
  * What the analysis needs of a whole file, read once: where the code is (template code included),
@@ -322,7 +321,7 @@ private class ScopeFrame(
     /** The same of the `fun` last read in this frame, and for a function's parameters of its own. */
     var funModifiers = 0
 
-    /** The values that just ended in this frame, one in another, while only modifiers follow: a `get(` then is their getter. */
+    /** The values that just ended in this frame, one in another, while only modifiers follow: a `get()` then is their getter. */
     var lastValues = emptyList<Span>()
 
     /** The values written in this frame whose statements have not ended. */
