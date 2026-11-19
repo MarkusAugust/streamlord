@@ -318,7 +318,7 @@ private class ScopeFrame(
     /** What is written before the declaration being read: each of [MODIFIER_WORDS] and the HTML mark, until anything else is. */
     var modifiers = 0
 
-    /** The same of the `fun` last read in this frame, and for a function's parameters of its own. */
+    /** The same of the `fun` last read in this frame, where a `fun interface` has its own, and for a function's parameters of its function. */
     var funModifiers = 0
 
     /** The values that just ended in this frame, one in another, while only modifiers follow: a `get()` then is their getter. */
@@ -467,7 +467,7 @@ private val MODIFIER_WORDS: Map<String, Int> =
 private val QUOTED = regex("`[^`\n]+`")
 private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
 
-/** What stands between a modifier and the declaration it is written before on its line: modifiers and annotations alone. */
+/** What stands between a modifier and the declaration on its line: words and annotations, twelve at most, so that no line is too long to read. */
 private val DECLARES_AFTER = regex("""(?:[ \t]+(?:[a-z]+|@[^\s(]+(?:\([^()\n]*\))?)){0,12}[ \t]+(?:va[lr]|fun|class|interface|object)\b""")
 
 /** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
@@ -487,7 +487,7 @@ private fun annotationEnd(
         if (closes >= 0 && --depth[closes] < 0) break
         if (closes >= 0 && depth.sum() == 0) return k + 1
     }
-    return name
+    return open
 }
 
 /**
@@ -658,7 +658,6 @@ private fun declarations(
                 word == "fun" || (word == "constructor" && !ctorOfClass) -> {
                     f.fn = true
                     f.funModifiers = f.modifiers
-                    f.lastValues = emptyList()
                 }
 
                 word == "return" -> {
@@ -675,7 +674,7 @@ private fun declarations(
 
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
-                    f.privateClass = f.modifiers and PRIVATE != 0
+                    f.privateClass = (if (f.word == "fun") f.funModifiers else f.modifiers) and PRIVATE != 0
                     val contract = word == "interface"
                     f.declares = (contract || (word == "class" && f.modifiers and EXTENDED != 0)) to contract
                 }
@@ -762,7 +761,7 @@ private fun declarations(
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
             val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 || DECLARES_AFTER.matchAt(src, end) != null }
-            if (says == null && word != "fun") f.reset()
+            if (says == null) f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
             i = end
@@ -857,6 +856,7 @@ private fun declarations(
             continue
         }
         if (!c.isWhitespace()) f.reset(if (c in "=.,") 2 else 1)
+        if (c == ';') f.after = 0
         if (c == ')' || c == ']' || c == '}') {
             if (stack.size == 1) {
                 f.endValues(i)

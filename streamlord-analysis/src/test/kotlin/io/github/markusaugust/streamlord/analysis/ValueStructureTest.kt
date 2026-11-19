@@ -809,5 +809,19 @@ class ValueStructureTest {
     fun `a private fun interface keeps its members out of other files' sight`() {
         val seen = declaredNames("private fun interface Q {\n    fun run()\n    val title: String get() = \"<b>x</b>\"\n}")
         assertEquals(emptySet(), seen.others)
+        // A function half written keeps its modifiers to itself.
+        assertEquals(setOf("title"), declaredNames("class P {\n    private fun\n    val title = 1\n}").others)
+    }
+
+    @Test
+    fun `a modifier after a semicolon is one with the declaration on the next line`() {
+        val page = "    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
+        assertEquals(listOf("\$title"), told("open class P {\n    val a = 1; open\n$page"))
+    }
+
+    @Test
+    fun `a group of annotations too long to read closes nothing but itself`() {
+        val group = "@[A Query(\"\"\"" + "x".repeat(6000) + "\"\"\")]"
+        assertEquals(emptySet(), declaredNames("private class P { $group val title = \"<b>x</b>\" }").others)
     }
 }
