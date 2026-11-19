@@ -14,14 +14,14 @@ All notable changes to Streamlord are recorded here. The format follows
   gives `RestTestClient.bindToServer(...)` the same reading. An answer still open after
   `asyncTimeout`, ten seconds by default, is stopped and fails. `datastar` replaces the helper the
   testing page gave to copy. See
-  [Testing](https://streamlord-docs.netlify.app/testing/#through-the-controller-with-mockmvctester).
+  [Testing](https://streamlord.sobernetics.no/testing/#through-the-controller-with-mockmvctester).
 
 ### The analysis
 
 - The build check is one line: `fun markup() = Analyzer().checkProject()` reads the project under
   `src/main` and fails with every finding that fails a build, each written as a compiler writes
   it. `checkProject(strict = true)` fails on what `failures(strict = true)` keeps. See
-  [The analysis](https://streamlord-docs.netlify.app/analysis/#a-test-over-your-own-sources).
+  [The analysis](https://streamlord.sobernetics.no/analysis/#a-test-over-your-own-sources).
 - `analyzeProject` reads HTML and template files too, each as the editors read that kind of file,
   where it read `.kt` alone, and gives `unknown-signal` and `signal-never-declared` as the editors
   do. Both are warnings, which `failures()` does not keep. Hand it `src/main` where you gave
