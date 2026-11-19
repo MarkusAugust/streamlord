@@ -441,6 +441,14 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a parameter is read behind a comment at the end of the line before it`() {
+        assertEquals(emptyList(), told("fun f(\n    a: String, // the a\n    title: Int,\n) = \"<p>\$title</p>\""))
+        val row = "class Row(\n    val id: String, // the key\n    val title: String,\n)"
+        assertEquals(setOf("id", "title"), declaredNames(row).others)
+        assertEquals(emptyList(), told("fun f(\n    // the body\n    @Language(\"HTML\") body: String,\n) = \"<div>\$body</div>\""))
+    }
+
+    @Test
     fun `a parameter is marked HTML behind a comment too`() {
         assertEquals(
             emptyList(),

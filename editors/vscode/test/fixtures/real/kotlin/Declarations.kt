@@ -65,3 +65,9 @@ fun labelled(rows: List<Int>): String {
 }
 
 fun caller(rows: List<Int>) = "<p>${labelled(rows)}</p>"
+
+// A parameter on the line after a comment is one: nothing is said of $heading, an Int.
+fun commented(
+    body: String, // the body
+    heading: Int,
+) = "<h1>$heading</h1>"

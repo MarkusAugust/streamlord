@@ -74,6 +74,9 @@ All notable changes to Streamlord are recorded here. The format follows
   call that a function declared inside another, a value of the same name, or a member of another
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
+- A parameter written on the line after a `//` comment is read. With `a: String, // the a` on one
+  line and `title: Int` on the next, `title` was no parameter: `$title` in the function was warned
+  of, and a constructor property written so was not one other files could see.
 - What is written before a declaration is read once, as the file is: a mark, an `open`, a
   `private` or a `const` is seen behind another annotation, one with brackets in its arguments, a
   comment, a line break or any stretch of text, where each was looked for in the few characters
