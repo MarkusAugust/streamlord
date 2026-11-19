@@ -239,7 +239,7 @@ private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
 private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
 private val PARAMETER =
     regex(
-        """^\s*(?:(?:/\*[\s\S]*?\*/|//[^\n]*\n)\s*)*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
+        """^\s*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
     )
 private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
@@ -503,6 +503,31 @@ private fun overridable(
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
+/** [src] with each comment a run of spaces as long, its line breaks kept, so that every offset still holds. */
+private fun withoutComments(
+    src: String,
+    code: BooleanArray,
+): String {
+    val out = src.toCharArray()
+    var k = 0
+    while (k < src.length) {
+        val end =
+            when {
+                code[k] -> -1
+                src.startsWith("//", k) -> src.indexOf('\n', k).let { if (it < 0) src.length else it }
+                src.startsWith("/*", k) -> src.indexOf("*/", k + 2).let { if (it < 0) src.length else it + 2 }
+                else -> -1
+            }
+        if (end < 0) {
+            k++
+            continue
+        }
+        for (j in k until end) if (out[j] != '\n') out[j] = ' '
+        k = end
+    }
+    return out.concatToString()
+}
+
 /**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
  * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
@@ -558,6 +583,9 @@ private fun declarations(
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
 
+    // Parameters are read in the code alone: a comment among them, `a: String, // the a`, is blank.
+    val blank by lazy { withoutComments(src, code) }
+
     fun add(
         name: String,
         d: Declaration,
@@ -597,7 +625,7 @@ private fun declarations(
         val out = ArrayList<Declaration>()
         val cuts = listOf(f.open) + f.commas + close
         for (k in 0 until cuts.size - 1) {
-            val text = src.substring(cuts[k] + 1, cuts[k + 1])
+            val text = blank.substring(cuts[k] + 1, cuts[k + 1])
             val m = PARAMETER.find(text) ?: continue
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
@@ -929,7 +957,7 @@ private fun declarations(
         f.endValues(src.length)
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((g, close) in declared) functionAt(src, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
+    for ((g, close) in declared) functionAt(blank, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
     return names
 }
 

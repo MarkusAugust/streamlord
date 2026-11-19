@@ -446,6 +446,23 @@ class ValueStructureTest {
         val row = "class Row(\n    val id: String, // the key\n    val title: String,\n)"
         assertEquals(setOf("id", "title"), declaredNames(row).others)
         assertEquals(emptyList(), told("fun f(\n    // the body\n    @Language(\"HTML\") body: String,\n) = \"<div>\$body</div>\""))
+        assertEquals(emptyList(), told("fun f(\n    @Suppress(\"x\") // why\n    title: Int,\n) = \"<p>\$title</p>\""))
+        // A mark in a comment is none, and a comma in one cuts nothing.
+        val like = "fun f(\n    a: String, // like @Language(\"HTML\") here\n    title: String,\n) = \"<p>\$title</p>\""
+        assertEquals(listOf("\$title"), told(like))
+        val marked = "fun g(a: String, // one, two\n    @Language(\"HTML\") body: String) = body"
+        assertEquals(
+            setOf(1, "body"),
+            fileFacts(marked)
+                .functions
+                .getValue("g")
+                .single()
+                .html,
+        )
+        assertEquals(
+            listOf("\$title"),
+            told("fun f(\n    a: String,\n" + "    // old\n".repeat(5000) + "    title: String,\n) = \"<p>\$title</p>\""),
+        )
     }
 
     @Test
