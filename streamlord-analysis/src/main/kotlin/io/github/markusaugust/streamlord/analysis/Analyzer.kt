@@ -102,7 +102,8 @@ internal class Reading(
 /**
  * A value of a Kotlin file the analysis asks the editor about, by where it stands: a template of an HTML string, an
  * operand of a `+` chain, a value marked with `+` in `interpolate { }`, an argument of `interpolate(...)`, or a part of
- * one of these whose type decides how the whole is read, as `rows` of `rows.joinToString("")`.
+ * one of these whose type decides how the whole is read, as `rows` of `rows.joinToString("")`, or of what a `val` or a
+ * function of the file that such a value names is set to.
  */
 public class ValueQuestion internal constructor(
     public val start: Int,

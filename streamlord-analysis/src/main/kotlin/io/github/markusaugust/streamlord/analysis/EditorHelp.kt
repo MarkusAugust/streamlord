@@ -55,7 +55,8 @@ public data class ValueAnswer(
      * The declaration the value names, where the whole value is a name or a call and the editor finds what it means in
      * another file: `fun badge(): String = "<b>new</b>"` with its annotations, after that file's `package` and `import`
      * lines, which say what its names mean, and in the head of the class that holds it, `open class Card { ... }`, which
-     * says whether another may stand in for it. Of a declaration that is compiled or not Kotlin the `package` line alone:
+     * says whether another may stand in for it; a property of a constructor in the class's brackets, `class Row(val label: String)`,
+     * without its default. Of a declaration that is compiled or not Kotlin the `package` line alone:
      * a call that is not Streamlord's is no helper of its DSL. The analysis reads it only of a value whose type is a
      * String or unknown. Null for any other value.
      */

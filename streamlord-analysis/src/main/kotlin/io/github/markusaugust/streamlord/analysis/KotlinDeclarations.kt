@@ -307,9 +307,12 @@ private class ScopeFrame(
     /** For a function's parameters: whether another function may stand in for it. */
     var overridable = false
 
-    /** For a class's body, and for the frame a class is declared in until its body opens: whether the class can be extended, and whether it is an interface. */
+    /** For a class's body: whether the class can be extended, and whether it is an interface. */
     var extended = false
     var contract = false
+
+    /** The same of the class last declared in this frame, until its body opens. */
+    var declares = false to false
 }
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -423,8 +426,14 @@ private fun modifiersBefore(
 private fun overridable(
     modifiers: String,
     owner: ScopeFrame?,
-): Boolean =
-    EXTENDED.containsMatchIn(modifiers) || owner?.contract == true || (OVERRIDES.containsMatchIn(modifiers) && owner?.extended != false)
+): Boolean = overridable(modifiers, owner?.extended, owner?.contract)
+
+/** [overridable] of a member of a class that can be [extended] and is a [contract], an interface; null of a class the text does not show. */
+private fun overridable(
+    modifiers: String,
+    extended: Boolean?,
+    contract: Boolean?,
+): Boolean = EXTENDED.containsMatchIn(modifiers) || contract == true || (OVERRIDES.containsMatchIn(modifiers) && extended != false)
 
 private val NAME_BEFORE_BRACKET = regex("""($NAME)\s*$""")
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
@@ -530,7 +539,7 @@ private fun declarations(
                         f.open,
                         type,
                         html = HTML_ANNOTATION.containsMatchIn(text),
-                        overridable = holder != null && overridable(m.groupValues[1], holder),
+                        overridable = holder != null && overridable(m.groupValues[1], holder.declares.first, holder.declares.second),
                         typeArguments = arguments,
                         shared =
                             visible &&
@@ -575,8 +584,8 @@ private fun declarations(
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
                     f.privateClass = PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
-                    f.contract = word == "interface"
-                    f.extended = f.contract || (word == "class" && EXTENDED.containsMatchIn(modifiersBefore(src, code, i)))
+                    val contract = word == "interface"
+                    f.declares = (contract || (word == "class" && EXTENDED.containsMatchIn(modifiersBefore(src, code, i)))) to contract
                 }
 
                 word == "when" -> {
@@ -708,8 +717,8 @@ private fun declarations(
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
-                    g.extended = f.extended
-                    g.contract = f.contract
+                    g.extended = f.declares.first
+                    g.contract = f.declares.second
                     g.hidden = classHidden(f)
                     f.ctor?.let { g.ends += it }
                     f.ctor = null

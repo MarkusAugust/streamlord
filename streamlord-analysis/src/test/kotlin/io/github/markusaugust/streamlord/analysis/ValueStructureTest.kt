@@ -553,4 +553,32 @@ class ValueStructureTest {
         assertEquals(listOf(both[0]), told("$core.Html"))
         for (type in listOf("kotlin.Int?", "kotlin.UInt", "kotlin.Number", "$core.Trusted")) told(type)
     }
+
+    @Test
+    fun `a class declared in a class leaves the outer one what it is`() {
+        val members = "    fun head(): String = \"<b>x</b>\"\n    fun render() = \"<p>\${head()}</p>\"\n}"
+        for (inner in listOf("class Helper", "class Helper { val a = 1 }", "companion object { val A = 1 }", "enum class Kind { A, B }")) {
+            assertEquals(listOf("\${head()}"), told("interface Page {\n    $inner\n$members"), inner)
+        }
+        assertEquals(emptyList(), told("class Card {\n    interface L { fun x() }\n$members"))
+        assertEquals(
+            listOf("\$body"),
+            told(
+                "open class Card : Base() {\n    companion object\n    override val body = \"<b>x</b>\"\n    fun r() = \"<p>\$body</p>\"\n}",
+            ),
+        )
+    }
+
+    @Test
+    fun `a getter is seen behind its modifiers and a comment`() {
+        for (getter in listOf("// adds q\n        get()", "inline get()", "@JvmName(\"t\") get()", "/** Adds. */\n        get()")) {
+            assertEquals(
+                listOf("\$title"),
+                told(
+                    "class P(val q: String) {\n    val title: String = \"<b>x</b>\"\n        $getter = field + q\n    fun page() = \"<p>\$title</p>\"\n}",
+                ),
+                getter,
+            )
+        }
+    }
 }

@@ -715,7 +715,7 @@ internal fun markupValue(
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk, editor)
 }
 
-private val GETTER_AFTER = regex("""\s*get\s*\(""")
+private val GETTER_AFTER = regex("""^\s*(?:(?:[a-z]+|@[\p{L}\p{Nd}_:.]+(?:\([^()]*\))?)\s+)*get\s*\(""")
 
 /** What the `val` [d] is set to, where that is what the name gives: not one another may stand in for, nor one with a getter of its own. */
 private fun valueOf(
@@ -723,7 +723,19 @@ private fun valueOf(
     d: Declaration,
 ): ValueText? {
     if (d.valueAt < 0 || d.overridable) return null
-    return valueFrom(src, d.valueAt)?.takeUnless { GETTER_AFTER.matchesAt(src, it.end) }
+    return valueFrom(src, d.valueAt)?.takeUnless {
+        GETTER_AFTER.containsMatchIn(
+            uncommented(
+                src.substring(
+                    it.end,
+                    minOf(
+                        src.length,
+                        it.end + 300,
+                    ),
+                ),
+            ),
+        )
+    }
 }
 
 /** How many calls deep a function is followed to what it returns. */
