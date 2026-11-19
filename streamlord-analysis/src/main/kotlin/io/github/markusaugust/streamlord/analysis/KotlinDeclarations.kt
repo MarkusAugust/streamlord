@@ -335,7 +335,7 @@ private class ScopeFrame(
     /** For a function's block: its parameters. */
     var function: ScopeFrame? = null
 
-    /** The word last read in this frame with nothing but space after it, and the word its bracket follows: a function's name before its parameters. */
+    /** The word last read in this frame with nothing but space after it, and for a function's parameters the function's name. */
     var word: String? = null
     var name: String? = null
 
@@ -467,7 +467,10 @@ private val MODIFIER_WORDS: Map<String, Int> =
         mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES, "companion" to COMPANION)
 
 private val QUOTED = regex("`[^`\n]+`")
-private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|(?:`[^`\n]+`|[\p{L}_][\p{L}\p{Nd}_.]*)(?:<(?:[^<>\n]|<[^<>\n]*>)*>)?)""")
+private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
+
+/** What stands between a modifier and the declaration it is written before on its line: modifiers and annotations alone. */
+private val DECLARES_AFTER = regex("""(?:[ \t]+(?:[a-z]+|@[^\s(]+(?:\([^()\n]*\))?))*[ \t]+(?:va[lr]|fun|class|interface|object)\b""")
 
 /** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
 private fun annotationEnd(
@@ -479,7 +482,7 @@ private fun annotationEnd(
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
     val depth = IntArray(3)
-    for (k in open until if (src.getOrNull(open) == '(' || open < name) src.length else open) {
+    for (k in open until if (src.getOrNull(open) == '(' || open < name) minOf(src.length, open + 20_000) else open) {
         if (code[k] && src[k] in "([{") depth["([{".indexOf(src[k])]++
         val closes = if (code[k]) ")]}".indexOf(src[k]) else -1
         // A bracket that closes none of its kind is past an annotation left open.
@@ -759,7 +762,7 @@ private fun declarations(
                 }
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
-            val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 }
+            val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 || DECLARES_AFTER.matchAt(src, end) != null }
             if (says == null && word != "fun") f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
@@ -779,12 +782,12 @@ private fun declarations(
         }
         if (c == '(' || c == '[' || c == '{') {
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
-            g.name = f.word
             if (c == '(' && f.fn) {
                 g.kind = "params"
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
                 g.funModifiers = f.funModifiers
+                g.name = f.word
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -862,8 +865,6 @@ private fun declarations(
             }
             val g = stack.removeAt(stack.size - 1)
             val outer = stack.last()
-            // `fun a() {} open val b`: a declaration may begin on the line of the bracket that closes the one before it.
-            if (c != ']' && g.name != "if" && g.name != "while") outer.after = 0
 
             fun handOver(p: PendingScope) {
                 outer.pending?.let { settle(it, i + 1) }

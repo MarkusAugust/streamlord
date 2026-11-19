@@ -721,11 +721,13 @@ class ValueStructureTest {
     fun `a function without a name left open is read however much follows it`() {
         val src = "class P {\n    fun style(n: Int) = fun(\n" + "    val row1 = \"<b>1</b>\"\n".repeat(400) + "}"
         assertEquals(emptyList(), told(src))
+        assertEquals(emptyList(), told("class P {\n    @A<" + "String, ".repeat(9000)))
     }
 
     @Test
     fun `a modifier is read behind an annotation named in backticks or with type arguments`() {
-        for (annotation in listOf("@`A`", "@A<String>", "@A<List<String>>")) {
+        val more = listOf("@A<B<C<D>>>", "@A<(Int) -> Unit>", "@A <String>", "@a.`b`", "abstract fun f(): List<String>")
+        for (annotation in listOf("@`A`", "@A<String>", "@A<List<String>>") + more) {
             val src = "abstract class P {\n    $annotation open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
             assertEquals(listOf("\$title"), told(src), annotation)
         }
@@ -735,6 +737,10 @@ class ValueStructureTest {
     fun `a name after a condition is no modifier of the declaration on the next line`() {
         val body = "    if (door.locked) const\n    val title: String = load()\n    println(\"<p>\$title</p>\")"
         assertEquals(listOf("\$title"), told("fun f(door: Door, const: Int) {\n$body\n}"))
+        assertEquals(
+            listOf("\$title"),
+            told("fun f(door: List<Door>, const: Int) {\n${body.replace("if (door.locked)", "for (d in door)")}\n}"),
+        )
     }
 
     @Test
