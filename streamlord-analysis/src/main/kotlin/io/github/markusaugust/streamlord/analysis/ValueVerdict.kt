@@ -67,7 +67,7 @@ internal fun verdict(
  * an unsigned number, whose digits Kotlin writes. Where escaping does not help, [verdict] still
  * asks which.
  */
-public fun ValueFact?.writesItself(): Boolean =
+internal fun ValueFact?.writesItself(): Boolean =
     this == ValueFact.CONSTANT || this == ValueFact.NUMBER || this == ValueFact.BOOLEAN || this == ValueFact.UNSIGNED
 
 /** A fact as the judgement reads it: a `String?` is a String and a `Trusted` markup, whose difference only the fixes ask about. */
@@ -132,11 +132,12 @@ internal fun ValueFact?.isNullable(): Boolean = this == ValueFact.NULLABLE
 internal fun ValueFact?.isOther(): Boolean = this == ValueFact.OTHER
 
 /** Html or Trusted: markup, whose values have been through interpolate or which the author vouched for. */
-public fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP || this == ValueFact.TRUSTED
+internal fun ValueFact?.isMarkup(): Boolean = this == ValueFact.MARKUP || this == ValueFact.TRUSTED
 
 /** Each kind from the one safe in the fewest places to the one safe everywhere. */
 private val WEAKEST_FIRST =
     listOf(
+        ValueFact.NULLABLE_STRING,
         ValueFact.STRING,
         null,
         ValueFact.COLLECTION,

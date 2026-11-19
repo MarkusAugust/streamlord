@@ -6,7 +6,6 @@ import io.github.markusaugust.streamlord.analysis.IssueCode
 import io.github.markusaugust.streamlord.analysis.Source
 import io.github.markusaugust.streamlord.analysis.SourceLanguage
 import io.github.markusaugust.streamlord.analysis.ValueAnswer
-import io.github.markusaugust.streamlord.analysis.ValueFact
 import io.github.markusaugust.streamlord.analysis.rewriteAt
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import java.io.File
@@ -24,8 +23,8 @@ private class Case(
     val declares: String,
     val params: String,
     val body: String,
-    /** The fact the editor gives of a value written as one of [written], as the matrix has it. */
-    val fact: ValueFact?,
+    /** The fact the editor gives of a value written as one of [written], by the name the matrix has it under. */
+    val fact: String?,
     val written: Set<String>,
     val expects: String?,
     val says: List<String>,
@@ -82,7 +81,7 @@ private fun matrix(file: File): List<Case> {
                         value.string("declares").orEmpty(),
                         value.string("type")?.let { "v: $it" }.orEmpty(),
                         form.string("open") + markup.replace("§", form.string("placeholder")!!) + form.string("close"),
-                        (value.string("kotlinFact") ?: value.string("fact"))?.let { ValueFact.valueOf(it.uppercase().replace('-', '_')) },
+                        value.string("kotlinFact") ?: value.string("fact"),
                         setOf("\${v}", "\$\${v}", "v"),
                         null,
                         emptyList(),
@@ -97,20 +96,21 @@ private fun matrix(file: File): List<Case> {
 private val analyzer = Analyzer()
 
 /** An answer of an editor that the analysis reads as [fact]: the matrix says what the editor knows by the fact itself. */
-private fun answerGiving(fact: ValueFact): ValueAnswer =
+private fun answerGiving(fact: String): ValueAnswer =
     when (fact) {
-        ValueFact.STRING -> ValueAnswer("kotlin.String")
-        ValueFact.NULLABLE_STRING -> ValueAnswer("kotlin.String?")
-        ValueFact.NUMBER -> ValueAnswer("kotlin.Int")
-        ValueFact.BOOLEAN -> ValueAnswer("kotlin.Boolean")
-        ValueFact.NULLABLE -> ValueAnswer("kotlin.Int?")
-        ValueFact.CONSTANT -> ValueAnswer(null, constant = true)
-        ValueFact.MARKUP -> ValueAnswer("io.github.markusaugust.streamlord.core.domain.Html")
-        ValueFact.TRUSTED -> ValueAnswer("io.github.markusaugust.streamlord.core.domain.Trusted")
-        ValueFact.UNSIGNED -> ValueAnswer("kotlin.UInt")
-        ValueFact.OTHER -> ValueAnswer("com.acme.Html")
-        ValueFact.COLLECTION -> ValueAnswer("kotlin.collections.List<kotlin.String>")
-        ValueFact.OPEN_NUMBER -> ValueAnswer("kotlin.Number")
+        "string" -> ValueAnswer("kotlin.String")
+        "nullable-string" -> ValueAnswer("kotlin.String?")
+        "number" -> ValueAnswer("kotlin.Int")
+        "boolean" -> ValueAnswer("kotlin.Boolean")
+        "nullable" -> ValueAnswer("kotlin.Int?")
+        "constant" -> ValueAnswer(null, constant = true)
+        "markup" -> ValueAnswer("io.github.markusaugust.streamlord.core.domain.Html")
+        "trusted" -> ValueAnswer("io.github.markusaugust.streamlord.core.domain.Trusted")
+        "unsigned" -> ValueAnswer("kotlin.UInt")
+        "other" -> ValueAnswer("com.acme.Html")
+        "collection" -> ValueAnswer("kotlin.collections.List<kotlin.String>")
+        "open-number" -> ValueAnswer("kotlin.Number")
+        else -> error("the matrix names no fact $fact")
     }
 
 /** The object of one case: the function as written, and as each fix and each context action leaves it. */

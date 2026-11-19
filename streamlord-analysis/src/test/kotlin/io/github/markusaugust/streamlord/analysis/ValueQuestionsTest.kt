@@ -26,13 +26,13 @@ class ValueQuestionsTest {
             val source = Source(src, SourceLanguage.KOTLIN, modules = Modules.known(core = true, htmlDsl = true))
             val asked = analyzer.valueQuestions(source)
             assertEquals(
-                wanted.map { it.string("text") to (it.boolean("argument") == true) },
-                asked.map { src.substring(it.start, it.end) to it.argument },
+                wanted.map { it.string("text") },
+                asked.map { src.substring(it.start, it.end) },
                 "asked about",
             )
             val answers =
                 asked.zip(wanted).associate { (q, w) ->
-                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant") == true, w.string("read")?.let(::factNamed))
+                    (q.start to q.end) to ValueAnswer(w.string("type"), w.boolean("constant") == true)
                 }
             assertEquals(
                 wanted.map { "${it.string("text")}=${it.string("fact")}" },
@@ -45,12 +45,21 @@ class ValueQuestionsTest {
             assertEquals((c["issues"] as JsonArray).strings(), shown(answered), "answered")
             // As an editor that resolves nothing reads the file, VS Code among them.
             assertEquals((c["unanswered"] as JsonArray).strings(), shown(source), "unanswered")
-            // What is asked hangs on no answer, so an editor that has answered is asked nothing it was not told of.
-            assertEquals(
-                asked.map { it.start to it.end },
-                analyzer.valueQuestions(answered).map { it.start to it.end },
-                "asked about once answered",
+            // An editor is asked of nothing it was not told of, so it can answer all in one go.
+            val listed = asked.mapTo(HashSet()) { it.start to it.end }
+            val unlisted = ArrayList<String>()
+            shown(
+                source.copy(valueAnswer = { start, end ->
+                    answers[start to end].also {
+                        if (start to end !in
+                            listed
+                        ) {
+                            unlisted += src.substring(start, end)
+                        }
+                    }
+                }),
             )
+            assertEquals(emptyList(), unlisted, "asked about though not listed")
         }
     }
 }

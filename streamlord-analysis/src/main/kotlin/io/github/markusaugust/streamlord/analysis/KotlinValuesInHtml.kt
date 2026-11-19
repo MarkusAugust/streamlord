@@ -1461,13 +1461,20 @@ internal fun Analyzer.factOf(
     opts: Reading,
     ip: Interpolation,
 ): ValueFact? {
-    opts.fact(ip.start, ip.end)?.let { return it }
+    val told = opts.fact(ip.start, ip.end)
+    // A String's type says nothing of whose text it is: that the text shows.
+    if (told != null && told != ValueFact.STRING && told != ValueFact.NULLABLE_STRING) return told
     val sdk = opts.modules
+    val editor = opts.parts(ip.start, ip.end)
     val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(TemplateValue(ip.text, false)) else templateValues(ip.text)
-    val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }
+    val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk, editor) }
     if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
-    if (isMarkup(src, s, ip, sdk) || markupCollection(src, ip.text, s.start, sdk)) return ValueFact.MARKUP
-    return weakest(kinds)
+    if (markupValue(src, ip.text, s.start, sdk = sdk, editor = editor) ||
+        markupCollection(src, ip.text, s.start, sdk)
+    ) {
+        return ValueFact.MARKUP
+    }
+    return told ?: weakest(kinds)
 }
 
 /**

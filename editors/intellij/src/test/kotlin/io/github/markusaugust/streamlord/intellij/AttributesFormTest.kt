@@ -172,6 +172,19 @@ class ForeignDslCallTest : StreamlordTestCase() {
         assertEquals(emptyList<String>(), shown)
     }
 
+    fun `test a value in the string of somebody else's call is read through what it names in this file`() {
+        myFixture.enableInspections(KotlinInterpolationInspection())
+        myFixture.addFileToProject("parts/Marks.kt", "package parts\nfun mark(): String = \"<b>x</b>\"")
+        myFixture.configureByText(
+            "Other.kt",
+            "import parts.mark\nclass Other { fun dataText(s: String) {} }\n" +
+                "class P {\n    fun outer() = mark()\n    fun plain(q: String) = q\n}\n" +
+                "fun f(other: Other, p: P, q: String) { other.dataText(\"<p>\${p.outer()} \${p.plain(q)}</p>\") }",
+        )
+        val shown = myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text }
+        assertEquals(listOf("\${p.plain(q)}"), shown)
+    }
+
     // What the UI thread took by its name must not be what the highlighting is then answered with.
     fun `test a string the ui thread asked about first is still somebody else's to the highlighting`() {
         val file = myFixture.configureByText("Other.kt", onReceiver) as KtFile

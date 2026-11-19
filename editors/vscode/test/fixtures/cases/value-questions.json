@@ -1,5 +1,5 @@
 {
-  "$comment": "Kotlin files with values written into markup: the values the analysis asks an editor about, in the order it asks (see valueQuestions), each by its text with what an editor that resolves types answers of it: the type, with every class by its qualified name (null where it resolves to none), constant where it is one, and what the editor read of how the value is written; then the fact the analysis makes of that answer. Of an argument of interpolate(...) the analysis takes only that its class is somebody else's, whatever the fact. After them what is shown, the text of each issue and its severity in the order of the file, with those answers (issues) and with none (unanswered), as VS Code reads the file. The file's module has Streamlord's core and DSL. The analysis reads each case with the answers (ValueQuestionsTest.kt). The IntelliJ plugin reads the same file with the Kotlin plugin's own types, and must answer and show the same (SharedValueCasesTest.kt).",
+  "$comment": "Kotlin files with values written into markup: the values the analysis asks an editor about, in the order it asks (see valueQuestions), each by its text with what an editor that resolves types answers of it: the type, with every class by its qualified name (null where it resolves to none), and constant where it is one; then the fact the analysis makes of that answer alone, before it reads how the value is written. A name asked about by itself is what a value is built on, the rows of rows.joinToString(\"\"), whose type says whether the value is markup. Of an argument of interpolate(...) the analysis takes only that its class is somebody else's, whatever the fact. After them what is shown, the text of each issue and its severity in the order of the file, with those answers (issues) and with none (unanswered), as VS Code reads the file. The file's module has Streamlord's core and DSL. The analysis reads each case with the answers (ValueQuestionsTest.kt). The IntelliJ plugin reads the same file with the Kotlin plugin's own types, and must answer and show the same (SharedValueCasesTest.kt).",
   "cases": [
     {
       "name": "a string in a template is a warning, a number silent",
@@ -31,6 +31,16 @@
           "text": "x + y",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "x",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "y",
+          "type": "kotlin.String",
+          "fact": "string"
         }
       ],
       "issues": [
@@ -48,6 +58,16 @@
           "text": "s + a * b",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "s",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "a * b",
+          "type": "kotlin.Int",
+          "fact": "number"
         }
       ],
       "issues": [
@@ -175,13 +195,11 @@
       "questions": [
         {
           "text": "name",
-          "argument": true,
           "type": "kotlin.String",
           "fact": "string"
         },
         {
           "text": "mine",
-          "argument": true,
           "type": "Html",
           "fact": "other"
         }
@@ -212,7 +230,6 @@
       "questions": [
         {
           "text": "q",
-          "argument": true,
           "type": "kotlin.String",
           "fact": "string"
         },
@@ -239,8 +256,7 @@
         {
           "text": "${\"<p>\" + h + \"</p>\"}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${bold(q)}",
@@ -250,14 +266,12 @@
         {
           "text": "${badge()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${deep2()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${deep1()}",
@@ -267,8 +281,7 @@
         {
           "text": "${either(c)}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${mixed(c, q)}",
@@ -278,14 +291,12 @@
         {
           "text": "${annotated()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "$frag",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "$h",
@@ -295,8 +306,7 @@
         {
           "text": "${h.text}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "$built",
@@ -306,8 +316,7 @@
         {
           "text": "$fragment",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${Trusted(q)}",
@@ -317,20 +326,17 @@
         {
           "text": "${\"<li>$q</li>\".trimIndent()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${items.joinToString(\"\") { \"<li>$it</li>\" }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${items.map { \"<li>$it</li>\" }.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${items.joinToString(\"\")}",
@@ -350,44 +356,37 @@
         {
           "text": "${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${createHTML().div { +q }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${elements { span { +q } }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${buildString { appendHTML().div { +q } }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${post(\"/save\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${signal(\"count\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${increment(\"n\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${n}",
@@ -410,6 +409,56 @@
           "fact": "markup"
         },
         {
+          "text": "deep3()",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "deep4()",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "deep2()",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "items.map { \"<li>$it</li>\" }",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
+        },
+        {
+          "text": "items",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
+        },
+        {
+          "text": "listOf(\"<b>a</b>\", q)",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
           "text": "$q",
           "type": "kotlin.String",
           "fact": "string"
@@ -428,11 +477,8 @@
       "issues": [
         "q warning",
         "$q warning",
-        "${\"<b>\" + q} warning",
         "q warning",
-        "${q + \"<b>\"} warning",
         "q warning",
-        "${bold(q)} warning",
         "${deep1()} warning",
         "${mixed(c, q)} warning",
         "$q warning",
@@ -446,16 +492,9 @@
         "q warning",
         "$q warning",
         "q warning",
-        "${q + \"<b>\"} hint",
         "q warning",
-        "${bold(q)} hint",
-        "${badge()} hint",
-        "${deep2()} hint",
         "${deep1()} hint",
-        "${either(c)} hint",
         "${mixed(c, q)} hint",
-        "${annotated()} hint",
-        "$fragment hint",
         "$q warning",
         "$it hint",
         "$it hint",
@@ -499,13 +538,22 @@
         {
           "text": "${t.html}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${p.html}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "t",
+          "type": "io.github.markusaugust.streamlord.core.domain.Trusted",
+          "fact": "trusted"
+        },
+        {
+          "text": "p",
+          "type": "Page",
+          "fact": null
         }
       ],
       "issues": [
@@ -565,11 +613,15 @@
         {
           "text": "${(\"\"\"|<b>x</b>\"\"\").trimMargin()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${\"|<u>\" + q}",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
           "type": "kotlin.String",
           "fact": "string"
         }
@@ -578,7 +630,6 @@
         "${\"|<u>\" + q} warning"
       ],
       "unanswered": [
-        "${(\"\"\"|<b>x</b>\"\"\").trimMargin()} hint",
         "${\"|<u>\" + q} hint"
       ]
     },
@@ -589,14 +640,12 @@
         {
           "text": "${signal(\"count\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${signal(KEY)}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${signal(q)}",
@@ -611,8 +660,7 @@
         {
           "text": "${statements(increment(\"a\"), toggle(\"b\"))}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${statements(increment(\"a\"), signal(q))}",
@@ -622,8 +670,7 @@
         {
           "text": "${post(\"/save\") { contentType = ContentType.FORM }}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${post(\"/save\") { selector = q }}",
@@ -638,8 +685,7 @@
         {
           "text": "${signal(Tab.HOME.name)}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${Tab.HOME}",
@@ -656,7 +702,8 @@
         {
           "text": "${Shown.ONE}",
           "type": "page.Shown",
-          "fact": null
+          "constant": true,
+          "fact": "constant"
         },
         {
           "text": "${maybe}",
@@ -671,8 +718,75 @@
         {
           "text": "${set(\"n\", n)}",
           "type": "kotlin.String",
-          "read": "constant",
+          "fact": "string"
+        },
+        {
+          "text": "KEY",
+          "type": "kotlin.String",
+          "constant": true,
           "fact": "constant"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "\"a\" + q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "increment(\"a\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "toggle(\"b\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "increment(\"a\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "signal(q)",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "ContentType.FORM",
+          "type": "io.github.markusaugust.streamlord.html.FetchOptions.ContentType",
+          "constant": true,
+          "fact": "constant"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "url",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "Tab.HOME.name",
+          "type": "kotlin.String",
+          "constant": true,
+          "fact": "constant"
+        },
+        {
+          "text": "n",
+          "type": "kotlin.Int",
+          "fact": "number"
         }
       ],
       "issues": [
@@ -688,7 +802,6 @@
         "${signal(q)} warning",
         "${signal(\"a\" + q)} warning",
         "${statements(increment(\"a\"), signal(q))} warning",
-        "${post(\"/save\") { contentType = ContentType.FORM }} warning",
         "${post(\"/save\") { selector = q }} warning",
         "${post(url)} warning",
         "${maybe} warning",
@@ -701,7 +814,6 @@
       "questions": [
         {
           "text": "it",
-          "argument": true,
           "type": "kotlin.String",
           "fact": "string"
         },
@@ -728,25 +840,67 @@
         {
           "text": "${rows.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${built.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${trusted.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${names.joinToString(\"\")}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "u.toULong()",
+          "type": "kotlin.ULong",
+          "fact": "unsigned"
+        },
+        {
+          "text": "rows",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        },
+        {
+          "text": "built",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        },
+        {
+          "text": "names.map { interpolate(\"<li>%s</li>\", it) }",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        },
+        {
+          "text": "interpolate(\"<li>%s</li>\", it)",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "trusted",
+          "type": "kotlin.sequences.Sequence<io.github.markusaugust.streamlord.core.domain.Trusted>",
+          "fact": "markup"
+        },
+        {
+          "text": "sequenceOf(Trusted(q))",
+          "type": "kotlin.sequences.Sequence<io.github.markusaugust.streamlord.core.domain.Trusted>",
+          "fact": "markup"
+        },
+        {
+          "text": "Trusted(q)",
+          "type": "io.github.markusaugust.streamlord.core.domain.Trusted",
+          "fact": "trusted"
+        },
+        {
+          "text": "names",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
         }
       ],
       "issues": [
@@ -759,7 +913,6 @@
         "${u} hint",
         "${w} warning",
         "${maybe} warning",
-        "${trusted.joinToString(\"\")} hint",
         "${names.joinToString(\"\")} hint"
       ]
     },
@@ -781,6 +934,11 @@
           "text": "$some",
           "type": "kotlin.collections.MutableSet<io.github.markusaugust.streamlord.core.domain.Html>",
           "fact": "markup"
+        },
+        {
+          "text": "maybe",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Trusted?>",
+          "fact": "collection"
         }
       ],
       "issues": [
@@ -790,6 +948,77 @@
       "unanswered": [
         "${maybe.joinToString(\"\")} hint",
         "$maybe hint"
+      ]
+    },
+    {
+      "name": "a sum is markup beside an HTML literal or with the author's own text, and buildString where it writes only kotlinx.html",
+      "kotlin": "package page\nimport io.github.markusaugust.streamlord.core.domain.Html\nimport kotlinx.html.div\nimport kotlinx.html.stream.appendHTML\n\nfun page(h: Html, q: String): String {\n    val joined = h.text + q\n    val signed = \"by \" + h\n    val greeted = \"by $q \" + h\n    val plain = \"<b>x</b>\"\n    return \"\"\"\n        <div>\n        $joined\n        $signed\n        $greeted\n        $plain\n        ${buildString { append(q); appendHTML().div { +q } }}\n        ${buildString { appendHTML().div { +q }; appendHTML().div { +q } }}\n        </div>\n    \"\"\"\n}\n",
+      "questions": [
+        {
+          "text": "$joined",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "$signed",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "$greeted",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "$plain",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "${buildString { append(q); appendHTML().div { +q } }}",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "${buildString { appendHTML().div { +q }; appendHTML().div { +q } }}",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "h.text",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        }
+      ],
+      "issues": [
+        "$joined warning",
+        "$greeted warning",
+        "${buildString { append(q); appendHTML().div { +q } }} warning"
+      ],
+      "unanswered": [
+        "$joined hint",
+        "$greeted hint",
+        "${buildString { append(q); appendHTML().div { +q } }} hint"
       ]
     }
   ]

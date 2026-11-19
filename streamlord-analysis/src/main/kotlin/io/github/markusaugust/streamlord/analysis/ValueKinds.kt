@@ -224,25 +224,55 @@ private val VALUE_HELPERS: Set<String> =
     EXPRESSION_HELPERS +
         Catalog.default.actions
             .map { it.kotlin }
-            .filter { it.isNotEmpty() } + "statements" + "js"
+            .filter { it.isNotEmpty() }
+            // `postExpr(...)`: the same call with its first argument an expression.
+            .flatMap { listOf(it, "${it}Expr") } + "statements" + "js"
+
+/**
+ * What an editor that resolves answers of a part of the value being read, by the part as it is written: the fact of its
+ * type, and all it answered, the declaration the part names in it. Null of a part it was not asked about or could not find.
+ */
+internal class Editor(
+    val fact: (part: String) -> ValueFact?,
+    val answer: (part: String) -> ValueAnswer?,
+    /** The same editor for what is written elsewhere in the file, a `val`'s value or a function's result. */
+    val elsewhere: (from: Int, to: Int) -> Editor,
+)
+
+private val HTML_DSL_PACKAGE = regex("""(?:^|\n)[ \t]*package[ \t]+io\.github\.markusaugust\.streamlord\.html(?![\p{L}\p{Nd}_.])""")
 
 /**
  * The arguments of [t] when it is one call to a helper of Streamlord's DSL, in a file that uses
- * the DSL and imports no other function of that name; null when it is not one.
+ * the DSL and imports no other function of that name, where the call can mean no function of the file and the [editor]
+ * finds it declared nowhere but in the DSL; null when it is not one.
  */
 private fun helperArguments(
     src: String,
     t: String,
+    at: Int,
     sdk: FileModules,
+    editor: Editor?,
 ): List<String>? {
     val m = CALL_START.find(t) ?: return null
     val name = m.groupValues[1]
     val facts = fileFacts(src)
     if (!(sdk.htmlDsl ?: facts.usesDsl)) return null
     val helpers = facts.helpers ?: unshadowed(src, VALUE_HELPERS).also { facts.helpers = it }
-    if (name !in helpers || !wholeCall(t, name)) return null
-    val args = t.substring(m.value.length, t.length - 1)
-    return if (args.isBlank()) emptyList() else splitTop(args, ",")
+    if (name !in helpers) return null
+    // What the editor found the call to mean is taken over what the file declares by that name.
+    val found = editor?.answer(t)
+    val foreign =
+        found?.declaration?.let { !HTML_DSL_PACKAGE.containsMatchIn(it) } ?: (found?.declaredAt != null || callsFileFunction(src, name, at))
+    if (foreign) return null
+    // `post("/save") { openWhenHidden = true }`: each option the lambda sets is given as an argument is.
+    val options = lastCall(t)?.takeIf { it.receiver == null && it.name == name }?.lambda
+    val call = if (options == null) t else t.substring(0, t.lastIndexOf(options) - 1).trimEnd()
+    if (!wholeCall(call, name)) return null
+    val args = call.substring(m.value.length, call.length - 1)
+    val set = options?.let(::statements).orEmpty()
+    // A statement that sets nothing may do anything, and is no argument the author's own could be.
+    if (set.any { ARGUMENT_NAME.find(it) == null }) return listOf("*")
+    return (if (args.isBlank()) emptyList() else splitTop(args, ",")) + set
 }
 
 /** A name given to an argument, `value = `, which says nothing of the value. */
@@ -250,7 +280,7 @@ private val ARGUMENT_NAME = regex("""^\s*[\p{L}_][\p{L}\p{Nd}_]*\s*=(?!=)""")
 
 /**
  * Whether a helper's argument is the author's own: a literal, a constant, a number or a boolean
- * the file declares, or a helper call whose arguments are. `signal("x;alert(1)")` returns code, so
+ * the file declares or the [editor] types, or a helper call whose arguments are. `signal("x;alert(1)")` returns code, so
  * a helper is only as much the author's own as what it is given.
  */
 private fun ownArgument(
@@ -259,10 +289,11 @@ private fun ownArgument(
     at: Int,
     constants: Set<String>,
     sdk: FileModules,
+    editor: Editor?,
 ): Boolean {
     val a = arg.replaceFirst(ARGUMENT_NAME, "").trim()
     if (a.startsWith("*")) return false
-    val kind = weakest(templateValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk) })
+    val kind = weakest(templateValues(a).map { valueKind(src, it.text, at, constants, it.nonNull, sdk, editor) })
     return kind.writesItself()
 }
 
@@ -324,6 +355,7 @@ internal fun valueKind(
     constants: Set<String>,
     nonNull: Boolean = false,
     sdk: FileModules = FileModules.DEFAULT,
+    editor: Editor? = null,
 ): ValueFact? {
     val t = value.trim()
     if (LITERAL.matchEntire(t) != null || STRING_LITERAL.matchEntire(t) != null ||
@@ -335,24 +367,32 @@ internal fun valueKind(
         return weakest(
             literal.interpolations.flatMap { ip ->
                 val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(TemplateValue(ip.text, false)) else templateValues(ip.text)
-                values.map { valueKind(src, it.text, at, constants, it.nonNull, sdk) }
+                values.map { valueKind(src, it.text, at, constants, it.nonNull, sdk, editor) }
             },
         )
     }
-    helperArguments(src, t, sdk)?.let { args ->
-        return if (args.all { ownArgument(src, it, at, constants, sdk) }) ValueFact.CONSTANT else ValueFact.STRING
+    val told = editor?.fact(t)
+    if (told.isConstant()) return ValueFact.CONSTANT
+    // A name the editor resolved is what it says, whatever the file or the workspace declares by that name.
+    // Left of `?:` a number that may be null is one, which the declaration says and the fact alone does not.
+    if (told != null && PROPERTY_CHAIN.matchEntire(t) != null && !(nonNull && told == ValueFact.NULLABLE)) {
+        return if (nonNull && told == ValueFact.NULLABLE_STRING) ValueFact.STRING else told
+    }
+    helperArguments(src, t, at, sdk, editor)?.let { args ->
+        // Each is read, so an editor is asked of every one whatever it answers of the first.
+        return if (args.map { ownArgument(src, it, at, constants, sdk, editor) }.all { it }) ValueFact.CONSTANT else ValueFact.STRING
     }
     // `"ab".repeat(3)`: a plain change to text the author wrote, made with what the author wrote.
     val call = lastCall(t)
     if (call?.receiver != null && call.lambda == null && call.name in TEXT_TRANSFORMS &&
-        valueKind(src, call.receiver, at, constants, sdk = sdk).isConstant() &&
-        (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants, sdk) })
+        valueKind(src, call.receiver, at, constants, sdk = sdk, editor = editor).isConstant() &&
+        (call.args.isBlank() || splitTop(call.args, ",").all { ownArgument(src, it, at, constants, sdk, editor) })
     ) {
         return ValueFact.CONSTANT
     }
-    callKind(src, t, at, constants, sdk)?.let { return it }
+    callKind(src, t, at, constants, sdk, editor)?.let { return it }
     if (qualifiedConstant(src, t, at, constants)) return ValueFact.CONSTANT
-    shapeKind(src, t, at, constants, sdk)?.let { return it }
+    shapeKind(src, t, at, constants, sdk, editor)?.let { return it }
     if (KOTLIN_NAME.matchEntire(t) == null) return null
     if (constantAt(src, t, at, constants)) return ValueFact.CONSTANT
     return declaredKind(src, t, at, nonNull, sdk.core)
@@ -397,6 +437,7 @@ internal fun callKind(
     at: Int,
     constants: Set<String>,
     sdk: FileModules = FileModules.DEFAULT,
+    editor: Editor? = null,
 ): ValueFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
@@ -415,9 +456,9 @@ internal fun callKind(
     val lambda = call.name == "ifBlank" || call.name == "ifEmpty"
     if (!(call.name in STRING_CHANGES && call.lambda == null) && !(lambda && call.lambda != null && call.args.isBlank())) return null
     // `query!!.trim()`: what `!!` leaves of a `String?` is a String.
-    if (!valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk).isString()) return null
+    if (!valueKind(src, receiver.replace(NON_NULL_ASSERTION, ""), at, constants, sdk = sdk, editor = editor).isString()) return null
     if (!lambda) return ValueFact.STRING
-    val result = valueKind(src, lambdaResult(call.lambda!!), at, constants, sdk = sdk)
+    val result = valueKind(src, lambdaResult(call.lambda!!), at, constants, sdk = sdk, editor = editor)
     return if (result.isString() || result.isConstant()) ValueFact.STRING else null
 }
 
@@ -426,13 +467,6 @@ private fun wholeOperand(e: String): Boolean {
     val d = depths(e)
     return e.indices.all { d[it] != 0 || OPERAND_CHAR.matchEntire(e[it].toString()) != null }
 }
-
-/** Whether [name] means, at [at], a parameter or value marked `@Language("HTML")`. */
-internal fun htmlNamed(
-    src: String,
-    name: String,
-    at: Int,
-): Boolean = declarationOf(src, name, at)?.html ?: false
 
 private val TRIM_CALL = regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
 
@@ -444,7 +478,9 @@ private val USES_ELEMENTS =
     )
 internal val TEXT_OF_VALUE = regex("""^([\s\S]*?)\s*\.\s*(?:text|html)$""")
 private val CREATE_HTML = regex("""^createHTML\s*\(""")
-private val APPEND_HTML = regex("""\bappendHTML\s*\(""")
+private val RETURN_TO_LABEL = regex("""\breturn@""")
+private val NEW_BUILDER = regex("""\s*StringBuilder\s*\(\s*\)\s*""")
+private val WRITES_HTML = regex("""^\s*appendHTML\s*\(""")
 private val NAME_AT_END = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\s*$""")
 private val SAFE_CALL_DOT = regex("""\??\.$""")
 private val LAMBDA_HEAD =
@@ -452,7 +488,7 @@ private val LAMBDA_HEAD =
         """^\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|[\p{L}_][\p{L}\p{Nd}_]*)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*\s*->""",
     )
 private val ENDS_IN_OPERATOR = regex("""[-+*/%=<>&|?:.,(]$""")
-private val STARTS_WITH_OPERATOR = regex("""^(?:[-+*/%&|?:.]|else\b)""")
+private val STARTS_WITH_OPERATOR = regex("""^(?:[*/%&|?:.]|else\b)""")
 internal val PROPERTY_CHAIN = regex("""^[\p{L}_][\p{L}\p{Nd}_]*(?:\s*\??\.\s*[\p{L}_][\p{L}\p{Nd}_]*)*(?:!!)?$""")
 private val MARKUP_CHARS = regex("""[<&]""")
 
@@ -461,6 +497,7 @@ private fun htmlLiteral(t: String): Boolean {
     val quote = QUOTE_OPENING.find(t) ?: return false
     val at = quote.value.length - 1
     val end = literalEnd(t, at)
+    if (end < at + 2 || t[end - 1] != '"') return false
     val rest = t.substring(end)
     if (rest.isNotBlank() && TRIM_CALL.matchEntire(rest) == null) return false
     val content = t.substring(minOf(end, at + (if (t.startsWith("\"\"\"", at)) 3 else 1)), end)
@@ -509,25 +546,58 @@ internal fun lastCall(t: String): Call? {
     return Call(name.groupValues[1], before.substring(0, before.length - dot.value.length), args, lambda)
 }
 
-/** What a lambda gives: its last expression, without its parameters. */
-private fun lambdaResult(body: String): String {
-    val b = body.replaceFirst(LAMBDA_HEAD, "")
+/** [text] with each comment a blank, so its quotes and brackets are none: a literal is passed over whole. */
+private fun uncommented(text: String): String {
+    val out = StringBuilder()
+    var k = 0
+    while (k < text.length) {
+        val end =
+            when {
+                text.startsWith("//", k) -> text.indexOf('\n', k).let { if (it < 0) text.length else it }
+                text.startsWith("/*", k) -> text.indexOf("*/", k + 2).let { if (it < 0) text.length else it + 2 }
+                text[k] == '"' || text[k] == '\'' -> literalEnd(text, k)
+                else -> -1
+            }
+        if (end < 0) {
+            out.append(text[k++])
+        } else {
+            out.append(if (text[k] == '/') " " else text.substring(k, end))
+            k = end
+        }
+    }
+    return out.toString()
+}
+
+/** The statements of a lambda's body, without its parameters: a line that ends in an operator, or starts with one, goes on with the next. */
+private fun statements(body: String): List<String> {
+    val b = uncommented(body).replaceFirst(LAMBDA_HEAD, "")
     val d = depths(b)
+    // A lambda that returns to its label gives more than its last statement: it is not read.
+    if (RETURN_TO_LABEL.findAll(b).any { d[it.range.first] != -1 }) return emptyList()
+    val out = ArrayList<String>()
     var from = 0
     for (k in b.indices) {
         if (d[k] != 0 || (b[k] != '\n' && b[k] != ';')) continue
         val before = b.substring(from, k).trim()
         val after = b.substring(k + 1).trimStart()
-        // A line that ends in an operator, or one that starts with one, goes on with the next.
         if (b[k] == '\n' &&
             (ENDS_IN_OPERATOR.containsMatchIn(before) || STARTS_WITH_OPERATOR.containsMatchIn(after) || before.isEmpty())
         ) {
             continue
         }
+        if (before.isNotEmpty()) out += before
         from = k + 1
     }
-    return b.substring(from).trim()
+    b
+        .substring(from)
+        .trim()
+        .takeIf { it.isNotEmpty() }
+        ?.let { out += it }
+    return out
 }
+
+/** What a lambda gives: its last expression. */
+private fun lambdaResult(body: String): String = statements(body).lastOrNull().orEmpty()
 
 /** The argument given as `name = { ... }`, as its lambda's body. */
 private fun namedLambda(
@@ -541,11 +611,12 @@ private fun namedLambda(
 
 /**
  * Whether a placeholder's whole result is markup the author built, which escaping would print as tags:
- * an HTML literal, trimmed or not, or a `+` chain that opens with one; a call to `interpolate` or
- * `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
- * kotlinx.html's `createHTML()`, `appendHTML()` in `buildString`, or Streamlord's `elements { }`;
- * `joinToString` of markup or of a collection declared one of Html; a `val` set to a call that is
- * markup; or an `if`, a `when` or an `?:` every one of whose results is markup.
+ * an HTML literal, trimmed or not; a sum that holds markup, beside an HTML literal or with plain literals around it; a
+ * call to `interpolate` or `Trusted`, or the text of an `Html`; a name declared `Html` or marked `@Language("HTML")`;
+ * kotlinx.html's `createHTML()`, `appendHTML()` and nothing else in `buildString`, or Streamlord's `elements { }`;
+ * `joinToString` of markup or of a collection declared one of Html; a `val` set to markup, or a function every result of
+ * which is; or an `if`, a `when` or an `?:` every one of whose results is markup.
+ * Of each part the [editor] types, its type is taken over what a declaration reads as.
  */
 internal fun markupValue(
     src: String,
@@ -553,11 +624,12 @@ internal fun markupValue(
     at: Int,
     depth: Int = 0,
     sdk: FileModules = FileModules.DEFAULT,
+    editor: Editor? = null,
 ): Boolean {
     val values = templateValues(value)
     // `if (admin) "<b>admin</b>" else ""`: every result is markup or a literal the author wrote.
     if (values.size > 1) {
-        val markup = values.map { markupValue(src, it.text, at, depth, sdk) }
+        val markup = values.map { markupValue(src, it.text, at, depth, sdk, editor) }
         return markup.any { it } &&
             values.indices.all { k ->
                 val v = values[k].text
@@ -567,36 +639,117 @@ internal fun markupValue(
     val t = values[0].text
     if (htmlLiteral(t)) return true
     val sum = splitTop(t, "+")
-    if (sum.size > 1) return htmlLiteral(sum[0].trim())
+    // Markup with text around it, `"<p>" + body` or `"by " + author`.
+    if (sum.size > 1) {
+        val markup = sum.map { markupValue(src, it, at, depth, sdk, editor) }
+        // Where the first literal of a sum is HTML each part is judged where it stands; anywhere else the rest must be plain literals.
+        val judged = sum.firstOrNull { QUOTE_OPENING.containsMatchIn(it.trimStart()) }?.let { htmlLiteral(it.trim()) } == true
+        return markup.any { it } && (judged || sum.indices.all { markup[it] || plainString(sum[it].trim()) })
+    }
+    // A literal is what it says, and an editor is asked nothing of it.
+    val asked = editor.takeUnless { QUOTE_OPENING.containsMatchIn(t.trimStart()) }
+    val told = asked?.fact(t)
+    if (told.isMarkup()) return true
+    // A type that is no String is no markup, whatever the text reads the value as.
+    if (told != null && told != ValueFact.STRING && told != ValueFact.NULLABLE_STRING) return false
     if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     // The text of an Html or the html of a Trusted, the markup each holds; neither has the other.
-    if (sdk.core &&
-        textOf != null &&
-        (
-            coreCall(src, textOf, "interpolate") || coreCall(src, textOf, "Trusted") ||
-                (KOTLIN_NAME.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
-        )
-    ) {
-        return true
+    if (textOf != null) {
+        val on = editor?.fact(textOf)
+        if (on.isMarkup()) return true
+        if (on == null && sdk.core &&
+            (
+                coreCall(src, textOf, "interpolate") || coreCall(src, textOf, "Trusted") ||
+                    (KOTLIN_NAME.matchEntire(textOf) != null && declaredKind(src, textOf, at).isMarkup())
+            )
+        ) {
+            return true
+        }
     }
+    // What the editor found the value to name is read where it is declared, and the file's own of that name is not.
+    val found = asked?.answer(t)?.takeIf { it.declaredAt != null || it.declaration != null }
+    if (found != null && depth < CALL_DEPTH && declaresMarkup(src, found, sdk, depth, editor)) return true
     if (KOTLIN_NAME.matchEntire(t) != null) {
-        if (declaredKind(src, t, at, core = sdk.core).isMarkup() || htmlNamed(src, t, at)) return true
-        // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
+        if (found != null) return false
+        if ((told == null && declaredKind(src, t, at, core = sdk.core).isMarkup()) || declarationOf(src, t, at)?.html == true) return true
+        // `val e = elements { }`: the name stands for what it is set to.
         val d = declarationOf(src, t, at) ?: return false
-        val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && lastCall(init) != null && markupValue(src, init, d.at, depth + 1, sdk)
+        val init = valueOf(src, d) ?: return false
+        return depth < VALUE_DEPTH && markupValue(src, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
     }
     if (CREATE_HTML.containsMatchIn(t)) return true
     val call = lastCall(t) ?: return false
     val lambda = call.lambda
-    if (call.name == "buildString" && call.receiver == null && lambda != null) return APPEND_HTML.containsMatchIn(lambda)
+    if (call.receiver != null && lambda == null && (call.name == "trimIndent" || call.name == "trimMargin")) {
+        val trimmed = unparen(call.receiver)
+        // The margin is passed over only where the literal itself is trimmed of it.
+        return htmlLiteral("$trimmed.${call.name}()") || markupValue(src, trimmed, at, depth, sdk, editor)
+    }
+    // `StringBuilder().appendHTML().div { }.toString()`: what kotlinx.html wrote into the builder.
+    if (call.name == "toString" && call.receiver != null && lambda == null && call.args.isBlank()) {
+        val chain = splitTop(call.receiver, ".")
+        return chain.size == 3 && NEW_BUILDER.matchEntire(chain[0]) != null && WRITES_HTML.containsMatchIn(chain[1])
+    }
+    if (call.name == "buildString" && call.receiver == null && lambda != null) {
+        val written = statements(lambda)
+        // `appendHTML().div { }` and no more: what is called on the tag's result may write anything.
+        return written.isNotEmpty() && written.all { WRITES_HTML.containsMatchIn(it) && splitTop(it, ".").size == 2 }
+    }
+    if (found == null && call.receiver == null && lambda == null && depth < CALL_DEPTH) {
+        val declared = functionsNamed(src, call.name, at) ?: return false
+        if (declared.isNotEmpty()) return declared.all { functionMarkup(src, functionResult(src, it), depth, sdk, editor) }
+    }
     val elements = call.name == "elements" && call.receiver == null && lambda != null
     if (elements) return sdk.htmlDsl != false && USES_ELEMENTS.containsMatchIn(src)
     if (call.name != "joinToString") return false
     val transform = lambda ?: namedLambda(call.args, "transform")
-    if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk)
-    return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk)
+    if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk, editor)
+    return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk, editor)
+}
+
+private val GETTER_AFTER = regex("""^\s*(?:(?:[a-z]+|@[\p{L}\p{Nd}_:.]+(?:\([^()]*\))?)\s+)*get\s*\(""")
+
+/** What the `val` [d] is set to, where that is what the name gives: not one another may stand in for, nor one with a getter of its own. */
+private fun valueOf(
+    src: String,
+    d: Declaration,
+): ValueText? {
+    if (d.valueAt < 0 || d.overridable) return null
+    return valueFrom(src, d.valueAt)?.takeUnless {
+        GETTER_AFTER.containsMatchIn(
+            uncommented(
+                src.substring(
+                    it.end,
+                    minOf(
+                        src.length,
+                        it.end + 300,
+                    ),
+                ),
+            ),
+        )
+    }
+}
+
+/** How many calls deep a function is followed to what it returns. */
+private const val CALL_DEPTH = 3
+
+/** Whether a function is marked `@Language("HTML")`, declared to return core's `Html`, or gives markup whatever it returns. */
+private fun functionMarkup(
+    src: String,
+    f: FunctionResult,
+    depth: Int,
+    sdk: FileModules,
+    editor: Editor?,
+): Boolean {
+    if (f.html) return true
+    if (f.type != null && sdk.core && !markupTypeShadowed(src, f.type) &&
+        declaredFact(coreType(src, f.type), false, true).isMarkup()
+    ) {
+        return true
+    }
+    return f.values.isNotEmpty() &&
+        f.values.map { markupValue(src, it.text, it.start, depth + 1, sdk, editor?.elsewhere(it.start, it.end)) }.all { it }
 }
 
 /**
@@ -608,14 +761,16 @@ internal fun markupCollection(
     value: String,
     at: Int,
     sdk: FileModules,
-): Boolean = KOTLIN_NAME.matchEntire(value.trim()) != null && markupElements(src, value.trim(), at, 0, sdk)
+): Boolean = KOTLIN_NAME.matchEntire(value.trim()) != null && markupElements(src, value.trim(), at, 0, sdk, null)
+
+private val COLLECTION_BUILDERS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
 
 /** How many names deep a value is followed to what it is set to. */
 internal const val VALUE_DEPTH = 4
 
 /**
- * Whether every element of a collection is markup: `listOf(a, b)` of markup, a `map { }` to
- * markup, a name declared a `List<Html>`, or one set to such a collection.
+ * Whether every element of a collection is markup: one the [editor] types as a collection of markup, `listOf(a, b)` of
+ * markup, a `map { }` to markup, a name declared a `List<Html>`, or one set to such a collection.
  */
 private fun markupElements(
     src: String,
@@ -623,49 +778,65 @@ private fun markupElements(
     at: Int,
     depth: Int,
     sdk: FileModules,
+    editor: Editor?,
 ): Boolean {
     val t = receiver.trim()
+    val told = editor?.fact(t)
+    if (told == ValueFact.MARKUP) return true
     if (KOTLIN_NAME.matchEntire(t) != null) {
         val d = declarationOf(src, t, at) ?: return false
         val type = d.type
         if (type != null) {
-            return sdk.core &&
+            // The type the editor resolved is taken over the one the declaration writes.
+            return told == null && sdk.core &&
                 d.typeArguments?.replace(OUT_VARIANCE, "")?.let {
                     !markupTypeShadowed(src, it) && isMarkupCollection("${type.removeSuffix("?")}<${coreType(src, it)}>")
                 } == true
         }
-        val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && markupElements(src, init, d.at, depth + 1, sdk)
+        val init = valueOf(src, d) ?: return false
+        return depth < VALUE_DEPTH && markupElements(src, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
     }
     val r = lastCall(t) ?: return false
     val lambda = r.lambda
-    if ((r.name == "listOf" || r.name == "arrayOf") && r.receiver == null && lambda == null) {
-        return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at, depth, sdk) }
+    if (r.name in COLLECTION_BUILDERS && r.receiver == null && lambda == null) {
+        return r.args.isNotBlank() && splitTop(r.args, ",").map { markupValue(src, it, at, depth, sdk, editor) }.all { it }
     }
     if ((r.name == "map" || r.name == "mapIndexed" || r.name == "mapNotNull") &&
         lambda != null
     ) {
-        return markupValue(src, lambdaResult(lambda), at, depth, sdk)
+        return markupValue(src, lambdaResult(lambda), at, depth, sdk, editor)
     }
     return false
 }
 
 /**
- * The value a `val` is set to, as written: from after its `=` to where the statement ends, at a
- * line break that ends it, a `;`, a comment, or the bracket that closes what holds it. Null for a
- * `var`, a literal, or a name declared in any other way.
+ * The value written from [from], as a `val` is set to one: to where its statement ends, at a line break that ends it, a
+ * `;`, or the bracket that closes what holds it, each comment in it left out.
  */
-internal fun initialiser(
+internal fun valueFrom(
     src: String,
-    d: Declaration,
-): String? {
-    if (d.valueAt < 0) return null
+    from: Int,
+): ValueText? {
     val code = fileFacts(src).code
+    val out = StringBuilder()
     var depth = 0
-    var k = d.valueAt
+    var k = from
     while (k < src.length) {
+        val c = src[k]
+        val comment = !code[k] && (src.startsWith("//", k) || src.startsWith("/*", k))
+        val end =
+            when {
+                comment && c == '/' && src[k + 1] == '/' -> src.indexOf('\n', k).let { if (it < 0) src.length else it }
+                comment -> src.indexOf("*/", k + 2).let { if (it < 0) src.length else it + 2 }
+                c == '"' || c == '\'' -> literalEnd(src, k)
+                else -> -1
+            }
+        if (end >= 0) {
+            out.append(if (comment) " " else src.substring(k, end))
+            k = end
+            continue
+        }
         if (code[k]) {
-            val c = src[k]
             if (c == '(' || c == '[' || c == '{') {
                 depth++
             } else if (c == ')' || c == ']' || c == '}') {
@@ -674,21 +845,71 @@ internal fun initialiser(
             } else if (depth == 0 && (c == ';' || (c == '\n' && lineEnds(src, code, k)))) {
                 break
             }
-        } else if (depth == 0 && (src.startsWith("//", k) || src.startsWith("/*", k))) {
-            break
         }
+        out.append(c)
         k++
     }
-    return src.substring(d.valueAt, k).trim().takeIf { it.isNotEmpty() }
+    return out
+        .toString()
+        .trim()
+        .takeIf { it.isNotEmpty() }
+        ?.let { ValueText(it, from, k) }
 }
 
-/** Whether a placeholder's value is markup the author built; see [markupValue]. */
-internal fun isMarkup(
+private val KEYWORD = regex("""\b(?:fun|va[lr])\b""")
+private val DECLARED =
+    regex(
+        """(fun|va[lr])\s+(?:<(?:[^<>]|<[^<>]*>)*>\s*)?(?:$RECEIVER)?([\p{L}_][\p{L}\p{Nd}_]*)(?![\p{L}\p{Nd}_]|\s*[.<])""",
+    )
+
+/**
+ * Whether the property or the function an editor [found] a value to name gives markup. One of [src] is read where its
+ * name stands there. One of another file is read as a file of its own, so of what it names only what it declares or
+ * imports itself is known: the first `val` or function of it, and none where the text cannot read that one's name.
+ */
+internal fun declaresMarkup(
     src: String,
-    s: KotlinString,
-    ip: Interpolation,
-    sdk: FileModules = FileModules.DEFAULT,
-): Boolean = markupValue(src, ip.text, s.start, sdk = sdk)
+    found: ValueAnswer,
+    sdk: FileModules,
+    depth: Int,
+    editor: Editor?,
+): Boolean {
+    val at = found.declaredAt
+    if (at != null) return at in src.indices && namedMarkup(src, at, fileFacts(src), sdk, depth, editor)
+    val text = found.declaration ?: return false
+    return besideFile(text) { facts ->
+        val keyword =
+            KEYWORD
+                .findAll(text)
+                .firstOrNull { facts.code[it.range.first] }
+                ?.range
+                ?.first
+        val m = keyword?.let { DECLARED.matchAt(text, it) } ?: return@besideFile false
+        // The name ends the match.
+        namedMarkup(text, m.range.last + 1 - m.groupValues[2].length, facts, sdk, depth, null)
+    }
+}
+
+/** Whether the function or the `val` whose name is written at [at] of [text] gives markup. */
+private fun namedMarkup(
+    text: String,
+    at: Int,
+    facts: FileFacts,
+    sdk: FileModules,
+    depth: Int,
+    editor: Editor?,
+): Boolean {
+    val name = KOTLIN_NAME_AT.matchAt(text, at)?.value ?: return false
+    facts.functions[name].orEmpty().firstOrNull { it.open >= at && text.substring(at + name.length, it.open).isBlank() }?.let {
+        return functionMarkup(text, functionResult(text, it), depth, sdk, editor)
+    }
+    val d = declarationOf(text, name, at) ?: return false
+    if (d.html) return true
+    val init = valueOf(text, d) ?: return false
+    return markupValue(text, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
+}
+
+private val KOTLIN_NAME_AT = regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
 private val TEXT_TRANSFORMS =
@@ -766,6 +987,7 @@ private fun shapeKind(
     at: Int,
     constants: Set<String>,
     sdk: FileModules,
+    editor: Editor?,
 ): ValueFact? {
     val e = unparen(value)
     val d = depths(e)
@@ -788,7 +1010,7 @@ private fun shapeKind(
         operands.all { o ->
             val operand = o.trim()
             KOTLIN_NUMBER.matchEntire(operand.removePrefix("-")) != null ||
-                valueKind(src, operand, at, constants, sdk = sdk) == ValueFact.NUMBER
+                valueKind(src, operand, at, constants, sdk = sdk, editor = editor) == ValueFact.NUMBER
         }
     }
 }

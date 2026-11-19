@@ -88,13 +88,53 @@ class ValueJudgementTest {
     }
 
     @Test
-    fun `the editor's fact wins over what the text shows`() {
+    fun `a name the editor resolves to no constant is none, and markup is markup whatever its type`() {
         // The text takes both for the author's own: a literal of markup, a workspace constant.
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
         val text = Source("", SourceLanguage.KOTLIN, constants = setOf("LABEL"))
         assertEquals(emptyList(), interpolation(src, text))
         val typed = text.copy(valueAnswer = { _, _ -> answerGiving(ValueFact.STRING) })
-        assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
+        assertEquals(listOf("\$LABEL"), analyzer.analyzeKotlin(typed.copy(text = src)).map { src.substring(it.start, it.end) })
+    }
+
+    @Test
+    fun `what a value is built on is what the editor says it is, whatever its declaration reads as`() {
+        // A star import can make `Html` another package's, which the text cannot see.
+        val src = "import com.acme.*\nfun f(items: List<Html>, h: Html) = \"<ul>\${items.joinToString(\"\")} \${h.text}</ul>\""
+        val shown = { items: String, h: String ->
+            val types = mapOf("items" to items, "h" to h)
+            val answered =
+                Source(src, SourceLanguage.KOTLIN, valueAnswer = { s, e -> ValueAnswer(types[src.substring(s, e)] ?: "kotlin.String") })
+            analyzer.analyzeKotlin(answered).map { src.substring(it.start, it.end) }
+        }
+        val core = "io.github.markusaugust.streamlord.core.domain.Html"
+        assertEquals(emptyList(), shown("kotlin.collections.List<$core>", core))
+        assertEquals(listOf("\${items.joinToString(\"\")}", "\${h.text}"), shown("kotlin.collections.List<com.acme.Html>", "com.acme.Html"))
+    }
+
+    @Test
+    fun `a declaration the editor found in another file is read as one of this file is`() {
+        val src = "fun f() = \"<p>\${badge()}</p>\""
+        val shown = { declaration: String? ->
+            val answered =
+                Source(src, SourceLanguage.KOTLIN, valueAnswer = {
+                    _,
+                    _,
+                    ->
+                    ValueAnswer("kotlin.String", declaration = declaration)
+                })
+            analyzer.analyzeKotlin(answered).map { it.severity }
+        }
+        assertEquals(listOf(Severity.WARNING), shown(null))
+        assertEquals(emptyList(), shown("fun badge(): String = \"<b>new</b>\""))
+        assertEquals(emptyList(), shown("@Language(\"HTML\") fun badge(): String = load()"))
+        assertEquals(emptyList(), shown("@Language(\"HTML\")\nval badge: String = load()"))
+        assertEquals(emptyList(), shown("private val badge = \"<b>new</b>\""))
+        assertEquals(emptyList(), shown("fun badge(): String {\n    if (open) return \"<b>a</b>\"\n    return \"<i>b</i>\"\n}"))
+        assertEquals(emptyList(), shown("fun <T> List<T>.badge() = \"<p>\" + this + \"</p>\""))
+        assertEquals(listOf(Severity.WARNING), shown("fun badge(): String = load()"))
+        assertEquals(listOf(Severity.WARNING), shown("fun badge(q: String): String {\n    if (open) return \"<b>a</b>\"\n    return q\n}"))
+        assertEquals(listOf(Severity.WARNING), shown("class Badge"))
     }
 
     @Test

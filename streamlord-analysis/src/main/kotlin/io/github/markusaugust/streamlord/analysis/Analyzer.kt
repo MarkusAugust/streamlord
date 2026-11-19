@@ -40,28 +40,81 @@ internal class Reading(
         start: Int,
         end: Int,
         argument: Boolean = false,
-    ): ValueFact? {
-        asked?.getOrPut(start to end) { ValueQuestion(start, end, argument) }
-        return source.valueAnswer
-            ?.invoke(start, end)
-            ?.fact()
-            ?.takeIf { !argument || it == ValueFact.OTHER }
+    ): ValueFact? = answer(start, end)?.fact()?.takeIf { !argument || it == ValueFact.OTHER }
+
+    /** All the editor answered of the value at [start] to [end], which is noted as asked about. */
+    private fun answer(
+        start: Int,
+        end: Int,
+    ): ValueAnswer? {
+        asked?.getOrPut(start to end) { ValueQuestion(start, end) }
+        return source.valueAnswer?.invoke(start, end)
+    }
+
+    /**
+     * The editor's answers of the parts of what is written at [start] to [end], a value or what a declaration is set to,
+     * each found by its text between the two, wherever it is written there as code and as a whole: not after a dot, where
+     * it is a member of something, nor before `->`, where a lambda names it. One written twice is answered for only where
+     * the editor says the same of both, as `it` of two lambdas may be two things. A template is asked about by its own range.
+     */
+    fun parts(
+        start: Int,
+        end: Int,
+    ): Editor {
+        val text = source.text
+        val template = text[start] == '$'
+        val region = text.substring(start, end)
+        val whole = region.trimStart('$').removeSurrounding("{", "}").trim()
+
+        fun ranges(part: String): List<Pair<Int, Int>> {
+            val t = part.trim()
+            if (t.isEmpty()) return emptyList()
+            if (template && t == whole) return listOf(start to end)
+            val code = fileFacts(text).code
+            val name = isWordPart(t.first())
+
+            // Not the letters of a longer name, `it` of `items`, nor the text of a literal, `n` of `"n"`.
+            fun elsewhere(at: Int): Boolean {
+                if (!code[at] && t.first() != '"') return true
+                if (name && isWordPart(text.getOrNull(at - 1))) return true
+                if (isWordPart(t.last()) && isWordPart(text.getOrNull(at + t.length))) return true
+                val before = text.substring(start, at).trimEnd().lastOrNull()
+                return name && (before == '.' || before == ':' || text.substring(at + t.length, end).trimStart().startsWith("->"))
+            }
+            val out = ArrayList<Pair<Int, Int>>()
+            var at = region.indexOf(t)
+            while (at >= 0) {
+                if (!elsewhere(start + at)) out += start + at to start + at + t.length
+                at = region.indexOf(t, at + 1)
+            }
+            return out
+        }
+
+        fun <T> agreed(
+            part: String,
+            answer: (Int, Int) -> T?,
+        ): T? = ranges(part).map { answer(it.first, it.second) }.distinct().singleOrNull()
+        return Editor(
+            { part -> agreed(part) { from, to -> fact(from, to) } },
+            { part -> agreed(part) { from, to -> answer(from, to) } },
+            { from, to -> parts(from, to) },
+        )
     }
 }
 
 /**
  * A value of a Kotlin file the analysis asks the editor about, by where it stands: a template of an HTML string, an
- * operand of a `+` chain, or a value marked with `+` in `interpolate { }`. Of an [argument] of `interpolate(...)` the
- * analysis takes only that its class is somebody else's, [ValueFact.OTHER], and reads the rest from the text.
+ * operand of a `+` chain, a value marked with `+` in `interpolate { }`, an argument of `interpolate(...)`, or a part of
+ * one of these whose type decides how the whole is read, as `rows` of `rows.joinToString("")`, or of what a `val` or a
+ * function of the file that such a value names is set to.
  */
 public class ValueQuestion internal constructor(
     public val start: Int,
     public val end: Int,
-    public val argument: Boolean,
 )
 
 /**
- * What is known of a value, from the text or from what an editor answered ([ValueAnswer.fact]): its type, or that it
+ * What is known of a value, from the text or from what an editor answered ([ValueAnswer]): its type, or that it
  * is a constant or markup. [NULLABLE] is a
  * number or a boolean that may be null (`Int?`): digits, true, false or null. [NULLABLE_STRING] is
  * a `String?`, which a Kotlin template writes as `null` and `interpolate` as nothing. [UNSIGNED] is
@@ -73,7 +126,7 @@ public class ValueQuestion internal constructor(
  * nothing about it is known, and no reading of the text makes it markup. Only
  * IntelliJ gives it; VS Code has no resolver.
  */
-public enum class ValueFact {
+internal enum class ValueFact {
     STRING,
     NULLABLE_STRING,
     NUMBER,
@@ -93,7 +146,7 @@ public enum class ValueFact {
     ;
 
     /** What [ofTypeName] in ValueTypes.kt hangs on. */
-    public companion object
+    companion object
 }
 
 private val CONSTANT_NAME = regex("""(?:^|\.)([A-Z]+)\s*$""")
@@ -273,13 +326,15 @@ public class Analyzer(
 
     /**
      * The values of the Kotlin file [source] the analysis asks the editor about through [Source.valueAnswer], in the order it
-     * asks: an editor answers for each of these and for nothing else, by the very range it is asked by.
+     * asks: an editor answers for each of these and for nothing else, by the very range it is asked by. An answer that
+     * places a declaration in the file ([ValueAnswer.declaredAt]) leads on to what that declaration is set to, so an
+     * editor that gave one asks again with its answers in [source], until nothing new is listed.
      * The file is read as [analyzeKotlinSites] reads it, and costs as much. A call [Source.foreign] names is read as that
      * reading reads it, so its string may ask what it did not ask as Streamlord's.
      */
     public fun valueQuestions(source: Source): List<ValueQuestion> {
         val asked = LinkedHashMap<Pair<Int, Int>, ValueQuestion>()
-        kotlinSites(Reading(source.copy(valueAnswer = null), settle(source), asked))
+        kotlinSites(Reading(source, settle(source), asked))
         return asked.values.toList()
     }
 

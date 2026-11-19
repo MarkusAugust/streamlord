@@ -162,7 +162,7 @@ class NeverThrowsTest {
                     ->
                     answerGiving(ValueFact.STRING)
                 }),
-                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, false), valueAnswer = { start, _ ->
+                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, true), valueAnswer = { start, _ ->
                     answerGiving(
                         ValueFact.entries[
                             start %
@@ -171,6 +171,14 @@ class NeverThrowsTest {
                     )
                 }),
                 Source("", SourceLanguage.KOTLIN, modules = Modules.known(false, false)),
+                // An editor that names a declaration of every value: in the file, past its end, and half a one of another file.
+                Source("", SourceLanguage.KOTLIN, modules = Modules.known(true, true), valueAnswer = { start, end ->
+                    when (start % 3) {
+                        0 -> ValueAnswer("kotlin.String", declaredAt = start / 2)
+                        1 -> ValueAnswer("kotlin.String", declaredAt = end * 3)
+                        else -> ValueAnswer(null, declaration = "package p\n\nfun f(q: String): String {\n    return \"<b>\" + q")
+                    }
+                }),
             )
     }
 }

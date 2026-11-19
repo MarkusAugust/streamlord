@@ -26,7 +26,7 @@ public data class Source(
     val constants: Set<String> = emptySet(),
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
     val foreign: (name: String, nameStart: Int) -> Boolean = NOT_FOREIGN,
-    /** What the editor knows of a Kotlin value the analysis asks about, from types the text cannot show: see [Analyzer.valueQuestions]. */
+    /** What the editor knows of a Kotlin value the analysis asks about, which only resolving tells: see [Analyzer.valueQuestions]. */
     val valueAnswer: ((start: Int, end: Int) -> ValueAnswer?)? = null,
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,
@@ -48,14 +48,21 @@ public data class ValueAnswer(
     public val type: String?,
     /**
      * Whether what the value writes is fixed where it is written: the compiler folds it into a constant, or it is an
-     * entry of an enum that does not override `toString`, or the `name` of an entry.
+     * entry of an enum, or the `name` of one.
      */
     public val constant: Boolean = false,
     /**
-     * What the type alone cannot say and the editor read of how the value is written: [ValueFact.MARKUP], or
-     * [ValueFact.CONSTANT] for a value the author wrote. An editor that reads no structure leaves it null.
+     * The declaration the value names, where the whole value is a name or a call and the editor finds what it means in
+     * another file: `fun badge(): String = "<b>new</b>"` with its annotations, after that file's `package` and `import`
+     * lines, which say what its names mean, and in the head of the class that holds it, `open class Card { ... }`, which
+     * says whether another may stand in for it; a property of a constructor in the class's brackets, `class Row(val label: String)`,
+     * without its default. Of a declaration that is compiled or not Kotlin the `package` line alone:
+     * a call that is not Streamlord's is no helper of its DSL. The analysis reads it only of a value whose type is a
+     * String or unknown. Null for any other value.
      */
-    public val read: ValueFact? = null,
+    public val declaration: String? = null,
+    /** Where the name of the declaration the value names is written, when that is a property or a function of the file being judged. */
+    public val declaredAt: Int? = null,
 )
 
 /** No call is somebody else's: what a host that resolves nothing says. */
