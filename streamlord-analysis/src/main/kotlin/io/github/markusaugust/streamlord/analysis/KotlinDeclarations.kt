@@ -503,6 +503,22 @@ private fun overridable(
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
+/** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
+private fun withoutComments(
+    src: String,
+    code: BooleanArray,
+): String {
+    val out = src.toCharArray()
+    var comment = false
+    for (k in src.indices) {
+        // The lexer leaves a comment out of the code whole, a nested one too, and a `//` inside a string begins none.
+        val starts = (k == 0 || code[k - 1]) && (src.startsWith("//", k) || src.startsWith("/*", k))
+        comment = !code[k] && (comment || starts)
+        if (comment && src[k] != '\n') out[k] = ' '
+    }
+    return out.concatToString()
+}
+
 /**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
  * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
@@ -510,6 +526,7 @@ private val PARAMETER_NAME = regex("""($NAME)\s*:""")
  */
 private fun functionAt(
     src: String,
+    code: BooleanArray,
     g: ScopeFrame,
     close: Int,
 ): Pair<String, FunctionDeclaration>? {
@@ -519,7 +536,8 @@ private fun functionAt(
     var from = g.open + 1
     var k = 0
     for (i in g.open + 1..close) {
-        val c = src[i]
+        // A comma or a bracket in a string cuts nothing.
+        val c = if (code[i]) src[i] else ' '
         if (i < close && c in "([{<") depth++
         if (i < close && (c in ")]}" || (c == '>' && src[i - 1] != '-'))) depth--
         if (i == close || (c == ',' && depth == 0)) {
@@ -559,7 +577,7 @@ private fun declarations(
     val aliases = aliasesIn(src, code)
 
     // Parameters are read in the code alone: a comment among them, `a: String, // the a`, is blank.
-    val blank by lazy { uncommented(src) }
+    val blank by lazy { withoutComments(src, code) }
 
     fun add(
         name: String,
@@ -932,7 +950,7 @@ private fun declarations(
         f.endValues(src.length)
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((g, close) in declared) functionAt(blank, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
+    for ((g, close) in declared) functionAt(blank, code, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
     return names
 }
 
