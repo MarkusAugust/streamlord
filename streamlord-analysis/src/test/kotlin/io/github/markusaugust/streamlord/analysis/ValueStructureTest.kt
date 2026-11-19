@@ -57,7 +57,8 @@ class ValueStructureTest {
         assertEquals(
             listOf("\${g(n)}"),
             told(
-                "fun g(q: String): String {\n    // don't\n    if (q.isEmpty()) {\n        return \"<b>none</b>\"\n    // it's\n    }\n    return q\n}$use",
+                "fun g(q: String): String {\n    // don't\n    if (q.isEmpty()) {\n        return \"<b>none</b>\"\n" +
+                    "    // it's\n    }\n    return q\n}$use",
             ),
         )
     }
@@ -94,13 +95,15 @@ class ValueStructureTest {
         assertEquals(
             listOf("\$x"),
             told(
-                "fun f(q: String, ok: Boolean): String {\n    val x = \"<img src='//cdn/a.png'>\".takeIf { ok } ?: q\n    return \"<p>\$x</p>\"\n}",
+                "fun f(q: String, ok: Boolean): String {\n    val x = \"<img src='//cdn/a.png'>\".takeIf { ok } ?: q\n" +
+                    "    return \"<p>\$x</p>\"\n}",
             ),
         )
         assertEquals(
             listOf("\${g(n)}"),
             told(
-                "fun g(q: String): String =\n    \"<b>x</b>\" // default\n        .replace(\"x\", q)\nfun f(n: String) = \"<p>\${g(n)}</p>\"",
+                "fun g(q: String): String =\n    \"<b>x</b>\" // default\n        .replace(\"x\", q)\n" +
+                    "fun f(n: String) = \"<p>\${g(n)}</p>\"",
             ),
         )
         // A line that starts with a sign starts a statement of its own.
@@ -233,7 +236,7 @@ class ValueStructureTest {
         // A member reached through a receiver, which the text alone does not follow.
         val own = "class P {\n    fun badge() = \"<b>x</b>\"\n    fun outer() = badge()\n}\nfun f(p: P) = \"<p>\${p.outer()}</p>\""
         assertEquals(listOf("\${p.outer()}"), told(own, emptyMap()))
-        assertEquals(emptyList(), told(own, mapOf("p.outer()" to ValueAnswer("kotlin.String", declaredAt = own.indexOf("fun outer")))))
+        assertEquals(emptyList(), told(own, mapOf("p.outer()" to ValueAnswer("kotlin.String", declaredAt = own.indexOf("outer")))))
         val src = "fun f(u: User) = \"<main>\${card(u)} \${\"by \" + card(u)}</main>\""
         val card =
             "package parts\n\nimport io.github.markusaugust.streamlord.html.elements\n\n" +
@@ -257,8 +260,8 @@ class ValueStructureTest {
                 "fun page(a: A, b: B) = \"<div>\${a.body} \${b.body}</div>\""
         val answers =
             mapOf(
-                "a.body" to ValueAnswer("kotlin.String", declaredAt = src.indexOf("val body: String)\nfun")),
-                "b.body" to ValueAnswer("kotlin.String", declaredAt = src.indexOf("@Language")),
+                "a.body" to ValueAnswer("kotlin.String", declaredAt = src.indexOf("body: String)\nfun")),
+                "b.body" to ValueAnswer("kotlin.String", declaredAt = src.indexOf("body")),
             )
         assertEquals(listOf("\${a.body}"), told(src, answers))
     }
@@ -390,5 +393,149 @@ class ValueStructureTest {
     fun `a helper is one where the call can mean no function of the file`() {
         val src = "class Cache { operator fun get(k: String): String = k }\nfun f() = \"<b data-on:click=\\\"\${get(\"/x\")}\\\">x</b>\""
         assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `the questions list what an answer leads on to`() {
+        val src = "class P {\n    fun outer() = loose()\n}\nfun f(p: P) = \"<p>\${p.outer()}</p>\""
+        val source = Source(src, SourceLanguage.KOTLIN, modules = known)
+        val asked = { s: Source -> analyzer.valueQuestions(s).map { src.substring(it.start, it.end) } }
+        assertEquals(listOf("\${p.outer()}"), asked(source))
+        val placed =
+            source.copy(valueAnswer = { s, _ ->
+                ValueAnswer("kotlin.String", declaredAt = src.indexOf("outer")).takeIf {
+                    src[s] ==
+                        '$'
+                }
+            })
+        assertEquals(listOf("\${p.outer()}", "loose()"), asked(placed))
+    }
+
+    @Test
+    fun `a declaration is read only where its name is one the text reads`() {
+        val here = "fun `my plain`(q: String) = q\nval after = \"<b>x</b>\"\nfun f(q: String) = \"<p>\${`my plain`(q)}</p>\""
+        assertEquals(1, told(here, mapOf("`my plain`(q)" to ValueAnswer("kotlin.String", declaredAt = here.indexOf("`my")))).size)
+        val src = "fun f(q: String, l: List<String>) = \"<p>\${`my plain`(q)} \${l.render(q)}</p>\""
+        val quoted = "package parts\n\nfun `my plain`(q: String): String {\n    val open = \"<b>\"\n    return q\n}"
+        val bounded =
+            "package parts\n\nfun <T : Comparable<T>> List<T>.render(q: String): String {\n    val open = \"<b>\"\n" +
+                "    return q\n}"
+        val answers =
+            mapOf(
+                "`my plain`(q)" to ValueAnswer("kotlin.String", declaration = quoted),
+                "l.render(q)" to ValueAnswer("kotlin.String", declaration = bounded),
+            )
+        assertEquals(listOf("\${`my plain`(q)}", "\${l.render(q)}"), told(src, answers))
+    }
+
+    @Test
+    fun `a member of another file is read in the class the editor shows it in`() {
+        val src = "fun f(c: Card) = \"<p>\${c.badge()}</p>\""
+        val within = { head: String, member: String ->
+            mapOf("c.badge()" to ValueAnswer("kotlin.String", declaration = "package parts\n\n$head {\n$member\n}"))
+        }
+        assertEquals(listOf("\${c.badge()}"), told(src, within("interface Card", "fun badge() = \"<b>x</b>\"")))
+        assertEquals(listOf("\${c.badge()}"), told(src, within("open class Card", "override fun badge() = \"<b>x</b>\"")))
+        assertEquals(emptyList(), told(src, within("class Card", "override fun badge() = \"<b>x</b>\"")))
+        assertEquals(emptyList(), told(src, within("class Card", "fun badge() = \"<b>x</b>\"")))
+    }
+
+    @Test
+    fun `a parameter is marked HTML behind a comment too`() {
+        assertEquals(
+            emptyList(),
+            told("class K(/** The body. */ @Language(\"HTML\") val body: String) {\n    fun page() = \"<div>\$body</div>\"\n}"),
+        )
+    }
+
+    @Test
+    fun `a function that takes markup by a marked parameter is not followed`() {
+        assertEquals(
+            listOf("\${cell(q)}"),
+            told("fun cell(@Language(\"HTML\") inner: String) = \"<td>\$inner</td>\"\nfun f(q: String) = \"<tr>\${cell(q)}</tr>\""),
+        )
+        val elsewhere =
+            ValueAnswer(
+                "kotlin.String",
+                declaration = "package parts\n\nfun cell(@Language(\"HTML\") inner: String) = \"<td>\$inner</td>\"",
+            )
+        assertEquals(listOf("\${cell(q)}"), told("fun f(q: String) = \"<tr>\${cell(q)}</tr>\"", mapOf("cell(q)" to elsewhere)))
+    }
+
+    @Test
+    fun `whether another may stand in for a member is read off its class and its own modifiers, in code alone`() {
+        val page = "interface Page {\n    fun head(): String = \"<b>x</b>\"\n    fun render() = \"<p>\${head()}</p>\"\n}"
+        assertEquals(listOf("\${head()}"), told("/** A class of pages. */\n$page"))
+        assertEquals(listOf("\${head()}"), told("data class Row(val a: Int)\n$page"))
+        val card = "open class Card : Base() {\n    override fun head(): String = \"<b>x</b>\"\n    fun render() = \"<p>\${head()}</p>\"\n}"
+        assertEquals(listOf("\${head()}"), told("class Row(val a: Int)\n$card"))
+        assertEquals(listOf("\${head()}"), told("@Serializable(with = CardSerializer::class)\n$card"))
+        val final =
+            "class Card {\n    // whether the card is open\n    fun head(): String = \"<b>x</b>\"\n" +
+                "    fun render() = \"<p>\${head()}</p>\"\n}"
+        assertEquals(emptyList(), told(final))
+        assertEquals(
+            listOf("\${head()}"),
+            told(final.replace("    fun head", "    open @JvmName(\"h\") fun head").replace("class Card", "open class Card")),
+        )
+        val body = "Card : Base() {\n    override val body = \"<b>x</b>\"\n    fun render() = \"<p>\$body</p>\"\n}"
+        assertEquals(emptyList(), told("object $body"))
+        assertEquals(emptyList(), told("class $body"))
+        assertEquals(listOf("\$body"), told("abstract class $body"))
+        assertEquals(
+            listOf("\${items.joinToString(\"\")}"),
+            told(
+                "open class P {\n    open val items = listOf(\"<li>a</li>\")\n" +
+                    "    fun render() = \"<ul>\${items.joinToString(\"\")}</ul>\"\n}",
+            ),
+        )
+    }
+
+    @Test
+    fun `a function of the top level is followed only where no class of the file has a member of its name`() {
+        val src =
+            "fun badge() = \"<b>x</b>\"\nclass A(val q: String) {\n    companion object {\n        fun badge(): String = load()\n    }\n" +
+                "    fun page() = \"<p>\${badge()}</p>\"\n}"
+        assertEquals(listOf("\${badge()}"), told(src))
+    }
+
+    @Test
+    fun `a value of a helper's name is no function, and the editor's word on the call is taken over the file's`() {
+        val named =
+            "fun f(): String {\n    val signal = signal(\"count\")\n" +
+                "    return \"<b data-text=\\\"\${signal(\"count\")}\\\">x</b>\"\n}"
+        assertEquals(emptyList(), told(named))
+        assertEquals(
+            emptyList(),
+            told("class PostView(private val post: Post) {\n    fun like() = \"<b data-on:click=\\\"\${post(\"/like\")}\\\">x</b>\"\n}"),
+        )
+        val member =
+            "class P {\n    fun get(k: String): String = load(k)\n" +
+                "    fun page() = \"<b data-on:click=\\\"\${get(\"/x\")}\\\">x</b>\"\n}"
+        assertEquals(listOf("\${get(\"/x\")}"), told(member))
+        val dsl = ValueAnswer("kotlin.String", declaration = "package io.github.markusaugust.streamlord.html\n")
+        assertEquals(emptyList(), told(member, mapOf("get(\"/x\")" to dsl)))
+    }
+
+    @Test
+    fun `a number that may be null is a number left of an elvis, whoever says what it is`() {
+        val src = "fun f(count: Int?) = \"<b data-on:click=\\\"\${set(\"n\", count ?: 0)}\\\">x</b>\""
+        assertEquals(emptyList(), told(src))
+        assertEquals(emptyList(), told(src, mapOf("count" to ValueAnswer("kotlin.Int?"), "count ?: 0" to ValueAnswer("kotlin.Int"))))
+    }
+
+    @Test
+    fun `a comment's apostrophes join no statements, and a val with a getter is what the getter gives`() {
+        assertEquals(
+            listOf("\${buildString {\n    appendHTML().br() // it's\n    append(q) // it's\n}}"),
+            told("fun f(q: String) = \"<p>\${buildString {\n    appendHTML().br() // it's\n    append(q) // it's\n}}</p>\""),
+        )
+        assertEquals(
+            listOf("\$title"),
+            told(
+                "class P(val q: String) {\n    val title: String = \"<b>x</b>\"\n        get() = field + q\n" +
+                    "    fun page() = \"<p>\$title</p>\"\n}",
+            ),
+        )
     }
 }

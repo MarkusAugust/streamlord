@@ -125,4 +125,38 @@ class DeclarationElsewhereTest : StreamlordTestCase() {
             myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text },
         )
     }
+
+    private fun highlighted(text: String): List<String> {
+        myFixture.configureByText("Page.kt", text)
+        return myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text }
+    }
+
+    fun `test a member of this file is read through to another file, and a default is no value of a property`() {
+        myFixture.addFileToProject(
+            "parts/More.kt",
+            "package parts\nclass Row(val label: String = \"<b>x</b>\")\n" +
+                "interface Face {\n    fun mark() = \"<b>x</b>\"\n}\n" +
+                "class Final : Face {\n    override fun mark() = \"<i>x</i>\"\n    fun own() = \"<u>x</u>\"\n}\n" +
+                "fun `my plain`(q: String): String {\n    val open = \"<b>\"\n    return q\n}\n",
+        )
+        assertEquals(
+            listOf("\${r.label}", "\${face.mark()}", "\${`my plain`(q)}"),
+            highlighted(
+                "import parts.*\nclass P {\n    fun outer() = badge()\n    val w = badge()\n}\n" +
+                    "fun page(p: P, r: Row, face: Face, f: Final, q: String) =\n" +
+                    "    \"<div>\${p.outer()} \${p.w} \${r.label} \${face.mark()} \${f.mark()} \${f.own()} \${`my plain`(q)}</div>\"",
+            ),
+        )
+    }
+
+    fun `test a property of a constructor is marked HTML behind its comment too`() {
+        assertEquals(
+            emptyList<String>(),
+            highlighted(
+                "import org.intellij.lang.annotations.Language\n" +
+                    "class K(/** The body. */ @Language(\"HTML\") val body: String) {\n" +
+                    "    fun page() = \"<div>\${this.body} \$body</div>\"\n}",
+            ),
+        )
+    }
 }

@@ -39,6 +39,8 @@ internal class Declaration(
     val trustedText: String? = null,
     /** Whether the call it is set to names core's own under an alias the file imports, which no other import can take. */
     val aliased: Boolean = false,
+    /** Whether another declaration may stand in for it: see [overridable]. */
+    val overridable: Boolean = false,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -110,15 +112,17 @@ internal class FileFacts(
 
 /**
  * A function the file declares: the body of the class it is a member of, its parameters marked `@Language("HTML")`, by
- * place and by name, where its parameters open and close, and whether it is declared inside a function, where no other
- * can call it.
+ * place and by name, where its `fun` is written and its parameters open and close, whether it is declared inside a
+ * function, where no other can call it, and whether another may stand in for it ([overridable]).
  */
 internal class FunctionDeclaration(
     val owner: IntRange?,
     val html: Set<Any>,
-    val open: Int = -1,
-    val close: Int = -1,
-    val local: Boolean = false,
+    val keyword: Int,
+    val open: Int,
+    val close: Int,
+    val local: Boolean,
+    val overridable: Boolean,
 )
 
 @Volatile
@@ -228,7 +232,7 @@ private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
 private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
 private val PARAMETER =
     regex(
-        """^\s*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
+        """^\s*(?:/\*[\s\S]*?\*/\s*)*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
     )
 private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
@@ -296,6 +300,16 @@ private class ScopeFrame(
 
     /** For a function's parameters: whether the function is declared inside another. */
     var local = false
+
+    /** Where the `fun` last read in this frame is written, and for a function's parameters where its own is. */
+    var keyword = -1
+
+    /** For a function's parameters: whether another function may stand in for it. */
+    var overridable = false
+
+    /** For a class's body, and for the frame a class is declared in until its body opens: whether the class can be extended, and whether it is an interface. */
+    var extended = false
+    var contract = false
 }
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -386,6 +400,32 @@ internal fun splitTopLevel(text: String): List<String> {
     return out
 }
 
+private val EXTENDED = regex("""\b(?:open|abstract|sealed)\b""")
+private val OVERRIDES = regex("""\boverride\b""")
+private val MODIFIERS = regex("""(?:(?:[a-z]+|@[\p{L}\p{Nd}_:.]+(?:\([^()]*\))?)\s+)*$""")
+
+/** The modifiers and annotations written before the keyword at [at], what is no code left out. */
+private fun modifiersBefore(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): String {
+    val text = StringBuilder()
+    for (k in maxOf(0, at - 160) until at) text.append(if (code[k]) src[k] else ' ')
+    return MODIFIERS.find(text)?.value.orEmpty()
+}
+
+/**
+ * Whether another declaration may stand in for one with these [modifiers], a member of the class whose body is [owner]:
+ * it is `open` or `abstract`, a member of an interface, or an `override` in a class that can be extended or that the
+ * text does not show.
+ */
+private fun overridable(
+    modifiers: String,
+    owner: ScopeFrame?,
+): Boolean =
+    EXTENDED.containsMatchIn(modifiers) || owner?.contract == true || (OVERRIDES.containsMatchIn(modifiers) && owner?.extended != false)
+
 private val NAME_BEFORE_BRACKET = regex("""($NAME)\s*$""")
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
@@ -419,7 +459,7 @@ private fun functionAt(
         }
     }
     val body = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
-    return name to FunctionDeclaration(body, html, g.open, close, g.local)
+    return name to FunctionDeclaration(body, html, g.keyword, g.open, close, g.local, g.overridable)
 }
 
 /**
@@ -472,6 +512,7 @@ private fun declarations(
         f: ScopeFrame,
         close: Int,
         visible: Boolean = false,
+        holder: ScopeFrame? = null,
     ): List<Declaration> {
         val out = ArrayList<Declaration>()
         val cuts = listOf(f.open) + f.commas + close
@@ -489,6 +530,7 @@ private fun declarations(
                         f.open,
                         type,
                         html = HTML_ANNOTATION.containsMatchIn(text),
+                        overridable = holder != null && overridable(m.groupValues[1], holder),
                         typeArguments = arguments,
                         shared =
                             visible &&
@@ -527,11 +569,14 @@ private fun declarations(
 
                 word == "fun" || (word == "constructor" && !ctorOfClass) -> {
                     f.fn = true
+                    f.keyword = i
                 }
 
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
                     f.privateClass = PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
+                    f.contract = word == "interface"
+                    f.extended = f.contract || (word == "class" && EXTENDED.containsMatchIn(modifiersBefore(src, code, i)))
                 }
 
                 word == "when" -> {
@@ -546,6 +591,7 @@ private fun declarations(
                     val constant = CONST_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
                     val html = HTML_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 160), i))
                     val local = f.kind != "top" && f.kind != "class"
+                    val overridable = !local && overridable(modifiersBefore(src, code, i), f.takeIf { it.kind == "class" })
                     val shared = !local && !f.hidden && !PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
                     val scopeStart = { at: Int ->
                         if (local) {
@@ -615,6 +661,7 @@ private fun declarations(
                                         trusted,
                                         trustedText,
                                         aliased = initialiser?.third == true,
+                                        overridable = overridable,
                                     ),
                                 )
                             if (owner.kind != "top") owner.ends += d
@@ -631,6 +678,8 @@ private fun declarations(
                 g.kind = "params"
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
+                g.keyword = f.keyword
+                g.overridable = f.keyword >= 0 && overridable(modifiersBefore(src, code, f.keyword), g.owner)
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -659,6 +708,8 @@ private fun declarations(
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
+                    g.extended = f.extended
+                    g.contract = f.contract
                     g.hidden = classHidden(f)
                     f.ctor?.let { g.ends += it }
                     f.ctor = null
@@ -718,7 +769,7 @@ private fun declarations(
                 handOver(PendingScope(parameters(g, i), true))
                 if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
-                outer.ctor = parameters(g, i, !classHidden(outer))
+                outer.ctor = parameters(g, i, !classHidden(outer), outer)
             }
             i++
             continue
@@ -781,31 +832,7 @@ internal class ValueText(
 internal const val RECEIVER = """[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>]|<[^<>]*>)*>)?\??\s*\.\s*"""
 
 private val RETURN = regex("""\breturn\b(@?)""")
-private val FUN_BEFORE = regex("""\bfun\b(?![\s\S]*\bfun\b)[^(){}=;]*$""")
 private val BODY_AFTER = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
-
-private val MODIFIERS_BEFORE = regex("""((?:\b[a-z]+\s+)*)$""")
-private val CLASS_BEFORE = regex("""((?:\b[a-z]+\s+)*)\b(class|interface|object)\b[^{}]*$""")
-private val OPEN = regex("""\b(?:open|abstract|sealed)\b""")
-private val OVERRIDES = regex("""\boverride\b""")
-
-/**
- * Whether another declaration may stand in for the one whose keyword is at [keyword], a member of the class whose body
- * is [owner]: it is `open` or `abstract`, a member of an interface, or an `override` in a class that is not final or not
- * shown.
- */
-internal fun overridable(
-    src: String,
-    keyword: Int,
-    owner: IntRange?,
-): Boolean {
-    val modifiers = MODIFIERS_BEFORE.find(src.substring(maxOf(0, keyword - 160), keyword))?.value.orEmpty()
-    if (OPEN.containsMatchIn(modifiers)) return true
-    val held = owner?.let { CLASS_BEFORE.find(src.substring(maxOf(0, it.first - 300), it.first)) }
-    if (held?.groupValues?.get(2) == "interface") return true
-    val final = held != null && (held.groupValues[2] == "object" || !OPEN.containsMatchIn(held.groupValues[1]))
-    return OVERRIDES.containsMatchIn(modifiers) && !final
-}
 
 /** Nothing known of a function: no result of it is markup. */
 private val UNREAD = FunctionResult(false, null, emptyList())
@@ -828,7 +855,8 @@ private fun closingInCode(
 /**
  * The functions [name] can mean at [at] where it is called without a receiver: the members of the class the call is in,
  * before those of the top level. Null where the text cannot say which it means: the file declares a function of that
- * name inside another, or a value of that name is in sight.
+ * name inside another, a value of that name is in sight, or a class the call is not in has a member of that name, which
+ * a companion or a class it extends may give it.
  */
 internal fun functionsNamed(
     src: String,
@@ -838,13 +866,20 @@ internal fun functionsNamed(
     val all = fileFacts(src).functions[name].orEmpty()
     if (all.any { it.local } || declarationOf(src, name, at) != null) return null
     val members = all.filter { f -> f.owner?.let { at in it } == true }
-    val innermost = members.minOfOrNull { it.owner!!.last - it.owner.first }
-    return if (innermost == null) all.filter { it.owner == null } else members.filter { it.owner!!.last - it.owner.first == innermost }
+    val innermost = members.minOfOrNull { it.owner!!.last - it.owner.first } ?: return all.takeIf { f -> f.all { it.owner == null } }
+    return members.filter { it.owner!!.last - it.owner.first == innermost }
 }
+
+/** Whether a call of [name] without a receiver at [at] may mean a function of the file: one of the top level, of a class the call is in, or declared inside another. */
+internal fun callsFileFunction(
+    src: String,
+    name: String,
+    at: Int,
+): Boolean = fileFacts(src).functions[name].orEmpty().any { f -> f.local || f.owner?.let { at in it } != false }
 
 /**
  * What [f] shows of its result. One whose body the text does not show, that returns to a label, or that another may
- * stand in for ([overridable]), shows nothing. A
+ * stand in for, shows nothing, and one that takes markup by a marked parameter shows only its own mark and type. A
  * `return` of a function declared inside it counts as its own, which can only make it less of what every result is.
  */
 internal fun functionResult(
@@ -854,6 +889,7 @@ internal fun functionResult(
     val facts = fileFacts(src)
     return facts.results.getOrPut(f.close) {
         val code = facts.code
+        if (f.overridable || f.keyword < 0) return@getOrPut UNREAD
         val body = BODY_AFTER.matchAt(src, f.close + 1) ?: return@getOrPut UNREAD
         val from = body.range.last + 1
         val values =
@@ -865,13 +901,11 @@ internal fun functionResult(
                 if (returns.any { it.groupValues[1].isNotEmpty() }) return@getOrPut UNREAD
                 returns.map { from + it.range.last + 1 }
             }
-        val head = src.substring(maxOf(0, f.open - 300), f.open)
-        val fn = FUN_BEFORE.find(head)?.let { f.open - head.length + it.range.first } ?: return@getOrPut UNREAD
-        if (overridable(src, fn, f.owner)) return@getOrPut UNREAD
-        val before = maxOf(0, fn - 160)
-        val html = HTML_BEFORE.find(src.substring(before, fn))?.let { code[before + it.range.first] } == true
+        val before = maxOf(0, f.keyword - 160)
+        val html = HTML_BEFORE.find(src.substring(before, f.keyword))?.let { code[before + it.range.first] } == true
         val read = values.map { at -> valueFrom(src, at) }
-        FunctionResult(html, body.groups[1]?.value, if (null in read) emptyList() else read.filterNotNull())
+        // What is handed to a parameter marked HTML is written as it is, and nothing judges it there.
+        FunctionResult(html, body.groups[1]?.value, if (null in read || f.html.isNotEmpty()) emptyList() else read.filterNotNull())
     }
 }
 

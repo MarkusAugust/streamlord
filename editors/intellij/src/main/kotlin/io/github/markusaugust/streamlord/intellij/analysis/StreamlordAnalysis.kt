@@ -270,7 +270,16 @@ class StreamlordAnalysis(
     internal fun valueAnswers(file: KtFile): Map<TextRange, ValueAnswer> =
         CachedValuesManager.getCachedValue(file) {
             val dumb = DumbService.getInstance(project)
-            val answers = if (dumb.isDumb) emptyMap() else ValueAnswers.of(file, valueQuestions(file))
+            var answers = if (dumb.isDumb) emptyMap() else ValueAnswers.of(file, valueQuestions(file))
+            // A declaration an answer places in the file leads on to values of its own, a few calls deep at most.
+            for (round in 1..FOLLOWED) {
+                if (answers.values.none { it.declaredAt != null }) break
+                val known = answers
+                val read = source(file.text, SourceLanguage.KOTLIN, file).copy(valueAnswer = { start, end -> known[TextRange(start, end)] })
+                val more = analyzer.valueQuestions(read).filter { TextRange(it.start, it.end) !in known }
+                if (more.isEmpty()) break
+                answers = known + ValueAnswers.of(file, more)
+            }
             CachedValueProvider.Result.create(answers, PsiModificationTracker.getInstance(project), dumb.modificationTracker)
         }
 
@@ -338,6 +347,9 @@ class StreamlordAnalysis(
         }
 
     companion object {
+        /** How many times the analysis is asked what the answers given so far lead on to. */
+        private const val FOLLOWED = 3
+
         /** The name of a function declared: `fun dataText(`, `fun HTMLTag.dataText(`, `fun <T> T.dataText(`. */
         private val FUNCTION_NAME = Regex("""\bfun\s[^(\n]*?`?\b(\w+)`?\s*\(""")
 

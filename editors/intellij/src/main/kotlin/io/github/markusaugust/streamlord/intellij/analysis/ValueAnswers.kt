@@ -4,6 +4,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiClassOwner
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.PsiNameIdentifierOwner
 import io.github.markusaugust.streamlord.analysis.ValueAnswer
 import io.github.markusaugust.streamlord.analysis.ValueQuestion
 import org.jetbrains.kotlin.analysis.api.KaSession
@@ -12,7 +13,10 @@ import org.jetbrains.kotlin.analysis.api.types.KaClassType
 import org.jetbrains.kotlin.analysis.api.types.KaFlexibleType
 import org.jetbrains.kotlin.analysis.api.types.KaType
 import org.jetbrains.kotlin.idea.references.mainReference
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtCallExpression
+import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtEnumEntry
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
@@ -23,6 +27,7 @@ import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiUtil
 import org.jetbrains.kotlin.psi.KtQualifiedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateEntryWithExpression
+import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 
 /**
  * What the Kotlin plugin answers of each value the analysis asks about, which only resolving tells: the type the Analysis
@@ -47,8 +52,8 @@ object ValueAnswers {
                 // The analysis reads a declaration only of a value its type leaves open.
                 val target = if (!constant && (type == null || type == "kotlin.String" || type == "kotlin.String?")) declared(e) else null
                 val here = target?.takeIf { it.containingFile.originalFile == file.originalFile }
-                TextRange(q.start, q.end) to
-                    ValueAnswer(type, constant, if (here == null) target?.let(::elsewhere) else null, here?.textRange?.startOffset)
+                val name = (here as? PsiNameIdentifierOwner)?.nameIdentifier?.textRange?.startOffset
+                TextRange(q.start, q.end) to ValueAnswer(type, constant, if (here == null) target?.let(::elsewhere) else null, name)
             }
         }
     }
@@ -69,7 +74,7 @@ object ValueAnswers {
             if (range.startOffset != start || range.endOffset > end) return null
             if (range.endOffset == end) {
                 if (element is KtStringTemplateEntryWithExpression) return element.expression
-                if (element is KtExpression) return KtPsiUtil.safeDeparenthesize(element)
+                if (element is KtExpression && element !is KtDeclaration) return KtPsiUtil.safeDeparenthesize(element)
             }
             element = element.parent
         }
@@ -125,13 +130,35 @@ object ValueAnswers {
 
     /**
      * A declaration of another file as the analysis reads one: after its file's package and imports, which say what its
-     * names mean. Of one that is compiled or not Kotlin the package alone, which says whose it is.
+     * names mean, and in the head of the class that holds it, which says whether another may stand in for it. A property
+     * of a constructor is written without its default, which is no value of it. Of a declaration that is compiled or not
+     * Kotlin the package alone, which says whose it is.
      */
     private fun elsewhere(target: PsiElement): String? {
         val holder = target.containingFile
         if (holder !is KtFile) return "package ${(holder as? PsiClassOwner)?.packageName.orEmpty()}\n"
         val pkg = holder.packageDirective?.text.orEmpty()
         if (holder.isCompiled) return "$pkg\n"
-        return "$pkg\n${holder.importList?.text.orEmpty()}\n${target.text}".takeIf { it.length <= LONGEST_DECLARATION }
+        val owner = (target as KtDeclaration).containingClassOrObject
+        val head =
+            owner?.let { c ->
+                val open = listOf(KtTokens.OPEN_KEYWORD, KtTokens.ABSTRACT_KEYWORD, KtTokens.SEALED_KEYWORD).filter(c::hasModifier)
+                val kind =
+                    if (c is KtClass && c.isInterface()) {
+                        "interface"
+                    } else if (c is KtClass) {
+                        "class"
+                    } else {
+                        "object"
+                    }
+                (open.map { it.value } + kind + c.name.orEmpty()).joinToString(" ")
+            }
+        val written =
+            when {
+                target is KtParameter -> "$head(${target.text.substring(0, target.equalsToken?.startOffsetInParent ?: target.textLength)})"
+                head != null -> "$head {\n${target.text}\n}"
+                else -> target.text
+            }
+        return "$pkg\n${holder.importList?.text.orEmpty()}\n$written".takeIf { it.length <= LONGEST_DECLARATION }
     }
 }

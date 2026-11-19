@@ -53,12 +53,14 @@ public data class ValueAnswer(
     public val constant: Boolean = false,
     /**
      * The declaration the value names, where the whole value is a name or a call and the editor finds what it means in
-     * another Kotlin file: `fun badge(): String = "<b>new</b>"` with its annotations, after that file's `package` and
-     * `import` lines, which say what its names mean. Of a compiled declaration the `package` line alone. The analysis
-     * reads it only of a value whose type is a String or unknown. Null for any other value.
+     * another file: `fun badge(): String = "<b>new</b>"` with its annotations, after that file's `package` and `import`
+     * lines, which say what its names mean, and in the head of the class that holds it, `open class Card { ... }`, which
+     * says whether another may stand in for it. Of a declaration that is compiled or not Kotlin the `package` line alone:
+     * a call that is not Streamlord's is no helper of its DSL. The analysis reads it only of a value whose type is a
+     * String or unknown. Null for any other value.
      */
     public val declaration: String? = null,
-    /** Where the declaration the value names starts, its annotations included, when it stands in the file being judged. */
+    /** Where the name of the declaration the value names is written, when that is a property or a function of the file being judged. */
     public val declaredAt: Int? = null,
 )
 

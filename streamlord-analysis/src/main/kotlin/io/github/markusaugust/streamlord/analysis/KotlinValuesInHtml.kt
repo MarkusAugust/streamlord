@@ -1469,7 +1469,11 @@ internal fun Analyzer.factOf(
     val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(TemplateValue(ip.text, false)) else templateValues(ip.text)
     val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk, editor) }
     if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
-    if (isMarkup(src, s, ip, sdk, editor) || markupCollection(src, ip.text, s.start, sdk)) return ValueFact.MARKUP
+    if (markupValue(src, ip.text, s.start, sdk = sdk, editor = editor) ||
+        markupCollection(src, ip.text, s.start, sdk)
+    ) {
+        return ValueFact.MARKUP
+    }
     return told ?: weakest(kinds)
 }
 

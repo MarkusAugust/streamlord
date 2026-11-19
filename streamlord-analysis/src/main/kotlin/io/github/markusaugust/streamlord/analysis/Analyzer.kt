@@ -94,7 +94,7 @@ internal class Reading(
         return Editor(
             { part -> agreed(part) { from, to -> fact(from, to) } },
             { part -> agreed(part) { from, to -> source.valueAnswer?.invoke(from, to) } },
-            { from, to -> if (from in 0 until to && to <= text.length) parts(from, to) else null },
+            { from, to -> parts(from, to) },
         )
     }
 }
@@ -322,13 +322,15 @@ public class Analyzer(
 
     /**
      * The values of the Kotlin file [source] the analysis asks the editor about through [Source.valueAnswer], in the order it
-     * asks: an editor answers for each of these and for nothing else, by the very range it is asked by.
+     * asks: an editor answers for each of these and for nothing else, by the very range it is asked by. An answer that
+     * places a declaration in the file ([ValueAnswer.declaredAt]) leads on to what that declaration is set to, so an
+     * editor that gave one asks again with its answers in [source], until nothing new is listed.
      * The file is read as [analyzeKotlinSites] reads it, and costs as much. A call [Source.foreign] names is read as that
      * reading reads it, so its string may ask what it did not ask as Streamlord's.
      */
     public fun valueQuestions(source: Source): List<ValueQuestion> {
         val asked = LinkedHashMap<Pair<Int, Int>, ValueQuestion>()
-        kotlinSites(Reading(source.copy(valueAnswer = null), settle(source), asked))
+        kotlinSites(Reading(source, settle(source), asked))
         return asked.values.toList()
     }
 
