@@ -335,7 +335,7 @@ private class ScopeFrame(
     /** For a function's block: its parameters. */
     var function: ScopeFrame? = null
 
-    /** The word last read in this frame with nothing but space after it, and for a function's parameters the function's name. */
+    /** The word last read in this frame with nothing but space after it, and the word its bracket follows: a function's name before its parameters. */
     var word: String? = null
     var name: String? = null
 
@@ -455,8 +455,9 @@ private const val OVERRIDES = 8
 private const val HTML = 16
 private const val COMPANION = 32
 
-/** What follows an `object` or a `fun` that has no name: of a `fun` its parameters, and no receiver in brackets. */
-private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\((?!(?:[^()]|\([^()]*\))*\)\s*\.)"""))
+/** What follows an `object` or a `fun` that has no name. */
+private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
+private val RECEIVER_DOT = regex("""\s*\.""")
 
 /** The words that may stand before a declaration, each with what it says of it. */
 private val MODIFIER_WORDS: Map<String, Int> =
@@ -466,7 +467,7 @@ private val MODIFIER_WORDS: Map<String, Int> =
         mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES, "companion" to COMPANION)
 
 private val QUOTED = regex("`[^`\n]+`")
-private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
+private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|(?:`[^`\n]+`|[\p{L}_][\p{L}\p{Nd}_.]*)(?:<(?:[^<>\n]|<[^<>\n]*>)*>)?)""")
 
 /** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
 private fun annotationEnd(
@@ -640,7 +641,11 @@ private fun declarations(
             val reference = src.startsWith("::", i - 2)
             val ctorOfClass = word == "constructor" && f.cls
             // In a function's expression an `object` or a `fun` without a name is a value, and the parameters are in sight in it.
-            val value = f.pending?.unended == true && f.modifiers and COMPANION == 0 && UNNAMED[word]?.matchAt(src, end) != null
+            val unnamed = if (f.pending?.unended == true && f.modifiers and COMPANION == 0) UNNAMED[word]?.matchAt(src, end) else null
+            // A receiver in brackets has a dot after it, the parameters of a function without a name none.
+            val after = if (word == "fun") unnamed?.let { src.substring(it.range.last, minOf(src.length, it.range.last + 2_000)) } else null
+            val value =
+                unnamed != null && (after == null || RECEIVER_DOT.matchAt(after, maxOf(0, closing(after, depths(after), 0))) == null)
             if (word in DECLARATION_WORDS && !reference && !ctorOfClass && !value) {
                 // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
                 endPending(f, i)
@@ -723,18 +728,8 @@ private fun declarations(
                             val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
                             val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
                             // The value of a `val` set once, which a name then stands for.
-                            val valueAt =
-                                if (word != "val") {
-                                    null
-                                } else if (bare && !markup) {
-                                    VALUE_AFTER
-                                        .matchAt(
-                                            src,
-                                            arguments?.range?.last?.plus(1) ?: (m.range.last + 1),
-                                        )?.let { it.range.last + 1 }
-                                } else {
-                                    VAL_AFTER.groupRange(src, m, 5)?.first
-                                }
+                            val set = VALUE_AFTER.matchAt(src, arguments?.range?.last?.plus(1) ?: (m.range.last + 1))?.range?.last
+                            val valueAt = if (bare && !markup) set?.plus(1) else VAL_AFTER.groupRange(src, m, 5)?.first
                             val d =
                                 add(
                                     m.groupValues[2],
@@ -750,7 +745,7 @@ private fun declarations(
                                         markup,
                                         if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
                                         arguments?.groupValues?.get(1),
-                                        valueAt?.let { f.begin(Span(it)) },
+                                        valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
                                         shared,
                                         trusted,
                                         trustedText,
@@ -775,19 +770,21 @@ private fun declarations(
         val quoted = if (c == '`') QUOTED.matchAt(src, i)?.also { f.reset() } else null
         val annotated = if (c == '@' && !isWordPart(src.getOrNull(i - 1))) annotationEnd(src, code, i) else i + (quoted?.value?.length ?: 0)
         if (annotated > i) {
-            f.pending?.started = true
+            // What an annotation stands first in has begun: a loop's statement, a function's expression.
+            if (f.pending?.fn == null) f.pending?.state = "stmt"
+            if (f.pending?.state == "expr") f.pending?.started = true
             if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == annotated - 1) f.modifiers = f.modifiers or HTML
             i = annotated
             continue
         }
         if (c == '(' || c == '[' || c == '{') {
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
+            g.name = f.word
             if (c == '(' && f.fn) {
                 g.kind = "params"
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
                 g.funModifiers = f.funModifiers
-                g.name = f.word
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -866,7 +863,7 @@ private fun declarations(
             val g = stack.removeAt(stack.size - 1)
             val outer = stack.last()
             // `fun a() {} open val b`: a declaration may begin on the line of the bracket that closes the one before it.
-            if (c != ']') outer.after = 0
+            if (c != ']' && g.name != "if" && g.name != "while") outer.after = 0
 
             fun handOver(p: PendingScope) {
                 outer.pending?.let { settle(it, i + 1) }

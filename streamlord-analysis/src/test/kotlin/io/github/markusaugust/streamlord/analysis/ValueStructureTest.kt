@@ -655,9 +655,10 @@ class ValueStructureTest {
             val first = "class Page(val id: String) {\n    fun row(id: Int) = $end\n\n"
             assertEquals(listOf("\$id"), told("$first    fun render() = \"<p>\$id</p>\"\n}"), end)
             assertEquals(listOf("\$id"), told("$first    object O { fun render() = \"<p>\$id</p>\" }\n}"), end)
-            assertEquals(listOf("\$id"), told("$first    companion object { fun render(id: String) = \"<p>\$id</p>\" }\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    companion object { fun render() = \"<p>\$id</p>\" }\n}"), end)
             // A receiver in brackets is no parameter list, and its function has a name.
             assertEquals(listOf("\$id"), told("$first    fun (String.() -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    fun (((Int) -> Unit) -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
         }
         // The function after it is one of its own.
         assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
@@ -714,5 +715,32 @@ class ValueStructureTest {
         val page = "    fun other() = \"<b>x</b>\"\n    fun page() = \"<p>\${other()}</p>\"\n}"
         assertEquals(emptyList(), told("class T {\n    fun `reads @get(x`() {}\n$page"))
         assertEquals(setOf("other", "page"), fileFacts("class T {\n    @Suppress(\n$page").functions.keys)
+    }
+
+    @Test
+    fun `a function without a name left open is read however much follows it`() {
+        val src = "class P {\n    fun style(n: Int) = fun(\n" + "    val row1 = \"<b>1</b>\"\n".repeat(400) + "}"
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a modifier is read behind an annotation named in backticks or with type arguments`() {
+        for (annotation in listOf("@`A`", "@A<String>", "@A<List<String>>")) {
+            val src = "abstract class P {\n    $annotation open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}"
+            assertEquals(listOf("\$title"), told(src), annotation)
+        }
+    }
+
+    @Test
+    fun `a name after a condition is no modifier of the declaration on the next line`() {
+        val body = "    if (door.locked) const\n    val title: String = load()\n    println(\"<p>\$title</p>\")"
+        assertEquals(listOf("\$title"), told("fun f(door: Door, const: Int) {\n$body\n}"))
+    }
+
+    @Test
+    fun `a loop variable is out of sight after its statement where an annotation stands in the loop`() {
+        for (loop in listOf("for (n in @A rows) println(n)", "for (n in rows) @A println(n)")) {
+            assertEquals(emptyList(), told("fun f(n: Int, rows: List<String>) {\n    $loop\n    println(\"<p>\$n</p>\")\n}"), loop)
+        }
     }
 }
