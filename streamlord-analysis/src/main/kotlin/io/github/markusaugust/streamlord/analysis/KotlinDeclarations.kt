@@ -46,13 +46,11 @@ internal class Declaration(
     var end: Int = Int.MAX_VALUE
 }
 
-/** Where a value is written: from [start] to just past it, [end], which is -1 until its statement has ended. */
+/** Where a value is written: from [start] to just past it, [end], -1 until its statement has ended; [getter] where a `val` has a getter after it. */
 internal class Span(
     val start: Int,
 ) {
     var end: Int = -1
-
-    /** Whether a getter of its own follows the value of a `val`, which is then what the name gives. */
     var getter: Boolean = false
 }
 
@@ -324,8 +322,8 @@ private class ScopeFrame(
     /** The same of the `fun` last read in this frame, and for a function's parameters of its own. */
     var funModifiers = 0
 
-    /** The value that just ended in this frame, while only modifiers follow it: a `get(` then is its getter. */
-    var lastValue: Span? = null
+    /** The values that just ended in this frame, one in another, while only modifiers follow: a `get(` then is their getter. */
+    var lastValues = emptyList<Span>()
 
     /** The values written in this frame whose statements have not ended. */
     val values = ArrayList<Span>()
@@ -346,7 +344,7 @@ private class ScopeFrame(
 
     fun reset(after: Int = 1) {
         modifiers = 0
-        lastValue = null
+        lastValues = emptyList()
         word = null
         this.after = after
     }
@@ -357,7 +355,7 @@ private class ScopeFrame(
     fun endValues(at: Int) {
         val ended = values.filter { it.start <= at }
         for (v in ended) v.end = at
-        lastValue = ended.lastOrNull() ?: return
+        lastValues = ended.ifEmpty { return }
         values.removeAll(ended)
     }
 }
@@ -462,15 +460,12 @@ private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""
 
 /** The words that may stand before a declaration, each with what it says of it. */
 private val MODIFIER_WORDS: Map<String, Int> =
-    (
-        "public protected internal final lateinit inline suspend tailrec operator infix external data enum annotation " +
-            "inner value actual expect vararg noinline crossinline"
-    ).split(" ").associateWith { 0 } + listOf("open", "abstract", "sealed").associateWith { EXTENDED } +
+    "public protected internal final lateinit inline suspend tailrec operator infix external data enum annotation inner value actual expect"
+        .split(" ")
+        .associateWith { 0 } + listOf("open", "abstract", "sealed").associateWith { EXTENDED } +
         mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES, "companion" to COMPANION)
 
-/** What the modifiers a parameter is written with say of it. */
-private fun modifiersOf(text: String): Int = text.split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
-
+private val QUOTED = regex("`[^`\n]+`")
 private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
 
 /** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
@@ -482,10 +477,13 @@ private fun annotationEnd(
     val name = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
-    var depth = 0
+    val depth = IntArray(3)
     for (k in open until if (src.getOrNull(open) == '(' || open < name) src.length else open) {
-        if (code[k] && src[k] in "([{") depth++
-        if (code[k] && src[k] in ")]}" && --depth == 0) return k + 1
+        if (code[k] && src[k] in "([{") depth["([{".indexOf(src[k])]++
+        val closes = if (code[k]) ")]}".indexOf(src[k]) else -1
+        // A bracket that closes none of its kind is past an annotation left open.
+        if (closes >= 0 && --depth[closes] < 0) break
+        if (closes >= 0 && depth.sum() == 0) return k + 1
     }
     return name
 }
@@ -538,8 +536,8 @@ private fun functionAt(
     val type = body?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
     val results = if (body != null && src[body.start - 1] == '{') g.returns else listOfNotNull(body)
     val values = if (type == null || html.isNotEmpty()) emptyList() else results
-    val marked = type != null && g.funModifiers and HTML != 0
-    return name to FunctionDeclaration(owner, html, g.open, g.local, marked, type?.groups?.get(1)?.value, values)
+    return name to
+        FunctionDeclaration(owner, html, g.open, g.local, type != null && g.funModifiers and HTML != 0, type?.groups?.get(1)?.value, values)
 }
 
 /**
@@ -599,7 +597,7 @@ private fun declarations(
         for (k in 0 until cuts.size - 1) {
             val text = src.substring(cuts[k] + 1, cuts[k + 1])
             val m = PARAMETER.find(text) ?: continue
-            val modifiers = modifiersOf(m.groupValues[1])
+            val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
             val arguments = if (vararg) null else m.groups[4]?.value
@@ -665,7 +663,7 @@ private fun declarations(
 
                 // A getter takes nothing: `get("/")` after a value is a call.
                 word == "get" -> {
-                    if (GETTER_AFTER.matchAt(src, end) != null) f.lastValue?.getter = true
+                    if (GETTER_AFTER.matchAt(src, end) != null) for (v in f.lastValues) v.getter = true
                 }
 
                 word == "class" || word == "interface" || word == "object" -> {
@@ -773,8 +771,11 @@ private fun declarations(
             i = end
             continue
         }
-        val annotated = if (c == '@' && !isWordPart(src.getOrNull(i - 1))) annotationEnd(src, code, i) else i
+        // A name in backticks is a name whatever it holds.
+        val quoted = if (c == '`') QUOTED.matchAt(src, i)?.also { f.reset() } else null
+        val annotated = if (c == '@' && !isWordPart(src.getOrNull(i - 1))) annotationEnd(src, code, i) else i + (quoted?.value?.length ?: 0)
         if (annotated > i) {
+            f.pending?.started = true
             if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == annotated - 1) f.modifiers = f.modifiers or HTML
             i = annotated
             continue

@@ -696,4 +696,23 @@ class ValueStructureTest {
         val seen = declaredNames("object O { fun a() {} private const val K = \"k\"; class N {} private class H { val x = 1 } }")
         assertEquals(emptySet<String>() to emptySet(), seen.constants to seen.others)
     }
+
+    @Test
+    fun `an annotation that begins a function's expression is part of it`() {
+        val src = "fun outer(n: String) {\n    fun size(n: Int) = @Suppress(\"X\") pad(n)\n    println(\"<p>\$n</p>\")\n}"
+        assertEquals(listOf("\$n"), told(src))
+    }
+
+    @Test
+    fun `a getter is its val's where the value holds a function with an expression of its own`() {
+        val src = "class P(val q: String) {\n    val title = fun() = \"<b>x</b>\"\n        get() = { q }\n}"
+        assertEquals(true, declarationOf(src, "title", src.length - 2)?.value?.getter)
+    }
+
+    @Test
+    fun `a name in backticks is a name whatever it holds, and an annotation left open takes nothing with it`() {
+        val page = "    fun other() = \"<b>x</b>\"\n    fun page() = \"<p>\${other()}</p>\"\n}"
+        assertEquals(emptyList(), told("class T {\n    fun `reads @get(x`() {}\n$page"))
+        assertEquals(setOf("other", "page"), fileFacts("class T {\n    @Suppress(\n$page").functions.keys)
+    }
 }
