@@ -328,11 +328,11 @@ private class ScopeFrame(
     var lastValue: Span? = null
 
     /** The values written in this frame whose statements have not ended. */
-    var values: ArrayList<Span>? = null
+    val values = ArrayList<Span>()
 
     /** For a function's parameters: where its body is written, none once it returns to a label, and what each `return` of a block gives. */
     var body: Span? = null
-    var returns: ArrayList<Span>? = null
+    val returns = ArrayList<Span>()
 
     /** For a function's block: its parameters. */
     var function: ScopeFrame? = null
@@ -351,17 +351,14 @@ private class ScopeFrame(
         this.after = after
     }
 
-    fun begin(value: Span): Span {
-        (values ?: ArrayList<Span>().also { values = it }) += value
-        return value
-    }
+    fun begin(value: Span) = value.also { values += it }
 
     /** Ends each value written before [at], where a statement of this frame ends. */
     fun endValues(at: Int) {
-        val ended = values?.filter { it.start <= at }.orEmpty()
+        val ended = values.filter { it.start <= at }
         for (v in ended) v.end = at
         lastValue = ended.lastOrNull() ?: return
-        values?.removeAll(ended)
+        values.removeAll(ended)
     }
 }
 
@@ -539,10 +536,10 @@ private fun functionAt(
     val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
     // Between the parameters and the body stands the type or nothing, or the function is not read.
     val type = body?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
-    val values = if (type == null || html.isNotEmpty()) emptyList() else g.returns ?: listOf(body)
+    val results = if (body != null && src[body.start - 1] == '{') g.returns else listOfNotNull(body)
+    val values = if (type == null || html.isNotEmpty()) emptyList() else results
     val marked = type != null && g.funModifiers and HTML != 0
-    return name to
-        FunctionDeclaration(owner, html, g.open, g.local, marked, type?.groups?.get(1)?.value, values)
+    return name to FunctionDeclaration(owner, html, g.open, g.local, marked, type?.groups?.get(1)?.value, values)
 }
 
 /**
@@ -663,7 +660,7 @@ private fun declarations(
                     // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
                     val into = stack.mapNotNull { it.function }
                     val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
-                    for (g in into) if (value == null) g.body = null else g.returns?.add(value)
+                    for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
 
                 // A getter takes nothing: `get("/")` after a value is a call.
@@ -770,22 +767,17 @@ private fun declarations(
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
             val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 }
-            if (says != null) {
-                f.modifiers = f.modifiers or says
-            } else if (word != "fun") {
-                f.reset()
-            }
+            if (says == null && word != "fun") f.reset()
+            f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
             i = end
             continue
         }
-        if (c == '@' && !isWordPart(src.getOrNull(i - 1))) {
-            val end = annotationEnd(src, code, i)
-            if (end > i) {
-                if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == end - 1) f.modifiers = f.modifiers or HTML
-                i = end
-                continue
-            }
+        val annotated = if (c == '@' && !isWordPart(src.getOrNull(i - 1))) annotationEnd(src, code, i) else i
+        if (annotated > i) {
+            if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == annotated - 1) f.modifiers = f.modifiers or HTML
+            i = annotated
+            continue
         }
         if (c == '(' || c == '[' || c == '{') {
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
@@ -820,11 +812,7 @@ private fun declarations(
                     // The body of the function or the loop whose parameters just closed.
                     g.ends += p.decls
                     f.pending = null
-                    p.fn?.let {
-                        it.body = Span(i + 1)
-                        it.returns = ArrayList()
-                        g.function = it
-                    }
+                    g.function = p.fn?.also { it.body = Span(i + 1) }
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
@@ -867,17 +855,8 @@ private fun declarations(
             i++
             continue
         }
-        if (!c.isWhitespace()) {
-            f.reset(
-                if (c == ';') {
-                    0
-                } else if (c in "=.,") {
-                    2
-                } else {
-                    1
-                },
-            )
-        }
+        if (!c.isWhitespace()) f.reset(if (c in "=.,") 2 else 1)
+        if (c == ';') f.after = 0
         if (c == ')' || c == ']' || c == '}') {
             if (stack.size == 1) {
                 i++
@@ -900,11 +879,7 @@ private fun declarations(
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1
             if (g.kind == "params") {
-                val around =
-                    outer.pending
-                        ?.takeIf { it.unended }
-                        ?.decls
-                        .orEmpty()
+                val around = outer.pending?.takeIf { it.unended }?.decls ?: emptyList()
                 handOver(PendingScope(parameters(g, i) + around, g))
                 if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
@@ -918,7 +893,7 @@ private fun declarations(
             i++
             continue
         }
-        if (f.values?.isEmpty() == false && (c == ';' || (c == '\n' && lineEnds(src, code, i)))) f.endValues(i)
+        if (f.values.isNotEmpty() && (c == ';' || (c == '\n' && lineEnds(src, code, i)))) f.endValues(i)
         val p = f.pending
         if (p != null) {
             when (p.state) {
@@ -997,11 +972,10 @@ internal fun callsFileFunction(
 internal fun valueText(
     src: String,
     at: Span,
-): ValueText? =
-    uncommented(src.substring(at.start, maxOf(at.start, at.end)))
-        .trim()
-        .takeIf { it.isNotEmpty() }
-        ?.let { ValueText(it, at.start, at.end) }
+): ValueText? {
+    val text = uncommented(src.substring(at.start, maxOf(at.start, at.end))).trim()
+    return if (text.isEmpty()) null else ValueText(text, at.start, at.end)
+}
 
 /**
  * The declaration [name] means at [at]: of those whose scope holds [at], the innermost, and of
