@@ -1,5 +1,5 @@
 {
-  "$comment": "Kotlin files with values written into markup: the values the analysis asks an editor about, in the order it asks (see valueQuestions), each by its text with what an editor that resolves types answers of it: the type, with every class by its qualified name (null where it resolves to none), and constant where it is one; then the fact the analysis makes of that answer alone, before it reads how the value is written. Of an argument of interpolate(...) the analysis takes only that its class is somebody else's, whatever the fact. After them what is shown, the text of each issue and its severity in the order of the file, with those answers (issues) and with none (unanswered), as VS Code reads the file. The file's module has Streamlord's core and DSL. The analysis reads each case with the answers (ValueQuestionsTest.kt). The IntelliJ plugin reads the same file with the Kotlin plugin's own types, and must answer and show the same (SharedValueCasesTest.kt).",
+  "$comment": "Kotlin files with values written into markup: the values the analysis asks an editor about, in the order it asks (see valueQuestions), each by its text with what an editor that resolves types answers of it: the type, with every class by its qualified name (null where it resolves to none), and constant where it is one; then the fact the analysis makes of that answer alone, before it reads how the value is written. A name asked about by itself is what a value is built on, the rows of rows.joinToString(\"\"), whose type says whether the value is markup. Of an argument of interpolate(...) the analysis takes only that its class is somebody else's, whatever the fact. After them what is shown, the text of each issue and its severity in the order of the file, with those answers (issues) and with none (unanswered), as VS Code reads the file. The file's module has Streamlord's core and DSL. The analysis reads each case with the answers (ValueQuestionsTest.kt). The IntelliJ plugin reads the same file with the Kotlin plugin's own types, and must answer and show the same (SharedValueCasesTest.kt).",
   "cases": [
     {
       "name": "a string in a template is a warning, a number silent",
@@ -374,6 +374,16 @@
           "fact": "number"
         },
         {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "items",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
+        },
+        {
           "text": "q",
           "type": "kotlin.String",
           "fact": "string"
@@ -474,6 +484,16 @@
           "text": "${p.html}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "t",
+          "type": "io.github.markusaugust.streamlord.core.domain.Trusted",
+          "fact": "trusted"
+        },
+        {
+          "text": "p",
+          "type": "Page",
+          "fact": null
         }
       ],
       "issues": [
@@ -703,6 +723,26 @@
           "text": "${names.joinToString(\"\")}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "rows",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        },
+        {
+          "text": "built",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        },
+        {
+          "text": "trusted",
+          "type": "kotlin.sequences.Sequence<io.github.markusaugust.streamlord.core.domain.Trusted>",
+          "fact": "markup"
+        },
+        {
+          "text": "names",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
         }
       ],
       "issues": [
@@ -736,6 +776,11 @@
           "text": "$some",
           "type": "kotlin.collections.MutableSet<io.github.markusaugust.streamlord.core.domain.Html>",
           "fact": "markup"
+        },
+        {
+          "text": "maybe",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Trusted?>",
+          "fact": "collection"
         }
       ],
       "issues": [

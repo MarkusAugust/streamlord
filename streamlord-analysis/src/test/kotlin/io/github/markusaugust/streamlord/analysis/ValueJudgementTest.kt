@@ -98,6 +98,21 @@ class ValueJudgementTest {
     }
 
     @Test
+    fun `what a value is built on is what the editor says it is, whatever its declaration reads as`() {
+        // A star import can make `Html` another package's, which the text cannot see.
+        val src = "import com.acme.*\nfun f(items: List<Html>, h: Html) = \"<ul>\${items.joinToString(\"\")} \${h.text}</ul>\""
+        val shown = { items: String, h: String ->
+            val types = mapOf("items" to items, "h" to h)
+            val answered =
+                Source(src, SourceLanguage.KOTLIN, valueAnswer = { s, e -> ValueAnswer(types[src.substring(s, e)] ?: "kotlin.String") })
+            analyzer.analyzeKotlin(answered).map { src.substring(it.start, it.end) }
+        }
+        val core = "io.github.markusaugust.streamlord.core.domain.Html"
+        assertEquals(emptyList(), shown("kotlin.collections.List<$core>", core))
+        assertEquals(listOf("\${items.joinToString(\"\")}", "\${h.text}"), shown("kotlin.collections.List<com.acme.Html>", "com.acme.Html"))
+    }
+
+    @Test
     fun `a declaration the editor found in another file is read as one of this file is`() {
         val src = "fun f() = \"<p>\${badge()}</p>\""
         val shown = { declaration: String? ->

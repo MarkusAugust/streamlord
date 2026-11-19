@@ -732,6 +732,18 @@ internal fun valueFrom(
     return src.substring(from, k).trim().takeIf { it.isNotEmpty() }
 }
 
+/**
+ * The name the whole of [value] is built on, where its type alone says whether the value is markup: the collection of
+ * `rows.joinToString("")` without a transform, or the `Html` or `Trusted` of `h.text` and `t.html`. An editor is asked
+ * its type, which the text can only read off a declaration.
+ */
+internal fun builtOn(value: String): String? {
+    val t = unparen(value.trim())
+    val call = lastCall(t)?.takeIf { it.name == "joinToString" && it.lambda == null && namedLambda(it.args, "transform") == null }
+    val on = (TEXT_OF_VALUE.find(t)?.groupValues?.get(1) ?: call?.receiver)?.trim() ?: return null
+    return on.takeIf { PROPERTY_CHAIN.matchEntire(it) != null }
+}
+
 private val DECLARED = regex("""\b(fun|va[lr])\s+(?:<[^<>]*>\s*)?(?:$RECEIVER)?([\p{L}_][\p{L}\p{Nd}_]*)(?![\p{L}\p{Nd}_]|\s*[.<])""")
 
 /**
