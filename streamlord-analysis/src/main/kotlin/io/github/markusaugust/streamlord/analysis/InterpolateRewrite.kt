@@ -486,7 +486,7 @@ internal fun collectionShown(
 
                 KOTLIN_NAME.matchEntire(t) != null -> {
                     val d = declarationOf(src, t, at)
-                    val init = d?.takeIf { it.valueAt >= 0 }?.let { valueFrom(src, it.valueAt)?.text }
+                    val init = d?.value?.let { valueText(src, it)?.text }
                     init != null && collectionShown(src, init, d.at, depth + 1)
                 }
 

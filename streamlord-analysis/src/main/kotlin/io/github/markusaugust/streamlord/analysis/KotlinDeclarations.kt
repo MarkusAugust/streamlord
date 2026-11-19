@@ -29,8 +29,8 @@ internal class Declaration(
     val textOf: String? = null,
     /** What the brackets after its type hold, `Html` of `List<Html>`. */
     val typeArguments: String? = null,
-    /** Where the value a `val` is set to starts, when it is set to more than a number or a boolean; -1 otherwise. */
-    val valueAt: Int = -1,
+    /** Where the value a `val` is set to is written, when it is set to more than a number or a boolean. */
+    val value: Span? = null,
     /** Whether another file can mean it by its bare name: a `val` or `var` at top level, in a class or a constructor, and not private. */
     val shared: Boolean = false,
     /** Whether it is set to a call to `Trusted` and nothing more, which interpolate lets in wherever it lands. */
@@ -44,6 +44,16 @@ internal class Declaration(
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
+}
+
+/** Where a value is written: from [start] to just past it, [end], which is -1 until its statement has ended. */
+internal class Span(
+    val start: Int,
+) {
+    var end: Int = -1
+
+    /** Whether a getter of its own follows the value of a `val`, which is then what the name gives. */
+    var getter: Boolean = false
 }
 
 /**
@@ -105,24 +115,24 @@ internal class FileFacts(
     /** The type parameters the file declares, each with whether a value of it may be null. */
     @Volatile
     var typeParameters: Map<String, Boolean>? = null
-
-    /** What each function shows of its result, by where its parameters close ([functionResult]). */
-    val results: MutableMap<Int, FunctionResult> = sharedMap()
 }
 
 /**
  * A function the file declares: the body of the class it is a member of, its parameters marked `@Language("HTML")`, by
- * place and by name, where its `fun` is written and its parameters open and close, whether it is declared inside a
- * function, where no other can call it, and whether another may stand in for it ([overridable]).
+ * place and by name, where its parameters open, whether it is declared inside a function, where no other can call it,
+ * whether it is marked `@Language("HTML")`, the type it is declared to return, and where each value it can give is
+ * written: its expression, or what each `return` of its block gives. One that has no body the text shows, returns to a
+ * label, or that another may stand in for ([overridable]), shows none of the three, and one that takes markup by a
+ * marked parameter no values: what is handed to it is written as it is, and nothing judges it there.
  */
 internal class FunctionDeclaration(
     val owner: IntRange?,
     val html: Set<Any>,
-    val keyword: Int,
     val open: Int,
-    val close: Int,
     val local: Boolean,
-    val overridable: Boolean,
+    val marked: Boolean,
+    val type: String?,
+    val values: List<Span>,
 )
 
 @Volatile
@@ -243,11 +253,7 @@ private val LAMBDA_PARAMETERS =
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
 private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = regex(TYPE)
-private val CONST_BEFORE = regex("""\bconst[ \t]+(?:\p{L}+[ \t]+)*$""")
-private val PRIVATE_BEFORE = regex("""\bprivate[ \t]+(?:\p{L}+[ \t]+)*$""")
 private val PROPERTY_MODIFIERS = regex("""\b(?:val|var)\b""")
-private val PRIVATE_MODIFIER = regex("""\bprivate\b""")
-private val HTML_BEFORE = regex("""$HTML_LANGUAGE\s*(?:\p{L}+\s+)*$""", RegexOption.IGNORE_CASE)
 internal val HTML_ANNOTATION = regex(HTML_LANGUAGE, RegexOption.IGNORE_CASE)
 private val VARARG = regex("""\bvararg\b""")
 private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
@@ -261,13 +267,17 @@ private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface",
 /** Names whose declarations wait for their scope's end: a function's parameters until its body is found. */
 private class PendingScope(
     val decls: List<Declaration>,
-    val isFun: Boolean,
+    /** For a function: its parameters. */
+    val fn: ScopeFrame? = null,
 ) {
     /** `after`: the parameters closed; `expr`: an expression body; `stmt`: a loop body without braces. */
     var state: String = "after"
 
     /** Whether an expression body has begun: `=` then a line break goes on with the next line. */
     var started: Boolean = false
+
+    /** Whether the function's expression is still being written. */
+    val unended get() = state == "expr" && fn?.body?.end == -1
 }
 
 private class ScopeFrame(
@@ -301,18 +311,54 @@ private class ScopeFrame(
     /** For a function's parameters: whether the function is declared inside another. */
     var local = false
 
-    /** Where the `fun` last read in this frame is written, and for a function's parameters where its own is. */
-    var keyword = -1
-
-    /** For a function's parameters: whether another function may stand in for it. */
-    var overridable = false
-
     /** For a class's body: whether the class can be extended, and whether it is an interface. */
     var extended = false
     var contract = false
 
     /** The same of the class last declared in this frame, until its body opens. */
     var declares = false to false
+
+    /** What is written before the declaration being read: each of [MODIFIER_WORDS] and the HTML mark, until anything else is. */
+    var modifiers = 0
+
+    /** The same of the `fun` last read in this frame, and for a function's parameters of its own. */
+    var funModifiers = 0
+
+    /** The value that just ended in this frame, while only modifiers follow it: a `get(` then is its getter. */
+    var lastValue: Span? = null
+
+    /** The values written in this frame whose statements have not ended. */
+    var values: ArrayList<Span>? = null
+
+    /** For a function's parameters: where its body is written, none once it returns to a label, and what each `return` of a block gives. */
+    var body: Span? = null
+    var returns: ArrayList<Span>? = null
+
+    /** For a function's block: its parameters. */
+    var function: ScopeFrame? = null
+
+    /** The word last read in this frame with nothing but space after it, and for a function's parameters the function's name. */
+    var word: String? = null
+    var name: String? = null
+
+    fun reset() {
+        modifiers = 0
+        lastValue = null
+        word = null
+    }
+
+    fun begin(value: Span): Span {
+        (values ?: ArrayList<Span>().also { values = it }) += value
+        return value
+    }
+
+    /** Ends each value written before [at], where a statement of this frame ends. */
+    fun endValues(at: Int) {
+        val ended = values?.filter { it.start <= at }.orEmpty()
+        for (v in ended) v.end = at
+        lastValue = ended.lastOrNull() ?: return
+        values?.removeAll(ended)
+    }
 }
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -403,39 +449,51 @@ internal fun splitTopLevel(text: String): List<String> {
     return out
 }
 
-private val EXTENDED = regex("""\b(?:open|abstract|sealed)\b""")
-private val OVERRIDES = regex("""\boverride\b""")
-private val MODIFIERS = regex("""(?:(?:[a-z]+|@[\p{L}\p{Nd}_:.]+(?:\([^()]*\))?)\s+)*$""")
+private const val PRIVATE = 1
+private const val CONST = 2
+private const val EXTENDED = 4
+private const val OVERRIDES = 8
+private const val HTML = 16
 
-/** The modifiers and annotations written before the keyword at [at], what is no code left out. */
-private fun modifiersBefore(
+/** The words that may stand before a declaration, each with what it says of it. */
+private val MODIFIER_WORDS: Map<String, Int> =
+    (
+        "public protected internal final lateinit inline suspend tailrec operator infix external data enum annotation " +
+            "inner value companion actual expect vararg noinline crossinline"
+    ).split(" ").associateWith { 0 } + listOf("open", "abstract", "sealed").associateWith { EXTENDED } +
+        mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES)
+
+/** What the modifiers a parameter is written with say of it. */
+private fun modifiersOf(text: String): Int = text.split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
+
+private val ANNOTATION = regex("""@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*""")
+
+/** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
+private fun annotationEnd(
     src: String,
     code: BooleanArray,
     at: Int,
-): String {
-    val text = StringBuilder()
-    for (k in maxOf(0, at - 160) until at) text.append(if (code[k]) src[k] else ' ')
-    return MODIFIERS.find(text)?.value.orEmpty()
+): Int {
+    val name = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
+    var depth = 0
+    for (k in name until if (src.getOrNull(name) == '(') src.length else name) {
+        if (code[k] && src[k] in "([{") depth++
+        if (code[k] && src[k] in ")]}" && --depth == 0) return k + 1
+    }
+    return name
 }
 
 /**
- * Whether another declaration may stand in for one with these [modifiers], a member of the class whose body is [owner]:
- * it is `open` or `abstract`, a member of an interface, or an `override` in a class that can be extended or that the
- * text does not show.
+ * Whether another declaration may stand in for one with these [modifiers], a member of a class that can be [extended]
+ * and is a [contract], an interface, each null of a class the text does not show: it is `open` or `abstract`, a member
+ * of an interface, or an `override` in a class that can be extended or that the text does not show.
  */
 private fun overridable(
-    modifiers: String,
-    owner: ScopeFrame?,
-): Boolean = overridable(modifiers, owner?.extended, owner?.contract)
-
-/** [overridable] of a member of a class that can be [extended] and is a [contract], an interface; null of a class the text does not show. */
-private fun overridable(
-    modifiers: String,
+    modifiers: Int,
     extended: Boolean?,
     contract: Boolean?,
-): Boolean = EXTENDED.containsMatchIn(modifiers) || contract == true || (OVERRIDES.containsMatchIn(modifiers) && extended != false)
+): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
 
-private val NAME_BEFORE_BRACKET = regex("""($NAME)\s*$""")
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
 /**
@@ -448,7 +506,7 @@ private fun functionAt(
     g: ScopeFrame,
     close: Int,
 ): Pair<String, FunctionDeclaration>? {
-    val name = NAME_BEFORE_BRACKET.find(src.substring(maxOf(0, g.open - 200), g.open))?.groupValues?.get(1) ?: return null
+    val name = g.name ?: return null
     val html = HashSet<Any>()
     var depth = 0
     var from = g.open + 1
@@ -467,8 +525,14 @@ private fun functionAt(
             k++
         }
     }
-    val body = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
-    return name to FunctionDeclaration(body, html, g.keyword, g.open, close, g.local, g.overridable)
+    val owner = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
+    val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
+    // Between the parameters and the body stands the type or nothing, or the function is not read.
+    val type = body?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
+    val values = if (type == null || html.isNotEmpty()) emptyList() else g.returns ?: listOf(body)
+    val marked = type != null && g.funModifiers and HTML != 0
+    return name to
+        FunctionDeclaration(owner, html, g.open, g.local, marked, type?.groups?.get(1)?.value, values)
 }
 
 /**
@@ -528,6 +592,7 @@ private fun declarations(
         for (k in 0 until cuts.size - 1) {
             val text = src.substring(cuts[k] + 1, cuts[k + 1])
             val m = PARAMETER.find(text) ?: continue
+            val modifiers = modifiersOf(m.groupValues[1])
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
             val arguments = if (vararg) null else m.groups[4]?.value
@@ -539,12 +604,10 @@ private fun declarations(
                         f.open,
                         type,
                         html = HTML_ANNOTATION.containsMatchIn(text),
-                        overridable = holder != null && overridable(m.groupValues[1], holder.declares.first, holder.declares.second),
+                        overridable = holder != null && overridable(modifiers, holder.declares.first, holder.declares.second),
                         typeArguments = arguments,
                         shared =
-                            visible &&
-                                PROPERTY_MODIFIERS.containsMatchIn(m.groupValues[1]) &&
-                                !PRIVATE_MODIFIER.containsMatchIn(m.groupValues[1]),
+                            visible && PROPERTY_MODIFIERS.containsMatchIn(m.groupValues[1]) && modifiers and PRIVATE == 0,
                     ),
                 )
         }
@@ -555,12 +618,14 @@ private fun declarations(
     fun listed(list: String): List<Pair<String, String?>> = NAMES.findAll(list).map { it.groupValues[1] to it.groups[2]?.value }.toList()
     var i = 0
     while (i < src.length) {
+        val f = stack.last()
         if (!code[i]) {
+            // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
+            if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) f.reset()
             i++
             continue
         }
         val c = src[i]
-        val f = stack.last()
         if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
             var end = i + 1
             while (end < src.length && isWordPart(src[end])) end++
@@ -568,7 +633,9 @@ private fun declarations(
             // `Row::class` names a class and declares none.
             val reference = src.startsWith("::", i - 2)
             val ctorOfClass = word == "constructor" && f.cls
-            if (word in DECLARATION_WORDS && !reference && !ctorOfClass) {
+            // In a function's expression an `object` or a `fun` is a value, and the parameters are in sight in it.
+            val value = (word == "object" || word == "fun") && f.pending?.unended == true
+            if (word in DECLARATION_WORDS && !reference && !ctorOfClass && !value) {
                 // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
                 endPending(f, i)
                 f.cls = false
@@ -578,14 +645,26 @@ private fun declarations(
 
                 word == "fun" || (word == "constructor" && !ctorOfClass) -> {
                     f.fn = true
-                    f.keyword = i
+                    f.funModifiers = f.modifiers
+                }
+
+                word == "return" -> {
+                    // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
+                    val into = stack.mapNotNull { it.function }
+                    val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
+                    for (g in into) if (value == null) g.body = null else g.returns?.add(value)
+                }
+
+                // A getter takes nothing: `get("/")` after a value is a call.
+                word == "get" -> {
+                    if (GETTER_AFTER.matchAt(src, end) != null) f.lastValue?.getter = true
                 }
 
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
-                    f.privateClass = PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
+                    f.privateClass = f.modifiers and PRIVATE != 0
                     val contract = word == "interface"
-                    f.declares = (contract || (word == "class" && EXTENDED.containsMatchIn(modifiersBefore(src, code, i)))) to contract
+                    f.declares = (contract || (word == "class" && f.modifiers and EXTENDED != 0)) to contract
                 }
 
                 word == "when" -> {
@@ -597,11 +676,12 @@ private fun declarations(
                 }
 
                 (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
-                    val constant = CONST_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
-                    val html = HTML_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 160), i))
+                    val constant = f.modifiers and CONST != 0
+                    val html = f.modifiers and HTML != 0
                     val local = f.kind != "top" && f.kind != "class"
-                    val overridable = !local && overridable(modifiersBefore(src, code, i), f.takeIf { it.kind == "class" })
-                    val shared = !local && !f.hidden && !PRIVATE_BEFORE.containsMatchIn(src.substring(maxOf(0, i - 80), i))
+                    val cls = f.takeIf { it.kind == "class" }
+                    val overridable = !local && overridable(f.modifiers, cls?.extended, cls?.contract)
+                    val shared = !local && !f.hidden && f.modifiers and PRIVATE == 0
                     val scopeStart = { at: Int ->
                         if (local) {
                             at
@@ -665,7 +745,7 @@ private fun declarations(
                                         markup,
                                         if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
                                         arguments?.groupValues?.get(1),
-                                        valueAt,
+                                        valueAt.takeIf { it >= 0 }?.let { f.begin(Span(it)) },
                                         shared,
                                         trusted,
                                         trustedText,
@@ -678,8 +758,18 @@ private fun declarations(
                     }
                 }
             }
+            MODIFIER_WORDS[word]?.let { f.modifiers = f.modifiers or it } ?: if (word != "fun") f.reset() else Unit
+            f.word = word
             i = end
             continue
+        }
+        if (c == '@' && !isWordPart(src.getOrNull(i - 1))) {
+            val end = annotationEnd(src, code, i)
+            if (end > i) {
+                if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == end - 1) f.modifiers = f.modifiers or HTML
+                i = end
+                continue
+            }
         }
         if (c == '(' || c == '[' || c == '{') {
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
@@ -687,8 +777,8 @@ private fun declarations(
                 g.kind = "params"
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
-                g.keyword = f.keyword
-                g.overridable = f.keyword >= 0 && overridable(modifiersBefore(src, code, f.keyword), g.owner)
+                g.funModifiers = f.funModifiers
+                g.name = f.word
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -704,7 +794,7 @@ private fun declarations(
                         } else {
                             listOf(first to m.groups[2]?.value)
                         }
-                    g.pending = PendingScope(list.map { (name, type) -> add(name, Declaration(i + 1, i, type)) }, false)
+                    g.pending = PendingScope(list.map { (name, type) -> add(name, Declaration(i + 1, i, type)) })
                 }
             } else if (c == '{') {
                 f.fn = false
@@ -714,6 +804,11 @@ private fun declarations(
                     // The body of the function or the loop whose parameters just closed.
                     g.ends += p.decls
                     f.pending = null
+                    p.fn?.let {
+                        it.body = Span(i + 1)
+                        it.returns = ArrayList()
+                        g.function = it
+                    }
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
@@ -751,10 +846,12 @@ private fun declarations(
                     }
                 }
             }
+            f.reset()
             stack += g
             i++
             continue
         }
+        if (!c.isWhitespace()) f.reset()
         if (c == ')' || c == ']' || c == '}') {
             if (stack.size == 1) {
                 i++
@@ -772,10 +869,17 @@ private fun declarations(
                 g.pending = null
             }
             endPending(g, i + 1)
+            g.endValues(i)
+            g.function?.body?.end = i + 1
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1
             if (g.kind == "params") {
-                handOver(PendingScope(parameters(g, i), true))
+                val around =
+                    outer.pending
+                        ?.takeIf { it.unended }
+                        ?.decls
+                        .orEmpty()
+                handOver(PendingScope(parameters(g, i) + around, g))
                 if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
@@ -788,13 +892,15 @@ private fun declarations(
             i++
             continue
         }
+        if (f.values?.isEmpty() == false && (c == ';' || (c == '\n' && lineEnds(src, code, i)))) f.endValues(i)
         val p = f.pending
         if (p != null) {
             when (p.state) {
                 "after" -> {
-                    if (c == '=' && src.getOrNull(i + 1) != '=' && p.isFun) {
+                    if (c == '=' && src.getOrNull(i + 1) != '=' && p.fn != null) {
                         p.state = "expr"
-                    } else if (!p.isFun && !c.isWhitespace()) {
+                        p.fn?.body = f.begin(Span(i + 1))
+                    } else if (p.fn == null && !c.isWhitespace()) {
                         p.state = "stmt"
                     }
                 }
@@ -814,21 +920,14 @@ private fun declarations(
         }
         i++
     }
-    for (f in stack) endPending(f, src.length)
+    for (f in stack) {
+        endPending(f, src.length)
+        f.endValues(src.length)
+    }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
     for ((g, close) in declared) functionAt(src, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
     return names
 }
-
-/** What a function the file declares shows of its result. */
-internal class FunctionResult(
-    /** Whether it is marked `@Language("HTML")`. */
-    val html: Boolean,
-    /** The type it is declared to return, where it writes one. */
-    val type: String?,
-    /** Each value it can give, with where that is written: its expression, or what each `return` of its block gives. */
-    val values: List<ValueText>,
-)
 
 /** A value as the file writes it, comments left out, from [start] to [end]. */
 internal class ValueText(
@@ -840,26 +939,8 @@ internal class ValueText(
 /** The type an extension is declared on, with the dot after it: `List<T>.` of `fun <T> List<T>.joined()`. */
 internal const val RECEIVER = """[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>]|<[^<>]*>)*>)?\??\s*\.\s*"""
 
-private val RETURN = regex("""\breturn\b(@?)""")
-private val BODY_AFTER = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
-
-/** Nothing known of a function: no result of it is markup. */
-private val UNREAD = FunctionResult(false, null, emptyList())
-
-/** Just past the bracket that closes the one at [open], counting the brackets of code alone, or -1. */
-private fun closingInCode(
-    src: String,
-    code: BooleanArray,
-    open: Int,
-): Int {
-    var depth = 0
-    for (k in open until src.length) {
-        if (!code[k]) continue
-        if (src[k] in "([{") depth++
-        if (src[k] in ")]}" && --depth == 0) return k + 1
-    }
-    return -1
-}
+private val GETTER_AFTER = regex("""\s*\(\s*\)""")
+private val RETURN_TYPE = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*""")
 
 /**
  * The functions [name] can mean at [at] where it is called without a receiver: the members of the class the call is in,
@@ -886,37 +967,15 @@ internal fun callsFileFunction(
     at: Int,
 ): Boolean = fileFacts(src).functions[name].orEmpty().any { f -> f.local || f.owner?.let { at in it } != false }
 
-/**
- * What [f] shows of its result. One whose body the text does not show, that returns to a label, or that another may
- * stand in for, shows nothing, and one that takes markup by a marked parameter shows only its own mark and type. A
- * `return` of a function declared inside it counts as its own, which can only make it less of what every result is.
- */
-internal fun functionResult(
+/** The value [src] writes in [at], each comment in it left out, or null where that is nothing. */
+internal fun valueText(
     src: String,
-    f: FunctionDeclaration,
-): FunctionResult {
-    val facts = fileFacts(src)
-    return facts.results.getOrPut(f.close) {
-        val code = facts.code
-        if (f.overridable || f.keyword < 0) return@getOrPut UNREAD
-        val body = BODY_AFTER.matchAt(src, f.close + 1) ?: return@getOrPut UNREAD
-        val from = body.range.last + 1
-        val values =
-            if (body.groupValues.last() == "=") {
-                listOf(from)
-            } else {
-                val end = closingInCode(src, code, from - 1).takeIf { it > 0 } ?: return@getOrPut UNREAD
-                val returns = RETURN.findAll(src.substring(from, end)).filter { code[from + it.range.first] }.toList()
-                if (returns.any { it.groupValues[1].isNotEmpty() }) return@getOrPut UNREAD
-                returns.map { from + it.range.last + 1 }
-            }
-        val before = maxOf(0, f.keyword - 160)
-        val html = HTML_BEFORE.find(src.substring(before, f.keyword))?.let { code[before + it.range.first] } == true
-        val read = values.map { at -> valueFrom(src, at) }
-        // What is handed to a parameter marked HTML is written as it is, and nothing judges it there.
-        FunctionResult(html, body.groups[1]?.value, if (null in read || f.html.isNotEmpty()) emptyList() else read.filterNotNull())
-    }
-}
+    at: Span,
+): ValueText? =
+    uncommented(src.substring(at.start, maxOf(at.start, at.end)))
+        .trim()
+        .takeIf { it.isNotEmpty() }
+        ?.let { ValueText(it, at.start, at.end) }
 
 /**
  * The declaration [name] means at [at]: of those whose scope holds [at], the innermost, and of

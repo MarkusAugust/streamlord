@@ -547,7 +547,7 @@ internal fun lastCall(t: String): Call? {
 }
 
 /** [text] with each comment a blank, so its quotes and brackets are none: a literal is passed over whole. */
-private fun uncommented(text: String): String {
+internal fun uncommented(text: String): String {
     val out = StringBuilder()
     var k = 0
     while (k < text.length) {
@@ -698,7 +698,7 @@ internal fun markupValue(
     }
     if (found == null && call.receiver == null && lambda == null && depth < CALL_DEPTH) {
         val declared = functionsNamed(src, call.name, at) ?: return false
-        if (declared.isNotEmpty()) return declared.all { functionMarkup(src, functionResult(src, it), depth, sdk, editor) }
+        if (declared.isNotEmpty()) return declared.all { functionMarkup(src, it, depth, sdk, editor) }
     }
     val elements = call.name == "elements" && call.receiver == null && lambda != null
     if (elements) return sdk.htmlDsl != false && USES_ELEMENTS.containsMatchIn(src)
@@ -708,28 +708,11 @@ internal fun markupValue(
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk, editor)
 }
 
-private val GETTER_AFTER = regex("""^\s*(?:(?:[a-z]+|@[\p{L}\p{Nd}_:.]+(?:\([^()]*\))?)\s+)*get\s*\(""")
-
 /** What the `val` [d] is set to, where that is what the name gives: not one another may stand in for, nor one with a getter of its own. */
 private fun valueOf(
     src: String,
     d: Declaration,
-): ValueText? {
-    if (d.valueAt < 0 || d.overridable) return null
-    return valueFrom(src, d.valueAt)?.takeUnless {
-        GETTER_AFTER.containsMatchIn(
-            uncommented(
-                src.substring(
-                    it.end,
-                    minOf(
-                        src.length,
-                        it.end + 300,
-                    ),
-                ),
-            ),
-        )
-    }
-}
+): ValueText? = d.value?.takeUnless { d.overridable || it.getter }?.let { valueText(src, it) }
 
 /** How many calls deep a function is followed to what it returns. */
 private const val CALL_DEPTH = 3
@@ -737,19 +720,21 @@ private const val CALL_DEPTH = 3
 /** Whether a function is marked `@Language("HTML")`, declared to return core's `Html`, or gives markup whatever it returns. */
 private fun functionMarkup(
     src: String,
-    f: FunctionResult,
+    f: FunctionDeclaration,
     depth: Int,
     sdk: FileModules,
     editor: Editor?,
 ): Boolean {
-    if (f.html) return true
+    if (f.marked) return true
     if (f.type != null && sdk.core && !markupTypeShadowed(src, f.type) &&
         declaredFact(coreType(src, f.type), false, true).isMarkup()
     ) {
         return true
     }
-    return f.values.isNotEmpty() &&
-        f.values.map { markupValue(src, it.text, it.start, depth + 1, sdk, editor?.elsewhere(it.start, it.end)) }.all { it }
+    // A `return` of nothing is no markup, and then no other is asked about.
+    val values = f.values.map { valueText(src, it) ?: return false }
+    return values.isNotEmpty() &&
+        values.map { markupValue(src, it.text, it.start, depth + 1, sdk, editor?.elsewhere(it.start, it.end)) }.all { it }
 }
 
 /**
@@ -809,53 +794,6 @@ private fun markupElements(
     return false
 }
 
-/**
- * The value written from [from], as a `val` is set to one: to where its statement ends, at a line break that ends it, a
- * `;`, or the bracket that closes what holds it, each comment in it left out.
- */
-internal fun valueFrom(
-    src: String,
-    from: Int,
-): ValueText? {
-    val code = fileFacts(src).code
-    val out = StringBuilder()
-    var depth = 0
-    var k = from
-    while (k < src.length) {
-        val c = src[k]
-        val comment = !code[k] && (src.startsWith("//", k) || src.startsWith("/*", k))
-        val end =
-            when {
-                comment && c == '/' && src[k + 1] == '/' -> src.indexOf('\n', k).let { if (it < 0) src.length else it }
-                comment -> src.indexOf("*/", k + 2).let { if (it < 0) src.length else it + 2 }
-                c == '"' || c == '\'' -> literalEnd(src, k)
-                else -> -1
-            }
-        if (end >= 0) {
-            out.append(if (comment) " " else src.substring(k, end))
-            k = end
-            continue
-        }
-        if (code[k]) {
-            if (c == '(' || c == '[' || c == '{') {
-                depth++
-            } else if (c == ')' || c == ']' || c == '}') {
-                if (depth == 0) break
-                depth--
-            } else if (depth == 0 && (c == ';' || (c == '\n' && lineEnds(src, code, k)))) {
-                break
-            }
-        }
-        out.append(c)
-        k++
-    }
-    return out
-        .toString()
-        .trim()
-        .takeIf { it.isNotEmpty() }
-        ?.let { ValueText(it, from, k) }
-}
-
 private val KEYWORD = regex("""\b(?:fun|va[lr])\b""")
 private val DECLARED =
     regex(
@@ -901,7 +839,7 @@ private fun namedMarkup(
 ): Boolean {
     val name = KOTLIN_NAME_AT.matchAt(text, at)?.value ?: return false
     facts.functions[name].orEmpty().firstOrNull { it.open >= at && text.substring(at + name.length, it.open).isBlank() }?.let {
-        return functionMarkup(text, functionResult(text, it), depth, sdk, editor)
+        return functionMarkup(text, it, depth, sdk, editor)
     }
     val d = declarationOf(text, name, at) ?: return false
     if (d.html) return true

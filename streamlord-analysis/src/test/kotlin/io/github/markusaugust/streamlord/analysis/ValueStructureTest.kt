@@ -581,4 +581,63 @@ class ValueStructureTest {
             )
         }
     }
+
+    @Test
+    fun `what is written before a declaration is read however much of it there is, in code alone`() {
+        val long = "x".repeat(200)
+        val use = "\nfun page() = \"<div>\${a()}\$b</div>\""
+        for (between in listOf(" @JvmName(\"c\")", "\n// The badge.\n", " @Suppress(\"$long\")", " @Since(Version(1))")) {
+            assertEquals(
+                emptyList(),
+                told("@Language(\"HTML\")$between fun a(): String = load()\n@Language(\"HTML\")$between val b: String = load()$use"),
+                between,
+            )
+        }
+        // A mark on a value is none on the declaration after it.
+        assertEquals(
+            listOf("\$b"),
+            told("val a = @Language(\"HTML\") \"x\"\nval b: String = load()\nfun page() = \"<div>\$b</div>\""),
+        )
+        for (between in listOf("@Since(Version(1))", "@Deprecated(\"$long\")", "/* $long */")) {
+            assertEquals(
+                listOf("\${head()}", "\$title"),
+                told(
+                    "abstract class Page {\n    open $between fun head(): String = \"<title>x</title>\"\n" +
+                        "    open $between val title = \"<b>x</b>\"\n    fun render() = \"<html>\${head()}\$title</html>\"\n}",
+                ),
+                between,
+            )
+        }
+    }
+
+    @Test
+    fun `a getter is seen however far behind the value it is written`() {
+        for (getter in listOf("@Since(Version(1)) get()", "// ${"x".repeat(400)}\n        get()")) {
+            assertEquals(
+                listOf("\$title"),
+                told(
+                    "class P(val q: String) {\n    val title: String = \"<b>x</b>\"\n        $getter = field + q\n    fun page() = \"<p>\$title</p>\"\n}",
+                ),
+                getter,
+            )
+        }
+    }
+
+    @Test
+    fun `a call of a function named get after a val is no getter of it`() {
+        assertEquals(
+            emptyList(),
+            told("fun Route.page() {\n    val badge = \"<b>x</b>\"\n    get(\"/\") { call.respondText(\"<p>\$badge</p>\") }\n}"),
+        )
+    }
+
+    @Test
+    fun `a function's parameters are in sight in the object or the function its expression is`() {
+        assertEquals(emptyList(), told("fun f(n: Int) = object : R {\n    fun r() = \"<p>\$n</p>\"\n}"))
+        assertEquals(listOf("\$q"), told("fun f(q: String) = object : R {\n    fun r() = \"<p>\$q</p>\"\n}"))
+        assertEquals(emptyList(), told("fun f(n: Int): () -> String = fun(): String = \"<p>\$n</p>\""))
+        assertEquals(emptyList(), told("fun f(n: Int): () -> String = fun(): String {\n    return \"<p>\$n</p>\"\n}"))
+        // The function after it is one of its own.
+        assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
+    }
 }
