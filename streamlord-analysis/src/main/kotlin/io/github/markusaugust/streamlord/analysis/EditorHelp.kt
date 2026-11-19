@@ -26,7 +26,7 @@ public data class Source(
     val constants: Set<String> = emptySet(),
     /** Whether the call named so, its name starting there, is somebody else's, as an editor that resolves calls can tell. */
     val foreign: (name: String, nameStart: Int) -> Boolean = NOT_FOREIGN,
-    /** What the editor knows of a Kotlin value the analysis asks about, from types the text cannot show: see [Analyzer.valueQuestions]. */
+    /** What the editor knows of a Kotlin value the analysis asks about, which only resolving tells: see [Analyzer.valueQuestions]. */
     val valueAnswer: ((start: Int, end: Int) -> ValueAnswer?)? = null,
     /** How the editor names its attribute prefix setting, where a message sends the reader to it. */
     val prefixSetting: String = PREFIX_SETTING,
@@ -52,9 +52,10 @@ public data class ValueAnswer(
      */
     public val constant: Boolean = false,
     /**
-     * The declaration the value names, as its file writes it, where the whole value is a name or a call and the editor
-     * finds what it means in Kotlin source: `fun badge(): String = "<b>new</b>"`, with its annotations. The analysis reads
-     * of it what it reads of a declaration of the file it judges. Null for any other value.
+     * The declaration the value names, where the whole value is a name or a call and the editor finds what it means in
+     * Kotlin source: `fun badge(): String = "<b>new</b>"`, with its annotations. One of the file being judged is given as
+     * it stands there, so the analysis finds it and reads it in its place; one of another file follows that file's
+     * `package` and `import` lines, which say what its names mean. Null for any other value.
      */
     public val declaration: String? = null,
 )

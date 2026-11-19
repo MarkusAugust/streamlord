@@ -48,16 +48,49 @@ internal class Reading(
             ?.takeIf { !argument || it == ValueFact.OTHER }
     }
 
-    /** The declaration the editor found for the value at [start] to [end], of one it was asked the [fact] of. */
-    fun declaration(
+    /**
+     * The editor's answers of the parts of the value at [start] to [end], each found by its text between the two: the
+     * first place it is written there, which names what any later one does. The whole value is asked about by its own range.
+     */
+    fun parts(
         start: Int,
         end: Int,
-    ): String? = source.valueAnswer?.invoke(start, end)?.declaration
+    ): Editor {
+        val text = source.text
+        val whole =
+            text
+                .substring(start, end)
+                .trimStart('$')
+                .removeSurrounding("{", "}")
+                .trim()
+
+        fun range(part: String): Pair<Int, Int>? {
+            val t = part.trim()
+            if (t.isEmpty()) return null
+            if (t == whole) return start to end
+
+            // Not the letters of a longer name, `it` of `items`, nor the text of a literal, `n` of `"n"`.
+            val code = fileFacts(text).code
+
+            fun elsewhere(at: Int) =
+                (!code[at] && t.first() != '"') ||
+                    (isWordPart(text.getOrNull(at - 1)) && isWordPart(t.first())) ||
+                    (isWordPart(text.getOrNull(at + t.length)) && isWordPart(t.last()))
+            var at = text.indexOf(t, start)
+            while (at >= 0 && at + t.length <= end && elsewhere(at)) at = text.indexOf(t, at + 1)
+            return if (at < 0 || at + t.length > end) null else at to at + t.length
+        }
+        return Editor(
+            { part -> range(part)?.let { fact(it.first, it.second) } },
+            { part -> range(part)?.let { source.valueAnswer?.invoke(it.first, it.second)?.declaration } },
+        )
+    }
 }
 
 /**
  * A value of a Kotlin file the analysis asks the editor about, by where it stands: a template of an HTML string, an
- * operand of a `+` chain, a value marked with `+` in `interpolate { }`, or an argument of `interpolate(...)`.
+ * operand of a `+` chain, a value marked with `+` in `interpolate { }`, an argument of `interpolate(...)`, or a part of
+ * one of these whose type decides how the whole is read, as `rows` of `rows.joinToString("")`.
  */
 public class ValueQuestion internal constructor(
     public val start: Int,

@@ -31,6 +31,16 @@
           "text": "x + y",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "x",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "y",
+          "type": "kotlin.String",
+          "fact": "string"
         }
       ],
       "issues": [
@@ -48,6 +58,16 @@
           "text": "s + a * b",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "s",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "a * b",
+          "type": "kotlin.Int",
+          "fact": "number"
         }
       ],
       "issues": [
@@ -374,12 +394,37 @@
           "fact": "number"
         },
         {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
           "text": "h",
           "type": "io.github.markusaugust.streamlord.core.domain.Html",
           "fact": "markup"
         },
         {
+          "text": "h",
+          "type": "io.github.markusaugust.streamlord.core.domain.Html",
+          "fact": "markup"
+        },
+        {
+          "text": "items.map { \"<li>$it</li>\" }",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
+        },
+        {
           "text": "items",
+          "type": "kotlin.collections.List<kotlin.String>",
+          "fact": "collection"
+        },
+        {
+          "text": "listOf(\"<b>a</b>\", q)",
           "type": "kotlin.collections.List<kotlin.String>",
           "fact": "collection"
         },
@@ -392,11 +437,6 @@
           "text": "q",
           "type": "kotlin.String",
           "fact": "string"
-        },
-        {
-          "text": "h",
-          "type": "io.github.markusaugust.streamlord.core.domain.Html",
-          "fact": "markup"
         },
         {
           "text": "$q",
@@ -559,6 +599,11 @@
           "text": "${\"|<u>\" + q}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
         }
       ],
       "issues": [
@@ -654,6 +699,74 @@
           "text": "${set(\"n\", n)}",
           "type": "kotlin.String",
           "fact": "string"
+        },
+        {
+          "text": "KEY",
+          "type": "kotlin.String",
+          "constant": true,
+          "fact": "constant"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "\"a\" + q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "increment(\"a\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "toggle(\"b\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "increment(\"a\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "signal(q)",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "ContentType.FORM",
+          "type": "io.github.markusaugust.streamlord.html.FetchOptions.ContentType",
+          "constant": true,
+          "fact": "constant"
+        },
+        {
+          "text": "q",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "url",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "Tab.HOME.name",
+          "type": "kotlin.String",
+          "constant": true,
+          "fact": "constant"
+        },
+        {
+          "text": "n",
+          "type": "kotlin.Int",
+          "fact": "number"
         }
       ],
       "issues": [

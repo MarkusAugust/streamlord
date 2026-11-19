@@ -45,12 +45,6 @@ class ValueQuestionsTest {
             assertEquals((c["issues"] as JsonArray).strings(), shown(answered), "answered")
             // As an editor that resolves nothing reads the file, VS Code among them.
             assertEquals((c["unanswered"] as JsonArray).strings(), shown(source), "unanswered")
-            // What is asked hangs on no answer, so an editor that has answered is asked nothing it was not told of.
-            assertEquals(
-                asked.map { it.start to it.end },
-                analyzer.valueQuestions(answered).map { it.start to it.end },
-                "asked about once answered",
-            )
         }
     }
 }

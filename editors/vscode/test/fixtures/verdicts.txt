@@ -11445,7 +11445,7 @@ interpolate-template 98-100 warning: interpolate escapes h.text here, so the tag
 == corpus/kotlin-markup-strings.json: an if of literals passed to interpolate is text the author chose
 == corpus/kotlin-markup-strings.json: interpolate escapes a String marked @Language(HTML) in element text
 interpolate-template 121-123 warning: interpolate escapes body here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
-== corpus/kotlin-markup-strings.json: a val set to the text of an Html is markup held as a String
+== corpus/kotlin-markup-strings.json: a val set to the text of an Html is markup, written as it is
 == corpus/kotlin-markup-strings.json: a val set to the text of something else is not known to be markup
 unescaped-interpolation 126-130 hint: Kotlin writes $row into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
   fix "Mark the values with + in interpolate { }, which escapes the values" 121-136 "interpolate { \"<ul>${+row}</ul>\" }.text"

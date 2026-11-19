@@ -50,8 +50,30 @@ class DeclarationElsewhereTest : StreamlordTestCase() {
         assertEquals(listOf("\${plain(q)}", "\${load()}", "\${Marks.word}"), shown("\${plain(q)} \${load()} \${Marks.word}"))
     }
 
-    fun `test a declaration is followed one file away, and not from inside a larger value`() {
-        assertEquals(listOf("\${outer()}", "\${q + badge()}"), shown("\${outer()} \${q + badge()}"))
+    fun `test a declaration of another file is read inside a larger value, and no further than itself`() {
+        assertEquals(listOf("\${outer()}"), shown("\${outer()} \${\"by \" + badge()} \${if (c) badge() else \"\"}"))
+    }
+
+    fun `test a function of another file is read with the imports of that file`() {
+        myFixture.addFileToProject(
+            "parts/Cards.kt",
+            "package parts\nimport io.github.markusaugust.streamlord.html.elements\nimport kotlinx.html.div\n" +
+                "fun card(q: String): String = elements { div { +q } }\n" +
+                "fun get(key: String): String = System.getenv(key)\n",
+        )
+        assertEquals(listOf("\${get(\"a\")}"), shown("\${card(q)} \${get(\"a\")}"))
+    }
+
+    fun `test a member of this file reached through a receiver is read where it stands`() {
+        myFixture.configureByText(
+            "Page.kt",
+            "class P {\n    fun badge() = \"<b>x</b>\"\n    fun outer() = badge()\n    fun plain(q: String) = q\n}\n" +
+                "fun page(p: P, q: String) = \"<div>\${p.outer()} \${p.plain(q)}</div>\"",
+        )
+        assertEquals(
+            listOf("\${p.plain(q)}"),
+            myFixture.doHighlighting().filter { it.inspectionToolId == "KotlinInterpolationInspection" }.map { it.text },
+        )
     }
 
     fun `test an extension of another file is read as any function is`() {

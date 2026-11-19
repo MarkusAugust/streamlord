@@ -40,7 +40,11 @@ object ValueAnswers {
         if (asked.isEmpty()) return emptyMap()
         return analyze(file) {
             asked.associate { (q, e) ->
-                TextRange(q.start, q.end) to ValueAnswer(written(e.expressionType), e.evaluate() != null || enumEntry(e), declaration(e))
+                val type = written(e.expressionType)
+                val constant = e.evaluate() != null || enumEntry(e)
+                // The analysis reads a declaration only of a value its type leaves open.
+                val open = !constant && (type == null || type == "kotlin.String" || type == "kotlin.String?")
+                TextRange(q.start, q.end) to ValueAnswer(type, constant, if (open) declaration(file, e) else null)
             }
         }
     }
@@ -87,8 +91,16 @@ object ValueAnswers {
     /** `Tab.HOME`, or its `name`: an entry of a Kotlin enum, which K2 folds into no constant. */
     private fun enumEntry(expr: KtExpression): Boolean {
         val e = KtPsiUtil.safeDeparenthesize(expr)
-        val entry = if (e is KtQualifiedExpression && e.selectorExpression?.text == "name") e.receiverExpression else e
-        return reference(entry)?.takeIf { entry !is KtCallExpression }?.mainReference?.resolve() is KtEnumEntry
+        val entry =
+            if (e is KtQualifiedExpression &&
+                e.selectorExpression?.text == "name"
+            ) {
+                KtPsiUtil.safeDeparenthesize(e.receiverExpression)
+            } else {
+                e
+            }
+        val name = (entry as? KtQualifiedExpression)?.selectorExpression ?: entry
+        return (name as? KtNameReferenceExpression)?.mainReference?.resolve() is KtEnumEntry
     }
 
     /** The name an expression's value comes from: `x`, `a.x`, `f()`, `a.f()`. */
@@ -100,11 +112,26 @@ object ValueAnswers {
             else -> null
         }
 
-    /** The `val` or the function of Kotlin source that the whole of [expr] names, as its file writes it. */
-    private fun declaration(expr: KtExpression): String? {
+    /**
+     * The property or the function of Kotlin source that the whole of [expr] names, as its file writes it: one of [file]
+     * as it stands there, where the analysis finds it, and one of another file after that file's package and imports,
+     * which say what its names mean.
+     */
+    private fun declaration(
+        file: KtFile,
+        expr: KtExpression,
+    ): String? {
         val target = reference(expr)?.mainReference?.resolve() ?: return null
         val declares = target is KtProperty || target is KtNamedFunction || (target is KtParameter && target.hasValOrVar())
-        if (!declares || (target.containingFile as? KtFile)?.isCompiled != false) return null
-        return target.text.takeIf { it.length <= LONGEST_DECLARATION }
+        val holder = (target.containingFile as? KtFile)?.takeIf { declares && !it.isCompiled } ?: return null
+        val head =
+            if (holder ==
+                file
+            ) {
+                ""
+            } else {
+                listOfNotNull(holder.packageDirective?.text, holder.importList?.text).joinToString("\n", postfix = "\n")
+            }
+        return (head + target.text).takeIf { it.length <= LONGEST_DECLARATION }
     }
 }

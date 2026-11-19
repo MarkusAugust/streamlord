@@ -103,12 +103,22 @@ internal class FileFacts(
     /** The type parameters the file declares, each with whether a value of it may be null. */
     @Volatile
     var typeParameters: Map<String, Boolean>? = null
+
+    /** What each function shows of its result, by where its parameters close ([functionResult]). */
+    val results: MutableMap<Int, FunctionResult> = sharedMap()
 }
 
-/** A function the file declares: the body of the class it is a member of, and its parameters marked `@Language("HTML")`, by place and by name. */
+/**
+ * A function the file declares: the body of the class it is a member of, its parameters marked `@Language("HTML")`, by
+ * place and by name, where its parameters open and close, and whether it is declared inside a function, where no other
+ * can call it.
+ */
 internal class FunctionDeclaration(
     val owner: IntRange?,
     val html: Set<Any>,
+    val open: Int = -1,
+    val close: Int = -1,
+    val local: Boolean = false,
 )
 
 @Volatile
@@ -120,10 +130,28 @@ internal fun fileFacts(
     lex: KotlinLex? = null,
 ): FileFacts {
     lastFacts?.let { if (it.src == src) return it }
+    otherFacts?.let { if (it.src == src) return it }
     val l = lex ?: lexKotlin(src)
     val code = codeMask(src, l.strings, l.mask)
     val functions = HashMap<String, MutableList<FunctionDeclaration>>()
     return FileFacts(src, code, declarations(src, code, functions), functions).also { lastFacts = it }
+}
+
+@Volatile
+private var otherFacts: FileFacts? = null
+
+/** The facts of [text], a declaration of another file, kept beside those of the file being judged, which stay. */
+internal fun <T> besideFile(
+    text: String,
+    read: (FileFacts) -> T,
+): T {
+    val judged = lastFacts
+    val facts = fileFacts(text)
+    if (judged != null && facts !== judged) {
+        otherFacts = facts
+        lastFacts = judged
+    }
+    return read(facts)
 }
 
 /** The names a Kotlin file declares that other files can see, as [declaredNames] reads them. */
@@ -219,7 +247,7 @@ private val VARARG = regex("""\bvararg\b""")
 private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
 private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
 private val LINE_GOES_ON_BEFORE = regex("""[-=+*/%&|?:.,(<>!]""")
-private val LINE_GOES_ON_AFTER = regex("""^(?:[-.?+*/%&|:]|else\b)""")
+private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
@@ -263,6 +291,9 @@ private class ScopeFrame(
 
     /** Just past the bracket that closes the frame, once it has. */
     var closeAt = -1
+
+    /** For a function's parameters: whether the function is declared inside another. */
+    var local = false
 }
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -365,7 +396,7 @@ private fun functionAt(
     src: String,
     g: ScopeFrame,
     close: Int,
-): Triple<String, ScopeFrame?, Set<Any>>? {
+): Pair<String, FunctionDeclaration>? {
     val name = NAME_BEFORE_BRACKET.find(src.substring(maxOf(0, g.open - 200), g.open))?.groupValues?.get(1) ?: return null
     val html = HashSet<Any>()
     var depth = 0
@@ -385,7 +416,8 @@ private fun functionAt(
             k++
         }
     }
-    return Triple(name, g.owner, html)
+    val body = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
+    return name to FunctionDeclaration(body, html, g.open, close, g.local)
 }
 
 /**
@@ -400,7 +432,7 @@ private fun declarations(
     functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
     // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
-    val declared = ArrayList<Triple<String, ScopeFrame?, Set<Any>>>()
+    val declared = ArrayList<Pair<ScopeFrame, Int>>()
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
 
@@ -596,6 +628,7 @@ private fun declarations(
             if (c == '(' && f.fn) {
                 g.kind = "params"
                 g.owner = f.takeIf { it.kind == "class" }
+                g.local = f.kind != "class" && f.kind != "top"
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
@@ -681,7 +714,7 @@ private fun declarations(
             g.closeAt = i + 1
             if (g.kind == "params") {
                 handOver(PendingScope(parameters(g, i), true))
-                if (functions != null) functionAt(src, g, i)?.let { declared += it }
+                if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer))
             }
@@ -721,10 +754,7 @@ private fun declarations(
     }
     for (f in stack) endPending(f, src.length)
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((name, owner, html) in declared) {
-        val body = owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
-        functions!!.getOrPut(name) { ArrayList() } += FunctionDeclaration(body, html)
-    }
+    for ((g, close) in declared) functionAt(src, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
     return names
 }
 
@@ -741,46 +771,78 @@ internal class FunctionResult(
 /** The type an extension is declared on, with the dot after it: `List<T>.` of `fun <T> List<T>.joined()`. */
 internal const val RECEIVER = """[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>]|<[^<>]*>)*>)?\??\s*\.\s*"""
 
-private val RETURN = regex("""\breturn\b(?!@)""")
+private val RETURN = regex("""\breturn\b(@?)""")
+private val FUN_BEFORE = regex("""\bfun\b(?![\s\S]*\bfun\b)[^(){}=;]*$""")
+private val BODY_AFTER = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
+
+/** Nothing known of a function: no result of it is markup. */
+private val UNREAD = FunctionResult(false, null, emptyList())
+
+/** Just past the bracket that closes the one at [open], counting the brackets of code alone, or -1. */
+private fun closingInCode(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+): Int {
+    var depth = 0
+    for (k in open until src.length) {
+        if (!code[k]) continue
+        if (src[k] in "([{") depth++
+        if (src[k] in ")]}" && --depth == 0) return k + 1
+    }
+    return -1
+}
 
 /**
- * The functions [src] declares by [name], `fun name(...)`, an extension among them. A `return` of a function declared
- * inside one counts as its own, which can only make it less of what every result is.
+ * The functions [name] can mean at [at] where it is called without a receiver: the members of the class the call is in,
+ * before those of the top level. One declared inside another function is none of them.
  */
-internal fun functionResults(
+internal fun functionsNamed(
     src: String,
     name: String,
-): List<FunctionResult> {
-    val code = fileFacts(src).code
-    val head = regex("""\bfun\s+(?:<[^<>]*>\s*)?(?:$RECEIVER)?${Regex.escape(name)}\s*\(""")
-    val after = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
-    return head
-        .findAll(src)
-        .filter { code[it.range.first] }
-        .mapNotNull { m ->
-            val open = m.range.last
-            val e = src.substring(open, minOf(src.length, open + 20_000))
-            val close = closing(e, depths(e), 0).takeIf { it > 0 } ?: return@mapNotNull null
-            val body = after.matchAt(src, open + close) ?: return@mapNotNull null
-            val from = body.range.last + 1
-            val values =
-                if (body.groupValues.last() == "=") {
-                    listOf(from)
-                } else {
-                    val block = src.substring(from - 1, minOf(src.length, from + 20_000))
-                    val end = closing(block, depths(block), 0).takeIf { it > 0 } ?: return@mapNotNull null
-                    RETURN
-                        .findAll(block.substring(0, end))
-                        .map { from - 1 + it.range.last + 1 }
-                        .filter { code[it - 1] }
-                        .toList()
-                }
-            FunctionResult(
-                HTML_BEFORE.containsMatchIn(src.substring(maxOf(0, m.range.first - 160), m.range.first)),
-                body.groups[1]?.value,
-                values.mapNotNull { at -> valueFrom(src, at)?.let { it to at } },
-            )
-        }.toList()
+    at: Int,
+): List<FunctionDeclaration> {
+    val candidates = fileFacts(src).functions[name].orEmpty().filter { !it.local }
+    val members = candidates.filter { f -> f.owner?.let { at in it } == true }
+    val innermost = members.minOfOrNull { it.owner!!.last - it.owner.first }
+    return if (innermost ==
+        null
+    ) {
+        candidates.filter { it.owner == null }
+    } else {
+        members.filter { it.owner!!.last - it.owner.first == innermost }
+    }
+}
+
+/**
+ * What [f] shows of its result. One whose body the text does not show, or that returns to a label, shows nothing. A
+ * `return` of a function declared inside it counts as its own, which can only make it less of what every result is.
+ */
+internal fun functionResult(
+    src: String,
+    f: FunctionDeclaration,
+): FunctionResult {
+    val facts = fileFacts(src)
+    return facts.results.getOrPut(f.close) {
+        val code = facts.code
+        val body = BODY_AFTER.matchAt(src, f.close + 1) ?: return@getOrPut UNREAD
+        val from = body.range.last + 1
+        val values =
+            if (body.groupValues.last() == "=") {
+                listOf(from)
+            } else {
+                val end = closingInCode(src, code, from - 1).takeIf { it > 0 } ?: return@getOrPut UNREAD
+                val returns = RETURN.findAll(src.substring(from, end)).filter { code[from + it.range.first] }.toList()
+                if (returns.any { it.groupValues[1].isNotEmpty() }) return@getOrPut UNREAD
+                returns.map { from + it.range.last + 1 }
+            }
+        val head = src.substring(maxOf(0, f.open - 300), f.open)
+        val fn = FUN_BEFORE.find(head)?.let { f.open - head.length + it.range.first } ?: return@getOrPut UNREAD
+        val before = maxOf(0, fn - 160)
+        val html = HTML_BEFORE.find(src.substring(before, fn))?.let { code[before + it.range.first] } == true
+        val read = values.map { at -> valueFrom(src, at)?.let { it to at } }
+        FunctionResult(html, body.groups[1]?.value, if (null in read) emptyList() else read.filterNotNull())
+    }
 }
 
 /**

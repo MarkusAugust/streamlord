@@ -51,7 +51,8 @@ All notable changes to Streamlord are recorded here. The format follows
   and gives the tokens and the prose of a value written to it.
 - `valueQuestions(source)` lists the values of a Kotlin file the analysis asks an editor about,
   each by the range it asks by, so an editor that resolves types answers for those and need not
-  find the values itself.
+  find the values itself. The parts of a value are among them where their type decides: the
+  arguments of a helper, the branches of an `if`, and what `joinToString` or `.text` is called on.
 - **Breaking:** an editor answers through `Source.valueAnswer` with a `ValueAnswer`: the type the
   value resolves to, written with every class by its qualified name (`kotlin.Int?`,
   `kotlin.collections.List<com.acme.Row>`), whether it is a constant, and the declaration it names
@@ -96,11 +97,13 @@ All notable changes to Streamlord are recorded here. The format follows
   another library or of your own, `PersistentList<Html>`, is judged by the `String` it gives, and
   is a warning where it said nothing.
 - IntelliJ reads how a value is built as the analysis reads it for VS Code, where it had rules of
-  its own. A sum beside an HTML literal, `"<b>" + q`, and a function that returns one are markup,
-  with the warning on `q` where it is written. An entry of an enum is the author's own whether or
-  not the enum overrides `toString`. A `val` or a function of another file is read when it is the
-  whole value, `${badge()}`, and no further than that file: inside a larger value, or through a
-  second function, it is the `String` its type says.
+  its own, and answers what only resolving tells: the type of a value and of its parts, whether
+  each is a constant, and the declaration it names. A sum beside an HTML literal, `"<b>" + q`, and
+  a function that returns one are markup, with the warning on `q` where it is written. An entry of
+  an enum is the author's own whether or not the enum overrides `toString`. A `val` set to an
+  HTML literal is markup with a declared type too, `val row: String = "<li>a</li>"`. A `val` or a
+  function of another file is read with that file's imports, and what it calls in turn is not
+  followed: `fun outer() = badge()` in another file is the `String` its type says.
 - IntelliJ colours the value of `attributes["data-bind"] = "name"` as the signal's name it is, and
   no longer spell checks a signal's name in a DSL call, `dataBind("usrnm")`, as it never did in an
   attribute.

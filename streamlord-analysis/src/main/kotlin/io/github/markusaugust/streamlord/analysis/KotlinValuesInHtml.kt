@@ -1462,23 +1462,14 @@ internal fun Analyzer.factOf(
     ip: Interpolation,
 ): ValueFact? {
     val told = opts.fact(ip.start, ip.end)
-    val on =
-        builtOn(ip.text)?.let { receiver ->
-            val at = src.indexOf(receiver, ip.start)
-            if (at < 0 || at + receiver.length > ip.end) null else opts.fact(at, at + receiver.length)
-        }
     // A String's type says nothing of whose text it is: that the text shows.
     if (told != null && told != ValueFact.STRING && told != ValueFact.NULLABLE_STRING) return told
     val sdk = opts.modules
+    val editor = opts.parts(ip.start, ip.end)
     val values = if (ip.kind == InterpolationKind.SIMPLE) listOf(TemplateValue(ip.text, false)) else templateValues(ip.text)
-    val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk) }
-    // A name the editor resolved and did not call a constant is none, whatever the workspace declares by that name.
-    val resolved = told != null && PROPERTY_CHAIN.matchEntire(ip.text.trim()) != null
-    if (!resolved && kinds.all { it.isConstant() }) return ValueFact.CONSTANT
-    // Of what the editor typed, markup is markup and anything else is the String the value is.
-    if (on != null) return if (on.isMarkup()) ValueFact.MARKUP else told ?: weakest(kinds)
-    if (isMarkup(src, s, ip, sdk) || markupCollection(src, ip.text, s.start, sdk)) return ValueFact.MARKUP
-    if (opts.declaration(ip.start, ip.end)?.let { declaresMarkup(it, sdk) } == true) return ValueFact.MARKUP
+    val kinds = values.map { valueKind(src, it.text, s.start, opts.constants, it.nonNull, sdk, editor) }
+    if (kinds.all { it.isConstant() }) return ValueFact.CONSTANT
+    if (isMarkup(src, s, ip, sdk, editor) || markupCollection(src, ip.text, s.start, sdk)) return ValueFact.MARKUP
     return told ?: weakest(kinds)
 }
 
