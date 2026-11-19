@@ -503,31 +503,6 @@ private fun overridable(
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
-/** [src] with each comment a run of spaces as long, its line breaks kept, so that every offset still holds. */
-private fun withoutComments(
-    src: String,
-    code: BooleanArray,
-): String {
-    val out = src.toCharArray()
-    var k = 0
-    while (k < src.length) {
-        val end =
-            when {
-                code[k] -> -1
-                src.startsWith("//", k) -> src.indexOf('\n', k).let { if (it < 0) src.length else it }
-                src.startsWith("/*", k) -> src.indexOf("*/", k + 2).let { if (it < 0) src.length else it + 2 }
-                else -> -1
-            }
-        if (end < 0) {
-            k++
-            continue
-        }
-        for (j in k until end) if (out[j] != '\n') out[j] = ' '
-        k = end
-    }
-    return out.concatToString()
-}
-
 /**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
  * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
@@ -584,7 +559,7 @@ private fun declarations(
     val aliases = aliasesIn(src, code)
 
     // Parameters are read in the code alone: a comment among them, `a: String, // the a`, is blank.
-    val blank by lazy { withoutComments(src, code) }
+    val blank by lazy { uncommented(src) }
 
     fun add(
         name: String,

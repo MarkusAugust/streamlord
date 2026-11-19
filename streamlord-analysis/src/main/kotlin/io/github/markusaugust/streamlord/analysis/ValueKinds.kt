@@ -546,7 +546,12 @@ internal fun lastCall(t: String): Call? {
     return Call(name.groupValues[1], before.substring(0, before.length - dot.value.length), args, lambda)
 }
 
-/** [text] with each comment a blank, so its quotes and brackets are none: a literal is passed over whole. */
+/**
+ * [text] with each comment blank, so its quotes and brackets are none, and as long as it was, its line breaks kept, so
+ * that every offset still holds: a literal is passed over whole.
+ */
+private val NOT_LINE_BREAK = regex("""[^\n]""")
+
 internal fun uncommented(text: String): String {
     val out = StringBuilder()
     var k = 0
@@ -561,7 +566,7 @@ internal fun uncommented(text: String): String {
         if (end < 0) {
             out.append(text[k++])
         } else {
-            out.append(if (text[k] == '/') " " else text.substring(k, end))
+            out.append(if (text[k] == '/') text.substring(k, end).replace(NOT_LINE_BREAK, " ") else text.substring(k, end))
             k = end
         }
     }
