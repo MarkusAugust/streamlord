@@ -77,7 +77,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - What is written before a declaration is read once, as the file is: a mark or an `open` is seen
   behind another annotation, one with brackets in its arguments, a comment or any stretch of text,
   where each was looked for in the few characters before the keyword, and a mark in a comment is
-  none, where `// @Language("HTML")` above a `val` marked it. A getter
+  none, where `// @Language("HTML")` above a `val` marked it. `open` in `val isOpen = door.open`
+  is a name, and no longer makes the `val` on the next line one another may stand in for, and
+  `@[A B]` is read as the annotations it holds. A getter
   is seen however far behind its `val` it stands, and a call of a function named `get` after a
   `val`, `get("/") { }` in a route, is no getter of it. A function's parameters are in sight in the
   `object` or the function without a name that its expression is, where

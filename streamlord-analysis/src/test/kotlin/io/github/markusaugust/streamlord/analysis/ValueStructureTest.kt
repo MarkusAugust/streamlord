@@ -660,4 +660,22 @@ class ValueStructureTest {
         // The function after it is one of its own.
         assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
     }
+
+    @Test
+    fun `a modifier's word that is a name in a value says nothing of the declaration after it`() {
+        val page = "\nval q: String = load()\nfun page() = \"<p>\$q</p>\""
+        assertEquals(listOf("\$q"), told("val const = load()\nval c = const$page"))
+        assertEquals(listOf("\$q"), told("fun f(door: Door) = door.const$page"))
+        val member = "    val title = \"<b>x</b>\"\n    fun render() = \"<p>\$title</p>\"\n}"
+        assertEquals(emptyList(), told("class Page(door: Door) {\n    val isOpen = door.open\n$member"))
+        // A line that ends in `!!` ends its statement, and the modifier after it is one.
+        assertEquals(
+            listOf("\$title"),
+            told("abstract class Page(q: String?) {\n    val a = q!!\n    open$member".replace("open    val", "open val")),
+        )
+        assertEquals(
+            listOf("\$title"),
+            told("abstract class Page {\n    open @[A B] val title = \"<b>x</b>\"\n    fun render() = \"<p>\$title</p>\"\n}"),
+        )
+    }
 }

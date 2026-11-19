@@ -341,10 +341,14 @@ private class ScopeFrame(
     var word: String? = null
     var name: String? = null
 
-    fun reset() {
+    /** What a modifier's word is here: 0 where a declaration may begin, 1 after a value, which a line break ends, 2 after what carries on. */
+    var after = 0
+
+    fun reset(after: Int = 1) {
         modifiers = 0
         lastValue = null
         word = null
+        this.after = after
     }
 
     fun begin(value: Span): Span {
@@ -470,7 +474,7 @@ private val MODIFIER_WORDS: Map<String, Int> =
 /** What the modifiers a parameter is written with say of it. */
 private fun modifiersOf(text: String): Int = text.split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
 
-private val ANNOTATION = regex("""@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*""")
+private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
 
 /** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
 private fun annotationEnd(
@@ -479,8 +483,10 @@ private fun annotationEnd(
     at: Int,
 ): Int {
     val name = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
+    // `@[A B]` holds its annotations in the bracket.
+    val open = if (src[name - 1] == '[') name - 1 else name
     var depth = 0
-    for (k in name until if (src.getOrNull(name) == '(') src.length else name) {
+    for (k in open until if (src.getOrNull(open) == '(' || open < name) src.length else open) {
         if (code[k] && src[k] in "([{") depth++
         if (code[k] && src[k] in ")]}" && --depth == 0) return k + 1
     }
@@ -623,6 +629,7 @@ private fun declarations(
     var i = 0
     while (i < src.length) {
         val f = stack.last()
+        if (src[i] == '\n' && f.after == 1) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
             if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) f.reset()
@@ -761,7 +768,13 @@ private fun declarations(
                     }
                 }
             }
-            MODIFIER_WORDS[word]?.let { f.modifiers = f.modifiers or it } ?: if (word != "fun") f.reset() else Unit
+            // `open` in `door.open` is a name, and says nothing of what the next line declares.
+            val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 }
+            if (says != null) {
+                f.modifiers = f.modifiers or says
+            } else if (word != "fun") {
+                f.reset()
+            }
             f.word = word
             i = end
             continue
@@ -854,7 +867,17 @@ private fun declarations(
             i++
             continue
         }
-        if (!c.isWhitespace()) f.reset()
+        if (!c.isWhitespace()) {
+            f.reset(
+                if (c == ';') {
+                    0
+                } else if (c in "=.,") {
+                    2
+                } else {
+                    1
+                },
+            )
+        }
         if (c == ')' || c == ']' || c == '}') {
             if (stack.size == 1) {
                 i++
