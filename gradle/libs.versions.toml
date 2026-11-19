@@ -29,7 +29,7 @@ jettyOldestKtor = "11.0.26"
 spring = "7.0.10"
 servlet = "6.1.0"
 # Spring Boot 4.0.8 pins 11.0.24, which has three advisories fixed in 11.0.25; the tests run the current 11.0 line.
-tomcat = "11.0.27"
+tomcat = "11.0.29"
 reactor = "3.8.8"
 jackson = "3.3.0"
 jackson2 = "2.23.0"
