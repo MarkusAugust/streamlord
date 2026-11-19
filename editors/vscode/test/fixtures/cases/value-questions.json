@@ -239,8 +239,7 @@
         {
           "text": "${\"<p>\" + h + \"</p>\"}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${bold(q)}",
@@ -250,14 +249,12 @@
         {
           "text": "${badge()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${deep2()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${deep1()}",
@@ -267,8 +264,7 @@
         {
           "text": "${either(c)}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${mixed(c, q)}",
@@ -278,14 +274,12 @@
         {
           "text": "${annotated()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "$frag",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "$h",
@@ -295,8 +289,7 @@
         {
           "text": "${h.text}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "$built",
@@ -306,8 +299,7 @@
         {
           "text": "$fragment",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${Trusted(q)}",
@@ -317,20 +309,17 @@
         {
           "text": "${\"<li>$q</li>\".trimIndent()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${items.joinToString(\"\") { \"<li>$it</li>\" }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${items.map { \"<li>$it</li>\" }.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${items.joinToString(\"\")}",
@@ -350,44 +339,37 @@
         {
           "text": "${when { c -> \"<b>a</b>\"; else -> \"<i>b</i>\" }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${createHTML().div { +q }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${elements { span { +q } }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${buildString { appendHTML().div { +q } }}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${post(\"/save\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${signal(\"count\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${increment(\"n\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${n}",
@@ -428,11 +410,8 @@
       "issues": [
         "q warning",
         "$q warning",
-        "${\"<b>\" + q} warning",
         "q warning",
-        "${q + \"<b>\"} warning",
         "q warning",
-        "${bold(q)} warning",
         "${deep1()} warning",
         "${mixed(c, q)} warning",
         "$q warning",
@@ -446,16 +425,9 @@
         "q warning",
         "$q warning",
         "q warning",
-        "${q + \"<b>\"} hint",
         "q warning",
-        "${bold(q)} hint",
-        "${badge()} hint",
-        "${deep2()} hint",
         "${deep1()} hint",
-        "${either(c)} hint",
         "${mixed(c, q)} hint",
-        "${annotated()} hint",
-        "$fragment hint",
         "$q warning",
         "$it hint",
         "$it hint",
@@ -499,8 +471,7 @@
         {
           "text": "${t.html}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${p.html}",
@@ -565,8 +536,7 @@
         {
           "text": "${(\"\"\"|<b>x</b>\"\"\").trimMargin()}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${\"|<u>\" + q}",
@@ -578,7 +548,6 @@
         "${\"|<u>\" + q} warning"
       ],
       "unanswered": [
-        "${(\"\"\"|<b>x</b>\"\"\").trimMargin()} hint",
         "${\"|<u>\" + q} hint"
       ]
     },
@@ -589,14 +558,12 @@
         {
           "text": "${signal(\"count\")}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${signal(KEY)}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${signal(q)}",
@@ -611,8 +578,7 @@
         {
           "text": "${statements(increment(\"a\"), toggle(\"b\"))}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${statements(increment(\"a\"), signal(q))}",
@@ -622,8 +588,7 @@
         {
           "text": "${post(\"/save\") { contentType = ContentType.FORM }}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${post(\"/save\") { selector = q }}",
@@ -638,8 +603,7 @@
         {
           "text": "${signal(Tab.HOME.name)}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         },
         {
           "text": "${Tab.HOME}",
@@ -671,8 +635,7 @@
         {
           "text": "${set(\"n\", n)}",
           "type": "kotlin.String",
-          "read": "constant",
-          "fact": "constant"
+          "fact": "string"
         }
       ],
       "issues": [
@@ -688,7 +651,6 @@
         "${signal(q)} warning",
         "${signal(\"a\" + q)} warning",
         "${statements(increment(\"a\"), signal(q))} warning",
-        "${post(\"/save\") { contentType = ContentType.FORM }} warning",
         "${post(\"/save\") { selector = q }} warning",
         "${post(url)} warning",
         "${maybe} warning",
@@ -728,20 +690,17 @@
         {
           "text": "${rows.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${built.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${trusted.joinToString(\"\")}",
           "type": "kotlin.String",
-          "read": "markup",
-          "fact": "markup"
+          "fact": "string"
         },
         {
           "text": "${names.joinToString(\"\")}",
@@ -759,7 +718,6 @@
         "${u} hint",
         "${w} warning",
         "${maybe} warning",
-        "${trusted.joinToString(\"\")} hint",
         "${names.joinToString(\"\")} hint"
       ]
     },
@@ -790,6 +748,52 @@
       "unanswered": [
         "${maybe.joinToString(\"\")} hint",
         "$maybe hint"
+      ]
+    },
+    {
+      "name": "a sum is markup beside an HTML literal or with the author's own text, and buildString where it writes only kotlinx.html",
+      "kotlin": "package page\nimport io.github.markusaugust.streamlord.core.domain.Html\nimport kotlinx.html.div\nimport kotlinx.html.stream.appendHTML\n\nfun page(h: Html, q: String): String {\n    val joined = h.text + q\n    val signed = \"by \" + h\n    val greeted = \"by $q \" + h\n    val plain = \"<b>x</b>\"\n    return \"\"\"\n        <div>\n        $joined\n        $signed\n        $greeted\n        $plain\n        ${buildString { append(q); appendHTML().div { +q } }}\n        ${buildString { appendHTML().div { +q }; appendHTML().div { +q } }}\n        </div>\n    \"\"\"\n}\n",
+      "questions": [
+        {
+          "text": "$joined",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "$signed",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "$greeted",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "$plain",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "${buildString { append(q); appendHTML().div { +q } }}",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "${buildString { appendHTML().div { +q }; appendHTML().div { +q } }}",
+          "type": "kotlin.String",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "$joined warning",
+        "$greeted warning",
+        "${buildString { append(q); appendHTML().div { +q } }} warning"
+      ],
+      "unanswered": [
+        "$joined hint",
+        "$greeted hint",
+        "${buildString { append(q); appendHTML().div { +q } }} hint"
       ]
     }
   ]

@@ -88,13 +88,13 @@ class ValueJudgementTest {
     }
 
     @Test
-    fun `the editor's fact wins over what the text shows`() {
+    fun `a name the editor resolves to no constant is none, and markup is markup whatever its type`() {
         // The text takes both for the author's own: a literal of markup, a workspace constant.
         val src = "fun f(b: Boolean) = \"<p>\${if (b) \"<b>x</b>\" else \"<i>y</i>\"} \$LABEL</p>\""
         val text = Source("", SourceLanguage.KOTLIN, constants = setOf("LABEL"))
         assertEquals(emptyList(), interpolation(src, text))
         val typed = text.copy(valueAnswer = { _, _ -> answerGiving(ValueFact.STRING) })
-        assertEquals(listOf(Severity.WARNING, Severity.WARNING), interpolation(src, typed))
+        assertEquals(listOf("\$LABEL"), analyzer.analyzeKotlin(typed.copy(text = src)).map { src.substring(it.start, it.end) })
     }
 
     @Test

@@ -11246,6 +11246,7 @@ unescaped-interpolation 71-79 hint: Kotlin writes ${+name} into the HTML as it i
 unescaped-interpolation 222-227 warning: Kotlin writes $name into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
   fix "Mark the values with + in interpolate { }, which escapes the values" 217-233 "interpolate { \"<li>${+name}</li>\" }.text" (not preferred)
   fix "Mark $name as markup" 222-227 "${Trusted(name)}" (not preferred)
+interpolate-template 278-291 warning: interpolate escapes row(name) here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: a value that may be null, marked and not
 interpolate-template 247-253 warning: Kotlin fills in $title before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it. Where $title is null, interpolate writes nothing, and Kotlin writes null.
   fix "Mark $title with +, which interpolate escapes" 247-253 "${+title}" (not preferred)
@@ -11445,9 +11446,6 @@ interpolate-template 98-100 warning: interpolate escapes h.text here, so the tag
 == corpus/kotlin-markup-strings.json: interpolate escapes a String marked @Language(HTML) in element text
 interpolate-template 121-123 warning: interpolate escapes body here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-markup-strings.json: a val set to the text of an Html is markup held as a String
-unescaped-interpolation 127-131 hint: Kotlin writes $row into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
-  fix "Mark $row as markup" 127-131 "${Trusted(row)}" (not preferred)
-    edit 64-64 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
 == corpus/kotlin-markup-strings.json: a val set to the text of something else is not known to be markup
 unescaped-interpolation 126-130 hint: Kotlin writes $row into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
   fix "Mark the values with + in interpolate { }, which escapes the values" 121-136 "interpolate { \"<ul>${+row}</ul>\" }.text"
@@ -11462,14 +11460,8 @@ interpolate-template 108-110 warning: interpolate escapes xs.joinToString { inte
 == corpus/kotlin-markup-strings.json: markup from interpolate in an attribute is not told to use interpolate
 unescaped-interpolation 96-126 warning: Kotlin writes ${interpolate("<b>%s</b>", x)} into the HTML as it is, and it is markup: inside an attribute its quotes and tags are only characters, and a quote ends the value. Write text there rather than markup.
   fix "Mark the values with + in interpolate { }, which escapes the values" 84-135 "interpolate { \"<p title=\\\"${+interpolate(\"<b>%s</b>\", x)}\\\">y</p>\" }.text"
-== corpus/kotlin-markup-strings.json: a val set to the text of interpolate(...) after a run of blanks is markup held as a String, not markup
-unescaped-interpolation 165-169 hint: Kotlin writes $row into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
-  fix "Mark $row as markup" 165-169 "${Trusted(row)}" (not preferred)
-    edit 64-64 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
-== corpus/kotlin-markup-strings.json: a val set to the text of interpolate(...) after a longer run of blanks is markup held as a String too
-unescaped-interpolation 169-173 hint: Kotlin writes $row into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
-  fix "Mark $row as markup" 169-173 "${Trusted(row)}" (not preferred)
-    edit 64-64 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
+== corpus/kotlin-markup-strings.json: a val set to the text of interpolate(...) after a run of blanks is markup, written as it is
+== corpus/kotlin-markup-strings.json: a val set to the text of interpolate(...) after a longer run of blanks is markup too
 == corpus/kotlin-markup-strings.json: a val set to interpolate(...) is markup in element text
 == corpus/kotlin-markup-strings.json: an Html a Kotlin template writes into the format is read as format
 interpolate-template 171-177 warning: Kotlin fills in $inner before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is.
@@ -12464,10 +12456,7 @@ unescaped-interpolation 24-35 hint: Kotlin writes ${badge(u)} into the HTML as i
   fix "Mark ${badge(u)} as markup" 24-35 "${Trusted(badge(u))}" (not preferred)
     edit 0-0 "import io.github.markusaugust.streamlord.core.domain.Trusted\n\n"
 == corpus/kotlin-trusted.json: a placeholder made Trusted is markup and says nothing in text
-== corpus/kotlin-trusted.json: a val set to the text of interpolate(...) is markup held as a String: Trusted, no rewrite
-unescaped-interpolation 157-161 hint: Kotlin writes $row into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
-  fix "Mark $row as markup" 157-161 "${Trusted(row)}" (not preferred)
-    edit 64-64 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
+== corpus/kotlin-trusted.json: a val set to the text of interpolate(...) is markup, written as it is
 == corpus/kotlin-trusted.json: no Trusted for arithmetic, which is no markup, and the rewrite, which writes a number as it is
 unescaped-interpolation 37-51 hint: Kotlin writes ${it * 7 % 13} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
   fix "Mark the values with + in interpolate { }, which escapes the values" 32-57 "interpolate { \"<td>${+(it * 7 % 13)}</td>\" }.text"

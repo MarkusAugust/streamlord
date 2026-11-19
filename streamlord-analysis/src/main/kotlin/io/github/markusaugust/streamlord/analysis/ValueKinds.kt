@@ -240,9 +240,16 @@ private fun helperArguments(
     val facts = fileFacts(src)
     if (!(sdk.htmlDsl ?: facts.usesDsl)) return null
     val helpers = facts.helpers ?: unshadowed(src, VALUE_HELPERS).also { facts.helpers = it }
-    if (name !in helpers || !wholeCall(t, name)) return null
-    val args = t.substring(m.value.length, t.length - 1)
-    return if (args.isBlank()) emptyList() else splitTop(args, ",")
+    if (name !in helpers) return null
+    // `post("/save") { openWhenHidden = true }`: each option the lambda sets is given as an argument is.
+    val options = lastCall(t)?.takeIf { it.receiver == null && it.name == name }?.lambda
+    val call = if (options == null) t else t.substring(0, t.lastIndexOf(options) - 1).trimEnd()
+    if (!wholeCall(call, name)) return null
+    val args = call.substring(m.value.length, call.length - 1)
+    val set = options?.let { o -> splitTop(o, "\n").flatMap { splitTop(it, ";") }.filter { it.isNotBlank() } }.orEmpty()
+    // A statement that sets nothing may do anything, and is no argument the author's own could be.
+    if (set.any { ARGUMENT_NAME.find(it) == null }) return listOf("*")
+    return (if (args.isBlank()) emptyList() else splitTop(args, ",")) + set
 }
 
 /** A name given to an argument, `value = `, which says nothing of the value. */
@@ -567,7 +574,12 @@ internal fun markupValue(
     val t = values[0].text
     if (htmlLiteral(t)) return true
     val sum = splitTop(t, "+")
-    if (sum.size > 1) return htmlLiteral(sum[0].trim())
+    // Markup with text around it, `"<p>" + body` or `"by " + author`.
+    if (sum.size > 1) {
+        val markup = sum.map { markupValue(src, it, at, depth, sdk) }
+        // Beside an HTML literal each part is judged where it stands; anywhere else the rest must be the author's own text.
+        return markup.any { it } && (sum.any { htmlLiteral(it.trim()) } || sum.indices.all { markup[it] || plainString(sum[it].trim()) })
+    }
     if (sdk.core && (coreCall(src, t, "interpolate") || coreCall(src, t, "Trusted"))) return true
     val textOf = TEXT_OF_VALUE.find(t)?.groupValues?.get(1)
     // The text of an Html or the html of a Trusted, the markup each holds; neither has the other.
@@ -585,18 +597,49 @@ internal fun markupValue(
         // `val e = elements { }`: the name stands for the call it is set to; a literal it is set to is judged where it is written.
         val d = declarationOf(src, t, at) ?: return false
         val init = initialiser(src, d) ?: return false
-        return depth < VALUE_DEPTH && lastCall(init) != null && markupValue(src, init, d.at, depth + 1, sdk)
+        return depth < VALUE_DEPTH && markupValue(src, init, d.at, depth + 1, sdk)
     }
     if (CREATE_HTML.containsMatchIn(t)) return true
     val call = lastCall(t) ?: return false
     val lambda = call.lambda
-    if (call.name == "buildString" && call.receiver == null && lambda != null) return APPEND_HTML.containsMatchIn(lambda)
+    if (call.receiver != null && lambda == null && (call.name == "trimIndent" || call.name == "trimMargin")) {
+        val trimmed = unparen(call.receiver)
+        // The margin is passed over only where the literal itself is trimmed of it.
+        return htmlLiteral("$trimmed.${call.name}()") || markupValue(src, trimmed, at, depth, sdk)
+    }
+    if (call.name == "buildString" && call.receiver == null && lambda != null) {
+        val statements = splitTop(lambda, "\n").flatMap { splitTop(it, ";") }.filter { it.isNotBlank() }
+        return statements.isNotEmpty() && statements.all { APPEND_HTML.containsMatchIn(it) }
+    }
+    if (call.receiver == null && lambda == null && depth < CALL_DEPTH) {
+        val declared = functionResults(src, call.name)
+        if (declared.isNotEmpty()) return declared.all { functionMarkup(src, it, depth, sdk) }
+    }
     val elements = call.name == "elements" && call.receiver == null && lambda != null
     if (elements) return sdk.htmlDsl != false && USES_ELEMENTS.containsMatchIn(src)
     if (call.name != "joinToString") return false
     val transform = lambda ?: namedLambda(call.args, "transform")
     if (transform != null) return markupValue(src, lambdaResult(transform), at, depth, sdk)
     return call.receiver != null && markupElements(src, call.receiver, at, depth, sdk)
+}
+
+/** How many calls deep a function is followed to what it returns. */
+private const val CALL_DEPTH = 3
+
+/** Whether a function is marked `@Language("HTML")`, declared to return core's `Html`, or gives markup whatever it returns. */
+private fun functionMarkup(
+    src: String,
+    f: FunctionResult,
+    depth: Int,
+    sdk: FileModules,
+): Boolean {
+    if (f.html) return true
+    if (f.type != null && sdk.core && !markupTypeShadowed(src, f.type) &&
+        declaredFact(coreType(src, f.type), false, true).isMarkup()
+    ) {
+        return true
+    }
+    return f.values.isNotEmpty() && f.values.all { (value, at) -> markupValue(src, value, at, depth + 1, sdk) }
 }
 
 /**
@@ -609,6 +652,8 @@ internal fun markupCollection(
     at: Int,
     sdk: FileModules,
 ): Boolean = KOTLIN_NAME.matchEntire(value.trim()) != null && markupElements(src, value.trim(), at, 0, sdk)
+
+private val COLLECTION_BUILDERS = setOf("listOf", "listOfNotNull", "arrayOf", "setOf", "sequenceOf")
 
 /** How many names deep a value is followed to what it is set to. */
 internal const val VALUE_DEPTH = 4
@@ -639,7 +684,7 @@ private fun markupElements(
     }
     val r = lastCall(t) ?: return false
     val lambda = r.lambda
-    if ((r.name == "listOf" || r.name == "arrayOf") && r.receiver == null && lambda == null) {
+    if (r.name in COLLECTION_BUILDERS && r.receiver == null && lambda == null) {
         return r.args.isNotBlank() && splitTop(r.args, ",").all { markupValue(src, it, at, depth, sdk) }
     }
     if ((r.name == "map" || r.name == "mapIndexed" || r.name == "mapNotNull") &&
@@ -653,16 +698,21 @@ private fun markupElements(
 /**
  * The value a `val` is set to, as written: from after its `=` to where the statement ends, at a
  * line break that ends it, a `;`, a comment, or the bracket that closes what holds it. Null for a
- * `var`, a literal, or a name declared in any other way.
+ * `var`, a number or a boolean, or a name declared in any other way.
  */
 internal fun initialiser(
     src: String,
     d: Declaration,
+): String? = if (d.valueAt < 0) null else valueFrom(src, d.valueAt)
+
+/** The value written from [from], to where its statement ends as [initialiser] has it. */
+internal fun valueFrom(
+    src: String,
+    from: Int,
 ): String? {
-    if (d.valueAt < 0) return null
     val code = fileFacts(src).code
     var depth = 0
-    var k = d.valueAt
+    var k = from
     while (k < src.length) {
         if (code[k]) {
             val c = src[k]
@@ -679,7 +729,7 @@ internal fun initialiser(
         }
         k++
     }
-    return src.substring(d.valueAt, k).trim().takeIf { it.isNotEmpty() }
+    return src.substring(from, k).trim().takeIf { it.isNotEmpty() }
 }
 
 /** Whether a placeholder's value is markup the author built; see [markupValue]. */

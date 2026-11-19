@@ -29,7 +29,7 @@ internal class Declaration(
     val textOf: String? = null,
     /** What the brackets after its type hold, `Html` of `List<Html>`. */
     val typeArguments: String? = null,
-    /** Where the value a `val` is set to starts, when it is set to more than a literal; -1 otherwise. */
+    /** Where the value a `val` is set to starts, when it is set to more than a number or a boolean; -1 otherwise. */
     val valueAt: Int = -1,
     /** Whether another file can mean it by its bare name: a `val` or `var` at top level, in a class or a constructor, and not private. */
     val shared: Boolean = false,
@@ -274,8 +274,17 @@ internal fun lineEnds(
     at: Int,
 ): Boolean {
     var k = at - 1
-    while (k >= 0 && (!code[k] || src[k].isWhitespace())) k--
-    if (k >= 0 && LINE_GOES_ON_BEFORE.matchEntire(src[k].toString()) != null) return false
+    while (k >= 0 && (!code[k] || src[k].isWhitespace())) {
+        if (!code[k] && !src[k].isWhitespace()) {
+            var from = k
+            while (from > 0 && !code[from - 1]) from--
+            // A literal the line ends in is the end of a value; a comment is passed over.
+            if (!src.startsWith("//", from) && !src.startsWith("/*", from)) break
+            k = from
+        }
+        k--
+    }
+    if (k >= 0 && code[k] && LINE_GOES_ON_BEFORE.matchEntire(src[k].toString()) != null) return false
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
@@ -547,6 +556,8 @@ private fun declarations(
                                             arguments?.range?.last?.plus(1) ?: (m.range.last + 1),
                                         )?.let { it.range.last + 1 }
                                         ?: -1
+                                } else if (word == "val") {
+                                    VAL_AFTER.groupRange(src, m, 5)?.first ?: -1
                                 } else {
                                     -1
                                 }
@@ -715,6 +726,58 @@ private fun declarations(
         functions!!.getOrPut(name) { ArrayList() } += FunctionDeclaration(body, html)
     }
     return names
+}
+
+/** What a function the file declares shows of its result. */
+internal class FunctionResult(
+    /** Whether it is marked `@Language("HTML")`. */
+    val html: Boolean,
+    /** The type it is declared to return, where it writes one. */
+    val type: String?,
+    /** Each value it can give, with where that is written: its expression, or what each `return` of its block gives. */
+    val values: List<Pair<String, Int>>,
+)
+
+private val RETURN = regex("""\breturn\b(?!@)""")
+
+/**
+ * The functions [src] declares by [name] and calls without a receiver, `fun name(...)`. A `return` of a function declared
+ * inside one counts as its own, which can only make it less of what every result is.
+ */
+internal fun functionResults(
+    src: String,
+    name: String,
+): List<FunctionResult> {
+    val code = fileFacts(src).code
+    val head = regex("""\bfun\s+(?:<[^<>]*>\s*)?${Regex.escape(name)}\s*\(""")
+    val after = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*([={])""")
+    return head
+        .findAll(src)
+        .filter { code[it.range.first] }
+        .mapNotNull { m ->
+            val open = m.range.last
+            val e = src.substring(open, minOf(src.length, open + 20_000))
+            val close = closing(e, depths(e), 0).takeIf { it > 0 } ?: return@mapNotNull null
+            val body = after.matchAt(src, open + close) ?: return@mapNotNull null
+            val from = body.range.last + 1
+            val values =
+                if (body.groupValues.last() == "=") {
+                    listOf(from)
+                } else {
+                    val block = src.substring(from - 1, minOf(src.length, from + 20_000))
+                    val end = closing(block, depths(block), 0).takeIf { it > 0 } ?: return@mapNotNull null
+                    RETURN
+                        .findAll(block.substring(0, end))
+                        .map { from - 1 + it.range.last + 1 }
+                        .filter { code[it - 1] }
+                        .toList()
+                }
+            FunctionResult(
+                HTML_BEFORE.containsMatchIn(src.substring(maxOf(0, m.range.first - 160), m.range.first)),
+                body.groups[1]?.value,
+                values.mapNotNull { at -> valueFrom(src, at)?.let { it to at } },
+            )
+        }.toList()
 }
 
 /**
