@@ -454,14 +454,18 @@ private const val CONST = 2
 private const val EXTENDED = 4
 private const val OVERRIDES = 8
 private const val HTML = 16
+private const val COMPANION = 32
+
+/** What follows an `object` or a `fun` that has no name. */
+private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
 
 /** The words that may stand before a declaration, each with what it says of it. */
 private val MODIFIER_WORDS: Map<String, Int> =
     (
         "public protected internal final lateinit inline suspend tailrec operator infix external data enum annotation " +
-            "inner value companion actual expect vararg noinline crossinline"
+            "inner value actual expect vararg noinline crossinline"
     ).split(" ").associateWith { 0 } + listOf("open", "abstract", "sealed").associateWith { EXTENDED } +
-        mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES)
+        mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES, "companion" to COMPANION)
 
 /** What the modifiers a parameter is written with say of it. */
 private fun modifiersOf(text: String): Int = text.split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
@@ -497,9 +501,9 @@ private fun overridable(
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
 /**
- * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in,
- * and each parameter marked `@Language("HTML")`, by place and by name. The parameters are cut at
- * commas outside brackets, the `<...>` of a type among them and the `->` of a function type not.
+ * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
+ * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
+ * outside brackets, the `<...>` of a type among them and the `->` of a function type not.
  */
 private fun functionAt(
     src: String,
@@ -633,8 +637,8 @@ private fun declarations(
             // `Row::class` names a class and declares none.
             val reference = src.startsWith("::", i - 2)
             val ctorOfClass = word == "constructor" && f.cls
-            // In a function's expression an `object` or a `fun` is a value, and the parameters are in sight in it.
-            val value = (word == "object" || word == "fun") && f.pending?.unended == true
+            // In a function's expression an `object` or a `fun` without a name is a value, and the parameters are in sight in it.
+            val value = f.pending?.unended == true && f.modifiers and COMPANION == 0 && UNNAMED[word]?.matchAt(src, end) != null
             if (word in DECLARATION_WORDS && !reference && !ctorOfClass && !value) {
                 // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
                 endPending(f, i)
@@ -718,17 +722,16 @@ private fun declarations(
                             val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
                             // The value of a `val` set once, which a name then stands for.
                             val valueAt =
-                                if (word == "val" && bare && !markup) {
+                                if (word != "val") {
+                                    null
+                                } else if (bare && !markup) {
                                     VALUE_AFTER
                                         .matchAt(
                                             src,
                                             arguments?.range?.last?.plus(1) ?: (m.range.last + 1),
                                         )?.let { it.range.last + 1 }
-                                        ?: -1
-                                } else if (word == "val") {
-                                    VAL_AFTER.groupRange(src, m, 5)?.first ?: -1
                                 } else {
-                                    -1
+                                    VAL_AFTER.groupRange(src, m, 5)?.first
                                 }
                             val d =
                                 add(
@@ -745,7 +748,7 @@ private fun declarations(
                                         markup,
                                         if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
                                         arguments?.groupValues?.get(1),
-                                        valueAt.takeIf { it >= 0 }?.let { f.begin(Span(it)) },
+                                        valueAt?.let { f.begin(Span(it)) },
                                         shared,
                                         trusted,
                                         trustedText,

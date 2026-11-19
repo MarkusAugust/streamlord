@@ -593,6 +593,8 @@ class ValueStructureTest {
                 between,
             )
         }
+        // A mark in a comment is none.
+        assertEquals(listOf("\$b"), told("// @Language(\"HTML\")\nval b: String = load()\nfun page() = \"<div>\$b</div>\""))
         // A mark on a value is none on the declaration after it.
         assertEquals(
             listOf("\$b"),
@@ -624,6 +626,16 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a getter is seen on the line of its val`() {
+        assertEquals(
+            listOf("\$title"),
+            told(
+                "class P(val q: String) {\n    val title: String = \"<b>x</b>\"; get() = field + q\n    fun page() = \"<p>\$title</p>\"\n}",
+            ),
+        )
+    }
+
+    @Test
     fun `a call of a function named get after a val is no getter of it`() {
         assertEquals(
             emptyList(),
@@ -637,6 +649,14 @@ class ValueStructureTest {
         assertEquals(listOf("\$q"), told("fun f(q: String) = object : R {\n    fun r() = \"<p>\$q</p>\"\n}"))
         assertEquals(emptyList(), told("fun f(n: Int): () -> String = fun(): String = \"<p>\$n</p>\""))
         assertEquals(emptyList(), told("fun f(n: Int): () -> String = fun(): String {\n    return \"<p>\$n</p>\"\n}"))
+        assertEquals(emptyList(), told("fun f(n: Int) = object : R(n) {\n    fun r() = \"<p>\$n</p>\"\n}"))
+        // A declaration after an expression whose line could go on is one of its own.
+        for (end in listOf("rows[id]!!", "rows[id] as String?", "rows[id] as List<Int>")) {
+            val first = "class Page(val id: String) {\n    fun row(id: Int) = $end\n\n"
+            assertEquals(listOf("\$id"), told("$first    fun render() = \"<p>\$id</p>\"\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    object O { fun render() = \"<p>\$id</p>\" }\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    companion object { fun render(id: String) = \"<p>\$id</p>\" }\n}"), end)
+        }
         // The function after it is one of its own.
         assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
     }
