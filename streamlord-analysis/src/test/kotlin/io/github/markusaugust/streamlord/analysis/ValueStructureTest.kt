@@ -659,6 +659,7 @@ class ValueStructureTest {
             // A receiver in brackets is no parameter list, and its function has a name.
             assertEquals(listOf("\$id"), told("$first    fun (String.() -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
             assertEquals(listOf("\$id"), told("$first    fun (((Int) -> Unit) -> Unit).ext() = \"<p>\$id</p>\"\n}"), end)
+            assertEquals(listOf("\$id"), told("$first    fun ((Int) -> Unit)?.ext() = \"<p>\$id</p>\"\n}"), end)
         }
         // The function after it is one of its own.
         assertEquals(listOf("\$n"), told("fun f(n: Int) = object : R { }\nfun g() = \"<p>\$n</p>\""))
@@ -748,5 +749,48 @@ class ValueStructureTest {
         for (loop in listOf("for (n in @A rows) println(n)", "for (n in rows) @A println(n)")) {
             assertEquals(emptyList(), told("fun f(n: Int, rows: List<String>) {\n    $loop\n    println(\"<p>\$n</p>\")\n}"), loop)
         }
+    }
+
+    @Test
+    fun `a label after type arguments is no annotation`() {
+        val call = "super<A>@C.f(x, { n: String -> \"<p>\$n</p>\" })"
+        assertEquals(listOf("\$n"), told("class C(val n: Int) : A() {\n    fun i(x: Int) = $call\n}"))
+    }
+
+    @Test
+    fun `a bracket that closes nothing ends the value before it`() {
+        assertEquals(emptyList(), told("val a = \"<b>a</b>\" }\nfun p() = \"<p>\$a</p>\""))
+    }
+
+    @Test
+    fun `a type too long to be one is not read, and the file is`() {
+        val src = "fun f(): List<" + "x".repeat(8000) + "> = 1\nval a = \"<b>a</b>\"\nfun p() = \"<p>\$a</p>\""
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a function named get declared after a val is no getter of it`() {
+        val page = "    fun page() = \"<p>\$html</p>\"\n}"
+        for (get in listOf("override fun get() = html", "operator fun get(i: Int) = html")) {
+            assertEquals(emptyList(), told("class Holder {\n    private val html = \"<b>x</b>\"\n    $get\n$page"), get)
+        }
+    }
+
+    @Test
+    fun `a constructor behind an annotation with arguments declares its parameters`() {
+        val src = "class Row @Named(\"x\") constructor(val id: Int, val name: String) {\n    fun page() = \"<p>\$id \$name</p>\"\n}"
+        assertEquals(listOf("\$name"), told(src))
+    }
+
+    @Test
+    fun `a function that returns to a label is not followed`() {
+        val f = "fun f(rows: List<Int>): String {\n    rows.forEach { return@forEach }\n    return \"<b>x</b>\"\n}"
+        assertEquals(listOf("\${f(rows)}"), told("$f\nfun p(rows: List<Int>) = \"<p>\${f(rows)}</p>\""))
+    }
+
+    @Test
+    fun `a raw string that closes with four quotes ends the value it is`() {
+        val src = "fun re() = Regex(\"\"\"id=\"([^\"]*)\"\"\"\")\nfun bold() = \"<b>x</b>\"\nfun p() = \"<p>\${bold()}</p>\""
+        assertEquals(emptyList(), told(src))
     }
 }

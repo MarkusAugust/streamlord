@@ -82,8 +82,8 @@ All notable changes to Streamlord are recorded here. The format follows
   another may stand in for, and `@[A B]` is passed over whole. A constructor behind an annotation
   with arguments, `class Row @Named("x") constructor(val id: String)`, declares its parameters. A
   getter is seen however far behind its `val` it stands, and neither a call of a function named
-  `get` after a `val`, `get("/") { }` in a route, nor a function `get(i: Int)` declared after it is
-  a getter of it. A value that ends in a raw string closing with four quotes ends there, and a
+  `get` after a `val`, `get("/") { }` in a route, nor a function declared after it, `fun get()` of
+  a `Supplier` or `operator fun get(i: Int)`, is a getter of it. A value that ends in a raw string closing with four quotes ends there, and a
   name in backticks declares nothing by the words in it, as a test's name with `val` in it did. A
   function's parameters are in sight in the `object` or the function without a name that its
   expression is, where `fun row(n: Int) = object : Row { ... "$n" }` warned of `$n`.

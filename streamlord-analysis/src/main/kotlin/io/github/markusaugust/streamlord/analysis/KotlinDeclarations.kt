@@ -457,7 +457,7 @@ private const val COMPANION = 32
 
 /** What follows an `object` or a `fun` that has no name. */
 private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
-private val RECEIVER_DOT = regex("""\s*\.""")
+private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
 
 /** The words that may stand before a declaration, each with what it says of it. */
 private val MODIFIER_WORDS: Map<String, Int> =
@@ -537,7 +537,7 @@ private fun functionAt(
     val owner = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
     val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
     // Between the parameters and the body stands the type or nothing, or the function is not read.
-    val type = body?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
+    val type = body?.takeIf { it.start - close < 1_000 }?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
     val results = if (body != null && src[body.start - 1] == '{') g.returns else listOfNotNull(body)
     val values = if (type == null || html.isNotEmpty()) emptyList() else results
     return name to
@@ -763,15 +763,16 @@ private fun declarations(
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
             val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 || DECLARES_AFTER.matchAt(src, end) != null }
-            if (says == null && word != "fun") f.reset()
+            if (says == null) f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
             i = end
             continue
         }
-        // A name in backticks is a name whatever it holds.
+        // A name in backticks is a name whatever it holds, and `@` after a word or `super<A>` names a label.
         val quoted = if (c == '`') QUOTED.matchAt(src, i)?.also { f.reset() } else null
-        val annotated = if (c == '@' && !isWordPart(src.getOrNull(i - 1))) annotationEnd(src, code, i) else i + (quoted?.value?.length ?: 0)
+        val label = c != '@' || src.getOrNull(i - 1)?.let { isWordPart(it) || it == '>' } == true
+        val annotated = if (label) i + (quoted?.value?.length ?: 0) else annotationEnd(src, code, i)
         if (annotated > i) {
             // What an annotation stands first in has begun: a loop's statement, a function's expression.
             if (f.pending?.fn == null) f.pending?.state = "stmt"
@@ -860,6 +861,7 @@ private fun declarations(
         if (c == ';') f.after = 0
         if (c == ')' || c == ']' || c == '}') {
             if (stack.size == 1) {
+                f.endValues(i)
                 i++
                 continue
             }
