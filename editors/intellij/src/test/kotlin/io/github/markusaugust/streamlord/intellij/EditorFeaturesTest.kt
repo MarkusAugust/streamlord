@@ -110,4 +110,56 @@ class EditorFeaturesTest : StreamlordTestCase() {
         assertEquals(2, injected.size)
         assertNull(manager.getInjectedPsiFiles(hostAt("select")))
     }
+
+    fun `test html is injected wherever the kotlin plugin injects none, and only there`() {
+        myFixture.addFileToProject(
+            "stubs/Language.kt",
+            "package org.intellij.lang.annotations\nannotation class Language(val value: String, val prefix: String = \"\", val suffix: String = \"\")",
+        )
+        val src =
+            """
+            import org.intellij.lang.annotations.Language
+            import io.github.markusaugust.streamlord.core.domain.*
+
+            fun take(@Language("HTML", prefix = "<ul>", suffix = "</ul>") body: String) = body
+
+            fun wrap(@Language("HTML") body: String) = body
+
+            fun page(name: String) = interpolate { "<p>${'$'}{+name}</p>" }
+
+            fun hello(name: String) = interpolate { "Hello <b>${'$'}{+name}</b>" }
+
+            fun bold() = Trusted("<b>bold</b>")
+
+            fun items() = listOf("<li>a</li>")
+
+            fun call() = take("<li>arg</li>")
+
+            @Deprecated("<b>not</b> markup")
+            fun old() = 1
+            """.trimIndent()
+        myFixture.configureByText("View.kt", src)
+        val manager = InjectedLanguageManager.getInstance(project)
+
+        fun injected(needle: String): String? {
+            val host =
+                com.intellij.psi.util.PsiTreeUtil.getParentOfType(
+                    myFixture.file.findElementAt(src.indexOf(needle)),
+                    org.jetbrains.kotlin.psi.KtStringTemplateExpression::class.java,
+                )!!
+            return manager
+                .getInjectedPsiFiles(host)
+                ?.first()
+                ?.first
+                ?.let { it.language.id + " " + it.text }
+        }
+        // A mark on another function's parameter says nothing of the literals after it.
+        assertEquals("HTML <p></p>", injected("<p>"))
+        assertEquals("HTML Hello <b></b>", injected("Hello"))
+        // A call's argument is the Kotlin plugin's only where the parameter is marked, with what the mark adds.
+        assertEquals("HTML <b>bold</b>", injected("<b>bold"))
+        assertEquals("HTML <li>a</li>", injected("<li>a"))
+        assertEquals("HTML <ul><li>arg</li></ul>", injected("<li>arg"))
+        assertEquals(null, injected("<b>not"))
+    }
 }
