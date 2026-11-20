@@ -356,13 +356,21 @@ class SignalIndex(
         markup += FileTypeIndex.getFiles(HtmlFileType.INSTANCE, scope)
         // A template file is markup whatever type the IDE gives it, so it is found by its extension.
         for (extension in markupExtensions()) markup += FilenameIndex.getAllFilesByExt(project, extension, scope)
+        // Spring's settings, found by name: they say how the codec names signals.
+        val settings =
+            SETTINGS_EXTENSIONS
+                .asSequence()
+                .flatMap { FilenameIndex.getAllFilesByExt(project, it, scope) }
+                .filter { ProjectFiles.isSettings(it.name) && indexable(it) }
+                .take(ProjectFiles.FILE_CAP)
         val files =
             markup.asSequence().filter(::indexable).take(ProjectFiles.FILE_CAP) +
                 FileTypeIndex
                     .getFiles(KotlinFileType.INSTANCE, scope)
                     .asSequence()
                     .filter(::indexable)
-                    .take(ProjectFiles.FILE_CAP)
+                    .take(ProjectFiles.FILE_CAP) +
+                settings
         return files.toList().also { listed = counts to it }
     }
 
@@ -382,15 +390,21 @@ class SignalIndex(
     /** HTML's own extensions and the template extensions in the settings, which the inspections read as markup too. */
     private fun markupExtensions(): Set<String> = ProjectFiles.HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
 
-    /** Kotlin sources and markup, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
+    /** Kotlin sources, markup and Spring's settings, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
     private fun languageOf(vf: VirtualFile): SourceLanguage? =
-        when (vf.fileType) {
-            KotlinFileType.INSTANCE -> if (vf.extension == "kt") SourceLanguage.KOTLIN else null
-            HtmlFileType.INSTANCE -> SourceLanguage.HTML
-            else -> if (vf.extension?.lowercase() in markupExtensions()) SourceLanguage.HTML else null
+        if (ProjectFiles.isSettings(vf.name)) {
+            SourceLanguage.SETTINGS
+        } else {
+            when (vf.fileType) {
+                KotlinFileType.INSTANCE -> if (vf.extension == "kt") SourceLanguage.KOTLIN else null
+                HtmlFileType.INSTANCE -> SourceLanguage.HTML
+                else -> if (vf.extension?.lowercase() in markupExtensions()) SourceLanguage.HTML else null
+            }
         }
 
     companion object {
         fun getInstance(project: Project): SignalIndex = project.service()
+
+        private val SETTINGS_EXTENSIONS = listOf("properties", "yml", "yaml")
     }
 }

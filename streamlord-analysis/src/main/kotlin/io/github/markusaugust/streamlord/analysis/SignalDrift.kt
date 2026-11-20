@@ -46,6 +46,8 @@ public data class SignalProperty(
  *   sends what it sends, and a read only it could set is still worth a look.
  * @property packageName The file's package, and [imports] what it imports, `app.forms.Form` or
  *   `app.forms.*`: a simple name above is the class they make it, as Kotlin resolves it.
+ * @property renamesSignals Whether the file sets a naming strategy for its codec, in code or in
+ *   Spring's settings, so that no class's signals go by the names the check reads off it.
  */
 public data class SignalFacts(
     val declared: Set<String>,
@@ -56,6 +58,7 @@ public data class SignalFacts(
     val patchedTypes: Set<String> = emptySet(),
     val packageName: String = "",
     val imports: Set<String> = emptySet(),
+    val renamesSignals: Boolean = false,
 )
 
 private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
@@ -100,6 +103,9 @@ private val READ_SIGNALS_BEFORE = regex("""\breadSignals\s*$""")
 public fun collectSignalFacts(source: Source): SignalFacts {
     val src = source.text
     val language = source.language
+    if (language == SourceLanguage.SETTINGS) {
+        return SignalFacts(emptySet(), emptySet(), emptyMap(), emptyList(), renamesSignals = settingsRenameSignals(src))
+    }
     if (language == SourceLanguage.HTML) {
         return SignalFacts(collectDeclaredSignals(src, language, source.prefix), emptySet(), emptyMap(), emptyList())
     }
@@ -135,12 +141,13 @@ public fun collectSignalFacts(source: Source): SignalFacts {
     return SignalFacts(
         collectDeclaredSignals(src, language, source.prefix),
         types,
-        serializableProperties(src),
+        jacksonProperties(src) + serializableProperties(src),
         lookups,
         encodedSignalTypes(src, lex = lex),
         patchedSignalTypes(src, lex),
         packageName,
         imports,
+        codeRenamesSignals(src, lex),
     )
 }
 
@@ -223,6 +230,78 @@ internal fun serializableProperties(src: String): Map<String, List<SignalPropert
     }
     return out
 }
+
+// A class that is not `@Serializable`, with the annotations above it, and none of the kinds whose
+// constructor holds no signals: an enum, an annotation, a value class, a sealed or abstract one.
+private val PLAIN_DECLARATION =
+    regex(
+        """((?:@[A-Za-z_][\w.]*(?:\([^()]*\))?\s*)*)(?:(?:public|internal|private|protected|open|final|data)\s+)*class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
+    )
+
+// A constructor property with the annotations before it, whichever target they name: Jackson reads
+// `@JsonProperty` on the parameter, the getter and the field alike.
+private val JACKSON_PROPERTY =
+    regex("""((?:@[A-Za-z_][\w.:]*(?:\([^()]*\))?\s*)*)(?:[a-z]+\s+)*?\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""")
+private val JSON_PROPERTY_NAME = regex("""@(?:\w+:)?JsonProperty\(\s*(?:value\s*=\s*)?"([^"]*)"""")
+private val JSON_IGNORE = regex("""@(?:\w+:)?JsonIgnore\b(?!\s*\(\s*false)""")
+
+/**
+ * Every class in the file that is not `@Serializable`, with the names Jackson gives its constructor
+ * properties: the property's own, or the one `@JsonProperty` gives, and none for one `@JsonIgnore`
+ * leaves out. A class under `@JsonNaming` is left out, its names being its strategy's.
+ */
+internal fun jacksonProperties(src: String): Map<String, List<SignalProperty>> {
+    val out = LinkedHashMap<String, List<SignalProperty>>()
+    for (declaration in PLAIN_DECLARATION.findAll(src)) {
+        val annotations = declaration.groupValues[1]
+        if ("@Serializable" in annotations || "@JsonNaming" in annotations) continue
+        val start = declaration.range.first + annotations.length
+        if (start > 0 && src[start - 1].let { it.isLetterOrDigit() || it == '_' }) continue
+        val name = declaration.groupValues[2]
+        val open = src.indexOf('(', declaration.range.last)
+        val close = matchingParen(src, open).takeIf { it >= 0 } ?: continue
+        val list = src.substring(open, close)
+        val properties = ArrayList<SignalProperty>()
+        for (property in JACKSON_PROPERTY.findAll(list)) {
+            val before = property.groupValues[1]
+            if (JSON_IGNORE.containsMatchIn(before)) continue
+            val given = JSON_PROPERTY_NAME.find(before)?.let { JSON_PROPERTY_NAME.groupAt(before, it, 1) }
+            if (given != null) {
+                val at = open + property.range.first + given.range.first
+                properties += SignalProperty(given.value, at, at + given.value.length)
+            } else {
+                val group = JACKSON_PROPERTY.groupAt(list, property, 2) ?: continue
+                properties += SignalProperty(group.value, open + group.range.first, open + group.range.last + 1)
+            }
+        }
+        out[name] = properties
+    }
+    return out
+}
+
+// A naming strategy handed to a mapper, Jackson's or kotlinx.serialization's.
+private val NAMING_STRATEGY =
+    regex("""\bPropertyNamingStrateg(?:y|ies)\b|\bpropertyNamingStrategy\b|\bJsonNamingStrategy\b|\bnamingStrategy\s*=""")
+private val JSON_NAMING = regex("""@JsonNaming\s*\([^()]*\)""")
+
+/** Whether the code of [src] sets a naming strategy for a codec: one named in `@JsonNaming` is that class's alone. */
+internal fun codeRenamesSignals(
+    src: String,
+    lex: KotlinLex,
+): Boolean {
+    val own = JSON_NAMING.findAll(src).map { it.range }.toList()
+    return NAMING_STRATEGY.findAll(src).any { m -> lex.mask[m.range.first] && own.none { m.range.first in it } }
+}
+
+// Spring's `spring.jackson.property-naming-strategy`, as its relaxed binding lets it be written.
+private val SETTINGS_NAMING = regex("""(?i)property[-_]?naming[-_]?strategy""")
+
+/** Whether Spring's settings in [text] set a naming strategy, on a line that is no comment. */
+internal fun settingsRenameSignals(text: String): Boolean =
+    text.lineSequence().any { line ->
+        val start = line.trimStart()
+        !start.startsWith("#") && !start.startsWith("!") && SETTINGS_NAMING.containsMatchIn(line)
+    }
 
 /** The offset of the `)` that closes the `(` at [open], or -1. Nesting only; a parenthesis in a string is rare here. */
 private fun matchingParen(
@@ -319,6 +398,12 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
             for (c in found) c.properties.forEach { declared += it.name }
         }
         for (type in one.patchedTypes) for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+    }
+    // A naming strategy renames every class's signals, so none is read off its properties.
+    if (facts.values.any { it.renamesSignals }) {
+        for ((_, type) in judged) byCodec += type
+        judged.clear()
+        for (one in facts.values) byCodec += one.encodedTypes
     }
     val anyDeclared = byCodec.isNotEmpty()
 

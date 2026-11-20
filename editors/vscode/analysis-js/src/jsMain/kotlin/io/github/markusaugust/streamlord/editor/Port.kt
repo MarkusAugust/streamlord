@@ -246,6 +246,9 @@ interface WorkspaceFiles {
     /** How many markup files and how many Kotlin files are listed, and the size above which a listed file is left unread. */
     val fileCap: Int
     val sizeCap: Int
+
+    /** A glob of Spring's settings files, read for how the codec names signals. */
+    val settingsGlob: String
 }
 
 @JsExport
@@ -255,19 +258,21 @@ fun workspaceFiles(): WorkspaceFiles =
         "markupExtensions" to (ProjectFiles.HTML_EXTENSIONS + ProjectFiles.TEMPLATE_EXTENSIONS).plain(),
         "fileCap" to ProjectFiles.FILE_CAP,
         "sizeCap" to ProjectFiles.SIZE_CAP,
+        "settingsGlob" to "**/application*.{properties,yml,yaml}",
     )
 
 /** Whether the file at [path], counted from the workspace folder that holds it, lies in a folder left unread. */
 @JsExport
 fun inSkippedFolder(path: String): Boolean = ProjectFiles.inSkippedFolder(path)
 
-/** How a file named [name] is read where VS Code gives it no language the extension reads: `kotlin`, `html`, or null for a file left unread. */
+/** How a file named [name] is read where VS Code gives it no language the extension reads: `kotlin`, `html`, `settings`, or null for a file left unread. */
 @JsExport
 fun languageOfFile(name: String): String? =
     when (ProjectFiles.languageOf(name)) {
         SourceLanguage.KOTLIN -> "kotlin"
         SourceLanguage.HTML -> "html"
-        else -> null
+        SourceLanguage.SETTINGS -> "settings"
+        null -> null
     }
 
 /** What one file gives the workspace: the signals it names and defines, its ids and classes, and what its Kotlin lets other files see. */
@@ -371,13 +376,23 @@ class WorkspaceIndex(
     private var constants: Pair<Set<String>, Array<String>>? = null
     private val drift = HashMap<String, Pair<SignalFacts, DriftFacts>>()
 
-    /** Reads [text] as the file [key]; without [facts], what it says of the server's reads waits for [readFacts]. */
+    /** Reads [text] as the file [key] in [language], as [languageOfFile] names it; without [facts], what it says of the server's reads waits for [readFacts]. */
     fun put(
         key: String,
         text: String,
-        kotlin: Boolean,
+        language: String,
         facts: Boolean,
-    ): Boolean = index.put(key, text, if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML, facts)
+    ): Boolean =
+        index.put(
+            key,
+            text,
+            when (language) {
+                "kotlin" -> SourceLanguage.KOTLIN
+                "settings" -> SourceLanguage.SETTINGS
+                else -> SourceLanguage.HTML
+            },
+            facts,
+        )
 
     fun readFacts(
         key: String,

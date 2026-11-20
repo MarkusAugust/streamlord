@@ -31,6 +31,26 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()].sort(), ["open", "query"]);
   });
 
+  it("reads Spring's settings for a naming strategy, which leaves the names to the codec", async () => {
+    const index = new SignalIndex(new Set());
+    index.update(doc("/w/src/main/resources/application.yml", "yaml", "server:\n  port: 8080\n"));
+    index.update(doc("/w/src/main/resources/logback.yml", "yaml", "spring.jackson.property-naming-strategy: SNAKE_CASE\n"));
+    assert.deepEqual([...index.allDefinitions()], []);
+    index.update(doc("/w/src/main/resources/application.yml", "yaml", "spring.jackson.property-naming-strategy: SNAKE_CASE\n", 2));
+    assert.deepEqual([...index.allDefinitions()], ["*"]);
+    files.set("/d/application-dev.properties", encode("spring.jackson.property-naming-strategy=SNAKE_CASE\n"));
+    const findFiles = workspace.findFiles;
+    workspace.findFiles = async (glob?: unknown) => (String(glob).includes("application") ? [Uri.file("/d/application-dev.properties")] : []);
+    try {
+      const fromDisk = new SignalIndex(new Set());
+      await fromDisk.rebuild();
+      assert.deepEqual([...fromDisk.allDefinitions()], ["*"]);
+    } finally {
+      workspace.findFiles = findFiles;
+      files.clear();
+    }
+  });
+
   it("gives the analysis the constants no file declares as anything else", () => {
     const index = new SignalIndex(new Set());
     let fired = 0;
@@ -203,7 +223,7 @@ describe("signal index", () => {
       await index.rebuild();
       assert.deepEqual([...index.allDefinitions()], ["kept"]);
       const glob = "**/{build,node_modules,.gradle,dist,out,target,.*}/**";
-      assert.deepEqual(excludes, [glob, glob]);
+      assert.deepEqual(excludes, [glob, glob, glob]);
       for (const p of skipped) {
         listeners.create?.(Uri.file(p));
         listeners.change?.(Uri.file(p));

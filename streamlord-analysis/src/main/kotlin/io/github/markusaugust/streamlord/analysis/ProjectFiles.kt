@@ -1,5 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.regex
+
 /** Which files of a project the analysis and both editors read, and which folders they leave out. */
 public object ProjectFiles {
     /** The folders left unread below a project's root, with every hidden one: build output and dependencies. */
@@ -29,12 +31,19 @@ public object ProjectFiles {
      */
     public fun languageOf(path: String): SourceLanguage? {
         if (inSkippedFolder(path)) return null
-        return when (path.substringAfterLast('/').substringAfterLast('.', "").lowercase()) {
+        val name = path.substringAfterLast('/')
+        if (isSettings(name)) return SourceLanguage.SETTINGS
+        return when (name.substringAfterLast('.', "").lowercase()) {
             "kt" -> SourceLanguage.KOTLIN
             in HTML_EXTENSIONS, in TEMPLATE_EXTENSIONS -> SourceLanguage.HTML
             else -> null
         }
     }
+
+    /** Whether a file named [name] holds Spring's settings, `application.yml` and `application-dev.properties` among them: read for how the codec names signals. */
+    public fun isSettings(name: String): Boolean = SETTINGS_FILE.matchEntire(name) != null
+
+    private val SETTINGS_FILE = regex("""application(?:-[\w.-]+)?\.(?:properties|ya?ml)""")
 
     /**
      * Whether the file at [path], a path from the project's root, lies in a folder left unread: one of

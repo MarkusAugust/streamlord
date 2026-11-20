@@ -961,6 +961,7 @@ public class Analyzer(
      */
     public fun signalReferences(source: Source): List<SignalReference> {
         val src = source.text
+        if (source.language == SourceLanguage.SETTINGS) return emptyList()
         if (source.language != SourceLanguage.KOTLIN) return markupSignalReferences(src, catalog, source.prefix, engine = source.engine)
         val out = ArrayList<SignalReference>()
         val claimed = HashSet<Int>()

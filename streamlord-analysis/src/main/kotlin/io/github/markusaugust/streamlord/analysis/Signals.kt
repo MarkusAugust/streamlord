@@ -12,7 +12,8 @@ import kotlin.concurrent.Volatile
  * generous: better to offer a name twice than to miss it.
  */
 
-public enum class SourceLanguage { KOTLIN, HTML }
+/** How a file is read: Kotlin, markup, or the settings of a Spring application, read only for how its codec names signals. */
+public enum class SourceLanguage { KOTLIN, HTML, SETTINGS }
 
 // A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
 // refused at runtime (signalNameHyphenIssues) and collected as written. The helpers that do not
@@ -303,11 +304,15 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
 
 /**
  * What the definitions say about a class, written with a `:`, which no signal name holds: a class
- * a page is declared from, and a `@Serializable` class whose properties are defined. A class in the
- * first and not the second is one only its codec can name (see [isKnownSignal]).
+ * a page is declared from, a class a server patch sends, a class whose properties the analysis
+ * reads, and a property of a Jackson class, `jackson:Form:email`, a signal only where a page is
+ * declared from the class or a patch sends it. A class a page is declared from that the analysis
+ * cannot read is one only its codec can name (see [isKnownSignal]).
  */
 internal const val ENCODED_CLASS: String = "toJsonValue:"
+internal const val PATCHED_CLASS: String = "patchSignals:"
 internal const val READABLE_CLASS: String = "class:"
+internal const val JACKSON_PROPERTY_OF: String = "jackson:"
 
 /**
  * A name a DSL call or core declares with a hyphen, which Streamlord refuses at render or send time,
@@ -412,6 +417,7 @@ public data class SignalDeclaration(
  * helpers are somebody else's and name no signal: their names, `set` and `toggle`, are other APIs' too.
  */
 public fun collectSignals(source: Source): Set<String> {
+    if (source.language == SourceLanguage.SETTINGS) return emptySet()
     val foreign = foreignHelpers(source)
     val src = source.text
     val language = source.language
@@ -449,6 +455,7 @@ internal fun collectDeclaredSignals(
  * reads them together.
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
+    if (source.language == SourceLanguage.SETTINGS) return if (settingsRenameSignals(source.text)) setOf(ANY_SIGNAL) else emptySet()
     val foreign = foreignHelpers(source)
     return collectSignalDefinitions(source.text, source.language, { name, _ -> name in foreign }, prefix = source.prefix)
 }
@@ -473,9 +480,16 @@ internal fun collectSignalDefinitions(
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
         for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
-        // A page declared from a class defines what its codec writes: the properties for a
-        // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
+        for ((type, properties) in jacksonProperties(src)) {
+            out += READABLE_CLASS + type
+            for (p in properties) out += "$JACKSON_PROPERTY_OF$type:${p.name}"
+        }
+        // A page declared from a class defines what its codec writes: the properties for a class
+        // the analysis reads, any name for one it cannot read, or for a value of no named class.
         for (type in encodedSignalTypes(src, foreign, lex!!)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+        for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) out += PATCHED_CLASS + type
+        // A naming strategy leaves every class's names to the codec.
+        if (codeRenamesSignals(src, lex)) out += ANY_SIGNAL
     }
     return out
 }
@@ -486,6 +500,7 @@ internal fun collectSignalDefinitions(
  * that names them, so neither is here.
  */
 public fun signalDeclarations(source: Source): List<SignalDeclaration> {
+    if (source.language == SourceLanguage.SETTINGS) return emptyList()
     val foreign = foreignHelpers(source)
     return definedAt(source.text, source.language, Spread(), { name, _ -> name in foreign }, prefix = source.prefix).sortedWith(
         compareBy({

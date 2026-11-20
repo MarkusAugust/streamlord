@@ -87,7 +87,7 @@ public class ProjectIndex(
                 text.hashCode(),
                 names(source),
                 withoutDsl,
-                collectSelectors(text),
+                if (language == SourceLanguage.SETTINGS) Selectors.EMPTY else collectSelectors(text),
                 if (language == SourceLanguage.KOTLIN) declaredNames(text) else null,
                 if (facts) collectSignalFacts(source) else previous?.facts ?: NO_FACTS,
                 stale = !facts,

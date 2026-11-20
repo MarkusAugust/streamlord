@@ -36,6 +36,17 @@ All notable changes to Streamlord are recorded here. The format follows
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
+- A class that is not `@Serializable` is read as Jackson writes it, where it turned the signal
+  checks off for the whole project: a page declared from it with `toJsonValue`, a patch of it and a
+  `readSignals<T>()` of it are judged by its constructor properties, each by its name or its
+  `@JsonProperty`, without one under `@JsonIgnore`. A class under `@JsonNaming`, and every class in
+  a project that sets a naming strategy, in code or in Spring's `spring.jackson.property-naming-strategy`,
+  stays the codec's alone, as before. A naming strategy in kotlinx's `Json { namingStrategy = ... }`
+  now does the same for `@Serializable` classes, which were judged by names the codec did not write.
+- **Breaking:** `SourceLanguage` has `SETTINGS`, for Spring's `application.yml`, `.yaml` and
+  `.properties`, which `ProjectFiles.languageOf` names and `checkProject` and both editors read for a
+  naming strategy. A `when` over `SourceLanguage` needs the branch. `SignalFacts.renamesSignals` says
+  a file sets a strategy.
 - A Datastar expression with template syntax in it is read around that syntax, where it was left
   out whole: `data-text="$cuont + {{ x }}"` in Pebble and `data-text="$cuont + ${x}"` in jte get
   `unknown-signal`, and go to definition, find usages and rename reach those reads in both

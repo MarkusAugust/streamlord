@@ -86,7 +86,12 @@ public fun Analyzer.analyzeProject(
     val constants = index.constants()
     return sources.flatMap { (path, file) ->
         val source = file.copy(constants = constants)
-        val own = if (source.language == SourceLanguage.KOTLIN) analyzeKotlin(source) else analyzeHtml(source)
+        val own =
+            when (source.language) {
+                SourceLanguage.KOTLIN -> analyzeKotlin(source)
+                SourceLanguage.HTML -> analyzeHtml(source)
+                SourceLanguage.SETTINGS -> emptyList()
+            }
         val told = projectSignalIssues(source.language, signalReferences(source), index.signalsFor(path))
         (own + told).sortedWith(compareBy({ it.start }, { it.end })).map { issue ->
             val (line, column) = issue.position(source.text)

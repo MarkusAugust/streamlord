@@ -17109,6 +17109,7 @@ expression-syntax 46-52 error: Datastar expression: Unterminated string constant
 expression-syntax 158-161 error: Datastar expression: Unterminated template
 expression-syntax 203-205 error: Datastar expression: Unterminated comment
 signal-name 666-668 warning: Datastar's client reads this key as the signal år, which no $name reaches: Datastar reads only ASCII letters, digits and _ after a $, so the browser looks for a JavaScript variable instead; only the bracket form $['år'] reads it.
+== real/html/jackson.html
 == real/html/mistakes.html
 unknown-action 107-111 warning: Unknown action @GET. Did you mean @get?
   fix "Change to @get" 107-111 "@get"
@@ -17321,6 +17322,7 @@ interpolate-placeholders 608-618 hint: interpolate takes arrayOf(a) as one value
   fix "Pass the elements as the values" 608-618 "a"
 interpolate-placeholders 620-636 hint: interpolate takes intArrayOf(n, 2) as one value and writes it whole, in brackets, escaped like any text. Write the elements out to pass them as the values.
   fix "Pass the elements as the values" 620-636 "n, 2"
+== real/kotlin/JacksonForms.kt
 == real/kotlin/KtorRoutes.kt
 unescaped-interpolation 570-573 hint: Kotlin writes $id into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it.
   fix "Mark the values with + in interpolate { }, which escapes the values" 555-586 "interpolate { \"<li id=\\\"item-${+id}\\\">${+qty}</li>\" }.text"

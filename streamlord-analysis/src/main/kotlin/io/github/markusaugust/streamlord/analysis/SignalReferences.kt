@@ -198,7 +198,24 @@ internal fun nearestSignal(
 internal fun unknownSignalIssues(
     refs: List<SignalReference>,
     defined: Set<String>,
-): List<Issue> = refs.mapNotNull { unknownSignalIssue(it, defined) }
+): List<Issue> {
+    val known = withClassProperties(defined)
+    return refs.mapNotNull { unknownSignalIssue(it, known) }
+}
+
+/** [defined] with the properties of each Jackson class a page is declared from or a patch sends, as the names they are. */
+internal fun withClassProperties(defined: Set<String>): Set<String> {
+    val sent = HashSet<String>()
+    for (d in defined) for (marker in listOf(ENCODED_CLASS, PATCHED_CLASS)) if (d.startsWith(marker)) sent += d.removePrefix(marker)
+    if (sent.isEmpty()) return defined
+    val out = LinkedHashSet(defined)
+    for (d in defined) {
+        if (!d.startsWith(JACKSON_PROPERTY_OF)) continue
+        val rest = d.removePrefix(JACKSON_PROPERTY_OF)
+        if (rest.substringBefore(':') in sent) out += rest.substringAfter(':')
+    }
+    return out
+}
 
 private fun unknownSignalIssue(
     ref: SignalReference,
