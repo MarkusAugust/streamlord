@@ -169,13 +169,30 @@ tasks.withType<Test>().configureEach {
     inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     // `-PrecordVerdicts=true` has VerdictDigestTest write test/fixtures/verdicts.txt anew instead of comparing with it.
     providers.gradleProperty("recordVerdicts").orNull?.let { systemProperty("streamlord.record", it) }
-    // KotlinParserFasitTest reads every Kotlin file of the repository, and `-PfasitExtra=<dirs>` more beside them.
+}
+
+// KotlinParserFasitTest reads every Kotlin file of the repository, so it runs on its own: a change to any of them runs
+// it again, and the module's other tests stay up to date. `-PfasitExtra=<dirs>` reads more beside them, and
+// `-PrecordFasit=true` takes out of fasit-known.txt what is gone (`all` writes what is found).
+tasks.named<Test>("test") { filter { excludeTestsMatching("*KotlinParserFasitTest") } }
+
+val fasitTest = tasks.register<Test>("fasitTest") {
+    description = "Holds the analysis's reading of Kotlin's structure to Kotlin's own parser."
+    group = "verification"
+    val test = tasks.test.get()
+    testClassesDirs = test.testClassesDirs
+    classpath = test.classpath
+    filter { includeTestsMatching("*KotlinParserFasitTest") }
+    val root = rootProject.layout.projectDirectory
     inputs
-        .files(root.asFileTree.matching { include("**/*.kt").exclude("**/build/**", "**/node_modules/**", ".claude/**", "**/.gradle/**") })
+        .files(root.asFileTree.matching { include("**/*.kt").exclude("**/build/**", "**/node_modules/**", ".claude/**", "**/.gradle/**", "**/.idea/**", "**/out/**") })
         .withPropertyName("kotlinSources")
         .withPathSensitivity(PathSensitivity.RELATIVE)
     providers.gradleProperty("fasitExtra").orNull?.let { systemProperty("streamlord.fasit.extra", it) }
+    providers.gradleProperty("recordFasit").orNull?.let { systemProperty("streamlord.fasit.record", it) }
 }
+
+tasks.check { dependsOn(fasitTest) }
 
 // How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript
 // build of the same tests, editors/vscode/analysis-js, brings its own. testCommon runs on both.
