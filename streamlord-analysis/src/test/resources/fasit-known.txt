@@ -1,5 +1,7 @@
+conformance/wire/kotlin/WireTranscripts.kt | returns | exchange | private fun exchange(
 demo/src/test/kotlin/io/github/markusaugust/streamlord/demo/CspTest.kt | value | header | val header = response.headers[CspNonce.HEADER]!!
 demo/src/test/kotlin/io/github/markusaugust/streamlord/demo/OrdersTest.kt | value | etag | val etag = first.headers[HttpHeaders.ETag]!!
+editors/intellij/src/main/kotlin/io/github/markusaugust/streamlord/intellij/index/SignalIndex.kt | returns | projectSignals | fun projectSignals(file: PsiFile): ProjectSignals {
 editors/intellij/src/main/kotlin/io/github/markusaugust/streamlord/intellij/inspections/StreamlordInspection.kt | scope | issue | fun range(issue: Issue) = TextRange(issue.start, minOf(maxOf(issue.end, issue.start + 1), length))
 editors/intellij/src/main/kotlin/io/github/markusaugust/streamlord/intellij/inspector/InspectorPanel.kt | value | model | val model = choices.model as DefaultComboBoxModel<Choice>
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/AttributesFormTest.kt | value | element | val element = myFixture.file.findElementAt(offset - 1)!!
@@ -9,6 +11,7 @@ editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/Comp
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/CompletionTest.kt | value | template | val template = TemplateManagerImpl.getTemplateState(myFixture.editor)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/DatastarPluginCoexistenceTest.kt | value | reference | val reference = TargetElementUtil.findReference(myFixture.editor, myFixture.caretOffset)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/DatastarPluginCoexistenceTest.kt | value | reference | val reference = TargetElementUtil.findReference(myFixture.editor, myFixture.caretOffset)!!
+editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/EditorFeaturesTest.kt | returns | hostAt | fun hostAt(needle: String) =
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/EditorFeaturesTest.kt | value | action | val action = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("@post") + 2)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/EditorFeaturesTest.kt | value | attr | val attr = StreamlordDocumentation.at(myFixture.file, 10)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/EditorFeaturesTest.kt | value | fn | val fn = StreamlordDocumentation.at(myFixture.file, myFixture.file.text.indexOf("dataOnClick") + 3)!!
@@ -17,6 +20,7 @@ editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/Edit
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/ExpressionHelpTest.kt | value | owner | val owner = handler.findElementForUpdatingParameterInfo(update)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/InspectionTest.kt | value | document | val document =
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/InspectionTest.kt | value | key | val key = HighlightDisplayKey.find("DatastarExpressionInspection")!!
+editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/InspectorTest.kt | returns | pumped | private fun pumped(bytes: ByteArray): List<DatastarFrame> {
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/InspectorTest.kt | value | base | val base = RequestStore.getInstance(project).baseDir()!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/InspectorTest.kt | value | dir | val dir = VfsUtil.createDirectoryIfMissing(base, path.substringBeforeLast('/'))!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/InspectorTest.kt | value | document | val document = FileDocumentManager.getInstance().getDocument(file)!!
@@ -42,6 +46,7 @@ editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/Sign
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/SignalIndexModuleTest.kt | value | page | val page = PsiManager.getInstance(project).findFile(file(root, "page.html", "<b data-text=\"\$sdk\"></b>"))!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/SignalNavigationTest.kt | value | reference | val reference = TargetElementUtil.findReference(editor, editor.caretModel.offset)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/SkippedFoldersTest.kt | value | root | val root = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(dir)!!
+editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/StreamlordProject.kt | returns | coreWithoutHtml | private fun coreWithoutHtml(core: File): File {
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/TemplateValueTypesTest.kt | value | document | val document = FileDocumentManager.getInstance().getDocument(values)!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/TemplateValueTypesTest.kt | value | files | val files = expected.obj("files")!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/TemplateValueTypesTest.kt | value | key | val key = HighlightDisplayKey.find("KotlinInterpolationInspection")!!
@@ -49,30 +54,442 @@ editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/Temp
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/TemplateValueTypesTest.kt | value | placeholder | val placeholder = it.string("placeholder")!!
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/WithoutStreamlordTest.kt | value | element | val element = myFixture.file.findElementAt(offset - 1)!!
 editors/vscode/analysis-js/src/jsMain/kotlin/io/github/markusaugust/streamlord/editor/Port.kt | value | facts | val facts = index.signalsFor(path).own()!!
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | f | fun f(n: Int) = try
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | f | fun f(n: Int) = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | inner | fun inner(n: Int): String = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | inner | fun inner(n: String): String = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | page | fun page(n: Int) = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | size | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | size | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | size | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | returns | size | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | for (n in rows) try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | for (n in rows) try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | for (n in xs) try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun a(n: Int) = run { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun f(n: Int) = try
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun f(n: Int) = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun inner(n: Int): String = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun parse(n: Int) = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun size(n: Int) = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | n | fun size(n: Int) = try { n }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | x | for (x in xs) try { out += x }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | x | for (x in xs) try { out += x.length }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | x | for (x: Int in xs) try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | scope | x | for (x: String in xs) try { out += x }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | a | val a = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | a | val a = try { n.length }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | a | val a = try { q.length }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | b | val b = try { n.length }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | c | val c = q!!
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | c | val c = try { q.length } catch (e: Exception) { 0 }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | d | val d = q!!
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | lines | val lines = order.lines!!
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | other | val other =
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try { load() }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | v | val v = try { x.length }
+editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | x | val x = try { 1 }
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | returns | f | fun f(n: String) = /* the page */ "Comment <b>$n</b>"
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | returns | g | fun g(n: String) = // the page
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | returns | page | fun page(n: Int) = // x: String,
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | scope | n | for (n in rows) // each
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | scope | n | fun size(n: Int) = pad(n) // the size
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | a | val a = if (n > 0) "a" else // the other
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | a | val a = q as String? /* nullable */
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | a | val a = q!! // forced
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | a | val a = q!! // sure
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | v | @Language("HTML") val v: String = // first, the header
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | v | val v = /* v */ "ValComment <b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/comments.kt | value | v | val v = try {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | returns | f | fun f(n: Int) = if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | returns | f | fun f(n: Int) = if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | returns | inner | fun inner(n: Int) = if (n > 0) n else
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | returns | size | fun size(n: Int) = if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | returns | size | fun size(n: Int) = when (n)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | returns | two | fun two(n: Int) =
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun f(n: Int) = if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun inner(n: Int) = if (n > 0) "a"
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun inner(n: Int) = if (n > 0) "a" else if (n < 0) "b"
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun inner(n: Int) = when (n) {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun inner(n: Int) = when (n) { 1 -> "a"; else -> "b" }
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun inner(n: Int) = when {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun size(n: Int) =
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun size(n: Int) = if (n > 0) "a"
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun size(n: Int) = run {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun size(n: Int) = when (n)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun size(n: Int) = when (n) {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | scope | n | fun size(n: Int) = when (n) {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = if (n > 0) "x" else
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = if (ok)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = if (ok) 1 else
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = when
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = when (n)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | a | val a = when (n)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | g | val g = if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > 0)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | ok | val ok = x is
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | w | val w = if (name.isEmpty()) {
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | x | val x = if (flag)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | x | val x = when (a)
+editors/vscode/test/fixtures/kotlin-layouts/if-else-lines.kt | value | x | val x = when (flag)
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | a | fun a() = b private const val title = "<b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | inner | fun inner(n: Int) = n to
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | outer | fun outer(x: String) {
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | pair | fun pair(name: Int) = name to
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | pair | fun pair(name: Int) = name to
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | scope | name | fun pair(name: Int) = name to
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | value | a | val a = b.let { } open
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | value | y | val y = x shl
+editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | value | z | val z = x until
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | returns | inner | fun inner(n: Int) = n !in
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | returns | inner | fun inner(n: Int) = n in
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | returns | inner | fun inner(n: Int) = n is
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | returns | inner | fun inner(n: Int) = n++
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | cb | fun reg2(cb: () -> List<Int>) = cb()
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun f(n: Int) = check(n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = "x$n"
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = (n + 1)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = arrayOf(n)[0]
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = basis
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = n
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = n !in
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = n /* c */
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = n in
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = n is
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = n++
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = run
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = run {
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = this
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun inner(n: Int) = { n + 1 }
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = "x$n"
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = listOf(
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int) = { n + 1 }
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | n | fun size(n: Int): Int = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | r | fun row(r: Row) = "<tr>${cell(r.n)}</tr>"
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | x | fun page(x: Int) = """
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-1.kt | scope | x | fun page(x: Int) = "a${
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | getter | title | val title = load(); get() = "<i>"
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun inner(n: Int) = do2 {
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun neg(n: Int) = { n + 1 }
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun one(n: Int) = (n + 1)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun size(n: Int) =
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun size(n: Int) = (n + 1)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun size(n: Int) = run {
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun størrelse(n: Int) = påfyll(n)
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun three(n: Int) = { n }
+editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | scope | n | fun two(n: Int) = listOf(n)[0]
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | returns | outer | fun outer(n: String, a: Boolean, rows: List<Int>): String {
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | i | for (i in 0 until
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | i | for (i in 0 until count)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | item | for (item in if (a) items else emptyList()) println(item)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | item | for (item in items
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | item | for (item in when (a) { 1 -> items; else -> emptyList() }) println(item)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | item | for (item: Int
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | k | for (n in a) for (m in n) for (k in m) println(k)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | m | for (n in a) for (m in n) for (k in m) println(k)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in a) for (m in n) for (k in m) println(k)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in names) log(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in row) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) append(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) if (n > 0) println(n) else if (n < 0) println(-n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) if (n > 0) println(n); println("<p>$n</p>")
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) if (n > 0) {
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) out += n to
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) println(
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) return "<b>$n</b>"
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | for (n in rows) total +=
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | n | if (a) for (n in rows) if (n > 0) return "x"
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | row | for (row in rows)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in if (ok) xs else xs) f(1)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) f(if (ok) 1 else 2)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) if (ok) if (ok) out += x else out += "a"
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) if (ok) out += "${if (ok) 1 else 2}"
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) if (ok) out += x else if (ok) out += x
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) if (ok) xs.map { if (ok) 1 else 2 }
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) if (x.isEmpty()) out += x
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) ifs(x)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x in xs) notify(x)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x: Int in xs)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x: Int in xs) // comment here
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | x | for (x: Int in xs) if (x > 0) println(x)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | æøå | for (æøå in rows) println(æøå)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | first | val first = items.firstOrNull()!!
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | id | val id = call.parameters["id"]!!
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | items | val items = if (page > 0)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | label | val label = name as String?
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | list | val list = items as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | name | val name = call.parameters["name"]!!
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | names | val names = repo.all() as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | value | user | val user = repo.find(id) as User?
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | item | for (item in items)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | 1 -> for (n in xs) use(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) append(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) if (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) if (n > 0) use(n) else if (n < 0) use(-n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) total = total +
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) use(
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs) while (n > 0) use(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | for (n in xs.map { v -> v * 2 }.filter { it > 0 })
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | fun inner(n: Int) = do2(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | if (ok) for (n in xs) use(n) else println("<p>$n</p>")
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | n | val a = if (ok) for (n in xs) use(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | name | fun inner(name: Int) = interpolate { "<b>${+name}</b>" }
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x in xs)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x in xs)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x in xs) if (x.isNotEmpty())
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x in xs) notif(x)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x in xs) println(x); for (y in xs) println(y)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x: Int in xs)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x: Int in xs) if (x > 0) println("a") else if (x < 0) println("b")
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x: Int in xs) if (x > 0) {
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | for (x: Int in xs) x
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | x | if (c) for (x: Int in xs) if (x > 0) {
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | y | for (x in xs) println(x); for (y in xs) println(y)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | scope | y | for (y in x.split(","))
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | value | list | val list = listOf(1) as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | value | n | val n = count!!
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-2.kt | value | w | val w = while (true)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | returns | pick | fun pick(x: String, a: Boolean, xs: List<Int>) {
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | item | for (item: Int in items)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | item | for (item: Int in items) // comment
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | item | for (item: Int in items.sortedWith(object : Comparator<Int> { override fun compare(a: Int, b: Int) = a - b }))
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (n in rows) if (n > 0) {
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (n in rows) println(
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (n in rows) println("""
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (n in rows) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (n in rows) total += n
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (n: Int in xs) while (n > 0)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | for (r in rows) for (n in r) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | n | outer@ for (n in rows) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | r | for (r in rows) for (n in r) println(n)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | x | for (x: Int in xs
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | x | for (x: Int in xs) if (x > 0)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | x | for (x: Int in xs) if (x > 0) return
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | x | for (x: Int in xs) if (x > 0) use(x)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | x | for (x: Int in xs) if (x > 0) use(x)
+editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | x | for (x: Int? in xs) use(x ?: return) else println("<b>$x</b>")
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-1.kt | returns | outer | fun outer(n: String): String {
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-1.kt | scope | x | for (x in xs) n += x
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-1.kt | value | a | val a = q as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-1.kt | value | a | val a = q as String?
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-1.kt | value | todo | val todo = todos.find(id)!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | returns | a | fun a(n: Int) = n++
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | returns | b | fun b(n: Int?) = n!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | returns | e | fun e(n: List<Int>) = n as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | n | for (n: Int in @Suppress("UNCHECKED_CAST") (xs as List<Int>))
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | n | fun a(n: Int) = n++
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | n | fun b(n: Int?) = n!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | n | fun e(n: List<Int>) = n as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | role | for (role in roles) println(role)
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x in xs)
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x in xs) do {
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x in xs) if (x > 0) a++
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x in xs) n += x +
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x in xs) n = n - -
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x: Int in xs)
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | for (x: Int in xs) use(x)
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | x | if (c) for (x in xs) println(x) else println("<i>$x</i>")
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | a | val a = name!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | d | val d = 1 until
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | g | val g = q !is
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | name | val name = user.name!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | r | val r = x as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | roles | val roles = user.roles as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | s | val s = x is Map<*, *>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | getter | a | val a = q as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | getter | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | returns | nested | fun nested(name: String): String =
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | returns | page | fun page(items: List<String>): String {
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | scope | n | fun size(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | a | val a = q as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | a | val a = q as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | b | val b = q as String?
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | items | val items = repo.all() as List<Todo>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | name | val name = call.parameters["name"]!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | todo | val todo = repo.find(id) as Todo?
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-3.kt | value | todo | val todo = repo.find(id)!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | scope | item | for (item: Int in items
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | value | a | val a = if (c) x else
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | value | c | val c = foo as String?
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | value | m | val m = cast<@Named("a=b") String>
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | getter | title | val title = "<b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | getter | title | val title = "<b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | value | a | val a = b as
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | value | a | val a = b in
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | value | a | val a = if (c)
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | value | a | val a = if (c) x else
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | getter | title | val title = "<b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | a | fun a() = b private const @A val title = "<b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | z | fun z() = a private open val title = "<b>x</b>"
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | getter | x | val x = count++
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | returns | size | fun size(n: Int) = -n
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | scope | n | fun size(n: Int) = -n
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | scope | n | fun size(n: Int) = n
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | scope | n | val f = fun(n: Int) = pad(n)
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | a | val a = k++
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | a | val a = k--
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | a | val a = n is
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | a | val a = q in
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | a | val a = q is
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | b | val b = k++
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | b | val b = n in
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | c | val c = a shr
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | c | val c = n !in
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | d | val d = n !is
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | e | val e = a is List<*>
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | g | val g = a !is Map<*, *>
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | x | val x = b--
+editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | value | x | val x = count++
+editors/vscode/test/fixtures/kotlin-layouts/misc-2.kt | scope | n | fun f(n: String) = fun (String).(m: Int) = "<b>$n</b>"
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | getter | names | val names = m["names"] as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | getter | names | val names = m["names"]!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | getter | x | val x = load() as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | getter | x | val x = load() as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | getter | x | val x: String = load()!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | cast | fun cast(x: Any) = x as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | four | fun four(id: Long) = if (id > 0)
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | get | fun get(x: String?) = x!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | inner | fun inner(n: Int) = listOf(n) as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | inner | fun inner(n: Int) = listOf(n) as List<Map<String, Int?>>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | inner | fun inner(n: Int) = n as
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | inner | fun inner(n: Int) = n as Comparable<*>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | returns | inner | fun inner(n: Int) = n.takeIf { it > 0 } as Int?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | n | fun inner(n: Int) = listOf(n) as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | n | fun inner(n: Int) = listOf(n) as List<Map<String, Int?>>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | n | fun inner(n: Int) = n as
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | n | fun inner(n: Int) = n as Comparable<*>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | n | fun inner(n: Int) = n.takeIf { it > 0 } as Int?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | x | fun cast(x: Any) = x as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | x | fun get(x: String?) = x!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = if (b)
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = q as
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = q as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = q!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | a | val a = x as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | age | val age = user.age as Int?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | bad | val bad = name!!.length!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | c | val c = q as
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | d | val d = n in
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | d | val d = s as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | e | val e = q is
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | email | val email = user!!.email!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | first | val first: List<Int> = m["x"] as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | g | val g = n++
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | greater | val greater = a.filter { it > 1 } as
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | h | val h = cb as (() -> Unit)?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | h | val h = g as (Int) -> List<String>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | h | val h = g as Map<String, () -> Int>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | i | val i = if (b) 1 else
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | j | val j = when (n)
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | list | val list = name!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | m | val m = a!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | names | val names = m["names"] as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | names | val names = m["names"]!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | tags | val tags = user.tags as List<String>?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | total | val total = count!!
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | v | val v = list.filter { it > 0 } as List<Int>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | x | val x = (name ?: "") as CharSequence?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | x | val x = listOf(1).map { it }
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | x | val x = load() as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | x | val x = load() as String?
+editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | x | val x: String = load()!!
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | returns | cast | fun cast(x: Any) = x as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | scope | x | fun cast(x: Any) = x as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | a | val a = listOf<Int>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | a | val a = m as List<*>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | a | val a = m as Map<String, List<Pair<Int, String?>>>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | a | val a = q as List<String>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | a | val a = q as Map<String, List<Int>>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | b | val b = m as Array<out Any?>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | c | val c = foo<Bar>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | first | val first = list.first() as Int?
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | forced | val forced = maybe!!
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | m | val m = map as MutableMap<String, Int?>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | m | val m = mapOf<String, () -> Unit>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | t | val t = map.toList() as List<Pair<String, Int>>
+editors/vscode/test/fixtures/kotlin-layouts/type-arguments-and-comparisons.kt | value | x | val x = m.getValue("a") as Comparable<Int>
 rewrite-probes/src/generator/kotlin/io/github/markusaugust/streamlord/probes/Generate.kt | scope | issue | for (issue in issues.filter { it.code in JUDGED }) for (fix in issue.fixes) variants += Triple(fix.title, fix, false)
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Analyzer.kt | returns | indicatorOrderIssues | private fun indicatorOrderIssues(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Analyzer.kt | returns | parts | fun parts(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Analyzer.kt | returns | ranges | fun ranges(part: String): List<Pair<Int, Int>> {
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Analyzer.kt | value | rewrite | val rewrite = site.rewrite!!
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Catalog.kt | value | all | val all = DOM_EVENTS_FILE.obj("interfaces")!!
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Catalog.kt | value | i | val i = all.obj(name)!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/EditorHelp.kt | returns | codeWord | private fun codeWord(e: ExpressionAtCaret): Hover? {
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/EditorHelp.kt | returns | events | private fun events(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/EventArguments.kt | returns | eventArgumentIssues | internal fun eventArgumentIssues(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Expression.kt | returns | jsRegions | internal fun jsRegions(text: String): ByteArray {
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Expression.kt | scope | r | for (r in clientStatements(trimmed)) for (k in r) covered[k] = true
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Expression.kt | value | value | val value = property.inner!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/InterpolateRewrite.kt | returns | interpolateText | private fun interpolateText(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Interpolations.kt | returns | chainFrom | internal fun chainFrom(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Interpolations.kt | scope | s | for (s in strings) visit(s)
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/JsParser.kt | scope | i | for (i in from until minOf(to, src.length)) if (isNewLine(src[i])) return true
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/JsParser.kt | scope | param | for (param in params) if (param != null) toAssignable(param, true)
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/JsParser.kt | value | argument | val argument = node.inner!!
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/JsParser.kt | value | only | val only = list[0]!!
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/JsParser.kt | value | target | val target = node.inner!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinDeclarations.kt | returns | declarations | private fun declarations(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinDeclarations.kt | value | callee | val callee = MARKUP_INITIALISER.groupAt(src, m, 2)!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinStrings.kt | returns | readKotlinStringAt | internal fun readKotlinStringAt(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinValuesInHtml.kt | returns | judgeInterpolated | private fun Analyzer.judgeInterpolated(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinValuesInHtml.kt | returns | judgeValues | internal fun Analyzer.judgeValues(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinValuesInHtml.kt | scope | where | fun unsigned(where: String): Issue? =
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/KotlinValuesInHtml.kt | value | value | val value = markedValue(ip)!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Markup.kt | returns | tokenize | public fun tokenize(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Markup.kt | returns | validateAttributes | public fun validateAttributes(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Markup.kt | returns | validateKeyCase | private fun validateKeyCase(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Markup.kt | value | keyedSpec | val keyedSpec =
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Operands.kt | returns | primaryEnd | private fun primaryEnd(from: Int): Int {
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Operands.kt | returns | skip | fun skip(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Requests.kt | value | list | val list = listed(json)!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Scanner.kt | returns | parseArgs | private fun parseArgs(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Selectors.kt | scope | m | for (m in CLASSES_SET.findAll(src)) for (s in STRING.findAll(m.groupValues[1])) classes += s.groupValues[1]
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/SignalDrift.kt | scope | type | for (type in one.patchedTypes) for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | returns | literalPairs | internal fun literalPairs(text: String): List<LiteralPair> {
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | returns | signalRenameText | public fun signalRenameText(
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | scope | properties | for (properties in serializableProperties(src).values) for (property in properties) out += property.name
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | scope | re | if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | value | body | val body = attributes.objectForm.groupAt(src, m, 1) ?: attributes.objectForm.groupAt(src, m, 2)!!
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | value | name | val name = ASSIGNED_SIGNAL.groupAt(src, m, 1) ?: ASSIGNED_SIGNAL.groupAt(src, m, 2)!!
 streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Signals.kt | value | written | val written = attributes.keyed.groupAt(src, m, 1)!!
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/Tokens.kt | returns | signalTokens | private fun signalTokens(
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/ValueKinds.kt | returns | lastCall | internal fun lastCall(t: String): Call? {
+streamlord-analysis/src/main/kotlin/io/github/markusaugust/streamlord/analysis/ValueKinds.kt | returns | trustedLiteral | internal fun trustedLiteral(
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/AnalyzeProjectTest.kt | value | files | val files = JsonParser.parseObject(dir.resolve("expected.json").readText()).obj("files")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/CallSitesTest.kt | value | src | val src = case.string("src")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/ClientOracleTest.kt | value | action | val action = case.string("action")!!
@@ -111,8 +528,11 @@ streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/E
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/EditorHelpTest.kt | value | written | val written = case.string("text")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/FixesTest.kt | value | source | val source = case.string("source")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/InterpolationProjectTest.kt | value | files | val files = expected.obj("files")!!
+streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/JsParserTest.kt | returns | tree | private fun tree(source: String): String {
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/JsParserTest.kt | value | e | val e = JsParser.error("\$a = `x \${1 +} y`")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/JudgedValuesTest.kt | value | attribute | val attribute = case.string("attribute")!!
+streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/KotlinParserFasitTest.kt | returns | differences | private fun differences(src: String): List<Difference> {
+streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/KotlinParserFasitTest.kt | returns | visitParameter | override fun visitParameter(parameter: KtParameter) {
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/KotlinStringsTest.kt | value | src | val src = case.string("src")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/MarkupTest.kt | value | input | val input = case.string("input")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/NeverThrowsTest.kt | scope | issue | for (site in sites) for (issue in site.issues) for (fix in issue.fixes) fix.apply(src)
@@ -144,8 +564,16 @@ streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/V
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/ValueMatrixTest.kt | value | shown | val shown = form.string("shown")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/ValueQuestionsTest.kt | value | src | val src = c.string("kotlin")!!
 streamlord-analysis/src/test/kotlin/io/github/markusaugust/streamlord/analysis/VerdictDigestTest.kt | value | source | val source = case.string("source")!!
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/client/ClientExpressions.kt | returns | quotedEnd | private fun quotedEnd(
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/domain/CspNonce.kt | returns | starterPolicy | public fun starterPolicy(nonce: String): String =
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/domain/ExpressionGuard.kt | returns | endOfString | private fun endOfString(
 streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/domain/ExpressionGuard.kt | scope | statement | for (statement in t
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/domain/MarkupScan.kt | returns | scanMarkupTracked | private fun scanMarkupTracked(
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/domain/MarkupScan.kt | returns | templateConstructEnd | public fun templateConstructEnd(
 streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/domain/MarkupScan.kt | value | nameStart | val nameStart = i++
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/json/JsonShape.kt | returns | string | private fun string(
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/json/JsonValue.kt | returns | exactLongOrNull | private fun exactLongOrNull(text: String): Long? {
+streamlord-core/src/main/kotlin/io/github/markusaugust/streamlord/core/json/JsonWriter.kt | returns | writeExpression | public fun writeExpression(
 streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ClientCasingTest.kt | value | raw | val raw = case.string("raw")!!
 streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ClientCasingTest.kt | value | table | val table = case.obj("modifyCasing")!!
 streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ClientCasingTest.kt | value | table | val table = case.obj("modifyCasing")!!
@@ -172,6 +600,7 @@ streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ValueLand
 streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ValueLandingsTest.kt | value | prefix | val prefix = host.string("prefix")!!
 streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ValueLandingsTest.kt | value | prefix | val prefix = url.string("prefix")!!
 streamlord-core/src/test/kotlin/io/github/markusaugust/streamlord/core/ValueOverloadsJvmTest.kt | value | events | val events = JsonParser.parseObject(catalog.readText()).obj("kotlinCallSites")!!.obj("events")!!
+streamlord-core/src/testCommon/kotlin/io/github/markusaugust/streamlord/fixtures/Growth.kt | returns | assertGrowsLinearly | internal fun <T> assertGrowsLinearly(
 streamlord-html-pro/src/test/kotlin/io/github/markusaugust/streamlord/html/pro/CatalogTest.kt | value | expression | val expression = catalog.obj("kotlinCallSites")!!.obj("expression")!!
 streamlord-html-pro/src/test/kotlin/io/github/markusaugust/streamlord/html/pro/CatalogTest.kt | value | fn | val fn = action.string("kotlin")!!
 streamlord-html-pro/src/test/kotlin/io/github/markusaugust/streamlord/html/pro/CatalogTest.kt | value | groups | val groups = catalog.obj("modifierGroups")!!
@@ -189,11 +618,13 @@ streamlord-json-jackson2/src/main/kotlin/io/github/markusaugust/streamlord/json/
 streamlord-json-kotlinx/src/main/kotlin/io/github/markusaugust/streamlord/json/kotlinx/KotlinxSignalsCodec.kt | value | elementClass | val elementClass = element?.classifier as? KClass<*>
 streamlord-ktor/src/javaxTomcatTest/kotlin/io/github/markusaugust/streamlord/ktor/JavaxTomcatWriterTest.kt | value | handler | val handler = currentCoroutineContext()[Job]!!
 streamlord-ktor/src/main/kotlin/io/github/markusaugust/streamlord/ktor/EngineCut.kt | value | writer | val writer = writerField.get(response.javaClass)?.get(response) as? Lazy<*>
+streamlord-ktor/src/main/kotlin/io/github/markusaugust/streamlord/ktor/Responses.kt | returns | respondStream | private suspend fun ApplicationCall.respondStream(
 streamlord-ktor/src/test/kotlin/io/github/markusaugust/streamlord/ktor/TomcatWriterTest.kt | value | handler | val handler = currentCoroutineContext()[Job]!!
 streamlord-ktor/src/test/kotlin/io/github/markusaugust/streamlord/ktor/ValueOverloadsJvmTest.kt | value | events | val events = JsonParser.parseObject(catalog.readText()).obj("kotlinCallSites")!!.obj("events")!!
 streamlord-spring/src/main/kotlin/io/github/markusaugust/streamlord/spring/Servlet.kt | scope | response | fun chain(response: ServletResponse) = generateSequence(response) { (it as? ServletResponseWrapper)?.response }
 streamlord-spring/src/test/kotlin/io/github/markusaugust/streamlord/spring/ValueOverloadsJvmTest.kt | value | events | val events = JsonParser.parseObject(catalog.readText()).obj("kotlinCallSites")!!.obj("events")!!
 streamlord-spring/src/test/kotlin/io/github/markusaugust/streamlord/spring/WebTestClientTest.kt | value | body | val body =
+streamlord-test/src/main/kotlin/io/github/markusaugust/streamlord/test/DatastarEvents.kt | returns | datastarEvents | public fun datastarEvents(
 streamlord-test/src/test/kotlin/io/github/markusaugust/streamlord/test/DatastarEventsTest.kt | value | message | val message = failure.message!!
 streamlord-test/src/test/kotlin/io/github/markusaugust/streamlord/test/DatastarEventsTest.kt | value | message | val message = failure.message!!
 streamlord-test/src/test/kotlin/io/github/markusaugust/streamlord/test/DatastarEventsTest.kt | value | message | val message = failure.message!!

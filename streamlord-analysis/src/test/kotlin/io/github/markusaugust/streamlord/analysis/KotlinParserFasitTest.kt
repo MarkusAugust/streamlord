@@ -19,14 +19,15 @@ import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiFactory
+import org.jetbrains.kotlin.psi.KtReturnExpression
 import org.jetbrains.kotlin.psi.KtTreeVisitorVoid
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Holds what the analysis reads of a Kotlin file's structure to Kotlin's own parser: where a value ends, and where a
- * parameter, a local or a loop's variable can last be seen. Every Kotlin file of the repository is read both ways,
+ * Holds what the analysis reads of a Kotlin file's structure to Kotlin's own parser: where a value ends and whether a
+ * getter follows it, what a function gives, and where a parameter, a local or a loop's variable can last be seen. Every Kotlin file of the repository is read both ways,
  * and `-PfasitExtra=<dirs>` adds more.
  */
 class KotlinParserFasitTest {
@@ -174,13 +175,65 @@ class KotlinParserFasitTest {
                     val d = declared[name.textOffset]
                     val init = property.initializer
                     val value = d?.value
-                    if (init != null && value != null && value.end >= 0) {
+                    if (value != null && value.end in 0 until value.start) {
+                        difference("value", name, "analysis ends the value at ${value.end}, before it starts at ${value.start}")
+                    } else if (init != null && value != null && value.end >= 0) {
                         val read = src.substring(value.start, withoutTrailingComments(src, comment, value.end)).trim()
                         if (read != init.text.trim()) {
                             difference("value", name, "analysis «${read.oneLine()}» parser «${init.text.oneLine()}»")
                         }
+                        if (value.getter != (property.getter != null)) {
+                            difference("getter", name, "analysis ${if (value.getter) "reads" else "misses"} a getter")
+                        }
                     }
                     if (property.isLocal) (property.parent as? KtBlockExpression)?.let { scope(name, blockEnd(it)) }
+                }
+
+                override fun visitNamedFunction(function: KtNamedFunction) {
+                    super.visitNamedFunction(function)
+                    val name = function.nameIdentifier ?: return
+                    val open = function.valueParameterList?.textRange?.startOffset ?: return
+                    val values =
+                        facts.functions[name.text]
+                            .orEmpty()
+                            .firstOrNull { it.open == open }
+                            ?.values
+                            .orEmpty()
+                    if (values.isEmpty() || values.any { it.end < it.start }) return
+                    val body = function.bodyExpression ?: return
+                    // What the function gives: its expression, or the value of each `return` of its own.
+                    val given =
+                        if (function.hasBlockBody()) {
+                            val returns = ArrayList<KtReturnExpression>()
+                            body.accept(
+                                object : KtTreeVisitorVoid() {
+                                    override fun visitNamedFunction(inner: KtNamedFunction) = Unit
+
+                                    override fun visitReturnExpression(r: KtReturnExpression) {
+                                        super.visitReturnExpression(r)
+                                        returns += r
+                                    }
+                                },
+                            )
+                            // A `return` to a label leaves the function unread.
+                            if (returns.any { it.getTargetLabel() != null }) return
+                            returns.map {
+                                it.returnedExpression
+                                    ?.text
+                                    ?.trim()
+                                    .orEmpty()
+                            }
+                        } else {
+                            listOf(body.text.trim())
+                        }
+                    val read = values.map { src.substring(it.start, withoutTrailingComments(src, comment, it.end)).trim() }
+                    if (read != given) {
+                        difference(
+                            "returns",
+                            name,
+                            "analysis «${read.joinToString(" | ").oneLine()}» parser «${given.joinToString(" | ").oneLine()}»",
+                        )
+                    }
                 }
 
                 override fun visitDestructuringDeclaration(multi: KtDestructuringDeclaration) {
