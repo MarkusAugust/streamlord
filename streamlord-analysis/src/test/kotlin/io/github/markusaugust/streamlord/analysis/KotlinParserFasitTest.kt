@@ -71,15 +71,21 @@ class KotlinParserFasitTest {
         }
 
         val known = File(root, KNOWN)
-        val keys = found.map { it.key }.sorted()
+        // A fixture that is a piece of a file, not one, is reported and holds nothing.
+        val held = found.filter { it.kind != "unparsed" }
+        val keys = held.map { it.key }.sorted()
         if (System.getProperty("streamlord.record") == "true") {
             known.writeText(keys.joinToString("\n", postfix = "\n"))
             return
         }
-        val held = known.readLines().filter { it.isNotBlank() }
-        val heldCount = held.groupingBy { it }.eachCount()
+        val heldCount =
+            known
+                .readLines()
+                .filter { it.isNotBlank() }
+                .groupingBy { it }
+                .eachCount()
         val foundCount = keys.groupingBy { it }.eachCount()
-        val new = found.filter { (foundCount[it.key] ?: 0) > (heldCount[it.key] ?: 0) }
+        val new = held.filter { (foundCount[it.key] ?: 0) > (heldCount[it.key] ?: 0) }
         val gone = heldCount.filter { (k, n) -> n > (foundCount[k] ?: 0) }.keys
         val message =
             buildString {
@@ -109,7 +115,7 @@ class KotlinParserFasitTest {
             .sortedBy { it.path }
             .toList()
 
-    /** Each place the analysis and the parser read [src] differently; none for a file the parser finds errors in. */
+    /** Each place the analysis and the parser read [src] differently; for a file the parser finds errors in, that alone. */
     private fun differences(src: String): List<Difference> {
         val facts = fileFacts(src)
         val declared =
@@ -131,7 +137,7 @@ class KotlinParserFasitTest {
         fun snippet(at: Int) = src.substring(maxOf(0, at - 20), minOf(src.length, at + 20)).replace("\n", "⏎")
 
         val file = factory.createFile("Fasit.kt", src)
-        if (PsiTreeUtil.hasErrorElements(file)) return emptyList()
+        if (PsiTreeUtil.hasErrorElements(file)) return listOf(Difference("", 1, "unparsed", "", "", "the parser finds errors in it"))
         // Where comments and the next declaration's modifiers stand, as the parser reads them: a KDoc's `$name` is no
         // code, and a scope that ends at `private fun` rather than before `private` ends at the same place.
         val comment = BooleanArray(src.length)
