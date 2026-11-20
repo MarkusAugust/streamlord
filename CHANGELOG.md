@@ -74,6 +74,10 @@ All notable changes to Streamlord are recorded here. The format follows
   call that a function declared inside another, a value of the same name, or a member of another
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
+- A `@Language("HTML")` mark makes HTML of what its `val` or function gives, read from the
+  declaration, behind another annotation too: `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"`
+  read `"x"` as the HTML string and not the function's literal, and a mark on a function whose
+  block declares a `val` before its `return` reached that `val`'s literal.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and
   `title: Int` on the next, `title` was no parameter: `$title` in the function was warned of, and a
   constructor property written so was not one other files could see. The same after an annotation

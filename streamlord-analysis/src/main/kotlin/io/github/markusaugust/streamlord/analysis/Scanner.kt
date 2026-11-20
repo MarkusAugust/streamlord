@@ -370,15 +370,14 @@ internal fun lexKotlin(src: String): KotlinLex {
 internal const val HTML_LANGUAGE =
     """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
 
-private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
+private val HTML_COMMENT = regex("""//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 
 /**
- * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,
- * or when the code just before it carries IntelliJ's injection marker: `@Language("HTML")` on
- * the function or property, or a `// language=HTML` comment. The marker reaches the next
- * string literal only. A literal handed straight to a parameter of the file's own function that
- * carries the annotation is HTML too.
+ * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, when it is what a
+ * `val` or a function marked `@Language("HTML")` gives, behind other annotations too, or when IntelliJ's
+ * `// language=HTML` comment stands before it, which reaches the next literal only. A literal handed straight to a
+ * parameter of the file's own function that carries the mark is HTML too, and so is one that is markup by where it
+ * stands, in the block of `interpolate` or handed to `Trusted`. No literal of an annotation's arguments is.
  */
 public fun isHtmlString(
     src: String,
@@ -387,13 +386,9 @@ public fun isHtmlString(
     val facts = fileFacts(src)
     // An annotation's arguments say something of the code: asked last, of a literal that would be HTML.
     if (textOpensWithTag(markupView(src, s))) return !facts.inAnnotation(s.start)
-    if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
+    if (s.start in facts.htmlArguments || s.start in facts.markupLiterals || s.start in facts.markedLiterals) return true
+    // IntelliJ's comment, `// language=HTML`, reaches the next literal; the mark on a declaration is the scanner's.
     val before = src.substring(maxOf(0, s.start - 240), s.start)
-    val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
-    val after = before.substring(last.range.last + 1)
-    // `fun f(@Language("HTML") html: String? = null, ...)` annotates a parameter, not the next literal:
-    // the marker is followed at once by a parameter declaration. A function's own parameters
-    // further on (`fun greeting(name: String): String = """..."""`) do not count.
-    if (PARAMETER_AFTER_MARKER.containsMatchIn(after)) return false
-    return '"' !in after
+    val last = HTML_COMMENT.findAll(before).lastOrNull() ?: return false
+    return '"' !in before.substring(last.range.last + 1)
 }

@@ -128,6 +128,28 @@ internal class FileFacts(
     }
 
     /**
+     * Where each literal starts that a `@Language("HTML")` mark makes markup: the first literal of the value of a marked
+     * `val`, of a marked function's expression, or of what each `return` of its block gives.
+     */
+    val markedLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val values =
+            names.values
+                .flatten()
+                .filter { it.html }
+                .mapNotNull { it.value } +
+                functions.values
+                    .flatten()
+                    .filter { it.marked }
+                    .flatMap { it.values }
+        if (values.isEmpty()) return@lazy emptySet()
+        val strings = lexKotlin(src).strings
+        values.mapNotNullTo(HashSet()) { v ->
+            val end = if (v.end < 0) src.length else v.end
+            strings.firstOrNull { it.start >= v.start && it.start < end }?.start
+        }
+    }
+
+    /**
      * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
      * tag or marks a value and stands in no call's arguments, where a Datastar expression or a log message would, or the
      * argument of core's `Trusted` that writes a tag.
