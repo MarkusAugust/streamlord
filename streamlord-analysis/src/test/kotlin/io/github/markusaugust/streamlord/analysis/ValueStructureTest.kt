@@ -955,6 +955,10 @@ class ValueStructureTest {
             "fun outer(n: Int, rows: List<String>) {\n    for (n in rows)\n        if (n.isNotEmpty())\n" +
                 "            println(\"<li>\$n</li>\")\n}"
         assertEquals(listOf("\$n"), told(loop))
+        val infix = "fun outer(n: Int) {\n    fun pair(n: String) = n to\n        \"<p>\$n</p>\"\n}"
+        assertEquals(listOf("\$n"), told(infix))
+        val arrow = "fun f(m: Any) {\n    val h = m as Map<String, () -> Int>\n    val title = \"<b>x</b>\"\n}"
+        assertEquals("m as Map<String, () -> Int>", valueText(arrow, declarationOf(arrow, "h", arrow.length - 2)!!.value!!)?.text)
         val compared = "fun f(b: Int, c: Int, d: Int, e: Int) {\n    val a = b < c && d >\n        e\n}"
         assertEquals("b < c && d >\n        e", valueText(compared, declarationOf(compared, "a", compared.length - 2)!!.value!!)?.text)
         val a = "fun f(q: Int) {\n    val a = q>\n        1\n}"

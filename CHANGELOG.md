@@ -84,7 +84,7 @@ All notable changes to Streamlord are recorded here. The format follows
   there, `val a = q!!`, where it ran on into the next line and took a getter after it for its own.
   A function's expression, or a loop's statement without braces, that begins with a word, a call
   or a literal ends with its line, and goes on past `if (...)`, `when (...)` and `else` at the end
-  of a line: `fun size(n: Int) = pad(n)` inside another function kept its `n` in sight to the end
+  of a line or an infix word such as `to`: `fun size(n: Int) = pad(n)` inside another function kept its `n` in sight to the end
   of the outer one, so `$n` after it was read as the Int.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and
   `title: Int` on the next, `title` was no parameter: `$title` in the function was warned of, and a

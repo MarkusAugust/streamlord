@@ -351,7 +351,8 @@ private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
 private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
 
 /**
- * Whether the line goes on after [k], its last character of code: an operator that wants what follows, `else`, or the
+ * Whether the line goes on after [k], its last character of code: an operator that wants what follows, `else`, an infix
+ * word, or the
  * condition of an `if`, a `when` or a loop, whose branch follows. `!!`, a `?` of a type and the `>` that closes type
  * arguments opened on the line end it, `List<Int>` or `String?` at the end of a value; `->` points on.
  */
@@ -365,11 +366,11 @@ private fun goesOn(
         '!' -> src.getOrNull(k - 1) != '!'
         '>' -> src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
         ')' -> branchFollows(src, code, k)
-        'e' -> ELSE_BEFORE.containsMatchIn(src.substring(maxOf(0, k - 5), k + 1))
-        else -> false
+        else -> isWordPart(src[k]) && WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 7), k + 1))
     }
 
-private val ELSE_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_])else$""")
+/** `else`, and the infix words after which Kotlin reads on: `n to`, `x as`, `a until`. */
+private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.])(?:else|to|as|is|in|and|or|xor|until|downTo|step|shl|shr)$""")
 private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while)\s*$""")
 
 /** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
@@ -381,7 +382,8 @@ private fun closesTypeArguments(
     var depth = 0
     var j = k
     while (j >= 0 && src[j] != '\n') {
-        if (code[j] && src[j] == '>') depth++
+        // The `>` of an arrow, `() -> Int`, closes nothing.
+        if (code[j] && src[j] == '>' && src.getOrNull(j - 1) != '-') depth++
         // `List<`: a type's name, then its arguments at once; `b < c` compares.
         if (code[j] && src[j] == '<' &&
             --depth == 0
