@@ -366,33 +366,6 @@ internal fun lexKotlin(src: String): KotlinLex {
     return KotlinLex(strings, mask, comments)
 }
 
-/** Whether [at] stands in the arguments of an annotation, `@Deprecated("<b>x</b>")`, which say something of the code and are no markup. */
-private fun inAnnotation(
-    src: String,
-    code: BooleanArray,
-    at: Int,
-): Boolean {
-    var depth = 0
-    var k = at - 1
-    while (k >= maxOf(0, at - 2_000)) {
-        if (code[k]) {
-            val c = src[k]
-            if (c == ')' || c == ']') depth++
-            if ((c == '(' || c == '[') && depth-- == 0) {
-                if (c == '(' && ANNOTATION_BEFORE.containsMatchIn(src.substring(maxOf(0, k - 200), k))) return true
-                depth = 0
-            }
-            // An annotation's arguments hold no block and no statement.
-            if (c == '{' || c == '}' || c == ';') return false
-        }
-        k--
-    }
-    return false
-}
-
-/** An annotation's name before its arguments; `this@Page.f(` and `return@forEach(` name a label. */
-private val ANNOTATION_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_>.])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*$""")
-
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one, on a use site and with a prefix or a suffix too. */
 internal const val HTML_LANGUAGE =
     """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
@@ -413,7 +386,7 @@ public fun isHtmlString(
 ): Boolean {
     val facts = fileFacts(src)
     // An annotation's arguments say something of the code: asked last, of a literal that would be HTML.
-    if (textOpensWithTag(markupView(src, s))) return !inAnnotation(src, facts.code, s.start)
+    if (textOpensWithTag(markupView(src, s))) return facts.annotationArguments.none { s.start in it }
     if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false

@@ -86,10 +86,26 @@ internal class FileFacts(
         out
     }
 
+    /** The arguments of each annotation, `@Deprecated("<b>x</b>")`, from parenthesis to parenthesis: they say something of the code and hold no markup. */
+    val annotationArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        ANNOTATION_OPEN
+            .findAll(src)
+            .filter { code[it.range.first] && code[it.range.last] }
+            .mapNotNull { m ->
+                var depth = 0
+                for (k in m.range.last until src.length) {
+                    if (!code[k]) continue
+                    if (src[k] == '(') depth++
+                    if (src[k] == ')' && --depth == 0) return@mapNotNull m.range.last..k
+                }
+                null
+            }.toList()
+    }
+
     /**
      * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
      * tag or marks a value and stands in no call's arguments, where a Datastar expression or a log message would, or the
-     * argument of core's `Trusted`.
+     * argument of core's `Trusted` that writes a tag.
      */
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
@@ -106,7 +122,7 @@ internal class FileFacts(
         if (!shadowsCore(src, "Trusted")) {
             for (site in findCallSites(src, setOf("Trusted"), lex)) {
                 if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
-                (site.named("html") ?: site.positional.firstOrNull())?.string?.let { out += it.start }
+                (site.named("html") ?: site.positional.firstOrNull())?.string?.let { if (TAG.containsMatchIn(it.text)) out += it.start }
             }
         }
         out
@@ -528,6 +544,9 @@ private fun overridable(
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
+
+/** An annotation's name and the parenthesis that opens its arguments; `this@Page.f(` and `return@forEach(` name a label. */
+private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*\(""")
 
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
