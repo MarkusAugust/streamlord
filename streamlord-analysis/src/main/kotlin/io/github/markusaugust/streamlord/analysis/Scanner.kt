@@ -57,11 +57,15 @@ public data class CallSite(
 }
 
 /** The string literals of a Kotlin file and a mask of which offsets are code. */
-public class KotlinLex(
+public class KotlinLex internal constructor(
     public val strings: List<KotlinString>,
     /** `true` where the offset is code, as opposed to a string literal, character literal or comment. */
     public val mask: BooleanArray,
+    /** `true` where the offset is in a comment. */
+    internal val comments: BooleanArray,
 ) {
+    public constructor(strings: List<KotlinString>, mask: BooleanArray) : this(strings, mask, BooleanArray(mask.size))
+
     /**
      * The string literal that contains an offset, if any. Taken from the literals the lexer found
      * reading forward from the start of the file, not by reading back from the offset: a quote inside
@@ -303,12 +307,17 @@ private fun makeArg(
 internal fun lexKotlin(src: String): KotlinLex {
     val strings = ArrayList<KotlinString>()
     val mask = BooleanArray(src.length) { true }
+    val comments = BooleanArray(src.length)
 
     fun blank(
         from: Int,
         to: Int,
+        comment: Boolean = false,
     ) {
-        for (k in from until minOf(to, src.length)) mask[k] = false
+        for (k in from until minOf(to, src.length)) {
+            mask[k] = false
+            comments[k] = comment
+        }
     }
     var i = 0
     while (i < src.length) {
@@ -330,7 +339,7 @@ internal fun lexKotlin(src: String): KotlinLex {
         if (c == '/' && src.getOrNull(i + 1) == '/') {
             val nl = src.indexOf('\n', i)
             val end = if (nl < 0) src.length else nl
-            blank(i, end)
+            blank(i, end, comment = true)
             i = end
             continue
         }
@@ -348,13 +357,13 @@ internal fun lexKotlin(src: String): KotlinLex {
                     j++
                 }
             }
-            blank(i, j)
+            blank(i, j, comment = true)
             i = j
             continue
         }
         i++
     }
-    return KotlinLex(strings, mask)
+    return KotlinLex(strings, mask, comments)
 }
 
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one, on a use site and with a prefix or a suffix too. */

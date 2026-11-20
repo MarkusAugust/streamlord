@@ -486,6 +486,25 @@ class ValueStructureTest {
         }
         assertEquals(setOf("id", "title"), declaredNames("/** \uD83D\uDE00 */\ndata class Row(val id: String, val title: String)").others)
         assertEquals(emptyList(), told("fun f(\n    /* outer /* inner */ still outer */ title: Int,\n) = \"<p>\$title</p>\""))
+        // A comment against a literal is one too.
+        val glued = "fun f(a: String = \"x\"/* @Language(\"HTML\") */, b: String) = b"
+        assertEquals(
+            emptySet(),
+            fileFacts(glued)
+                .functions
+                .getValue("f")
+                .single()
+                .html,
+        )
+        val inside = "fun g(@Language(/* c */\"HTML\") body: String) = body"
+        assertEquals(
+            setOf(0, "body"),
+            fileFacts(inside)
+                .functions
+                .getValue("g")
+                .single()
+                .html,
+        )
         // A string that holds `//` or a comma is no comment and cuts nothing.
         val link = "fun g(x: String = \"http://a, b\", @Language(\"HTML\") body: String) = body"
         assertEquals(

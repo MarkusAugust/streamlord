@@ -145,7 +145,7 @@ internal fun fileFacts(
     val l = lex ?: lexKotlin(src)
     val code = codeMask(src, l.strings, l.mask)
     val functions = HashMap<String, MutableList<FunctionDeclaration>>()
-    return FileFacts(src, code, declarations(src, code, functions), functions).also { lastFacts = it }
+    return FileFacts(src, code, declarations(src, code, l.comments, functions), functions).also { lastFacts = it }
 }
 
 @Volatile
@@ -181,7 +181,7 @@ public fun declaredNames(src: String): DeclaredNames {
     lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
-            ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask)) }
+            ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask), it.comments) }
     val constants = HashSet<String>()
     val others = HashSet<String>()
     for ((name, list) in names) {
@@ -506,18 +506,8 @@ private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 /** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
 private fun withoutComments(
     src: String,
-    code: BooleanArray,
-): String {
-    val out = src.toCharArray()
-    var comment = false
-    for (k in src.indices) {
-        // The lexer leaves a comment out of the code whole, a nested one too, and a `//` inside a string begins none.
-        val starts = (k == 0 || code[k - 1]) && (src.startsWith("//", k) || src.startsWith("/*", k))
-        comment = !code[k] && (comment || starts)
-        if (comment && src[k] != '\n') out[k] = ' '
-    }
-    return out.concatToString()
-}
+    comments: BooleanArray,
+): String = CharArray(src.length) { if (comments.getOrElse(it) { false } && src[it] != '\n') ' ' else src[it] }.concatToString()
 
 /**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
@@ -569,6 +559,7 @@ private fun functionAt(
 private fun declarations(
     src: String,
     code: BooleanArray,
+    comments: BooleanArray,
     functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
     // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
@@ -577,7 +568,7 @@ private fun declarations(
     val aliases = aliasesIn(src, code)
 
     // Parameters are read in the code alone: a comment among them, `a: String, // the a`, is blank.
-    val blank by lazy { withoutComments(src, code) }
+    val blank by lazy { withoutComments(src, comments) }
 
     fun add(
         name: String,
