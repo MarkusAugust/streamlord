@@ -78,12 +78,16 @@ All notable changes to Streamlord are recorded here. The format follows
   arguments, and no literal of an annotation's arguments is HTML:
   `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"` read `"x"` as the HTML string and not the
   function's literal.
-- A value whose line ends in `!!`, a nullable type or type arguments closed on its line ends
-  there, `val a = q!!`, where it ran on into the next line and took a getter after it for its own.
-  A function's expression, or a loop's statement without braces, that begins with a word, a call
-  or a literal ends with its line, and goes on past `if (...)`, `when (...)`, `else` and `as`, `is`
-  or `in` at the end of a line: `fun size(n: Int) = pad(n)` inside another function kept its `n`
-  in sight to the end of the outer one, so `$n` after it was read as the Int.
+- A value whose line ends in `!!`, `++`, `--`, a nullable type or type arguments closed on its
+  line ends there, `val a = q!!`, where it ran on into the next line and took a getter after it
+  for its own. A function's expression, or a loop's statement without braces, ends with its line
+  too, where it ran to the end of the block around it: `fun size(n: Int) = pad(n)` inside another
+  function kept its `n` in sight to the end of the outer one, so `$n` after it was read as the
+  Int. A value, an expression and a statement go on past `if (...)`, `when (...)`, `for (...)`,
+  `while (...)`, `else`, `as`, `as?`, `is` or `in` at the end of a line, and before `catch` or
+  `finally` on the next. A loop's header is read whole, over several lines and with a lambda in
+  it, and an `else` on the line after a loop's statement is the statement's own only where the
+  statement has an `if` still without one.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and
   `title: Int` on the next, `title` was no parameter: `$title` in the function was warned of, and a
   constructor property written so was not one other files could see. The same after an annotation

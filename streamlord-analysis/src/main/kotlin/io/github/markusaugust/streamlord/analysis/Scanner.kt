@@ -397,7 +397,8 @@ public fun isHtmlString(
     val after = before.substring(last.range.last + 1)
     // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal, behind other
     // annotations too.
-    if (PARAMETER_AFTER_MARKER.containsMatchIn(after.replace(LEADING_ANNOTATIONS, ""))) return false
     val at = from + last.range.last + 1
+    val bare = after.filterIndexed { k, _ -> !facts.inAnnotation(at + k) }
+    if (PARAMETER_AFTER_MARKER.containsMatchIn(bare.replace(LEADING_ANNOTATIONS, ""))) return false
     return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) }
 }

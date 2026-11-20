@@ -975,6 +975,20 @@ class ValueStructureTest {
             "fun f(x: String, xs: List<Int>) {\n    for (x: Int in xs)\n        if (x > 0) use(x)\n" +
                 "        else println(\"<i>\$x</i>\")\n}"
         assertEquals(emptyList(), told(branch))
+        // `catch` and `finally` on the next line, `as?` and a comparison with a number at a line's end carry it on.
+        val caught =
+            "class A(val n: String) {\n    fun size(n: Int): String = try {\n        n.toString()\n    }\n" +
+                "    catch (e: Exception) {\n        \"<p>\$n</p>\"\n    }\n}"
+        assertEquals(emptyList(), told(caught))
+        for (end in listOf("m as?\n        String", "n<3 && n>\n        1")) {
+            val src = "fun f(m: Any, n: Int) {\n    val k = $end\n}"
+            assertEquals(end, valueText(src, declarationOf(src, "k", src.length - 2)!!.value!!)?.text, end)
+        }
+        // An outer `if`'s `else` after a statement whose own `if` has one.
+        val closed =
+            "fun pick(x: String, a: Boolean, xs: List<Int>) {\n    if (a)\n        for (x: Int in xs) total += if (x > 0) x else 0\n" +
+                "    else\n        println(\"<b>\$x</b>\")\n}"
+        assertEquals(listOf("\$x"), told(closed))
         // A name that is also an infix function's ends its line; only a keyword carries it on.
         val step = "fun f(step: String) {\n    val current = step\n    val title = \"<h1>x</h1>\"\n}"
         assertEquals("step", valueText(step, declarationOf(step, "current", step.length - 2)!!.value!!)?.text)

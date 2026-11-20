@@ -347,6 +347,9 @@ private fun goesOn(
 
         ')' -> branchFollows(src, code, k)
 
+        // `x as?` wants its type.
+        '?' -> src.startsWith("as", k - 2) && !isWordPart(src.getOrNull(k - 3))
+
         else -> isWordPart(src[k]) && WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 7), k + 1))
     }
 
@@ -365,11 +368,12 @@ private fun closesTypeArguments(
     while (j >= 0 && src[j] != '\n') {
         // The `>` of an arrow, `() -> Int`, closes nothing.
         if (code[j] && src[j] == '>' && src.getOrNull(j - 1) != '-') depth++
-        // `List<`: a type's name, then its arguments at once; `b < c` compares.
+        // `List<Int>`: a type's name, then a type at once; `b < c` and `n<3` compare.
         if (code[j] && src[j] == '<' &&
             --depth == 0
         ) {
-            return isWordPart(src.getOrNull(j - 1)) && src.getOrNull(j + 1)?.isWhitespace() == false
+            val first = src.getOrNull(j + 1)
+            return isWordPart(src.getOrNull(j - 1)) && first != null && (first.isLetter() || first in "*(@?`_")
         }
         j--
     }
@@ -397,7 +401,7 @@ private fun branchFollows(
     return !(src.startsWith("while", word) && src.lastNonSpaceBefore(word) == '}')
 }
 
-private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
+private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b|catch\b|finally\b)""")
 private val ELSE_NEXT = regex("""^else\b""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
@@ -415,7 +419,7 @@ private class PendingScope(
     /** Whether an expression body has begun: `=` then a line break goes on with the next line. */
     var started: Boolean = false
 
-    /** How many `if`s a loop's statement holds, whose `else` may stand on a line of its own. */
+    /** How many `if`s of a loop's statement still want their `else`, which may stand on a line of its own. */
     var ifs = 0
 
     /**
@@ -903,7 +907,10 @@ private fun declarations(
         if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
             // A loop's own brackets hold its variable, not its statement.
             if (f.kind != "for") f.pending?.begun(brace = false)
-            if (f.pending?.state == "stmt" && src.startsWith("if", i) && !isWordPart(src.getOrNull(i + 2))) f.pending?.let { it.ifs++ }
+            f.pending?.takeIf { it.state == "stmt" }?.let { p ->
+                if (src.startsWith("if", i) && !isWordPart(src.getOrNull(i + 2))) p.ifs++
+                if (src.startsWith("else", i) && !isWordPart(src.getOrNull(i + 4)) && p.ifs > 0) p.ifs--
+            }
             var end = i + 1
             while (end < src.length && isWordPart(src[end])) end++
             val word = src.substring(i, end)
