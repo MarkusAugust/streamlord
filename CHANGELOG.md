@@ -74,13 +74,10 @@ All notable changes to Streamlord are recorded here. The format follows
   call that a function declared inside another, a value of the same name, or a member of another
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
-- A `@Language("HTML")` mark makes HTML of what its `val` or function gives, read from the
-  declaration, behind another annotation too: the literal the value opens with, of a function's
-  expression or of each `return` of its own block, whoever may stand in for it.
+- A `@Language("HTML")` mark reaches the next literal after it past another annotation's
+  arguments, and no literal of an annotation's arguments is HTML:
   `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"` read `"x"` as the HTML string and not the
-  function's literal. The mark still reaches the next literal after it, as before, past another
-  annotation's arguments but not past a parameter list or a call, so a getter and a `var` are
-  marked as before; no literal of an annotation's arguments is HTML.
+  function's literal.
 - A value whose line ends in `!!`, a nullable type or type arguments closed on its line ends
   there, `val a = q!!`, where it ran on into the next line and took a getter after it for its own.
   A function's expression, or a loop's statement without braces, that begins with a word, a call

@@ -966,6 +966,15 @@ class ValueStructureTest {
             "fun pick(title: String, a: Boolean, nums: List<Int>) {\n    if (a)\n        for (title: Int in nums) println(title)\n" +
                 "    else\n        println(\"<b>\$title</b>\")\n}"
         assertEquals(listOf("\$title"), told(pick))
+        // A loop's header that goes on over lines, and an `if` of its statement whose `else` stands on the next line.
+        val header =
+            "fun list(item: String, items: List<Int>) {\n    for (item: Int in items\n        .filter { it > 0 }) {\n" +
+                "        println(\"<li>\$item</li>\")\n    }\n}"
+        assertEquals(emptyList(), told(header))
+        val branch =
+            "fun f(x: String, xs: List<Int>) {\n    for (x: Int in xs)\n        if (x > 0) use(x)\n" +
+                "        else println(\"<i>\$x</i>\")\n}"
+        assertEquals(emptyList(), told(branch))
         // A name that is also an infix function's ends its line; only a keyword carries it on.
         val step = "fun f(step: String) {\n    val current = step\n    val title = \"<h1>x</h1>\"\n}"
         assertEquals("step", valueText(step, declarationOf(step, "current", step.length - 2)!!.value!!)?.text)

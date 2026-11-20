@@ -375,11 +375,11 @@ private val LEADING_ANNOTATIONS = regex("""^(?:\s*@[\p{L}_][\p{L}\p{Nd}_.:]*(?:\
 private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
 /**
- * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, when it is what a
- * `val` or a function marked `@Language("HTML")` gives, behind other annotations too, or when IntelliJ's
- * `// language=HTML` comment stands before it, which reaches the next literal only. A literal handed straight to a
- * parameter of the file's own function that carries the mark is HTML too, and so is one that is markup by where it
- * stands, in the block of `interpolate` or handed to `Trusted`. No literal of an annotation's arguments is.
+ * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, or when IntelliJ's
+ * mark stands before it, `@Language("HTML")` on the function or property or a `// language=HTML` comment, which
+ * reaches the next literal only, past those of other annotations' arguments. A literal handed straight to a parameter
+ * of the file's own function that carries the mark is HTML too, and so is one that is markup by where it stands, in
+ * the block of `interpolate` or handed to `Trusted`. No literal of an annotation's arguments is.
  */
 public fun isHtmlString(
     src: String,
@@ -389,9 +389,8 @@ public fun isHtmlString(
     // An annotation's arguments say something of the code: no literal of them is markup.
     if (facts.inAnnotation(s.start)) return false
     if (textOpensWithTag(markupView(src, s))) return true
-    if (s.start in facts.htmlArguments || s.start in facts.markupLiterals || s.start in facts.markedLiterals) return true
-    // A mark reaches the next literal too, past those of other annotations' arguments: what the scanner reads no value
-    // of, a getter, a `var`, a member another may stand in for, is reached so.
+    if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
+    // A mark reaches the next literal after it, past those of other annotations' arguments.
     val from = maxOf(0, s.start - 240)
     val before = src.substring(from, s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
@@ -400,9 +399,5 @@ public fun isHtmlString(
     // annotations too.
     if (PARAMETER_AFTER_MARKER.containsMatchIn(after.replace(LEADING_ANNOTATIONS, ""))) return false
     val at = from + last.range.last + 1
-    // Past a quote or a parenthesis that holds something, other than an annotation's, the mark is none of this literal's:
-    // a parameter list or a call stands between.
-    return after.indices.none { k ->
-        !facts.inAnnotation(at + k) && (after[k] == '"' || (after[k] == '(' && after.getOrNull(k + 1) != ')'))
-    }
+    return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) }
 }
