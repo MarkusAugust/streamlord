@@ -345,7 +345,22 @@ internal val HTML_ANNOTATION = regex(HTML_LANGUAGE, RegexOption.IGNORE_CASE)
 private val VARARG = regex("""\bvararg\b""")
 private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
 private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
-private val LINE_GOES_ON_BEFORE = regex("""[-=+*/%&|?:.,(<>!]""")
+
+/**
+ * Whether the line goes on after [k], its last character of code: an operator that wants what follows. `!!`, a `?` of
+ * a type and the `>` that closes type arguments end it, `List<Int>` or `String?` at the end of a value; a `>` with
+ * white space before it compares, and `->` points on.
+ */
+private fun goesOn(
+    src: String,
+    k: Int,
+): Boolean =
+    when (src[k]) {
+        '-', '=', '+', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> true
+        '>' -> src.getOrNull(k - 1).let { it == '-' || it == '=' || it == null || it.isWhitespace() }
+        else -> false
+    }
+
 private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
@@ -362,6 +377,18 @@ private class PendingScope(
 
     /** Whether an expression body has begun: `=` then a line break goes on with the next line. */
     var started: Boolean = false
+
+    /**
+     * What was written next: a loop's statement without braces has begun where the bracket after the loop is closed,
+     * and a function's expression where its `=` stands. A brace after the loop is its block, still to be read.
+     */
+    fun begun(brace: Boolean) {
+        if (state == "after" && fn == null && !brace) {
+            state = "stmt"
+        } else if (state == "expr") {
+            started = true
+        }
+    }
 
     /** Whether the function's expression is still being written. */
     val unended get() = state == "expr" && fn?.body?.end == -1
@@ -468,7 +495,7 @@ internal fun lineEnds(
         }
         k--
     }
-    if (k >= 0 && code[k] && LINE_GOES_ON_BEFORE.matchEntire(src[k].toString()) != null) return false
+    if (k >= 0 && code[k] && goesOn(src, k)) return false
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
@@ -821,12 +848,16 @@ private fun declarations(
         if (src[i] == '\n' && f.after == 1) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
-            if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) f.reset()
+            if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {
+                f.reset()
+                f.pending?.begun(brace = false)
+            }
             i++
             continue
         }
         val c = src[i]
         if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
+            f.pending?.begun(brace = false)
             var end = i + 1
             while (end < src.length && isWordPart(src[end])) end++
             val word = src.substring(i, end)
@@ -972,6 +1003,7 @@ private fun declarations(
             continue
         }
         if (c == '(' || c == '[' || c == '{') {
+            f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"

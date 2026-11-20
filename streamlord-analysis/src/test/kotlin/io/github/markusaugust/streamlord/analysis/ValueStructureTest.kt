@@ -915,4 +915,25 @@ class ValueStructureTest {
             )
         }) { it.markupLiterals }
     }
+
+    @Test
+    fun `a value whose line ends in a postfix or a type ends there`() {
+        for (end in listOf("q!!", "q as String?", "q as List<Int>")) {
+            val src = "fun f(q: Any?) {\n    val a = $end\n    val title = \"<b>x</b>\"\n}"
+            val a = declarationOf(src, "a", src.length - 2)!!
+            assertEquals(end, valueText(src, a.value!!)?.text, end)
+        }
+        // An arrow, an operator or a comparison carries the line on.
+        val src = "fun f(q: Int) {\n    val a = q >\n        1\n}"
+        assertEquals("q >\n        1", valueText(src, declarationOf(src, "a", src.length - 2)!!.value!!)?.text)
+    }
+
+    @Test
+    fun `an expression or a loop's statement that begins with a word ends with its line`() {
+        assertEquals(listOf("\$n"), told("fun outer(n: String) {\n    fun size(n: Int) = pad(n)\n    println(\"<p>\$n</p>\")\n}"))
+        assertEquals(
+            listOf("\$n"),
+            told("fun outer(n: String, rows: List<Int>) {\n    for (n in rows) println(n)\n    println(\"<p>\$n</p>\")\n}"),
+        )
+    }
 }
