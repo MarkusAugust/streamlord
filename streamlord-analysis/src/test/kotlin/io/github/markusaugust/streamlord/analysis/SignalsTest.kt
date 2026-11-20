@@ -23,7 +23,9 @@ class SignalsTest {
             val definitions = collectSignalDefinitions(source)
             case.array("signals")?.let { assertEquals(it.strings(), collectSignals(source).sorted(), name) }
             case.array("definitions")?.let { assertEquals(it.strings(), definitions.sorted(), name) }
-            case.array("encoded")?.let { assertEquals(it.strings(), definitions.filter { d -> d == "*" || ':' in d }, name) }
+            // Each class a page is declared from is sent too, so its `sends:` mark says nothing more.
+            val marks = definitions.filter { d -> (d == "*" || ':' in d) && !d.startsWith(SENT_CLASS) }
+            case.array("encoded")?.let { assertEquals(it.strings(), marks, name) }
             val declarations = signalDeclarations(source)
             case.array("declarations")?.let { expected ->
                 val written = declarations.map { listOf(it.name, src.substring(it.start, it.end)) }

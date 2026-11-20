@@ -165,8 +165,10 @@ and a missing declaration is what the check reports.
 A page declared from a class, `dataSignals(codec.toJsonValue(SearchSignals()))`, declares that
 class's properties, and the check reads them; it names the class from the constructor, a type
 argument, or the type of a variable the file declares. A `@Serializable` class's properties go by
-their `@SerialName`. Any other class is read as Jackson writes it: a constructor property goes by
-its name or by its `@JsonProperty`, and one under `@JsonIgnore` is left out.
+their `@SerialName`. Any other class is read as Jackson writes it: a public constructor property
+goes by its name or by its `@JsonProperty`, and one under `@JsonIgnore` is left out. A Jackson class
+with names outside its constructor, in a body or a supertype, or under `@JsonIgnoreProperties`,
+`@JsonAlias` or a property's `access`, is left to the codec.
 
 Where the names are the codec's alone, every read counts as declared and the check reports
 nothing anywhere: a class under `@JsonNaming`, a file that does not say which class it is, as with
@@ -175,6 +177,7 @@ The check finds a strategy in code, Jackson's `PropertyNamingStrategies` or kotl
 `namingStrategy`, and in Spring's settings, `spring.jackson.property-naming-strategy` in an
 `application.yml`, `.yaml` or `.properties`. Give it those files as
 `Source(text, SourceLanguage.SETTINGS)`; `checkProject` and both editors read them on their own.
+A strategy set in Java code is not seen, since the check reads no Java.
 `report.declaredByCodec` names what turned the check off, which is why the test above asserts it
 is empty. A property counts as declared
 even when the page writes it as `null`, which the client does not store, so give a signal the

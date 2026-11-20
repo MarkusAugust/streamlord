@@ -359,7 +359,11 @@ class StreamlordAnalysis(
     /** The signals the expressions of an HTML document or template read. */
     fun htmlSignalReferences(file: PsiFile): List<SignalReference> =
         CachedValuesManager.getCachedValue(file) {
-            CachedValueProvider.Result.create(analyzer.signalReferences(source(file.text, SourceLanguage.HTML)), file, settings.tracker)
+            CachedValueProvider.Result.create(
+                analyzer.signalReferences(source(file.text, SourceLanguage.HTML).copy(engine = templateEngine(file))),
+                file,
+                settings.tracker,
+            )
         }
 
     companion object {

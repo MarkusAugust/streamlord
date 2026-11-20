@@ -40,7 +40,9 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()], ["*"]);
     files.set("/d/application-dev.properties", encode("spring.jackson.property-naming-strategy=SNAKE_CASE\n"));
     const findFiles = workspace.findFiles;
-    workspace.findFiles = async (glob?: unknown) => (String(glob).includes("application") ? [Uri.file("/d/application-dev.properties")] : []);
+    files.set("/d/applicationContext.properties", encode(`<div data-signals:ctx="1"></div>\n`));
+    workspace.findFiles = async (glob?: unknown) =>
+      String(glob).includes("application") ? [Uri.file("/d/application-dev.properties"), Uri.file("/d/applicationContext.properties")] : [];
     try {
       const fromDisk = new SignalIndex(new Set());
       await fromDisk.rebuild();

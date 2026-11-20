@@ -31,6 +31,7 @@ import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
+import io.github.markusaugust.streamlord.intellij.analysis.templateEngine
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.CancellationException
@@ -107,7 +108,11 @@ class SignalIndex(
 
     /** Where [file] reads signals, from its current text, calls to something other than Streamlord among them. */
     fun readsIn(file: PsiFile): List<SignalReference> =
-        ask(file) { key -> reads(key) { StreamlordAnalysis.getInstance(project).source(file.text, languageOf(vfOf(file))!!) } }
+        ask(file) { key ->
+            reads(key) {
+                StreamlordAnalysis.getInstance(project).source(file.text, languageOf(vfOf(file))!!).copy(engine = templateEngine(file))
+            }
+        }
             ?: emptyList()
 
     /** Every place in the project that defines the signal [name], and with [inside] every one that defines a signal under it. */
@@ -133,8 +138,11 @@ class SignalIndex(
         val inside = "$name."
         val analysis = StreamlordAnalysis.getInstance(project)
         return places { key, vf ->
-            reads(key) { textOf(vf)?.let { text -> languageOf(vf)?.let { analysis.source(text, it) } } }
-                ?.filter { it.name == name || it.name.startsWith(inside) }
+            reads(key) {
+                textOf(vf)?.let { text ->
+                    languageOf(vf)?.let { analysis.source(text, it).copy(engine = ProjectFiles.engineOf(vf.name)) }
+                }
+            }?.filter { it.name == name || it.name.startsWith(inside) }
                 ?.map { Triple(it.start, it.end, it.name) }
         }
     }

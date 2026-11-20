@@ -304,15 +304,17 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
 
 /**
  * What the definitions say about a class, written with a `:`, which no signal name holds: a class
- * a page is declared from, a class a server patch sends, a class whose properties the analysis
- * reads, and a property of a Jackson class, `jackson:Form:email`, a signal only where a page is
- * declared from the class or a patch sends it. A class a page is declared from that the analysis
- * cannot read is one only its codec can name (see [isKnownSignal]).
+ * a page is declared from, a class a page or a patch sends with the classes its name may mean
+ * (`sends:Form:app.Form|lib.Form`), a `@Serializable` class whose properties are defined, and a
+ * Jackson class with each of its properties (`jackson:app.Form`, `jacksonProperty:app.Form:email`),
+ * a signal only where the class is sent. A class a page is declared from that the analysis cannot
+ * read is one only its codec can name (see [isKnownSignal]).
  */
 internal const val ENCODED_CLASS: String = "toJsonValue:"
-internal const val PATCHED_CLASS: String = "patchSignals:"
+internal const val SENT_CLASS: String = "sends:"
 internal const val READABLE_CLASS: String = "class:"
-internal const val JACKSON_PROPERTY_OF: String = "jackson:"
+internal const val JACKSON_CLASS: String = "jackson:"
+internal const val JACKSON_PROPERTY_OF: String = "jacksonProperty:"
 
 /**
  * A name a DSL call or core declares with a hyphen, which Streamlord refuses at render or send time,
@@ -449,10 +451,9 @@ internal fun collectDeclaredSignals(
  * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
  * reads, and every signal an expression assigns to.
  *
- * Three kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
- * `class:Form` for a `@Serializable` class whose properties are here, `toJsonValue:Form` for a
- * class a page is declared from, and `refused:is-open` for a name Streamlord refuses. [isKnownSignal]
- * reads them together.
+ * Some entries are no signal names, and hold a `:` so that none is mistaken for one: the marks of
+ * the classes a page is declared from or a codec writes (see [ENCODED_CLASS]), and `refused:is-open`
+ * for a name Streamlord refuses. [withClassProperties] and [isKnownSignal] read them together.
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
     if (source.language == SourceLanguage.SETTINGS) return if (settingsRenameSignals(source.text)) setOf(ANY_SIGNAL) else emptySet()
@@ -479,15 +480,27 @@ internal fun collectSignalDefinitions(
     for (d in definedAt(src, language, spread, foreign, lex, prefix, refused)) out += if (d in refused) REFUSED + d.name else d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
-        for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
-        for ((type, properties) in jacksonProperties(src)) {
-            out += READABLE_CLASS + type
-            for (p in properties) out += "$JACKSON_PROPERTY_OF$type:${p.name}"
+        val classes = signalClasses(src, lex!!)
+        val own = packageOf(src, lex)
+        for (c in classes) {
+            if (c.serializable) {
+                out += READABLE_CLASS + c.name
+            } else if (c.readable) {
+                // A Jackson class is known by its package too, so that another of its name is not taken for it.
+                val qualified = if (own.isEmpty()) c.name else "$own.${c.name}"
+                out += JACKSON_CLASS + qualified
+                for (p in c.properties) out += "$JACKSON_PROPERTY_OF$qualified:${p.name}"
+            }
         }
         // A page declared from a class defines what its codec writes: the properties for a class
         // the analysis reads, any name for one it cannot read, or for a value of no named class.
-        for (type in encodedSignalTypes(src, foreign, lex!!)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
-        for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) out += PATCHED_CLASS + type
+        val sent = LinkedHashSet<String>()
+        for (type in encodedSignalTypes(src, foreign, lex)) {
+            out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+            if (type != ANY_SIGNAL) sent += type
+        }
+        for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) sent += type
+        for (type in sent) out += "$SENT_CLASS$type:${candidateClasses(src, lex, type).joinToString("|")}"
         // A naming strategy leaves every class's names to the codec.
         if (codeRenamesSignals(src, lex)) out += ANY_SIGNAL
     }

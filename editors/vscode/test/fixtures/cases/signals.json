@@ -10,7 +10,7 @@
     {"name":"a page declared from a variable is read by what the file says about it (2)","language":"kotlin","src":"fun p(pairs: Array<Pair<String, Any?>>) = div { dataSignals(*pairs) }","encoded":[]},
     {"name":"a page declared from a variable is read by what the file says about it (3)","language":"kotlin","src":"val p = \"count\" to 0\nfun f() = div { dataSignals(p) }","encoded":[]},
     {"name":"a page declared from a variable is read by what the file says about it (4)","language":"kotlin","src":"fun p(s: JsonObject) = div { dataSignals(s) }","encoded":["*"]},
-    {"name":"a page declared from a variable is read by what the file says about it (5)","language":"kotlin","src":"class X(val form: String)\nfun p() { val form = Form(); div { dataSignals(codec.toJsonValue(form)) } }","encoded":["class:X","jackson:X:form","toJsonValue:Form"]},
+    {"name":"a page declared from a variable is read by what the file says about it (5)","language":"kotlin","src":"class X(val form: String)\nfun p() { val form = Form(); div { dataSignals(codec.toJsonValue(form)) } }","encoded":["jackson:X","jacksonProperty:X:form","toJsonValue:Form"]},
     {"name":"a page declared from a variable is read by what the file says about it (6)","language":"kotlin","src":"fun p() = div { dataSignals(codec.toJsonValue(forms.Form())) }","encoded":["toJsonValue:Form"]},
     {"name":"a page declared from a variable is read by what the file says about it (7)","language":"kotlin","src":"fun p() = div { dataSignals(codec.toJsonValue(Form()), true) }","encoded":["toJsonValue:Form"]},
     {"name":"a page declared from a variable is read by what the file says about it (8)","language":"kotlin","src":"fun p(text: String) = div { dataSignals(codec.toJsonValue(text)) }","encoded":[]},

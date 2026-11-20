@@ -498,8 +498,9 @@ fun signalPlaces(
     src: String,
     kotlin: Boolean,
     prefix: String,
+    path: String? = null,
 ): SignalPlaces {
-    val file = source(src, kotlin, prefix)
+    val file = source(src, kotlin, prefix, engine = path?.let(ProjectFiles::engineOf))
     return plain(
         "declarations" to signalDeclarations(file).map(::plain).toTypedArray(),
         "reads" to

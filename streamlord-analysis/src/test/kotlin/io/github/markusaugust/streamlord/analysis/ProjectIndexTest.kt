@@ -101,6 +101,17 @@ class ProjectIndexTest {
     }
 
     @Test
+    fun `a naming strategy set in a file waiting to be read tells the others when it is read`() {
+        kotlin(
+            "Search.kt",
+            "fun Route.s() {\n    get(\"/s\") { call.readSignals<Form>() }\n}\n@Serializable\ndata class Form(val pageNo: Int = 0)",
+        )
+        val strategy = "val json = Json { namingStrategy = JsonNamingStrategy.SnakeCase }"
+        index.put("Json.kt", strategy, SourceLanguage.KOTLIN, facts = false)
+        assertTrue(index.readFacts("Json.kt", strategy))
+    }
+
+    @Test
     fun `a file not put in is told what the others define, and nothing of itself`() {
         html("cart.html", """<div data-signals:count="0"></div>""")
         val signals = index.signalsFor("elsewhere.html")

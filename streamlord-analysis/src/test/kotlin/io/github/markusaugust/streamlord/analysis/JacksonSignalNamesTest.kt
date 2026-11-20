@@ -78,6 +78,94 @@ class JacksonSignalNamesTest {
         assertEquals(listOf("list.html: unknown-signal '\$label'"), told())
     }
 
+    /** The page declared from `F`, and the reads of [names] in a template, with the class [klass] in its own file. */
+    private fun pageOf(
+        klass: String,
+        vararg names: String,
+        pagePackage: String = "app",
+        imports: String = "",
+    ): List<String> {
+        files.clear()
+        write("src/main/kotlin/app/F.kt", "package app\n\n$klass\n")
+        write("src/main/kotlin/app/Page.kt", "package $pagePackage\n$imports\nfun p() = div { dataSignals(codec.toJsonValue(F())) }\n")
+        write("src/main/resources/templates/list.html", "<p data-text=\"${names.joinToString(" + ") { "${'$'}$it" }}\"></p>")
+        return told()
+    }
+
+    @Test
+    fun `a class whose names are not all in its constructor is left to the codec`() {
+        for (klass in listOf(
+            "data class F(val a: String = \"\") {\n    val b: String get() = a\n}",
+            "class F() {\n    var b: Int = 0\n}",
+            "open class Base(val b: String)\nclass F(val a: String = \"\") : Base(\"x\")",
+            "@JsonIgnoreProperties(\"a\")\ndata class F(val a: String = \"\")",
+            "data class F(@JsonAlias(\"q\") val a: String = \"\")",
+            "data class F(@JsonProperty(access = JsonProperty.Access.READ_ONLY) val a: String = \"\")",
+        )) {
+            assertEquals(emptyList(), pageOf(klass, "b", "q"), klass)
+        }
+    }
+
+    @Test
+    fun `a class of a kind that holds no signals is no Jackson class`() {
+        for (klass in listOf(
+            "enum class F(val a: String) { X(\"x\") }",
+            "@JvmInline\nvalue class F(val a: String)",
+            "annotation class F(val a: String)",
+        )) {
+            assertEquals(emptyList(), pageOf(klass, "b"), klass)
+        }
+    }
+
+    @Test
+    fun `a Serializable class is kotlinx's however its annotations are written`() {
+        for (klass in listOf(
+            "@kotlinx.serialization.Serializable\ndata class F(@SerialName(\"q\") val a: String = \"\")",
+            "@Serializable\n@Schema(description = \"a (b)\")\ndata class F(@SerialName(\"q\") val a: String = \"\")",
+        )) {
+            assertEquals(listOf("list.html: unknown-signal '\$a'"), pageOf(klass, "q", "a"), klass)
+        }
+    }
+
+    @Test
+    fun `a JsonProperty names the signal however it is written`() {
+        for (klass in listOf(
+            "data class F(@JsonProperty(required = true, value = \"q\") val a: String = \"\")",
+            "data class F(@JsonProperty(\"q\") @Schema(description = \"x (y)\") val a: String = \"\")",
+            "data class F(\n    @JsonProperty(\"q\") // the query\n    val a: String = \"\",\n)",
+        )) {
+            assertEquals(listOf("list.html: unknown-signal '\$a'"), pageOf(klass, "q", "a"), klass)
+        }
+    }
+
+    @Test
+    fun `a private constructor property is no signal, as Jackson writes none`() {
+        assertEquals(
+            listOf("list.html: unknown-signal '\$b'"),
+            pageOf("class F(val a: String = \"\", private val b: String = \"\")", "a", "b"),
+        )
+    }
+
+    @Test
+    fun `a class is the one the page's package and imports name, and one in a comment is none`() {
+        assertEquals(emptyList(), pageOf("data class F(val a: String = \"\")", "q", pagePackage = "web", imports = "import lib.F\n"))
+        assertEquals(
+            listOf("list.html: unknown-signal '\$q'"),
+            pageOf("data class F(val a: String = \"\")", "a", "q", pagePackage = "web", imports = "import app.F\n"),
+        )
+        assertEquals(emptyList(), pageOf("// was: class F(val old: String)\nclass F<T>(val items: List<T>)", "items"))
+    }
+
+    @Test
+    fun `an import of a naming strategy for JsonNaming renames nothing else`() {
+        write(
+            "src/main/kotlin/app/Snake.kt",
+            "package app\n\nimport com.fasterxml.jackson.databind.PropertyNamingStrategies\n\n@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)\ndata class Snake(val pageNo: Int = 0)\n",
+        )
+        write("src/main/resources/templates/other.html", """<div data-signals="{q: ''}"><p data-text="${'$'}qq"></p></div>""")
+        assertEquals(listOf("other.html: unknown-signal '\$qq'"), told())
+    }
+
     @Test
     fun `JsonNaming on the class leaves its names to the codec`() {
         write(

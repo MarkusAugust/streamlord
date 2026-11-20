@@ -101,7 +101,8 @@ export class SignalIndex implements vscode.Disposable {
       vscode.workspace.findFiles("**/*.kt", EXCLUDED_GLOB, FILE_CAP),
       vscode.workspace.findFiles(SETTINGS_GLOB, EXCLUDED_GLOB, FILE_CAP),
     ]);
-    const files = [...markup, ...kotlin, ...settings].filter((u) => !inSkippedFolder(u));
+    // The glob of the settings is wider than their names: `applicationContext.properties` is none.
+    const files = [...markup, ...kotlin, ...settings.filter((u) => languageByExtension(u) === "settings")].filter((u) => !inSkippedFolder(u));
     await Promise.all(
       files.map(async (uri) => {
         try {
@@ -231,7 +232,7 @@ export class SignalIndex implements vscode.Disposable {
     if (e.places?.prefix === this.prefix()) return e.places;
     const text = await textOf(uri);
     if (text === null) return null;
-    const places = placesIn(text, e.language, this.prefix());
+    const places = placesIn(text, e.language, this.prefix(), vscode.Uri.parse(uri).path);
     // Kept only while the entry is the index's: an edit meanwhile has put a new one in its place.
     if (this.byFile.get(uri) === e) e.places = places;
     return places;
@@ -265,10 +266,10 @@ export async function textOf(uri: string): Promise<string | null> {
 }
 
 /** Where `text` defines and reads signals. */
-export function placesIn(text: string, language: Language, prefix: string): Places {
+export function placesIn(text: string, language: Language, prefix: string, path?: string): Places {
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
   // Settings name no signal: they only say how the codec names the others.
-  const names = language === "settings" ? { declarations: [], reads: [] } : signalPlaces(text, language === "kotlin", prefix);
+  const names = language === "settings" ? { declarations: [], reads: [] } : signalPlaces(text, language === "kotlin", prefix, path);
   return { prefix, names, lineStarts };
 }

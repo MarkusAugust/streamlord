@@ -115,14 +115,14 @@ internal fun markupSignalReferences(
             val spec = catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
             val value = attr.value ?: continue
             if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
-            val written = if (hasTemplateSyntax(value)) templatePlaceholders(value, engine) else emptyList()
+            val written = templatePlaceholders(value, engine)
             val chars = value.toCharArray()
             for (range in written) for (k in range) chars[k] = ' '
             val decoded = decodeEntities(chars.concatToString())
             for (ref in expressionSignalReferences(decoded.text)) {
                 val start = decoded.toSource(ref.start)
                 val end = decoded.toSource(ref.end)
-                if (written.any { finishes(value, it, start, end) }) continue
+                if (finished(value, written, start, end, engine)) continue
                 out += ref.copy(start = attr.valueStart + start, end = attr.valueStart + end)
             }
         }
@@ -130,29 +130,45 @@ internal fun markupSignalReferences(
     return out
 }
 
-/** Template constructs that decide what is written and write nothing themselves: `{% if %}`, `<#if>`, `[#if]`, `@if`, `#if`. */
-private val CONTROL = regex("""\{%|</?#|\[#|[@#][a-z]""")
+/** A character that carries a name on, read after it: `$a` and then `b`, `1`, `.b`, `[0]` or `-b`. */
+private fun carriesOn(c: Char?) = c != null && (c.isLetterOrDigit() || c == '_' || c == '.' || c == '[' || c == '-')
 
-/** A character that would carry a name on: `$a` and then `b`, `1`, `.b` or `[0]` read as one path. */
-private fun carriesOn(c: Char?) = c != null && (c.isLetterOrDigit() || c == '_' || c == '.' || c == '[')
+/** A character that a name carries on from, read before it: `x$a` is one name in JavaScript. */
+private fun carriesInto(c: Char?) = c != null && (c.isLetterOrDigit() || c == '_' || c == '$')
 
 /**
- * Whether the construct at [range] of [value] finishes the read from [start] to [end]: text it
- * writes right before the dollar or right after the name, as in `{{ p }}$a`, `$a{{ i }}` and
- * `$a.{{ k }}`, or a construct that writes nothing with a name carried on after it.
+ * Whether what [written], the constructs of [value], write beside the read from [start] to [end]
+ * finishes it: text written right before the dollar or right after the name, as in `{{ p }}$a`,
+ * `$a{{ i }}` and `$a.{{ k }}`, or text that stands beyond a run of constructs that write nothing,
+ * as in `x{% if c %}$a`. A run that leads to another branch, `{% else %}`, ends what stands beside it.
  */
-private fun finishes(
+private fun finished(
     value: String,
-    range: IntRange,
+    written: List<IntRange>,
     start: Int,
     end: Int,
+    engine: TemplateEngine?,
 ): Boolean {
-    val control = CONTROL.matchesAt(value, range.first)
-    if (range.last + 1 == start) return !control
-    if (range.first < end) return false
-    val gap = value.substring(end, range.first)
-    if (gap.isNotEmpty() && gap != "." && gap != "[") return false
-    return !control || gap.isNotEmpty() || carriesOn(value.getOrNull(range.last + 1))
+    var before = start
+    var branch = false
+    while (true) {
+        val r = written.lastOrNull { it.last + 1 == before } ?: break
+        if (!writesNothing(value, r, engine)) return true
+        branch = branch || opensBranch(value, r)
+        before = r.first
+    }
+    if (before < start && !branch && carriesInto(value.getOrNull(before - 1))) return true
+    val gap = value.getOrNull(end)
+    if ((gap == '.' || gap == '[' || gap == '-') && written.any { it.first == end + 1 }) return true
+    var after = end
+    branch = false
+    while (true) {
+        val r = written.firstOrNull { it.first == after } ?: break
+        if (!writesNothing(value, r, engine)) return true
+        branch = branch || opensBranch(value, r)
+        after = r.last + 1
+    }
+    return after > end && !branch && carriesOn(value.getOrNull(after))
 }
 
 /**
@@ -203,16 +219,23 @@ internal fun unknownSignalIssues(
     return refs.mapNotNull { unknownSignalIssue(it, known) }
 }
 
-/** [defined] with the properties of each Jackson class a page is declared from or a patch sends, as the names they are. */
+/**
+ * [defined] with the properties of each Jackson class a page or a patch sends, as the names they
+ * are, and the class marked as one the analysis reads. Of the classes a name may mean, an import
+ * decides, and otherwise the file's own package before one star import alone.
+ */
 internal fun withClassProperties(defined: Set<String>): Set<String> {
-    val sent = HashSet<String>()
-    for (d in defined) for (marker in listOf(ENCODED_CLASS, PATCHED_CLASS)) if (d.startsWith(marker)) sent += d.removePrefix(marker)
-    if (sent.isEmpty()) return defined
+    val sends = defined.filter { it.startsWith(SENT_CLASS) }
+    if (sends.isEmpty()) return defined
     val out = LinkedHashSet(defined)
-    for (d in defined) {
-        if (!d.startsWith(JACKSON_PROPERTY_OF)) continue
-        val rest = d.removePrefix(JACKSON_PROPERTY_OF)
-        if (rest.substringBefore(':') in sent) out += rest.substringAfter(':')
+    for (d in sends) {
+        val type = d.removePrefix(SENT_CLASS).substringBefore(':')
+        val candidates = d.substringAfter("$SENT_CLASS$type:").split('|')
+        val found = candidates.filter { JACKSON_CLASS + it in defined }
+        val qualified = if (candidates.first() in found) candidates.first() else found.singleOrNull() ?: continue
+        out += READABLE_CLASS + type
+        val prefix = "$JACKSON_PROPERTY_OF$qualified:"
+        for (p in defined) if (p.startsWith(prefix)) out += p.removePrefix(prefix)
     }
     return out
 }

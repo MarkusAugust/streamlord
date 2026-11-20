@@ -55,6 +55,39 @@ internal val TEMPLATE_SYNTAX: Regex by lazy {
     regex((openers + directives + PLACEHOLDER).joinToString("|"))
 }
 
+/**
+ * Constructs that decide what is written and write nothing themselves: a `{% %}` statement, a
+ * FreeMarker `<#if>` or `[#if]`, a directive of the catalog, a Mustache section `{{#x}}`, `{{/x}}`,
+ * `{{^x}}` or `{{else}}`, and an ERB or JSP `<% %>` that is not `<%=` or `<%-`.
+ */
+private val CONTROL: Regex by lazy {
+    val directives = CONSTRUCTS.directives.map { (sigil, words) -> """${Regex.escape(sigil)}(?:${words.joinToString("|")})\b""" }
+    regex((listOf("""\{%""", """</?#""", """\[#""", """\{\{\s*(?:[#/^]|else\b)""", """<%(?![=-])""") + directives).joinToString("|"))
+}
+
+/** Statements among [CONTROL] that write another file's text where they stand. */
+private val INCLUDES = regex("""\{%-?\s*(?:include|embed|url)\b|</?#include\b|\[#include\b|#(?:parse|include)\b|@template\b""")
+
+/** A construct that leads to another branch: what stands on its other side is not written beside it. */
+private val BRANCH = regex("""\b(?:else|elif|elseif|elsif)\b""")
+
+/** Whether the construct at [range] of [value], in a file of [engine], writes nothing where it stands. */
+internal fun writesNothing(
+    value: String,
+    range: IntRange,
+    engine: TemplateEngine?,
+): Boolean {
+    val at = range.first
+    if (engine == TemplateEngine.RAZOR && (value.startsWith("@{", at) || value.startsWith("@*", at))) return true
+    return CONTROL.matchAt(value, at) != null && INCLUDES.matchAt(value, at) == null
+}
+
+/** Whether the construct at [range] of [value] opens another branch, `{% else %}` or `{{else}}`. */
+internal fun opensBranch(
+    value: String,
+    range: IntRange,
+): Boolean = BRANCH.containsMatchIn(value.substring(range.first, range.last + 1))
+
 /** Where the construct that starts at [s] of [value] ends. */
 internal fun placeholderEnd(
     value: String,

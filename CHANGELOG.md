@@ -38,10 +38,15 @@ All notable changes to Streamlord are recorded here. The format follows
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
 - A class that is not `@Serializable` is read as Jackson writes it, where it turned the signal
   checks off for the whole project: a page declared from it with `toJsonValue`, a patch of it and a
-  `readSignals<T>()` of it are judged by its constructor properties, each by its name or its
-  `@JsonProperty`, without one under `@JsonIgnore`. A class under `@JsonNaming`, and every class in
-  a project that sets a naming strategy, in code or in Spring's `spring.jackson.property-naming-strategy`,
-  stays the codec's alone, as before. A naming strategy in kotlinx's `Json { namingStrategy = ... }`
+  `readSignals<T>()` of it are judged by its public constructor properties, each by its name or its
+  `@JsonProperty`, without one under `@JsonIgnore`, and the class is the one the file's package and
+  imports name. A class with names elsewhere, in a body, a supertype, `@JsonNaming`,
+  `@JsonIgnoreProperties`, `@JsonAlias` or `access`, and every class in a project that sets a naming
+  strategy, in Kotlin code or in Spring's `spring.jackson.property-naming-strategy`, stays the codec's
+  alone, as before.
+- A `@Serializable` class written `@kotlinx.serialization.Serializable`, or with an annotation whose
+  arguments hold parentheses beside it, is read as one, and so is a `@SerialName` or `@JsonProperty`
+  with an annotation or a comment after it. A naming strategy in kotlinx's `Json { namingStrategy = ... }`
   now does the same for `@Serializable` classes, which were judged by names the codec did not write.
 - **Breaking:** `SourceLanguage` has `SETTINGS`, for Spring's `application.yml`, `.yaml` and
   `.properties`, which `ProjectFiles.languageOf` names and `checkProject` and both editors read for a
