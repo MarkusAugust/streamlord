@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * How a value is built, read from the text, and what an editor's answers of its parts change. Each case is a Kotlin file
@@ -900,5 +901,16 @@ class ValueStructureTest {
     fun `a group of annotations too long to read closes nothing but itself`() {
         val group = "@[A Query(\"\"\"" + "x".repeat(6000) + "\"\"\")]"
         assertEquals(emptySet(), declaredNames("private class P { $group val title = \"<b>x</b>\" }").others)
+    }
+
+    @Test
+    fun `the literals of a large block are read once each`() {
+        val block =
+            "import io.github.markusaugust.streamlord.core.domain.*\nfun f() = interpolate {\n" +
+                (0 until 16_000).joinToString("\n") { "    val a$it = \"x <b>$it</b>\"" } +
+                "\n    \"<p></p>\"\n}"
+        val started = System.nanoTime()
+        fileFacts(block).markupLiterals
+        assertTrue((System.nanoTime() - started) / 1_000_000 < 2_000, "read in time")
     }
 }

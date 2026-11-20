@@ -112,17 +112,18 @@ internal class FileFacts(
         val lex = lexKotlin(src)
         if (!shadowsCore(src, "interpolate")) {
             for (b in interpolateBlocks(src, code)) {
-                for (s in lex.stringsIn(b.braces.first, b.braces.last)) {
-                    if (TAG.containsMatchIn(s.text) || s.interpolations.any { markedValue(it) != null }) {
-                        if (!inArguments(src, code, b.braces.first, s.start)) out += s.start
-                    }
-                }
+                val literals = lex.stringsIn(b.braces.first, b.braces.last)
+                val written = literals.filter { TAG.containsMatchIn(it.text) || it.interpolations.any { ip -> markedValue(ip) != null } }
+                out += outsideArguments(src, code, b.braces.first, written)
             }
         }
         if (!shadowsCore(src, "Trusted")) {
             for (site in findCallSites(src, setOf("Trusted"), lex)) {
                 if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
-                (site.named("html") ?: site.positional.firstOrNull())?.string?.let { if (TAG.containsMatchIn(it.text)) out += it.start }
+                // Its argument, a literal or a sum of them: each that writes a tag, called in it by nothing else.
+                val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
+                val written = lex.stringsIn(arg.start, arg.end).filter { TAG.containsMatchIn(it.text) }
+                out += outsideArguments(src, code, site.openParen, written)
             }
         }
         out
@@ -552,27 +553,36 @@ private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}
 private val TAG = regex("""<[A-Za-z/!]""")
 
 /**
- * Whether [at] stands in a call's arguments within the block that opens at [open]: in parentheses, square brackets, or
- * a lambda handed to a call. The braces of a branch, `if (c) { ... }`, `else { }`, `"a" -> { }`, are the block's own.
+ * Where those of [literals], in the order of the file, start that stand in no call's arguments within the bracket that
+ * opens at [open]: in parentheses, square brackets, or a lambda handed to a call. The braces of a branch,
+ * `if (c) { ... }`, `else { }`, `"a" -> { }`, are the block's own. One pass over the bracket.
  */
-private fun inArguments(
+private fun outsideArguments(
     src: String,
     code: BooleanArray,
     open: Int,
-    at: Int,
-): Boolean {
-    var depth = 0
-    var k = at - 1
-    while (k > open) {
-        val c = src[k]
-        if (code[k] && (c == ')' || c == ']' || c == '}')) depth++
-        if (code[k] && (c == '(' || c == '[' || c == '{') && depth-- == 0) {
-            if (c != '{' || !branch(src, code, open, k)) return true
-            depth = 0
+    literals: List<KotlinString>,
+): List<Int> {
+    val out = ArrayList<Int>()
+    // Each bracket open at k, and whether it holds arguments; how many of those are open.
+    val stack = ArrayList<Boolean>()
+    var arguments = 0
+    var k = open + 1
+    for (s in literals) {
+        while (k < s.start) {
+            val c = src[k]
+            if (code[k] && (c == '(' || c == '[' || c == '{')) {
+                val holds = c != '{' || !branch(src, code, open, k)
+                stack += holds
+                if (holds) arguments++
+            } else if (code[k] && (c == ')' || c == ']' || c == '}') && stack.isNotEmpty()) {
+                if (stack.removeAt(stack.lastIndex)) arguments--
+            }
+            k++
         }
-        k--
+        if (arguments == 0) out += s.start
     }
-    return false
+    return out
 }
 
 private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do)\s*$""")
