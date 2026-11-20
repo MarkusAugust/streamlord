@@ -301,6 +301,20 @@ describe("kotlin injection grammar", () => {
     assert.match(scopeOf(plain, "open"), /variable\.other\.constant\.signal\.datastar/);
   });
 
+  it("highlights html in a string however the analysis reads it as html, and in no annotation's message", async () => {
+    const tag = /entity\.name\.tag\.html/;
+    assert.match(scopeOf(await tokens("source.kotlin", `val page = "<!doctype html><main>x</main>"`), "main"), tag, "a doctype first");
+    assert.match(scopeOf(await tokens("source.kotlin", `val a = " <p>x</p>"`), "p"), tag, "a space first");
+    assert.match(scopeOf(await tokens("source.kotlin", `val a = "\\n<p>x</p>"`), "p"), tag, "a line break first");
+    assert.match(scopeOf(await tokens("source.kotlin", `fun f(name: String) = interpolate { "Hello <b>\${+name}</b>" }`), "b"), tag, "text first in the block");
+    const block = await tokenLines("source.kotlin", [`fun f(c: Boolean) = interpolate {`, `    if (c) "no <i>way</i>" else """<p>x</p>"""`, `}`, `val after = "not <u>here</u>"`]);
+    assert.match(scopeOf(block[1]!, "i"), tag, "a branch of the block");
+    assert.ok(block[3]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "the block ends at its brace");
+    assert.match(scopeOf(await tokens("source.kotlin", `fun f() = Trusted("bold <b>text</b>")`), "b"), tag, "Trusted's argument");
+    const note = await tokens("source.kotlin", `@Deprecated("<b>not</b> markup") fun f() = 1`);
+    assert.ok(note.every((x) => !x.scopes.some((s) => s.includes("html"))), "an annotation's message is no markup");
+  });
+
   it("reads the annotation by its qualified name too", async () => {
     // The string opens no tag, so only the marker makes it HTML.
     const lines = await tokenLines("source.kotlin", [`@org.intellij.lang.annotations.Language("HTML")`, `fun page(): String = """x <b data-text="$count">y</b>"""`]);
