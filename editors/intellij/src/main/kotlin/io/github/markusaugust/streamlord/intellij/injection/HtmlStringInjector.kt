@@ -15,7 +15,6 @@ import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtEscapeStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
-import org.jetbrains.kotlin.psi.KtParenthesizedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
 /**
@@ -44,9 +43,10 @@ class HtmlStringInjector : MultiHostInjector {
         val s = analyzer.lex(src).strings.firstOrNull { it.start == host.textRange.startOffset } ?: return
         if (s.unterminated || !isHtmlString(src, s)) return
         // A string the Kotlin plugin injects into itself, by a mark on what it is or on the parameter it is handed to,
-        // keeps that injection and its prefix: ours would win over it. A sum is injected whole, and asked of as one.
+        // keeps that injection and its prefix: ours would win over it. A sum is injected whole, and asked of as one; a literal
+        // in parentheses is no literal of it.
         var whole: PsiElement = host
-        while (whole.parent.let { (it is KtBinaryExpression && it.operationToken == KtTokens.PLUS) || it is KtParenthesizedExpression }) {
+        while (whole.parent.let { it is KtBinaryExpression && it.operationToken == KtTokens.PLUS }) {
             whole = whole.parent
         }
         val contributors = LanguageInjectionContributor.INJECTOR_EXTENSION.allForLanguageOrAny(KotlinLanguage.INSTANCE)

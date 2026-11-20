@@ -130,6 +130,8 @@ class EditorFeaturesTest : StreamlordTestCase() {
 
             fun wrapped(x: String) = wrap("<ul>" + x + "<li>mid</li></ul>")
 
+            fun bracketed() = wrap(("<p>alone</p>") + "<i>sum</i>")
+
             fun page(name: String) = interpolate { "<p>${'$'}{+name}</p>" }
 
             fun hello(name: String) = interpolate { "Hello <b>${'$'}{+name}</b>" }
@@ -169,5 +171,7 @@ class EditorFeaturesTest : StreamlordTestCase() {
         // A sum under a mark is one injection of the Kotlin plugin's, all its literals in it.
         assertEquals("HTML <p>one</p><i>two</i>", injected("<i>two"))
         assertEquals("HTML <ul>x<li>mid</li></ul>", injected("<li>mid"))
+        // A literal in parentheses is none of the sum's literals to the Kotlin plugin, which takes it for a value.
+        assertEquals("HTML <p>alone</p>", injected("<p>alone"))
     }
 }
