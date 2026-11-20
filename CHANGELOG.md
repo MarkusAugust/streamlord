@@ -75,7 +75,8 @@ All notable changes to Streamlord are recorded here. The format follows
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
 - A `@Language("HTML")` mark reaches the next literal after it past another annotation's
-  arguments, and no literal of an annotation's arguments is HTML:
+  arguments and past comments, a mark written inside a comment marks nothing, and no literal of
+  an annotation's arguments is HTML:
   `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"` read `"x"` as the HTML string and not the
   function's literal.
 - A value whose line ends in `!!`, `++`, `--`, a nullable type or type arguments closed on its
@@ -84,8 +85,8 @@ All notable changes to Streamlord are recorded here. The format follows
   too, where it ran to the end of the block around it: `fun size(n: Int) = pad(n)` inside another
   function kept its `n` in sight to the end of the outer one, so `$n` after it was read as the
   Int. A value, an expression and a statement go on past `if (...)`, `when (...)`, `for (...)`,
-  `while (...)`, `else`, `as`, `as?`, `is` or `in` at the end of a line, and before `catch` or
-  `finally` on the next. A loop's header is read whole, over several lines and with a lambda in
+  `while (...)`, `else`, `as`, `as?`, `is` or `in` at the end of a line, and into a `try`'s
+  `catch` and `finally` however they are laid out. A loop's header is read whole, over several lines and with a lambda in
   it, and an `else` on the line after a loop's statement is the statement's own only where the
   statement has an `if` still without one.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and

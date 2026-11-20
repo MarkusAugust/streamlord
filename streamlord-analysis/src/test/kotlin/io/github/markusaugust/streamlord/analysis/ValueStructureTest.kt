@@ -992,6 +992,19 @@ class ValueStructureTest {
             "fun outer(n: Int) {\n    fun inner(n: String): String = try {\n        \"a\"\n    }\n    finally {\n" +
                 "        println(\"<p>\$n</p>\")\n    }\n}"
         assertEquals(listOf("\$n"), told(block))
+        // A handler however it is laid out, and no `catch` or `finally` after a lambda's block.
+        val tried = "fun outer(n: Int) {\n    fun inner(n: String): String = try {\n        \"a\"\n    }\n"
+        for (tail in listOf(
+            "    finally\n    {\n        println(\"<p>\$n</p>\")\n    }\n}",
+            "    catch (e: Exception)\n    {\n        println(\"<p>\$n</p>\")\n        \"b\"\n    }\n}",
+            "    catch /* any */ (e: Exception) {\n        println(\"<p>\$n</p>\")\n        \"b\"\n    }\n}",
+        )) {
+            assertEquals(listOf("\$n"), told(tried + tail), tail)
+        }
+        val lambda =
+            "fun outer(n: Int) {\n    fun inner(n: String) = run { n }\n" +
+                "    catch({ println(\"<p>\$n</p>\") }) { e: Throwable -> }\n}"
+        assertEquals(emptyList(), told(lambda))
         val called = "fun outer(x: String, nums: List<Int>) {\n    for (x: Int in nums) use(x)\n    catching(\"<p>\$x</p>\")\n}"
         assertEquals(listOf("\$x"), told(called))
         for (end in listOf("m as?\n        String", "n<3 && n>\n        1", "n<a && n>\n        b", "a<n && n>\n        a")) {

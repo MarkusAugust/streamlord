@@ -393,7 +393,8 @@ public fun isHtmlString(
     // A mark reaches the next literal after it, past those of other annotations' arguments.
     val from = maxOf(0, s.start - 240)
     val before = src.substring(from, s.start)
-    val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
+    // `@Language("HTML")` in a comment marks nothing; `// language=HTML` is a comment.
+    val last = HTML_MARKER.findAll(before).lastOrNull { it.value.startsWith("/") || facts.code[from + it.range.first] } ?: return false
     val after = before.substring(last.range.last + 1)
     // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal, behind other
     // annotations too.

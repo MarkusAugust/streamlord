@@ -350,12 +350,12 @@ private fun goesOn(
         // `x as?` wants its type.
         '?' -> src.startsWith("as", k - 2) && !isWordPart(src.getOrNull(k - 3))
 
-        else -> isWordPart(src[k]) && WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 7), k + 1))
+        else -> isWordPart(src[k]) && WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1))
     }
 
 /** The keywords after which Kotlin reads on, which no name can be: `else`, `x as`, `x is`, `x in`. */
-private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in)$""")
-private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while)\s*$""")
+private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in|finally)$""")
+private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
 
 /** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
 private fun closesTypeArguments(
@@ -404,7 +404,59 @@ private fun branchFollows(
 }
 
 private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
-private val HANDLER_NEXT = regex("""^(?:catch\s*\(|finally\s*\{)""")
+private val HANDLER_NEXT = regex("""^(?:catch\s*\(|finally\b)""")
+private val COMMENT = regex("""//[^\n]*|/\*[\s\S]*?\*/""")
+
+/** Whether the `catch` or `finally` at [at] goes on from the block that [close] ends: a `try`'s or a handler's, not a lambda's. */
+private fun handlerFollows(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+    close: Int,
+): Boolean {
+    if (!HANDLER_NEXT.containsMatchIn(src.substring(at, minOf(src.length, at + 64)).replace(COMMENT, " "))) return false
+    val open = opening(src, code, close, '{', '}') ?: return true
+    val before = codeBefore(src, code, open)
+    if (before < 0) return false
+    if (src[before] == ')') {
+        val paren = opening(src, code, before, '(', ')') ?: return false
+        val word = codeBefore(src, code, paren)
+        return word >= 4 && src.startsWith("catch", word - 4) && !isWordPart(src.getOrNull(word - 5))
+    }
+    return listOf("try", "finally").any { w ->
+        before + 1 >= w.length && src.startsWith(w, before + 1 - w.length) && !isWordPart(src.getOrNull(before - w.length))
+    }
+}
+
+/** Where the bracket [close] closes opens, read back at most 20,000 characters; `null` when it is farther. */
+private fun opening(
+    src: String,
+    code: BooleanArray,
+    close: Int,
+    open: Char,
+    shut: Char,
+): Int? {
+    var depth = 0
+    var j = close
+    while (j >= maxOf(0, close - 20_000)) {
+        if (code[j] && src[j] == shut) depth++
+        if (code[j] && src[j] == open && --depth == 0) return j
+        j--
+    }
+    return null
+}
+
+/** The last character of code before [at], past white space and comments; -1 when there is none. */
+private fun codeBefore(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Int {
+    var j = at - 1
+    while (j >= 0 && (src[j].isWhitespace() || !code[j])) j--
+    return j
+}
+
 private val ELSE_NEXT = regex("""^else\b""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
@@ -544,14 +596,14 @@ internal fun lineEnds(
         k--
     }
     if (k >= 0 && code[k] && goesOn(src, code, k)) return false
-    val closed = k >= 0 && src[k] == '}'
+    val last = k
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     val next = src.substring(k, minOf(src.length, k + 12))
     // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
     if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true
     // `try { }` goes on with a `catch` or `finally` after its block; `catchUp(x)` is a call of its own.
-    if (closed && HANDLER_NEXT.containsMatchIn(next)) return false
+    if (last >= 0 && src[last] == '}' && handlerFollows(src, code, k, last)) return false
     return !LINE_GOES_ON_AFTER.containsMatchIn(next)
 }
 
