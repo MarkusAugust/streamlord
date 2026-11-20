@@ -366,6 +366,32 @@ internal fun lexKotlin(src: String): KotlinLex {
     return KotlinLex(strings, mask, comments)
 }
 
+/** Whether [at] stands in the arguments of an annotation, `@Deprecated("<b>x</b>")`, which say something of the code and are no markup. */
+private fun inAnnotation(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Boolean {
+    var depth = 0
+    var k = at - 1
+    while (k >= 0) {
+        if (code[k]) {
+            val c = src[k]
+            if (c == ')' || c == ']') depth++
+            if ((c == '(' || c == '[') && depth-- == 0) {
+                if (c == '(' && ANNOTATION_BEFORE.containsMatchIn(src.substring(maxOf(0, k - 200), k))) return true
+                depth = 0
+            }
+            // An annotation's arguments hold no block and no statement.
+            if (c == '{' || c == '}' || c == ';') return false
+        }
+        k--
+    }
+    return false
+}
+
+private val ANNOTATION_BEFORE = regex("""@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*$""")
+
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one, on a use site and with a prefix or a suffix too. */
 internal const val HTML_LANGUAGE =
     """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
@@ -384,8 +410,10 @@ public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
+    val facts = fileFacts(src)
+    if (inAnnotation(src, facts.code, s.start)) return false
     if (textOpensWithTag(markupView(src, s))) return true
-    if (s.start in fileFacts(src).htmlArguments) return true
+    if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
     val after = before.substring(last.range.last + 1)

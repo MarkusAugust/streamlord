@@ -86,6 +86,26 @@ internal class FileFacts(
         out
     }
 
+    /** Where each literal starts that is markup by where it stands: in the block of core's `interpolate`, or handed first to core's `Trusted`. */
+    val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val out = HashSet<Int>()
+        val lex = lexKotlin(src)
+        if (!shadowsCore(src, "interpolate")) {
+            for (b in interpolateBlocks(src, code)) for (s in lex.stringsIn(b.braces.first, b.braces.last)) out += s.start
+        }
+        if (!shadowsCore(src, "Trusted")) {
+            for (site in findCallSites(src, setOf("Trusted"), lex)) {
+                if (src.lastNonSpaceBefore(site.nameStart) != '.') {
+                    site.positional
+                        .firstOrNull()
+                        ?.string
+                        ?.let { out += it.start }
+                }
+            }
+        }
+        out
+    }
+
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
     val importEdits: MutableMap<String, List<Edit>> = sharedMap()
 
