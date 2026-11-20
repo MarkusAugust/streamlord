@@ -145,7 +145,7 @@ internal fun fileFacts(
     val l = lex ?: lexKotlin(src)
     val code = codeMask(src, l.strings, l.mask)
     val functions = HashMap<String, MutableList<FunctionDeclaration>>()
-    return FileFacts(src, code, declarations(src, code, functions), functions).also { lastFacts = it }
+    return FileFacts(src, code, declarations(src, code, l.comments, functions), functions).also { lastFacts = it }
 }
 
 @Volatile
@@ -181,7 +181,7 @@ public fun declaredNames(src: String): DeclaredNames {
     lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
-            ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask)) }
+            ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask), it.comments) }
     val constants = HashSet<String>()
     val others = HashSet<String>()
     for ((name, list) in names) {
@@ -239,7 +239,7 @@ private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
 private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
 private val PARAMETER =
     regex(
-        """^\s*(?:/\*[\s\S]*?\*/\s*)*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
+        """^\s*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
     )
 private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
@@ -503,6 +503,12 @@ private fun overridable(
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
+/** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
+private fun withoutComments(
+    src: String,
+    comments: BooleanArray,
+): String = CharArray(src.length) { if (comments.getOrElse(it) { false } && src[it] != '\n') ' ' else src[it] }.concatToString()
+
 /**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
  * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
@@ -510,6 +516,7 @@ private val PARAMETER_NAME = regex("""($NAME)\s*:""")
  */
 private fun functionAt(
     src: String,
+    code: BooleanArray,
     g: ScopeFrame,
     close: Int,
 ): Pair<String, FunctionDeclaration>? {
@@ -519,7 +526,8 @@ private fun functionAt(
     var from = g.open + 1
     var k = 0
     for (i in g.open + 1..close) {
-        val c = src[i]
+        // A comma or a bracket in a string cuts nothing.
+        val c = if (code[i]) src[i] else ' '
         if (i < close && c in "([{<") depth++
         if (i < close && (c in ")]}" || (c == '>' && src[i - 1] != '-'))) depth--
         if (i == close || (c == ',' && depth == 0)) {
@@ -551,12 +559,16 @@ private fun functionAt(
 private fun declarations(
     src: String,
     code: BooleanArray,
+    comments: BooleanArray,
     functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
     // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
     val declared = ArrayList<Pair<ScopeFrame, Int>>()
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
+
+    // Parameters are read in the code alone: a comment among them, `a: String, // the a`, is blank.
+    val blank by lazy { withoutComments(src, comments) }
 
     fun add(
         name: String,
@@ -597,7 +609,7 @@ private fun declarations(
         val out = ArrayList<Declaration>()
         val cuts = listOf(f.open) + f.commas + close
         for (k in 0 until cuts.size - 1) {
-            val text = src.substring(cuts[k] + 1, cuts[k + 1])
+            val text = blank.substring(cuts[k] + 1, cuts[k + 1])
             val m = PARAMETER.find(text) ?: continue
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
@@ -929,7 +941,7 @@ private fun declarations(
         f.endValues(src.length)
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((g, close) in declared) functionAt(src, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
+    for ((g, close) in declared) functionAt(blank, code, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
     return names
 }
 

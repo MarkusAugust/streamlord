@@ -441,6 +441,83 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a parameter is read behind a comment at the end of the line before it`() {
+        assertEquals(emptyList(), told("fun f(\n    a: String, // the a\n    title: Int,\n) = \"<p>\$title</p>\""))
+        val row = "class Row(\n    val id: String, // the key\n    val title: String,\n)"
+        assertEquals(setOf("id", "title"), declaredNames(row).others)
+        assertEquals(emptyList(), told("fun f(\n    // the body\n    @Language(\"HTML\") body: String,\n) = \"<div>\$body</div>\""))
+        assertEquals(emptyList(), told("fun f(\n    @Suppress(\"x\") // why\n    title: Int,\n) = \"<p>\$title</p>\""))
+        // A mark in a comment is none, and a comma in one cuts nothing.
+        val like = "fun f(\n    a: String, // like @Language(\"HTML\") here\n    title: String,\n) = \"<p>\$title</p>\""
+        assertEquals(listOf("\$title"), told(like))
+        assertEquals(
+            emptySet(),
+            fileFacts(like)
+                .functions
+                .getValue("f")
+                .single()
+                .html,
+        )
+        val marked = "fun g(a: String, // one, two\n    @Language(\"HTML\") body: String) = body"
+        assertEquals(
+            setOf(1, "body"),
+            fileFacts(marked)
+                .functions
+                .getValue("g")
+                .single()
+                .html,
+        )
+        assertEquals(
+            listOf("\$title"),
+            told("fun f(\n    a: String,\n" + "    // old\n".repeat(5000) + "    title: String,\n) = \"<p>\$title</p>\""),
+        )
+    }
+
+    @Test
+    fun `a comment is left out of the parameters whatever else the file holds`() {
+        val after = "fun f(\n    a: String, // the a\n    title: Int,\n) = \"<p>\$title</p>\""
+        for (before in listOf(
+            "/** A row \uD83D\uDE00\uD83D\uDE00 */\n",
+            "/* outer /* inner */ still \"outer */\n",
+            "class T {\n    fun `it's here`() = check(\"<p>Don't</p>\")\n}\n",
+            "val a = \"abc\n",
+        )) {
+            assertEquals(emptyList(), told(before + after), before)
+        }
+        assertEquals(setOf("id", "title"), declaredNames("/** \uD83D\uDE00 */\ndata class Row(val id: String, val title: String)").others)
+        assertEquals(emptyList(), told("fun f(\n    /* outer /* inner */ still outer */ title: Int,\n) = \"<p>\$title</p>\""))
+        // A comment against a literal is one too.
+        val glued = "fun f(a: String = \"x\"/* @Language(\"HTML\") */, b: String) = b"
+        assertEquals(
+            emptySet(),
+            fileFacts(glued)
+                .functions
+                .getValue("f")
+                .single()
+                .html,
+        )
+        val inside = "fun g(@Language(/* c */\"HTML\") body: String) = body"
+        assertEquals(
+            setOf(0, "body"),
+            fileFacts(inside)
+                .functions
+                .getValue("g")
+                .single()
+                .html,
+        )
+        // A string that holds `//` or a comma is no comment and cuts nothing.
+        val link = "fun g(x: String = \"http://a, b\", @Language(\"HTML\") body: String) = body"
+        assertEquals(
+            setOf(1, "body"),
+            fileFacts(link)
+                .functions
+                .getValue("g")
+                .single()
+                .html,
+        )
+    }
+
+    @Test
     fun `a parameter is marked HTML behind a comment too`() {
         assertEquals(
             emptyList(),
