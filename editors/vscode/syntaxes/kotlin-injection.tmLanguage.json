@@ -263,7 +263,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(\\$*\")(?=(?:[ \\t]|\\\\[nrt])*<(?:[A-Za-z]|!--|!(?i:doctype)))(?:(?<![(=][ \\t]{0,4}\\${0,4}\")|(?<!(?:^|[^\\w.>\\x60])@(?:[a-z]{1,8}:)?[A-Za-z_][\\w.]{0,60}[ \\t]{0,4}\\([ \\t]{0,4}(?:[A-Za-z_]\\w{0,30}[ \\t]{0,4}=[ \\t]{0,4})?\\${0,4}\"))",
+          "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--|!(?i:doctype))|(?:[ \\t]|\\\\[nrt])+<(?:[A-Za-z]|!--|!(?i:doctype))(?:[^\"\\\\\\n]|\\\\.)*\")(?:(?<![(=][ \\t]{0,4}\\${0,4}\")|(?<!(?:^|[^\\w.>\\x60])@(?:[a-z]{1,8}:)?[A-Za-z_][\\w.]{0,60}[ \\t]{0,4}\\([ \\t]{0,4}(?:[A-Za-z_]\\w{0,30}[ \\t]{0,4}=[ \\t]{0,4})?\\${0,4}\"))",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
@@ -492,7 +492,7 @@
     },
     "html-double-string": {
       "comment": "A double-quoted literal that opens with a tag, under an HTML marker: HTML.",
-      "begin": "(\\$*\")(?=(?:[ \\t]|\\\\[nrt])*<(?:[A-Za-z]|!--|!(?i:doctype)))",
+      "begin": "(\\$*\")(?=<(?:[A-Za-z]|!--|!(?i:doctype))|(?:[ \\t]|\\\\[nrt])+<(?:[A-Za-z]|!--|!(?i:doctype))(?:[^\"\\\\\\n]|\\\\.)*\")",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
@@ -2060,7 +2060,7 @@
       "comment": "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
       "patterns": [
         {
-          "begin": "(\\$*\"\"\")(?=(?:[^\"\\\\\\n]|\\\\.)*<[A-Za-z/!])(?<=[(=][ \\t]{0,4}\\${0,4}\")(?<=(?:^|[^\\w.\\x60])Trusted[ \\t]{0,4}\\([ \\t]{0,4}(?:html[ \\t]{0,4}=[ \\t]{0,4})?\\${0,4}\"\"\")",
+          "begin": "(\\$*\"\"\")(?=(?:[^\"\\\\\\n]|\\\\.)*<[A-Za-z/!])(?<=[(=][ \\t]{0,4}\\${0,4}\"\"\")(?<=(?:^|[^\\w.\\x60])Trusted[ \\t]{0,4}\\([ \\t]{0,4}(?:html[ \\t]{0,4}=[ \\t]{0,4})?\\${0,4}\"\"\")",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"

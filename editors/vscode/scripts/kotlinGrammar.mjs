@@ -57,7 +57,7 @@ function opening(begin, captures, quote) {
 const SIGNAL_NAME = r`([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)`;
 const RAW_QUOTE = r`(\$*""")`;
 /** What opens HTML in a double-quoted literal, as the analysis reads it: a tag, a comment or a doctype, after white space or an escaped line break. */
-const DQ_TAG_AHEAD = r`(?=(?:[ \t]|\\[nrt])*<(?:[A-Za-z]|!--|!(?i:doctype)))`;
+const DQ_TAG_AHEAD = r`(?=<(?:[A-Za-z]|!--|!(?i:doctype))|(?:[ \t]|\\[nrt])+<(?:[A-Za-z]|!--|!(?i:doctype))(?:[^"\\\n]|\\.)*")`;
 /** Both kinds of literal, HTML however they open. */
 const HTML_LITERALS = [
   embedded(r`(\$*""")`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
@@ -448,7 +448,10 @@ export function kotlinInjectionGrammar(catalog) {
       comment: "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
       patterns: HTML_LITERALS.map((rule) => ({
         ...rule,
-        begin: rule.begin + TRUSTED_TAG + r`(?<=[(=][ \t]{0,4}\${0,4}")(?<=` + AFTER_TRUSTED + (rule === HTML_LITERALS[0] ? r`\${0,4}"""` : r`\${0,4}"`) + ")",
+        begin: (() => {
+          const quote = rule === HTML_LITERALS[0] ? '"""' : '"';
+          return rule.begin + TRUSTED_TAG + r`(?<=[(=][ \t]{0,4}\${0,4}` + quote + r`)(?<=` + AFTER_TRUSTED + r`\${0,4}` + quote + ")";
+        })(),
       })),
     },
     "trusted-call-next-line": {

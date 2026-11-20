@@ -320,6 +320,9 @@ describe("kotlin injection grammar", () => {
     assert.match(scopeOf(await tokens("source.kotlin", `val page = "<!doctype html><main>x</main>"`), "main"), tag, "a doctype first");
     assert.match(scopeOf(await tokens("source.kotlin", `val a = " <p>x</p>"`), "p"), tag, "a space first");
     assert.match(scopeOf(await tokens("source.kotlin", `val a = "\\n<p>x</p>"`), "p"), tag, "a line break first");
+    const unclosed = await tokenLines("source.kotlin", [`    "  <template value=\\"\${esc(`, `        "data-$name",`, `    )}\\" />",`]);
+    assert.ok(unclosed[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "white space first, and the literal goes on past its line in a template: Kotlin's");
+    assert.match(scopeOf(await tokens("source.kotlin", `val a = Trusted("""raw <b>x</b>""")`), "b"), tag, "Trusted's raw argument");
     assert.match(scopeOf(await tokens("source.kotlin", `fun f(name: String) = interpolate { "Hello <b>\${+name}</b>" }`), "b"), tag, "text first in the block");
     const opening = await tokenLines("source.kotlin", [`fun f(c: Boolean) = interpolate { "no <i>way</i>"`, `}`, `val after = "not <u>here</u>"`]);
     assert.match(scopeOf(opening[0]!, "i"), tag, "the literal that opens the block");
