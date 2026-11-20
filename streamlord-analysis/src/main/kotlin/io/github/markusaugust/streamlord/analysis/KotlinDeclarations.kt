@@ -368,6 +368,8 @@ private fun closesTypeArguments(
     while (j >= 0 && src[j] != '\n') {
         // The `>` of an arrow, `() -> Int`, closes nothing.
         if (code[j] && src[j] == '>' && src.getOrNull(j - 1) != '-') depth++
+        // `n<a && n>` compares: no type argument holds `&`, `|`, `=`, `+` or `%`.
+        if (code[j] && depth > 0 && src[j] in "&|=+%") return false
         // `List<Int>`: a type's name, then a type at once; `b < c` and `n<3` compare.
         if (code[j] && src[j] == '<' &&
             --depth == 0
@@ -401,7 +403,8 @@ private fun branchFollows(
     return !(src.startsWith("while", word) && src.lastNonSpaceBefore(word) == '}')
 }
 
-private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b|catch\b|finally\b)""")
+private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
+private val HANDLER_NEXT = regex("""^(?:catch\s*\(|finally\s*\{)""")
 private val ELSE_NEXT = regex("""^else\b""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
@@ -541,11 +544,14 @@ internal fun lineEnds(
         k--
     }
     if (k >= 0 && code[k] && goesOn(src, code, k)) return false
+    val closed = k >= 0 && src[k] == '}'
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
-    val next = src.substring(k, minOf(src.length, k + 5))
+    val next = src.substring(k, minOf(src.length, k + 12))
     // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
     if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true
+    // `try { }` goes on with a `catch` or `finally` after its block; `catchUp(x)` is a call of its own.
+    if (closed && HANDLER_NEXT.containsMatchIn(next)) return false
     return !LINE_GOES_ON_AFTER.containsMatchIn(next)
 }
 

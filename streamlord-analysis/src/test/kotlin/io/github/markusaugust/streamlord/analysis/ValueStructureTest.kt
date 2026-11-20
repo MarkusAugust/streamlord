@@ -980,8 +980,16 @@ class ValueStructureTest {
             "class A(val n: String) {\n    fun size(n: Int): String = try {\n        n.toString()\n    }\n" +
                 "    catch (e: Exception) {\n        \"<p>\$n</p>\"\n    }\n}"
         assertEquals(emptyList(), told(caught))
-        for (end in listOf("m as?\n        String", "n<3 && n>\n        1")) {
-            val src = "fun f(m: Any, n: Int) {\n    val k = $end\n}"
+        val handled =
+            "fun outer(n: String): String {\n    fun size(n: Int) = try { n }\n    finally { println(\"<b>\$n</b>\") }\n" +
+                "    return \"<p>\$n</p>\"\n}"
+        assertEquals(listOf("\$n"), told(handled))
+        val named =
+            "fun catchUp(a: String) {}\nfun page(n: String, items: List<Int>) {\n    for (n: Int in items) use(n)\n" +
+                "    catchUp(\"<p>\$n</p>\")\n}"
+        assertEquals(listOf("\$n"), told(named))
+        for (end in listOf("m as?\n        String", "n<3 && n>\n        1", "n<a && n>\n        b")) {
+            val src = "fun f(m: Any, n: Int, a: Int) {\n    val k = $end\n}"
             assertEquals(end, valueText(src, declarationOf(src, "k", src.length - 2)!!.value!!)?.text, end)
         }
         // An outer `if`'s `else` after a statement whose own `if` has one.

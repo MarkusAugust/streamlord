@@ -398,7 +398,8 @@ public fun isHtmlString(
     // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal, behind other
     // annotations too.
     val at = from + last.range.last + 1
-    val bare = after.filterIndexed { k, _ -> !facts.inAnnotation(at + k) }
+    // Annotations' arguments and comments read as space: `@Named("x")body` and `@Named("x") /* c */ body` hold a parameter.
+    val bare = CharArray(after.length) { k -> if (facts.inAnnotation(at + k) || !facts.code[at + k]) ' ' else after[k] }.concatToString()
     if (PARAMETER_AFTER_MARKER.containsMatchIn(bare.replace(LEADING_ANNOTATIONS, ""))) return false
     return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) }
 }
