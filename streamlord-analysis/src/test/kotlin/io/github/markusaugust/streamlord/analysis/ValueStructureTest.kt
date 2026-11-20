@@ -955,8 +955,20 @@ class ValueStructureTest {
             "fun outer(n: Int, rows: List<String>) {\n    for (n in rows)\n        if (n.isNotEmpty())\n" +
                 "            println(\"<li>\$n</li>\")\n}"
         assertEquals(listOf("\$n"), told(loop))
-        val infix = "fun outer(n: Int) {\n    fun pair(n: String) = n to\n        \"<p>\$n</p>\"\n}"
-        assertEquals(listOf("\$n"), told(infix))
+        // A loop's statement ends at `n++`, before an outer `if`'s `else`, and after a do-while.
+        for (statement in listOf("count++", "do { println(title) } while (title > 0)")) {
+            val src =
+                "fun list(title: String, nums: List<Int>) {\n    var count = 0\n    for (title: Int in nums) $statement\n" +
+                    "    println(\"<p>\$title</p>\")\n}"
+            assertEquals(listOf("\$title"), told(src), statement)
+        }
+        val pick =
+            "fun pick(title: String, a: Boolean, nums: List<Int>) {\n    if (a)\n        for (title: Int in nums) println(title)\n" +
+                "    else\n        println(\"<b>\$title</b>\")\n}"
+        assertEquals(listOf("\$title"), told(pick))
+        // A name that is also an infix function's ends its line; only a keyword carries it on.
+        val step = "fun f(step: String) {\n    val current = step\n    val title = \"<h1>x</h1>\"\n}"
+        assertEquals("step", valueText(step, declarationOf(step, "current", step.length - 2)!!.value!!)?.text)
         val arrow = "fun f(m: Any) {\n    val h = m as Map<String, () -> Int>\n    val title = \"<b>x</b>\"\n}"
         assertEquals("m as Map<String, () -> Int>", valueText(arrow, declarationOf(arrow, "h", arrow.length - 2)!!.value!!)?.text)
         val compared = "fun f(b: Int, c: Int, d: Int, e: Int) {\n    val a = b < c && d >\n        e\n}"
@@ -980,5 +992,13 @@ class ValueStructureTest {
             val literal = analyzer.lex(src).strings.first { "<b>" in it.text }
             assertEquals(true, isHtmlString(src, literal), marked)
         }
+    }
+
+    @Test
+    fun `a bracket that closes nothing at a line's end reads no further than a line's worth back`() {
+        var made = 0
+        assertGrowsLinearly("lines that close nothing", 200, { n: Int ->
+            "// ${made++}\n" + "val a = run {\n".repeat(n) + ")\n".repeat(n)
+        }) { fileFacts(it) }
     }
 }

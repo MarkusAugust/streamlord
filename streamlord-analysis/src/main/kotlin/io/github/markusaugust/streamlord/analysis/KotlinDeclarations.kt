@@ -139,8 +139,7 @@ internal class FileFacts(
                 .mapNotNull { it.value } +
                 functions.values
                     .flatten()
-                    .filter { it.marked }
-                    .flatMap { it.values }
+                    .flatMap { it.marks }
         if (values.isEmpty()) return@lazy emptySet()
         val strings = lexKotlin(src).strings
         values.mapNotNullTo(HashSet()) { v ->
@@ -149,7 +148,8 @@ internal class FileFacts(
             var k = strings.binarySearch { if (it.start < v.start) -1 else 1 }.let { -it - 1 }
             // An annotation on the value says something of it, and its literal is none of the value's.
             while (k < strings.size && inAnnotation(strings[k].start)) k++
-            strings.getOrNull(k)?.start?.takeIf { it < end }
+            // The value is the literal, written first: one in a call's arguments or a condition is none.
+            strings.getOrNull(k)?.start?.takeIf { it < end && OPENS_WITH_LITERAL.matches(src.substring(v.start, it)) }
         }
     }
 
@@ -224,6 +224,8 @@ internal class FunctionDeclaration(
     val marked: Boolean,
     val type: String?,
     val values: List<Span>,
+    /** What a `@Language("HTML")` on it reaches: its expression, or what each `return` of its own block gives, whoever may stand in for it. */
+    val marks: List<Span> = emptyList(),
 )
 
 @Volatile
@@ -362,15 +364,22 @@ private fun goesOn(
     k: Int,
 ): Boolean =
     when (src[k]) {
-        '-', '=', '+', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> true
+        // `n++` and `n--` end a statement.
+        '-', '+' -> src.getOrNull(k - 1) != src[k]
+
+        '=', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> true
+
         '!' -> src.getOrNull(k - 1) != '!'
+
         '>' -> src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
+
         ')' -> branchFollows(src, code, k)
+
         else -> isWordPart(src[k]) && WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 7), k + 1))
     }
 
-/** `else`, and the infix words after which Kotlin reads on: `n to`, `x as`, `a until`. */
-private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.])(?:else|to|as|is|in|and|or|xor|until|downTo|step|shl|shr)$""")
+/** The keywords after which Kotlin reads on, which no name can be: `else`, `x as`, `x is`, `x in`. */
+private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in)$""")
 private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while)\s*$""")
 
 /** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
@@ -403,12 +412,17 @@ private fun branchFollows(
 ): Boolean {
     var depth = 0
     var j = k
-    while (j >= 0) {
+    while (j >= maxOf(0, k - 2_000)) {
         if (code[j] && src[j] == ')') depth++
         if (code[j] && src[j] == '(' && --depth == 0) break
         j--
     }
-    return j > 0 && CONDITION_HEAD.containsMatchIn(src.substring(maxOf(0, j - 12), j))
+    if (j <= 0 || depth != 0) return false
+    val from = maxOf(0, j - 12)
+    val head = CONDITION_HEAD.find(src.substring(from, j)) ?: return false
+    // `do { } while (c)` has its branch before it.
+    val word = from + head.range.first + head.value.indexOfFirst { it.isLetter() }
+    return !(src.startsWith("while", word) && src.lastNonSpaceBefore(word) == '}')
 }
 
 private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
@@ -494,9 +508,13 @@ private class ScopeFrame(
     /** The values written in this frame whose statements have not ended. */
     val values = ArrayList<Span>()
 
-    /** For a function's parameters: where its body is written, none once it returns to a label, and what each `return` of a block gives. */
+    /** For a function's parameters: where its body is written, and what each `return` of a block gives. */
     var body: Span? = null
     val returns = ArrayList<Span>()
+
+    /** For a function's parameters: the `return`s of its own block, none of a function declared inside it, and whether a `return` in it goes to a label. */
+    val own = ArrayList<Span>()
+    var labelled = false
 
     /** For a function's block: its parameters. */
     var function: ScopeFrame? = null
@@ -533,6 +551,7 @@ internal fun lineEnds(
     src: String,
     code: BooleanArray,
     at: Int,
+    next: Boolean = true,
 ): Boolean {
     var k = at - 1
     while (k >= 0 && (!code[k] || src[k].isWhitespace())) {
@@ -546,6 +565,8 @@ internal fun lineEnds(
         k--
     }
     if (k >= 0 && code[k] && goesOn(src, code, k)) return false
+    // A loop's statement is not carried on by the next line: an `else` there is an outer `if`'s.
+    if (!next) return true
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
@@ -673,6 +694,9 @@ private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 /** An annotation's name and the parenthesis that opens its arguments; `this@Page.f(` and `return@forEach(` name a label. */
 private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*\(""")
 
+/** What may stand before the literal a value opens with: white space, a comment-free annotation, `(`. */
+private val OPENS_WITH_LITERAL = regex("""(?:\s|\(|@[\p{L}_][\p{L}\p{Nd}_.:]*(?:\([^()]*\))?)*\$*""")
+
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
 
@@ -798,13 +822,24 @@ private fun functionAt(
         }
     }
     val owner = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
-    val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
+    val body = g.body?.takeIf { it.end >= 0 && !g.labelled && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
     // Between the parameters and the body stands the type or nothing, or the function is not read.
     val type = body?.takeIf { it.start - close < 1_000 }?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
     val results = if (body != null && src[body.start - 1] == '{') g.returns else listOfNotNull(body)
     val values = if (type == null || html.isNotEmpty()) emptyList() else results
+    val written = g.body?.takeIf { it.end >= 0 && g.funModifiers and HTML != 0 }
+    val marks = if (written != null && src[written.start - 1] == '{') g.own else listOfNotNull(written)
     return name to
-        FunctionDeclaration(owner, html, g.open, g.local, type != null && g.funModifiers and HTML != 0, type?.groups?.get(1)?.value, values)
+        FunctionDeclaration(
+            owner,
+            html,
+            g.open,
+            g.local,
+            type != null && g.funModifiers and HTML != 0,
+            type?.groups?.get(1)?.value,
+            values,
+            marks,
+        )
 }
 
 /**
@@ -938,7 +973,8 @@ private fun declarations(
                     // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
                     val into = stack.mapNotNull { it.function }
                     val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
-                    for (g in into) if (value == null) g.body = null else g.returns.add(value)
+                    for (g in into) if (value == null) g.labelled = true else g.returns.add(value)
+                    if (value != null) into.lastOrNull()?.own?.add(value)
                 }
 
                 // A getter takes nothing: `get("/")` after a value is a call.
@@ -1185,7 +1221,7 @@ private fun declarations(
                 }
 
                 "stmt" -> {
-                    if (c == ';' || (c == '\n' && lineEnds(src, code, i))) endPending(f, i)
+                    if (c == ';' || (c == '\n' && lineEnds(src, code, i, next = false))) endPending(f, i)
                 }
 
                 else -> {

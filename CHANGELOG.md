@@ -75,17 +75,18 @@ All notable changes to Streamlord are recorded here. The format follows
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
 - A `@Language("HTML")` mark makes HTML of what its `val` or function gives, read from the
-  declaration, behind another annotation too, and of every `return` of a function's block where
-  only the first literal after the mark was: `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"`
-  read `"x"` as the HTML string and not the function's literal. The mark still reaches the next
-  literal after it, now past another annotation's arguments, so a getter, a `var` and a member
-  another may stand in for are marked as before; no literal of an annotation's arguments is HTML.
+  declaration, behind another annotation too: the literal the value opens with, of a function's
+  expression or of each `return` of its own block, whoever may stand in for it.
+  `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"` read `"x"` as the HTML string and not the
+  function's literal. The mark still reaches the next literal after it, as before, past another
+  annotation's arguments but not past a parameter list or a call, so a getter and a `var` are
+  marked as before; no literal of an annotation's arguments is HTML.
 - A value whose line ends in `!!`, a nullable type or type arguments closed on its line ends
   there, `val a = q!!`, where it ran on into the next line and took a getter after it for its own.
   A function's expression, or a loop's statement without braces, that begins with a word, a call
-  or a literal ends with its line, and goes on past `if (...)`, `when (...)` and `else` at the end
-  of a line or an infix word such as `to`: `fun size(n: Int) = pad(n)` inside another function kept its `n` in sight to the end
-  of the outer one, so `$n` after it was read as the Int.
+  or a literal ends with its line, and goes on past `if (...)`, `when (...)`, `else` and `as`, `is`
+  or `in` at the end of a line: `fun size(n: Int) = pad(n)` inside another function kept its `n`
+  in sight to the end of the outer one, so `$n` after it was read as the Int.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and
   `title: Int` on the next, `title` was no parameter: `$title` in the function was warned of, and a
   constructor property written so was not one other files could see. The same after an annotation
