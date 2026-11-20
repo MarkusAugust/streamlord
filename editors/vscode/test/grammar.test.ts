@@ -310,6 +310,8 @@ describe("kotlin injection grammar", () => {
     const block = await tokenLines("source.kotlin", [`fun f(c: Boolean) = interpolate {`, `    if (c) "no <i>way</i>" else """<p>x</p>"""`, `}`, `val after = "not <u>here</u>"`]);
     assert.match(scopeOf(block[1]!, "i"), tag, "a branch of the block");
     assert.ok(block[3]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "the block ends at its brace");
+    const raw = await tokenLines("source.kotlin", [`fun f(name: String) = interpolate {`, `    """`, `    Hello <b>\${+name}</b>`, `    """`, `}`]);
+    assert.match(scopeOf(raw[2]!, "b"), tag, "a raw literal whose first line is empty, opening with text");
     assert.match(scopeOf(await tokens("source.kotlin", `fun f() = Trusted("bold <b>text</b>")`), "b"), tag, "Trusted's argument");
     const note = await tokens("source.kotlin", `@Deprecated("<b>not</b> markup") fun f() = 1`);
     assert.ok(note.every((x) => !x.scopes.some((s) => s.includes("html"))), "an annotation's message is no markup");
