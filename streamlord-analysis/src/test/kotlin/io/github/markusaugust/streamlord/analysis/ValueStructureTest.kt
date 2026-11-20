@@ -988,7 +988,13 @@ class ValueStructureTest {
             "fun catchUp(a: String) {}\nfun page(n: String, items: List<Int>) {\n    for (n: Int in items) use(n)\n" +
                 "    catchUp(\"<p>\$n</p>\")\n}"
         assertEquals(listOf("\$n"), told(named))
-        for (end in listOf("m as?\n        String", "n<3 && n>\n        1", "n<a && n>\n        b")) {
+        val block =
+            "fun outer(n: Int) {\n    fun inner(n: String): String = try {\n        \"a\"\n    }\n    finally {\n" +
+                "        println(\"<p>\$n</p>\")\n    }\n}"
+        assertEquals(listOf("\$n"), told(block))
+        val called = "fun outer(x: String, nums: List<Int>) {\n    for (x: Int in nums) use(x)\n    catching(\"<p>\$x</p>\")\n}"
+        assertEquals(listOf("\$x"), told(called))
+        for (end in listOf("m as?\n        String", "n<3 && n>\n        1", "n<a && n>\n        b", "a<n && n>\n        a")) {
             val src = "fun f(m: Any, n: Int, a: Int) {\n    val k = $end\n}"
             assertEquals(end, valueText(src, declarationOf(src, "k", src.length - 2)!!.value!!)?.text, end)
         }
