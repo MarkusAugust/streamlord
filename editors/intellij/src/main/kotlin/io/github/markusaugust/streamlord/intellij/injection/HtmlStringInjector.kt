@@ -10,9 +10,12 @@ import io.github.markusaugust.streamlord.analysis.isHtmlString
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.lexer.KtTokens
+import org.jetbrains.kotlin.psi.KtBinaryExpression
 import org.jetbrains.kotlin.psi.KtEscapeStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.KtLiteralStringTemplateEntry
+import org.jetbrains.kotlin.psi.KtParenthesizedExpression
 import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 
 /**
@@ -40,15 +43,14 @@ class HtmlStringInjector : MultiHostInjector {
         val analyzer = StreamlordAnalysis.getInstance(file.project).analyzer
         val s = analyzer.lex(src).strings.firstOrNull { it.start == host.textRange.startOffset } ?: return
         if (s.unterminated || !isHtmlString(src, s)) return
-        // A string the Kotlin plugin injects itself, by a mark on what it is or on the parameter it is handed to, keeps
-        // that injection and its prefix: ours would win over it.
-        if (LanguageInjectionContributor.INJECTOR_EXTENSION
-                .allForLanguage(
-                    KotlinLanguage.INSTANCE,
-                ).any { it.getInjection(host) != null }
-        ) {
-            return
+        // A string the Kotlin plugin injects into itself, by a mark on what it is or on the parameter it is handed to,
+        // keeps that injection and its prefix: ours would win over it. A sum is injected whole, and asked of as one.
+        var whole: PsiElement = host
+        while (whole.parent.let { (it is KtBinaryExpression && it.operationToken == KtTokens.PLUS) || it is KtParenthesizedExpression }) {
+            whole = whole.parent
         }
+        val contributors = LanguageInjectionContributor.INJECTOR_EXTENSION.allForLanguageOrAny(KotlinLanguage.INSTANCE)
+        if (contributors.any { it.getInjection(host) != null || (whole !== host && it.getInjection(whole) != null) }) return
         val entries = host.entries
         val ranges = ArrayList<TextRange>()
         var current: TextRange? = null

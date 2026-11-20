@@ -125,6 +125,11 @@ class EditorFeaturesTest : StreamlordTestCase() {
 
             fun wrap(@Language("HTML") body: String) = body
 
+            @Language("HTML")
+            val joined = "<p>one</p>" + "<i>two</i>"
+
+            fun wrapped(x: String) = wrap("<ul>" + x + "<li>mid</li></ul>")
+
             fun page(name: String) = interpolate { "<p>${'$'}{+name}</p>" }
 
             fun hello(name: String) = interpolate { "Hello <b>${'$'}{+name}</b>" }
@@ -154,12 +159,15 @@ class EditorFeaturesTest : StreamlordTestCase() {
                 ?.let { it.language.id + " " + it.text }
         }
         // A mark on another function's parameter says nothing of the literals after it.
-        assertEquals("HTML <p></p>", injected("<p>"))
+        assertEquals("HTML <p></p>", injected("<p>\${+name"))
         assertEquals("HTML Hello <b></b>", injected("Hello"))
         // A call's argument is the Kotlin plugin's only where the parameter is marked, with what the mark adds.
         assertEquals("HTML <b>bold</b>", injected("<b>bold"))
         assertEquals("HTML <li>a</li>", injected("<li>a"))
         assertEquals("HTML <ul><li>arg</li></ul>", injected("<li>arg"))
         assertEquals(null, injected("<b>not"))
+        // A sum under a mark is one injection of the Kotlin plugin's, all its literals in it.
+        assertEquals("HTML <p>one</p><i>two</i>", injected("<i>two"))
+        assertEquals("HTML <ul>x<li>mid</li></ul>", injected("<li>mid"))
     }
 }
