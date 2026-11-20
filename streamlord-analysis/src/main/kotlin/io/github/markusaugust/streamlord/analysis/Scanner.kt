@@ -374,7 +374,7 @@ private fun inAnnotation(
 ): Boolean {
     var depth = 0
     var k = at - 1
-    while (k >= 0) {
+    while (k >= maxOf(0, at - 2_000)) {
         if (code[k]) {
             val c = src[k]
             if (c == ')' || c == ']') depth++
@@ -390,7 +390,8 @@ private fun inAnnotation(
     return false
 }
 
-private val ANNOTATION_BEFORE = regex("""@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*$""")
+/** An annotation's name before its arguments; `this@Page.f(` and `return@forEach(` name a label. */
+private val ANNOTATION_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_>.])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*$""")
 
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one, on a use site and with a prefix or a suffix too. */
 internal const val HTML_LANGUAGE =
@@ -411,8 +412,8 @@ public fun isHtmlString(
     s: KotlinString,
 ): Boolean {
     val facts = fileFacts(src)
-    if (inAnnotation(src, facts.code, s.start)) return false
-    if (textOpensWithTag(markupView(src, s))) return true
+    // An annotation's arguments say something of the code: asked last, of a literal that would be HTML.
+    if (textOpensWithTag(markupView(src, s))) return !inAnnotation(src, facts.code, s.start)
     if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
     val before = src.substring(maxOf(0, s.start - 240), s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false

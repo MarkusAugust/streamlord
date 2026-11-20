@@ -86,21 +86,24 @@ internal class FileFacts(
         out
     }
 
-    /** Where each literal starts that is markup by where it stands: in the block of core's `interpolate`, or handed first to core's `Trusted`. */
+    /**
+     * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
+     * tag or marks a value, as the block's judging reads it, or the argument of core's `Trusted`.
+     */
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
         val lex = lexKotlin(src)
         if (!shadowsCore(src, "interpolate")) {
-            for (b in interpolateBlocks(src, code)) for (s in lex.stringsIn(b.braces.first, b.braces.last)) out += s.start
+            for (b in interpolateBlocks(src, code)) {
+                for (s in lex.stringsIn(b.braces.first, b.braces.last)) {
+                    if ('<' in s.text || s.interpolations.any { markedValue(it) != null }) out += s.start
+                }
+            }
         }
         if (!shadowsCore(src, "Trusted")) {
             for (site in findCallSites(src, setOf("Trusted"), lex)) {
-                if (src.lastNonSpaceBefore(site.nameStart) != '.') {
-                    site.positional
-                        .firstOrNull()
-                        ?.string
-                        ?.let { out += it.start }
-                }
+                if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+                (site.named("html") ?: site.positional.firstOrNull())?.string?.let { out += it.start }
             }
         }
         out
