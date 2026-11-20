@@ -67,13 +67,19 @@ const HTML_LITERALS = [
  * Just after the brace of interpolate's block, by the qualified name and after prefixes too, read behind the literal so
  * that Kotlin's grammar keeps the name and the brace, and the brackets it opens.
  */
-const AFTER_INTERPOLATE = r`(?:^|[^\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?interpolate[ \t]{0,4}(?:\((?:[^()\n]|\([^()\n]{0,80}\)){0,120}\)[ \t]{0,4})?\{[ \t]{0,8}`;
+const AFTER_INTERPOLATE = r`(?:^|[^\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?interpolate[ \t]{0,4}(?:\([^()\n]{0,60}(?:\([^()\n]{0,60}\)[^()\n]{0,20})?\)[ \t]{0,4})?\{[ \t]{0,8}`;
 /** Just after `Trusted(` and its argument's name: a literal there is an argument, so this is a call and no declaration. */
 const AFTER_TRUSTED = r`(?:^|[^\w.\x60])Trusted[ \t]{0,4}\([ \t]{0,4}(?:html[ \t]{0,4}=[ \t]{0,4})?`;
 /** What makes Trusted's argument markup, as the analysis reads it: a tag on its line. */
 const TRUSTED_TAG = r`(?=(?:[^"\\\n]|\\.)*<[A-Za-z/!])`;
 /** Not the first argument of an annotation, `@Deprecated("<b>x</b>")`, which says something of the code; `this@Page.f(` names a label. */
-const NOT_ANNOTATION = r`(?<!(?:^|[^\w.>\x60])@(?:[a-z]{1,8}:)?[A-Za-z_][\w.]{0,60}[ \t]{0,4}\([ \t]{0,4}(?:[A-Za-z_]\w{0,30}[ \t]{0,4}=[ \t]{0,4})?)`;
+const ANNOTATION_HEAD = r`(?:^|[^\w.>\x60])@(?:[a-z]{1,8}:)?[A-Za-z_][\w.]{0,60}[ \t]{0,4}\([ \t]{0,4}(?:[A-Za-z_]\w{0,30}[ \t]{0,4}=[ \t]{0,4})?`;
+/**
+ * The quote [quote], opening a literal that [ahead] says is HTML and that is no annotation's argument. What lies ahead is
+ * read first and then what lies behind, the cheap test first, so the look behind runs at few quotes.
+ */
+const notAnnotation = (quote, ahead) =>
+  r`(\$*` + quote + ")" + ahead + r`(?:(?<![(=][ \t]{0,4}\${0,4}` + quote + r`)|(?<!` + ANNOTATION_HEAD + r`\${0,4}` + quote + "))";
 const QUOTE = r`(\$*"(?!""))`;
 
 /** Longest first, so that no name is taken for the start of a longer one. */
@@ -218,8 +224,8 @@ export function kotlinInjectionGrammar(catalog) {
           patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#marked-double-string" }, { include: "#plain-double-string" }],
           name: MARKER,
         },
-        embedded(NOT_ANNOTATION + r`(\$*""")(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
-        embedded(NOT_ANNOTATION + r`(\$*")` + DQ_TAG_AHEAD, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
+        embedded(notAnnotation('"""', r`(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`), { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
+        embedded(notAnnotation('"', DQ_TAG_AHEAD), { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
       ],
     },
     "html-string-next-line": {
@@ -423,14 +429,14 @@ export function kotlinInjectionGrammar(catalog) {
         "interpolate { \"Hello <b>${+name}</b>\" }: the literal that opens the block on its line, after prefixes and by the qualified name too, is markup however it opens where it writes a tag or marks a value, as the analysis reads the block. A literal further into a block is HTML when it opens with a tag, as anywhere: a rule reads one line.",
       patterns: [
         embedded(
-          r`(\$*""")(?<=` + AFTER_INTERPOLATE + r`\${0,4}""")(?=[^\n]*?(?:<[A-Za-z/!]|\$\{\s*\+)|[ \t]*$)`,
+          r`(\$*""")(?=(?:(?!""")[^\n])*?(?:<[A-Za-z/!]|\$\{\s*\+))(?<=\{[ \t]{0,8}\${0,4}""")(?<=` + AFTER_INTERPOLATE + r`\${0,4}""")`,
           { 1: { name: RAW_START } },
           true,
           "meta.embedded.block.html",
           "text.html.basic",
         ),
         embedded(
-          r`(\$*")(?<=` + AFTER_INTERPOLATE + r`\${0,4}")(?=(?:[^"\\\n]|\\.)*(?:<[A-Za-z/!]|\$\{\s*\+))`,
+          r`(\$*")(?=(?:[^"\\\n]|\\.)*(?:<[A-Za-z/!]|\$\{\s*\+))(?<=\{[ \t]{0,8}\${0,4}")(?<=` + AFTER_INTERPOLATE + r`\${0,4}")`,
           { 1: { name: DQ_START } },
           false,
           "meta.embedded.block.html",
@@ -442,13 +448,13 @@ export function kotlinInjectionGrammar(catalog) {
       comment: "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
       patterns: HTML_LITERALS.map((rule) => ({
         ...rule,
-        begin: rule.begin + r`(?<=` + AFTER_TRUSTED + (rule === HTML_LITERALS[0] ? r`\${0,4}"""` : r`\${0,4}"`) + ")" + TRUSTED_TAG,
+        begin: rule.begin + TRUSTED_TAG + r`(?<=[(=][ \t]{0,4}\${0,4}")(?<=` + AFTER_TRUSTED + (rule === HTML_LITERALS[0] ? r`\${0,4}"""` : r`\${0,4}"`) + ")",
       })),
     },
     "trusted-call-next-line": {
-      comment: "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region ends after it, or at the closing parenthesis.",
-      begin: r`(?<![\w.\x60])(?<!class |fun )(Trusted)(\s*\()[ \t]*$`,
-      beginCaptures: { 1: FN },
+      comment:
+        "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region opens at the end of the line, after Kotlin's grammar has read `Trusted(`, and ends after the argument or at the closing parenthesis.",
+      begin: r`(?<=(?:^|[^\w.\x60])Trusted[ \t]{0,4}\()(?<!(?:class|fun)[ \t]{1,4}Trusted[ \t]{0,4}\()(?=[ \t]*$)`,
       end: r`(?<=")|(?=\))`,
       patterns: [...HTML_LITERALS.map((rule) => ({ ...rule, begin: r`^\s*(?:html\s*=\s*)?` + rule.begin + TRUSTED_TAG })), { include: "source.kotlin" }],
     },
