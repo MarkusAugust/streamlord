@@ -389,8 +389,8 @@ public fun isHtmlString(
     if (facts.inAnnotation(s.start)) return false
     if (textOpensWithTag(markupView(src, s))) return true
     if (s.start in facts.htmlArguments || s.start in facts.markupLiterals || s.start in facts.markedLiterals) return true
-    // Where the scanner reads no value of a marked declaration (a getter, a `var`, a member another may stand in for),
-    // the mark reaches the next literal, past those of other annotations' arguments.
+    // A mark reaches the next literal too, past those of other annotations' arguments: what the scanner reads no value
+    // of, a getter, a `var`, a member another may stand in for, is reached so.
     val from = maxOf(0, s.start - 240)
     val before = src.substring(from, s.start)
     val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
@@ -398,8 +398,5 @@ public fun isHtmlString(
     // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal.
     if (PARAMETER_AFTER_MARKER.containsMatchIn(after)) return false
     val at = from + last.range.last + 1
-    // A mark the scanner read a value of gives that value alone: a literal before a function's `return` is none.
-    val read = facts.markedLiterals.filter { it >= at }.minOrNull()
-    if (read != null && HTML_MARKER.find(src.substring(at, read)) == null) return false
     return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) }
 }

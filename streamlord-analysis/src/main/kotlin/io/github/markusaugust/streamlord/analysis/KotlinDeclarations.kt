@@ -146,7 +146,9 @@ internal class FileFacts(
         values.mapNotNullTo(HashSet()) { v ->
             val end = if (v.end < 0) src.length else v.end
             // The first literal at or after the value's start, found by where the literals start: they are in order.
-            val k = strings.binarySearch { if (it.start < v.start) -1 else 1 }.let { -it - 1 }
+            var k = strings.binarySearch { if (it.start < v.start) -1 else 1 }.let { -it - 1 }
+            // An annotation on the value says something of it, and its literal is none of the value's.
+            while (k < strings.size && inAnnotation(strings[k].start)) k++
             strings.getOrNull(k)?.start?.takeIf { it < end }
         }
     }
@@ -380,7 +382,12 @@ private fun closesTypeArguments(
     var j = k
     while (j >= 0 && src[j] != '\n') {
         if (code[j] && src[j] == '>') depth++
-        if (code[j] && src[j] == '<' && --depth == 0) return true
+        // `List<`: a type's name, then its arguments at once; `b < c` compares.
+        if (code[j] && src[j] == '<' &&
+            --depth == 0
+        ) {
+            return isWordPart(src.getOrNull(j - 1)) && src.getOrNull(j + 1)?.isWhitespace() == false
+        }
         j--
     }
     return false
@@ -1176,7 +1183,7 @@ private fun declarations(
                 }
 
                 "stmt" -> {
-                    if (c == '\n' || c == ';') endPending(f, i)
+                    if (c == ';' || (c == '\n' && lineEnds(src, code, i))) endPending(f, i)
                 }
 
                 else -> {
