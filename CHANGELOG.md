@@ -110,16 +110,23 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Editors
 
-- HTML in a Kotlin string is coloured where the analysis reads HTML, in both editors alike. A
-  literal in the block of `interpolate { }` or handed to `Trusted(...)` is HTML however it opens,
-  `interpolate { "Hello <b>${+name}</b>" }` too, and is read so for completion, hover and
-  warnings. An annotation's message, `@Deprecated("<b>not</b> markup")`, is none. IntelliJ asks
-  the Kotlin plugin which strings it injects HTML into itself, by a mark on what they are or on
-  the parameter they are handed to, and colours every other: a `@Language("HTML")` on another
-  function's parameter no longer turns colours off for the strings after it, and an argument of a
-  call whose parameter has no mark, `listOf("<li>a</li>")`, `call.respondText("<h1>x</h1>")`, is
-  coloured. VS Code colours a literal that opens with a doctype, or with white space or `\n`
-  before its first tag.
+- HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of
+  `interpolate { }` that writes a tag or marks a value with `+` is HTML however it opens,
+  `interpolate { "Hello <b>${+name}</b>" }` too, and so is the argument of `Trusted(...)`, by
+  position or by its name `html`; both are read so for completion, hover and warnings. A literal
+  of the block that writes neither, a log message or a comparison, is a string as before. An
+  annotation's message, `@Deprecated("<b>not</b> markup")`, is no HTML.
+- IntelliJ asks the Kotlin plugin which strings it injects a language into itself, a sum joined
+  with `+` as a whole, by a mark on what they are or on the parameter they are handed to, and
+  colours the other HTML strings: a `@Language("HTML")` on another function's parameter no longer
+  turns colours off for the strings after it, and an argument of a call whose parameter has no
+  mark, `listOf("<li>a</li>")` or `call.respondText("<h1>x</h1>")`, is coloured. A string the
+  Kotlin plugin injects keeps its injection with the mark's `prefix` and `suffix`.
+- VS Code colours a literal that opens with a doctype, or with white space or `\n` before its
+  first tag, the block of `interpolate` after prefixes and by its qualified name, and `Trusted(`
+  with its argument on the next line. It still cannot colour a literal handed to a parameter of the
+  file's own function marked `@Language("HTML")` when the literal opens with text, nor
+  `interpolate(block = { })`: a grammar of patterns does not know what a call means.
 - IntelliJ reads a project that lies under a folder named `build`, `out`, `dist` or `target`,
   which it took for build output and left unread, so every signal in it was unknown. It now counts
   folders from the outermost content root that holds the file, and leaves out hidden folders, as
