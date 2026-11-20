@@ -17237,15 +17237,15 @@ unescaped-interpolation 1832-1838 hint: Kotlin writes $shown into the HTML as it
 unescaped-interpolation 2064-2081 hint: Kotlin writes ${labelled(rows)} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
   fix "Mark ${labelled(rows)} as markup" 2064-2081 "${Trusted(labelled(rows))}" (not preferred)
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
-unescaped-interpolation 2497-2501 warning: Kotlin writes $who into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
-  fix "Mark the values with + in interpolate { }, which escapes the values" 2489-2506 "interpolate { \"Hey <b>${+who}</b>\" }.text" (not preferred)
+unescaped-interpolation 2498-2502 warning: Kotlin writes $who into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark the values with + in interpolate { }, which escapes the values" 2490-2507 "interpolate { \"Hey <b>${+who}</b>\" }.text" (not preferred)
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
-  fix "Mark $who as markup" 2497-2501 "${Trusted(who)}" (not preferred)
+  fix "Mark $who as markup" 2498-2502 "${Trusted(who)}" (not preferred)
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
-unescaped-interpolation 2684-2689 warning: Kotlin writes $page into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
-  fix "Mark the values with + in interpolate { }, which escapes the values" 2680-2694 "interpolate { \"<p>${+page}</p>\" }.text" (not preferred)
+unescaped-interpolation 2685-2690 warning: Kotlin writes $page into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark the values with + in interpolate { }, which escapes the values" 2681-2695 "interpolate { \"<p>${+page}</p>\" }.text" (not preferred)
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
-  fix "Mark $page as markup" 2684-2689 "${Trusted(page)}" (not preferred)
+  fix "Mark $page as markup" 2685-2690 "${Trusted(page)}" (not preferred)
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
 == real/kotlin/FragmentMistakes.kt
 interpolate-template 1438-1444 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
