@@ -149,7 +149,7 @@ internal class FileFacts(
             // An annotation on the value says something of it, and its literal is none of the value's.
             while (k < strings.size && inAnnotation(strings[k].start)) k++
             // The value is the literal, written first: one in a call's arguments or a condition is none.
-            strings.getOrNull(k)?.start?.takeIf { it < end && OPENS_WITH_LITERAL.matches(src.substring(v.start, it)) }
+            strings.getOrNull(k)?.start?.takeIf { it < end && OPENS_WITH_LITERAL.matchEntire(src.substring(v.start, it)) != null }
         }
     }
 
