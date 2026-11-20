@@ -75,8 +75,9 @@ All notable changes to Streamlord are recorded here. The format follows
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
 - A `@Language("HTML")` mark reaches the next literal after it past another annotation's
-  arguments and past comments, a mark written inside a comment marks nothing, and no literal of
-  an annotation's arguments is HTML:
+  arguments and past comments, quotes in them too, a mark written inside a comment marks
+  nothing, a parameter's mark behind another annotation or a modifier (`private val`, `vararg`)
+  reaches no later default, and no literal of an annotation's arguments is HTML:
   `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"` read `"x"` as the HTML string and not the
   function's literal.
 - A value whose line ends in `!!`, `++`, `--`, a nullable type or type arguments closed on its

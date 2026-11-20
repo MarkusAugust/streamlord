@@ -372,7 +372,10 @@ internal const val HTML_LANGUAGE =
 
 private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 private val LEADING_ANNOTATIONS = regex("""^(?:\s*@[\p{L}_][\p{L}\p{Nd}_.:]*(?:\([^()]*\))?)+""")
-private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
+private val PARAMETER_AFTER_MARKER =
+    regex(
+        """^\s*(?:(?:private|protected|internal|public|override|open|final|vararg|crossinline|noinline)\s+)*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""",
+    )
 
 /**
  * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, or when IntelliJ's
@@ -402,5 +405,6 @@ public fun isHtmlString(
     // Annotations' arguments and comments read as space: `@Named("x")body` and `@Named("x") /* c */ body` hold a parameter.
     val bare = CharArray(after.length) { k -> if (facts.inAnnotation(at + k) || !facts.code[at + k]) ' ' else after[k] }.concatToString()
     if (PARAMETER_AFTER_MARKER.containsMatchIn(bare.replace(LEADING_ANNOTATIONS, ""))) return false
-    return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) }
+    // A literal between the mark and this one takes it: a quote in a comment or an annotation's arguments is none.
+    return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) && !inComment(src, facts.code, at + it) }
 }

@@ -182,7 +182,7 @@ class KotlinParserFasitTest {
                     if (value != null && value.end in 0 until value.start) {
                         difference("value", name, "analysis ends the value at ${value.end}, before it starts at ${value.start}")
                     } else if (init != null && value != null && value.end >= 0) {
-                        val read = src.substring(value.start, withoutTrailingComments(src, comment, value.end)).trim()
+                        val read = src.substring(value.start, maxOf(value.start, withoutTrailingComments(src, comment, value.end))).trim()
                         if (read != init.text.trim()) {
                             difference("value", name, "analysis «${read.oneLine()}» parser «${init.text.oneLine()}»")
                         }
@@ -230,7 +230,7 @@ class KotlinParserFasitTest {
                         } else {
                             listOf(body.text.trim())
                         }
-                    val read = values.map { src.substring(it.start, withoutTrailingComments(src, comment, it.end)).trim() }
+                    val read = values.map { src.substring(it.start, maxOf(it.start, withoutTrailingComments(src, comment, it.end))).trim() }
                     if (read != given) {
                         difference(
                             "returns",

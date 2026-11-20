@@ -337,24 +337,40 @@ private fun goesOn(
 ): Boolean =
     when (src[k]) {
         // `n++` and `n--` end a statement.
-        '-', '+' -> src.getOrNull(k - 1) != src[k]
+        '-', '+' -> {
+            var from = k
+            while (from > 0 && src[from - 1] == src[k]) from--
+            (k - from) % 2 == 0
+        }
 
-        '=', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> true
+        '=', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> {
+            true
+        }
 
-        '!' -> src.getOrNull(k - 1) != '!'
+        '!' -> {
+            src.getOrNull(k - 1) != '!'
+        }
 
-        '>' -> src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
+        '>' -> {
+            src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
+        }
 
-        ')' -> branchFollows(src, code, k)
+        ')' -> {
+            branchFollows(src, code, k)
+        }
 
         // `x as?` wants its type.
-        '?' -> src.startsWith("as", k - 2) && !isWordPart(src.getOrNull(k - 3))
+        '?' -> {
+            src.startsWith("as", k - 2) && !isWordPart(src.getOrNull(k - 3))
+        }
 
-        else -> isWordPart(src[k]) && (WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1)) || infixWaits(src, code, k))
+        else -> {
+            isWordPart(src[k]) && (WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1)) || infixWaits(src, code, k))
+        }
     }
 
 /** The keywords after which Kotlin reads on, which no name can be: `else`, `x as`, `x is`, `x in`. */
-private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in|finally|try)$""")
+private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in|finally|try|when)$""")
 
 /** Words that stand before a name or a value and are no operand of an infix call. */
 private val NO_OPERAND =
@@ -407,20 +423,45 @@ private fun infixWaits(
         if (src.substring(start, j + 1) in NO_OPERAND) break
         run++
         j = start - 1
-        while (j >= 0 && (src[j] == ' ' || src[j] == '\t')) j--
+        // A comment between two names is space.
+        while (j >= 0) {
+            if (src[j] == ' ' || src[j] == '\t') {
+                j--
+                continue
+            }
+            if (code[j] || src[j] == '\n') break
+            var from = j
+            while (from > 0 && !code[from - 1]) from--
+            if (!src.startsWith("//", from) && !src.startsWith("/*", from)) break
+            j = from - 1
+        }
         if (j < 0 || src[j] == '\n' || j == start - 1) break
         if (!code[j] || src[j] == ']' || src[j] == '}') {
             run++
             break
         }
         if (src[j] == ')') {
-            if (!branchFollows(src, code, j)) run++
+            // `@Suppress("x") n`: an annotation is no operand.
+            val open = opening(src, code, j, '(', ')')
+            val head = open?.let { codeBefore(src, code, it) } ?: -1
+            var name = head
+            while (name >= 0 && isWordPart(src[name])) name--
+            if (!branchFollows(src, code, j) && !(head >= 0 && isWordPart(src[head]) && src.getOrNull(name) == '@')) run++
+            break
+        }
+        // `x!! to` and `n++ to`: what ends an operand.
+        if ((src[j] == '!' || src[j] == '+' || src[j] == '-') && src.getOrNull(j - 1) == src[j]) {
+            run++
             break
         }
         if (!isWordPart(src[j])) break
     }
     return run % 2 == 0 && run > 0
 }
+
+private val INFIX_OPERATOR = regex("""\s(?:and|or|xor|shl|shr|ushr)\s""")
+
+private val DO_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_.])do(?:\s|\{)""")
 
 private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
 
@@ -437,11 +478,14 @@ private fun closesTypeArguments(
         if (code[j] && src[j] == '>' && src.getOrNull(j - 1) != '-') depth++
         // `n<a && n>` compares: no type argument holds `&`, `|`, `=`, `+` or `%`.
         if (code[j] && depth > 0 && src[j] in "&|=+%") return false
+        if (code[j] && depth > 0 && src[j] == '*' && src.getOrNull(j - 1) == ' ' && src.getOrNull(j + 1) == ' ') return false
         // `List<Int>`: a type's name, then a type at once; `b < c` and `n<3` compare.
         if (code[j] && src[j] == '<' &&
             --depth == 0
         ) {
             val first = src.getOrNull(j + 1)
+            // `n<m and n>` compares: no type argument holds an infix operator.
+            if (INFIX_OPERATOR.containsMatchIn(src.substring(j, k))) return false
             return isWordPart(src.getOrNull(j - 1)) && first != null && (first.isLetter() || first in "*(@?`_")
         }
         j--
@@ -465,9 +509,14 @@ private fun branchFollows(
     if (j <= 0 || depth != 0) return false
     val from = maxOf(0, j - 12)
     val head = CONDITION_HEAD.find(src.substring(from, j)) ?: return false
-    // `do { } while (c)` has its branch before it.
     val word = from + head.range.first + head.value.indexOfFirst { it.isLetter() }
-    return !(src.startsWith("while", word) && src.lastNonSpaceBefore(word) == '}')
+    // A handler's `catch (e: E)` follows the `}` of a block; `flow.catch(f)` and `catch(f)` are calls.
+    if (src.startsWith("catch", word)) return src.lastNonSpaceBefore(word) == '}'
+    if (!src.startsWith("while", word)) return true
+    // `do { } while (c)`, and `do x while (c)` on one line, have their branch before it.
+    if (src.lastNonSpaceBefore(word) == '}') return false
+    val line = src.substring(src.lastIndexOf('\n', word - 1) + 1, word)
+    return !DO_BEFORE.containsMatchIn(line)
 }
 
 private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
@@ -645,7 +694,7 @@ private class ScopeFrame(
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
 /** Whether the character at [k], outside code, is a comment's and not a literal's, by what stands where code stopped. */
-private fun inComment(
+internal fun inComment(
     src: String,
     code: BooleanArray,
     k: Int,
