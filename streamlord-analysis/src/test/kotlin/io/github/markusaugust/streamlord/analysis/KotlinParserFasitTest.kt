@@ -139,14 +139,18 @@ class KotlinParserFasitTest {
 
         val file = factory.createFile("Fasit.kt", src)
         if (PsiTreeUtil.hasErrorElements(file)) return listOf(Difference("", 1, "unparsed", "", "", "the parser finds errors in it"))
-        // Where comments and the next declaration's modifiers stand, as the parser reads them: a KDoc's `$name` is no
-        // code, and a scope that ends at `private fun` rather than before `private` ends at the same place.
+        // Where comments stand, as the parser reads them: a KDoc's `$name` is no code. A scope may end past the next
+        // declaration's modifiers too, at `private fun` rather than before `private`; a value may not.
         val comment = BooleanArray(src.length)
+        val between = BooleanArray(src.length)
 
         fun mark(e: PsiElement) {
             if (e is PsiComment || e is KtModifierList) {
-                for (k in e.textRange.startOffset until e.textRange.endOffset) comment[k] = true
-                return
+                for (k in e.textRange.startOffset until e.textRange.endOffset) {
+                    between[k] = true
+                    if (e is PsiComment) comment[k] = true
+                }
+                if (e is PsiComment) return
             }
             var child = e.firstChild
             while (child != null) {
@@ -162,7 +166,7 @@ class KotlinParserFasitTest {
         ) {
             val at = name?.textOffset ?: return
             val d = declared[at] ?: return
-            if (!sameEnd(src, comment, d.end, end)) {
+            if (!sameEnd(src, between, d.end, end)) {
                 difference("scope", name, "analysis «${if (d.end == Int.MAX_VALUE) "never" else snippet(d.end)}» parser «${snippet(end)}»")
             }
         }
