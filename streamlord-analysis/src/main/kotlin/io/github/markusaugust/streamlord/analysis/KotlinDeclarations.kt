@@ -350,11 +350,78 @@ private fun goesOn(
         // `x as?` wants its type.
         '?' -> src.startsWith("as", k - 2) && !isWordPart(src.getOrNull(k - 3))
 
-        else -> isWordPart(src[k]) && WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1))
+        else -> isWordPart(src[k]) && (WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1)) || infixWaits(src, code, k))
     }
 
 /** The keywords after which Kotlin reads on, which no name can be: `else`, `x as`, `x is`, `x in`. */
-private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in|finally)$""")
+private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in|finally|try)$""")
+
+/** Words that stand before a name or a value and are no operand of an infix call. */
+private val NO_OPERAND =
+    setOf(
+        "return",
+        "throw",
+        "else",
+        "in",
+        "is",
+        "as",
+        "val",
+        "var",
+        "fun",
+        "class",
+        "object",
+        "interface",
+        "typealias",
+        "import",
+        "package",
+        "if",
+        "when",
+        "while",
+        "for",
+        "do",
+        "try",
+        "catch",
+        "finally",
+        "by",
+        "where",
+        "get",
+        "set",
+    )
+
+/**
+ * Whether the name the line ends in at [k] is an infix function's, still wanting its right operand: `a to`, where the
+ * names and operands standing one after another back to an operator or a bracket are an even number. `a to b` ends.
+ */
+private fun infixWaits(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    if (!src[k].isLetter() && src[k] != '_' && src[k] != '`') return false
+    var run = 0
+    var j = k
+    while (j >= 0) {
+        var start = j
+        while (start > 0 && isWordPart(src[start - 1])) start--
+        if (src.getOrNull(start - 1) == '@') break
+        if (src.substring(start, j + 1) in NO_OPERAND) break
+        run++
+        j = start - 1
+        while (j >= 0 && (src[j] == ' ' || src[j] == '\t')) j--
+        if (j < 0 || src[j] == '\n' || j == start - 1) break
+        if (!code[j] || src[j] == ']' || src[j] == '}') {
+            run++
+            break
+        }
+        if (src[j] == ')') {
+            if (!branchFollows(src, code, j)) run++
+            break
+        }
+        if (!isWordPart(src[j])) break
+    }
+    return run % 2 == 0 && run > 0
+}
+
 private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
 
 /** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
@@ -577,6 +644,17 @@ private class ScopeFrame(
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
+/** Whether the character at [k], outside code, is a comment's and not a literal's, by what stands where code stopped. */
+private fun inComment(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    var from = k
+    while (from > 0 && !code[from - 1]) from--
+    return src.startsWith("//", from) || src.startsWith("/*", from)
+}
+
 /** Whether the line break at [at] ends an expression: nothing before it or after it carries the expression on. */
 internal fun lineEnds(
     src: String,
@@ -598,7 +676,16 @@ internal fun lineEnds(
     if (k >= 0 && code[k] && goesOn(src, code, k)) return false
     val last = k
     k = at + 1
-    while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
+    // A comment at the next line's start is passed over; a literal there opens a line of its own.
+    while (k < src.length) {
+        if (src[k].isWhitespace()) {
+            k++
+        } else if (!code[k] && inComment(src, code, k)) {
+            while (k < src.length && !code[k]) k++
+        } else {
+            break
+        }
+    }
     val next = src.substring(k, minOf(src.length, k + 12))
     // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
     if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true

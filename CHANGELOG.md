@@ -85,8 +85,9 @@ All notable changes to Streamlord are recorded here. The format follows
   too, where it ran to the end of the block around it: `fun size(n: Int) = pad(n)` inside another
   function kept its `n` in sight to the end of the outer one, so `$n` after it was read as the
   Int. A value, an expression and a statement go on past `if (...)`, `when (...)`, `for (...)`,
-  `while (...)`, `else`, `as`, `as?`, `is` or `in` at the end of a line, and into a `try`'s
-  `catch` and `finally` however they are laid out. A loop's header is read whole, over several lines and with a lambda in
+  `while (...)`, `try`, `else`, `as`, `as?`, `is`, `in` or an infix function's name (`a to`) at
+  the end of a line, and into a `try`'s `catch` and `finally` however they are laid out; a line
+  that opens with a literal, `"<p>$n</p>".also(::println)`, is a statement of its own. A loop's header is read whole, over several lines and with a lambda in
   it, and an `else` on the line after a loop's statement is the statement's own only where the
   statement has an `if` still without one.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and

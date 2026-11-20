@@ -1005,6 +1005,25 @@ class ValueStructureTest {
             "fun outer(n: Int) {\n    fun inner(n: String) = run { n }\n" +
                 "    catch({ println(\"<p>\$n</p>\") }) { e: Throwable -> }\n}"
         assertEquals(emptyList(), told(lambda))
+        // A line that opens with a literal is a statement of its own; an infix call and a `try` at a line's end go on.
+        val literal =
+            "fun f(n: String, rows: List<Int>) = run {\n    for (n: Int in rows) println(n)\n" +
+                "    \"<p>\$n</p>\".also(::println)\n}"
+        assertEquals(listOf("\$n"), told(literal))
+        assertEquals(emptyList(), told("val name = \"x\"\nfun pair(name: Int) = name to\n    \"<b>\$name</b>\""))
+        assertEquals(
+            emptyList(),
+            told("fun outer(n: String) {\n    fun f(n: Int) = try\n    {\n        \"<b>\$n</b>\"\n    } finally {}\n}"),
+        )
+        for ((line, next) in listOf(
+            "val p = a to b" to "println(1)",
+            "if (ok) b" to "println(1)",
+            "private val x" to "get() = 1",
+            "items.forEach { return@forEach x }" to "println(1)",
+        )) {
+            val src = "fun f(a: Int, b: Int, ok: Boolean, x: Int) {\n    $line\n    $next\n}"
+            assertEquals(true, lineEnds(src, fileFacts(src).code, src.indexOf('\n', src.indexOf(line))), line)
+        }
         val called = "fun outer(x: String, nums: List<Int>) {\n    for (x: Int in nums) use(x)\n    catching(\"<p>\$x</p>\")\n}"
         assertEquals(listOf("\$x"), told(called))
         for (end in listOf("m as?\n        String", "n<3 && n>\n        1", "n<a && n>\n        b", "a<n && n>\n        a")) {
