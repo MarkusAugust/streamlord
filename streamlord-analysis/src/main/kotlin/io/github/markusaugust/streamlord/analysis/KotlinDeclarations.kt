@@ -88,7 +88,8 @@ internal class FileFacts(
 
     /**
      * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
-     * tag or marks a value, as the block's judging reads it, or the argument of core's `Trusted`.
+     * tag or marks a value and stands in no call's arguments, where a Datastar expression or a log message would, or the
+     * argument of core's `Trusted`.
      */
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
@@ -96,7 +97,9 @@ internal class FileFacts(
         if (!shadowsCore(src, "interpolate")) {
             for (b in interpolateBlocks(src, code)) {
                 for (s in lex.stringsIn(b.braces.first, b.braces.last)) {
-                    if ('<' in s.text || s.interpolations.any { markedValue(it) != null }) out += s.start
+                    if (TAG.containsMatchIn(s.text) || s.interpolations.any { markedValue(it) != null }) {
+                        if (!inArguments(src, code, b.braces.first, s.start)) out += s.start
+                    }
                 }
             }
         }
@@ -525,6 +528,26 @@ private fun overridable(
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
+
+/** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
+private val TAG = regex("""<[A-Za-z/!]""")
+
+/** Whether the innermost bracket [at] stands in, after [open], is a parenthesis or a square one: a call's arguments. */
+private fun inArguments(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    at: Int,
+): Boolean {
+    var depth = 0
+    for (k in at - 1 downTo open + 1) {
+        if (!code[k]) continue
+        val c = src[k]
+        if (c == ')' || c == ']' || c == '}') depth++
+        if ((c == '(' || c == '[' || c == '{') && depth-- == 0) return c != '{'
+    }
+    return false
+}
 
 /** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
 private fun withoutComments(
