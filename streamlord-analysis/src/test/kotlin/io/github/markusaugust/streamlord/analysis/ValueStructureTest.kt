@@ -1,8 +1,8 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * How a value is built, read from the text, and what an editor's answers of its parts change. Each case is a Kotlin file
@@ -905,12 +905,9 @@ class ValueStructureTest {
 
     @Test
     fun `the literals of a large block are read once each`() {
-        val block =
+        assertGrowsLinearly("the literals of one block", 200, { n: Int ->
             "import io.github.markusaugust.streamlord.core.domain.*\nfun f() = interpolate {\n" +
-                (0 until 16_000).joinToString("\n") { "    val a$it = \"x <b>$it</b>\"" } +
-                "\n    \"<p></p>\"\n}"
-        val started = System.nanoTime()
-        fileFacts(block).markupLiterals
-        assertTrue((System.nanoTime() - started) / 1_000_000 < 2_000, "read in time")
+                (0 until n).joinToString("\n") { "    val a$it = \"x <b>$it</b>\"" } + "\n    \"<p></p>\"\n}"
+        }) { fileFacts(it).markupLiterals }
     }
 }
