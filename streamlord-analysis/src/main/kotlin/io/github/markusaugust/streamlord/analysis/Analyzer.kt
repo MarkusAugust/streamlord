@@ -219,7 +219,11 @@ internal fun interpolateBlocks(
     INTERPOLATE_BLOCK.findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
         val name = m.range.first + m.value.indexOf("interpolate")
         // A function declared by the name is no call of it.
-        if (src.substring(0, m.range.first).trimEnd().endsWith("fun")) return@mapNotNullTo null
+        if (src.lastNonSpaceBefore(m.range.first) == 'n' &&
+            src.substring(maxOf(0, m.range.first - 40), m.range.first).trimEnd().endsWith("fun")
+        ) {
+            return@mapNotNullTo null
+        }
         // The braces of code, a template's code among it: a block may stand in a template of another's markup.
         var depth = 0
         val close =

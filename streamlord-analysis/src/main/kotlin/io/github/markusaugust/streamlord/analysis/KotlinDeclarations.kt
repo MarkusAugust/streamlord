@@ -597,7 +597,8 @@ private fun outsideArguments(
         while (k < s.start) {
             val c = src[k]
             if (code[k] && (c == '(' || c == '[' || c == '{')) {
-                val holds = c != '{' || !branch(src, code, open, k)
+                // A parenthesis after a name or a bracket is a call's; one after an operator only groups.
+                val holds = if (c == '{') !branch(src, code, open, k) else c == '[' || calls(src, code, k)
                 stack += holds
                 if (holds) arguments++
             } else if (code[k] && (c == ')' || c == ']' || c == '}') && stack.isNotEmpty()) {
@@ -608,6 +609,17 @@ private fun outsideArguments(
         if (arguments == 0 && !compared(src, code, s)) out += s.start
     }
     return out
+}
+
+/** Whether the parenthesis at [paren] holds a call's arguments: it follows a name, a closing bracket or `>` of type arguments. */
+private fun calls(
+    src: String,
+    code: BooleanArray,
+    paren: Int,
+): Boolean {
+    var k = paren - 1
+    while (k >= 0 && (!code[k] || src[k].isWhitespace())) k--
+    return k >= 0 && (isWordPart(src[k]) || src[k] == ')' || src[k] == ']' || src[k] == '>' || src[k] == '`')
 }
 
 /** Whether [s] is compared, not written: an operand of `==` or `!=`, or the condition of a `when` branch. */
