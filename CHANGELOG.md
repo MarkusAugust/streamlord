@@ -123,10 +123,11 @@ All notable changes to Streamlord are recorded here. The format follows
   mark, `listOf("<li>a</li>")` or `call.respondText("<h1>x</h1>")`, is coloured. A string the
   Kotlin plugin injects keeps its injection with the mark's `prefix` and `suffix`.
 - VS Code colours a literal that opens with a doctype, or with white space or `\n` before its
-  first tag, the block of `interpolate` after prefixes and by its qualified name, and `Trusted(`
-  with its argument on the next line. It still cannot colour a literal handed to a parameter of the
-  file's own function marked `@Language("HTML")` when the literal opens with text, nor
-  `interpolate(block = { })`: a grammar of patterns does not know what a call means.
+  first tag, `Trusted(...)`'s argument that writes a tag, on its line or the next, and the
+  literal that opens the block of `interpolate` on its line, after prefixes and by the qualified
+  name too. It reads one line at a time, so a literal further into a block, or handed to a
+  parameter of the file's own function marked `@Language("HTML")`, is coloured only when it opens
+  with a tag, and only an annotation's first argument on its line is kept out of HTML.
 - IntelliJ reads a project that lies under a folder named `build`, `out`, `dist` or `target`,
   which it took for build output and left unread, so every signal in it was unknown. It now counts
   folders from the outermost content root that holds the file, and leaves out hidden folders, as
