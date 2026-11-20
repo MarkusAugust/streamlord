@@ -110,6 +110,27 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Editors
 
+- HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of
+  `interpolate { }` that writes a tag or marks a value with `+` is HTML however it opens,
+  `interpolate { "Hello <b>${+name}</b>" }` too, and so is the argument of `Trusted(...)` that
+  writes a tag, by position or by its name `html`, a sum of literals too; both are read so for
+  completion, hover and warnings. A literal
+  of the block that writes neither, or stands in a call's arguments or a lambda handed to one, a
+  log message, a Datastar expression or a comparison, is a string as before. An
+  annotation's message, `@Deprecated("<b>not</b> markup")`, is no HTML.
+- IntelliJ asks the Kotlin plugin which strings it injects a language into itself, a sum joined
+  with `+` as a whole, by a mark on what they are or on the parameter they are handed to, and
+  colours the other HTML strings: a `@Language("HTML")` on another function's parameter no longer
+  turns colours off for the strings after it, and an argument of a call whose parameter has no
+  mark, `listOf("<li>a</li>")` or `call.respondText("<h1>x</h1>")`, is coloured. A string the
+  Kotlin plugin injects keeps its injection with the mark's `prefix` and `suffix`.
+- VS Code colours a literal that opens with a doctype, or with white space or `\n` before its
+  first tag, `Trusted(...)`'s argument that writes a tag, on its line or the next, and the
+  literal that opens the block of `interpolate` on its line, after prefixes and by the qualified
+  name too. It reads one line at a time, so a literal further into a block, after the first of a
+  sum handed to `Trusted`, or handed to a parameter of the file's own function marked
+  `@Language("HTML")`, is coloured only when it opens with a tag, and only an annotation's first
+  argument on its line is kept out of HTML.
 - IntelliJ reads a project that lies under a folder named `build`, `out`, `dist` or `target`,
   which it took for build output and left unread, so every signal in it was unknown. It now counts
   folders from the outermost content root that holds the file, and leaves out hidden folders, as

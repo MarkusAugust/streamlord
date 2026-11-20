@@ -44,6 +44,15 @@
       "include": "streamlord.kotlin.injection#interpolate-call-next-line"
     },
     {
+      "include": "streamlord.kotlin.injection#interpolate-block"
+    },
+    {
+      "include": "streamlord.kotlin.injection#trusted-call"
+    },
+    {
+      "include": "streamlord.kotlin.injection#trusted-call-next-line"
+    },
+    {
       "include": "streamlord.kotlin.injection#script-call"
     },
     {

@@ -56,6 +56,30 @@ function opening(begin, captures, quote) {
 }
 const SIGNAL_NAME = r`([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\.[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)*)`;
 const RAW_QUOTE = r`(\$*""")`;
+/** What opens HTML in a double-quoted literal, as the analysis reads it: a tag, a comment or a doctype, after white space or an escaped line break. */
+const DQ_TAG_AHEAD = r`(?=<(?:[A-Za-z]|!--|!(?i:doctype))|(?:[ \t]|\\[nrt])+<(?:[A-Za-z]|!--|!(?i:doctype))(?:[^"\\\n]|\\.)*")`;
+/** Both kinds of literal, HTML however they open. */
+const HTML_LITERALS = [
+  embedded(r`(\$*""")`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
+  embedded(r`(\$*")`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
+];
+/**
+ * Just after the brace of interpolate's block, by the qualified name and after prefixes too, read behind the literal so
+ * that Kotlin's grammar keeps the name and the brace, and the brackets it opens.
+ */
+const AFTER_INTERPOLATE = r`(?:^|[^\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?interpolate[ \t]{0,4}(?:\([^()\n]{0,60}(?:\([^()\n]{0,60}\)[^()\n]{0,20})?\)[ \t]{0,4})?\{[ \t]{0,8}`;
+/** Just after `Trusted(` and its argument's name: a literal there is an argument, so this is a call and no declaration. */
+const AFTER_TRUSTED = r`(?:^|[^\w.\x60])Trusted[ \t]{0,4}\([ \t]{0,4}(?:html[ \t]{0,4}=[ \t]{0,4})?`;
+/** What makes Trusted's argument markup, as the analysis reads it: a tag on its line. */
+const TRUSTED_TAG = r`(?=(?:[^"\\\n]|\\.)*<[A-Za-z/!])`;
+/** Not the first argument of an annotation, `@Deprecated("<b>x</b>")`, which says something of the code; `this@Page.f(` names a label. */
+const ANNOTATION_HEAD = r`(?:^|[^\w.>\x60])@(?:[a-z]{1,8}:)?[A-Za-z_][\w.]{0,60}[ \t]{0,4}\([ \t]{0,4}(?:[A-Za-z_]\w{0,30}[ \t]{0,4}=[ \t]{0,4})?`;
+/**
+ * The quote [quote], opening a literal that [ahead] says is HTML and that is no annotation's argument. What lies ahead is
+ * read first and then what lies behind, the cheap test first, so the look behind runs at few quotes.
+ */
+const notAnnotation = (quote, ahead) =>
+  r`(\$*` + quote + ")" + ahead + r`(?:(?<![(=][ \t]{0,4}\${0,4}` + quote + r`)|(?<!` + ANNOTATION_HEAD + r`\${0,4}` + quote + "))";
 const QUOTE = r`(\$*"(?!""))`;
 
 /** Longest first, so that no name is taken for the start of a longer one. */
@@ -200,8 +224,8 @@ export function kotlinInjectionGrammar(catalog) {
           patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#marked-double-string" }, { include: "#plain-double-string" }],
           name: MARKER,
         },
-        embedded(r`(\$*""")(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
-        embedded(r`(\$*")(?=<(?:[A-Za-z]|!--))`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
+        embedded(notAnnotation('"""', r`(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`), { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
+        embedded(notAnnotation('"', DQ_TAG_AHEAD), { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
       ],
     },
     "html-string-next-line": {
@@ -228,7 +252,7 @@ export function kotlinInjectionGrammar(catalog) {
     "html-triple-string": embedded(r`(\$*""")`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
     "html-double-string": {
       comment: "A double-quoted literal that opens with a tag, under an HTML marker: HTML.",
-      ...embedded(r`(\$*")(?=<(?:[A-Za-z]|!--))`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
+      ...embedded(r`(\$*")` + DQ_TAG_AHEAD, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
     },
     "marked-double-string": {
       comment: "The double-quoted literal the marker ends at, the one that ends the line or is joined to more: HTML, however it opens (`@Language(\"HTML\") val p = \"Hello <b>\" + rest`).",
@@ -400,6 +424,43 @@ export function kotlinInjectionGrammar(catalog) {
         { include: "source.kotlin" },
       ],
     },
+    "interpolate-block": {
+      comment:
+        "interpolate { \"Hello <b>${+name}</b>\" }: the literal that opens the block on its line, after prefixes and by the qualified name too, is markup however it opens where it writes a tag or marks a value, as the analysis reads the block. A literal further into a block is HTML when it opens with a tag, as anywhere: a rule reads one line.",
+      patterns: [
+        embedded(
+          r`(\$*""")(?=(?:(?!""")[^\n])*?(?:<[A-Za-z/!]|\$\{\s*\+))(?<=\{[ \t]{0,8}\${0,4}""")(?<=` + AFTER_INTERPOLATE + r`\${0,4}""")`,
+          { 1: { name: RAW_START } },
+          true,
+          "meta.embedded.block.html",
+          "text.html.basic",
+        ),
+        embedded(
+          r`(\$*")(?=(?:[^"\\\n]|\\.)*(?:<[A-Za-z/!]|\$\{\s*\+))(?<=\{[ \t]{0,8}\${0,4}")(?<=` + AFTER_INTERPOLATE + r`\${0,4}")`,
+          { 1: { name: DQ_START } },
+          false,
+          "meta.embedded.block.html",
+          "text.html.basic",
+        ),
+      ],
+    },
+    "trusted-call": {
+      comment: "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
+      patterns: HTML_LITERALS.map((rule) => ({
+        ...rule,
+        begin: (() => {
+          const quote = rule === HTML_LITERALS[0] ? '"""' : '"';
+          return rule.begin + TRUSTED_TAG + r`(?<=[(=][ \t]{0,4}\${0,4}` + quote + r`)(?<=` + AFTER_TRUSTED + r`\${0,4}` + quote + ")";
+        })(),
+      })),
+    },
+    "trusted-call-next-line": {
+      comment:
+        "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region opens at the end of the line, after Kotlin's grammar has read `Trusted(`, and ends after the argument or at the closing parenthesis.",
+      begin: r`(?<=(?:^|[^\w.\x60])Trusted[ \t]{0,4}\()(?<!(?:class|fun)[ \t]{1,4}Trusted[ \t]{0,4}\()(?=[ \t]*$)`,
+      end: r`(?<=")|(?=\))`,
+      patterns: [...HTML_LITERALS.map((rule) => ({ ...rule, begin: r`^\s*(?:html\s*=\s*)?` + rule.begin + TRUSTED_TAG })), { include: "source.kotlin" }],
+    },
     "script-call": {
       comment: "executeScript(\"\"\"...\"\"\"): JavaScript inside the string.",
       patterns: [true, false].map((raw) =>
@@ -419,7 +480,19 @@ export function kotlinInjectionGrammar(catalog) {
     comment: "Generated by scripts/kotlinGrammar.mjs (npm run generate) from catalog/datastar-1.0.5.json. Do not edit by hand.",
     scopeName: "streamlord.kotlin.injection",
     injectionSelector: `L:source.kotlin -comment -string -meta.dsl-file.streamlord -${STRING} -${MARKER}`,
-    patterns: ["dsl-file", "attributes-index", "html-call", "interpolate-call", "interpolate-call-next-line", "script-call", "html-string", "html-string-next-line"].map((k) => ({ include: "#" + k })),
+    patterns: [
+      "dsl-file",
+      "attributes-index",
+      "html-call",
+      "interpolate-call",
+      "interpolate-call-next-line",
+      "interpolate-block",
+      "trusted-call",
+      "trusted-call-next-line",
+      "script-call",
+      "html-string",
+      "html-string-next-line",
+    ].map((k) => ({ include: "#" + k })),
     repository,
   };
 }
@@ -445,6 +518,9 @@ export function kotlinDslInjectionGrammar() {
       "html-call",
       "interpolate-call",
       "interpolate-call-next-line",
+      "interpolate-block",
+      "trusted-call",
+      "trusted-call-next-line",
       "script-call",
       "html-string",
       "html-string-next-line",

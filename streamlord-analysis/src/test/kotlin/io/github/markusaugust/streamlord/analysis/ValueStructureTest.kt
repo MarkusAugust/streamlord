@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -900,5 +901,18 @@ class ValueStructureTest {
     fun `a group of annotations too long to read closes nothing but itself`() {
         val group = "@[A Query(\"\"\"" + "x".repeat(6000) + "\"\"\")]"
         assertEquals(emptySet(), declaredNames("private class P { $group val title = \"<b>x</b>\" }").others)
+    }
+
+    @Test
+    fun `the literals of a large block are read once each`() {
+        // The file is read untimed, each a file of its own so that no reading is kept from the one before; what is
+        // timed is finding which of the block's literals are markup.
+        var made = 0
+        assertGrowsLinearly("the literals of one block", 200, { n: Int ->
+            fileFacts(
+                "// ${made++}\nimport io.github.markusaugust.streamlord.core.domain.*\nfun f() = interpolate {\n" +
+                    (0 until n).joinToString("\n") { "    val a$it = \"x <b>$it</b>\"" } + "\n    \"<p></p>\"\n}",
+            )
+        }) { it.markupLiterals }
     }
 }

@@ -205,11 +205,42 @@ private val PREFIXES_GIVEN =
     regex("""(?:prefixes\s*=\s*)?(?:listOf|mutableListOf|arrayListOf)\s*\(\s*((?:"[^"\\$]*"\s*,\s*)*(?:"[^"\\$]*"\s*,?\s*)?)\)""")
 private val PLAIN_STRING = regex(""""([^"\\$]*)"""")
 
-private class InterpolateBlock(
+internal class InterpolateBlock(
     val site: CallSite,
     val braces: IntRange,
     val prefixes: List<String>?,
 )
+
+/** The braces of each `interpolate { ... }` and `interpolate(prefixes) { ... }` of the file, with the prefixes written as plain literals. */
+internal fun interpolateBlocks(
+    src: String,
+    code: BooleanArray,
+): List<InterpolateBlock> =
+    INTERPOLATE_BLOCK.findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
+        val name = m.range.first + m.value.indexOf("interpolate")
+        // A function declared by the name is no call of it.
+        if (src.lastNonSpaceBefore(m.range.first) == 'n' &&
+            src.substring(maxOf(0, m.range.first - 40), m.range.first).trimEnd().endsWith("fun")
+        ) {
+            return@mapNotNullTo null
+        }
+        // The braces of code, a template's code among it: a block may stand in a template of another's markup.
+        var depth = 0
+        val close =
+            (m.range.last until src.length).firstOrNull {
+                code[it] &&
+                    ((src[it] == '{' && ++depth < 0) || (src[it] == '}' && --depth == 0))
+            }
+                ?: return@mapNotNullTo null
+        val list = (m.groups[2] ?: m.groups[3])?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
+        InterpolateBlock(
+            CallSite("interpolate", name, m.range.last, close, emptyList(), trailingLambda = true),
+            m.range.last..close,
+            list?.let { l ->
+                PLAIN_STRING.findAll(l.groupValues[1]).map { it.groupValues[1] }.toList()
+            },
+        )
+    }
 
 private val INDICATOR_ORDER_CALLS = setOf("dataInit", "dataIndicator")
 
@@ -658,33 +689,6 @@ public class Analyzer(
         }
         return out
     }
-
-    /** The braces of each `interpolate { ... }` and `interpolate(prefixes) { ... }` of the file, with the prefixes written as plain literals. */
-    private fun interpolateBlocks(
-        src: String,
-        code: BooleanArray,
-    ): List<InterpolateBlock> =
-        INTERPOLATE_BLOCK.findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
-            val name = m.range.first + m.value.indexOf("interpolate")
-            // A function declared by the name is no call of it.
-            if (src.substring(0, m.range.first).trimEnd().endsWith("fun")) return@mapNotNullTo null
-            // The braces of code, a template's code among it: a block may stand in a template of another's markup.
-            var depth = 0
-            val close =
-                (m.range.last until src.length).firstOrNull {
-                    code[it] &&
-                        ((src[it] == '{' && ++depth < 0) || (src[it] == '}' && --depth == 0))
-                }
-                    ?: return@mapNotNullTo null
-            val list = (m.groups[2] ?: m.groups[3])?.let { PREFIXES_GIVEN.matchEntire(it.value.trim()) }
-            InterpolateBlock(
-                CallSite("interpolate", name, m.range.last, close, emptyList(), trailingLambda = true),
-                m.range.last..close,
-                list?.let { l ->
-                    PLAIN_STRING.findAll(l.groupValues[1]).map { it.groupValues[1] }.toList()
-                },
-            )
-        }
 
     /** Whether [s] stands in a template of a literal of the block at [braces] that marks its value with `+`: it is that value's then. */
     private fun inMarkedValue(

@@ -86,6 +86,74 @@ internal class FileFacts(
         out
     }
 
+    /** The arguments of each annotation, `@Deprecated("<b>x</b>")`, from parenthesis to parenthesis: they say something of the code and hold no markup. */
+    private val annotationArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        ANNOTATION_OPEN
+            .findAll(src)
+            .filter { code[it.range.first] && code[it.range.last] }
+            .mapNotNull { m ->
+                var depth = 0
+                for (k in m.range.last until src.length) {
+                    if (!code[k]) continue
+                    if (src[k] == '(') depth++
+                    if (src[k] == ')' && --depth == 0) return@mapNotNull m.range.last..k
+                }
+                null
+            }
+            // An annotation in another's arguments lies in it: the ranges, merged, follow one another.
+            .fold(ArrayList<IntRange>()) { merged, r ->
+                val last = merged.lastOrNull()
+                if (last != null && r.first <= last.last) {
+                    merged[merged.lastIndex] = last.first..maxOf(last.last, r.last)
+                } else {
+                    merged += r
+                }
+                merged
+            }
+    }
+
+    /** Whether [at] stands in an annotation's arguments. */
+    fun inAnnotation(at: Int): Boolean {
+        val k =
+            annotationArguments.binarySearch {
+                if (it.last < at) {
+                    -1
+                } else if (it.first > at) {
+                    1
+                } else {
+                    0
+                }
+            }
+        return k >= 0
+    }
+
+    /**
+     * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
+     * tag or marks a value and stands in no call's arguments, where a Datastar expression or a log message would, or the
+     * argument of core's `Trusted` that writes a tag.
+     */
+    val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val out = HashSet<Int>()
+        val lex = lexKotlin(src)
+        if ("interpolate" in src && !shadowsCore(src, "interpolate")) {
+            for (b in interpolateBlocks(src, code)) {
+                val literals = lex.stringsIn(b.braces.first, b.braces.last)
+                val written = literals.filter { TAG.containsMatchIn(it.text) || it.interpolations.any { ip -> markedValue(ip) != null } }
+                out += outsideArguments(src, code, b.braces.first, written)
+            }
+        }
+        if ("Trusted" in src && !shadowsCore(src, "Trusted")) {
+            for (site in findCallSites(src, setOf("Trusted"), lex)) {
+                if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+                // Its argument, a literal or a sum of them: each that writes a tag, called in it by nothing else.
+                val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
+                val written = lex.stringsIn(arg.start, arg.end).filter { TAG.containsMatchIn(it.text) }
+                out += outsideArguments(src, code, site.openParen, written)
+            }
+        }
+        out
+    }
+
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
     val importEdits: MutableMap<String, List<Edit>> = sharedMap()
 
@@ -502,6 +570,96 @@ private fun overridable(
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
 
 private val PARAMETER_NAME = regex("""($NAME)\s*:""")
+
+/** An annotation's name and the parenthesis that opens its arguments; `this@Page.f(` and `return@forEach(` name a label. */
+private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*\(""")
+
+/** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
+private val TAG = regex("""<[A-Za-z/!]""")
+
+/**
+ * Where those of [literals], in the order of the file, start that stand in no call's arguments within the bracket that
+ * opens at [open]: in parentheses, square brackets, or a lambda handed to a call. The braces of a branch,
+ * `if (c) { ... }`, `else { }`, `"a" -> { }`, are the block's own. One pass over the bracket.
+ */
+private fun outsideArguments(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    literals: List<KotlinString>,
+): List<Int> {
+    val out = ArrayList<Int>()
+    // Each bracket open at k, and whether it holds arguments; how many of those are open.
+    val stack = ArrayList<Boolean>()
+    var arguments = 0
+    var k = open + 1
+    for (s in literals) {
+        while (k < s.start) {
+            val c = src[k]
+            if (code[k] && (c == '(' || c == '[' || c == '{')) {
+                // A parenthesis after a name or a bracket is a call's; one after an operator only groups.
+                val holds = if (c == '{') !branch(src, code, open, k) else c == '[' || calls(src, code, k)
+                stack += holds
+                if (holds) arguments++
+            } else if (code[k] && (c == ')' || c == ']' || c == '}') && stack.isNotEmpty()) {
+                if (stack.removeAt(stack.lastIndex)) arguments--
+            }
+            k++
+        }
+        if (arguments == 0 && !compared(src, code, s)) out += s.start
+    }
+    return out
+}
+
+/** Whether the parenthesis at [paren] holds a call's arguments: it follows a name, a closing bracket or `>` of type arguments. */
+private fun calls(
+    src: String,
+    code: BooleanArray,
+    paren: Int,
+): Boolean {
+    var k = paren - 1
+    while (k >= 0 && (!code[k] || src[k].isWhitespace())) k--
+    return k >= 0 && (isWordPart(src[k]) || src[k] == ')' || src[k] == ']' || src[k] == '>' || src[k] == '`')
+}
+
+/** Whether [s] is compared, not written: an operand of `==` or `!=`, or the condition of a `when` branch. */
+private fun compared(
+    src: String,
+    code: BooleanArray,
+    s: KotlinString,
+): Boolean {
+    var before = s.start - 1
+    while (before >= 0 && (!code[before] || src[before].isWhitespace())) before--
+    var after = s.end
+    while (after < src.length && (!code[after] || src[after].isWhitespace())) after++
+    return listOf("==", "!=").any { src.startsWith(it, before - 1) || src.startsWith(it, after) } || src.startsWith("->", after)
+}
+
+private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do|when)\s*$""")
+private val BRANCH_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
+
+/** Whether the brace at [brace] opens a branch: after `else`, `try`, `->`, or the parentheses of `if`, `when`, a loop or `catch`. */
+private fun branch(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    brace: Int,
+): Boolean {
+    var k = brace - 1
+    while (k > open && (!code[k] || src[k].isWhitespace())) k--
+    if (k <= open) return false
+    if (src[k] == '>' && src.getOrNull(k - 1) == '-') return true
+    if (src[k] == ')') {
+        var depth = 0
+        while (k > open) {
+            if (code[k] && src[k] == ')') depth++
+            if (code[k] && src[k] == '(' && --depth == 0) break
+            k--
+        }
+        return BRANCH_HEAD.containsMatchIn(src.substring(maxOf(open, k - 20), k))
+    }
+    return BRANCH_WORD.containsMatchIn(src.substring(maxOf(open, k - 20), k + 1))
+}
 
 /** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
 private fun withoutComments(

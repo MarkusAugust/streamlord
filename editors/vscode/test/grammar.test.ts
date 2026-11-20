@@ -94,6 +94,20 @@ before(async () => {
   });
 });
 
+/** The tokens Kotlin's grammar gives a line by itself, with none of the extension's grammars injected. */
+async function baseTokens(line: string): Promise<{ text: string; scopes: string[] }[]> {
+  const plain = new tm.Registry({
+    onigLib: Promise.resolve({
+      createOnigScanner: (patterns: string[]) => new oniguruma.OnigScanner(patterns),
+      createOnigString: (s: string) => new oniguruma.OnigString(s),
+    }),
+    loadGrammar: async (scope: string) => grammars[scope] ?? null,
+  });
+  const grammar = await plain.loadGrammar("source.kotlin");
+  assert.ok(grammar);
+  return grammar.tokenizeLine(line, tm.INITIAL).tokens.map((t) => ({ text: line.slice(t.startIndex, t.endIndex), scopes: t.scopes }));
+}
+
 /** The DSL's import, after which a file's DSL calls are Streamlord's. */
 const DSL_IMPORT = "import io.github.markusaugust.streamlord.html.*";
 
@@ -299,6 +313,45 @@ describe("kotlin injection grammar", () => {
     assert.match(scopeOf(plain, "p"), /entity\.name\.tag\.html/);
     assert.match(scopeOf(plain, "show"), /entity\.other\.attribute-name\.datastar\.plugin/);
     assert.match(scopeOf(plain, "open"), /variable\.other\.constant\.signal\.datastar/);
+  });
+
+  it("highlights html in a string however the analysis reads it as html, and in no annotation's message", async () => {
+    const tag = /entity\.name\.tag\.html/;
+    assert.match(scopeOf(await tokens("source.kotlin", `val page = "<!doctype html><main>x</main>"`), "main"), tag, "a doctype first");
+    assert.match(scopeOf(await tokens("source.kotlin", `val a = " <p>x</p>"`), "p"), tag, "a space first");
+    assert.match(scopeOf(await tokens("source.kotlin", `val a = "\\n<p>x</p>"`), "p"), tag, "a line break first");
+    const unclosed = await tokenLines("source.kotlin", [`    "  <template value=\\"\${esc(`, `        "data-$name",`, `    )}\\" />",`]);
+    assert.ok(unclosed[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "white space first, and the literal goes on past its line in a template: Kotlin's");
+    assert.match(scopeOf(await tokens("source.kotlin", `val a = Trusted("""raw <b>x</b>""")`), "b"), tag, "Trusted's raw argument");
+    assert.match(scopeOf(await tokens("source.kotlin", `fun f(name: String) = interpolate { "Hello <b>\${+name}</b>" }`), "b"), tag, "text first in the block");
+    const opening = await tokenLines("source.kotlin", [`fun f(c: Boolean) = interpolate { "no <i>way</i>"`, `}`, `val after = "not <u>here</u>"`]);
+    assert.match(scopeOf(opening[0]!, "i"), tag, "the literal that opens the block");
+    assert.ok(opening[2]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "and nothing after it");
+    const raw = await tokenLines("source.kotlin", [`fun f(name: String) = interpolate { """`, `    <b>\${+name}</b>`, `    """`, `}`]);
+    assert.match(scopeOf(raw[1]!, "b"), tag, "a raw literal that opens the block and ends its line, its next line opening with a tag");
+    const letter = await tokenLines("source.kotlin", [`fun f(name: String) = interpolate { """`, `    Dear $name, thanks.`, `""" }`]);
+    assert.ok(letter[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "and no HTML where it writes none");
+    assert.match(scopeOf(await tokens("source.kotlin", `fun f() = Trusted("bold <b>text</b>")`), "b"), tag, "Trusted's argument");
+    const wrapped = await tokenLines("source.kotlin", [`fun f() = Trusted(`, `    "bold <b>wrapped</b>",`, `)`]);
+    assert.match(scopeOf(wrapped[1]!, "b"), tag, "Trusted's argument on a line of its own");
+    const called = await tokenLines("source.kotlin", [`val t = Trusted(`, `    "plain text",`, `)`]);
+    assert.doesNotMatch(scopeOf(called[0]!, "Trusted"), /entity\.name\.function/, "and Kotlin's grammar keeps the call's name");
+    assert.ok(called[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "a plain argument stays a string");
+    const plain = (line: string) => tokens("source.kotlin", line).then((t) => t.every((x) => !x.scopes.some((s) => s.includes("html"))));
+    assert.ok(await plain(`fun f(name: String) = interpolate { "render $name" }`), "a literal of the block that writes no tag");
+    assert.ok(await plain(`fun f(url: String) = Trusted("https://cdn.example.com/$url")`), "Trusted's argument that writes no tag");
+    assert.ok(await plain(`public value class Trusted(val html: String)`), "Trusted's declaration");
+    const after = await tokens("source.kotlin", `fun r() = interpolate { """plain""" }.also { log("<b>x</b>") }`);
+    assert.doesNotMatch(scopeOf(after, "plain"), /html/, "a raw literal of the block that writes no tag before its closing quotes");
+    const prefixed = await tokens("source.kotlin", `fun f() = interpolate(listOf("data-")) { "Hi <b>\${+n}</b>" }`);
+    assert.match(scopeOf(prefixed, "b"), tag, "prefixes before the block");
+    assert.match(scopeOf(prefixed, `"data-"`) + scopeOf(prefixed, "data-"), /string/, "and the prefixes keep Kotlin's colours");
+    const annotated = await tokens("source.kotlin", `@GetMapping("/feed") fun feed() = 1`, false);
+    const before = await baseTokens(`@GetMapping("/feed") fun feed() = 1`);
+    const perCharacter = (toks: { text: string; scopes: string[] }[]) => toks.flatMap((x) => [...x.text].map(() => x.scopes.join(" ")));
+    assert.deepEqual(perCharacter(annotated), perCharacter(before), "an annotation keeps the host grammar's colours");
+    const note = await tokens("source.kotlin", `@Deprecated("<b>not</b> markup") fun f() = 1`);
+    assert.ok(note.every((x) => !x.scopes.some((s) => s.includes("html"))), "an annotation's message is no markup");
   });
 
   it("reads the annotation by its qualified name too", async () => {
