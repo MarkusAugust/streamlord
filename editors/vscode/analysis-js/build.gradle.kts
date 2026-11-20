@@ -83,6 +83,7 @@ kotlin {
                 "**/analysis/AnalyzeProjectTest.kt",
                 // Its oracle is the kotlinx.html DSL.
                 "**/analysis/DataSignalsSecondArgumentTest.kt",
+                "**/analysis/KotlinParserFasitTest.kt",
                 "**/core/DatastarStreamTest.kt",
                 "**/core/ElementsGuardTest.kt",
                 "**/core/ElementsResponseViewTransitionSelectorTest.kt",
