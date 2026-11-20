@@ -87,7 +87,7 @@ internal class FileFacts(
     }
 
     /** The arguments of each annotation, `@Deprecated("<b>x</b>")`, from parenthesis to parenthesis: they say something of the code and hold no markup. */
-    val annotationArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    private val annotationArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         ANNOTATION_OPEN
             .findAll(src)
             .filter { code[it.range.first] && code[it.range.last] }
@@ -99,7 +99,32 @@ internal class FileFacts(
                     if (src[k] == ')' && --depth == 0) return@mapNotNull m.range.last..k
                 }
                 null
-            }.toList()
+            }
+            // An annotation in another's arguments lies in it: the ranges, merged, follow one another.
+            .fold(ArrayList<IntRange>()) { merged, r ->
+                val last = merged.lastOrNull()
+                if (last != null && r.first <= last.last) {
+                    merged[merged.lastIndex] = last.first..maxOf(last.last, r.last)
+                } else {
+                    merged += r
+                }
+                merged
+            }
+    }
+
+    /** Whether [at] stands in an annotation's arguments. */
+    fun inAnnotation(at: Int): Boolean {
+        val k =
+            annotationArguments.binarySearch {
+                if (it.last < at) {
+                    -1
+                } else if (it.first > at) {
+                    1
+                } else {
+                    0
+                }
+            }
+        return k >= 0
     }
 
     /**
@@ -110,14 +135,14 @@ internal class FileFacts(
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
         val lex = lexKotlin(src)
-        if (!shadowsCore(src, "interpolate")) {
+        if ("interpolate" in src && !shadowsCore(src, "interpolate")) {
             for (b in interpolateBlocks(src, code)) {
                 val literals = lex.stringsIn(b.braces.first, b.braces.last)
                 val written = literals.filter { TAG.containsMatchIn(it.text) || it.interpolations.any { ip -> markedValue(ip) != null } }
                 out += outsideArguments(src, code, b.braces.first, written)
             }
         }
-        if (!shadowsCore(src, "Trusted")) {
+        if ("Trusted" in src && !shadowsCore(src, "Trusted")) {
             for (site in findCallSites(src, setOf("Trusted"), lex)) {
                 if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
                 // Its argument, a literal or a sum of them: each that writes a tag, called in it by nothing else.
@@ -580,12 +605,25 @@ private fun outsideArguments(
             }
             k++
         }
-        if (arguments == 0) out += s.start
+        if (arguments == 0 && !compared(src, code, s)) out += s.start
     }
     return out
 }
 
-private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do)\s*$""")
+/** Whether [s] is compared, not written: an operand of `==` or `!=`, or the condition of a `when` branch. */
+private fun compared(
+    src: String,
+    code: BooleanArray,
+    s: KotlinString,
+): Boolean {
+    var before = s.start - 1
+    while (before >= 0 && (!code[before] || src[before].isWhitespace())) before--
+    var after = s.end
+    while (after < src.length && (!code[after] || src[after].isWhitespace())) after++
+    return listOf("==", "!=").any { src.startsWith(it, before - 1) || src.startsWith(it, after) } || src.startsWith("->", after)
+}
+
+private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do|when)\s*$""")
 private val BRANCH_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
 
 /** Whether the brace at [brace] opens a branch: after `else`, `try`, `->`, or the parentheses of `if`, `when`, a loop or `catch`. */
