@@ -551,7 +551,10 @@ private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
 
-/** Whether the innermost bracket [at] stands in, after [open], is a parenthesis or a square one: a call's arguments. */
+/**
+ * Whether [at] stands in a call's arguments within the block that opens at [open]: in parentheses, square brackets, or
+ * a lambda handed to a call. The braces of a branch, `if (c) { ... }`, `else { }`, `"a" -> { }`, are the block's own.
+ */
 private fun inArguments(
     src: String,
     code: BooleanArray,
@@ -559,13 +562,43 @@ private fun inArguments(
     at: Int,
 ): Boolean {
     var depth = 0
-    for (k in at - 1 downTo open + 1) {
-        if (!code[k]) continue
+    var k = at - 1
+    while (k > open) {
         val c = src[k]
-        if (c == ')' || c == ']' || c == '}') depth++
-        if ((c == '(' || c == '[' || c == '{') && depth-- == 0) return c != '{'
+        if (code[k] && (c == ')' || c == ']' || c == '}')) depth++
+        if (code[k] && (c == '(' || c == '[' || c == '{') && depth-- == 0) {
+            if (c != '{' || !branch(src, code, open, k)) return true
+            depth = 0
+        }
+        k--
     }
     return false
+}
+
+private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do)\s*$""")
+private val BRANCH_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
+
+/** Whether the brace at [brace] opens a branch: after `else`, `try`, `->`, or the parentheses of `if`, `when`, a loop or `catch`. */
+private fun branch(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    brace: Int,
+): Boolean {
+    var k = brace - 1
+    while (k > open && (!code[k] || src[k].isWhitespace())) k--
+    if (k <= open) return false
+    if (src[k] == '>' && src.getOrNull(k - 1) == '-') return true
+    if (src[k] == ')') {
+        var depth = 0
+        while (k > open) {
+            if (code[k] && src[k] == ')') depth++
+            if (code[k] && src[k] == '(' && --depth == 0) break
+            k--
+        }
+        return BRANCH_HEAD.containsMatchIn(src.substring(maxOf(open, k - 20), k))
+    }
+    return BRANCH_WORD.containsMatchIn(src.substring(maxOf(open, k - 20), k + 1))
 }
 
 /** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
