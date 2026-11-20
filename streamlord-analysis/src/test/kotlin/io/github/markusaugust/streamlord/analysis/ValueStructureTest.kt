@@ -905,9 +905,14 @@ class ValueStructureTest {
 
     @Test
     fun `the literals of a large block are read once each`() {
+        // The file is read untimed, each a file of its own so that no reading is kept from the one before; what is
+        // timed is finding which of the block's literals are markup.
+        var made = 0
         assertGrowsLinearly("the literals of one block", 200, { n: Int ->
-            "import io.github.markusaugust.streamlord.core.domain.*\nfun f() = interpolate {\n" +
-                (0 until n).joinToString("\n") { "    val a$it = \"x <b>$it</b>\"" } + "\n    \"<p></p>\"\n}"
-        }) { fileFacts(it).markupLiterals }
+            fileFacts(
+                "// ${made++}\nimport io.github.markusaugust.streamlord.core.domain.*\nfun f() = interpolate {\n" +
+                    (0 until n).joinToString("\n") { "    val a$it = \"x <b>$it</b>\"" } + "\n    \"<p></p>\"\n}",
+            )
+        }) { it.markupLiterals }
     }
 }
