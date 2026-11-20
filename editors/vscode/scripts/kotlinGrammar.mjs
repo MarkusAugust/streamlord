@@ -21,10 +21,6 @@ const EMB = "meta.embedded.inline.datastar";
 /** Every string this grammar opens has it, so no injected rule starts at its closing quote: an injection wins over a rule's end at the same place. */
 const STRING = "meta.kotlin-string.streamlord";
 const MARKER = "meta.language-marker.streamlord";
-/** The arguments of an annotation: no rule of these grammars opens in them. */
-const ANNOTATION = "meta.annotation-arguments.streamlord";
-/** The block of interpolate: its own rules read it, where a literal is HTML however it opens. */
-const BLOCK = "meta.interpolate-block.streamlord";
 const SIGNAL = "variable.other.constant.signal.datastar";
 const PATH = "variable.other.property.signal-path.datastar";
 
@@ -68,10 +64,16 @@ const HTML_LITERALS = [
   embedded(r`(\$*")`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
 ];
 /**
- * The literals of interpolate's block that are its markup, as the analysis reads them: a plain one that writes a tag
- * or marks a value with `+` on its line, and every raw one, whose lines a rule cannot look ahead over.
+ * Just after the brace of interpolate's block, by the qualified name and after prefixes too, read behind the literal so
+ * that Kotlin's grammar keeps the name and the brace, and the brackets it opens.
  */
-const BLOCK_LITERALS = [HTML_LITERALS[0], { ...HTML_LITERALS[1], begin: r`(\$*")(?=(?:[^"\\\n]|\\.)*(?:<|\$\{\s*\+))` }];
+const AFTER_INTERPOLATE = r`(?:^|[^\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?interpolate[ \t]{0,4}(?:\((?:[^()\n]|\([^()\n]{0,80}\)){0,120}\)[ \t]{0,4})?\{[ \t]{0,8}`;
+/** Just after `Trusted(` and its argument's name: a literal there is an argument, so this is a call and no declaration. */
+const AFTER_TRUSTED = r`(?:^|[^\w.\x60])Trusted[ \t]{0,4}\([ \t]{0,4}(?:html[ \t]{0,4}=[ \t]{0,4})?`;
+/** What makes Trusted's argument markup, as the analysis reads it: a tag on its line. */
+const TRUSTED_TAG = r`(?=(?:[^"\\\n]|\\.)*<[A-Za-z/!])`;
+/** Not the first argument of an annotation, `@Deprecated("<b>x</b>")`, which says something of the code; `this@Page.f(` names a label. */
+const NOT_ANNOTATION = r`(?<!(?:^|[^\w.>\x60])@(?:[a-z]{1,8}:)?[A-Za-z_][\w.]{0,60}[ \t]{0,4}\([ \t]{0,4}(?:[A-Za-z_]\w{0,30}[ \t]{0,4}=[ \t]{0,4})?)`;
 const QUOTE = r`(\$*"(?!""))`;
 
 /** Longest first, so that no name is taken for the start of a longer one. */
@@ -126,54 +128,6 @@ const expressionString = (anchor) =>
     patterns: [{ include: "#expression-string-body" }],
     name: STRING,
   }));
-
-/** The rules of a DSL file, which its own grammar opens: inside interpolate's block too. */
-const DSL_RULES = [
-  "expression-call-every-arg",
-  "expression-option",
-  "expression-call-signal-pair",
-  "expression-call-second-arg",
-  "expression-call-lone-object",
-  "expression-call-first-arg",
-  "signal-name-call",
-  "expression-call-next-line",
-  "expression-call-named",
-];
-
-/** interpolate { ... }, read by its own rules to the brace that closes it, after prefixes and by its qualified name too. */
-function interpolateBlock(body) {
-  return {
-    comment:
-      "interpolate { ... }: a literal of the block that writes a tag or marks a value is markup however it opens, as the analysis reads it, to the brace that closes the block.",
-    begin: r`(?<![\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)(\s*(?:\((?:[^()\n]|\([^()\n]*\))*\)\s*)?)(\{)`,
-    beginCaptures: { 1: FN },
-    end: r`\}`,
-    name: BLOCK,
-    patterns: [{ include: body }],
-  };
-}
-
-/**
- * What the block holds: the calls these grammars colour, its literals, and Kotlin's grammar for the rest. Its own
- * brackets, char literals and comments are read here, so a brace in one never ends the block, whatever Kotlin grammar.
- */
-function blockBody(extra) {
-  const self = { include: extra.length ? "#interpolate-block-dsl-body" : "#interpolate-block-body" };
-  return {
-    patterns: [
-      ...[...extra, "html-call", "interpolate-call", "trusted-call", "trusted-call-next-line", "script-call", "annotation-arguments"].map((k) => ({ include: "#" + k })),
-      ...BLOCK_LITERALS,
-      { begin: r`\$*"""`, end: '"""', name: "string.quoted.triple.kotlin" },
-      { include: "#plain-double-string" },
-      { match: r`'(?:[^'\\\n]|\\.)*'`, name: "string.quoted.single.kotlin" },
-      { match: r`//.*$`, name: "comment.line.double-slash.kotlin" },
-      { begin: r`/\*`, end: r`\*/`, name: "comment.block.kotlin" },
-      { begin: r`\{`, end: r`\}`, patterns: [self] },
-      { begin: r`\(`, end: r`\)`, patterns: [self] },
-      { include: "source.kotlin" },
-    ],
-  };
-}
 
 export function kotlinInjectionGrammar(catalog) {
   const sites = catalog.kotlinCallSites;
@@ -264,8 +218,8 @@ export function kotlinInjectionGrammar(catalog) {
           patterns: [{ include: "#html-triple-string" }, { include: "#html-double-string" }, { include: "#marked-double-string" }, { include: "#plain-double-string" }],
           name: MARKER,
         },
-        embedded(r`(\$*""")(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
-        embedded(r`(\$*")` + DQ_TAG_AHEAD, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
+        embedded(NOT_ANNOTATION + r`(\$*""")(?=\s*<(?:[A-Za-z]|!--|!(?i:doctype)))`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
+        embedded(NOT_ANNOTATION + r`(\$*")` + DQ_TAG_AHEAD, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
       ],
     },
     "html-string-next-line": {
@@ -464,33 +418,39 @@ export function kotlinInjectionGrammar(catalog) {
         { include: "source.kotlin" },
       ],
     },
-    "interpolate-block": interpolateBlock("#interpolate-block-body"),
-    "interpolate-block-body": blockBody([]),
-    "interpolate-block-dsl": interpolateBlock("#interpolate-block-dsl-body"),
-    "interpolate-block-dsl-body": blockBody(DSL_RULES),
+    "interpolate-block": {
+      comment:
+        "interpolate { \"Hello <b>${+name}</b>\" }: the literal that opens the block on its line, after prefixes and by the qualified name too, is markup however it opens where it writes a tag or marks a value, as the analysis reads the block. A literal further into a block is HTML when it opens with a tag, as anywhere: a rule reads one line.",
+      patterns: [
+        embedded(
+          r`(\$*""")(?<=` + AFTER_INTERPOLATE + r`\${0,4}""")(?=[^\n]*?(?:<[A-Za-z/!]|\$\{\s*\+)|[ \t]*$)`,
+          { 1: { name: RAW_START } },
+          true,
+          "meta.embedded.block.html",
+          "text.html.basic",
+        ),
+        embedded(
+          r`(\$*")(?<=` + AFTER_INTERPOLATE + r`\${0,4}")(?=(?:[^"\\\n]|\\.)*(?:<[A-Za-z/!]|\$\{\s*\+))`,
+          { 1: { name: DQ_START } },
+          false,
+          "meta.embedded.block.html",
+          "text.html.basic",
+        ),
+      ],
+    },
     "trusted-call": {
       comment: "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
-      patterns: HTML_LITERALS.map((rule) => ({ ...rule, begin: r`(?<![\w.\x60])(Trusted)(\s*\(\s*(?:html\s*=\s*)?)` + rule.begin, beginCaptures: { 1: FN, 3: rule.beginCaptures[1] } })),
+      patterns: HTML_LITERALS.map((rule) => ({
+        ...rule,
+        begin: rule.begin + r`(?<=` + AFTER_TRUSTED + (rule === HTML_LITERALS[0] ? r`\${0,4}"""` : r`\${0,4}"`) + ")" + TRUSTED_TAG,
+      })),
     },
     "trusted-call-next-line": {
       comment: "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region ends after it, or at the closing parenthesis.",
-      begin: r`(?<![\w.\x60])(Trusted)(\s*\()[ \t]*$`,
+      begin: r`(?<![\w.\x60])(?<!class |fun )(Trusted)(\s*\()[ \t]*$`,
       beginCaptures: { 1: FN },
       end: r`(?<=")|(?=\))`,
-      patterns: [...HTML_LITERALS.map((rule) => ({ ...rule, begin: r`^\s*(?:html\s*=\s*)?` + rule.begin })), { include: "source.kotlin" }],
-    },
-    "annotation-arguments": {
-      comment:
-        "The arguments of an annotation, @Deprecated(\"<b>x</b>\"), say something of the code and hold no markup: no rule of these grammars opens in them, and Kotlin's grammar colours them as it would. Listed after html-string, whose @Language(\"HTML\") wins at the same @.",
-      begin: r`(?=(?<![\w.\x60>])@(?:[a-z]+:)?[A-Za-z_][\w.]*\s*\()`,
-      end: r`(?<=\))`,
-      name: ANNOTATION,
-      patterns: [{ begin: r`(?=\()`, end: r`(?<=\))`, patterns: [{ include: "#annotation-parentheses" }] }, { include: "source.kotlin" }],
-    },
-    "annotation-parentheses": {
-      begin: r`\(`,
-      end: r`\)`,
-      patterns: [{ include: "#annotation-parentheses" }, { include: "source.kotlin" }],
+      patterns: [...HTML_LITERALS.map((rule) => ({ ...rule, begin: r`^\s*(?:html\s*=\s*)?` + rule.begin + TRUSTED_TAG })), { include: "source.kotlin" }],
     },
     "script-call": {
       comment: "executeScript(\"\"\"...\"\"\"): JavaScript inside the string.",
@@ -510,7 +470,7 @@ export function kotlinInjectionGrammar(catalog) {
     $schema: "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
     comment: "Generated by scripts/kotlinGrammar.mjs (npm run generate) from catalog/datastar-1.0.5.json. Do not edit by hand.",
     scopeName: "streamlord.kotlin.injection",
-    injectionSelector: `L:source.kotlin -comment -string -meta.dsl-file.streamlord -${STRING} -${MARKER} -${ANNOTATION} -${BLOCK}`,
+    injectionSelector: `L:source.kotlin -comment -string -meta.dsl-file.streamlord -${STRING} -${MARKER}`,
     patterns: [
       "dsl-file",
       "attributes-index",
@@ -522,7 +482,6 @@ export function kotlinInjectionGrammar(catalog) {
       "trusted-call-next-line",
       "script-call",
       "html-string",
-      "annotation-arguments",
       "html-string-next-line",
     ].map((k) => ({ include: "#" + k })),
     repository,
@@ -535,7 +494,7 @@ export function kotlinDslInjectionGrammar() {
     comment:
       "Generated by scripts/kotlinGrammar.mjs (npm run generate). Inside a file that imports the DSL (meta.dsl-file.streamlord, opened by streamlord.kotlin.injection): its calls, and everything else that grammar colours, from that grammar's own rules.",
     scopeName: "streamlord.kotlin.dsl.injection",
-    injectionSelector: `L:meta.dsl-file.streamlord -comment -string -${STRING} -${MARKER} -${ANNOTATION} -${BLOCK}`,
+    injectionSelector: `L:meta.dsl-file.streamlord -comment -string -${STRING} -${MARKER}`,
     patterns: [
       "expression-call-every-arg",
       "expression-option",
@@ -550,12 +509,11 @@ export function kotlinDslInjectionGrammar() {
       "html-call",
       "interpolate-call",
       "interpolate-call-next-line",
-      "interpolate-block-dsl",
+      "interpolate-block",
       "trusted-call",
       "trusted-call-next-line",
       "script-call",
       "html-string",
-      "annotation-arguments",
       "html-string-next-line",
     ].map((k) => ({ include: "streamlord.kotlin.injection#" + k })),
   };
