@@ -97,26 +97,62 @@ internal fun unshadowed(
 internal fun helperSignalReference(text: String): SignalReference? =
     if (PLAIN_HELPER_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
 
-/** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
+/**
+ * The signals the expressions of an HTML fragment or document read, with offsets relative to [html].
+ * Where an engine of [engine]'s kind writes into a value, the reads are those around what it
+ * writes; a read it adjoins, `{{ p }}$a`, `$a{{ i }}` or `$a.{{ k }}`, is the engine's to finish.
+ */
 internal fun markupSignalReferences(
     html: String,
     catalog: Catalog,
     prefix: String,
     templates: Boolean = true,
+    engine: TemplateEngine? = null,
 ): List<SignalReference> {
     val out = ArrayList<SignalReference>()
     for (tag in appliedTags(tokenize(html, templates).tags, prefix)) {
         for (attr in tag.attributes) {
             val spec = catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
             val value = attr.value ?: continue
-            if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank() || hasTemplateSyntax(value)) continue
-            val decoded = decodeEntities(value)
+            if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
+            val written = if (hasTemplateSyntax(value)) templatePlaceholders(value, engine) else emptyList()
+            val chars = value.toCharArray()
+            for (range in written) for (k in range) chars[k] = ' '
+            val decoded = decodeEntities(chars.concatToString())
             for (ref in expressionSignalReferences(decoded.text)) {
-                out += ref.copy(start = attr.valueStart + decoded.toSource(ref.start), end = attr.valueStart + decoded.toSource(ref.end))
+                val start = decoded.toSource(ref.start)
+                val end = decoded.toSource(ref.end)
+                if (written.any { finishes(value, it, start, end) }) continue
+                out += ref.copy(start = attr.valueStart + start, end = attr.valueStart + end)
             }
         }
     }
     return out
+}
+
+/** Template constructs that decide what is written and write nothing themselves: `{% if %}`, `<#if>`, `[#if]`, `@if`, `#if`. */
+private val CONTROL = regex("""\{%|</?#|\[#|[@#][a-z]""")
+
+/** A character that would carry a name on: `$a` and then `b`, `1`, `.b` or `[0]` read as one path. */
+private fun carriesOn(c: Char?) = c != null && (c.isLetterOrDigit() || c == '_' || c == '.' || c == '[')
+
+/**
+ * Whether the construct at [range] of [value] finishes the read from [start] to [end]: text it
+ * writes right before the dollar or right after the name, as in `{{ p }}$a`, `$a{{ i }}` and
+ * `$a.{{ k }}`, or a construct that writes nothing with a name carried on after it.
+ */
+private fun finishes(
+    value: String,
+    range: IntRange,
+    start: Int,
+    end: Int,
+): Boolean {
+    val control = CONTROL.matchesAt(value, range.first)
+    if (range.last + 1 == start) return !control
+    if (range.first < end) return false
+    val gap = value.substring(end, range.first)
+    if (gap.isNotEmpty() && gap != "." && gap != "[") return false
+    return !control || gap.isNotEmpty() || carriesOn(value.getOrNull(range.last + 1))
 }
 
 /**

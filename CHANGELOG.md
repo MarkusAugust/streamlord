@@ -36,6 +36,11 @@ All notable changes to Streamlord are recorded here. The format follows
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
+- A Datastar expression with template syntax in it is read around that syntax, where it was left
+  out whole: `data-text="$cuont + {{ x }}"` in Pebble and `data-text="$cuont + ${x}"` in jte get
+  `unknown-signal`, and go to definition, find usages and rename reach those reads in both
+  editors. A read that the engine's output touches, such as `{{ p }}$a` or `$a{{ i }}`, is left to the
+  template, and a construct that writes nothing, such as `{% if %}`, stops no read.
 - `Fix.leads` says an editor that sorts fixes itself keeps the fix at the top though it is not
   preferred, as the fixes that mark a value with `+` are.
 - `ProjectIndex` holds what a project's files give each other, for a tool that keeps a project in

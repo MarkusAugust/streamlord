@@ -37,9 +37,10 @@ class SignalReferencesTest {
             }
             val src = case.string("src")!!
             val language = SourceLanguage.valueOf(case.string("language")!!.uppercase())
-            val defined = collectSignalDefinitions(Source(src, language))
+            val engine = case.string("engine")?.let { ProjectFiles.engineOf("t.$it") }
+            val defined = collectSignalDefinitions(Source(src, language, engine = engine))
             val kotlin = language == SourceLanguage.KOTLIN
-            val refs = analyzer.signalReferences(Source(src, language))
+            val refs = analyzer.signalReferences(Source(src, language, engine = engine))
             val issues = unknown(refs, defined)
             case["refs"]?.let { assertEquals(it.toKotlin(), refs.map { r -> listOf(src.substring(r.start, r.end), r.name) }, name) }
             case.array("unknown")?.let { assertEquals(it.strings(), issues.map { i -> src.substring(i.start, i.end) }, name) }

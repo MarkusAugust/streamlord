@@ -17157,6 +17157,7 @@ unknown-option 2066-2076 warning: @post has no option contentTyp, so Datastar ig
   fix "Change to contentType" 2066-2076 "contentType"
 option-value 2093-2104 warning: retry takes 'auto' | 'error' | 'always' | 'never', and with 'sometimes' Datastar retries as with 'auto'.
 expression-syntax 2163-2164 error: Datastar expression: Unexpected end of input
+== real/html/mixed-template.html
 == real/html/names.html
 unknown-attribute 138-150 hint: data-persits is not a Datastar attribute. Did you mean data-persist?
   fix "Change to data-persist" 138-150 "data-persist"
@@ -17700,6 +17701,9 @@ unknown-attribute 284-298 warning: Unknown Datastar attribute data-onn. Did you 
 wrong-element 110-120 warning: data-nonce only works on <html>.
 unknown-modifier 305-318 warning: Unknown modifier __debunce on data-on, which Datastar ignores, so it listens for the event click. Did you mean __debounce?
   fix "Change to __debounce" 305-312 "debounce"
+== real/templates/mixed.jte
+key-case 34-41 warning: The browser lowercases attribute names, so this reaches Datastar as the signal $mxcount, not mxCount. Write data-signals:mx-count: keys are kebab-case, and Datastar reads a kebab-case signal key as camelCase.
+  fix "Change to mx-count" 34-41 "mx-count"
 == real/templates/page.ftl
 modifier-args 351-361 warning: __once takes no arguments; Datastar ignores .twice.
 == real/templates/page.vm
