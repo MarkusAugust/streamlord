@@ -26,6 +26,9 @@
       "include": "#trusted-call"
     },
     {
+      "include": "#trusted-call-next-line"
+    },
+    {
       "include": "#script-call"
     },
     {
@@ -1940,8 +1943,8 @@
       ]
     },
     "interpolate-block": {
-      "comment": "interpolate { ... }: every literal of the block is markup however it opens, as the analysis reads it, to the brace that closes the block. A brace of code in it opens one more.",
-      "begin": "(?<![\\w.\\x60])(interpolate)(\\s*(?:\\([^()\\n]*\\)\\s*)?)(\\{)",
+      "comment": "interpolate { ... }: a literal of the block that writes a tag or marks a value is markup however it opens, as the analysis reads it, to the brace that closes the block.",
+      "begin": "(?<![\\w.\\x60])(?:io\\.github\\.markusaugust\\.streamlord\\.core\\.domain\\.)?(interpolate)(\\s*(?:\\((?:[^()\\n]|\\([^()\\n]*\\))*\\)\\s*)?)(\\{)",
       "beginCaptures": {
         "1": {
           "name": "entity.name.function.kotlin"
@@ -1965,6 +1968,9 @@
         },
         {
           "include": "#trusted-call"
+        },
+        {
+          "include": "#trusted-call-next-line"
         },
         {
           "include": "#script-call"
@@ -2026,7 +2032,7 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
-          "begin": "(\\$*\")",
+          "begin": "(\\$*\")(?=(?:[^\"\\\\\\n]|\\\\.)*(?:<|\\$\\{\\s*\\+))",
           "beginCaptures": {
             "1": {
               "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
@@ -2085,11 +2091,260 @@
           "name": "meta.kotlin-string.streamlord"
         },
         {
+          "begin": "\\$*\"\"\"",
+          "end": "\"\"\"",
+          "name": "string.quoted.triple.kotlin"
+        },
+        {
+          "include": "#plain-double-string"
+        },
+        {
+          "match": "'(?:[^'\\\\\\n]|\\\\.)*'",
+          "name": "string.quoted.single.kotlin"
+        },
+        {
+          "match": "//.*$",
+          "name": "comment.line.double-slash.kotlin"
+        },
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.kotlin"
+        },
+        {
           "begin": "\\{",
           "end": "\\}",
           "patterns": [
             {
               "include": "#interpolate-block-body"
+            }
+          ]
+        },
+        {
+          "begin": "\\(",
+          "end": "\\)",
+          "patterns": [
+            {
+              "include": "#interpolate-block-body"
+            }
+          ]
+        },
+        {
+          "include": "source.kotlin"
+        }
+      ]
+    },
+    "interpolate-block-dsl": {
+      "comment": "interpolate { ... }: a literal of the block that writes a tag or marks a value is markup however it opens, as the analysis reads it, to the brace that closes the block.",
+      "begin": "(?<![\\w.\\x60])(?:io\\.github\\.markusaugust\\.streamlord\\.core\\.domain\\.)?(interpolate)(\\s*(?:\\((?:[^()\\n]|\\([^()\\n]*\\))*\\)\\s*)?)(\\{)",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.function.kotlin"
+        }
+      },
+      "end": "\\}",
+      "name": "meta.interpolate-block.streamlord",
+      "patterns": [
+        {
+          "include": "#interpolate-block-dsl-body"
+        }
+      ]
+    },
+    "interpolate-block-dsl-body": {
+      "patterns": [
+        {
+          "include": "#expression-call-every-arg"
+        },
+        {
+          "include": "#expression-option"
+        },
+        {
+          "include": "#expression-call-signal-pair"
+        },
+        {
+          "include": "#expression-call-second-arg"
+        },
+        {
+          "include": "#expression-call-lone-object"
+        },
+        {
+          "include": "#expression-call-first-arg"
+        },
+        {
+          "include": "#signal-name-call"
+        },
+        {
+          "include": "#expression-call-next-line"
+        },
+        {
+          "include": "#expression-call-named"
+        },
+        {
+          "include": "#html-call"
+        },
+        {
+          "include": "#interpolate-call"
+        },
+        {
+          "include": "#trusted-call"
+        },
+        {
+          "include": "#trusted-call-next-line"
+        },
+        {
+          "include": "#script-call"
+        },
+        {
+          "include": "#annotation-arguments"
+        },
+        {
+          "begin": "(\\$*\"\"\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G(?<=\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.two.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.one.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#dollar-escape"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "(\\$*\")(?=(?:[^\"\\\\\\n]|\\\\.)*(?:<|\\$\\{\\s*\\+))",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G(?<=\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.two.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.one.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "\\$*\"\"\"",
+          "end": "\"\"\"",
+          "name": "string.quoted.triple.kotlin"
+        },
+        {
+          "include": "#plain-double-string"
+        },
+        {
+          "match": "'(?:[^'\\\\\\n]|\\\\.)*'",
+          "name": "string.quoted.single.kotlin"
+        },
+        {
+          "match": "//.*$",
+          "name": "comment.line.double-slash.kotlin"
+        },
+        {
+          "begin": "/\\*",
+          "end": "\\*/",
+          "name": "comment.block.kotlin"
+        },
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [
+            {
+              "include": "#interpolate-block-dsl-body"
+            }
+          ]
+        },
+        {
+          "begin": "\\(",
+          "end": "\\)",
+          "patterns": [
+            {
+              "include": "#interpolate-block-dsl-body"
             }
           ]
         },
@@ -2221,40 +2476,159 @@
         }
       ]
     },
-    "annotation-arguments": {
-      "comment": "The arguments of an annotation, @Deprecated(\"<b>x</b>\"), say something of the code and hold no markup. Listed after html-string, whose @Language(\"HTML\") wins at the same @.",
-      "begin": "(?<![\\w.\\x60>])(@(?:[a-z]+:)?[A-Za-z_][\\w.]*)(\\s*\\()",
+    "trusted-call-next-line": {
+      "comment": "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region ends after it, or at the closing parenthesis.",
+      "begin": "(?<![\\w.\\x60])(Trusted)(\\s*\\()[ \\t]*$",
       "beginCaptures": {
         "1": {
-          "name": "storage.type.annotation.kotlin"
+          "name": "entity.name.function.kotlin"
         }
       },
-      "end": "\\)",
-      "name": "meta.annotation-arguments.streamlord",
+      "end": "(?<=\")|(?=\\))",
       "patterns": [
         {
-          "include": "#annotation-argument"
+          "begin": "^\\s*(?:html\\s*=\\s*)?(\\$*\"\"\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "end": "(\"\"\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.triple.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G(?<=\\$\\$\"\"\")",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.two.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G",
+              "end": "(?=\"\"\")",
+              "name": "meta.kotlin-template.one.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#dollar-escape"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "begin": "^\\s*(?:html\\s*=\\s*)?(\\$*\")",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.begin.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "end": "(\")",
+          "endCaptures": {
+            "1": {
+              "name": "punctuation.definition.string.end.kotlin string.quoted.double.kotlin"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\G(?<=\\$\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.three.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G(?<=\\$\\$\")",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.two.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            },
+            {
+              "begin": "\\G",
+              "end": "(?=\")",
+              "name": "meta.kotlin-template.one.streamlord",
+              "contentName": "meta.embedded.block.html",
+              "patterns": [
+                {
+                  "include": "#kotlin-escapes"
+                },
+                {
+                  "include": "text.html.basic"
+                }
+              ]
+            }
+          ],
+          "name": "meta.kotlin-string.streamlord"
+        },
+        {
+          "include": "source.kotlin"
         }
       ]
     },
-    "annotation-argument": {
+    "annotation-arguments": {
+      "comment": "The arguments of an annotation, @Deprecated(\"<b>x</b>\"), say something of the code and hold no markup: no rule of these grammars opens in them, and Kotlin's grammar colours them as it would. Listed after html-string, whose @Language(\"HTML\") wins at the same @.",
+      "begin": "(?=(?<![\\w.\\x60>])@(?:[a-z]+:)?[A-Za-z_][\\w.]*\\s*\\()",
+      "end": "(?<=\\))",
+      "name": "meta.annotation-arguments.streamlord",
       "patterns": [
         {
-          "begin": "\\$*\"\"\"",
-          "end": "\"\"\"",
-          "name": "string.quoted.triple.kotlin"
-        },
-        {
-          "include": "#plain-double-string"
-        },
-        {
-          "begin": "\\(",
-          "end": "\\)",
+          "begin": "(?=\\()",
+          "end": "(?<=\\))",
           "patterns": [
             {
-              "include": "#annotation-argument"
+              "include": "#annotation-parentheses"
             }
           ]
+        },
+        {
+          "include": "source.kotlin"
+        }
+      ]
+    },
+    "annotation-parentheses": {
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#annotation-parentheses"
         },
         {
           "include": "source.kotlin"

@@ -94,6 +94,20 @@ before(async () => {
   });
 });
 
+/** The tokens Kotlin's grammar gives a line by itself, with none of the extension's grammars injected. */
+async function baseTokens(line: string): Promise<{ text: string; scopes: string[] }[]> {
+  const plain = new tm.Registry({
+    onigLib: Promise.resolve({
+      createOnigScanner: (patterns: string[]) => new oniguruma.OnigScanner(patterns),
+      createOnigString: (s: string) => new oniguruma.OnigString(s),
+    }),
+    loadGrammar: async (scope: string) => grammars[scope] ?? null,
+  });
+  const grammar = await plain.loadGrammar("source.kotlin");
+  assert.ok(grammar);
+  return grammar.tokenizeLine(line, tm.INITIAL).tokens.map((t) => ({ text: line.slice(t.startIndex, t.endIndex), scopes: t.scopes }));
+}
+
 /** The DSL's import, after which a file's DSL calls are Streamlord's. */
 const DSL_IMPORT = "import io.github.markusaugust.streamlord.html.*";
 
@@ -313,6 +327,19 @@ describe("kotlin injection grammar", () => {
     const raw = await tokenLines("source.kotlin", [`fun f(name: String) = interpolate {`, `    """`, `    Hello <b>\${+name}</b>`, `    """`, `}`]);
     assert.match(scopeOf(raw[2]!, "b"), tag, "a raw literal whose first line is empty, opening with text");
     assert.match(scopeOf(await tokens("source.kotlin", `fun f() = Trusted("bold <b>text</b>")`), "b"), tag, "Trusted's argument");
+    const wrapped = await tokenLines("source.kotlin", [`fun f() = Trusted(`, `    "bold <b>wrapped</b>",`, `)`]);
+    assert.match(scopeOf(wrapped[1]!, "b"), tag, "Trusted's argument on a line of its own");
+    const log = await tokenLines("source.kotlin", [`fun f(name: String) = interpolate {`, `    log.info("render $name")`, `    if (c == '{') "<p>\${+name}</p>" else wrap("<i>x</i>")`, `}`]);
+    assert.ok(log[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "a literal of the block that writes no tag");
+    assert.match(scopeOf(log[2]!, "p"), tag, "after a brace in a char literal");
+    assert.match(scopeOf(log[2]!, "i"), tag, "in parentheses in the block");
+    assert.match(scopeOf(await tokens("source.kotlin", `fun f() = interpolate(listOf("data-")) { "Hi <b>\${+n}</b>" }`), "b"), tag, "prefixes before the block");
+    const dsl = await tokenLines("source.kotlin", [DSL_IMPORT, `fun f() = interpolate {`, `    val a = dataText("$count + 1")`, `    "<p>\${+a}</p>"`, `}`]);
+    assert.match(scopeOf(dsl[2]!, "+"), /keyword\.operator\.arithmetic\.datastar/, "a DSL call in the block keeps its colours");
+    const annotated = (await tokens("source.kotlin", `@GetMapping("/feed") fun feed() = 1`, false)).map((x) => ({ ...x, scopes: x.scopes.filter((s) => !s.endsWith(".streamlord")) }));
+    const before = await baseTokens(`@GetMapping("/feed") fun feed() = 1`);
+    const perCharacter = (toks: { text: string; scopes: string[] }[]) => toks.flatMap((x) => [...x.text].map(() => x.scopes.join(" ")));
+    assert.deepEqual(perCharacter(annotated), perCharacter(before), "an annotation keeps the host grammar's colours");
     const note = await tokens("source.kotlin", `@Deprecated("<b>not</b> markup") fun f() = 1`);
     assert.ok(note.every((x) => !x.scopes.some((s) => s.includes("html"))), "an annotation's message is no markup");
   });

@@ -67,6 +67,11 @@ const HTML_LITERALS = [
   embedded(r`(\$*""")`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
   embedded(r`(\$*")`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
 ];
+/**
+ * The literals of interpolate's block that are its markup, as the analysis reads them: a plain one that writes a tag
+ * or marks a value with `+` on its line, and every raw one, whose lines a rule cannot look ahead over.
+ */
+const BLOCK_LITERALS = [HTML_LITERALS[0], { ...HTML_LITERALS[1], begin: r`(\$*")(?=(?:[^"\\\n]|\\.)*(?:<|\$\{\s*\+))` }];
 const QUOTE = r`(\$*"(?!""))`;
 
 /** Longest first, so that no name is taken for the start of a longer one. */
@@ -121,6 +126,54 @@ const expressionString = (anchor) =>
     patterns: [{ include: "#expression-string-body" }],
     name: STRING,
   }));
+
+/** The rules of a DSL file, which its own grammar opens: inside interpolate's block too. */
+const DSL_RULES = [
+  "expression-call-every-arg",
+  "expression-option",
+  "expression-call-signal-pair",
+  "expression-call-second-arg",
+  "expression-call-lone-object",
+  "expression-call-first-arg",
+  "signal-name-call",
+  "expression-call-next-line",
+  "expression-call-named",
+];
+
+/** interpolate { ... }, read by its own rules to the brace that closes it, after prefixes and by its qualified name too. */
+function interpolateBlock(body) {
+  return {
+    comment:
+      "interpolate { ... }: a literal of the block that writes a tag or marks a value is markup however it opens, as the analysis reads it, to the brace that closes the block.",
+    begin: r`(?<![\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?(interpolate)(\s*(?:\((?:[^()\n]|\([^()\n]*\))*\)\s*)?)(\{)`,
+    beginCaptures: { 1: FN },
+    end: r`\}`,
+    name: BLOCK,
+    patterns: [{ include: body }],
+  };
+}
+
+/**
+ * What the block holds: the calls these grammars colour, its literals, and Kotlin's grammar for the rest. Its own
+ * brackets, char literals and comments are read here, so a brace in one never ends the block, whatever Kotlin grammar.
+ */
+function blockBody(extra) {
+  const self = { include: extra.length ? "#interpolate-block-dsl-body" : "#interpolate-block-body" };
+  return {
+    patterns: [
+      ...[...extra, "html-call", "interpolate-call", "trusted-call", "trusted-call-next-line", "script-call", "annotation-arguments"].map((k) => ({ include: "#" + k })),
+      ...BLOCK_LITERALS,
+      { begin: r`\$*"""`, end: '"""', name: "string.quoted.triple.kotlin" },
+      { include: "#plain-double-string" },
+      { match: r`'(?:[^'\\\n]|\\.)*'`, name: "string.quoted.single.kotlin" },
+      { match: r`//.*$`, name: "comment.line.double-slash.kotlin" },
+      { begin: r`/\*`, end: r`\*/`, name: "comment.block.kotlin" },
+      { begin: r`\{`, end: r`\}`, patterns: [self] },
+      { begin: r`\(`, end: r`\)`, patterns: [self] },
+      { include: "source.kotlin" },
+    ],
+  };
+}
 
 export function kotlinInjectionGrammar(catalog) {
   const sites = catalog.kotlinCallSites;
@@ -411,42 +464,33 @@ export function kotlinInjectionGrammar(catalog) {
         { include: "source.kotlin" },
       ],
     },
-    "interpolate-block": {
-      comment:
-        "interpolate { ... }: every literal of the block is markup however it opens, as the analysis reads it, to the brace that closes the block. A brace of code in it opens one more.",
-      begin: r`(?<![\w.\x60])(interpolate)(\s*(?:\([^()\n]*\)\s*)?)(\{)`,
-      beginCaptures: { 1: FN },
-      end: r`\}`,
-      name: BLOCK,
-      patterns: [{ include: "#interpolate-block-body" }],
-    },
-    "interpolate-block-body": {
-      patterns: [
-        ...["html-call", "interpolate-call", "trusted-call", "script-call", "annotation-arguments"].map((k) => ({ include: "#" + k })),
-        ...HTML_LITERALS,
-        { begin: r`\{`, end: r`\}`, patterns: [{ include: "#interpolate-block-body" }] },
-        { include: "source.kotlin" },
-      ],
-    },
+    "interpolate-block": interpolateBlock("#interpolate-block-body"),
+    "interpolate-block-body": blockBody([]),
+    "interpolate-block-dsl": interpolateBlock("#interpolate-block-dsl-body"),
+    "interpolate-block-dsl-body": blockBody(DSL_RULES),
     "trusted-call": {
       comment: "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
       patterns: HTML_LITERALS.map((rule) => ({ ...rule, begin: r`(?<![\w.\x60])(Trusted)(\s*\(\s*(?:html\s*=\s*)?)` + rule.begin, beginCaptures: { 1: FN, 3: rule.beginCaptures[1] } })),
     },
-    "annotation-arguments": {
-      comment: "The arguments of an annotation, @Deprecated(\"<b>x</b>\"), say something of the code and hold no markup. Listed after html-string, whose @Language(\"HTML\") wins at the same @.",
-      begin: r`(?<![\w.\x60>])(@(?:[a-z]+:)?[A-Za-z_][\w.]*)(\s*\()`,
-      beginCaptures: { 1: { name: "storage.type.annotation.kotlin" } },
-      end: r`\)`,
-      name: ANNOTATION,
-      patterns: [{ include: "#annotation-argument" }],
+    "trusted-call-next-line": {
+      comment: "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region ends after it, or at the closing parenthesis.",
+      begin: r`(?<![\w.\x60])(Trusted)(\s*\()[ \t]*$`,
+      beginCaptures: { 1: FN },
+      end: r`(?<=")|(?=\))`,
+      patterns: [...HTML_LITERALS.map((rule) => ({ ...rule, begin: r`^\s*(?:html\s*=\s*)?` + rule.begin })), { include: "source.kotlin" }],
     },
-    "annotation-argument": {
-      patterns: [
-        { begin: r`\$*"""`, end: '"""', name: "string.quoted.triple.kotlin" },
-        { include: "#plain-double-string" },
-        { begin: r`\(`, end: r`\)`, patterns: [{ include: "#annotation-argument" }] },
-        { include: "source.kotlin" },
-      ],
+    "annotation-arguments": {
+      comment:
+        "The arguments of an annotation, @Deprecated(\"<b>x</b>\"), say something of the code and hold no markup: no rule of these grammars opens in them, and Kotlin's grammar colours them as it would. Listed after html-string, whose @Language(\"HTML\") wins at the same @.",
+      begin: r`(?=(?<![\w.\x60>])@(?:[a-z]+:)?[A-Za-z_][\w.]*\s*\()`,
+      end: r`(?<=\))`,
+      name: ANNOTATION,
+      patterns: [{ begin: r`(?=\()`, end: r`(?<=\))`, patterns: [{ include: "#annotation-parentheses" }] }, { include: "source.kotlin" }],
+    },
+    "annotation-parentheses": {
+      begin: r`\(`,
+      end: r`\)`,
+      patterns: [{ include: "#annotation-parentheses" }, { include: "source.kotlin" }],
     },
     "script-call": {
       comment: "executeScript(\"\"\"...\"\"\"): JavaScript inside the string.",
@@ -475,6 +519,7 @@ export function kotlinInjectionGrammar(catalog) {
       "interpolate-call-next-line",
       "interpolate-block",
       "trusted-call",
+      "trusted-call-next-line",
       "script-call",
       "html-string",
       "annotation-arguments",
@@ -505,8 +550,9 @@ export function kotlinDslInjectionGrammar() {
       "html-call",
       "interpolate-call",
       "interpolate-call-next-line",
-      "interpolate-block",
+      "interpolate-block-dsl",
       "trusted-call",
+      "trusted-call-next-line",
       "script-call",
       "html-string",
       "annotation-arguments",
