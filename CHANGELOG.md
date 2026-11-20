@@ -76,13 +76,17 @@ All notable changes to Streamlord are recorded here. The format follows
   parameter marked `@Language("HTML")`, whose argument nothing judges.
 - A `@Language("HTML")` mark makes HTML of what its `val` or function gives, read from the
   declaration, behind another annotation too: `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"`
-  read `"x"` as the HTML string and not the function's literal, and a mark on a function whose
-  block declares a `val` before its `return` reached that `val`'s literal.
-- A value whose line ends in `!!`, a nullable type or type arguments ends there, `val a = q!!`,
-  where it ran on into the next line and took a getter after it for its own. A function's
-  expression, or a loop's statement without braces, that begins with a word, a call or a literal
-  ends with its line: `fun size(n: Int) = pad(n)` inside another function kept its `n` in sight to
-  the end of the outer one, so `$n` after it was read as the Int.
+  read `"x"` as the HTML string and not the function's literal, a mark on a function whose block
+  declares a `val` before its `return` reached that `val`'s literal, and every `return` of a block
+  is HTML where only the first was. Where the declaration gives no value the text shows, a getter,
+  a `var`, a member another may stand in for, the mark reaches the next literal as before, past
+  another annotation's arguments, and no literal of an annotation's arguments is HTML.
+- A value whose line ends in `!!`, a nullable type or type arguments closed on its line ends
+  there, `val a = q!!`, where it ran on into the next line and took a getter after it for its own.
+  A function's expression, or a loop's statement without braces, that begins with a word, a call
+  or a literal ends with its line, and goes on past `if (...)`, `when (...)` and `else` at the end
+  of a line: `fun size(n: Int) = pad(n)` inside another function kept its `n` in sight to the end
+  of the outer one, so `$n` after it was read as the Int.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and
   `title: Int` on the next, `title` was no parameter: `$title` in the function was warned of, and a
   constructor property written so was not one other files could see. The same after an annotation

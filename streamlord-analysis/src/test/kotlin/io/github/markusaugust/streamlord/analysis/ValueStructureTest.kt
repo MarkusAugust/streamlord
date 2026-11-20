@@ -935,5 +935,40 @@ class ValueStructureTest {
             listOf("\$n"),
             told("fun outer(n: String, rows: List<Int>) {\n    for (n in rows) println(n)\n    println(\"<p>\$n</p>\")\n}"),
         )
+        // A statement on the next line is still the loop's, and an expression goes on past `if (...)` and `else`.
+        assertEquals(
+            listOf("\$n"),
+            told("fun outer(n: Int, rows: List<String>) {\n    for (n in rows)\n        println(\"<p>\$n</p>\")\n}"),
+        )
+        assertEquals(emptyList(), told("fun label(n: Int) =\n    if (n > 0)\n        \"a\"\n    else\n        \"<i>\$n</i>\""))
+        val inner =
+            "fun outer(n: Int) {\n    fun inner(n: String) = if (n.isEmpty())\n        \"none\"\n" +
+                "    else\n        \"<p>\$n</p>\"\n}"
+        assertEquals(listOf("\$n"), told(inner))
+        assertEquals(
+            listOf("\$item"),
+            told(
+                "fun outer(item: Int, items: List<String>) {\n    for (item in\n        items) {\n        println(\"<li>\$item</li>\")\n    }\n}",
+            ),
+        )
+        val a = "fun f(q: Int) {\n    val a = q>\n        1\n}"
+        assertEquals("q>\n        1", valueText(a, declarationOf(a, "a", a.length - 2)!!.value!!)?.text)
+    }
+
+    @Test
+    fun `a mark reaches what its declaration gives in every layout the text shows`() {
+        val page = "\nfun page(name: String) = \"<p>\$name</p>\""
+        for (marked in listOf(
+            "@Language(\"HTML\") var out = \"Hi <b>\$name</b>\"",
+            "@Language(\"HTML\") val html: String get() = \"Hi <b>\$name</b>\"",
+            "open class Page { @Language(\"HTML\") open fun head(title: String): String = \"Title <b>\$title</b>\" }",
+            "class Page { @Language(\"HTML\") val greeting by lazy { \"Hello <b>\$name</b>\" } }",
+            "interface View { @Language(\"HTML\") fun render(): String = \"Hello <b>\$name</b>\" }",
+            "@Language(\"HTML\") fun list(items: List<String>): String {\n    items.forEach { if (it.isEmpty()) return@forEach }\n    return \"Items <b>\$name</b>\"\n}",
+        )) {
+            val src = "import org.intellij.lang.annotations.Language\nval name = load()\n$marked$page"
+            val literal = analyzer.lex(src).strings.first { "<b>" in it.text }
+            assertEquals(true, isHtmlString(src, literal), marked)
+        }
     }
 }

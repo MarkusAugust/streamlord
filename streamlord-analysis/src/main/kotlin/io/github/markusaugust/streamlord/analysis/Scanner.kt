@@ -370,7 +370,8 @@ internal fun lexKotlin(src: String): KotlinLex {
 internal const val HTML_LANGUAGE =
     """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
 
-private val HTML_COMMENT = regex("""//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
+private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
 
 /**
  * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, when it is what a
@@ -384,11 +385,21 @@ public fun isHtmlString(
     s: KotlinString,
 ): Boolean {
     val facts = fileFacts(src)
-    // An annotation's arguments say something of the code: asked last, of a literal that would be HTML.
-    if (textOpensWithTag(markupView(src, s))) return !facts.inAnnotation(s.start)
+    // An annotation's arguments say something of the code: no literal of them is markup.
+    if (facts.inAnnotation(s.start)) return false
+    if (textOpensWithTag(markupView(src, s))) return true
     if (s.start in facts.htmlArguments || s.start in facts.markupLiterals || s.start in facts.markedLiterals) return true
-    // IntelliJ's comment, `// language=HTML`, reaches the next literal; the mark on a declaration is the scanner's.
-    val before = src.substring(maxOf(0, s.start - 240), s.start)
-    val last = HTML_COMMENT.findAll(before).lastOrNull() ?: return false
-    return '"' !in before.substring(last.range.last + 1)
+    // Where the scanner reads no value of a marked declaration (a getter, a `var`, a member another may stand in for),
+    // the mark reaches the next literal, past those of other annotations' arguments.
+    val from = maxOf(0, s.start - 240)
+    val before = src.substring(from, s.start)
+    val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
+    val after = before.substring(last.range.last + 1)
+    // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal.
+    if (PARAMETER_AFTER_MARKER.containsMatchIn(after)) return false
+    val at = from + last.range.last + 1
+    // A mark the scanner read a value of gives that value alone: a literal before a function's `return` is none.
+    val read = facts.markedLiterals.filter { it >= at }.minOrNull()
+    if (read != null && HTML_MARKER.find(src.substring(at, read)) == null) return false
+    return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) }
 }

@@ -145,7 +145,9 @@ internal class FileFacts(
         val strings = lexKotlin(src).strings
         values.mapNotNullTo(HashSet()) { v ->
             val end = if (v.end < 0) src.length else v.end
-            strings.firstOrNull { it.start >= v.start && it.start < end }?.start
+            // The first literal at or after the value's start, found by where the literals start: they are in order.
+            val k = strings.binarySearch { if (it.start < v.start) -1 else 1 }.let { -it - 1 }
+            strings.getOrNull(k)?.start?.takeIf { it < end }
         }
     }
 
@@ -347,19 +349,58 @@ private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
 private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
 
 /**
- * Whether the line goes on after [k], its last character of code: an operator that wants what follows. `!!`, a `?` of
- * a type and the `>` that closes type arguments end it, `List<Int>` or `String?` at the end of a value; a `>` with
- * white space before it compares, and `->` points on.
+ * Whether the line goes on after [k], its last character of code: an operator that wants what follows, `else`, or the
+ * condition of an `if`, a `when` or a loop, whose branch follows. `!!`, a `?` of a type and the `>` that closes type
+ * arguments opened on the line end it, `List<Int>` or `String?` at the end of a value; `->` points on.
  */
 private fun goesOn(
     src: String,
+    code: BooleanArray,
     k: Int,
 ): Boolean =
     when (src[k]) {
         '-', '=', '+', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> true
-        '>' -> src.getOrNull(k - 1).let { it == '-' || it == '=' || it == null || it.isWhitespace() }
+        '!' -> src.getOrNull(k - 1) != '!'
+        '>' -> src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
+        ')' -> branchFollows(src, code, k)
+        'e' -> ELSE_BEFORE.containsMatchIn(src.substring(maxOf(0, k - 5), k + 1))
         else -> false
     }
+
+private val ELSE_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_])else$""")
+private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while)\s*$""")
+
+/** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
+private fun closesTypeArguments(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    var depth = 0
+    var j = k
+    while (j >= 0 && src[j] != '\n') {
+        if (code[j] && src[j] == '>') depth++
+        if (code[j] && src[j] == '<' && --depth == 0) return true
+        j--
+    }
+    return false
+}
+
+/** Whether the `)` at [k] closes the condition of an `if`, a `when` or a loop, whose branch follows on the next line. */
+private fun branchFollows(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    var depth = 0
+    var j = k
+    while (j >= 0) {
+        if (code[j] && src[j] == ')') depth++
+        if (code[j] && src[j] == '(' && --depth == 0) break
+        j--
+    }
+    return j > 0 && CONDITION_HEAD.containsMatchIn(src.substring(maxOf(0, j - 12), j))
+}
 
 private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
 
@@ -495,7 +536,7 @@ internal fun lineEnds(
         }
         k--
     }
-    if (k >= 0 && code[k] && goesOn(src, k)) return false
+    if (k >= 0 && code[k] && goesOn(src, code, k)) return false
     k = at + 1
     while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
     return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
@@ -850,14 +891,15 @@ private fun declarations(
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
             if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {
                 f.reset()
-                f.pending?.begun(brace = false)
+                if (f.kind != "for") f.pending?.begun(brace = false)
             }
             i++
             continue
         }
         val c = src[i]
         if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
-            f.pending?.begun(brace = false)
+            // A loop's own brackets hold its variable, not its statement.
+            if (f.kind != "for") f.pending?.begun(brace = false)
             var end = i + 1
             while (end < src.length && isWordPart(src[end])) end++
             val word = src.substring(i, end)
@@ -1003,7 +1045,7 @@ private fun declarations(
             continue
         }
         if (c == '(' || c == '[' || c == '{') {
-            f.pending?.begun(brace = c == '{')
+            if (f.kind != "for") f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
