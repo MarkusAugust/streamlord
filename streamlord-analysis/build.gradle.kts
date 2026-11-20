@@ -8,6 +8,8 @@ dependencies {
     testImplementation(kotlin("test"))
     // DataSignalsSecondArgumentTest compiles DSL calls, so the Kotlin compiler is its oracle.
     testImplementation(project(":streamlord-html"))
+    // KotlinParserFasitTest holds where the analysis reads a statement or a value to end to Kotlin's own parser.
+    testImplementation(kotlin("compiler-embeddable"))
 }
 
 /*
@@ -70,9 +72,27 @@ abstract class GenerateCatalogText : DefaultTask() {
                 }
                 append('"')
             }
+
         // Cut at most every 8192 characters, never between the two halves of a surrogate pair.
         fun pieces(json: String): String {
-            val cuts = generateSequence(0) { at -> if (at >= json.length) null else minOf(json.length, at + 8192).let { if (it < json.length && json[it - 1].isHighSurrogate()) it - 1 else it } }
+            val cuts =
+                generateSequence(0) { at ->
+                    if (at >=
+                        json.length
+                    ) {
+                        null
+                    } else {
+                        minOf(json.length, at + 8192).let {
+                            if (it < json.length &&
+                                json[it - 1].isHighSurrogate()
+                            ) {
+                                it - 1
+                            } else {
+                                it
+                            }
+                        }
+                    }
+                }
             return cuts.zipWithNext { from, to -> json.substring(from, to) }.joinToString(",\n") { "            ${literal(it)}" }
         }
         val pieces = pieces(file.readText())
@@ -149,6 +169,12 @@ tasks.withType<Test>().configureEach {
     inputs.dir(root.dir("conformance/dom")).withPropertyName("domFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
     // `-PrecordVerdicts=true` has VerdictDigestTest write test/fixtures/verdicts.txt anew instead of comparing with it.
     providers.gradleProperty("recordVerdicts").orNull?.let { systemProperty("streamlord.record", it) }
+    // KotlinParserFasitTest reads every Kotlin file of the repository, and `-PfasitExtra=<dirs>` more beside them.
+    inputs
+        .files(root.asFileTree.matching { include("**/*.kt").exclude("**/build/**", "**/node_modules/**", ".claude/**", "**/.gradle/**") })
+        .withPropertyName("kotlinSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    providers.gradleProperty("fasitExtra").orNull?.let { systemProperty("streamlord.fasit.extra", it) }
 }
 
 // How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript
