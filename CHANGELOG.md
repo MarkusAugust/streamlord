@@ -112,9 +112,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of
   `interpolate { }` that writes a tag or marks a value with `+` is HTML however it opens,
-  `interpolate { "Hello <b>${+name}</b>" }` too, and so is the argument of `Trusted(...)`, by
-  position or by its name `html`; both are read so for completion, hover and warnings. A literal
-  of the block that writes neither, a log message or a comparison, is a string as before. An
+  `interpolate { "Hello <b>${+name}</b>" }` too, and so is the argument of `Trusted(...)` that
+  writes a tag, by position or by its name `html`, a sum of literals too; both are read so for
+  completion, hover and warnings. A literal
+  of the block that writes neither, or stands in a call's arguments or a lambda handed to one, a
+  log message, a Datastar expression or a comparison, is a string as before. An
   annotation's message, `@Deprecated("<b>not</b> markup")`, is no HTML.
 - IntelliJ asks the Kotlin plugin which strings it injects a language into itself, a sum joined
   with `+` as a whole, by a mark on what they are or on the parameter they are handed to, and
