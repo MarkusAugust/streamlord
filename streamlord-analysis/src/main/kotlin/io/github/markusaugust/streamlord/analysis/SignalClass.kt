@@ -33,6 +33,7 @@ private class Header(
 )
 
 private val CLASS = regex("""\bclass\s+([A-Za-z_][A-Za-z0-9_]*)\s*(<)?""")
+private val OTHER_TYPE = regex("""\b(?:interface|typealias)\s+([A-Za-z_][A-Za-z0-9_]*)""")
 private val PROPERTY = regex("""\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*:""")
 private val BLANK_LINE = regex("""\n[ \t\r]*\n""")
 
@@ -43,6 +44,7 @@ private val NAME_ARGUMENT = regex("""^\s*"([^"]*)"|\bvalue\s*=\s*"([^"]*)"""")
 private val NO_SIGNALS =
     setOf("enum", "annotation", "value", "inline", "sealed", "abstract", "inner", "interface", "fun", "expect", "external")
 private val KOTLINX_KINDS = setOf("value", "inline", "sealed", "abstract")
+private val NO_OBJECT = setOf("enum", "annotation", "expect")
 private val MODIFIERS =
     NO_SIGNALS +
         setOf("public", "internal", "private", "protected", "open", "final", "data", "actual", "override", "lateinit", "const", "vararg")
@@ -58,21 +60,39 @@ internal fun signalClasses(
     lex: KotlinLex = lexKotlin(src),
 ): List<SignalClass> {
     val out = ArrayList<SignalClass>()
+    // An interface or a type alias is a class of the project whose names the check cannot read.
+    for (m in OTHER_TYPE.findAll(src)) if (lex.mask[m.range.first]) out += opaque(m.groupValues[1])
     for (m in CLASS.findAll(src)) {
         val at = m.range.first
         // `Form::class` names a class and declares none.
         if (!lex.mask[at] || src.startsWith("::", maxOf(0, at - 2))) continue
-        // A generic class's names depend on its argument.
-        if (m.groupValues[2].isNotEmpty()) continue
-        val header = header(src, lex, at, 0)
-        val serializable = header.annotations.any { it.name == "Serializable" }
-        // kotlinx reads a value, sealed or abstract class as a signals class, as it always has.
-        if (header.modifiers.any { it in NO_SIGNALS && !(serializable && it in KOTLINX_KINDS) }) continue
         val name = m.groupValues[1]
-        val open = constructorOpen(src, m.range.last + 1) ?: continue
+        val header = header(src, lex, at, 0)
+        // An enum, an annotation or a value class is no object of signals, and an expect class is its actual's.
+        if (header.modifiers.any { it in NO_OBJECT } ||
+            (header.modifiers.any { it == "value" || it == "inline" } && header.annotations.none { it.name == "Serializable" })
+        ) {
+            continue
+        }
+        val serializable = header.annotations.any { it.name == "Serializable" }
+        // A generic class's names depend on its argument, and a sealed, abstract or inner one's on more than its constructor.
+        // kotlinx reads a sealed or abstract class as a signals class, as it always has.
+        if (m.groupValues[2].isNotEmpty() || header.modifiers.any { it in NO_SIGNALS && !(serializable && it in KOTLINX_KINDS) }) {
+            out += opaque(name)
+            continue
+        }
+        val open = constructorOpen(src, m.range.last + 1)
+        if (open == null) {
+            out += opaque(name)
+            continue
+        }
         val closed = codeParen(src, lex, open)
         // Still being typed, a signals class's list is what stands before the first blank line: its signals stay known meanwhile.
-        val close = closed.takeIf { it >= 0 } ?: if (serializable) BLANK_LINE.find(src, open)?.range?.first ?: src.length else continue
+        val close = closed.takeIf { it >= 0 } ?: if (serializable) BLANK_LINE.find(src, open)?.range?.first ?: src.length else -1
+        if (close < 0) {
+            out += opaque(name)
+            continue
+        }
         val properties = ArrayList<SignalProperty>()
         var readable = closed >= 0 && (serializable || header.annotations.none { ownsNames(it) })
         if (!serializable && closed >= 0 && !addsNoNames(src, lex, close + 1)) readable = false
@@ -100,6 +120,9 @@ internal fun signalClasses(
     }
     return out
 }
+
+/** A class of the project whose names the codec alone knows. */
+private fun opaque(name: String) = SignalClass(name, serializable = false, readable = false, properties = emptyList())
 
 /** The property named by the string argument of [header]'s annotation [annotation], where it has one. */
 private fun renamed(

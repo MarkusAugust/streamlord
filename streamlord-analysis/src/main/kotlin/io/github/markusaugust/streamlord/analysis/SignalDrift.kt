@@ -165,7 +165,9 @@ private fun resolve(
 ): List<DeclaredClass> {
     val all = byName[type].orEmpty()
     // An explicit import of the name decides, even of a class outside the project.
-    if (reader.imports.any { it == type || it.endsWith(".$type") }) return all.filter { "${it.packageName}.$type" in reader.imports }
+    if (reader.imports.any { it == type || it.endsWith(".$type") }) {
+        return all.filter { c -> "${c.packageName}.$type".let { q -> q in reader.imports || reader.imports.any { nests(it, q) } } }
+    }
     all.filter { it.packageName == reader.packageName }.let { if (it.isNotEmpty()) return it }
     return all.filter { it.packageName.isNotEmpty() && "${it.packageName}.*" in reader.imports }
 }

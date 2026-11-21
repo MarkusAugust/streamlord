@@ -308,6 +308,37 @@ class JacksonSignalNamesTest {
     }
 
     @Test
+    fun `a patch of a class of the project the check cannot read may set any signal, whatever kind of class it is`() {
+        for ((declaration, handler) in listOf(
+            "sealed class UiState {\n    data class Loading(val loading: Boolean = true) : UiState()\n}" to
+                "fun s(state: UiState) { sse.patchSignals(state) }",
+            "interface Counter {\n    val x: Int\n}" to "fun s(c: Counter) { sse.patchSignals(c) }",
+            "class State {\n    var x = 0\n}" to "fun s() { sse.patchSignals(State()) }",
+            "data class Page<T>(val x: List<T>)" to "fun s(p: Page<Int>) { sse.patchSignals(p) }",
+            "abstract class Base(val x: Int)" to "fun s(b: Base) { sse.patchSignals(b) }",
+            "@JsonNaming(SnakeCaseStrategy::class)\ndata class O(val userName: String = \"\")\ntypealias Q = O" to
+                "fun s(q: Q) { sse.patchSignals(q) }",
+        )) {
+            files.clear()
+            write("src/main/kotlin/app/State.kt", "package app\n\n$declaration\n")
+            write("src/main/kotlin/app/S.kt", "package app\n\n$handler\n")
+            write("src/main/resources/templates/list.html", "<p data-text=\"${'$'}x + ${'$'}loading + ${'$'}user_name\"></p>")
+            assertEquals(emptyList(), told(), declaration)
+        }
+    }
+
+    @Test
+    fun `the drift check reads an import of a nested class as the other check does`() {
+        write(
+            "src/main/kotlin/app/S.kt",
+            "package app\n\n@Serializable\ndata class S(val userName: String = \"\")\n\nfun r() { val s = call.readSignals<S>() }\n",
+        )
+        write("src/main/kotlin/model/Outer.kt", "package model\n\nclass Outer {\n    data class F(val userName: String = \"\")\n}\n")
+        write("src/main/kotlin/web/P.kt", "package web\n\nimport model.Outer.F\n\nfun s() { sse.patchSignals(F()) }\n")
+        assertEquals(emptyList(), told())
+    }
+
+    @Test
     fun `JsonNaming on the class leaves its names to the codec`() {
         write(
             "src/main/kotlin/app/SearchForm.kt",

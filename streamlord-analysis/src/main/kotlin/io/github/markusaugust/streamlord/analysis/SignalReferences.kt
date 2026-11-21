@@ -261,7 +261,7 @@ internal fun withClassProperties(defined: Set<String>): Set<String> {
 }
 
 /** Whether [written], a class as an import names it, is [declared] nested in a class of the same package: `model.Outer.Form` and `model.Form`. */
-private fun nests(
+internal fun nests(
     written: String,
     declared: String,
 ): Boolean {

@@ -112,6 +112,15 @@ class ProjectIndexTest {
     }
 
     @Test
+    fun `a class turning opaque in the file that patches it tells the others when it is read`() {
+        kotlin("S.kt", "@Serializable\ndata class S(val userName: String = \"\")\nfun r() { val s = call.readSignals<S>() }")
+        kotlin("A.kt", "data class F(val a: String = \"\")\nfun s() { sse.patchSignals(F()) }")
+        val opaque = "@JsonNaming(SnakeCaseStrategy::class)\ndata class F(val a: String = \"\")\nfun s() { sse.patchSignals(F()) }"
+        index.put("A.kt", opaque, SourceLanguage.KOTLIN, facts = false)
+        assertTrue(index.readFacts("A.kt", opaque))
+    }
+
+    @Test
     fun `a file not put in is told what the others define, and nothing of itself`() {
         html("cart.html", """<div data-signals:count="0"></div>""")
         val signals = index.signalsFor("elsewhere.html")

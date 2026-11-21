@@ -251,16 +251,15 @@ public class ProjectIndex(
         if (a.packageName != b.packageName || a.imports != b.imports) return true
         val declared = (a.declared - b.declared) + (b.declared - a.declared)
         val shapes = { f: SignalFacts -> f.classes.mapTo(HashSet()) { (name, properties) -> name to properties.map { it.name } } }
-        val classes = (shapes(a) - shapes(b) + (shapes(b) - shapes(a))).mapTo(HashSet()) { it.first }
+        val classes =
+            (shapes(a) - shapes(b) + (shapes(b) - shapes(a))).mapTo(HashSet()) { it.first } +
+                (a.opaqueClasses - b.opaqueClasses) + (b.opaqueClasses - a.opaqueClasses)
         if (declared.isEmpty() && classes.isEmpty()) return false
-        // A declared name counts where another file reads it, and a class where another reads into it or
-        // declares a page from it: one more class of a name may leave a read naming two.
+        // A declared name counts where another file reads it, and a class where a file, this one too, reads
+        // into it, patches it or declares a page from it: one more class of a name may leave a read naming two.
         return entries.any { (key, e) ->
-            key != path &&
-                (
-                    e.serverReads.any { it in declared } ||
-                        classes.any { it in e.facts.encodedTypes || it in e.facts.patchedTypes || it in e.facts.signalTypes }
-                )
+            (key != path && e.serverReads.any { it in declared }) ||
+                classes.any { it in e.facts.encodedTypes || it in e.facts.patchedTypes || it in e.facts.signalTypes }
         }
     }
 
