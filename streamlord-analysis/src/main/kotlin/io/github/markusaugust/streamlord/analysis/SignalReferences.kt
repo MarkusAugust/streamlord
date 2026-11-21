@@ -117,7 +117,9 @@ internal fun markupSignalReferences(
             if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
             val written = templatePlaceholders(value, engine)
             val chars = value.toCharArray()
-            for (range in written) for (k in range) chars[k] = ' '
+            for (range in written) {
+                for (k in range) chars[k] = ' '
+            }
             val decoded = decodeEntities(chars.concatToString())
             for (ref in expressionSignalReferences(decoded.text)) {
                 val start = decoded.toSource(ref.start)
