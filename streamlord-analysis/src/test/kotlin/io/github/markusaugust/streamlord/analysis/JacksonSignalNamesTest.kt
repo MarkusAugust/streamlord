@@ -261,6 +261,53 @@ class JacksonSignalNamesTest {
     }
 
     @Test
+    fun `a patch of a class the project does not declare sends nothing the check can know, and turns nothing off`() {
+        for (handler in listOf(
+            "fun s(dto: UserDto) { patchSignals(dto) }",
+            "fun s(node: ObjectNode) { sse.patchSignals(node) }",
+            "fun s() { sse.patchSignals(LibraryForm()) }",
+        )) {
+            files.clear()
+            write("src/main/kotlin/app/S.kt", "package app\n\n$handler\n")
+            write("src/main/resources/templates/list.html", """<div data-signals="{query: ''}"><p data-text="${'$'}qurey"></p></div>""")
+            assertEquals(listOf("list.html: unknown-signal '\$qurey'"), told(), handler)
+        }
+    }
+
+    @Test
+    fun `a class in a subpackage is not taken for one nested in a class`() {
+        val project =
+            mapOf(
+                "src/main/kotlin/model/F.kt" to "package model\n\ndata class F(val title: String = \"\")\n",
+                "src/main/kotlin/model/sub/F.kt" to
+                    "package model.sub\n\n@JsonNaming(SnakeCaseStrategy::class)\ndata class F(val userName: String = \"\")\n",
+            )
+        for (page in listOf(
+            "package web\n\nimport model.sub.F\n\nfun p() = div { dataSignals(codec.toJsonValue(F())) }\n",
+            "package model.sub\n\nfun s() { sse.patchSignals(F()) }\n",
+        )) {
+            files.clear()
+            files += project
+            write("src/main/kotlin/web/Page.kt", page)
+            write("src/main/resources/templates/list.html", "<p data-text=\"${'$'}user_name\"></p>")
+            assertEquals(emptyList(), told(), page)
+        }
+    }
+
+    @Test
+    fun `a patch of a class whose names the codec alone knows leaves the drift check to the codec too`() {
+        write(
+            "src/main/kotlin/app/S.kt",
+            "package app\n\n@Serializable\ndata class S(val userName: String = \"\")\n\nfun r() { val s = call.readSignals<S>() }\n",
+        )
+        write(
+            "src/main/kotlin/app/Dto.kt",
+            "package app\n\n@JsonNaming(SnakeCaseStrategy::class)\ndata class Dto(val userName: String = \"\")\n\nfun s(dto: Dto) { sse.patchSignals(dto) }\n",
+        )
+        assertEquals(emptyList(), told())
+    }
+
+    @Test
     fun `JsonNaming on the class leaves its names to the codec`() {
         write(
             "src/main/kotlin/app/SearchForm.kt",

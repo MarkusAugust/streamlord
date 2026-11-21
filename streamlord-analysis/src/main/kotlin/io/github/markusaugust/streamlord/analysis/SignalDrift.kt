@@ -49,6 +49,8 @@ public data class SignalProperty(
  *   `app.forms.*`: a simple name above is the class they make it, as Kotlin resolves it.
  * @property renamesSignals Whether the file sets a naming strategy for its codec, in code or in
  *   Spring's settings, so that no class's signals go by the names the check reads off it.
+ * @property opaqueClasses The classes the file declares whose names the codec alone knows, by simple
+ *   name: a Jackson class with names outside its constructor, or under `@JsonNaming`.
  */
 public data class SignalFacts(
     val declared: Set<String>,
@@ -60,6 +62,7 @@ public data class SignalFacts(
     val packageName: String = "",
     val imports: Set<String> = emptySet(),
     val renamesSignals: Boolean = false,
+    val opaqueClasses: Set<String> = emptySet(),
 )
 
 private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
@@ -123,19 +126,18 @@ public fun collectSignalFacts(source: Source): SignalFacts {
             ?.get(1)
             .orEmpty()
     val imports = IMPORT.findAll(src).filter { lex.mask[it.range.first] }.mapTo(LinkedHashSet()) { it.groupValues[1] }
+    val classes = signalClasses(src, lex)
     return SignalFacts(
         collectDeclaredSignals(src, language, source.prefix),
         types,
-        signalClasses(src, lex).filter { it.serializable || (it.readable && it.properties.isNotEmpty()) }.associate {
-            it.name to
-                it.properties
-        },
+        classes.filter { it.serializable || (it.readable && it.properties.isNotEmpty()) }.associate { it.name to it.properties },
         lookups,
         encodedSignalTypes(src, lex = lex),
         patchedSignalTypes(src, lex),
         packageName,
         imports,
         codeRenamesSignals(src, lex),
+        classes.filter { !it.serializable && !it.readable }.mapTo(LinkedHashSet()) { it.name },
     )
 }
 
@@ -348,9 +350,12 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val read = LinkedHashSet<String>()
 
     val byName = HashMap<String, MutableList<DeclaredClass>>()
+    val opaque = HashMap<String, MutableList<DeclaredClass>>()
     for ((file, one) in facts) {
         for ((type, properties) in one.classes) byName.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
+        for (type in one.opaqueClasses) opaque.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, emptyList())
     }
+    val renamed = facts.values.any { it.renamesSignals }
 
     // A class is judged where one class alone is what a read names: two the read may mean are left alone.
     val judged = HashSet<Pair<String, String>>()
@@ -364,10 +369,14 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
             if (found.isEmpty()) byCodec += type
             for (c in found) c.properties.forEach { declared += it.name }
         }
-        for (type in one.patchedTypes) for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+        for (type in one.patchedTypes) {
+            // A patch of a class whose names the codec alone knows may set any signal, as a page declared from one does.
+            if (resolve(one, type, opaque).isNotEmpty() || (renamed && resolve(one, type, byName).isNotEmpty())) byCodec += type
+            for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+        }
     }
     // A naming strategy renames every class's signals, so none is read off its properties.
-    if (facts.values.any { it.renamesSignals }) {
+    if (renamed) {
         for ((_, type) in judged) byCodec += type
         judged.clear()
         for (one in facts.values) byCodec += one.encodedTypes

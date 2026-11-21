@@ -43,7 +43,8 @@ All notable changes to Streamlord are recorded here. The format follows
   imports name. A class with names elsewhere, in a body, a supertype, `@JsonNaming`,
   `@JsonIgnoreProperties`, `@JsonAlias` or `access`, and every class in a project that sets a naming
   strategy, in Kotlin code or in Spring's `spring.jackson.property-naming-strategy`, stays the codec's
-  alone, as before.
+  alone, as before. A patch of such a class of the project may set any signal, in both checks, as a
+  page declared from one does; a patch of a class the project does not declare sets none.
 - A `@Serializable` class written `@kotlinx.serialization.Serializable`, or with an annotation whose
   arguments hold parentheses beside it, is read as one, and so is a `@SerialName` or `@JsonProperty`
   with an annotation or a comment after it. A naming strategy in kotlinx's `Json { namingStrategy = ... }`

@@ -226,16 +226,15 @@ internal fun unknownSignalIssues(
  * nested class, `model.Outer.Form`, means the `Form` of `model`. A class sent whose names the codec
  * alone knows may send any signal.
  */
-
 internal fun withClassProperties(defined: Set<String>): Set<String> {
     val sends = defined.filter { it.startsWith(SENT_CLASS) }
     if (sends.isEmpty()) return defined
+
+    fun marked(mark: String) = defined.filter { it.startsWith(mark) }.map { it.removePrefix(mark) }
+    val readable = marked(KOTLINX_CLASS) + marked(JACKSON_CLASS)
     // A naming strategy renames every class's signals, so none is read off its properties.
-    if (RENAMED_CLASSES in defined) return defined + ANY_SIGNAL
-    val classes =
-        defined.mapNotNull { d ->
-            listOf(KOTLINX_CLASS, JACKSON_CLASS).firstOrNull { d.startsWith(it) }?.let { d.removePrefix(it) }
-        }
+    val opaque = marked(OPAQUE_CLASS).toSet() + if (RENAMED_CLASSES in defined) readable else emptyList()
+    val classes = readable + opaque
     val out = LinkedHashSet(defined)
     for (d in sends) {
         val type = d.removePrefix(SENT_CLASS).substringBefore(':')
@@ -247,7 +246,10 @@ internal fun withClassProperties(defined: Set<String>): Set<String> {
             } else {
                 found.singleOrNull() ?: classes.singleOrNull { nests(candidates.first(), it) }
             }
-        if (qualified == null) {
+        // A class the project does not declare sends nothing the check can know; one whose names
+        // the codec alone knows may send any signal.
+        if (qualified == null) continue
+        if (qualified in opaque) {
             out += ANY_SIGNAL
             continue
         }
@@ -264,8 +266,10 @@ private fun nests(
     declared: String,
 ): Boolean {
     val pkg = declared.substringBeforeLast('.', "")
-    return pkg.isNotEmpty() && written.startsWith("$pkg.") && written != declared &&
-        written.substringAfterLast('.') == declared.substringAfterLast('.')
+    if (pkg.isEmpty() || !written.startsWith("$pkg.") || written.substringAfterLast('.') != declared.substringAfterLast('.')) return false
+    // Between the package and the name stand classes, `Outer`, not the packages of `model.sub.Form`.
+    val between = written.removePrefix("$pkg.").split('.').dropLast(1)
+    return between.isNotEmpty() && between.all { it.first().isUpperCase() }
 }
 
 private fun unknownSignalIssue(

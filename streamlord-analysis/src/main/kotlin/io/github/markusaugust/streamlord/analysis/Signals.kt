@@ -307,8 +307,9 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
  * a page is declared from, a class a page or a patch sends with the classes its name may mean
  * (`sends:Form:app.Form|lib.Form`), a `@Serializable` class (`kotlinx:app.Form`), whose properties
  * are defined, a Jackson class with each of its properties (`jackson:app.Form`,
- * `jacksonProperty:app.Form:email`), a signal only where the class is sent, and a naming strategy,
- * which leaves every class to its codec. A class a page is declared from that the analysis cannot
+ * `jacksonProperty:app.Form:email`), a signal only where the class is sent, a class of the project
+ * whose names the codec alone knows (`opaque:app.Form`), and a naming strategy, which leaves every
+ * class to its codec. A class a page is declared from that the analysis cannot
  * read is one only its codec can name, and is marked readable (`class:Form`) only where one of the
  * classes its name may mean is (see [withClassProperties]).
  */
@@ -317,6 +318,7 @@ internal const val SENT_CLASS: String = "sends:"
 internal const val READABLE_CLASS: String = "class:"
 internal const val KOTLINX_CLASS: String = "kotlinx:"
 internal const val JACKSON_CLASS: String = "jackson:"
+internal const val OPAQUE_CLASS: String = "opaque:"
 internal const val RENAMED_CLASSES: String = "renamed:classes"
 internal const val JACKSON_PROPERTY_OF: String = "jacksonProperty:"
 
@@ -493,6 +495,8 @@ internal fun collectSignalDefinitions(
             } else if (c.readable) {
                 out += JACKSON_CLASS + qualified
                 for (p in c.properties) out += "$JACKSON_PROPERTY_OF$qualified:${p.name}"
+            } else {
+                out += OPAQUE_CLASS + qualified
             }
         }
         // A page declared from a class defines what its codec writes: the properties for a class
