@@ -915,4 +915,159 @@ class ValueStructureTest {
             )
         }) { it.markupLiterals }
     }
+
+    @Test
+    fun `a value whose line ends in a postfix or a type ends there`() {
+        for (end in listOf("q!!", "q as String?", "q as List<Int>")) {
+            val src = "fun f(q: Any?) {\n    val a = $end\n    val title = \"<b>x</b>\"\n}"
+            val a = declarationOf(src, "a", src.length - 2)!!
+            assertEquals(end, valueText(src, a.value!!)?.text, end)
+        }
+        // An arrow, an operator or a comparison carries the line on.
+        val src = "fun f(q: Int) {\n    val a = q >\n        1\n}"
+        assertEquals("q >\n        1", valueText(src, declarationOf(src, "a", src.length - 2)!!.value!!)?.text)
+    }
+
+    @Test
+    fun `an expression or a loop's statement that begins with a word ends with its line`() {
+        assertEquals(listOf("\$n"), told("fun outer(n: String) {\n    fun size(n: Int) = pad(n)\n    println(\"<p>\$n</p>\")\n}"))
+        assertEquals(
+            listOf("\$n"),
+            told("fun outer(n: String, rows: List<Int>) {\n    for (n in rows) println(n)\n    println(\"<p>\$n</p>\")\n}"),
+        )
+        // A statement on the next line is still the loop's, and an expression goes on past `if (...)` and `else`.
+        assertEquals(
+            listOf("\$n"),
+            told("fun outer(n: Int, rows: List<String>) {\n    for (n in rows)\n        println(\"<p>\$n</p>\")\n}"),
+        )
+        assertEquals(emptyList(), told("fun label(n: Int) =\n    if (n > 0)\n        \"a\"\n    else\n        \"<i>\$n</i>\""))
+        val inner =
+            "fun outer(n: Int) {\n    fun inner(n: String) = if (n.isEmpty())\n        \"none\"\n" +
+                "    else\n        \"<p>\$n</p>\"\n}"
+        assertEquals(listOf("\$n"), told(inner))
+        assertEquals(
+            listOf("\$item"),
+            told(
+                "fun outer(item: Int, items: List<String>) {\n    for (item in\n        items) {\n        println(\"<li>\$item</li>\")\n    }\n}",
+            ),
+        )
+        val loop =
+            "fun outer(n: Int, rows: List<String>) {\n    for (n in rows)\n        if (n.isNotEmpty())\n" +
+                "            println(\"<li>\$n</li>\")\n}"
+        assertEquals(listOf("\$n"), told(loop))
+        // A loop's statement ends at `n++`, before an outer `if`'s `else`, and after a do-while.
+        for (statement in listOf("count++", "do { println(title) } while (title > 0)")) {
+            val src =
+                "fun list(title: String, nums: List<Int>) {\n    var count = 0\n    for (title: Int in nums) $statement\n" +
+                    "    println(\"<p>\$title</p>\")\n}"
+            assertEquals(listOf("\$title"), told(src), statement)
+        }
+        val pick =
+            "fun pick(title: String, a: Boolean, nums: List<Int>) {\n    if (a)\n        for (title: Int in nums) println(title)\n" +
+                "    else\n        println(\"<b>\$title</b>\")\n}"
+        assertEquals(listOf("\$title"), told(pick))
+        // A loop's header that goes on over lines, and an `if` of its statement whose `else` stands on the next line.
+        val header =
+            "fun list(item: String, items: List<Int>) {\n    for (item: Int in items\n        .filter { it > 0 }) {\n" +
+                "        println(\"<li>\$item</li>\")\n    }\n}"
+        assertEquals(emptyList(), told(header))
+        val branch =
+            "fun f(x: String, xs: List<Int>) {\n    for (x: Int in xs)\n        if (x > 0) use(x)\n" +
+                "        else println(\"<i>\$x</i>\")\n}"
+        assertEquals(emptyList(), told(branch))
+        // `catch` and `finally` on the next line, `as?` and a comparison with a number at a line's end carry it on.
+        val caught =
+            "class A(val n: String) {\n    fun size(n: Int): String = try {\n        n.toString()\n    }\n" +
+                "    catch (e: Exception) {\n        \"<p>\$n</p>\"\n    }\n}"
+        assertEquals(emptyList(), told(caught))
+        val handled =
+            "fun outer(n: String): String {\n    fun size(n: Int) = try { n }\n    finally { println(\"<b>\$n</b>\") }\n" +
+                "    return \"<p>\$n</p>\"\n}"
+        assertEquals(listOf("\$n"), told(handled))
+        val named =
+            "fun catchUp(a: String) {}\nfun page(n: String, items: List<Int>) {\n    for (n: Int in items) use(n)\n" +
+                "    catchUp(\"<p>\$n</p>\")\n}"
+        assertEquals(listOf("\$n"), told(named))
+        val block =
+            "fun outer(n: Int) {\n    fun inner(n: String): String = try {\n        \"a\"\n    }\n    finally {\n" +
+                "        println(\"<p>\$n</p>\")\n    }\n}"
+        assertEquals(listOf("\$n"), told(block))
+        // A handler however it is laid out, and no `catch` or `finally` after a lambda's block.
+        val tried = "fun outer(n: Int) {\n    fun inner(n: String): String = try {\n        \"a\"\n    }\n"
+        for (tail in listOf(
+            "    finally\n    {\n        println(\"<p>\$n</p>\")\n    }\n}",
+            "    catch (e: Exception)\n    {\n        println(\"<p>\$n</p>\")\n        \"b\"\n    }\n}",
+            "    catch /* any */ (e: Exception) {\n        println(\"<p>\$n</p>\")\n        \"b\"\n    }\n}",
+        )) {
+            assertEquals(listOf("\$n"), told(tried + tail), tail)
+        }
+        val lambda =
+            "fun outer(n: Int) {\n    fun inner(n: String) = run { n }\n" +
+                "    catch({ println(\"<p>\$n</p>\") }) { e: Throwable -> }\n}"
+        assertEquals(emptyList(), told(lambda))
+        // A line that opens with a literal is a statement of its own; an infix call and a `try` at a line's end go on.
+        val literal =
+            "fun f(n: String, rows: List<Int>) = run {\n    for (n: Int in rows) println(n)\n" +
+                "    \"<p>\$n</p>\".also(::println)\n}"
+        assertEquals(listOf("\$n"), told(literal))
+        assertEquals(emptyList(), told("val name = \"x\"\nfun pair(name: Int) = name to\n    \"<b>\$name</b>\""))
+        assertEquals(
+            emptyList(),
+            told("fun outer(n: String) {\n    fun f(n: Int) = try\n    {\n        \"<b>\$n</b>\"\n    } finally {}\n}"),
+        )
+        for ((line, next) in listOf(
+            "val p = a to b" to "println(1)",
+            "if (ok) b" to "println(1)",
+            "private val x" to "get() = 1",
+            "items.forEach { return@forEach x }" to "println(1)",
+        )) {
+            val src = "fun f(a: Int, b: Int, ok: Boolean, x: Int) {\n    $line\n    $next\n}"
+            assertEquals(true, lineEnds(src, fileFacts(src).code, src.indexOf('\n', src.indexOf(line))), line)
+        }
+        val called = "fun outer(x: String, nums: List<Int>) {\n    for (x: Int in nums) use(x)\n    catching(\"<p>\$x</p>\")\n}"
+        assertEquals(listOf("\$x"), told(called))
+        for (end in listOf("m as?\n        String", "n<3 && n>\n        1", "n<a && n>\n        b", "a<n && n>\n        a")) {
+            val src = "fun f(m: Any, n: Int, a: Int) {\n    val k = $end\n}"
+            assertEquals(end, valueText(src, declarationOf(src, "k", src.length - 2)!!.value!!)?.text, end)
+        }
+        // An outer `if`'s `else` after a statement whose own `if` has one.
+        val closed =
+            "fun pick(x: String, a: Boolean, xs: List<Int>) {\n    if (a)\n        for (x: Int in xs) total += if (x > 0) x else 0\n" +
+                "    else\n        println(\"<b>\$x</b>\")\n}"
+        assertEquals(listOf("\$x"), told(closed))
+        // A name that is also an infix function's ends its line; only a keyword carries it on.
+        val step = "fun f(step: String) {\n    val current = step\n    val title = \"<h1>x</h1>\"\n}"
+        assertEquals("step", valueText(step, declarationOf(step, "current", step.length - 2)!!.value!!)?.text)
+        val arrow = "fun f(m: Any) {\n    val h = m as Map<String, () -> Int>\n    val title = \"<b>x</b>\"\n}"
+        assertEquals("m as Map<String, () -> Int>", valueText(arrow, declarationOf(arrow, "h", arrow.length - 2)!!.value!!)?.text)
+        val compared = "fun f(b: Int, c: Int, d: Int, e: Int) {\n    val a = b < c && d >\n        e\n}"
+        assertEquals("b < c && d >\n        e", valueText(compared, declarationOf(compared, "a", compared.length - 2)!!.value!!)?.text)
+        val a = "fun f(q: Int) {\n    val a = q>\n        1\n}"
+        assertEquals("q>\n        1", valueText(a, declarationOf(a, "a", a.length - 2)!!.value!!)?.text)
+    }
+
+    @Test
+    fun `a mark reaches what its declaration gives in every layout the text shows`() {
+        val page = "\nfun page(name: String) = \"<p>\$name</p>\""
+        for (marked in listOf(
+            "@Language(\"HTML\") var out = \"Hi <b>\$name</b>\"",
+            "@Language(\"HTML\") val html: String get() = \"Hi <b>\$name</b>\"",
+            "open class Page { @Language(\"HTML\") open fun head(title: String): String = \"Title <b>\$title</b>\" }",
+            "class Page { @Language(\"HTML\") val greeting by lazy { \"Hello <b>\$name</b>\" } }",
+            "interface View { @Language(\"HTML\") fun render(): String = \"Hello <b>\$name</b>\" }",
+            "@Language(\"HTML\") fun list(items: List<String>): String {\n    items.forEach { if (it.isEmpty()) return@forEach }\n    return \"Items <b>\$name</b>\"\n}",
+        )) {
+            val src = "import org.intellij.lang.annotations.Language\nval name = load()\n$marked$page"
+            val literal = analyzer.lex(src).strings.first { "<b>" in it.text }
+            assertEquals(true, isHtmlString(src, literal), marked)
+        }
+    }
+
+    @Test
+    fun `a bracket that closes nothing at a line's end reads no further than a line's worth back`() {
+        var made = 0
+        assertGrowsLinearly("lines that close nothing", 200, { n: Int ->
+            "// ${made++}\n" + "val a = run {\n".repeat(n) + ")\n".repeat(n)
+        }) { fileFacts(it) }
+    }
 }

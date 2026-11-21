@@ -8,6 +8,8 @@ dependencies {
     testImplementation(kotlin("test"))
     // DataSignalsSecondArgumentTest compiles DSL calls, so the Kotlin compiler is its oracle.
     testImplementation(project(":streamlord-html"))
+    // KotlinParserFasitTest holds where the analysis reads a statement or a value to end to Kotlin's own parser.
+    testImplementation(kotlin("compiler-embeddable"))
 }
 
 /*
@@ -70,9 +72,27 @@ abstract class GenerateCatalogText : DefaultTask() {
                 }
                 append('"')
             }
+
         // Cut at most every 8192 characters, never between the two halves of a surrogate pair.
         fun pieces(json: String): String {
-            val cuts = generateSequence(0) { at -> if (at >= json.length) null else minOf(json.length, at + 8192).let { if (it < json.length && json[it - 1].isHighSurrogate()) it - 1 else it } }
+            val cuts =
+                generateSequence(0) { at ->
+                    if (at >=
+                        json.length
+                    ) {
+                        null
+                    } else {
+                        minOf(json.length, at + 8192).let {
+                            if (it < json.length &&
+                                json[it - 1].isHighSurrogate()
+                            ) {
+                                it - 1
+                            } else {
+                                it
+                            }
+                        }
+                    }
+                }
             return cuts.zipWithNext { from, to -> json.substring(from, to) }.joinToString(",\n") { "            ${literal(it)}" }
         }
         val pieces = pieces(file.readText())
@@ -150,6 +170,29 @@ tasks.withType<Test>().configureEach {
     // `-PrecordVerdicts=true` has VerdictDigestTest write test/fixtures/verdicts.txt anew instead of comparing with it.
     providers.gradleProperty("recordVerdicts").orNull?.let { systemProperty("streamlord.record", it) }
 }
+
+// KotlinParserFasitTest reads every Kotlin file of the repository, so it runs on its own: a change to any of them runs
+// it again, and the module's other tests stay up to date. `-PfasitExtra=<dirs>` reads more beside them, and
+// `-PrecordFasit=true` takes out of fasit-known.txt what is gone (`all` writes what is found).
+tasks.named<Test>("test") { filter { excludeTestsMatching("*KotlinParserFasitTest") } }
+
+val fasitTest = tasks.register<Test>("fasitTest") {
+    description = "Holds the analysis's reading of Kotlin's structure to Kotlin's own parser."
+    group = "verification"
+    val test = tasks.test.get()
+    testClassesDirs = test.testClassesDirs
+    classpath = test.classpath
+    filter { includeTestsMatching("*KotlinParserFasitTest") }
+    val root = rootProject.layout.projectDirectory
+    inputs
+        .files(root.asFileTree.matching { include("**/*.kt").exclude("**/build/**", "**/node_modules/**", ".claude/**", "**/.gradle/**", "**/.idea/**", "**/out/**") })
+        .withPropertyName("kotlinSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    providers.gradleProperty("fasitExtra").orNull?.let { systemProperty("streamlord.fasit.extra", it) }
+    providers.gradleProperty("recordFasit").orNull?.let { systemProperty("streamlord.fasit.record", it) }
+}
+
+tasks.check { dependsOn(fasitTest) }
 
 // How the tests read the catalog, conformance/ and the editor fixtures on the JVM; the JavaScript
 // build of the same tests, editors/vscode/analysis-js, brings its own. testCommon runs on both.

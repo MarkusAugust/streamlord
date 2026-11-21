@@ -323,8 +323,257 @@ internal val HTML_ANNOTATION = regex(HTML_LANGUAGE, RegexOption.IGNORE_CASE)
 private val VARARG = regex("""\bvararg\b""")
 private val LAMBDA_NAME = regex("""^\S+?(?=\s*(?::|$))""")
 private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
-private val LINE_GOES_ON_BEFORE = regex("""[-=+*/%&|?:.,(<>!]""")
+
+/**
+ * Whether the line goes on after [k], its last character of code: an operator that wants what follows, `else`, an infix
+ * word, or the
+ * condition of an `if`, a `when` or a loop, whose branch follows. `!!`, a `?` of a type and the `>` that closes type
+ * arguments opened on the line end it, `List<Int>` or `String?` at the end of a value; `->` points on.
+ */
+private fun goesOn(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean =
+    when (src[k]) {
+        // `n++` and `n--` end a statement.
+        '-', '+' -> {
+            var from = k
+            while (from > 0 && src[from - 1] == src[k]) from--
+            (k - from) % 2 == 0
+        }
+
+        '=', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> {
+            true
+        }
+
+        '!' -> {
+            src.getOrNull(k - 1) != '!'
+        }
+
+        '>' -> {
+            src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
+        }
+
+        ')' -> {
+            branchFollows(src, code, k)
+        }
+
+        // `x as?` wants its type.
+        '?' -> {
+            src.startsWith("as", k - 2) && !isWordPart(src.getOrNull(k - 3))
+        }
+
+        else -> {
+            isWordPart(src[k]) && (WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1)) || infixWaits(src, code, k))
+        }
+    }
+
+/** The keywords after which Kotlin reads on, which no name can be: `else`, `x as`, `x is`, `x in`. */
+private val WORD_THAT_GOES_ON = regex("""(?:^|[^\p{L}\p{Nd}_.`])(?:else|as|is|in|finally|try|when)$""")
+
+/** Words that stand before a name or a value and are no operand of an infix call. */
+private val NO_OPERAND =
+    setOf(
+        "return",
+        "throw",
+        "else",
+        "in",
+        "is",
+        "as",
+        "val",
+        "var",
+        "fun",
+        "class",
+        "object",
+        "interface",
+        "typealias",
+        "import",
+        "package",
+        "if",
+        "when",
+        "while",
+        "for",
+        "do",
+        "try",
+        "catch",
+        "finally",
+        "by",
+        "where",
+        "get",
+        "set",
+    )
+
+/**
+ * Whether the name the line ends in at [k] is an infix function's, still wanting its right operand: `a to`, where the
+ * names and operands standing one after another back to an operator or a bracket are an even number. `a to b` ends.
+ */
+private fun infixWaits(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    if (!src[k].isLetter() && src[k] != '_' && src[k] != '`') return false
+    var run = 0
+    var j = k
+    while (j >= 0) {
+        var start = j
+        while (start > 0 && isWordPart(src[start - 1])) start--
+        if (src.getOrNull(start - 1) == '@') break
+        if (src.substring(start, j + 1) in NO_OPERAND) break
+        run++
+        j = start - 1
+        // A comment between two names is space.
+        while (j >= 0) {
+            if (src[j] == ' ' || src[j] == '\t') {
+                j--
+                continue
+            }
+            if (code[j] || src[j] == '\n') break
+            var from = j
+            while (from > 0 && !code[from - 1]) from--
+            if (!src.startsWith("//", from) && !src.startsWith("/*", from)) break
+            j = from - 1
+        }
+        if (j < 0 || src[j] == '\n' || j == start - 1) break
+        if (!code[j] || src[j] == ']' || src[j] == '}') {
+            run++
+            break
+        }
+        if (src[j] == ')') {
+            // `@Suppress("x") n`: an annotation is no operand.
+            val open = opening(src, code, j, '(', ')')
+            val head = open?.let { codeBefore(src, code, it) } ?: -1
+            var name = head
+            while (name >= 0 && isWordPart(src[name])) name--
+            if (!branchFollows(src, code, j) && !(head >= 0 && isWordPart(src[head]) && src.getOrNull(name) == '@')) run++
+            break
+        }
+        // `x!! to` and `n++ to`: what ends an operand.
+        if ((src[j] == '!' || src[j] == '+' || src[j] == '-') && src.getOrNull(j - 1) == src[j]) {
+            run++
+            break
+        }
+        if (!isWordPart(src[j])) break
+    }
+    return run % 2 == 0 && run > 0
+}
+
+private val INFIX_OPERATOR = regex("""\s(?:and|or|xor|shl|shr|ushr)\s""")
+
+private val DO_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_.])do(?:\s|\{)""")
+
+private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
+
+/** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
+private fun closesTypeArguments(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    var depth = 0
+    var j = k
+    while (j >= 0 && src[j] != '\n') {
+        // The `>` of an arrow, `() -> Int`, closes nothing.
+        if (code[j] && src[j] == '>' && src.getOrNull(j - 1) != '-') depth++
+        // `n<a && n>` compares: no type argument holds `&`, `|`, `=`, `+` or `%`.
+        if (code[j] && depth > 0 && src[j] in "&|=+%") return false
+        if (code[j] && depth > 0 && src[j] == '*' && src.getOrNull(j - 1) == ' ' && src.getOrNull(j + 1) == ' ') return false
+        // `List<Int>`: a type's name, then a type at once; `b < c` and `n<3` compare.
+        if (code[j] && src[j] == '<' &&
+            --depth == 0
+        ) {
+            val first = src.getOrNull(j + 1)
+            // `n<m and n>` compares: no type argument holds an infix operator.
+            if (INFIX_OPERATOR.containsMatchIn(src.substring(j, k))) return false
+            return isWordPart(src.getOrNull(j - 1)) && first != null && (first.isLetter() || first in "*(@?`_")
+        }
+        j--
+    }
+    return false
+}
+
+/** Whether the `)` at [k] closes the condition of an `if`, a `when` or a loop, whose branch follows on the next line. */
+private fun branchFollows(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    var depth = 0
+    var j = k
+    while (j >= maxOf(0, k - 2_000)) {
+        if (code[j] && src[j] == ')') depth++
+        if (code[j] && src[j] == '(' && --depth == 0) break
+        j--
+    }
+    if (j <= 0 || depth != 0) return false
+    val from = maxOf(0, j - 12)
+    val head = CONDITION_HEAD.find(src.substring(from, j)) ?: return false
+    val word = from + head.range.first + head.value.indexOfFirst { it.isLetter() }
+    // A handler's `catch (e: E)` follows the `}` of a block; `flow.catch(f)` and `catch(f)` are calls.
+    if (src.startsWith("catch", word)) return src.lastNonSpaceBefore(word) == '}'
+    if (!src.startsWith("while", word)) return true
+    // `do { } while (c)`, and `do x while (c)` on one line, have their branch before it.
+    if (src.lastNonSpaceBefore(word) == '}') return false
+    val line = src.substring(src.lastIndexOf('\n', word - 1) + 1, word)
+    return !DO_BEFORE.containsMatchIn(line)
+}
+
 private val LINE_GOES_ON_AFTER = regex("""^(?:[.?*/%&|:]|else\b)""")
+private val HANDLER_NEXT = regex("""^(?:catch\s*\(|finally\b)""")
+private val COMMENT = regex("""//[^\n]*|/\*[\s\S]*?\*/""")
+
+/** Whether the `catch` or `finally` at [at] goes on from the block that [close] ends: a `try`'s or a handler's, not a lambda's. */
+private fun handlerFollows(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+    close: Int,
+): Boolean {
+    if (!HANDLER_NEXT.containsMatchIn(src.substring(at, minOf(src.length, at + 64)).replace(COMMENT, " "))) return false
+    val open = opening(src, code, close, '{', '}') ?: return true
+    val before = codeBefore(src, code, open)
+    if (before < 0) return false
+    if (src[before] == ')') {
+        val paren = opening(src, code, before, '(', ')') ?: return false
+        val word = codeBefore(src, code, paren)
+        return word >= 4 && src.startsWith("catch", word - 4) && !isWordPart(src.getOrNull(word - 5))
+    }
+    return listOf("try", "finally").any { w ->
+        before + 1 >= w.length && src.startsWith(w, before + 1 - w.length) && !isWordPart(src.getOrNull(before - w.length))
+    }
+}
+
+/** Where the bracket [close] closes opens, read back at most 20,000 characters; `null` when it is farther. */
+private fun opening(
+    src: String,
+    code: BooleanArray,
+    close: Int,
+    open: Char,
+    shut: Char,
+): Int? {
+    var depth = 0
+    var j = close
+    while (j >= maxOf(0, close - 20_000)) {
+        if (code[j] && src[j] == shut) depth++
+        if (code[j] && src[j] == open && --depth == 0) return j
+        j--
+    }
+    return null
+}
+
+/** The last character of code before [at], past white space and comments; -1 when there is none. */
+private fun codeBefore(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Int {
+    var j = at - 1
+    while (j >= 0 && (src[j].isWhitespace() || !code[j])) j--
+    return j
+}
+
+private val ELSE_NEXT = regex("""^else\b""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
@@ -340,6 +589,21 @@ private class PendingScope(
 
     /** Whether an expression body has begun: `=` then a line break goes on with the next line. */
     var started: Boolean = false
+
+    /** How many `if`s of a loop's statement still want their `else`, which may stand on a line of its own. */
+    var ifs = 0
+
+    /**
+     * What was written next: a loop's statement without braces has begun where the bracket after the loop is closed,
+     * and a function's expression where its `=` stands. A brace after the loop is its block, still to be read.
+     */
+    fun begun(brace: Boolean) {
+        if (state == "after" && fn == null && !brace) {
+            state = "stmt"
+        } else if (state == "expr") {
+            started = true
+        }
+    }
 
     /** Whether the function's expression is still being written. */
     val unended get() = state == "expr" && fn?.body?.end == -1
@@ -429,11 +693,23 @@ private class ScopeFrame(
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
+/** Whether the character at [k], outside code, is a comment's and not a literal's, by what stands where code stopped. */
+internal fun inComment(
+    src: String,
+    code: BooleanArray,
+    k: Int,
+): Boolean {
+    var from = k
+    while (from > 0 && !code[from - 1]) from--
+    return src.startsWith("//", from) || src.startsWith("/*", from)
+}
+
 /** Whether the line break at [at] ends an expression: nothing before it or after it carries the expression on. */
 internal fun lineEnds(
     src: String,
     code: BooleanArray,
     at: Int,
+    elseGoesOn: Boolean = true,
 ): Boolean {
     var k = at - 1
     while (k >= 0 && (!code[k] || src[k].isWhitespace())) {
@@ -446,10 +722,25 @@ internal fun lineEnds(
         }
         k--
     }
-    if (k >= 0 && code[k] && LINE_GOES_ON_BEFORE.matchEntire(src[k].toString()) != null) return false
+    if (k >= 0 && code[k] && goesOn(src, code, k)) return false
+    val last = k
     k = at + 1
-    while (k < src.length && (!code[k] || src[k].isWhitespace())) k++
-    return !LINE_GOES_ON_AFTER.containsMatchIn(src.substring(k, minOf(src.length, k + 5)))
+    // A comment at the next line's start is passed over; a literal there opens a line of its own.
+    while (k < src.length) {
+        if (src[k].isWhitespace()) {
+            k++
+        } else if (!code[k] && inComment(src, code, k)) {
+            while (k < src.length && !code[k]) k++
+        } else {
+            break
+        }
+    }
+    val next = src.substring(k, minOf(src.length, k + 12))
+    // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
+    if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true
+    // `try { }` goes on with a `catch` or `finally` after its block; `catchUp(x)` is a call of its own.
+    if (last >= 0 && src[last] == '}' && handlerFollows(src, code, k, last)) return false
+    return !LINE_GOES_ON_AFTER.containsMatchIn(next)
 }
 
 private val MARKUP_INITIALISER = regex("""\s*=\s*(`?)([\p{L}_][\p{L}\p{Nd}_]*)\1\s*\(""")
@@ -799,12 +1090,21 @@ private fun declarations(
         if (src[i] == '\n' && f.after == 1) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
-            if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) f.reset()
+            if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {
+                f.reset()
+                if (f.kind != "for") f.pending?.begun(brace = false)
+            }
             i++
             continue
         }
         val c = src[i]
         if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
+            // A loop's own brackets hold its variable, not its statement.
+            if (f.kind != "for") f.pending?.begun(brace = false)
+            f.pending?.takeIf { it.state == "stmt" }?.let { p ->
+                if (src.startsWith("if", i) && !isWordPart(src.getOrNull(i + 2))) p.ifs++
+                if (src.startsWith("else", i) && !isWordPart(src.getOrNull(i + 4)) && p.ifs > 0) p.ifs--
+            }
             var end = i + 1
             while (end < src.length && isWordPart(src[end])) end++
             val word = src.substring(i, end)
@@ -950,6 +1250,7 @@ private fun declarations(
             continue
         }
         if (c == '(' || c == '[' || c == '{') {
+            if (f.kind != "for") f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
@@ -978,7 +1279,8 @@ private fun declarations(
                 f.fn = false
                 f.loop = false
                 val p = f.pending
-                if (p != null && p.state == "after") {
+                // A lambda in a loop's own brackets is no body of it.
+                if (p != null && p.state == "after" && f.kind != "for") {
                     // The body of the function or the loop whose parameters just closed.
                     g.ends += p.decls
                     f.pending = null
@@ -1074,13 +1376,13 @@ private fun declarations(
                     if (c == '=' && src.getOrNull(i + 1) != '=' && p.fn != null) {
                         p.state = "expr"
                         p.fn?.body = f.begin(Span(i + 1))
-                    } else if (p.fn == null && !c.isWhitespace()) {
+                    } else if (p.fn == null && !c.isWhitespace() && f.kind != "for") {
                         p.state = "stmt"
                     }
                 }
 
                 "stmt" -> {
-                    if (c == '\n' || c == ';') endPending(f, i)
+                    if (c == ';' || (c == '\n' && lineEnds(src, code, i, elseGoesOn = p.ifs > 0))) endPending(f, i)
                 }
 
                 else -> {

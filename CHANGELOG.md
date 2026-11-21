@@ -74,6 +74,23 @@ All notable changes to Streamlord are recorded here. The format follows
   call that a function declared inside another, a value of the same name, or a member of another
   class of the file may mean is not followed either, nor is a function that takes markup by a
   parameter marked `@Language("HTML")`, whose argument nothing judges.
+- A `@Language("HTML")` mark reaches the next literal after it past another annotation's
+  arguments and past comments, quotes in them too, a mark written inside a comment marks
+  nothing, a parameter's mark behind another annotation or a modifier (`private val`, `vararg`)
+  reaches no later default, and no literal of an annotation's arguments is HTML:
+  `@Language("HTML") @JvmName("x") fun f() = "Hey <b>…"` read `"x"` as the HTML string and not the
+  function's literal.
+- A value whose line ends in `!!`, `++`, `--`, a nullable type or type arguments closed on its
+  line ends there, `val a = q!!`, where it ran on into the next line and took a getter after it
+  for its own. A function's expression, or a loop's statement without braces, ends with its line
+  too, where it ran to the end of the block around it: `fun size(n: Int) = pad(n)` inside another
+  function kept its `n` in sight to the end of the outer one, so `$n` after it was read as the
+  Int. A value, an expression and a statement go on past `if (...)`, `when (...)`, `for (...)`,
+  `while (...)`, `try`, `else`, `as`, `as?`, `is`, `in` or an infix function's name (`a to`) at
+  the end of a line, and into a `try`'s `catch` and `finally` however they are laid out; a line
+  that opens with a literal, `"<p>$n</p>".also(::println)`, is a statement of its own. A loop's header is read whole, over several lines and with a lambda in
+  it, and an `else` on the line after a loop's statement is the statement's own only where the
+  statement has an `if` still without one.
 - Parameters are read with their comments left out. With `a: String, // the a` on one line and
   `title: Int` on the next, `title` was no parameter: `$title` in the function was warned of, and a
   constructor property written so was not one other files could see. The same after an annotation

@@ -371,29 +371,40 @@ internal const val HTML_LANGUAGE =
     """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
 
 private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-private val PARAMETER_AFTER_MARKER = regex("""^\s*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""")
+private val LEADING_ANNOTATIONS = regex("""^(?:\s*@[\p{L}_][\p{L}\p{Nd}_.:]*(?:\([^()]*\))?)+""")
+private val PARAMETER_AFTER_MARKER =
+    regex(
+        """^\s*(?:(?:private|protected|internal|public|override|open|final|vararg|crossinline|noinline)\s+)*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""",
+    )
 
 /**
- * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype,
- * or when the code just before it carries IntelliJ's injection marker: `@Language("HTML")` on
- * the function or property, or a `// language=HTML` comment. The marker reaches the next
- * string literal only. A literal handed straight to a parameter of the file's own function that
- * carries the annotation is HTML too.
+ * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, or when IntelliJ's
+ * mark stands before it, `@Language("HTML")` on the function or property or a `// language=HTML` comment, which
+ * reaches the next literal only, past those of other annotations' arguments. A literal handed straight to a parameter
+ * of the file's own function that carries the mark is HTML too, and so is one that is markup by where it stands, in
+ * the block of `interpolate` or handed to `Trusted`. No literal of an annotation's arguments is.
  */
 public fun isHtmlString(
     src: String,
     s: KotlinString,
 ): Boolean {
     val facts = fileFacts(src)
-    // An annotation's arguments say something of the code: asked last, of a literal that would be HTML.
-    if (textOpensWithTag(markupView(src, s))) return !facts.inAnnotation(s.start)
+    // An annotation's arguments say something of the code: no literal of them is markup.
+    if (facts.inAnnotation(s.start)) return false
+    if (textOpensWithTag(markupView(src, s))) return true
     if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
-    val before = src.substring(maxOf(0, s.start - 240), s.start)
-    val last = HTML_MARKER.findAll(before).lastOrNull() ?: return false
+    // A mark reaches the next literal after it, past those of other annotations' arguments.
+    val from = maxOf(0, s.start - 240)
+    val before = src.substring(from, s.start)
+    // `@Language("HTML")` in a comment marks nothing; `// language=HTML` is a comment.
+    val last = HTML_MARKER.findAll(before).lastOrNull { it.value.startsWith("/") || facts.code[from + it.range.first] } ?: return false
     val after = before.substring(last.range.last + 1)
-    // `fun f(@Language("HTML") html: String? = null, ...)` annotates a parameter, not the next literal:
-    // the marker is followed at once by a parameter declaration. A function's own parameters
-    // further on (`fun greeting(name: String): String = """..."""`) do not count.
-    if (PARAMETER_AFTER_MARKER.containsMatchIn(after)) return false
-    return '"' !in after
+    // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal, behind other
+    // annotations too.
+    val at = from + last.range.last + 1
+    // Annotations' arguments and comments read as space: `@Named("x")body` and `@Named("x") /* c */ body` hold a parameter.
+    val bare = CharArray(after.length) { k -> if (facts.inAnnotation(at + k) || !facts.code[at + k]) ' ' else after[k] }.concatToString()
+    if (PARAMETER_AFTER_MARKER.containsMatchIn(bare.replace(LEADING_ANNOTATIONS, ""))) return false
+    // A literal between the mark and this one takes it: a quote in a comment or an annotation's arguments is none.
+    return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) && !inComment(src, facts.code, at + it) }
 }

@@ -71,3 +71,18 @@ fun commented(
     body: String, // the body
     heading: Int,
 ) = "<h1>$heading</h1>"
+
+// A mark behind another annotation is the function's: nothing is said of "m03x", and $who is told.
+@Language("HTML")
+@get:JvmName("m03x")
+val m03: String = "<i>x</i>"
+
+@Language("HTML")
+@JvmName("hey")
+fun hey(who: String) = "Hey <b>$who</b>"
+
+// A local function's parameter ends with its line: $page is told as the String it is.
+fun outer(page: String) {
+    fun size(page: Int) = load().length + page
+    println("<p>$page</p>")
+}
