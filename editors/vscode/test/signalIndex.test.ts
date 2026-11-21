@@ -31,13 +31,13 @@ describe("signal index", () => {
     assert.deepEqual([...index.allDefinitions()].sort(), ["open", "query"]);
   });
 
-  it("reads Spring's settings for a naming strategy, which leaves the names to the codec", async () => {
+  it("reads Spring's settings for a naming strategy, which leaves the classes' names to the codec", async () => {
     const index = new SignalIndex(new Set());
     index.update(doc("/w/src/main/resources/application.yml", "yaml", "server:\n  port: 8080\n"));
     index.update(doc("/w/src/main/resources/logback.yml", "yaml", "spring.jackson.property-naming-strategy: SNAKE_CASE\n"));
     assert.deepEqual([...index.allDefinitions()], []);
     index.update(doc("/w/src/main/resources/application.yml", "yaml", "spring.jackson.property-naming-strategy: SNAKE_CASE\n", 2));
-    assert.deepEqual([...index.allDefinitions()], ["*"]);
+    assert.deepEqual([...index.allDefinitions()], ["renamed:classes"]);
     files.set("/d/application-dev.properties", encode("spring.jackson.property-naming-strategy=SNAKE_CASE\n"));
     const findFiles = workspace.findFiles;
     files.set("/d/applicationContext.properties", encode(`<div data-signals:ctx="1"></div>\n`));
@@ -46,7 +46,7 @@ describe("signal index", () => {
     try {
       const fromDisk = new SignalIndex(new Set());
       await fromDisk.rebuild();
-      assert.deepEqual([...fromDisk.allDefinitions()], ["*"]);
+      assert.deepEqual([...fromDisk.allDefinitions()], ["renamed:classes"]);
     } finally {
       workspace.findFiles = findFiles;
       files.clear();

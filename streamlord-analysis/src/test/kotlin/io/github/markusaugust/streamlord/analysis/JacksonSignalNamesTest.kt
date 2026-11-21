@@ -84,8 +84,10 @@ class JacksonSignalNamesTest {
         vararg names: String,
         pagePackage: String = "app",
         imports: String = "",
+        others: Map<String, String> = emptyMap(),
     ): List<String> {
         files.clear()
+        files += others
         write("src/main/kotlin/app/F.kt", "package app\n\n$klass\n")
         write("src/main/kotlin/app/Page.kt", "package $pagePackage\n$imports\nfun p() = div { dataSignals(codec.toJsonValue(F())) }\n")
         write("src/main/resources/templates/list.html", "<p data-text=\"${names.joinToString(" + ") { "${'$'}$it" }}\"></p>")
@@ -164,6 +166,60 @@ class JacksonSignalNamesTest {
         )
         write("src/main/resources/templates/other.html", """<div data-signals="{q: ''}"><p data-text="${'$'}qq"></p></div>""")
         assertEquals(listOf("other.html: unknown-signal '\$qq'"), told())
+    }
+
+    @Test
+    fun `a naming strategy leaves the classes to the codec and checks markup as before`() {
+        for ((file, text) in listOf(
+            "src/main/resources/application.yml" to "spring.jackson.property-naming-strategy: SNAKE_CASE\n",
+            "src/main/kotlin/app/Json.kt" to "package app\n\nval json = Json { namingStrategy = JsonNamingStrategy.SnakeCase }\n",
+        )) {
+            files.clear()
+            write(file, text)
+            write("src/main/resources/templates/list.html", """<div data-signals="{query: ''}"><p data-text="${'$'}qurey"></p></div>""")
+            assertEquals(listOf("list.html: unknown-signal '\$qurey'"), told(), file)
+        }
+    }
+
+    @Test
+    fun `a naming strategy of something other than a codec renames no signal`() {
+        val db = mapOf("src/main/kotlin/app/Db.kt" to "package app\n\nval cfg = DatabaseConfig { namingStrategy = SnakeCase }\n")
+        assertEquals(listOf("list.html: unknown-signal '\$query'"), pageOf("data class F(val a: String = \"\")", "a", "query", others = db))
+    }
+
+    @Test
+    fun `a constructor is read as code, its strings and default values aside`() {
+        assertEquals(emptyList(), pageOf("data class F(val a: String = \"x)\", val b: Int = 0)", "a", "b"))
+        assertEquals(
+            listOf("list.html: unknown-signal '\$tmp'"),
+            pageOf("data class F(val a: Int = run { val tmp: Int = 1; tmp })", "a", "tmp"),
+        )
+    }
+
+    @Test
+    fun `an empty JsonProperty keeps the property's name`() {
+        assertEquals(emptyList(), pageOf("data class F(@JsonProperty(\"\") val a: Int = 0)", "a"))
+    }
+
+    @Test
+    fun `a kotlinx class and a Jackson class of one name are told apart by their packages`() {
+        files.clear()
+        write("src/main/kotlin/app/a/F.kt", "package app.a\n\n@Serializable\ndata class F(val x: Int = 0)\n")
+        write("src/main/kotlin/app/b/F.kt", "package app.b\n\n@JsonNaming(SnakeCaseStrategy::class)\ndata class F(val bX: Int = 0)\n")
+        write("src/main/kotlin/app/b/Page.kt", "package app.b\n\nfun p() = div { dataSignals(codec.toJsonValue(F())) }\n")
+        write("src/main/resources/templates/list.html", "<p data-text=\"${'$'}b_x\"></p>")
+        assertEquals(emptyList(), told())
+    }
+
+    @Test
+    fun `a Jackson class whose extras add no names is read`() {
+        for (klass in listOf(
+            "@JsonIgnoreProperties(ignoreUnknown = true)\ndata class F(val a: String = \"\")",
+            "data class F(val a: String = \"\") {\n    fun twice() = a + a\n\n    companion object {\n        val EMPTY = F()\n    }\n}",
+            "data class F(val a: String = \"\") : java.io.Serializable",
+        )) {
+            assertEquals(listOf("list.html: unknown-signal '\$b'"), pageOf(klass, "a", "b"), klass)
+        }
     }
 
     @Test

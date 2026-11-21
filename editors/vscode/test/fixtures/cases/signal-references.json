@@ -32,6 +32,7 @@
     {"name":"a directive that writes another file's text finishes the read it touches","language":"html","src":"<p data-text=\"$a{% include 'x' %} + {% if c %}$b{% endif %}\"></p>","refs":[["$b","b"]]},
     {"name":"velocity's parse writes, its if writes nothing","language":"html","engine":"vm","src":"<p data-text=\"#parse('x')$a + #if($c)$b#end\"></p>","refs":[["$b","b"]]},
     {"name":"a mustache section and an erb statement write nothing","language":"html","src":"<p data-text=\"{{#if x}}$a{{else}}$b{{/if}} + <% if x %>$c<% end %> + <%= v %>$d\"></p>","refs":[["$a","a"],["$b","b"],["$c","c"]]},
+    {"name":"a template's comment writes nothing","language":"html","src":"<p data-text=\"$a{{! note }} + $b<%-- note --%>\"></p>","refs":[["$a","a"],["$b","b"]]},
     {"name":"a read after an entity beside template syntax keeps its offsets","language":"html","src":"<p data-text=\"{{ x }} &amp;&amp; $cuont\"></p>","refs":[["$cuont","cuont"]]},
     {"name":"serializable properties and dsl writes define signals","language":"kotlin","src":"@Serializable data class S(val query: String = \"\")\nfun f() { patchSignals(\"total\" to 1); dataText(\"${'$'}query + ${'$'}total\") }","unknown":[]},
     {"name":"serializable properties and dsl writes define signals, read with a backslash-escaped dollar","language":"kotlin","src":"@Serializable data class S(val query: String = \"\")\nfun f() { patchSignals(\"total\" to 1); dataText(\"\\$query + \\$total\") }","unknown":[]},

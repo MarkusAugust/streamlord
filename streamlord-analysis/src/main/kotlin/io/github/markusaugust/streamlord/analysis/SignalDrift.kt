@@ -204,23 +204,9 @@ internal fun serializableProperties(
     lex: KotlinLex = lexKotlin(src),
 ): Map<String, List<SignalProperty>> = signalClasses(src, lex).filter { it.serializable }.associate { it.name to it.properties }
 
-/**
- * Every class in the file that is not `@Serializable` and whose names Jackson writes off its
- * constructor, with them: each property's own, or the one `@JsonProperty` gives. A class with
- * names elsewhere, in a body, a supertype or under `@JsonNaming`, is left out.
- */
-internal fun jacksonProperties(
-    src: String,
-    lex: KotlinLex = lexKotlin(src),
-): Map<String, List<SignalProperty>> =
-    signalClasses(src, lex).filter { !it.serializable && it.readable }.associate {
-        it.name to
-            it.properties
-    }
-
 // A naming strategy handed to a mapper, Jackson's or kotlinx.serialization's.
 private val NAMING_STRATEGY =
-    regex("""\bPropertyNamingStrateg(?:y|ies)\b|\bpropertyNamingStrategy\b|\bJsonNamingStrategy\b|\bnamingStrategy\s*=""")
+    regex("""\bPropertyNamingStrateg(?:y|ies)\b|\bpropertyNamingStrategy\b|\bJsonNamingStrategy\b""")
 private val JSON_NAMING = regex("""@(?:[A-Za-z_][\w.]*\.)?JsonNaming\s*\(""")
 private val IMPORT_LINE = regex("""^[ \t]*import\b[^\n]*""", RegexOption.MULTILINE)
 

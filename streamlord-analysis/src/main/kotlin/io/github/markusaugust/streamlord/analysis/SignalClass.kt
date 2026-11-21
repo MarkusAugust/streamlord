@@ -70,17 +70,20 @@ internal fun signalClasses(
         if (header.modifiers.any { it in NO_SIGNALS && !(serializable && it in KOTLINX_KINDS) }) continue
         val name = m.groupValues[1]
         val open = constructorOpen(src, m.range.last + 1) ?: continue
-        val closed = matchingParen(src, open)
+        val closed = codeParen(src, lex, open)
         // Still being typed, a signals class's list is what stands before the first blank line: its signals stay known meanwhile.
         val close = closed.takeIf { it >= 0 } ?: if (serializable) BLANK_LINE.find(src, open)?.range?.first ?: src.length else continue
         val properties = ArrayList<SignalProperty>()
-        var readable = closed >= 0 && (serializable || header.annotations.none { it.name in JACKSON_CLASS_OWN })
-        if (!serializable && closed >= 0 && !endsBare(src, close + 1)) readable = false
-        for (p in PROPERTY.findAll(src.substring(open, close))) {
+        var readable = closed >= 0 && (serializable || header.annotations.none { ownsNames(it) })
+        if (!serializable && closed >= 0 && !addsNoNames(src, lex, close + 1)) readable = false
+        val list = src.substring(open, close)
+        val depth = depths(list, lex, open)
+        for (p in PROPERTY.findAll(list)) {
             val keyword = open + p.range.first
-            if (!lex.mask[keyword]) continue
+            // A `val` in a default value is that value's, not the class's.
+            if (!lex.mask[keyword] || depth[p.range.first] != 1) continue
             val own = header(src, lex, keyword, open + 1)
-            val group = PROPERTY.groupAt(src.substring(open, close), p, 1) ?: continue
+            val group = PROPERTY.groupAt(list, p, 1) ?: continue
             val start = open + group.range.first
             val written = SignalProperty(group.value, start, start + group.value.length)
             if (serializable) {
@@ -108,6 +111,8 @@ private fun renamed(
     val arguments = a.arguments ?: return null
     val m = NAME_ARGUMENT.find(arguments) ?: return null
     val group = NAME_ARGUMENT.groupAt(arguments, m, 1) ?: NAME_ARGUMENT.groupAt(arguments, m, 2) ?: return null
+    // An empty name is none: the property keeps its own.
+    if (group.value.isEmpty()) return null
     val start = a.argumentsStart + group.range.first
     return SignalProperty(group.value, start, start + group.value.length)
 }
@@ -141,17 +146,99 @@ private fun constructorOpen(
     return null
 }
 
-/** Whether what follows a constructor that closes before [from] adds no name: no supertype and no body with anything in it. */
-private fun endsBare(
+/** Whether [a], on a Jackson class, says its names are not all its constructor's: `ignoreUnknown` alone, which reads them as they are, does not. */
+private fun ownsNames(a: Annotation): Boolean =
+    a.name in JACKSON_CLASS_OWN && !(a.name == "JsonIgnoreProperties" && a.arguments?.let { IGNORE_UNKNOWN_ONLY.matchEntire(it) } != null)
+
+private val IGNORE_UNKNOWN_ONLY = regex("""\s*ignoreUnknown\s*=\s*(?:true|false)\s*""")
+
+// What in a body or a supertype gives Jackson a name: a property, a getter, an annotation of its own, a class it extends.
+private val NAMES_IN_BODY = regex("""\b(?:val|var)\b|\bfun\s+(?:get|is)[A-Z]|@Json""")
+private val COMPANION = regex("""\bcompanion\s+object\b[^{]*\{""")
+private val SERIALIZABLE_SUPERTYPE = regex("""(?:java\.io\.)?Serializable""")
+
+/**
+ * Whether what follows a constructor that closes before [from] adds no name Jackson writes: no
+ * supertype but `Serializable`, and a body, if any, with no property and no getter outside its
+ * companion object.
+ */
+private fun addsNoNames(
     src: String,
+    lex: KotlinLex,
     from: Int,
 ): Boolean {
     var i = from
-    while (i < src.length && src[i].isWhitespace()) i++
-    if (src.startsWith(":", i)) return false
+    while (i < src.length && (src[i].isWhitespace() || lex.comments[i])) i++
+    if (src.startsWith(":", i)) {
+        var end = i + 1
+        while (end < src.length && src[end] != '{' && src[end] != '\n') end++
+        if (SERIALIZABLE_SUPERTYPE.matchEntire(src.substring(i + 1, end).trim()) == null) return false
+        i = end
+        while (i < src.length && src[i].isWhitespace()) i++
+    }
     if (!src.startsWith("{", i)) return true
-    val close = matchingBrace(src, i)
-    return close >= 0 && src.substring(i + 1, close).isBlank()
+    val close = codeBrace(src, lex, i)
+    if (close < 0) return false
+    val companions =
+        COMPANION
+            .findAll(src.substring(i + 1, close))
+            .map { m ->
+                val open = i + 1 + m.range.last
+                open..codeBrace(src, lex, open).let { if (it < 0) close else it }
+            }.toList()
+    return NAMES_IN_BODY.findAll(src.substring(i + 1, close)).none { m ->
+        val at = i + 1 + m.range.first
+        lex.mask[at] && companions.none { at in it }
+    }
+}
+
+/** The depth of each offset of [list], which starts at [start] with the constructor's `(`, in code brackets: 1 is the list's own. */
+private fun depths(
+    list: String,
+    lex: KotlinLex,
+    start: Int,
+): IntArray {
+    val out = IntArray(list.length)
+    var depth = 0
+    for (k in list.indices) {
+        val c = list[k]
+        if (lex.mask[start + k] && (c == '(' || c == '[' || c == '{')) depth++
+        out[k] = depth
+        if (lex.mask[start + k] && (c == ')' || c == ']' || c == '}')) depth--
+    }
+    return out
+}
+
+/** The offset of the code `)` that closes the `(` at [open], or -1: a parenthesis in a string or a comment counts for nothing. */
+private fun codeParen(
+    src: String,
+    lex: KotlinLex,
+    open: Int,
+): Int = closing(src, lex, open, '(', ')')
+
+/** The offset of the code `}` that closes the `{` at [open], or -1. */
+private fun codeBrace(
+    src: String,
+    lex: KotlinLex,
+    open: Int,
+): Int = closing(src, lex, open, '{', '}')
+
+private fun closing(
+    src: String,
+    lex: KotlinLex,
+    open: Int,
+    opening: Char,
+    closing: Char,
+): Int {
+    var depth = 0
+    for (i in open until src.length) {
+        if (!lex.mask[i]) continue
+        when (src[i]) {
+            opening -> depth++
+            closing -> if (--depth == 0) return i
+        }
+    }
+    return -1
 }
 
 /**
@@ -214,21 +301,6 @@ private fun openingParen(
         when (src[i]) {
             ')' -> depth++
             '(' -> if (--depth == 0) return i
-        }
-    }
-    return -1
-}
-
-/** The offset of the `}` that closes the `{` at [open], or -1. Nesting only. */
-private fun matchingBrace(
-    src: String,
-    open: Int,
-): Int {
-    var depth = 0
-    for (i in open until src.length) {
-        when (src[i]) {
-            '{' -> depth++
-            '}' -> if (--depth == 0) return i
         }
     }
     return -1

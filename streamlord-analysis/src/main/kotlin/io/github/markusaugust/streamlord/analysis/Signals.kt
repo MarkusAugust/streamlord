@@ -305,15 +305,19 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
 /**
  * What the definitions say about a class, written with a `:`, which no signal name holds: a class
  * a page is declared from, a class a page or a patch sends with the classes its name may mean
- * (`sends:Form:app.Form|lib.Form`), a `@Serializable` class whose properties are defined, and a
- * Jackson class with each of its properties (`jackson:app.Form`, `jacksonProperty:app.Form:email`),
- * a signal only where the class is sent. A class a page is declared from that the analysis cannot
- * read is one only its codec can name (see [isKnownSignal]).
+ * (`sends:Form:app.Form|lib.Form`), a `@Serializable` class (`kotlinx:app.Form`), whose properties
+ * are defined, a Jackson class with each of its properties (`jackson:app.Form`,
+ * `jacksonProperty:app.Form:email`), a signal only where the class is sent, and a naming strategy,
+ * which leaves every class to its codec. A class a page is declared from that the analysis cannot
+ * read is one only its codec can name, and is marked readable (`class:Form`) only where one of the
+ * classes its name may mean is (see [withClassProperties]).
  */
 internal const val ENCODED_CLASS: String = "toJsonValue:"
 internal const val SENT_CLASS: String = "sends:"
 internal const val READABLE_CLASS: String = "class:"
+internal const val KOTLINX_CLASS: String = "kotlinx:"
 internal const val JACKSON_CLASS: String = "jackson:"
+internal const val RENAMED_CLASSES: String = "renamed:classes"
 internal const val JACKSON_PROPERTY_OF: String = "jacksonProperty:"
 
 /**
@@ -456,7 +460,7 @@ internal fun collectDeclaredSignals(
  * for a name Streamlord refuses. [withClassProperties] and [isKnownSignal] read them together.
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
-    if (source.language == SourceLanguage.SETTINGS) return if (settingsRenameSignals(source.text)) setOf(ANY_SIGNAL) else emptySet()
+    if (source.language == SourceLanguage.SETTINGS) return if (settingsRenameSignals(source.text)) setOf(RENAMED_CLASSES) else emptySet()
     val foreign = foreignHelpers(source)
     return collectSignalDefinitions(source.text, source.language, { name, _ -> name in foreign }, prefix = source.prefix)
 }
@@ -480,14 +484,13 @@ internal fun collectSignalDefinitions(
     for (d in definedAt(src, language, spread, foreign, lex, prefix, refused)) out += if (d in refused) REFUSED + d.name else d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
-        val classes = signalClasses(src, lex!!)
-        val own = packageOf(src, lex)
-        for (c in classes) {
+        val own = packageOf(src, lex!!)
+        // A class is known by its package too, so that another of its name is not taken for it.
+        for (c in signalClasses(src, lex)) {
+            val qualified = if (own.isEmpty()) c.name else "$own.${c.name}"
             if (c.serializable) {
-                out += READABLE_CLASS + c.name
+                out += KOTLINX_CLASS + qualified
             } else if (c.readable) {
-                // A Jackson class is known by its package too, so that another of its name is not taken for it.
-                val qualified = if (own.isEmpty()) c.name else "$own.${c.name}"
                 out += JACKSON_CLASS + qualified
                 for (p in c.properties) out += "$JACKSON_PROPERTY_OF$qualified:${p.name}"
             }
@@ -502,7 +505,7 @@ internal fun collectSignalDefinitions(
         for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) sent += type
         for (type in sent) out += "$SENT_CLASS$type:${candidateClasses(src, lex, type).joinToString("|")}"
         // A naming strategy leaves every class's names to the codec.
-        if (codeRenamesSignals(src, lex)) out += ANY_SIGNAL
+        if (codeRenamesSignals(src, lex)) out += RENAMED_CLASSES
     }
     return out
 }
@@ -604,7 +607,7 @@ private fun definedAt(
 ): List<SignalDeclaration> {
     val out = ArrayList(declared(src, language, spread, foreign, lex, prefix, refused))
     if (language == SourceLanguage.KOTLIN) {
-        for (properties in serializableProperties(src).values) {
+        for (properties in serializableProperties(src, lex ?: lexKotlin(src)).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
             for (p in properties) {
                 val kind = if (src.getOrNull(p.start - 1) == '"') SignalDeclaration.Kind.NAME else SignalDeclaration.Kind.PROPERTY

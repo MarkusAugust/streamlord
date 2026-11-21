@@ -226,12 +226,13 @@ internal fun unknownSignalIssues(
  */
 internal fun withClassProperties(defined: Set<String>): Set<String> {
     val sends = defined.filter { it.startsWith(SENT_CLASS) }
-    if (sends.isEmpty()) return defined
+    // A naming strategy renames every class's signals, so none is read off its properties.
+    if (sends.isEmpty() || RENAMED_CLASSES in defined) return defined
     val out = LinkedHashSet(defined)
     for (d in sends) {
         val type = d.removePrefix(SENT_CLASS).substringBefore(':')
         val candidates = d.substringAfter("$SENT_CLASS$type:").split('|')
-        val found = candidates.filter { JACKSON_CLASS + it in defined }
+        val found = candidates.filter { KOTLINX_CLASS + it in defined || JACKSON_CLASS + it in defined }
         val qualified = if (candidates.first() in found) candidates.first() else found.singleOrNull() ?: continue
         out += READABLE_CLASS + type
         val prefix = "$JACKSON_PROPERTY_OF$qualified:"

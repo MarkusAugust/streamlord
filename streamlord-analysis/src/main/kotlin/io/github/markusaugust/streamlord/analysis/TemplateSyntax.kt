@@ -58,11 +58,23 @@ internal val TEMPLATE_SYNTAX: Regex by lazy {
 /**
  * Constructs that decide what is written and write nothing themselves: a `{% %}` statement, a
  * FreeMarker `<#if>` or `[#if]`, a directive of the catalog, a Mustache section `{{#x}}`, `{{/x}}`,
- * `{{^x}}` or `{{else}}`, and an ERB or JSP `<% %>` that is not `<%=` or `<%-`.
+ * `{{^x}}` or `{{else}}`, a comment, `{{! }}` or `<%-- --%>`, and an ERB or JSP `<% %>` that is not
+ * `<%=` or `<%-`.
  */
 private val CONTROL: Regex by lazy {
     val directives = CONSTRUCTS.directives.map { (sigil, words) -> """${Regex.escape(sigil)}(?:${words.joinToString("|")})\b""" }
-    regex((listOf("""\{%""", """</?#""", """\[#""", """\{\{\s*(?:[#/^]|else\b)""", """<%(?![=-])""") + directives).joinToString("|"))
+    regex(
+        (
+            listOf(
+                """\{%""",
+                """</?#""",
+                """\[#""",
+                """\{\{\s*(?:[#/^!]|else\b)""",
+                """<%(?![=-])""",
+                """<%--""",
+            ) + directives
+        ).joinToString("|"),
+    )
 }
 
 /** Statements among [CONTROL] that write another file's text where they stand. */
