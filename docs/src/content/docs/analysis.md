@@ -178,6 +178,12 @@ The check finds a strategy in code, Jackson's `PropertyNamingStrategies` or kotl
 `application.yml`, `.yaml` or `.properties`. Give it those files as
 `Source(text, SourceLanguage.SETTINGS)`; `checkProject` and both editors read them on their own.
 A strategy set in Java code is not seen, since the check reads no Java.
+
+A Jackson class a handler reads is not judged either where the project writes signals whose names
+are known only at run time: a page whose `data-signals` a template writes, such as Thymeleaf's
+`th:data-signals="${signals}"` or Pebble's `data-signals="{{ signals | raw }}"`, `dataSignals(json)`
+with JSON text, or a handler that patches JSON text. A `@Serializable` class and a lookup such as
+`signals.string("query")` are judged all the same.
 `report.declaredByCodec` names what turned the check off, which is why the test above asserts it
 is empty. A property counts as declared
 even when the page writes it as `null`, which the client does not store, so give a signal the

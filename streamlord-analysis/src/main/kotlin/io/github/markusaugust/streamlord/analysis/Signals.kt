@@ -196,6 +196,9 @@ private val PATCH_CALLS =
     Catalog.default.signalCalls
         .filterValues { "value" in it }
         .keys
+
+/** A call that writes signals as JSON text, which a patch sends whatever is in it. */
+internal val JSON_TEXT = regex("""\.(?:writeValueAsString|encodeToString|toJson|toJsonString)\s*\(""")
 private val CONSTRUCTED = regex("""^\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(""")
 
 /**
@@ -221,8 +224,17 @@ internal fun patchedSignalTypes(
                     ?.get(1)
                     ?.let { if (it in VALUE_TYPES) null else named(it) }
                 ?: IDENTIFIER_ARG.find(a.text)?.let { m ->
-                    declarations.typeOf(m.groupValues[1], site.nameStart)?.let { if (it in VALUE_TYPES) null else named(it) }
+                    declarations.typeOf(m.groupValues[1], site.nameStart)?.let {
+                        if (it == "String") {
+                            ANY_SIGNAL
+                        } else if (it in VALUE_TYPES) {
+                            null
+                        } else {
+                            named(it)
+                        }
+                    }
                 }
+                ?: ANY_SIGNAL.takeIf { JSON_TEXT.containsMatchIn(a.text) }
         type?.let { out += it }
     }
     return out
@@ -450,6 +462,83 @@ internal fun collectDeclaredSignals(
     language: SourceLanguage,
     prefix: String,
 ): Set<String> = collect(src, language, reads = true, NOT_FOREIGN, prefix)
+
+/**
+ * Whether [src] writes signals whose names are known only at run time: a `data-signals` a template
+ * writes, Thymeleaf's `th:data-signals` or `th:attr`, a key with template syntax in it, or a value
+ * that is no object (`data-signals="{{ signals | raw }}"`, `"${'$'}{json}"`), in markup or in an HTML
+ * string of Kotlin; in Kotlin also `dataSignals(json)` or `attributes["data-signals"] = json` with
+ * JSON text, and a patch of JSON written at run time. A mention in a comment or in text writes none.
+ */
+internal fun writesSignalsAtRunTime(
+    src: String,
+    language: SourceLanguage,
+    prefix: String,
+    lex: KotlinLex? = null,
+    patched: Set<String>? = null,
+): Boolean {
+    if (!src.contains("signals", ignoreCase = true)) return false
+    if (language == SourceLanguage.HTML) return tagsWriteSignals(src, prefix, templates = true)
+    if (language != SourceLanguage.KOTLIN) return false
+    val code = lex ?: lexKotlin(src)
+    val inStrings =
+        code.strings.any {
+            it.text.contains("signals", ignoreCase = true) &&
+                tagsWriteSignals(it.text, prefix, templates = false)
+        }
+    if (inStrings || ANY_SIGNAL in (patched ?: patchedSignalTypes(src, code))) return true
+    val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
+    for (site in findCallSites(src, setOf("dataSignals"), code)) {
+        val a = site.positional.singleOrNull() ?: continue
+        if (a.string != null) continue
+        val text = a.text.trim()
+        if (JSON_TEXT.containsMatchIn(text)) return true
+        if (IDENTIFIER_ARG.matchEntire(text) != null && declarations.typeOf(text, site.nameStart) == "String") return true
+    }
+    return ATTRIBUTES_SET.findAll(src).any { m ->
+        code.mask[m.range.first] &&
+            src.getOrNull(m.range.last + 1).let { it != null && it != '"' }
+    }
+}
+
+// `attributes["data-signals"] = ` with what follows it, the kotlinx.html way to write any attribute.
+private val ATTRIBUTES_SET = regex("""\battributes\s*\[\s*"[\w-]*signals"\s*\]\s*=\s*""")
+
+/** Whether a start tag of [html] writes signals whose names are known only at run time (see [writesSignalsAtRunTime]). */
+private fun tagsWriteSignals(
+    html: String,
+    prefix: String,
+    templates: Boolean,
+): Boolean {
+    val signals = prefix + "signals"
+    for (tag in tokenize(html, templates).tags) {
+        if (tag.closing) continue
+        // A template blanks its own syntax out of a name, so a key it writes is read off the tag as written.
+        if (KEY_TEMPLATE.containsMatchIn(html.substring(tag.start, tag.end).lowercase().replace(signals, "\u0000"))) return true
+        for (attr in tag.attributes) {
+            val name = attr.name.lowercase()
+            if (name == "th:$signals" || name == "data-th-$signals") return true
+            if (name == "th:attr" && attr.value?.lowercase()?.let { THYMELEAF_ATTR.containsMatchIn(it) } == true) return true
+            val bare = name.substringBefore("__")
+            if (bare.startsWith("$signals:") &&
+                (hasTemplateSyntax(bare) || PLACEHOLDER in bare || "th:" in bare.removePrefix("$signals:"))
+            ) {
+                return true
+            }
+            if (bare != signals) continue
+            val value = attr.value?.trim() ?: continue
+            if (value.isEmpty()) continue
+            if (!value.startsWith("{") || value.startsWith("{{") || value.startsWith("{%")) return true
+        }
+    }
+    return false
+}
+
+// `data-signals:{{ key }}`, with the prefix and `signals` read as one mark before it.
+private val KEY_TEMPLATE = regex("""\u0000:(?:\$\{|\{\{|\{%|<%|th:|__kt__)""")
+
+// `th:attr="data-signals=${'$'}{...}"`: Thymeleaf writes each attribute the list names.
+private val THYMELEAF_ATTR = regex("""(?:^|,)\s*[\w-]*signals\s*=""")
 
 /**
  * The signals this source defines, which a `$name` in an expression is checked against: what

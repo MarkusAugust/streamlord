@@ -359,6 +359,71 @@ class JacksonSignalNamesTest {
         assertEquals(listOf("S.kt: signal-never-declared 'userName'"), told())
     }
 
+    private val jacksonRead = "package app\n\ndata class Form(val title: String = \"\")\n\nfun r() { val f = call.readSignalsOr(Form()) }\n"
+
+    /** What the project says with a Jackson class read, the page that declares `title`'s neighbour, and [file] holding [text]. */
+    private fun withWriter(
+        file: String,
+        text: String,
+    ): List<String> {
+        files.clear()
+        write("src/main/kotlin/app/Form.kt", jacksonRead)
+        write(file, text)
+        return told()
+    }
+
+    @Test
+    fun `a Jackson class is left to the codec where signals are written at run time, as it always was`() {
+        for ((file, text) in listOf(
+            "src/main/resources/templates/a.html" to "<div th:data-signals=\"${'$'}{signals}\"></div>",
+            "src/main/resources/templates/b.html" to "<div th:attr=\"data-signals=${'$'}{signals}\"></div>",
+            "src/main/resources/templates/c.peb" to "<div data-signals=\"{{ signals | raw }}\"></div>",
+            "src/main/resources/templates/d.jte" to "<div data-signals=\"${'$'}{signals}\"></div>",
+            "src/main/resources/templates/e.html" to "<div data-signals=\"[[${'$'}{signals}]]\"></div>",
+            "src/main/resources/templates/f.peb" to "<div data-signals:{{ key }}=\"1\"></div>",
+            "src/main/kotlin/app/K1.kt" to "package app\n\nfun p(json: String) = \"<div data-signals=\\\"${'$'}json\\\"></div>\"\n",
+            "src/main/kotlin/app/K2.kt" to "package app\n\nfun FlowContent.p(json: String) = div { dataSignals(json) }\n",
+            "src/main/kotlin/app/K3.kt" to "package app\n\nfun FlowContent.p() = div { dataSignals(mapper.writeValueAsString(Form())) }\n",
+            "src/main/kotlin/app/K4.kt" to "package app\n\nfun FlowContent.p(json: String) = div { attributes[\"data-signals\"] = json }\n",
+            "src/main/kotlin/app/P1.kt" to "package app\n\nfun s(json: String) { sse.patchSignals(json) }\n",
+            "src/main/kotlin/app/P2.kt" to "package app\n\nfun s() { sse.patchSignals(mapper.writeValueAsString(Form())) }\n",
+            "src/main/kotlin/app/P3.kt" to "package app\n\nfun s(json: JsonObject) { sse.patchSignals(json) }\n",
+        )) {
+            assertEquals(emptyList(), withWriter(file, text), file)
+        }
+    }
+
+    @Test
+    fun `a mention of data-signals that writes none leaves the Jackson class judged`() {
+        val never = listOf("Form.kt: signal-never-declared 'title'")
+        for ((file, text) in listOf(
+            "src/main/resources/templates/a.html" to "<!-- data-signals=\"x\" --><p>Thymeleaf's th:data-signals is not used.</p>",
+            "src/main/resources/templates/b.html" to "<style>[data-signals=\"x\"] { color: red }</style>",
+            "src/main/resources/templates/c.html" to "<div data-signals=\"{other: 1, total: ${'$'}{n}}\"></div>",
+            "src/main/kotlin/app/K.kt" to "package app\n\n// a page could write th:data-signals=\"${'$'}{json}\"\nfun p() = 1\n",
+        )) {
+            assertEquals(never, withWriter(file, text), file)
+        }
+    }
+
+    @Test
+    fun `a kotlinx class, a lookup and a page's reads are judged as before where signals are written at run time`() {
+        files.clear()
+        write(
+            "src/main/kotlin/app/S.kt",
+            "package app\n\n@Serializable\ndata class S(val userName: String = \"\")\n\nfun r() { val s = call.readSignals<S>(); call.readSignals().string(\"questQuery\") }\n",
+        )
+        write("src/main/resources/templates/a.html", "<div th:data-signals=\"${'$'}{signals}\"><p data-text=\"${'$'}anything\"></p></div>")
+        assertEquals(
+            listOf(
+                "S.kt: signal-never-declared 'userName'",
+                "S.kt: signal-never-declared 'questQuery'",
+                "a.html: unknown-signal '\$anything'",
+            ),
+            told(),
+        )
+    }
+
     @Test
     fun `JsonNaming on the class leaves its names to the codec`() {
         write(

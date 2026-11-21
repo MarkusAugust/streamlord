@@ -51,6 +51,9 @@ public data class SignalProperty(
  *   Spring's settings, so that no class's signals go by the names the check reads off it.
  * @property opaqueClasses The classes the file declares whose names the codec alone knows, by simple
  *   name: a Jackson class with names outside its constructor, or under `@JsonNaming`.
+ * @property writesAtRunTime Whether the file writes signals whose names are known only at run time:
+ *   a page whose `data-signals` a template writes, or JSON text a handler patches.
+ * @property jacksonClasses The Jackson classes among [classes], by simple name.
  */
 public data class SignalFacts(
     val declared: Set<String>,
@@ -63,6 +66,8 @@ public data class SignalFacts(
     val imports: Set<String> = emptySet(),
     val renamesSignals: Boolean = false,
     val opaqueClasses: Set<String> = emptySet(),
+    val writesAtRunTime: Boolean = false,
+    val jacksonClasses: Set<String> = emptySet(),
 )
 
 private val SIGNAL_TYPE_PARAMETER = regex("""\breadSignals\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>""")
@@ -95,7 +100,13 @@ public fun collectSignalFacts(source: Source): SignalFacts {
         return SignalFacts(emptySet(), emptySet(), emptyMap(), emptyList(), renamesSignals = settingsRenameSignals(src))
     }
     if (language == SourceLanguage.HTML) {
-        return SignalFacts(collectDeclaredSignals(src, language, source.prefix), emptySet(), emptyMap(), emptyList())
+        return SignalFacts(
+            collectDeclaredSignals(src, language, source.prefix),
+            emptySet(),
+            emptyMap(),
+            emptyList(),
+            writesAtRunTime = writesSignalsAtRunTime(src, language, source.prefix),
+        )
     }
 
     val lex = lexKotlin(src)
@@ -127,17 +138,20 @@ public fun collectSignalFacts(source: Source): SignalFacts {
             .orEmpty()
     val imports = IMPORT.findAll(src).filter { lex.mask[it.range.first] }.mapTo(LinkedHashSet()) { it.groupValues[1] }
     val classes = signalClasses(src, lex)
+    val patched = patchedSignalTypes(src, lex)
     return SignalFacts(
         collectDeclaredSignals(src, language, source.prefix),
         types,
         classes.filter { it.serializable || (it.readable && it.properties.isNotEmpty()) }.associate { it.name to it.properties },
         lookups,
         encodedSignalTypes(src, lex = lex),
-        patchedSignalTypes(src, lex),
+        patched,
         packageName,
         imports,
         codeRenamesSignals(src, lex),
         classes.filter { !it.serializable && !it.readable }.mapTo(LinkedHashSet()) { it.name },
+        writesSignalsAtRunTime(src, language, source.prefix, lex, patched),
+        classes.filter { !it.serializable && it.readable }.mapTo(LinkedHashSet()) { it.name },
     )
 }
 
@@ -364,6 +378,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         }
     }
     val renamed = facts.values.any { it.renamesSignals }
+    val atRunTime = facts.values.any { it.writesAtRunTime }
 
     // A class is judged where one class alone is what a read names: two the read may mean are left alone.
     val judged = HashSet<Pair<String, String>>()
@@ -371,7 +386,12 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     // class this check cannot read, a Jackson one or none named, may declare any name.
     val byCodec = LinkedHashSet<String>()
     for (one in facts.values) {
-        for (type in one.signalTypes) resolve(one, type, byName).singleOrNull()?.let { judged += it.file to type }
+        for (type in one.signalTypes) {
+            val c = resolve(one, type, byName).singleOrNull() ?: continue
+            // A Jackson class was never judged before it could be read; where signals are written at run time it is not judged still.
+            if (atRunTime && type in facts[c.file]?.jacksonClasses.orEmpty()) continue
+            judged += c.file to type
+        }
         for (type in one.encodedTypes) {
             val found = if (type == ANY_SIGNAL) emptyList() else resolve(one, type, byName)
             if (found.isEmpty()) byCodec += type

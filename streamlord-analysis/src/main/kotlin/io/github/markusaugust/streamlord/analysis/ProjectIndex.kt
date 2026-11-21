@@ -246,7 +246,7 @@ public class ProjectIndex(
     ): Boolean {
         if (a.signalTypes != b.signalTypes || a.encodedTypes != b.encodedTypes || a.patchedTypes != b.patchedTypes) return true
         // A naming strategy decides every class's names.
-        if (a.renamesSignals != b.renamesSignals) return true
+        if (a.renamesSignals != b.renamesSignals || a.writesAtRunTime != b.writesAtRunTime) return true
         // The package and the imports decide which class a name of the file is.
         if (a.packageName != b.packageName || a.imports != b.imports) return true
         val declared = (a.declared - b.declared) + (b.declared - a.declared)

@@ -44,7 +44,11 @@ All notable changes to Streamlord are recorded here. The format follows
   `@JsonIgnoreProperties`, `@JsonAlias` or `access`, and every class in a project that sets a naming
   strategy, in Kotlin code or in Spring's `spring.jackson.property-naming-strategy`, stays the codec's
   alone, as before. A patch of such a class of the project may set any signal, in both checks, as a
-  page declared from one does; a patch of a class the project does not declare sets none.
+  page declared from one does; a patch of a class the project does not declare sets none. Where the
+  project writes signals whose names are known only at run time, a page whose `data-signals` a
+  template writes (`th:data-signals`, `data-signals="{{ signals | raw }}"`), `dataSignals(json)` or
+  `attributes["data-signals"] = json` with JSON text, or a patch of JSON text, a Jackson class a
+  handler reads is not judged, as it was not before; a `@Serializable` class and a lookup are.
 - A `@Serializable` class written `@kotlinx.serialization.Serializable`, or with an annotation whose
   arguments hold parentheses beside it, is read as one, and so is a `@SerialName` or `@JsonProperty`
   with an annotation or a comment after it. A naming strategy in kotlinx's `Json { namingStrategy = ... }`
