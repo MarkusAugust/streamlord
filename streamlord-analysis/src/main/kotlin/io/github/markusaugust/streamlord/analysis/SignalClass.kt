@@ -153,7 +153,7 @@ private fun ownsNames(a: Annotation): Boolean =
 private val IGNORE_UNKNOWN_ONLY = regex("""\s*ignoreUnknown\s*=\s*(?:true|false)\s*""")
 
 // What in a body or a supertype gives Jackson a name: a property, a getter, an annotation of its own, a class it extends.
-private val NAMES_IN_BODY = regex("""\b(?:val|var)\b|\bfun\s+(?:get|is)[A-Z]|@Json""")
+private val NAMES_IN_BODY = regex("""\b(?:val|var)\b|\bfun\s+(?:get|is)[A-Z]|@(?:[A-Za-z_][\w.]*\.)?Json""")
 private val COMPANION = regex("""\bcompanion\s+object\b[^{]*\{""")
 private val SERIALIZABLE_SUPERTYPE = regex("""(?:java\.io\.)?Serializable""")
 
@@ -182,6 +182,7 @@ private fun addsNoNames(
     val companions =
         COMPANION
             .findAll(src.substring(i + 1, close))
+            .filter { lex.mask[i + 1 + it.range.first] }
             .map { m ->
                 val open = i + 1 + m.range.last
                 open..codeBrace(src, lex, open).let { if (it < 0) close else it }

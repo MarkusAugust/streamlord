@@ -222,23 +222,50 @@ internal fun unknownSignalIssues(
 /**
  * [defined] with the properties of each Jackson class a page or a patch sends, as the names they
  * are, and the class marked as one the analysis reads. Of the classes a name may mean, an import
- * decides, and otherwise the file's own package before one star import alone.
+ * decides, and otherwise the file's own package before one star import alone; an import of a
+ * nested class, `model.Outer.Form`, means the `Form` of `model`. A class sent whose names the codec
+ * alone knows may send any signal.
  */
+
 internal fun withClassProperties(defined: Set<String>): Set<String> {
     val sends = defined.filter { it.startsWith(SENT_CLASS) }
+    if (sends.isEmpty()) return defined
     // A naming strategy renames every class's signals, so none is read off its properties.
-    if (sends.isEmpty() || RENAMED_CLASSES in defined) return defined
+    if (RENAMED_CLASSES in defined) return defined + ANY_SIGNAL
+    val classes =
+        defined.mapNotNull { d ->
+            listOf(KOTLINX_CLASS, JACKSON_CLASS).firstOrNull { d.startsWith(it) }?.let { d.removePrefix(it) }
+        }
     val out = LinkedHashSet(defined)
     for (d in sends) {
         val type = d.removePrefix(SENT_CLASS).substringBefore(':')
         val candidates = d.substringAfter("$SENT_CLASS$type:").split('|')
-        val found = candidates.filter { KOTLINX_CLASS + it in defined || JACKSON_CLASS + it in defined }
-        val qualified = if (candidates.first() in found) candidates.first() else found.singleOrNull() ?: continue
+        val found = candidates.filter { it in classes }
+        val qualified =
+            if (candidates.first() in found) {
+                candidates.first()
+            } else {
+                found.singleOrNull() ?: classes.singleOrNull { nests(candidates.first(), it) }
+            }
+        if (qualified == null) {
+            out += ANY_SIGNAL
+            continue
+        }
         out += READABLE_CLASS + type
         val prefix = "$JACKSON_PROPERTY_OF$qualified:"
         for (p in defined) if (p.startsWith(prefix)) out += p.removePrefix(prefix)
     }
     return out
+}
+
+/** Whether [written], a class as an import names it, is [declared] nested in a class of the same package: `model.Outer.Form` and `model.Form`. */
+private fun nests(
+    written: String,
+    declared: String,
+): Boolean {
+    val pkg = declared.substringBeforeLast('.', "")
+    return pkg.isNotEmpty() && written.startsWith("$pkg.") && written != declared &&
+        written.substringAfterLast('.') == declared.substringAfterLast('.')
 }
 
 private fun unknownSignalIssue(

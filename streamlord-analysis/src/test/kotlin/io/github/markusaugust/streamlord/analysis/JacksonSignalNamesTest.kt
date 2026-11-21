@@ -223,6 +223,44 @@ class JacksonSignalNamesTest {
     }
 
     @Test
+    fun `a class a patch sends whose names the codec alone knows may send any signal`() {
+        for ((klass, others) in listOf(
+            "data class F(val userName: String = \"\")" to
+                mapOf("src/main/resources/application.yml" to "spring.jackson.property-naming-strategy: SNAKE_CASE\n"),
+            "@JsonNaming(SnakeCaseStrategy::class)\ndata class F(val userName: String = \"\")" to emptyMap(),
+        )) {
+            files.clear()
+            files += others
+            write("src/main/kotlin/app/F.kt", "package app\n\n$klass\n")
+            write("src/main/kotlin/app/S.kt", "package app\n\nfun s() { sse.patchSignals(F()) }\n")
+            write("src/main/resources/templates/list.html", "<p data-text=\"${'$'}user_name\"></p>")
+            assertEquals(emptyList(), told(), klass)
+        }
+    }
+
+    @Test
+    fun `an import of a nested class names the class of that package`() {
+        files.clear()
+        write("src/main/kotlin/model/Outer.kt", "package model\n\nclass Outer {\n    @Serializable\n    data class F(val a: Int = 0)\n}\n")
+        write(
+            "src/main/kotlin/web/Page.kt",
+            "package web\n\nimport model.Outer.F\n\nfun p() = div { dataSignals(codec.toJsonValue(F())) }\n",
+        )
+        write("src/main/resources/templates/list.html", "<p data-text=\"${'$'}a + ${'$'}zz\"></p>")
+        assertEquals(listOf("list.html: unknown-signal '\$zz'"), told())
+    }
+
+    @Test
+    fun `a body is read as code, and a qualified Jackson annotation in it is one`() {
+        for (klass in listOf(
+            "data class F(val a: Int = 0) {\n    // see companion object {\n    val extra = 1\n}",
+            "data class F(val a: Int = 0) {\n    @com.fasterxml.jackson.annotation.JsonProperty fun extra() = 1\n}",
+        )) {
+            assertEquals(emptyList(), pageOf(klass, "extra"), klass)
+        }
+    }
+
+    @Test
     fun `JsonNaming on the class leaves its names to the codec`() {
         write(
             "src/main/kotlin/app/SearchForm.kt",
