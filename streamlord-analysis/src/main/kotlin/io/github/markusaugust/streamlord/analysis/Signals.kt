@@ -211,6 +211,18 @@ internal fun patchedSignalTypes(
     src: String,
     lex: KotlinLex,
 ): Set<String> {
+    // The definitions and the facts of a file both ask: the answer is kept for the text last read.
+    lastPatched?.let { (text, types) -> if (text === src) return types }
+    return readPatchedTypes(src, lex).also { lastPatched = src to it }
+}
+
+@Volatile
+private var lastPatched: Pair<String, Set<String>>? = null
+
+private fun readPatchedTypes(
+    src: String,
+    lex: KotlinLex,
+): Set<String> {
     val out = LinkedHashSet<String>()
     val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
     for (site in findCallSites(src, PATCH_CALLS, lex)) {
@@ -504,41 +516,127 @@ internal fun writesSignalsAtRunTime(
 // `attributes["data-signals"] = ` with what follows it, the kotlinx.html way to write any attribute.
 private val ATTRIBUTES_SET = regex("""\battributes\s*\[\s*"[\w-]*signals"\s*\]\s*=\s*""")
 
-/** Whether a start tag of [html] writes signals whose names are known only at run time (see [writesSignalsAtRunTime]). */
+/**
+ * Whether a start tag of [html] writes signals whose names are known only at run time (see
+ * [writesSignalsAtRunTime]): read in one pass that keeps to start tags, past comments, scripts and
+ * styles, and looks only where `signals` stands.
+ */
 private fun tagsWriteSignals(
     html: String,
     prefix: String,
     templates: Boolean,
 ): Boolean {
-    val signals = prefix + "signals"
-    for (tag in tokenize(html, templates).tags) {
-        if (tag.closing) continue
-        // A template blanks its own syntax out of a name, so a key it writes is read off the tag as written.
-        if (KEY_TEMPLATE.containsMatchIn(html.substring(tag.start, tag.end).lowercase().replace(signals, "\u0000"))) return true
-        for (attr in tag.attributes) {
-            val name = attr.name.lowercase()
-            if (name == "th:$signals" || name == "data-th-$signals") return true
-            if (name == "th:attr" && attr.value?.lowercase()?.let { THYMELEAF_ATTR.containsMatchIn(it) } == true) return true
-            val bare = name.substringBefore("__")
-            if (bare.startsWith("$signals:") &&
-                (hasTemplateSyntax(bare) || PLACEHOLDER in bare || "th:" in bare.removePrefix("$signals:"))
-            ) {
-                return true
-            }
-            if (bare != signals) continue
-            val value = attr.value?.trim() ?: continue
-            if (value.isEmpty()) continue
-            if (!value.startsWith("{") || value.startsWith("{{") || value.startsWith("{%")) return true
+    if (!html.contains("signals", ignoreCase = true)) return false
+    val text = withoutComments(html.lowercase(), templates)
+    for (tag in startTags(text)) {
+        var at = text.indexOf("signals", tag.first)
+        while (at in tag) {
+            if (writesAt(text, at, tag.first, prefix)) return true
+            at = text.indexOf("signals", at + 7)
         }
     }
     return false
 }
 
-// `data-signals:{{ key }}`, with the prefix and `signals` read as one mark before it.
-private val KEY_TEMPLATE = regex("""\u0000:(?:\$\{|\{\{|\{%|<%|th:|__kt__)""")
+/** [lower] with each comment blanked out, a template's too with [templates], every offset kept. */
+private fun withoutComments(
+    lower: String,
+    templates: Boolean,
+): String {
+    val pairs = if (templates) COMMENTS + TEMPLATE_COMMENTS else COMMENTS
+    if (pairs.none { lower.contains(it.first) }) return lower
+    val chars = lower.toCharArray()
+    for ((open, close) in pairs) {
+        var at = lower.indexOf(open)
+        while (at >= 0) {
+            val end = lower.indexOf(close, at + open.length).let { if (it < 0) lower.length else it + close.length }
+            for (k in at until end) chars[k] = ' '
+            at = lower.indexOf(open, end)
+        }
+    }
+    return chars.concatToString()
+}
 
-// `th:attr="data-signals=${'$'}{...}"`: Thymeleaf writes each attribute the list names.
-private val THYMELEAF_ATTR = regex("""(?:^|,)\s*[\w-]*signals\s*=""")
+private val COMMENTS = listOf("<!--" to "-->")
+private val TEMPLATE_COMMENTS = listOf("{#" to "#}", "<#--" to "-->", "{{!" to "}}", "<%--" to "--%>")
+
+/** The start tags of [text], each from its `<` to its `>`, a quoted `>` inside it; a script's or a style's body is passed over. */
+private fun startTags(text: String): List<IntRange> {
+    val out = ArrayList<IntRange>()
+    var i = text.indexOf('<')
+    while (i >= 0 && i < text.length) {
+        if (i + 1 >= text.length || !text[i + 1].isLetter()) {
+            i = text.indexOf('<', i + 1)
+            continue
+        }
+        var j = i + 1
+        var quote = ' '
+        while (j < text.length) {
+            val c = text[j]
+            if (quote != ' ') {
+                if (c == quote) quote = ' '
+            } else if (c == '"' || c == '\'') {
+                quote = c
+            } else if (c == '>') {
+                break
+            }
+            j++
+        }
+        out += i..minOf(j, text.length - 1)
+        var end = i + 1
+        while (end < text.length && (text[end].isLetterOrDigit() || text[end] == '-')) end++
+        val name = text.substring(i + 1, end)
+        val next = if (name == "script" || name == "style") text.indexOf("</$name", j) else j
+        i = if (next < 0) -1 else text.indexOf('<', next + 1)
+    }
+    return out
+}
+
+/** Whether the `signals` at [at], in the start tag from [tagStart], names an attribute that writes signals at run time. */
+private fun writesAt(
+    text: String,
+    at: Int,
+    tagStart: Int,
+    prefix: String,
+): Boolean {
+    var start = at
+    while (start > tagStart && text[start - 1].let { it.isLetterOrDigit() || it == ':' || it == '-' || it == '_' }) start--
+    val after = at + "signals".length
+    val name = text.substring(start, after)
+    val signals = prefix + "signals"
+    if (name == "th:$signals" || name == "data-th-$signals") return true
+    var i = after
+    // `th:attr="data-signals=${'$'}{...}"`: Thymeleaf writes each attribute the list names.
+    if (name.endsWith(signals) && THYMELEAF_ATTR_OPEN.containsMatchIn(text.substring(tagStart, start))) {
+        while (i < text.length && text[i].isWhitespace()) i++
+        return text.startsWith("=", i)
+    }
+    if (name != signals) return false
+    if (text.startsWith("__", i)) {
+        while (i < text.length && text[i] != '=' && text[i] != ':' && !text[i].isWhitespace() &&
+            text[i] != '>'
+        ) {
+            i++
+        }
+    }
+    if (text.startsWith(":", i)) return KEY_OPENERS.any { text.startsWith(it, i + 1) }
+    while (i < text.length && text[i].isWhitespace()) i++
+    if (!text.startsWith("=", i)) return false
+    i++
+    while (i < text.length && text[i].isWhitespace()) i++
+    if (text.startsWith("\\", i)) i++
+    val quoted = text.getOrNull(i) == '"' || text.getOrNull(i) == '\''
+    if (quoted) i++
+    while (i < text.length && text[i] == ' ') i++
+    val c = text.getOrNull(i) ?: return false
+    if (c == '"' || c == '\'' || c == '\\' || c == '>' || c.isWhitespace()) return false
+    return c != '{' || text.startsWith("{{", i) || text.startsWith("{%", i)
+}
+
+// A `th:attr` whose quoted value is still open: the attributes it lists are Thymeleaf's to write.
+private val THYMELEAF_ATTR_OPEN = regex("""th:attr\s*=\s*\\?["'][^"']*$""")
+
+private val KEY_OPENERS = listOf("\${", "{{", "{%", "<%", "[[", "th:", PLACEHOLDER)
 
 /**
  * The signals this source defines, which a `$name` in an expression is checked against: what
@@ -596,7 +694,10 @@ internal fun collectSignalDefinitions(
             if (type != ANY_SIGNAL) sent += type
         }
         for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) sent += type
-        for (type in sent) out += "$SENT_CLASS$type:${candidateClasses(src, lex, type).joinToString("|")}"
+        if (sent.isNotEmpty()) {
+            val candidates = candidateClasses(src, lex)
+            for (type in sent) out += "$SENT_CLASS$type:${candidates(type).joinToString("|")}"
+        }
         // A naming strategy leaves every class's names to the codec.
         if (codeRenamesSignals(src, lex)) out += RENAMED_CLASSES
     }

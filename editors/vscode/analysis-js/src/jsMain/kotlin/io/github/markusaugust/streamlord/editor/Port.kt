@@ -25,6 +25,7 @@ import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
+import io.github.markusaugust.streamlord.analysis.signalDriftIn
 import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
@@ -189,10 +190,26 @@ fun diagnose(
             override fun own() = others?.let { collectSignalFacts(file) }
 
             override fun others() = facts(others ?: emptyArray())
+
+            override fun drift(): List<AnalysedIssue>? {
+                val own = own() ?: return null
+                val given = others ?: return null
+                lastDrift?.let { (ownBefore, othersBefore, issues) ->
+                    if (ownBefore == own && othersBefore.size == given.size &&
+                        othersBefore.indices.all { othersBefore[it] === given[it] }
+                    ) {
+                        return issues
+                    }
+                }
+                return signalDriftIn(own) { facts(given) }.also { lastDrift = Triple(own, given.copyOf(), it) }
+            }
         }
     val project = projectSignalIssues(file.language, analyzer.signalReferences(file), workspace)
     return (found + project).map(::plain).toTypedArray()
 }
+
+/** The drift check last worked out, for the file's own facts and the other files' as given, which the index hands back the same until one changes. */
+private var lastDrift: Triple<SignalFacts, Array<DriftFacts>, List<AnalysedIssue>>? = null
 
 /** What the workspace's other files say about signals, as the analysis holds it. */
 private fun facts(others: Array<DriftFacts>): List<SignalFacts> =

@@ -220,24 +220,33 @@ private fun onSignals(
 /** Every `@Serializable` class in the file, with the names and offsets of its constructor properties. */
 internal fun serializableProperties(
     src: String,
-    lex: KotlinLex = lexKotlin(src),
+    lex: KotlinLex? = null,
 ): Map<String, List<SignalProperty>> = signalClasses(src, lex).filter { it.serializable }.associate { it.name to it.properties }
 
 // A naming strategy handed to a mapper, Jackson's or kotlinx.serialization's.
-private val NAMING_STRATEGY =
-    regex("""\bPropertyNamingStrateg(?:y|ies)\b|\bpropertyNamingStrategy\b|\bJsonNamingStrategy\b""")
+// A naming strategy handed to a Jackson mapper. kotlinx.serialization's is not read: the check judged
+// a `@Serializable` class by its names before it read any strategy, and still does.
+private val NAMING_STRATEGY = regex("""\bPropertyNamingStrateg(?:y|ies)\b|\bpropertyNamingStrategy\b""")
+
+// Jackson's default, which renames nothing.
+private val LOWER_CAMEL = regex("""(?i)lower[_-]?camel""")
 private val JSON_NAMING = regex("""@(?:[A-Za-z_][\w.]*\.)?JsonNaming\s*\(""")
 private val IMPORT_LINE = regex("""^[ \t]*import\b[^\n]*""", RegexOption.MULTILINE)
 
-/** Whether the code of [src] sets a naming strategy for a codec: one named in `@JsonNaming` is that class's alone, and an import sets none. */
+/**
+ * Whether the code of [src] sets a naming strategy for a Jackson mapper that renames: one named in
+ * `@JsonNaming` is that class's alone, an import sets none, and `LOWER_CAMEL_CASE` renames nothing.
+ */
 internal fun codeRenamesSignals(
     src: String,
     lex: KotlinLex,
 ): Boolean {
+    if (!src.contains("amingStrateg")) return false
     val own = JSON_NAMING.findAll(src).map { it.range.first..maxOf(it.range.last, matchingParen(src, it.range.last)) }.toList()
     val imports = IMPORT_LINE.findAll(src).map { it.range }.toList()
     return NAMING_STRATEGY.findAll(src).any { m ->
-        lex.mask[m.range.first] && own.none { m.range.first in it } && imports.none { m.range.first in it }
+        lex.mask[m.range.first] && own.none { m.range.first in it } && imports.none { m.range.first in it } &&
+            !LOWER_CAMEL.containsMatchIn(lineFrom(src, m.range.first))
     }
 }
 
@@ -248,33 +257,33 @@ private val SETTINGS_NAMING = regex("""(?i)property[-_]?naming[-_]?strategy""")
 internal fun settingsRenameSignals(text: String): Boolean =
     text.lineSequence().any { line ->
         val start = line.trimStart()
-        !start.startsWith("#") && !start.startsWith("!") && SETTINGS_NAMING.containsMatchIn(line)
+        !start.startsWith("#") && !start.startsWith("!") && SETTINGS_NAMING.containsMatchIn(line) && !LOWER_CAMEL.containsMatchIn(line)
     }
 
+/** The text of [src] from [at] to the end of its line. */
+private fun lineFrom(
+    src: String,
+    at: Int,
+): String = src.substring(at, src.indexOf('\n', at).let { if (it < 0) src.length else it })
+
 /**
- * The classes the simple name [type] may mean in [src], as Kotlin looks it up: an explicit import
- * alone, or else the file's own package before each star import, written `pkg.Name`.
+ * The classes a simple name may mean in [src], as Kotlin looks it up: an explicit import alone, or
+ * else the file's own package before each star import, written `pkg.Name`. The file is read once.
  */
 internal fun candidateClasses(
     src: String,
     lex: KotlinLex,
-    type: String,
-): List<String> {
+): (String) -> List<String> {
     val imports =
         IMPORT
             .findAll(src)
             .filter { lex.mask[it.range.first] }
             .map { it.groupValues[1] }
             .toList()
-    imports.firstOrNull { it == type || it.endsWith(".$type") }?.let { return listOf(it) }
-    val own =
-        PACKAGE
-            .findAll(src)
-            .firstOrNull { lex.mask[it.range.first] }
-            ?.groupValues
-            ?.get(1)
-            .orEmpty()
-    return listOf(if (own.isEmpty()) type else "$own.$type") + imports.filter { it.endsWith(".*") }.map { it.removeSuffix("*") + type }
+    val explicit = imports.filter { !it.endsWith(".*") }.associateBy { it.substringAfterLast('.') }
+    val stars = imports.filter { it.endsWith(".*") }.map { it.removeSuffix("*") }
+    val own = packageOf(src, lex)
+    return { type -> explicit[type]?.let { listOf(it) } ?: (listOf(if (own.isEmpty()) type else "$own.$type") + stars.map { it + type }) }
 }
 
 /** The package [src] declares, or the empty one. */
@@ -366,49 +375,51 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val declared = facts.values.flatMapTo(LinkedHashSet()) { it.declared }
     val read = LinkedHashSet<String>()
 
+    // A naming strategy renames a Jackson class's signals, so none is read off its properties: the
+    // check is then as it was before it read Jackson classes.
+    val renamed = facts.values.any { it.renamesSignals }
     val byName = HashMap<String, MutableList<DeclaredClass>>()
-    // Every class a patch may name, the codec's own among them: the one Kotlin's lookup finds is the one sent.
-    val sendable = HashMap<String, MutableList<DeclaredClass>>()
+    // The classes whose names the codec alone knows, which a patch may name as well as one the check reads.
+    val opaque = HashMap<String, MutableList<DeclaredClass>>()
     for ((file, one) in facts) {
-        for ((type, properties) in one.classes) byName.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
-        for ((type, properties) in one.classes) sendable.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
+        for ((type, properties) in one.classes) {
+            if (renamed && type in one.jacksonClasses) continue
+            byName.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
+        }
         for (type in one.opaqueClasses) {
-            sendable.getOrPut(type) { ArrayList() } +=
-                DeclaredClass(file, one.packageName, emptyList(), opaque = true)
+            opaque.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, emptyList(), opaque = true)
         }
     }
-    val renamed = facts.values.any { it.renamesSignals }
-    val atRunTime = facts.values.any { it.writesAtRunTime }
 
-    // A class is judged where one class alone is what a read names: two the read may mean are left alone.
-    val judged = HashSet<Pair<String, String>>()
     // A page that declares its signals from an encoded class declares that class's properties. A
-    // class this check cannot read, a Jackson one or none named, may declare any name.
+    // class this check cannot read, a Jackson one or none named, may declare any name. A patch
+    // declares the properties of a class it reads and nothing of one it cannot.
     val byCodec = LinkedHashSet<String>()
+    var uncertain = facts.values.any { it.writesAtRunTime }
     for (one in facts.values) {
-        for (type in one.signalTypes) {
-            val c = resolve(one, type, byName).singleOrNull() ?: continue
-            // A Jackson class was never judged before it could be read; where signals are written at run time it is not judged still.
-            if (atRunTime && type in facts[c.file]?.jacksonClasses.orEmpty()) continue
-            judged += c.file to type
-        }
         for (type in one.encodedTypes) {
             val found = if (type == ANY_SIGNAL) emptyList() else resolve(one, type, byName)
             if (found.isEmpty()) byCodec += type
             for (c in found) c.properties.forEach { declared += it.name }
         }
         for (type in one.patchedTypes) {
-            // A patch of a class whose names the codec alone knows may set any signal, as a page declared from one does.
-            val sent = resolve(one, type, sendable)
-            if (sent.isNotEmpty() && (renamed || sent.any { it.opaque })) byCodec += type
+            // The one Kotlin's lookup finds among them all is the one sent.
+            val among = opaque[type]?.let { mapOf(type to byName[type].orEmpty() + it) } ?: byName
+            val sent = resolve(one, type, among)
+            if (sent.any { it.opaque }) uncertain = true
             for (c in sent) c.properties.forEach { declared += it.name }
         }
     }
-    // A naming strategy renames every class's signals, so none is read off its properties.
-    if (renamed) {
-        for ((_, type) in judged) byCodec += type
-        judged.clear()
-        for (one in facts.values) byCodec += one.encodedTypes
+    // A class is judged where one class alone is what a read names: two the read may mean are left alone.
+    // A Jackson class was never judged before the check could read it; where signals are written at run
+    // time, or a patch sends a class the check cannot read, it is not judged still.
+    val judged = HashSet<Pair<String, String>>()
+    for (one in facts.values) {
+        for (type in one.signalTypes) {
+            val c = resolve(one, type, byName).singleOrNull() ?: continue
+            if (uncertain && type in facts[c.file]?.jacksonClasses.orEmpty()) continue
+            judged += c.file to type
+        }
     }
     val anyDeclared = byCodec.isNotEmpty()
 
@@ -469,6 +480,12 @@ public interface ProjectSignals {
 
     /** What every other file says about signals. */
     public fun others(): Iterable<SignalFacts>
+
+    /**
+     * The drift check's issues for the file, where the host keeps them for what every file says now,
+     * or null for them to be worked out from [own] and [others].
+     */
+    public fun drift(): List<Issue>? = null
 }
 
 /**
@@ -483,5 +500,10 @@ public fun projectSignalIssues(
 ): List<Issue> {
     val defined = if (refs.isEmpty()) null else project.defined()
     val own = if (language == SourceLanguage.KOTLIN) project.own() else null
-    return defined?.let { unknownSignalIssues(refs, it) }.orEmpty() + own?.let { signalDriftIn(it, project::others) }.orEmpty()
+    return defined?.let { unknownSignalIssues(refs, it) }.orEmpty() +
+        own
+            // A file with no signals class and no lookup can report nothing, so the project is not asked.
+            ?.takeIf { it.classes.isNotEmpty() || it.lookups.isNotEmpty() }
+            ?.let { project.drift() ?: signalDriftIn(it, project::others) }
+            .orEmpty()
 }

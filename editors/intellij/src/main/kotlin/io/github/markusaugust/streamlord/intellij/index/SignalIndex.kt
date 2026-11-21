@@ -19,6 +19,7 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
+import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.ProjectIndex
 import io.github.markusaugust.streamlord.analysis.ProjectSignals
@@ -170,14 +171,26 @@ class SignalIndex(
 
             override fun others(): Iterable<SignalFacts> {
                 if (key == null) return emptyList()
-                refresh()
-                for ((waiting, vf) in locked { waiting().mapNotNull { path -> files[path]?.file?.let { path to it } } }) {
-                    ProgressManager.checkCanceled()
-                    val text = textOf(vf) ?: continue
-                    locked { readFacts(waiting, text) }
-                }
+                readWaiting()
                 return locked { signalsFor(key).others() }
             }
+
+            // Worked out once for every file the inspection judges until a file changes, as the analysis keeps it.
+            override fun drift(): List<Issue>? {
+                if (key == null) return null
+                readWaiting()
+                return locked { signalsFor(key).drift() }
+            }
+        }
+    }
+
+    /** Reads every project file again, and what each file whose facts wait says about the signals the server reads. */
+    private fun readWaiting() {
+        refresh()
+        for ((waiting, vf) in locked { waiting().mapNotNull { path -> files[path]?.file?.let { path to it } } }) {
+            ProgressManager.checkCanceled()
+            val text = textOf(vf) ?: continue
+            locked { readFacts(waiting, text) }
         }
     }
 

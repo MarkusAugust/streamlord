@@ -56,6 +56,10 @@ public class ProjectIndex(
 
     private val entries = LinkedHashMap<String, Entry>()
     private var definitionsUnion: Set<String>? = null
+
+    /** The drift check over what every file says, worked out once for each [factsRead] and asked of by file. */
+    private var factsRead = 0L
+    private var driftAt: Pair<Long, Map<String, List<Issue>>>? = null
     private var constantsUnion: Set<String>? = null
 
     /**
@@ -93,6 +97,7 @@ public class ProjectIndex(
                 stale = !facts,
             )
         entries[path] = next
+        factsRead++
         val defines =
             previous?.names?.definitions.orEmpty() != next.names.definitions ||
                 previous?.withoutDsl?.definitions != next.withoutDsl?.definitions
@@ -116,6 +121,7 @@ public class ProjectIndex(
         val e = entries[path]?.takeIf { it.stale && it.readFrom(text) } ?: return false
         val before = e.facts
         e.facts = collectSignalFacts(source(text, e.language))
+        factsRead++
         e.stale = false
         return factsMatter(path, before, e.facts)
     }
@@ -132,6 +138,7 @@ public class ProjectIndex(
             val (key, e) = each.next()
             if (key != path && !key.startsWith(folder)) continue
             each.remove()
+            factsRead++
             told = told || tells(e) || factsMatter(key, e.facts, NO_FACTS)
         }
         if (told) dropUnions()
@@ -236,7 +243,17 @@ public class ProjectIndex(
             override fun own() = entries[path]?.facts
 
             override fun others() = entries.entries.filter { it.key != path }.map { it.value.facts }
+
+            override fun drift() = entries[path]?.let { drifted()[path].orEmpty() }
         }
+
+    /** The drift check's issues by file, for what every file says now. */
+    private fun drifted(): Map<String, List<Issue>> {
+        driftAt?.let { (at, issues) -> if (at == factsRead) return issues }
+        val issues = signalDrift(entries.mapValues { it.value.facts }).issues
+        driftAt = factsRead to issues
+        return issues
+    }
 
     /** Whether the facts of the file at [path] changing from [a] to [b] can change how the server's reads are judged in another file. */
     private fun factsMatter(

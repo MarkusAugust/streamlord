@@ -106,7 +106,7 @@ class ProjectIndexTest {
             "Search.kt",
             "fun Route.s() {\n    get(\"/s\") { call.readSignals<Form>() }\n}\n@Serializable\ndata class Form(val pageNo: Int = 0)",
         )
-        val strategy = "val json = Json { namingStrategy = JsonNamingStrategy.SnakeCase }"
+        val strategy = "val mapper = jacksonMapperBuilder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build()"
         index.put("Json.kt", strategy, SourceLanguage.KOTLIN, facts = false)
         assertTrue(index.readFacts("Json.kt", strategy))
     }

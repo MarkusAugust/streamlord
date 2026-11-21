@@ -809,8 +809,13 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectKt {
 
 public abstract interface class io/github/markusaugust/streamlord/analysis/ProjectSignals {
 	public abstract fun defined ()Ljava/util/Set;
+	public fun drift ()Ljava/util/List;
 	public abstract fun others ()Ljava/lang/Iterable;
 	public abstract fun own ()Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ProjectSignals$DefaultImpls {
+	public static fun drift (Lio/github/markusaugust/streamlord/analysis/ProjectSignals;)Ljava/util/List;
 }
 
 public abstract interface class io/github/markusaugust/streamlord/analysis/ProjectTree {

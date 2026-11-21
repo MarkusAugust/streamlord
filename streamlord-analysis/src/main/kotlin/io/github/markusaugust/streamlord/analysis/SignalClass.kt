@@ -1,6 +1,7 @@
 package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.regex
+import kotlin.concurrent.Volatile
 
 /*
  * The classes a codec writes signals from, read off their declarations: a `@Serializable` class
@@ -57,7 +58,19 @@ private val JACKSON_PROPERTY_OWN = setOf("JsonAlias", "JsonUnwrapped", "JsonAnyS
 /** Every class in [src] with a constructor, in the order they are declared. */
 internal fun signalClasses(
     src: String,
-    lex: KotlinLex = lexKotlin(src),
+    lex: KotlinLex? = null,
+): List<SignalClass> {
+    // Each reading of a file asks for its classes more than once: they are kept for the text last read.
+    lastClasses?.let { (text, classes) -> if (text === src) return classes }
+    return readClasses(src, lex ?: lexKotlin(src)).also { lastClasses = src to it }
+}
+
+@Volatile
+private var lastClasses: Pair<String, List<SignalClass>>? = null
+
+private fun readClasses(
+    src: String,
+    lex: KotlinLex,
 ): List<SignalClass> {
     val out = ArrayList<SignalClass>()
     // An interface or a type alias is a class of the project whose names the check cannot read.
@@ -160,9 +173,11 @@ private fun constructorOpen(
             }
 
             else -> {
-                val word = src.substring(i).takeWhile { it.isLetter() }
+                var end = i
+                while (end < src.length && src[end].isLetter()) end++
+                val word = src.substring(i, end)
                 if (word.isEmpty() || (word != "constructor" && word !in MODIFIERS)) return null
-                i += word.length
+                i = end
             }
         }
     }

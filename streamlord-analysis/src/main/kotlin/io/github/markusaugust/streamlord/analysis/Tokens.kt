@@ -471,7 +471,8 @@ public fun templatePlaceholders(
     value: String,
     engine: TemplateEngine? = null,
 ): List<IntRange> {
-    val quotes = QuoteScan(value)
+    // Read only where a `${'$'}{` stands, to tell a JavaScript template's from the engine's.
+    val quotes by lazy(LazyThreadSafetyMode.NONE) { QuoteScan(value) }
     val out = ArrayList<IntRange>()
     for (m in TEMPLATE_SYNTAX.findAll(value)) {
         var s = m.range.first
