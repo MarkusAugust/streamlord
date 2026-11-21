@@ -151,6 +151,7 @@ private class DeclaredClass(
     val file: String,
     val packageName: String,
     val properties: List<SignalProperty>,
+    val opaque: Boolean = false,
 )
 
 /**
@@ -352,10 +353,15 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val read = LinkedHashSet<String>()
 
     val byName = HashMap<String, MutableList<DeclaredClass>>()
-    val opaque = HashMap<String, MutableList<DeclaredClass>>()
+    // Every class a patch may name, the codec's own among them: the one Kotlin's lookup finds is the one sent.
+    val sendable = HashMap<String, MutableList<DeclaredClass>>()
     for ((file, one) in facts) {
         for ((type, properties) in one.classes) byName.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
-        for (type in one.opaqueClasses) opaque.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, emptyList())
+        for ((type, properties) in one.classes) sendable.getOrPut(type) { ArrayList() } += DeclaredClass(file, one.packageName, properties)
+        for (type in one.opaqueClasses) {
+            sendable.getOrPut(type) { ArrayList() } +=
+                DeclaredClass(file, one.packageName, emptyList(), opaque = true)
+        }
     }
     val renamed = facts.values.any { it.renamesSignals }
 
@@ -373,8 +379,9 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         }
         for (type in one.patchedTypes) {
             // A patch of a class whose names the codec alone knows may set any signal, as a page declared from one does.
-            if (resolve(one, type, opaque).isNotEmpty() || (renamed && resolve(one, type, byName).isNotEmpty())) byCodec += type
-            for (c in resolve(one, type, byName)) c.properties.forEach { declared += it.name }
+            val sent = resolve(one, type, sendable)
+            if (sent.isNotEmpty() && (renamed || sent.any { it.opaque })) byCodec += type
+            for (c in sent) c.properties.forEach { declared += it.name }
         }
     }
     // A naming strategy renames every class's signals, so none is read off its properties.

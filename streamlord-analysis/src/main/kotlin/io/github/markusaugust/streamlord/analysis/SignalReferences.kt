@@ -240,12 +240,13 @@ internal fun withClassProperties(defined: Set<String>): Set<String> {
         val type = d.removePrefix(SENT_CLASS).substringBefore(':')
         val candidates = d.substringAfter("$SENT_CLASS$type:").split('|')
         val found = candidates.filter { it in classes }
-        val qualified =
-            if (candidates.first() in found) {
-                candidates.first()
-            } else {
-                found.singleOrNull() ?: classes.singleOrNull { nests(candidates.first(), it) }
-            }
+        // Two nested classes of one name in a package are marked alike, so an import of either is told apart from neither.
+        val nested = classes.filter { nests(candidates.first(), it) }
+        if (found.isEmpty() && nested.size > 1) {
+            out += ANY_SIGNAL
+            continue
+        }
+        val qualified = if (candidates.first() in found) candidates.first() else found.singleOrNull() ?: nested.singleOrNull()
         // A class the project does not declare sends nothing the check can know; one whose names
         // the codec alone knows may send any signal.
         if (qualified == null) continue

@@ -339,6 +339,27 @@ class JacksonSignalNamesTest {
     }
 
     @Test
+    fun `two nested classes of one name in a package are not told apart, and no read is flagged for it`() {
+        write("src/main/kotlin/model/Login.kt", "package model\n\nclass LoginPage {\n    data class Form(val title: String = \"\")\n}\n")
+        write("src/main/kotlin/model/Signup.kt", "package model\n\nclass SignupPage {\n    class Form {\n        var x = 1\n    }\n}\n")
+        write("src/main/kotlin/web/R.kt", "package web\n\nimport model.LoginPage.Form\n\nfun s() { sse.patchSignals(Form()) }\n")
+        write("src/main/resources/templates/p.html", "<p data-text=\"${'$'}title\"></p>")
+        assertEquals(emptyList(), told())
+    }
+
+    @Test
+    fun `the drift check takes the file's own class before one a star import names`() {
+        write(
+            "src/main/kotlin/app/S.kt",
+            "package app\n\n@Serializable\ndata class S(val userName: String = \"\")\n\nfun r() { val s = call.readSignals<S>() }\n",
+        )
+        write("src/main/kotlin/web/Form.kt", "package web\n\ndata class Form(val title: String = \"\")\n")
+        write("src/main/kotlin/api/Form.kt", "package api\n\ninterface Form\n")
+        write("src/main/kotlin/web/R.kt", "package web\n\nimport api.*\n\nfun s() { sse.patchSignals(Form()) }\n")
+        assertEquals(listOf("S.kt: signal-never-declared 'userName'"), told())
+    }
+
+    @Test
     fun `JsonNaming on the class leaves its names to the codec`() {
         write(
             "src/main/kotlin/app/SearchForm.kt",
