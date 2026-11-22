@@ -37,7 +37,10 @@ long, 30 seconds unless you set it, for the proxies in between, unless the strea
 `compress` gzips every stream whose request takes it; it is on
 [Operations](/operations/#compression). `requireJsonContentType`, on unless you set it to `false`,
 refuses signals in a body not declared `application/json`; it is on
-[Security](/security/#forms-from-other-sites).
+[Security](/security/#forms-from-other-sites). `maxSignalsSize` is the most a request may send in
+signals, 1 MiB unless you set it; it is on [Signals](/signals/#the-size-limit). A page served from
+another origin needs Ktor's CORS plugin told of Datastar's header; see
+[Security](/security/#a-page-on-another-origin).
 
 ## One-shot streams
 
@@ -65,6 +68,42 @@ This is the shape most endpoints take. It is a stream in the protocol sense, a
 Read the signals and set a session or a cookie before `respondDatastar`, as the example does. The
 `200` and its headers go out as the stream opens, so a `SignalsTooLargeException` thrown inside
 the block can no longer become a `413`, and a session set there throws `TooLateSessionSetException`.
+
+### Events you already hold
+
+The same goes for the events. Build them before the response opens, and one that cannot be built,
+a `PatchSignals` whose text is no JSON, is an exception your error handling can still answer with
+a status. Inside the block the stream is open: the reader gets a `200` and a stream cut short, and
+Datastar's client asks again, which runs your handler again.
+
+```kotlin sample=declarations
+fun searchEvents(hits: List<Hit>): List<DatastarEvent> =
+    listOf(
+        patchElements(selector = "#results", mode = ElementPatchMode.INNER) {
+            ul(classes = "results") {
+                hits.forEach { hit -> li { a(href = hit.url) { +hit.title } } }
+            }
+        },
+        PatchSignals("""{"total": ${hits.size}}"""),
+    )
+```
+
+```kotlin sample=ktor-routing
+post("/search") {
+    val signals = call.readSignalsOr(SearchSignals())
+    val events = searchEvents(repository.search(signals.query))
+
+    call.respondDatastar { events.forEach { send(it) } }
+}
+```
+
+`send` writes one event you hold, and `sendAll` a `Flow` of them.
+`call.respondDatastar(events.asFlow())` puts the same bytes on the wire. A function that returns
+its events needs no server to test; see [Testing](/testing/#without-a-framework-at-all).
+
+It costs the pairs: `patchSignals("total" to hits.size)` is the stream's, and `PatchSignals` takes
+its JSON as text. Write a number or a boolean into it as above, and a string through
+`JsonWriter.writeString` from `core.json`, which escapes it.
 
 ## When the block fails
 

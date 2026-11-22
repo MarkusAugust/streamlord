@@ -543,6 +543,23 @@ fun `a remove carries a selector and no elements`() {
 This is the cheapest test in the set, and usually the one that fails first when you change how
 markup is built.
 
+A function that returns the events of an answer, as
+[`searchEvents`](/ktor/#events-you-already-hold) does, is tested the same way, with the
+assertions of this page: `DatastarEvents` takes the list as it is.
+
+```kotlin sample=test
+@Test
+fun `a search patches the results and the total`() {
+    val events = DatastarEvents(searchEvents(listOf(Hit("A head on the wall", "/heads/1"))), emptyList())
+
+    events.assertPatchElements(selector = "#results", containing = "A head on the wall")
+    events.assertSignal("total", 1)
+}
+```
+
+It holds the function to what it builds, and not the route: the status, the headers and what the
+adapter does with a failure are the route's, and a test through `testApplication` asks about those.
+
 ## A stream that stays open
 
 Everything above reads a response that has ended. A live page does not end: it holds a stream

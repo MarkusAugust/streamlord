@@ -489,6 +489,53 @@ This closes the cheapest way in, not every way. A handler that changes something
 CORS policy that answers yes to other sites, opens it again, so keep CSRF tokens or `SameSite`
 cookies as well.
 
+## A page on another origin
+
+A page that calls a service on another origin, a documentation site and its demo, a front end and
+its API, has the browser ask first. Datastar's client sets `Datastar-Request: true` on every
+request it sends, and that header is not one a browser sends unasked, so `@get` is preflighted as
+well as `@post`. The service has to answer yes to the header by name:
+
+```kotlin sample=ktor-application
+install(CORS) {
+    allowHost("docs.example", schemes = listOf("https"))
+    allowHeader("Datastar-Request")
+    allowHeader(HttpHeaders.ContentType)
+    allowHeader("last-event-id")
+    allowMethod(HttpMethod.Put)
+    allowMethod(HttpMethod.Patch)
+    allowMethod(HttpMethod.Delete)
+}
+```
+
+Each line is one refusal less, measured with Chrome 148 against Ktor 3.6.1:
+
+- Without `Datastar-Request` every preflight is a `403` and your handler never runs.
+- `Content-Type` is what `@post`, `@put` and `@patch` need, since they declare their body
+  `application/json`.
+- `last-event-id` is sent when a stream whose events carried an `eventId` reconnects. Without the
+  line the stream opens, and its first reconnect is refused, which no first test shows.
+- Ktor answers yes to `GET`, `POST` and `HEAD` on its own; `@put`, `@patch` and `@delete` are named.
+
+`Accept` needs no line, and Ktor tells the browser it may keep a preflight for a day without
+being asked to. The browser keeps it by URL and method, and `@get` carries the signals in the
+URL, so each new set of signals is asked about again; `@post` to one URL is asked about once.
+
+A refusal is quiet on the page and loud in the console. The browser names the CORS policy there
+and not the `403`, the client asks ten more times over about three minutes, and then gives up with
+`FetchFailed`. The `datastar-fetch` event says `retrying` and `retries-failed` on the way, for a
+page that wants to show it.
+
+Spring's `CorsRegistry` and `@CrossOrigin` start from defaults that allow every request header,
+so the preflight passes with the header unnamed, and `GET`, `HEAD` and `POST`; name the other
+methods, and the header too once you list `allowedHeaders` yourself. This was run on WebMVC.
+
+The client sends no cookies to another origin and has no setting that makes it, so a session
+cookie does not travel: such a service knows its reader by something in the signals or the URL,
+or sits on the page's own origin. And a policy that answers yes to an origin answers yes to every
+page on it, which is what [Forms from other sites](#forms-from-other-sites) counted on not
+happening: allow the origins you serve, by name, over `https`.
+
 ## Signals are the reader's
 
 Signals live in the page, where the reader can read and change every one of them from the

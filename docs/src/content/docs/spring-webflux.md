@@ -103,6 +103,8 @@ fun save(): ResponseEntity<Flow<ServerSentEvent<String>>> =
     ).asDatastarResponse()
 ```
 
+A list of events you built first is the same answer: `events.asFlow().asDatastarResponse()`.
+
 `ExecuteScript.pushUrl` adds a history entry where `replaceUrl` replaces one, and
 `PatchElements.remove` removes elements, as `removeElements` does on a stream. Each refuses what
 the stream refuses: `redirect` a `javascript:` URL, `remove` a name the client cannot hold.

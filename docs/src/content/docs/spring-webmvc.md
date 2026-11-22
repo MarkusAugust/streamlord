@@ -25,7 +25,9 @@ The same constructor takes `heartbeat`, an interval after which a silent stream 
 keep-alive comment, 30 seconds unless you set it, `null` for none;
 [Operations](/operations/#heartbeats) has what it does and what it does not.
 `compress = true` gzips the stream when the request passed to `datastarStream` takes it; see
-[Operations](/operations/#compression).
+[Operations](/operations/#compression). `maxSignalsSize` is the most a request may send in
+signals, 1 MiB unless you set it; see [Signals](/signals/#the-size-limit). A page served from
+another origin is on [Security](/security/#a-page-on-another-origin).
 
 ## Streaming from a controller
 
@@ -57,6 +59,10 @@ class SearchController(private val streamlord: Streamlord) {
 `datastarStream` returns a `StreamingResponseBody`. Spring frees the servlet container's thread
 and runs the block on a thread from its own async executor, and that thread stays with the
 stream until the block returns. Everything inside the block writes one frame.
+
+Events built before the stream opens are sent with `send`, one each, or handed over whole:
+`response.datastarStream(events.asFlow(), streamlord)` writes the same frames as a block that
+sends them. [Ktor](/ktor/#events-you-already-hold) has the example and what it is for.
 
 Call `datastarStream` before anything writes to the response. One that something has already
 written to through its output stream still streams, without gzip, after a blank line that closes

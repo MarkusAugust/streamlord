@@ -38,6 +38,7 @@ dependencies {
     // The adapters keep their frameworks compileOnly. The samples need them for real.
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.status.pages)
+    implementation(libs.ktor.server.cors)
     implementation(libs.ktor.server.cio)
     implementation(libs.spring.web)
     implementation(libs.spring.webmvc)
@@ -128,8 +129,9 @@ abstract class ExtractDocSamples : DefaultTask() {
                     "import io.ktor.server.response.*\nimport io.ktor.server.request.receiveParameters\nimport io.ktor.utils.io.*\n$imports\n\n" +
                     "fun io.ktor.server.routing.Route.$name() {\n$body\n}\n"
             "ktor-application" ->
-                "import io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
-                    "import io.ktor.server.response.*\nimport io.ktor.server.plugins.statuspages.*\n$imports\n\n" +
+                "import io.ktor.http.*\nimport io.ktor.server.application.*\nimport io.ktor.server.routing.*\n" +
+                    "import io.ktor.server.response.*\nimport io.ktor.server.plugins.statuspages.*\n" +
+                    "import io.ktor.server.plugins.cors.routing.*\n$imports\n\n" +
                     "fun io.ktor.server.application.Application.$name() {\n$body\n}\n"
             "spring" ->
                 "import org.springframework.web.bind.annotation.*\n" +

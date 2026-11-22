@@ -147,7 +147,8 @@ public fun Application.live() {
     install(StreamlordPlugin) {
         codec = SIGNALS
         // The largest store any page here sends is the judge's, a 1 KiB paste and a few flags.
-        // Four times that, and a body above it is never read into memory.
+        // Four times that: bytes of a body, of which no more than one past it is read, and
+        // characters of the signals a GET carries in its URL.
         maxSignalsSize = 4096
     }
 
@@ -155,8 +156,9 @@ public fun Application.live() {
      * The documentation is served from another origin, so the browser asks first.
      *
      * `Datastar-Request` is the one that is easy to miss: the client sets it on every call and it
-     * is not on the CORS safelist, so every request begins with a preflight. Leave it out and the
-     * preflight is refused with a 403 the page never sees, and the search field does nothing.
+     * is not on the CORS safelist, so a GET is preflighted as a POST is. Leave it out and each
+     * preflight is refused with a 403 the page never sees: the search field shows nothing, the
+     * console names the CORS policy, and the client asks ten more times before it gives up.
      */
     install(CORS) {
         /*
@@ -174,12 +176,11 @@ public fun Application.live() {
 
         allowHeader("Datastar-Request")
         allowHeader(HttpHeaders.ContentType)
-        allowHeader(HttpHeaders.Accept)
+        // Sent when a stream whose events carry an id reconnects, and refused then without this.
         allowHeader("last-event-id")
 
-        // Because of that header every search is two round trips. A day of cache turns the pair
-        // into a single request for the rest of the visit.
-        maxAgeInSeconds = 86_400
+        // Ktor lets the browser keep a preflight for a day by default. It is kept by URL, and a
+        // GET carries its signals there, so each new search is still two round trips.
     }
 
     /*
@@ -364,8 +365,8 @@ public fun Application.live() {
              * Built before the response opens, so the wire panel can encode the same event
              * objects that go out: what it shows is the frame, not a description of it.
              *
-             * Out here `patchElements` is the free function that returns an event. Inside the
-             * block it would resolve to the stream's own extension, which sends and returns Unit.
+             * Out here `patchElements` is the function that returns an event. Inside the block
+             * the same name is streamlord-html's extension on the stream, which sends and returns Unit.
              */
             val results =
                 patchElements(selector = "#results", mode = ElementPatchMode.INNER) {
