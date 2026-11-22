@@ -586,12 +586,12 @@ class InspectorTest : BasePlatformTestCase() {
         var changes = 0
         servers.onChange(testRootDisposable) { changes++ }
         val process = FakeProcess()
-        servers.track("Orders back (dev)", process)
+        servers.track("Orders (dev)", process)
         process.startNotify()
-        process.print("\u001B[32m INFO\u001B[0;39m Starting Application\n2026-10-06 INFO Tomcat started on port 91")
+        process.print("\u001B[32m INFO\u001B[0;39m Starting Application\n2026-10-06 INFO Tomcat started on port 90")
         assertEquals(null, servers.current())
-        process.print("02 (http) with context path '/'\n")
-        assertEquals(RunningServer("http://localhost:9102", "Orders back (dev)"), servers.current())
+        process.print("90 (http) with context path '/'\n")
+        assertEquals(RunningServer("http://localhost:9090", "Orders (dev)"), servers.current())
         val since = System.currentTimeMillis()
         process.print("INFO all is well\n\u001B[33m WARN\u001B[0;39m Resolved [MissingServletRequestParameterException]\n")
         assertEquals(listOf(" WARN Resolved [MissingServletRequestParameterException]"), servers.problemsSince(since))
@@ -603,13 +603,13 @@ class InspectorTest : BasePlatformTestCase() {
 
     fun `test a running server is the baseUrl unless the env file sets one`() {
         val process = FakeProcess()
-        RunningServers.getInstance(project).track("Orders back (dev)", process)
+        RunningServers.getInstance(project).track("Orders (dev)", process)
         process.startNotify()
-        process.print("Tomcat started on port 9102 (http) with context path '/'\n")
+        process.print("Tomcat started on port 9090 (http) with context path '/'\n")
         val store = RequestStore.getInstance(project)
         try {
             assertEquals(
-                Requests.Variable("baseUrl", "http://localhost:9102", Requests.VariableSource.RUNNING, "Orders back (dev)"),
+                Requests.Variable("baseUrl", "http://localhost:9090", Requests.VariableSource.RUNNING, "Orders (dev)"),
                 store.environment().vars.single(),
             )
             val (file, changed) = store.useBaseUrl("http://localhost:9103")
@@ -956,7 +956,7 @@ class InspectorTest : BasePlatformTestCase() {
     fun `test the variables file cannot be made the requests file`() {
         val store = RequestStore.getInstance(project)
         val settings = StreamlordSettings.getInstance(project)
-        val variables = "{\n  \"baseUrl\": \"http://localhost:9102\"\n}\n"
+        val variables = "{\n  \"baseUrl\": \"http://localhost:9090\"\n}\n"
         val env = write(Requests.ENV_FILE, variables)
         remove(Requests.REQUESTS_FILE)
         val refused = "The requests file cannot be .streamlord/env.json: that file holds the variables. Nothing was saved."
@@ -1598,9 +1598,9 @@ class InspectorTest : BasePlatformTestCase() {
         errorLine(events, "Could not reach http://localhost:8080/feed.")
         assertTrue(links(events).toString(), "Edit variables" in links(events))
 
-        showError(panel, "Could not reach http://localhost:8080/x.", null, "http://localhost:9102")
+        showError(panel, "Could not reach http://localhost:8080/x.", null, "http://localhost:9090")
         errorLine(events, "Could not reach http://localhost:8080/x.")
-        assertTrue(links(events).toString(), "Use http://localhost:9102 in .streamlord/env.json" in links(events))
+        assertTrue(links(events).toString(), "Use http://localhost:9090 in .streamlord/env.json" in links(events))
         assertEquals(3, links(events).size)
     }
 

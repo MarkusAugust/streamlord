@@ -3,9 +3,9 @@
   {{#open}}
   <span data-text="$count"></span>                                   {{! ingen markering }}
   {{/open}}
-  {{#saker}}
-  <li data-on:click="@post('/sak/{{id}}')">{{{navn}}}</li>           {{! ingen markering }}
-  {{/saker}}
+  {{#orders}}
+  <li data-on:click="@post('/orders/{{id}}')">{{{navn}}}</li>           {{! ingen markering }}
+  {{/orders}}
   <div data-persist></div>                                           {{! HINT: Pro }}
   <div data-text="$count +"></div>                                   {{! RØD: syntaksfeil }}
 </div>

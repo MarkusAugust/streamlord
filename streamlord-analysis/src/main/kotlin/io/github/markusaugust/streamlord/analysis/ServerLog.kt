@@ -19,7 +19,7 @@ public object ServerLog {
     /*
      * Spring Boot writes "<server> started on " + its ports + " with context path '<path>'", the
      * same in 3.5 and 4.0 for Tomcat, Jetty and Undertow, and without a context path for Netty.
-     * One port reads "port 9102 (http)", Jetty's "(http/1.1)"; Boot 2 wrote "port(s): 9102 (http)".
+     * One port reads "port 9090 (http)", Jetty's "(http/1.1)"; Boot 2 wrote "port(s): 9090 (http)".
      */
     private val SPRING =
         regex(

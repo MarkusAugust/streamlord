@@ -194,7 +194,7 @@ file by hand:
   "requests": [
     {
       "name": "feed",
-      "url": "{{baseUrl}}/api/feed/{{partsnummer}}",
+      "url": "{{baseUrl}}/api/orders/{{orderNumber}}",
       "method": "POST",
       "signals": { "search": "ash" },
       "headers": { "X-Id": "7" }
@@ -214,12 +214,12 @@ the parameters of your routes. **Edit variables** in the inspector creates it:
   "baseUrl": "http://127.0.0.1:8081",
   "signals": { "search": "ash" },
   "headers": { "Authorization": "Bearer dev-token" },
-  "params": { "partsnummer": "3000507723" }
+  "params": { "orderNumber": "42" }
 }
 ```
 
 Write `{{baseUrl}}` in the URL, `{{signals}}` in the signals field, `{{headers}}` in the headers
-field, and the name of a param, `{{partsnummer}}`, in the URL or the headers. Type `{{` in a
+field, and the name of a param, `{{orderNumber}}`, in the URL or the headers. Type `{{` in a
 field to pick from the ones that are set. Without `baseUrl` in the file, it is where the server
 you started from the editor said it listens, and with nothing running the default base URL of
 the settings.

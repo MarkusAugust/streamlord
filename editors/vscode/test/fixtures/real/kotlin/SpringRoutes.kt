@@ -10,7 +10,7 @@ class OrderController {
     fun all() = datastar { patchElements("<ul id=\"orders\"></ul>") }
 
     @GetMapping("/{id}")
-    fun one(@PathVariable id: String, @RequestParam partsnummer: String, @RequestParam(required = false) page: Int?) =
+    fun one(@PathVariable id: String, @RequestParam orderNumber: String, @RequestParam(required = false) page: Int?) =
         datastar { patchSignals("order" to id) }
 
     @PostMapping("/{id}/ship", produces = ["text/event-stream"])

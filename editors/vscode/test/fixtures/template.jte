@@ -7,8 +7,8 @@
   @if(tilstand.open)
   <p data-show="$open" class="@if(tilstand.x)a@endif">x</p>          <!-- ingen markering -->
   @endif
-  @for(var sak : tilstand.saker)
-  <li data-on:click__debunce.500ms="@post('/x')">${sak}</li>          <!-- RØD: ukjent modifier -->
+  @for(var order : tilstand.orders)
+  <li data-on:click__debunce.500ms="@post('/x')">${order}</li>          <!-- RØD: ukjent modifier -->
   @endfor
   <div data-on:click="@if(a) x() @endif"></div>                      <!-- ingen markering (JTE-kontrollflyt i verdien) -->
   <div data-text="$count +"></div>                                   <!-- RØD: syntaksfeil -->
