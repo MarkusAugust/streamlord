@@ -49,8 +49,8 @@ public object DatastarAttributes {
 
     /**
      * Writes the attribute [name] on [tag], as every DSL helper does. An element holds one attribute
-     * of a name, so a second [value] for one it has would replace the first, and a second
-     * `dataSignals` leave the signals of the first undeclared: that is refused. The same value
+     * of a name, in any capitals, so a second [value] for one it has would replace the first, and a
+     * second `dataSignals` leave the signals of the first undeclared: that is refused. The same value
      * given again changes nothing and is let through.
      */
     public fun write(
@@ -58,10 +58,9 @@ public object DatastarAttributes {
         name: String,
         value: String,
     ) {
-        val written = tag.attributes[name]
-        check(written == null || written == value) {
-            "$name is already written on this <${tag.tagName}>, as $written, and an element holds one attribute of a name: " +
-                "$value would replace it. Write both in one call."
+        check(tag.attributes.none { (written, held) -> written.equals(name, ignoreCase = true) && held != value }) {
+            "$name is already written on this <${tag.tagName}>, and an element holds one attribute of a name: " +
+                "a second value would replace the first. Write the attribute once."
         }
         tag.attributes[name] = value
     }

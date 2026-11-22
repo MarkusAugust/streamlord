@@ -505,8 +505,8 @@ class AsTheClientReadsItTest {
                 }
             }
         assertEquals(
-            "data-signals is already written on this <div>, as {\"a\":true}, and an element holds one attribute of a name: " +
-                "{\"b\":true} would replace it. Write both in one call.",
+            "data-signals is already written on this <div>, and an element holds one attribute of a name: " +
+                "a second value would replace the first. Write the attribute once.",
             e.message,
         )
         assertFailsWith<IllegalStateException> {
@@ -549,12 +549,70 @@ class AsTheClientReadsItTest {
                 }
             }
         }
-        // What the element was given by kotlinx.html's own map is as much its attribute.
-        assertFailsWith<IllegalStateException> {
+        // What the element was given by kotlinx.html's own map is as much its attribute, in the capitals it was given in.
+        for (written in listOf("data-show", "DATA-Show")) {
+            assertFailsWith<IllegalStateException>(written) {
+                elements {
+                    div {
+                        attributes[written] = "true"
+                        dataShow("false")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `every helper that takes a value refuses a second one`() {
+        val helpers =
+            mapOf<String, DIV.(String) -> Unit>(
+                "dataSignals(expression)" to { dataSignals("{$it: 1}") },
+                "dataSignals(json)" to { dataSignals(JsonParser.parseObject("{\"$it\": 1}")) },
+                "dataSignals(name, expression)" to { dataSignals("n", "'$it'") },
+                "dataSignals(pairs)" to { dataSignals(it to 1) },
+                "dataComputed(expression)" to { dataComputed("{$it: () => 1}") },
+                "dataComputed(name, expression)" to { dataComputed("n", "'$it'") },
+                "dataJsonSignals" to { dataJsonSignals(SignalFilter(include = Regex(it))) },
+                "dataInit" to { dataInit("$it()") },
+                "dataEffect" to { dataEffect("$it()") },
+                "dataOn" to { dataOn("my-event", "$it()") },
+                "dataOnClick" to { dataOnClick("$it()") },
+                "dataOnSubmit" to { dataOnSubmit("$it()") },
+                "dataOnChange" to { dataOnChange("$it()") },
+                "dataOnInput" to { dataOnInput("$it()") },
+                "dataOnKeydown" to { dataOnKeydown("$it()") },
+                "dataOnFetch" to { dataOnFetch("$it()") },
+                "dataOnSignalPatch" to { dataOnSignalPatch("$it()") },
+                "dataOnSignalPatch(filter)" to { dataOnSignalPatch("x()", SignalFilter(include = Regex(it))) },
+                "dataOnInterval" to { dataOnInterval("$it()") },
+                "dataOnIntersect" to { dataOnIntersect("$it()") },
+                "dataBind" to { dataBind(it) },
+                "dataRef" to { dataRef(it) },
+                "dataIndicator" to { dataIndicator(it) },
+                "dataText" to { dataText("'$it'") },
+                "dataShow" to { dataShow("'$it'") },
+                "dataClass(expression)" to { dataClass("{$it: true}") },
+                "dataClass(name, expression)" to { dataClass("n", "'$it'") },
+                "dataStyle(expression)" to { dataStyle("{color: '$it'}") },
+                "dataStyle(property, expression)" to { dataStyle("color", "'$it'") },
+                "dataAttr(expression)" to { dataAttr("{title: '$it'}") },
+                "dataAttr(name, expression)" to { dataAttr("title", "'$it'") },
+                "dataPreserveAttr" to { dataPreserveAttr(it) },
+                "dataNonce" to { dataNonce(it + "AAAAAAAAAAAAAAAAAAAAAA==") },
+            )
+        for ((name, helper) in helpers) {
+            assertFailsWith<IllegalStateException>(name) {
+                elements {
+                    div {
+                        helper("a")
+                        helper("b")
+                    }
+                }
+            }
             elements {
                 div {
-                    attributes["data-show"] = "true"
-                    dataShow("false")
+                    helper("a")
+                    helper("a")
                 }
             }
         }

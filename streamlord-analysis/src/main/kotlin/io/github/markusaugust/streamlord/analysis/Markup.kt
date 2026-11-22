@@ -411,15 +411,8 @@ internal fun appliedTags(
     return out
 }
 
-/** The attributes of [tag] the HTML parser drops, each with the one it keeps: the first of that name, in any capitals. */
-internal fun droppedAttributes(tag: Tag): List<Pair<Attribute, Attribute>> {
-    if (tag.attributes.size < 2) return emptyList()
-    val kept = HashMap<String, Attribute>()
-    return tag.attributes.mapNotNull { attr ->
-        val lower = attr.name.asciiLowercase()
-        kept[lower]?.let { it to attr } ?: null.also { kept[lower] = attr }
-    }
-}
+/** A name an attribute has in plain HTML, Datastar's keys and modifiers with it: not `@auth`, `#if(x)` or `{{name}}`. */
+private val ATTRIBUTE_NAME = regex("""[A-Za-z][\w:.-]*""")
 
 /**
  * A value of another library's: Knockout's or Vue's `name: value` binding, or words, as a share
@@ -1280,17 +1273,27 @@ public class MarkupValidator(
     /**
      * A Datastar attribute the element already has, in any capitals, with another value: the HTML
      * parser keeps the first attribute of a name and drops the rest, so the client never reads this
-     * one. A template may write the name once in each branch, so a tag with its syntax is left alone.
+     * one. A template may write the name once in each branch, so a tag with its syntax is left alone,
+     * and so is one with a name no attribute has, `@auth` or `#if(x)`, a directive of an engine's.
      */
     private fun repeatedAttributes(
         tag: Tag,
         prefix: String,
         tagSource: String?,
     ): List<Issue> {
+        if (tag.attributes.size < 2) return emptyList()
+        val kept = HashMap<String, Attribute>()
+        val dropped =
+            tag.attributes.mapNotNull { attr ->
+                val lower = attr.name.asciiLowercase()
+                val first = kept[lower] ?: return@mapNotNull null.also { kept[lower] = attr }
+                val same = decodeEntities(first.value.orEmpty()).text == decodeEntities(attr.value.orEmpty()).text
+                attr.takeIf { !same && catalog.parseAttributeName(lower, prefix)?.spec != null }
+            }
+        if (dropped.isEmpty() || tag.attributes.any { ATTRIBUTE_NAME.matchEntire(it.name) == null }) return emptyList()
         if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
-        return droppedAttributes(tag).mapNotNull { (first, attr) ->
+        return dropped.map { attr ->
             val lower = attr.name.asciiLowercase()
-            if (first.value == attr.value || catalog.parseAttributeName(lower, prefix)?.spec == null) return@mapNotNull null
             Issue(
                 attr.nameStart,
                 attr.nameEnd,

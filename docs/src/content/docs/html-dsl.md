@@ -34,7 +34,9 @@ shows it with the class a handler reads.
 An element holds one attribute of a name, so each helper writes its attribute once: a second
 `dataSignals("b" to 0)` after `dataSignals("a" to 0)` would replace the first, and is refused as
 the page renders. Give both in one call, or one signal a call with the first form, which writes
-`data-signals:a` and `data-signals:b`. The same goes for two `dataOnClick` or two `dataShow`.
+`data-signals:a` and `data-signals:b`. The same goes for two `dataOnClick` or two `dataShow`. A
+function of yours that writes an attribute its caller may want another value for takes that value
+as a parameter.
 
 ## Modifiers are a block, not a string
 
@@ -102,14 +104,15 @@ event.
 
 ## An attribute without a helper
 
-A Datastar plugin of your own, or an attribute the DSL has no helper for, is written with the two
-calls the helpers use: `DatastarAttributes.name` puts the prefix in front, and
+A Datastar plugin of your own, or an attribute the DSL has no helper for, is written with the three
+calls the helpers use: `DatastarAttributes.name` puts the prefix in front,
 `DatastarAttributes.expression` checks the expression and hands it to kotlinx.html so the browser
-reads it back as written.
+reads it back as written, and `DatastarAttributes.write` sets the attribute, refusing a second
+value for one the element has.
 
 ```kotlin sample=html
 div {
-    attributes[DatastarAttributes.name("tooltip")] = DatastarAttributes.expression("\$hint")
+    DatastarAttributes.write(this, DatastarAttributes.name("tooltip"), DatastarAttributes.expression("\$hint"))
 }
 ```
 

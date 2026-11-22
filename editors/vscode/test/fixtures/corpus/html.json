@@ -243,6 +243,11 @@
     {"name":"attributes of one plugin under different names are each kept","source":"<div data-signals=\"{a: 1}\" data-signals__ifmissing=\"{b: 2}\" data-signals:c=\"3\" data-signals:d=\"4\" data-class:x=\"true\" data-class:y=\"false\"></div>","issues":[]},
     {"name":"an attribute repeated with the value it has loses nothing","source":"<div data-show=\"true\" data-show=\"true\" data-ignore-morph data-ignore-morph></div>","issues":[]},
     {"name":"an attribute a template writes in each branch is written once","source":"<div {% if open %}data-show=\"true\"{% else %}data-show=\"false\"{% endif %}></div>","issues":[]},
-    {"name":"a repeated attribute that is not Datastar's is the page's own","source":"<div class=\"a\" class=\"b\" data-id=\"1\" data-id=\"2\"></div>","issues":[]}
+    {"name":"a repeated attribute that is not Datastar's is the page's own","source":"<div class=\"a\" class=\"b\" data-id=\"1\" data-id=\"2\"></div>","issues":[]},
+    {"name":"a repeated attribute between Blade directives is one a branch","source":"<div @auth data-show=\"true\" @endauth @guest data-show=\"false\" @endguest></div>","issues":[]},
+    {"name":"a repeated attribute between Edge directives is one a branch","source":"<div @unless(x) data-show=\"true\" @end @unless(y) data-show=\"false\" @end></div>","issues":[]},
+    {"name":"a repeated attribute in JTE branches written against a quote is one a branch","source":"<div class=\"x\"@if(open) data-show=\"true\"@else data-show=\"false\"@endif></div>","issues":[]},
+    {"name":"a repeated attribute in Velocity branches written against a quote is one a branch","source":"<div class=\"x\"#if($open) data-show=\"true\"#else data-show=\"false\"#end></div>","issues":[]},
+    {"name":"an attribute repeated with the value it has once decoded, or with none and an empty one, loses nothing","source":"<div data-show=\"1 &amp;&amp; 2\" data-show=\"1 && 2\" data-ignore-morph data-ignore-morph=\"\"></div>","issues":[]}
   ]
 }

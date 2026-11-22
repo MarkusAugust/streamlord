@@ -11018,6 +11018,11 @@ repeated-attribute 62-75 warning: The browser keeps the first data-on:click of a
 == corpus/html.json: an attribute repeated with the value it has loses nothing
 == corpus/html.json: an attribute a template writes in each branch is written once
 == corpus/html.json: a repeated attribute that is not Datastar's is the page's own
+== corpus/html.json: a repeated attribute between Blade directives is one a branch
+== corpus/html.json: a repeated attribute between Edge directives is one a branch
+== corpus/html.json: a repeated attribute in JTE branches written against a quote is one a branch
+== corpus/html.json: a repeated attribute in Velocity branches written against a quote is one a branch
+== corpus/html.json: an attribute repeated with the value it has once decoded, or with none and an empty one, loses nothing
 == corpus/kotlin-actions.json: a Kotlin template in an option's value or key is an expression, not judged
 unsafe-interpolation 163-170 warning: Kotlin writes ${mode} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
 unsafe-interpolation 234-239 warning: Kotlin writes ${ct} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.

@@ -23,7 +23,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `dataSignals("a", "true")`. The same holds for two `dataOnClick`, two `dataShow` and every other
   helper. Calls that write different names, such as `dataSignals(...)` beside
   `dataSignals(..., ifMissing = true)`, are written as before, and so is the same value given again.
-  A helper of your own writes through the same check with `DatastarAttributes.write(tag, name, value)`.
+  A function that wrote a default for its caller to replace with a second call now takes the value
+  as a parameter. A helper of your own writes through the same check with
+  `DatastarAttributes.write(tag, name, value)`.
 
 ### The analysis
 
@@ -47,9 +49,8 @@ All notable changes to Streamlord are recorded here. The format follows
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
 - `repeated-attribute`, a new warning in HTML, templates and HTML in Kotlin strings: a Datastar
   attribute the element already has, in any capitals, with another value. The browser keeps the first
-  and drops the rest, so Datastar never reads them. What a dropped attribute declares no longer counts
-  as declared: `signal-never-declared` is given for a signal only the second `data-signals` names. A tag a
-  template writes into is left alone.
+  and drops the rest, so Datastar never reads them. A tag a template writes into is left alone, and
+  so is one with a directive for a name, such as `@auth` or `#if(x)`.
 - A class that is not `@Serializable` is read as Jackson writes it, where it turned the signal
   checks off for the whole project: a page declared from it with `toJsonValue`, a patch of it and a
   `readSignals<T>()` of it are judged by its public constructor properties, each by its name or its
