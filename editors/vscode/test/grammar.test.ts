@@ -454,6 +454,52 @@ describe("html injection grammar", () => {
     assert.ok(cut[1]!.every((x) => !x.scopes.some((s) => s.includes("datastar"))), "the line after a cut value is no Datastar");
   });
 
+  // HTML's grammar has no end of its own at a Kotlin quote: in a region, what it has open there takes the lines after it.
+  it("ends the HTML of a literal with the literal, whatever the HTML leaves open", async () => {
+    const html = (t: { scopes: string[] }[]) => t.some((x) => x.scopes.some((s) => s.includes("html") || s === "source.js"));
+    for (const open of [
+      `assertContains(page, "<lt-suggestion")`,
+      `raw.replaceFirst("<svg ", "<svg aria-hidden=\\"true\\" ")`,
+      `val x = "<p>a <c"`,
+      `assertContains(page, "<!--! Font Awesome Free")`,
+      `assertFalse("<script>alert" in html)`,
+      `val fragment = "<svg viewBox=\\"0 0 1 1\\">"`,
+      `val cut = "<div title=\\"a>"`,
+      `val joined = "<a href=\\"" + url + "\\">"`,
+      `val names = Regex("""<template name="([^"]+)" """).findAll(xml)`,
+      `sb.append("""<svg viewBox="0 0 1 1" role="img">""")`,
+      `out.append("""<!--""")`,
+      `val four = Regex("""<option value="a"""").find(page)`,
+      `// language=HTML\nval marked = "<a href=\\"" + rest`,
+      `@Language("HTML") val noted = "<svg " + rest`,
+      `patchElements("<p><svg>")`,
+      `patchElements("""<p title='"'>x</p><svg>""")`,
+      `val markup = interpolate("<svg class=\\"%s\\">", name)`,
+      `val built = interpolate { "<svg class=\\"\${+name}\\">" }`,
+      `val trusted = Trusted("<b>bold")`,
+      `executeScript("var a = \\"x")`,
+    ]) {
+      const lines = open.split("\\n");
+      const t = await tokenLines("source.kotlin", [DSL_IMPORT, ...lines, "val after = 1", "fun f() = after"]);
+      const literal = t[lines.length]!;
+      assert.ok(html(literal) || literal.some((x) => x.scopes.includes("meta.embedded.block.javascript")), `${open}: its text is read`);
+      for (const after of [t[lines.length + 1]!, t[lines.length + 2]!]) {
+        assert.ok(!html(after) && after.every((x) => !x.scopes.some((s) => s.startsWith("string") || s.includes("embedded"))), `${open}: the lines after are code`);
+      }
+      const last = literal.filter((x) => x.text.trim() !== "").pop()!;
+      assert.ok(!last.scopes.some((s) => s.includes("html") || s.includes("embedded")), `${open}: and so is what follows it on its line`);
+    }
+    // A raw literal that goes on past its line is a region still, and reads to its closing quotes.
+    const long = await tokenLines("source.kotlin", ['val h = """<ul>', "  <li>a</li>", '</ul>"""', "val after = 1"]);
+    assert.ok(html(long[1]!) && html(long[2]!), "the lines of a raw literal");
+    assert.ok(!html(long[3]!), "and the line after it");
+    // A template is passed whole with the strings in it, so the literal ends where Kotlin ends it.
+    const nested = await tokenLines("source.kotlin", [`val t = "<p class=\\"\${if (a) "x" else "y"}\\">\${f("z")}</p>" + tail`, "val after = 1"]);
+    assert.match(scopeOf(nested[0]!, "</p>"), /html/);
+    assert.ok(nested[0]!.filter((x) => x.text.includes("tail")).every((x) => !x.scopes.some((s) => s.includes("html") || s.startsWith("string"))), "what follows it is code");
+    assert.ok(!html(nested[1]!));
+  });
+
   it("colours the same in an HTML string in Kotlin", async () => {
     const t = await tokens("source.kotlin", `val h = """<div data-color="x" data-show="$a"></div>"""`);
     assert.ok(!t.some((x) => x.text.includes("color") && x.scopes.some((s) => s.includes("datastar"))));
@@ -878,6 +924,13 @@ describe("what is not Datastar's", () => {
     assert.ok(!t.some(([text, s]) => (text === "a" || text === "b") && s.includes("signal")), JSON.stringify(t));
     const ternary = await kinds("text.html.basic", `<div data-text="$a ? 1 : 2">`);
     assert.deepEqual(between(ternary, "?", "2"), [["?", S.arithmetic], ["1", S.number], [":", S.arithmetic], ["2", S.number]]);
+  });
+
+  it("reads a literal that leaves its HTML open in time that grows with it", async () => {
+    const kotlin = await lineReader("source.kotlin");
+    assertGrowsLinearly("a literal of opening tags alone", 40, (n) => `val h = "${"<p ".repeat(n)}"`, kotlin);
+    assertGrowsLinearly("a raw literal of quotes that never ends", 40, (n) => `val h = """<p>${'" '.repeat(n)}`, kotlin);
+    assertGrowsLinearly("a template of strings", 20, (n) => `val h = "<p>\${f(${'"a", '.repeat(n)}"b")}</p>"`, kotlin);
   });
 
   it("reads a long line of DSL calls in time that grows with it", async () => {

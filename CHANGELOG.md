@@ -195,6 +195,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Editors
 
+- VS Code no longer lets the colours of a Kotlin literal run on into the code after it. A literal
+  whose HTML left something open, `"<lt-suggestion"`, `"<svg "`, `"<!-- note"`,
+  `"<a href=\"" + url`, or whose script did, `"<script>console.log(\"x\")</script>"` and
+  `executeScript("var a = \"x")`, handed its closing quote to the grammar inside it, and the lines
+  after were coloured as attributes, a comment or JavaScript until something closed them. A literal
+  that ends on its line now ends its HTML or JavaScript with it, and is coloured inside its quotes
+  as before. A raw literal that goes on past its line is read as it was.
 - IntelliJ's Stream Inspector looks the same at every zoom of the IDE. The text of an event, the
   signal store, the variables and the fields grew by the zoom twice, three times their size at
   175 %, and an event's name and a comment line kept the size they had when they came; all now
