@@ -465,6 +465,65 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a return is the innermost function's, not that of the function it is declared in`() {
+        val page = "fun page(n: String, xs: List<Int>) = \"<p>\${badge(n, xs)}</p>\""
+        val told = listOf("\${badge(n, xs)}")
+
+        fun badge(inner: String) = "fun badge(n: String, xs: List<Int>): String {\n    $inner\n    return \"<b>x</b>\"\n}\n"
+        // What a function declared in it returns is not what badge gives.
+        for (inner in listOf(
+            "fun label(): String { return n }",
+            "fun <T> label(): String { return n }",
+            "fun String.label(): String { return n }",
+            "fun `my label`(): String { return n }",
+            "fun label(): String\n    {\n        return n\n    }",
+            "fun label():\n        String {\n        return n\n    }",
+            "val label = fun(): String { return n }",
+            "fun each() { xs.forEach { return@forEach } }",
+        )) {
+            assertEquals(emptyList(), told(badge(inner) + page), inner)
+        }
+        // And what such a function returns is not markup of the one around it.
+        val plain = "fun badge(n: String, xs: List<Int>): String {\n    fun bold(): String { return \"<b>x</b>\" }\n    return n\n}\n"
+        assertEquals(told, told(plain + page))
+        val none = "fun badge(n: String, xs: List<Int>) { fun inner(): String { return \"<b>x</b>\" } }\n"
+        assertEquals(told, told(none + page))
+    }
+
+    @Test
+    fun `a return counts for the function around as well where the block may not be the inner function's`() {
+        val page = "fun page(n: String, xs: List<Int>) = \"<p>\${badge(n, xs)}</p>\""
+        val told = listOf("\${badge(n, xs)}")
+
+        fun badge(inner: String) = "fun badge(n: String, xs: List<Int>): String {\n    $inner\n    return \"<b>x</b>\"\n}\n"
+        for (inner in listOf(
+            // A function still being typed has no body, and the block after it is badge's own.
+            "fun label(): String\n    xs.forEach { return n }",
+            "fun label()\n    if (xs.isEmpty()) { return n }",
+            "fun label(): String /* todo\n    */ run { return n }",
+            // Nor has one whose name is all that is typed, and the brackets on the next line are a statement's.
+            "fun label\n    if (xs.isEmpty()) { return n }",
+            "fun\n    for (x in xs) { return n }",
+            "fun <T> label\n    val x = xs.fold(0) { return n }",
+            "class L {\n        constructor\n        val v = xs.fold(0) { return n }\n    }",
+            "class L { val v = xs.constructor(1) { return n } }",
+            // Or on its own line, where more than a function's head stands before the brackets.
+            "fun label if (xs.isEmpty()) { return n }",
+            "fun label; if (xs.isEmpty()) { return n }",
+            "fun label: String if (xs.isEmpty()) { return n }",
+            "fun if (xs.isEmpty()) { return n }",
+            "class L {\n        val constructor = { a: Int, f: () -> Unit -> 1 }\n        val v = constructor(1) { return n }\n    }",
+            // A call of a value named as a constructor is declared.
+            "val constructor = { 1 }\n    val x = constructor()\n    if (xs.isEmpty()) { return n }",
+            "constructor(1) { return n }",
+            // A type the analysis does not read leaves the block in doubt, as before.
+            "fun <T> label(): String where T : Any { return n }",
+        )) {
+            assertEquals(told, told(badge(inner) + page), inner)
+        }
+    }
+
+    @Test
     fun `a lambda that returns to its label gives more than its last line`() {
         assertEquals(
             1,

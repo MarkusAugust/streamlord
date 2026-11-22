@@ -622,6 +622,10 @@ private class ScopeFrame(
     val commas = ArrayList<Int>()
     var pending: PendingScope? = null
     var fn = false
+
+    /** Just past the `fun` last read in this frame, and for a function's parameters whether they are surely its own ([FUN_HEAD]). */
+    var funAt = -1
+    var own = false
     var cls = false
     var whenBlock = false
     var loop = false
@@ -670,8 +674,9 @@ private class ScopeFrame(
     var body: Span? = null
     val returns = ArrayList<Span>()
 
-    /** For a function's block: its parameters. */
+    /** For a function's block: its parameters, and whether the block is surely that function's, with nothing but its type before it. */
     var function: ScopeFrame? = null
+    var sure = false
 
     /** The word last read in this frame with nothing but space after it, and for a function's parameters the function's name. */
     var word: String? = null
@@ -819,6 +824,14 @@ private const val EXTENDED = 4
 private const val OVERRIDES = 8
 private const val HTML = 16
 private const val COMPANION = 32
+
+/**
+ * What stands between `fun` and a function's own brackets, on its line: type parameters, a receiver and the name, or
+ * nothing. Brackets after anything else, or after a word that begins a statement, are not its parameters.
+ */
+private val FUN_HEAD = regex("""[ \t]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>[ \t]*)?(?:[\p{L}_`][^\s()]*\.[ \t]*)?(?:($NAME)|`[^`\n]+`)?[ \t]*""")
+private const val FUN_HEAD_LENGTH = 300
+private val STATEMENT_WORDS = "if for while when do try return throw else in is as super this typeof".split(" ").toSet()
 
 private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
 private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
@@ -1132,14 +1145,18 @@ private fun declarations(
             when {
                 reference -> {}
 
-                word == "fun" || (word == "constructor" && !ctorOfClass) -> {
+                // A constructor is declared in a class's body, where a declaration may begin; anywhere else the word is a name.
+                word == "fun" || (word == "constructor" && !ctorOfClass && f.kind == "class" && f.after == 0) -> {
                     f.fn = true
+                    f.funAt = end
                     f.funModifiers = f.modifiers
                 }
 
                 word == "return" -> {
-                    // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
-                    val into = stack.mapNotNull { it.function }
+                    // A `return` is the innermost function's. Where its block may be another's, a function still being typed
+                    // or a type the text does not read, it counts as the outer one's too, which can only make that less.
+                    val blocks = stack.filter { it.function != null }
+                    val into = blocks.drop(maxOf(0, blocks.indexOfLast { it.sure })).mapNotNull { it.function }
                     val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
                     for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
@@ -1261,6 +1278,9 @@ private fun declarations(
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
+                // A function still being typed has no brackets, and the next ones are a statement's.
+                val head = if (i - f.funAt < FUN_HEAD_LENGTH) FUN_HEAD.matchEntire(src.substring(f.funAt, i)) else null
+                g.own = head != null && head.groupValues[1] !in STATEMENT_WORDS
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
                 g.funModifiers = f.funModifiers
@@ -1300,6 +1320,9 @@ private fun declarations(
                     g.ends += p.decls
                     f.pending = null
                     g.function = p.fn?.also { it.body = Span(i + 1) }
+                    g.sure =
+                        p.fn?.let { it.own && i - it.closeAt < 1_000 && RETURN_TYPE.matchEntire(blank.substring(it.closeAt, i)) != null } ==
+                        true
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
