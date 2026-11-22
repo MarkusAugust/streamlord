@@ -5,23 +5,94 @@
     {
       "comment": "As the real grammar has svg and math: a start tag on one line is read by the begin's captures, under meta.element, never meta.tag.",
       "begin": "(?i)(<)(svg|math|circle)(?=\\s|/?>)(?:(([^\"'>]|\"[^\"]*\"|'[^']*')*)(/?>))?",
-      "beginCaptures": { "0": { "name": "meta.tag.structure.$2.start.html" }, "1": { "name": "punctuation.definition.tag.begin.html" }, "2": { "name": "entity.name.tag.html" }, "3": { "patterns": [{ "match": "[A-Za-z][A-Za-z0-9_:.-]*", "name": "entity.other.attribute-name.html" }, { "match": "\"[^\"]*\"", "name": "string.quoted.double.html" }] }, "5": { "name": "punctuation.definition.tag.end.html" } },
+      "beginCaptures": {
+        "0": {
+          "name": "meta.tag.structure.$2.start.html"
+        },
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        },
+        "3": {
+          "patterns": [
+            {
+              "match": "[A-Za-z][A-Za-z0-9_:.-]*",
+              "name": "entity.other.attribute-name.html"
+            },
+            {
+              "match": "\"[^\"]*\"",
+              "name": "string.quoted.double.html"
+            }
+          ]
+        },
+        "5": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      },
       "end": "(?i)(</)(\\2)\\s*(>)|(?<=/>)",
       "name": "meta.element.structure.$2.html",
-      "patterns": [{ "include": "$self" }]
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    {
+      "comment": "As the real grammar has them: a comment, and a script whose text is JavaScript up to its closing tag.",
+      "begin": "<!--",
+      "end": "-->",
+      "name": "comment.block.html"
+    },
+    {
+      "begin": "(?i)(<)(script)(?=\\s|/?>)",
+      "end": "(?i)(</)(script)\\s*(>)",
+      "name": "meta.embedded.block.html",
+      "patterns": [
+        {
+          "begin": "(?<=>)",
+          "end": "(?=</(?i:script))",
+          "name": "source.js"
+        }
+      ]
     },
     {
       "begin": "(<)([A-Za-z][A-Za-z0-9-]*)",
-      "beginCaptures": { "1": { "name": "punctuation.definition.tag.begin.html" }, "2": { "name": "entity.name.tag.html" } },
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.begin.html"
+        },
+        "2": {
+          "name": "entity.name.tag.html"
+        }
+      },
       "end": "(/?>)",
-      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.html" } },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.definition.tag.end.html"
+        }
+      },
       "name": "meta.tag.any.html",
       "patterns": [
-        { "match": "[A-Za-z][A-Za-z0-9_:.-]*", "name": "entity.other.attribute-name.html" },
-        { "match": "=", "name": "punctuation.separator.key-value.html" },
-        { "begin": "\"", "end": "\"", "name": "string.quoted.double.html" }
+        {
+          "match": "[A-Za-z][A-Za-z0-9_:.-]*",
+          "name": "entity.other.attribute-name.html"
+        },
+        {
+          "match": "=",
+          "name": "punctuation.separator.key-value.html"
+        },
+        {
+          "begin": "\"",
+          "end": "\"",
+          "name": "string.quoted.double.html"
+        }
       ]
     },
-    { "match": "</[A-Za-z][A-Za-z0-9-]*>", "name": "meta.tag.close.html" }
+    {
+      "match": "</[A-Za-z][A-Za-z0-9-]*>",
+      "name": "meta.tag.close.html"
+    }
   ]
 }

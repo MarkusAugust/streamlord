@@ -58,11 +58,11 @@ const SIGNAL_NAME = r`([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)((?:\.[A-Za-z0-
 const RAW_QUOTE = r`(\$*""")`;
 /** What opens HTML in a double-quoted literal, as the analysis reads it: a tag, a comment or a doctype, after white space or an escaped line break. */
 const DQ_TAG_AHEAD = r`(?=<(?:[A-Za-z]|!--|!(?i:doctype))|(?:[ \t]|\\[nrt])+<(?:[A-Za-z]|!--|!(?i:doctype))(?:[^"\\\n]|\\.)*")`;
-/** Both kinds of literal, HTML however they open. */
-const HTML_LITERALS = [
-  embedded(r`(\$*""")`, { 1: { name: RAW_START } }, true, "meta.embedded.block.html", "text.html.basic"),
-  embedded(r`(\$*")`, { 1: { name: DQ_START } }, false, "meta.embedded.block.html", "text.html.basic"),
-];
+/** Both kinds of literal, HTML however they open, each with [before] its quote and [after] it what its place asks for. */
+const htmlLiterals = (before, after) =>
+  [true, false].map((raw) =>
+    embedded(before + r`(\$*` + (raw ? '"""' : '"') + ")" + after(raw ? '"""' : '"'), { 1: { name: raw ? RAW_START : DQ_START } }, raw, "meta.embedded.block.html", "text.html.basic"),
+  );
 /**
  * Just after the brace of interpolate's block, by the qualified name and after prefixes too, read behind the literal so
  * that Kotlin's grammar keeps the name and the brace, and the brackets it opens.
@@ -97,16 +97,49 @@ function marked(quote, raw, content, inner, single = []) {
   }));
 }
 
-/** A string that holds HTML or JavaScript: raw or plain, its templates marked. */
+/** A raw string on one line, ended by the last three quotes of a run. */
+const RAW_STRING = r`"""(?:[^"\n]|"(?!""(?!")))*"""`;
+/**
+ * What a template holds between its braces: the strings in it whole, and braces [depth] deep. A plain string does not
+ * begin with two quotes before a third, so a raw one is read one way only; the one char that matters is a quote.
+ */
+const inTemplate = (depth) =>
+  r`(?:'\\?"'|[^{}"\n]|` + RAW_STRING + r`|""(?!")|"(?!")(?:[^"\\\n]|\\.)*"` + (depth > 0 ? r`|\{` + inTemplate(depth - 1) + r`\}` : "") + ")*";
+/**
+ * The text of a literal up to the quote that closes it on its line, where [dollars] open a template: a template is
+ * passed whole, so a quote inside one ends nothing. Atomic, since what it passed is never read another way.
+ */
+const bodyOf = (raw, dollars) =>
+  "(?>(?:" + (raw ? r`[^"\n$]|"(?!""(?!"))` : r`[^"\\\n$]|\\.`) + "|" + r`\$`.repeat(dollars) + r`\{` + inTemplate(3) + r`\}|\$)*)`;
+
+/**
+ * A string that holds HTML or JavaScript: raw or plain, its templates marked. One that ends on its line is a single
+ * match with its text in a capture, since the grammar included there reads no further than the capture: a tag, a
+ * comment or a script it has open at the closing quote ends with the literal. In a region it would take the quote and
+ * the lines after it. A raw literal that goes on past its line can only be a region.
+ */
 function embedded(begin, captures, raw, content, inner) {
-  return {
-    begin,
-    beginCaptures: captures,
-    end: raw ? '(""")' : '(")',
-    endCaptures: { 1: { name: raw ? RAW_END : DQ_END } },
-    patterns: marked(raw ? '"""' : '"', raw, content, [{ include: inner }], raw ? [{ include: "#dollar-escape" }] : []),
+  const quote = raw ? '"""' : '"';
+  const single = raw ? [{ include: "#dollar-escape" }] : [];
+  const text = (n) => ({ name: MARKERS[n] + " " + content, patterns: [...(raw ? [] : [{ include: "#kotlin-escapes" }]), ...(n === 1 ? single : []), { include: inner }] });
+  // The body by the dollars the literal opens with, most first, as the region's rules read them.
+  const bodies = (group) => "(?:" + [3, 2, 1].map((n) => opened(n, quote) + (group ? "(" : "") + bodyOf(raw, n) + (group ? ")" : "")).join("|") + ")";
+  const first = groupsOf(begin).count + 1;
+  const onItsLine = {
+    match: begin + bodies(true) + "(" + quote + ")",
+    captures: { ...captures, [first]: text(3), [first + 1]: text(2), [first + 2]: text(1), [first + 3]: { name: raw ? RAW_END : DQ_END } },
     name: STRING,
   };
+  if (!raw) return onItsLine;
+  const goesOn = {
+    begin: begin + "(?!" + bodies(false) + quote + ")",
+    beginCaptures: captures,
+    end: '(""")',
+    endCaptures: { 1: { name: RAW_END } },
+    patterns: marked(quote, raw, content, [{ include: inner }], single),
+    name: STRING,
+  };
+  return { patterns: [onItsLine, goesOn] };
 }
 
 /** Two rules, a raw string and a plain one, opened by [head] with the string in group [group]. */
@@ -446,20 +479,14 @@ export function kotlinInjectionGrammar(catalog) {
     },
     "trusted-call": {
       comment: "Trusted(\"bold <b>text</b>\"): core's markup, HTML however it opens.",
-      patterns: HTML_LITERALS.map((rule) => ({
-        ...rule,
-        begin: (() => {
-          const quote = rule === HTML_LITERALS[0] ? '"""' : '"';
-          return rule.begin + TRUSTED_TAG + r`(?<=[(=][ \t]{0,4}\${0,4}` + quote + r`)(?<=` + AFTER_TRUSTED + r`\${0,4}` + quote + ")";
-        })(),
-      })),
+      patterns: htmlLiterals("", (quote) => TRUSTED_TAG + r`(?<=[(=][ \t]{0,4}\${0,4}` + quote + r`)(?<=` + AFTER_TRUSTED + r`\${0,4}` + quote + ")"),
     },
     "trusted-call-next-line": {
       comment:
         "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region opens at the end of the line, after Kotlin's grammar has read `Trusted(`, and ends after the argument or at the closing parenthesis.",
       begin: r`(?<=(?:^|[^\w.\x60])Trusted[ \t]{0,4}\()(?<!(?:class|fun)[ \t]{1,4}Trusted[ \t]{0,4}\()(?=[ \t]*$)`,
       end: r`(?<=")|(?=\))`,
-      patterns: [...HTML_LITERALS.map((rule) => ({ ...rule, begin: r`^\s*(?:html\s*=\s*)?` + rule.begin + TRUSTED_TAG })), { include: "source.kotlin" }],
+      patterns: [...htmlLiterals(r`^\s*(?:html\s*=\s*)?`, () => TRUSTED_TAG), { include: "source.kotlin" }],
     },
     "script-call": {
       comment: "executeScript(\"\"\"...\"\"\"): JavaScript inside the string.",
