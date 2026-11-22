@@ -1540,6 +1540,18 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(emptyList<String>(), found)
     }
 
+    // A note is prose and breaks between words, as VS Code shows it; the body and the headers are the server's text and break where the line ends.
+    fun `test the note on a response that is no stream breaks between words`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        panel.javaClass
+            .getDeclaredMethod("addNonSse", StreamClient.NonSseResponse::class.java, List::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, StreamClient.NonSseResponse("404 Not Found", "", "", emptyMap()), emptyList<String>())
+        val note = UIUtil.findComponentsOfType(panel, JTextArea::class.java).single { it.text.startsWith("The server sent no body") }
+        assertTrue("the note breaks words apart", note.wrapStyleWord)
+        assertFalse("the note is set in the code face", note.font.family == java.awt.Font.MONOSPACED)
+    }
+
     fun `test the signal store keeps room for several lines at a zoom`() {
         val panel = InspectorPanel(project, testRootDisposable)
         zoom(panel, 1.75f)

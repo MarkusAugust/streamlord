@@ -4,7 +4,7 @@ import { Inspector } from "../src/inspector.ts";
 import type { DatastarFrame } from "../src/analysis.ts";
 import { RequestStore } from "../src/requestStore.ts";
 import { RunningServers } from "../src/serverLog.ts";
-import { files, Position, settings, unreadable, Uri, workspace } from "./vscode-mock.ts";
+import { files, Position, settings, unreadable, Uri, window, workspace } from "./vscode-mock.ts";
 
 /** An inspector with a stand-in panel that records what it posts to the page. */
 function inspector(): { apply: (signals: string, onlyIfMissing?: string) => void; posted: { type: string; [k: string]: unknown }[] } {
@@ -404,6 +404,50 @@ describe("inspector requests file as the editor has it", () => {
     } finally {
       named.restore();
       settings.clear();
+    }
+  });
+});
+
+describe("inspector opened from a route", () => {
+  // The page asks for the form once its script runs, after the panel is made: the route the panel was opened with is what it gets.
+  it("fills in the route on the first open, when the page says it is ready", async () => {
+    const posted: { type: string; [k: string]: any }[] = [];
+    let receive: (m: { type: string }) => Promise<void> = async () => {};
+    const panel = {
+      webview: {
+        html: "",
+        cspSource: "vscode-resource:",
+        postMessage: async (m: { type: string }) => posted.push(m),
+        onDidReceiveMessage: (l: typeof receive) => {
+          receive = l as typeof receive;
+        },
+      },
+      onDidDispose: () => {},
+      reveal: () => {},
+    };
+    const w = window as Record<string, unknown>;
+    w.createWebviewPanel = () => panel;
+    try {
+      const context = { subscriptions: [] as unknown[] };
+      const store = {
+        onDidChange: () => ({ dispose() {} }),
+        readFile: async () => ({ requests: [], skipped: [] }),
+        environment: async () => ({ values: {}, described: "", errors: [], vars: [] }),
+        requestsPathProblem: () => null,
+        recent: () => [],
+        lastUsed: () => ({ url: "{{baseUrl}}/last" }),
+      };
+      const i = new Inspector(context as never, store as never, null as never);
+      i.open({ url: "{{baseUrl}}/counter", method: "GET" });
+      await receive({ type: "ready" });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(posted.filter((m) => m.type === "requests").at(-1)?.current?.url, "{{baseUrl}}/counter");
+      // A page loaded again later gets the request of the moment, not the route it was first opened with.
+      await receive({ type: "ready" });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(posted.filter((m) => m.type === "requests").at(-1)?.current?.url, "{{baseUrl}}/last");
+    } finally {
+      delete w.createWebviewPanel;
     }
   });
 });

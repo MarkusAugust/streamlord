@@ -1066,7 +1066,8 @@ class InspectorPanel(
         } else {
             Requests.emptyBodyHint(r.http.substringBefore(' ').toIntOrNull() ?: 0, r.body)?.let { rows["note"] = it }
         }
-        prepend(card(listOf(r.http, r.contentType.ifEmpty { "no content-type" }), JBColor.foreground(), "non-SSE response", rows))
+        val head = listOf(r.http, r.contentType.ifEmpty { "no content-type" })
+        prepend(card(head, JBColor.foreground(), "non-SSE response", rows, prose = setOf("note")))
     }
 
     /**
@@ -1130,6 +1131,7 @@ class InspectorPanel(
         color: java.awt.Color,
         right: String,
         rows: Map<String, String>,
+        prose: Set<String> = emptySet(),
     ): JComponent {
         val card = JPanel(BorderLayout())
         card.border = JBUI.Borders.compound(JBUI.Borders.emptyBottom(6), JBUI.Borders.customLine(JBColor.border(), 1))
@@ -1148,7 +1150,8 @@ class InspectorPanel(
                 for ((k, v) in rows) {
                     // A row's name is the server's, a data line's first word: text, never Swing HTML.
                     row(plainLabel(k)) {
-                        cell(Wrapped(cut(v), mono = true).apply { border = JBUI.Borders.empty() })
+                        // The server's text breaks where the line ends; a note of ours, in [prose], between words.
+                        cell(Wrapped(cut(v), mono = k !in prose).apply { border = JBUI.Borders.empty() })
                             .align(AlignX.FILL)
                             .resizableColumn()
                     }

@@ -34,6 +34,8 @@ const LOG_GRACE_MS = 400;
 
 export class Inspector {
   private panel: vscode.WebviewPanel | null = null;
+  /** What a new panel is opened with: its page asks for the form once its script runs, after the panel is made. */
+  private opening: Partial<SavedRequest> | undefined;
   private abort: AbortController | null = null;
   private signals: Record<string, unknown> = {};
 
@@ -59,7 +61,8 @@ export class Inspector {
     } else {
       this.panel.reveal();
     }
-    void this.pushRequests(prefill ?? this.store.lastUsed() ?? { url: "{{baseUrl}}/" });
+    this.opening = prefill ?? this.store.lastUsed() ?? { url: "{{baseUrl}}/" };
+    void this.pushRequests(this.opening);
   }
 
   /**
@@ -125,8 +128,12 @@ export class Inspector {
 
   private async handle(msg: Message): Promise<void> {
     switch (msg.type) {
-      case "ready":
-        return this.pushRequests(this.store.lastUsed() ?? { url: "{{baseUrl}}/" });
+      case "ready": {
+        // The route of the open is the form's once; a page loaded again later gets the request of the moment.
+        const opening = this.opening;
+        this.opening = undefined;
+        return this.pushRequests(opening ?? this.store.lastUsed() ?? { url: "{{baseUrl}}/" });
+      }
       case "connect":
         return this.connect(msg.request);
       case "stop":
@@ -291,19 +298,26 @@ function html(cspSource: string): string {
 <title>Streamlord Stream Inspector</title>
 <style>
   :root { color-scheme: light dark; }
-  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 12px; }
+  /* The page is the panel's height: the events and the store beside them each scroll, and the form stays. */
+  html, body { height: 100%; }
+  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; }
   h1 { font-size: 1.1em; margin: 0 0 8px; letter-spacing: .04em; }
-  form { display: grid; grid-template-columns: 90px 1fr; gap: 6px 8px; align-items: start; margin-bottom: 10px; }
+  /* A field gives way to a narrow panel: the column may be narrower than what is in it. */
+  form { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 8px; align-items: start; margin-bottom: 10px; flex: none; }
+  /* A label stands on the line of its field's text. */
+  form > label { padding-top: 5px; }
   input, select, textarea, button { font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); padding: 4px 6px; border-radius: 3px; }
-  input, select, textarea { width: 100%; box-sizing: border-box; }
+  input, select, textarea { width: 100%; min-width: 0; box-sizing: border-box; }
   textarea { min-height: 48px; font-family: var(--vscode-editor-font-family); }
   button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; cursor: pointer; padding: 5px 12px; }
   button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
   button.link { background: none; color: var(--vscode-textLink-foreground); padding: 0 4px; }
   button:disabled { opacity: .5; cursor: default; }
   .row { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .saved-row { display: flex; gap: 6px; align-items: center; }
-  .saved-row select { flex: 1; width: auto; }
+  /* Save and Delete go under the list where it would be too narrow to read beside them. */
+  .saved-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
+  .saved-row select { flex: 1 1 12em; width: auto; }
+  .saved-actions { display: flex; gap: 6px; align-items: center; }
   #requestProblems { grid-column: 2; }
   #requestProblems:empty { display: none; }
   #requestProblems p { margin: 0; }
@@ -313,15 +327,19 @@ function html(cspSource: string): string {
   .status.error { color: var(--vscode-errorForeground); }
   .resolved { grid-column: 2; opacity: .6; font-family: var(--vscode-editor-font-family); font-size: .9em; min-height: 0; overflow-wrap: anywhere; }
   .resolved:empty { display: none; }
-  main { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
-  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  /* However short the panel, the events and the store keep room, and the page scrolls to them. */
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; flex: 1; min-height: 18em; }
+  #frames, aside { overflow: auto; min-height: 0; }
+  /* In a narrow panel the store and the variables go under the events, each with a share of the height. */
+  @media (max-width: 560px) { main { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); } }
   .frame { border: 1px solid var(--vscode-widget-border, #444); border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
-  .frame header { display: flex; gap: 10px; padding: 4px 8px; background: var(--vscode-editorWidget-background); font-family: var(--vscode-editor-font-family); }
+  /* The time keeps to the right end, and goes on to a line of its own where the names leave it no room. */
+  .frame header { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 4px 8px; background: var(--vscode-editorWidget-background); font-family: var(--vscode-editor-font-family); }
   .frame header .ev { font-weight: 600; }
   .frame header .ev.elements { color: var(--vscode-charts-blue); }
   .frame header .ev.signals { color: var(--vscode-charts-purple); }
   .frame header .t { margin-left: auto; opacity: .6; }
-  .frame dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; margin: 0; padding: 6px 8px; }
+  .frame dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 0; padding: 6px 8px; }
   .frame dt { opacity: .7; font-family: var(--vscode-editor-font-family); }
   .frame dd { margin: 0; }
   pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--vscode-editor-font-family); font-size: .95em; }
@@ -336,7 +354,9 @@ function html(cspSource: string): string {
   .completions .option { display: flex; gap: 12px; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
   .completions .option.active { background: var(--vscode-editorSuggestWidget-selectedBackground); color: var(--vscode-editorSuggestWidget-selectedForeground, inherit); }
   .completions .detail { opacity: .7; overflow: hidden; text-overflow: ellipsis; }
+  /* A URL in a message has no spaces to break at, and is broken anywhere rather than run past the edge. */
   .error { color: var(--vscode-errorForeground); }
+  .error, .comment, button.link { overflow-wrap: anywhere; text-align: left; }
   .empty { opacity: .6; }
 </style>
 </head>
@@ -346,9 +366,11 @@ function html(cspSource: string): string {
   <label for="saved">Request</label>
   <div class="saved-row">
     <select id="saved"><option value="">New request…</option></select>
-    <button type="button" class="secondary" id="save" title="Save the current request to .streamlord/inspector.json">Save</button>
-    <button type="button" class="secondary" id="delete" title="Delete the selected saved request">Delete</button>
-    <span class="dirty" id="dirty" style="visibility: hidden">● modified</span>
+    <span class="saved-actions">
+      <button type="button" class="secondary" id="save" title="Save the current request to .streamlord/inspector.json">Save</button>
+      <button type="button" class="secondary" id="delete" title="Delete the selected saved request">Delete</button>
+      <span class="dirty" id="dirty" style="visibility: hidden">● modified</span>
+    </span>
   </div>
   <div id="requestProblems"></div>
   <label for="url">URL</label><input id="url" placeholder="{{baseUrl}}/api/feed">
