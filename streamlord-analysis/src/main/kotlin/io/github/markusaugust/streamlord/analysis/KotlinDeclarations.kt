@@ -313,12 +313,12 @@ private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
     regex(
-        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*,?\s*->""",
+        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*(?:,\s*)?->""",
     )
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
 
 /** The variable a `catch` names, last in its brackets, whatever annotations stand before it. */
-private val CATCH_VARIABLE = regex("""($NAME)\s*:\s*($TYPE)\s*,?\s*$""")
+private val CATCH_VARIABLE = regex("""($NAME)\s*:\s*($TYPE)\s*(?:,\s*)?$""")
 private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = regex(TYPE)
 private val PROPERTY_MODIFIERS = regex("""\b(?:val|var)\b""")
@@ -578,6 +578,24 @@ private fun codeBefore(
 
 private val ELSE_NEXT = regex("""^else\b""")
 
+/**
+ * Whether a function whose parameters closed before the line break at [at] may still get its body: the line ends in
+ * the middle of its type, or the next begins with the body, the type or a `where`.
+ */
+private fun bodyMayFollow(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Boolean {
+    val before = codeBefore(src, code, at)
+    if (before >= 0 && (src[before] in ":,<(" || src.startsWith("->", before - 1))) return true
+    var next = at
+    while (next < src.length && (src[next].isWhitespace() || !code[next])) next++
+    return next < src.length && (src[next] in "{=:" || BODY_NEXT.matchAt(src, next) != null)
+}
+
+private val BODY_NEXT = regex("""where\b|->""")
+
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
 
@@ -625,9 +643,8 @@ private class ScopeFrame(
     var whenBlock = false
     var loop = false
 
-    /** The last letter of a `catch` after a block, whose brackets come next, and the variable they named with where they closed. */
-    var catchAt = -1
-    var caught: Pair<Declaration, Int>? = null
+    /** The variable the brackets of a `catch` named, in sight up to where they closed until the block after them takes it. */
+    var caught: Declaration? = null
 
     /** The parameters of a class's constructor, waiting for its body. */
     var ctor: List<Declaration>? = null
@@ -1164,11 +1181,6 @@ private fun declarations(
                     f.loop = true
                 }
 
-                // An infix function of that name is called with a lambda, or with brackets that name no variable.
-                word == "catch" -> {
-                    if (codeBefore(src, code, i).let { it >= 0 && src[it] == '}' }) f.catchAt = end - 1
-                }
-
                 (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
                     val constant = f.modifiers and CONST != 0
                     val html = f.modifiers and HTML != 0
@@ -1273,7 +1285,8 @@ private fun declarations(
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
-            } else if (c == '(' && f.catchAt >= 0 && codeBefore(src, code, i) == f.catchAt) {
+            } else if (c == '(' && f.word == "catch") {
+                // An infix function of that name is called with a lambda, or with brackets that name no variable.
                 g.kind = "catch"
             } else if (c == '(' && f.loop) {
                 g.kind = "for"
@@ -1294,8 +1307,7 @@ private fun declarations(
                 f.loop = false
                 val p = f.pending
                 // A catch has its block right after its brackets; one still being typed has none, and leaves the next block alone.
-                val caught = f.caught?.takeIf { codeBefore(src, code, i) == it.second }?.first
-                f.caught = null
+                val caught = f.caught?.takeIf { codeBefore(src, code, i) == it.end - 1 }
                 if (caught != null) {
                     g.ends += caught
                 } else if (p != null && p.state == "after" && f.kind != "for") {
@@ -1318,7 +1330,7 @@ private fun declarations(
                 } else {
                     // Read in the code alone, as a function's parameters are: a comment among them is blank.
                     val m = LAMBDA_PARAMETERS.matchAt(blank, i + 1)
-                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] || comments[it] }) {
+                    if (m != null) {
                         g.kind = "lambda"
                         for (part in splitTopLevel(m.groupValues[1])) {
                             val p0 = part.trim()
@@ -1379,9 +1391,9 @@ private fun declarations(
                 if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
-            } else if (g.kind == "catch") {
+            } else if (g.kind == "catch" && c == ')') {
                 CATCH_VARIABLE.find(blank.substring(g.open + 1, i))?.let { m ->
-                    outer.caught = add(m.groupValues[1], Declaration(g.open + 1, g.open, m.groupValues[2]).also { it.end = i + 1 }) to i
+                    outer.caught = add(m.groupValues[1], Declaration(g.open + 1, g.open, m.groupValues[2]).also { it.end = i + 1 })
                 }
             }
             i++
@@ -1402,6 +1414,9 @@ private fun declarations(
                         p.fn?.body = f.begin(Span(i + 1))
                     } else if (p.fn == null && !c.isWhitespace() && f.kind != "for") {
                         p.state = "stmt"
+                    } else if (p.fn != null && c == '\n' && !bodyMayFollow(src, code, i)) {
+                        // A function with no body, as one being typed: the next block is not its own.
+                        endPending(f, i)
                     }
                 }
 

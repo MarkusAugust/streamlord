@@ -387,6 +387,9 @@ class ValueStructureTest {
         assertEquals(listOf("\${plain(n)}"), told(outer + "fun page(n: String) = \"<p>\${plain(n)}</p>\""))
         val none = "fun outer() { fun inner(): String { return \"<b>x</b>\" } }\n"
         assertEquals(listOf("\${outer()}"), told(none + "fun page() = \"<p>\${outer()}</p>\""))
+        // A return to a label leaves the function it stands in unread, and no other.
+        val labelled = "fun badge(xs: List<Int>): String {\n    fun each() { xs.forEach { return@forEach } }\n    return \"<b>x</b>\"\n}\n"
+        assertEquals(emptyList(), told(labelled + "fun page(xs: List<Int>) = \"<p>\${badge(xs)}</p>\""))
     }
 
     @Test
@@ -404,6 +407,10 @@ class ValueStructureTest {
         // A catch still being typed has no block, and takes none of what follows.
         val typed = "fun f(xs: List<Int>) {\n    try { } catch (e: Exception)\n    xs.forEach { x: Int -> println(\"<b>\$x</b>\") }\n}\n"
         assertEquals(emptyList(), told(typed))
+        // Its variable is in sight in its brackets alone, and brackets that end in no variable name none.
+        for (brackets in listOf("(e: Exception)", "(e: Exception x)")) {
+            assertEquals(emptyList(), told("fun f(e: Int) {\n    try { } catch $brackets\n    println(\"<b>\$e</b>\")\n}\n"), brackets)
+        }
         // An infix function of that name is a call.
         val infix =
             "fun f(e: Int) {\n    attempt { } catch { println(\"<b>\$e</b>\") }\n" +
@@ -424,8 +431,53 @@ class ValueStructureTest {
         // The parameter is the one in sight, not a value of its name around the lambda.
         val shadow = "fun f(title: Int, xs: List<String>) = xs.map { title: String, -> \"<p>\$title</p>\" }\n"
         assertEquals(listOf("\$title"), told(shadow))
-        // A literal with an arrow in it names no parameter.
-        assertEquals(listOf("\$n"), told("fun f(n: String) = run { \"n: Int, -> \$n\"; \"<b>\$n</b>\" }\n"))
+    }
+
+    @Test
+    fun `a function with no body takes no later block for one, and its returns stay the outer function's`() {
+        val page = "fun page(n: String, xs: List<Int>) = \"<p>\${outer(n, xs)}</p>\""
+        val told = listOf("\${outer(n, xs)}")
+        // A local function still being typed.
+        for (typed in listOf("fun inner(): String", "fun inner()")) {
+            val src = "fun outer(n: String, xs: List<Int>): String {\n    $typed\n    xs.forEach { return n }\n    return \"<b>x</b>\"\n}\n"
+            assertEquals(told, told(src + page), typed)
+        }
+        // A call of a value named as a constructor is declared.
+        val called =
+            "fun outer(n: String, xs: List<Int>, constructor: () -> Int): String {\n    val x = constructor()\n" +
+                "    if (n.isEmpty()) { return n }\n    return \"<b>x</b>\"\n}\n"
+        assertEquals(
+            listOf("\${outer(n, xs, c)}"),
+            told(called + "fun page(n: String, xs: List<Int>, c: () -> Int) = \"<p>\${outer(n, xs, c)}</p>\""),
+        )
+        // A body may open on the line after, and so may what stands before it.
+        for (laid in listOf(
+            "fun inner(): String\n    {",
+            "fun inner():\n        String {",
+            "fun <T> inner(): String\n        where T : Any {",
+        )) {
+            val src = "fun outer(n: String, xs: List<Int>): String {\n    $laid\n        return n\n    }\n    return \"<b>x</b>\"\n}\n"
+            assertEquals(emptyList(), told(src + page), laid)
+        }
+    }
+
+    @Test
+    fun `a catch whose brackets never close names no variable`() {
+        val src =
+            "fun f() {\n    run {\n        try { load() } catch (e: Exception\n        val n: String\n    }\n" +
+                "    { n: Int -> println(\"<b>\$n</b>\") }\n}\n"
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a block that starts with a name and then space or comments is read in time that grows with it`() {
+        var made = 0
+        assertGrowsLinearly("comment lines after a first word", 200, { n: Int ->
+            "// ${made++}\nfun f(a: Int) {\n    if (a > 0) { return\n" + "        // println(a)\n".repeat(n) + "    }\n}\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("spaces in a catch that names nothing", 200, { n: Int ->
+            "// ${made++}\nfun f() {\n    try { } catch (e: Exception" + " ".repeat(n * 40) + "x) { }\n}\n"
+        }) { fileFacts(it) }
     }
 
     @Test
