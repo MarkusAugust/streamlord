@@ -17193,6 +17193,9 @@ unknown-attribute 204-217 warning: Unknown Datastar attribute data-no. Did you m
   fix "Change to data-on" 204-211 "data-on"
 unknown-attribute 559-568 hint: data-shwo is not a Datastar attribute. Did you mean data-show?
   fix "Change to data-show" 559-568 "data-show"
+== real/html/repeated.html
+repeated-attribute 110-119 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
+repeated-attribute 170-183 warning: The browser keeps the first data-on:click of an element and drops this one, so Datastar never reads it. Move its value into the first.
 == real/html/shop.html
 pro-attribute 3098-3125 hint: data-persist is a Datastar Pro attribute; it needs the Pro bundle.
 pro-attribute 3147-3164 hint: data-query-string is a Datastar Pro attribute; it needs the Pro bundle.
@@ -17378,6 +17381,9 @@ unescaped-interpolation 384-389 warning: Kotlin writes $name into the HTML as it
     edit 19-19 "\n\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
 unknown-attribute 361-375 warning: Unknown Datastar attribute data-onn. Did you mean data-on?
   fix "Change to data-on" 361-369 "data-on"
+== real/kotlin/Repeated.kt
+repeated-attribute 235-244 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
+repeated-attribute 311-320 warning: The browser keeps the first data-text of an element and drops this one, so Datastar never reads it. Move its value into the first.
 == real/kotlin/RewriteAudit.kt
 unsafe-interpolation 930-932 error: interpolate throws here for every value: the markup starts href with javascript:, which is not a scheme that only navigates. Start the URL with /, # or https://.
 interpolate-template 1249-1253 warning: Kotlin fills in ${v} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.

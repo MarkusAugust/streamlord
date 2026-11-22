@@ -1,0 +1,10 @@
+<!-- A Datastar attribute written twice on an element: the browser keeps the first. -->
+<div data-show="true" data-show="false"></div>
+<button data-on:click="@get('/a')" DATA-ON:CLICK="@get('/b')">Send</button>
+<!-- Nothing is lost here: other names, and the same value again. -->
+<div data-class:a="true" data-class:b="false" data-show="true" data-show="true"></div>
+<!-- A tag still being typed above one with the same attribute. -->
+<ul>
+  <li data-text="'a'"
+  <li data-text="'b'">x</li>
+</ul>
