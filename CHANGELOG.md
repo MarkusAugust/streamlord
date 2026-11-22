@@ -47,6 +47,18 @@ All notable changes to Streamlord are recorded here. The format follows
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
+- A Kotlin value in an HTML string is judged by what its name means in two places where it was
+  judged by something else:
+  - In a `catch` block, `$e` is the exception the `catch` names. It was read as a parameter or a
+    value named `e` around the `try`: an `Int` of that name hid the hint, and a `String` made it a
+    warning. With no other `e` around, nothing changes.
+  - A lambda's parameters are found where a comma follows the last or a comment stands among them.
+    They were not, so `$n` in such a lambda was judged as an unknown name, or as a value named `n`
+    outside it.
+
+  Where a name now means something else, a hint may become a warning or a warning a hint, and
+  `failures(strict = true)` keeps warnings: a `String` parameter of a lambda with a comma after the
+  last is a warning where it was a hint.
 - `repeated-attribute`, a new warning in HTML, templates and HTML in Kotlin strings: a Datastar
   attribute the element already has, in any capitals, with another value. The browser keeps the first
   and drops the rest, so Datastar never reads them. A tag a template writes into is left alone, and

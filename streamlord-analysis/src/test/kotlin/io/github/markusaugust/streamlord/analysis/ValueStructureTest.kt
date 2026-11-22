@@ -380,6 +380,91 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a catch declares its variable for its block, and for nothing else`() {
+        fun page(
+            handler: String,
+            after: String = "\"\"",
+        ) = "fun load() {}\nfun page(e: Int): String {\n    try { load() } $handler\n    return $after\n}\n"
+        assertEquals(listOf("\$e"), told(page("catch (e: Exception) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (\n        @Suppress(\"x\") e: Exception, // why\n    ) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (e: Exception) { return \"\" } catch (e: Error) { return \"<b>\$e</b>\" }")))
+        // Past its block the name is the parameter again, an Int, which is no markup.
+        assertEquals(emptyList(), told(page("catch (e: Exception) { }", "\"<b>\$e</b>\"")))
+        assertEquals(emptyList(), told(page("catch (e: Exception) { } finally { println(\"<b>\$e</b>\") }")))
+        // A catch still being typed has no block, and takes none of what follows.
+        val typed = "fun f(xs: List<Int>) {\n    try { } catch (e: Exception)\n    xs.forEach { x: Int -> println(\"<b>\$x</b>\") }\n}\n"
+        assertEquals(emptyList(), told(typed))
+        // Its variable is in sight in its brackets alone, and brackets that hold more than one variable name none.
+        for (brackets in listOf("(e: Exception)", "(e: Exception x)")) {
+            assertEquals(emptyList(), told("fun f(e: Int) {\n    try { } catch $brackets\n    println(\"<b>\$e</b>\")\n}\n"), brackets)
+        }
+        // An infix function of that name is a call.
+        val infix =
+            "fun f(e: Int) {\n    attempt { } catch { println(\"<b>\$e</b>\") }\n" +
+                "    attempt { } catch (e) { m: Int -> println(\"<b>\$m</b>\") }\n}\n"
+        assertEquals(emptyList(), told(infix))
+        // Brackets that hold more than a variable and its annotations name none, and their block is no catch's.
+        for (brackets in listOf("(a: B, e: Exception)", "(a: e: Exception)", "(object : Exception)")) {
+            val src = "fun f(e: Int, x: Any) {\n    x.catch $brackets { m: String -> println(\"<b>\$e \$m</b>\") }\n}\n"
+            assertEquals(listOf("\$m"), told(src), brackets)
+        }
+        val many = "fun f() {\n    try { } catch (" + "@A ".repeat(5_000) + "e: Exception) { println(\"<b>\$e</b>\") }\n}\n"
+        assertEquals(listOf("\$e"), told(many))
+    }
+
+    @Test
+    fun `a lambda's parameters are read past a comma after the last and a comment among them`() {
+        val comma = "fun f(xs: Map<Int, Int>) {\n    xs.forEach { i: Int,\n        n: Int,\n        -> println(\"<b>\$i \$n</b>\") }\n}\n"
+        assertEquals(emptyList(), told(comma))
+        val line = "fun f(xs: Map<Int, Int>) {\n    xs.forEach { i: Int, // the key\n        n: Int -> println(\"<b>\$i \$n</b>\") }\n}\n"
+        assertEquals(emptyList(), told(line))
+        val block = "val f = { a: String, /* c */ title: Int, -> \"<p>\$title</p>\" }\n"
+        assertEquals(emptyList(), told(block))
+        // The parameter is the one in sight, not a value of its name around the lambda.
+        val shadow = "fun f(title: Int, xs: List<String>) = xs.map { title: String, -> \"<p>\$title</p>\" }\n"
+        assertEquals(listOf("\$title"), told(shadow))
+    }
+
+    @Test
+    fun `a block right after a catch's own is no part of the catch`() {
+        val src =
+            "fun f(e: Int, x: Int): String {\n    val r = try { a() } catch (e: Exception) { b() }\n" +
+                "    { x: String -> println(\"<p>\$x</p>\") }\n    return \"<p>\$e</p>\"\n}\n"
+        assertEquals(listOf("\$x"), told(src))
+    }
+
+    @Test
+    fun `a literal in brackets before an arrow names no parameter`() {
+        val src = "fun f(a: Int): String {\n    foo { (\"a\") -> \"<p>\$a</p>\" }\n    return \"\"\n}\n"
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a catch whose brackets never close names no variable`() {
+        val src =
+            "fun f() {\n    run {\n        try { load() } catch (e: Exception\n        val n: String\n    }\n" +
+                "    { n: Int -> println(\"<b>\$n</b>\") }\n}\n"
+        assertEquals(emptyList(), told(src))
+    }
+
+    @Test
+    fun `a block that starts with a name and then space or comments is read in time that grows with it`() {
+        var made = 0
+        assertGrowsLinearly("comment lines after a first word", 200, { n: Int ->
+            "// ${made++}\nfun f(a: Int) {\n    if (a > 0) { return\n" + "        // println(a)\n".repeat(n) + "    }\n}\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("a long word in a catch that names nothing", 200, { n: Int ->
+            "// ${made++}\nfun f() {\n    try { } catch (" + "e".repeat(n * 40) + ") { }\n}\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("brackets after catch, one in another", 200, { n: Int ->
+            "// ${made++}\nfun f() {\n    x " + "catch(".repeat(n * 10) + "e: E" + ")".repeat(n * 10) + "\n}\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("spaces in a catch that names nothing", 200, { n: Int ->
+            "// ${made++}\nfun f() {\n    try { } catch (e: Exception" + " ".repeat(n * 40) + "x) { }\n}\n"
+        }) { fileFacts(it) }
+    }
+
+    @Test
     fun `a lambda that returns to its label gives more than its last line`() {
         assertEquals(
             1,

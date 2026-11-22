@@ -313,8 +313,12 @@ private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
     regex(
-        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*->""",
+        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*(?:,\s*)?->""",
     )
+
+/** How far back from its closing bracket a `catch` is read for its variable and the type. */
+private const val CATCH_VARIABLE_LENGTH = 500
+
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
 private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = regex(TYPE)
@@ -621,6 +625,9 @@ private class ScopeFrame(
     var cls = false
     var whenBlock = false
     var loop = false
+
+    /** The variable the brackets of a `catch` named, in sight up to where they closed until the block after them takes it. */
+    var caught: Declaration? = null
 
     /** The parameters of a class's constructor, waiting for its body. */
     var ctor: List<Declaration>? = null
@@ -1261,6 +1268,9 @@ private fun declarations(
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
+            } else if (c == '(' && f.word == "catch") {
+                // An infix function of that name is called with a lambda, or with brackets that name no variable.
+                g.kind = "catch"
             } else if (c == '(' && f.loop) {
                 g.kind = "for"
                 f.loop = false
@@ -1279,8 +1289,13 @@ private fun declarations(
                 f.fn = false
                 f.loop = false
                 val p = f.pending
-                // A lambda in a loop's own brackets is no body of it.
-                if (p != null && p.state == "after" && f.kind != "for") {
+                // A catch has its block right after its brackets; one still being typed has none, and leaves the next block alone.
+                val caught = f.caught?.takeIf { codeBefore(src, code, i) == it.end - 1 }
+                f.caught = null
+                if (caught != null) {
+                    g.ends += caught
+                } else if (p != null && p.state == "after" && f.kind != "for") {
+                    // A lambda in a loop's own brackets is no body of it.
                     // The body of the function or the loop whose parameters just closed.
                     g.ends += p.decls
                     f.pending = null
@@ -1297,8 +1312,9 @@ private fun declarations(
                     g.kind = "when"
                     f.whenBlock = false
                 } else {
-                    val m = LAMBDA_PARAMETERS.matchAt(src, i + 1)
-                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] }) {
+                    // Read in the code alone, as a function's parameters are: a comment among them is blank.
+                    val m = LAMBDA_PARAMETERS.matchAt(blank, i + 1)
+                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
                         for (part in splitTopLevel(m.groupValues[1])) {
                             val p0 = part.trim()
@@ -1359,6 +1375,26 @@ private fun declarations(
                 if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
+            } else if (g.kind == "catch" && c == ')') {
+                // The variable is all the brackets hold, `name: Type`, but for annotations before it; `object : Type` is a value.
+                // It is read in their last stretch, so brackets in brackets cost no more than their length.
+                val from = maxOf(g.open + 1, i - CATCH_VARIABLE_LENGTH)
+                val tail = blank.substring(from, i)
+                val colon = tail.lastIndexOf(':')
+                val before = tail.substring(0, maxOf(colon, 0)).trimEnd()
+                val name = before.takeLastWhile { isWordPart(it) }
+                val type =
+                    tail
+                        .substring(colon + 1)
+                        .trim()
+                        .removeSuffix(",")
+                        .trimEnd()
+                var first = g.open + 1
+                while (first < i && blank[first].isWhitespace()) first++
+                val alone = first == from + before.length - name.length || blank[first] == '@'
+                if (name.firstOrNull()?.isDigit() == false && name != "object" && alone && WHOLE_TYPE.matchEntire(type) != null) {
+                    outer.caught = add(name, Declaration(g.open + 1, g.open, type).also { it.end = i + 1 })
+                }
             }
             i++
             continue

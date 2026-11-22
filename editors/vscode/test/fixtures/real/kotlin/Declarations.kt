@@ -86,3 +86,22 @@ fun outer(page: String) {
     fun size(page: Int) = load().length + page
     println("<p>$page</p>")
 }
+
+// A catch names its variable for its block: $e there is the exception and is told, and after it the Int again.
+fun caught(e: Int): String {
+    try {
+        load()
+    } catch (e: IllegalStateException) {
+        return "<b>$e</b>"
+    }
+    return "<i>$e</i>"
+}
+
+// A lambda's parameters are read past the comma after the last and a comment: nothing is said of $index and $count.
+fun counted(rows: List<Int>) =
+    rows.mapIndexed {
+        index: Int, // the key
+        count: Int,
+        ->
+        "<li>$index: $count</li>"
+    }
