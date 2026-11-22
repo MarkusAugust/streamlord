@@ -499,6 +499,9 @@ describe("html injection grammar", () => {
       `val b = "<p>\${a.map { b -> b.map { c -> c.let { "x" } } }}</p>" + tail`,
       `val c = "<p>\${'"'}</p>" + tail`,
       `val d = "<p>\${"""x"""}</p>" + tail`,
+      `val e = "<p>\${a /* it's "quoted" */}</p>" + tail`,
+      `val f = "<p>\${g('\\u0041', "x")}</p>" + tail`,
+      `val g = "<p>\${h('\\"', "", """""", "x")}</p>" + tail`,
     ]) {
       const t = await tokenLines("source.kotlin", [whole, "val after = 1"]);
       assert.match(t[0]!.filter((x) => x.text.includes("</")).map((x) => x.scopes.join(" ")).pop() ?? "", /html/, `${whole}: the closing tag is HTML`);
@@ -944,6 +947,8 @@ describe("what is not Datastar's", () => {
     assertGrowsLinearly("a raw literal of quotes that never ends", 40, (n) => `val h = """<p>${'" '.repeat(n)}`, kotlin);
     assertGrowsLinearly("a template of strings", 20, (n) => `val h = "<p>\${f(${'"a", '.repeat(n)}"b")}</p>"`, kotlin);
     assertGrowsLinearly("templates after a quote that never closes", 20, (n) => `// writes "<p>${"\${a} ".repeat(n)}`, kotlin);
+    assertGrowsLinearly("raw strings in a template that never closes", 10, (n) => `val h = """<ul>\${f(${'"""x""", '.repeat(n)}`, kotlin);
+    assertGrowsLinearly("empty raw strings in a template that never closes", 10, (n) => `val h = "<ul>\${f(${'"""""", '.repeat(n)}1)</ul>"`, kotlin);
   });
 
   it("reads a long line of DSL calls in time that grows with it", async () => {

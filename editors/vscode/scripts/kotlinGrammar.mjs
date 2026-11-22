@@ -99,9 +99,12 @@ function marked(quote, raw, content, inner, single = []) {
 
 /** A raw string on one line, ended by the last three quotes of a run. */
 const RAW_STRING = r`"""(?:[^"\n]|"(?!""(?!")))*"""`;
-/** What a template holds between its braces: the strings and chars in it whole, and braces [depth] deep. */
+/**
+ * What a template holds between its braces: the strings in it whole, and braces [depth] deep. A plain string does not
+ * begin with two quotes before a third, so a raw one is read one way only; the one char that matters is a quote.
+ */
 const inTemplate = (depth) =>
-  r`(?:[^{}"'\n]|` + RAW_STRING + r`|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)'` + (depth > 0 ? r`|\{` + inTemplate(depth - 1) + r`\}` : "") + ")*";
+  r`(?:'\\?"'|[^{}"\n]|` + RAW_STRING + r`|""(?!")|"(?!")(?:[^"\\\n]|\\.)*"` + (depth > 0 ? r`|\{` + inTemplate(depth - 1) + r`\}` : "") + ")*";
 /**
  * The text of a literal up to the quote that closes it on its line, where [dollars] open a template: a template is
  * passed whole, so a quote inside one ends nothing. Atomic, since what it passed is never read another way.
