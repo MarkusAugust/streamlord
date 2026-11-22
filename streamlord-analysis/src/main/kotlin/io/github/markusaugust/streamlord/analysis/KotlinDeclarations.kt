@@ -623,7 +623,7 @@ private class ScopeFrame(
     var pending: PendingScope? = null
     var fn = false
 
-    /** Just past the `fun` last read in this frame, and for a function's parameters whether they open on that line: the function's own. */
+    /** Just past the `fun` last read in this frame, and for a function's parameters whether they are surely its own ([FUN_HEAD]). */
     var funAt = -1
     var own = false
     var cls = false
@@ -824,6 +824,14 @@ private const val EXTENDED = 4
 private const val OVERRIDES = 8
 private const val HTML = 16
 private const val COMPANION = 32
+
+/**
+ * What stands between `fun` and a function's own brackets, on its line: type parameters, a receiver and the name, or
+ * nothing. Brackets after anything else, or after a word that begins a statement, are not its parameters.
+ */
+private val FUN_HEAD = regex("""[ \t]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>[ \t]*)?(?:[\p{L}_`][^\s()]*\.[ \t]*)?(?:($NAME)|`[^`\n]+`)?[ \t]*""")
+private const val FUN_HEAD_LENGTH = 300
+private val STATEMENT_WORDS = "if for while when do try return throw else in is as super this typeof".split(" ").toSet()
 
 private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
 private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
@@ -1137,9 +1145,8 @@ private fun declarations(
             when {
                 reference -> {}
 
-                // A constructor is declared in a class's body; anywhere else, and after a dot, the word is a name.
-                word == "fun" ||
-                    (word == "constructor" && !ctorOfClass && f.kind == "class" && src.getOrNull(codeBefore(src, code, i)) != '.') -> {
+                // A constructor is declared in a class's body, where a declaration may begin; anywhere else the word is a name.
+                word == "fun" || (word == "constructor" && !ctorOfClass && f.kind == "class" && f.after == 0) -> {
                     f.fn = true
                     f.funAt = end
                     f.funModifiers = f.modifiers
@@ -1271,8 +1278,9 @@ private fun declarations(
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
-                // A function still being typed has no brackets, and the next line's are a statement's.
-                g.own = src.indexOf('\n', f.funAt).let { it < 0 || it > i }
+                // A function still being typed has no brackets, and the next ones are a statement's.
+                val head = if (i - f.funAt < FUN_HEAD_LENGTH) FUN_HEAD.matchEntire(src.substring(f.funAt, i)) else null
+                g.own = head != null && head.groupValues[1] !in STATEMENT_WORDS
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
                 g.funModifiers = f.funModifiers
