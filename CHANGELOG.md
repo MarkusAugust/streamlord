@@ -195,6 +195,15 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### Editors
 
+- IntelliJ's Stream Inspector looks the same at every zoom of the IDE. The text of an event, the
+  signal store, the variables and the fields grew by the zoom twice, three times their size at
+  175 %, and an event's name and a comment line kept the size they had when they came; all now
+  follow the zoom, after it too. The fields have room around their text, the signal store keeps
+  room for six lines, and the variables break between words. In a narrow panel nothing is cut or
+  drawn over: Save and Delete go under the request list, an event's time and the status to a line
+  of their own, and the store and the variables under the events.
+- The Stream Inspector shows the name of a data line as text. A server that sent
+  `data: <html><img src=...> v` had the name rendered as Swing HTML in IntelliJ, its image fetched.
 - HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of
   `interpolate { }` that writes a tag or marks a value with `+` is HTML however it opens,
   `interpolate { "Hello <b>${+name}</b>" }` too, and so is the argument of `Trusted(...)` that

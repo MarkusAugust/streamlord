@@ -9,6 +9,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
@@ -21,6 +22,7 @@ import com.intellij.ui.components.ActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.scale.JBUIScale
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.sun.net.httpserver.HttpServer
@@ -59,6 +61,8 @@ import javax.swing.JTextArea
 import javax.swing.ListCellRenderer
 import javax.swing.Scrollable
 import javax.swing.SwingUtilities
+import javax.swing.UIManager
+import javax.swing.plaf.FontUIResource
 import javax.swing.text.JTextComponent
 import kotlin.test.assertFailsWith
 
@@ -141,6 +145,7 @@ class InspectorTest : BasePlatformTestCase() {
     private fun layOut(
         panel: InspectorPanel,
         width: Int,
+        height: Int = 700,
     ) {
         fun all(c: Container) {
             // A window marks what it lays out valid, and a size that changes then invalidates the layouts above it; here each pass asks anew.
@@ -148,7 +153,7 @@ class InspectorTest : BasePlatformTestCase() {
             c.doLayout()
             for (child in c.components) if (child is Container) all(child)
         }
-        panel.setSize(width, 700)
+        panel.setSize(width, height)
         // Wrapped text knows its height only once it has its width, so one pass is not enough.
         repeat(4) { all(panel) }
     }
@@ -1087,7 +1092,16 @@ class InspectorTest : BasePlatformTestCase() {
         store.save(SavedRequest("<html><b>x</b><img src='http://127.0.0.1:1/beacon'>", "/a", "GET", "", ""))
         val panel = InspectorPanel(project, testRootDisposable)
         await(panel.pushRequests(null))
-        val frame = DatastarFrame("<html><b>forged</b><img src='http://127.0.0.1:1/b'>", "1", null, mapOf("elements" to "<p>x</p>"), "", 0L)
+        // The name of a data line is the server's too: `data: <html><img src=...> v` names a row of the card.
+        val frame =
+            DatastarFrame(
+                "<html><b>forged</b><img src='http://127.0.0.1:1/b'>",
+                "1",
+                null,
+                mapOf("elements" to "<p>x</p>", "<html><img src='http://127.0.0.1:1/k'>" to "v"),
+                "",
+                0L,
+            )
         panel.javaClass
             .getDeclaredMethod("addFrame", DatastarFrame::class.java)
             .apply { isAccessible = true }
@@ -1311,10 +1325,7 @@ class InspectorTest : BasePlatformTestCase() {
         val found = ArrayList<String>()
         for ((text, kind) in statuses) {
             setStatus(panel, text, kind, "http://h/x")
-            // Longer than the label may be in a narrow panel, so the label is in fact cut there and the cap is not met by a short text.
             val whole = status.getFontMetrics(status.font).stringWidth(text)
-            val cap = JBUI.scale(160)
-            assertTrue(text, whole > cap)
             for (width in listOf(360, 460, 900, 1200, 360)) {
                 layOut(panel, width)
                 val at = "at $width with ${text.substringBefore(' ')}"
@@ -1322,9 +1333,13 @@ class InspectorTest : BasePlatformTestCase() {
                 val label = boundsIn(panel, status)
                 found += outside(panel).map { "$it $at" }
                 if (label.width <= 0 || label.x < 0 || !form.contains(label)) found += "the status at $label outside the form at $form $at"
-                // Cut only where the row has no room for more: whole beside the buttons in a wide panel, never under the cap in between.
-                if (width <= 460 && label.width > cap) found += "the status is ${label.width} wide $at"
-                if (width == 900 && label.width < cap) found += "the status is ${label.width} wide, under $cap $at"
+                // Cut only where a line of the form is too short for it: under the buttons, on a line of its own, where they leave no room.
+                if (label.width <
+                    minOf(whole, form.width)
+                ) {
+                    found +=
+                        "the status is ${label.width} wide and its text $whole, in a form of ${form.width} $at"
+                }
                 if (width == 1200) {
                     if (label.width < whole) found += "the status is ${label.width} wide and its text $whole $at"
                     val row = ACTION_BUTTONS.map { boundsIn(panel, button(panel, it)) }
@@ -1374,6 +1389,165 @@ class InspectorTest : BasePlatformTestCase() {
         setStatus(panel, "open · 200 OK", StreamClient.Status.OPEN, "http://h/x")
         setStatus(panel, "error", null, null)
         assertFalse(stop.isEnabled)
+    }
+
+    /** What a zoom of the IDE does to [panel]: every scaled size and the theme's fonts grow by [factor], and the UI is updated. */
+    private fun zoom(
+        panel: InspectorPanel,
+        factor: Float,
+    ) {
+        val keys = listOf("Label.font", "TextArea.font", "TextField.font", "Button.font", "ComboBox.font", "Panel.font")
+        val base = keys.associateWith { UIManager.getFont(it) }
+        JBUIScale.setUserScaleFactor(factor)
+        for ((key, font) in base) UIManager.put(key, FontUIResource(font.deriveFont(font.size2D * factor)))
+        Disposer.register(testRootDisposable) {
+            JBUIScale.setUserScaleFactor(1f)
+            for ((key, font) in base) UIManager.put(key, font)
+        }
+        SwingUtilities.updateComponentTreeUI(panel)
+    }
+
+    private fun frame(panel: InspectorPanel) {
+        val frame =
+            DatastarFrame(
+                "datastar-patch-elements",
+                null,
+                null,
+                mapOf("selector" to "#counter", "elements" to "<p class=\"counter__number\">9</p><p class=\"lt-paragraph\">Counting.</p>"),
+                "",
+                0L,
+            )
+        panel.javaClass
+            .getDeclaredMethod("addFrame", DatastarFrame::class.java)
+            .apply { isAccessible = true }
+            .invoke(panel, frame)
+    }
+
+    /** The scroll pane of the event list once it holds the event of [frame]. */
+    private fun withEvent(panel: InspectorPanel): JScrollPane =
+        UIUtil.findComponentsOfType(panel, JScrollPane::class.java).first { pane ->
+            UIUtil.findComponentsOfType(pane, JLabel::class.java).any { it.text == "datastar-patch-elements" }
+        }
+
+    /** What is out of size in the event list: text larger or smaller than the theme's labels, and an event name that is not bold. */
+    private fun offSize(panel: InspectorPanel): List<String> {
+        val size = UIManager.getFont("Label.font").size2D
+        val events = withEvent(panel)
+        val name = UIUtil.findComponentsOfType(events, JLabel::class.java).single { it.text == "datastar-patch-elements" }
+        val texts = UIUtil.findComponentsOfType(events, JTextArea::class.java) + UIUtil.findComponentsOfType(events, JLabel::class.java)
+        return texts
+            .filter {
+                kotlin.math.abs(it.font.size2D - size) > 0.5f
+            }.map { "${(it as? JLabel)?.text ?: (it as JTextArea).text} at ${it.font.size2D}, not $size" } +
+            listOfNotNull("the event name is not bold".takeIf { !name.font.isBold })
+    }
+
+    /** Every scaled size grows by [factor] until the test ends, as at a zoom of the IDE. */
+    private fun scaled(factor: Float) {
+        JBUIScale.setUserScaleFactor(factor)
+        Disposer.register(testRootDisposable) { JBUIScale.setUserScaleFactor(1f) }
+    }
+
+    fun `test the events are read in the theme's size at a zoom`() {
+        scaled(1.75f)
+        val panel = InspectorPanel(project, testRootDisposable)
+        frame(panel)
+        assertEquals(emptyList<String>(), offSize(panel))
+    }
+
+    fun `test the events take the new size when the IDE is zoomed after they came`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        frame(panel)
+        zoom(panel, 1.75f)
+        assertEquals(emptyList<String>(), offSize(panel))
+        val events = withEvent(panel)
+        val mono = UIUtil.findComponentsOfType(events, JTextArea::class.java).map { it.font.family }.distinct()
+        assertEquals(listOf(java.awt.Font.MONOSPACED), mono)
+    }
+
+    fun `test the text fields have room around their text at any zoom`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        val list = events(panel)
+        // The fields of the form and of the store and variables beside the events; the text of an event is laid out by its card.
+        val fields =
+            UIUtil.findComponentsOfType(panel, JTextArea::class.java).filter {
+                it.font.family == java.awt.Font.MONOSPACED && !SwingUtilities.isDescendingFrom(it, list)
+            }
+        assertEquals(4, fields.size)
+
+        fun cramped() =
+            fields.filter { it.insets.left < JBUI.scale(6) || it.insets.top < JBUI.scale(4) }.map { "${it.text} with ${it.insets}" }
+        assertEquals(emptyList<String>(), cramped())
+        zoom(panel, 1.75f)
+        assertEquals(emptyList<String>(), cramped())
+    }
+
+    /** What is out of place in the event list of [panel]: a card's parts that overlap, and text past the right edge of the list. */
+    private fun cardsOutside(panel: InspectorPanel): List<String> {
+        val list = withEvent(panel)
+        val edge = list.viewport.width
+        val texts =
+            UIUtil.findComponentsOfType(list.viewport, JLabel::class.java) +
+                UIUtil.findComponentsOfType(list.viewport, JTextArea::class.java)
+        val bounds =
+            texts
+                .filter {
+                    it.isVisible && it.width > 0
+                }.associateWith { SwingUtilities.convertRectangle(it.parent, it.bounds, list.viewport.view) }
+        val past =
+            bounds
+                .filter { (_, b) ->
+                    b.x < 0 || b.x + b.width > edge
+                }.map { (c, b) ->
+                    "${(c as? JLabel)?.text ?: (c as JTextArea).text.take(20)} at x ${b.x} to ${b.x + b.width} of $edge"
+                }
+        val labels = bounds.filterKeys { it is JLabel }.entries.toList()
+        val overlaps =
+            labels.flatMapIndexed { i, (a, ab) ->
+                labels
+                    .drop(i + 1)
+                    .filter { (_, bb) ->
+                        ab.intersects(bb)
+                    }.map { (b, _) -> "${(a as JLabel).text} over ${(b as JLabel).text}" }
+            }
+        return past + overlaps
+    }
+
+    fun `test the form and the events fit a narrow panel at a zoom`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        await(panel.pushRequests(null))
+        frame(panel)
+        zoom(panel, 1.75f)
+        setStatus(panel, "open · 200 OK · text/event-stream; charset=utf-8", StreamClient.Status.OPEN, "http://h/x")
+        val found =
+            listOf(1575, 805, 630, 480).flatMap { width ->
+                // The widths and the height of a panel at 100 %, grown by the zoom, and one narrower still.
+                layOut(panel, width, 1225)
+                val list = withEvent(panel).viewport
+                val line = list.getFontMetrics(UIManager.getFont("Label.font")).height
+                val low = "the events are ${list.height} high, under four lines of $line".takeIf { list.height < 4 * line }
+                // The label of the request list stands by the list, not between it and the buttons that went under it.
+                val label = boundsIn(panel, UIUtil.findComponentsOfType(panel, JLabel::class.java).single { it.text == "Request:" })
+                val choices =
+                    boundsIn(panel, UIUtil.findComponentsOfType(panel, JComboBox::class.java).single { it.getItemAt(0) !is String })
+                val apart =
+                    "the label at $label beside the list at $choices".takeIf {
+                        label.centerY < choices.y ||
+                            label.centerY > choices.maxY
+                    }
+                (outside(panel) + cardsOutside(panel) + listOfNotNull(low, apart)).map { "$it of $width" }
+            }
+        assertEquals(emptyList<String>(), found)
+    }
+
+    fun `test the signal store keeps room for several lines at a zoom`() {
+        val panel = InspectorPanel(project, testRootDisposable)
+        zoom(panel, 1.75f)
+        layOut(panel, 1100)
+        val store = UIUtil.findComponentsOfType(panel, JTextArea::class.java).single { !it.isEditable && it.text == "{}" }
+        val pane = SwingUtilities.getAncestorOfClass(JScrollPane::class.java, store) as JScrollPane
+        val line = store.getFontMetrics(store.font).height
+        assertTrue("${pane.viewport.height} for lines of $line", pane.viewport.height >= 5 * line)
     }
 
     fun `test the modified marker asks for the width of its text in the font it has`() {

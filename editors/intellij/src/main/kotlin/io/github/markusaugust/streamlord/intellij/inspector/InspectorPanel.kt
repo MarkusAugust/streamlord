@@ -34,7 +34,6 @@ import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.WrapLayout
 import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RequestsFile
@@ -51,8 +50,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Component.BaselineResizeBehavior
 import java.awt.Dimension
-import java.awt.FlowLayout
 import java.awt.Font
 import java.awt.Rectangle
 import java.time.Instant
@@ -66,7 +65,6 @@ import javax.swing.JComponent
 import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.Scrollable
-import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
@@ -114,8 +112,8 @@ class InspectorPanel(
     private val choices = ComboBox(DefaultComboBoxModel<Choice>(), JBUI.scale(FIELD_WIDTH))
     private val url = JBTextField()
     private val method = ComboBox(Requests.METHODS.toTypedArray())
-    private val signalsField = JBTextArea(3, FIELD_COLUMNS).mono()
-    private val headersField = JBTextArea(2, FIELD_COLUMNS).mono()
+    private val signalsField = Mono(rows = 3, columns = FIELD_COLUMNS, padded = true)
+    private val headersField = Mono(rows = 2, columns = FIELD_COLUMNS, padded = true)
 
     /** The URL as it is sent, read whole: a long one goes on to more lines. */
     private val resolved =
@@ -143,8 +141,13 @@ class InspectorPanel(
 
     private val status = Status()
     private val frames = JPanel().apply { layout = BoxLayout(this, BoxLayout.Y_AXIS) }
-    private val storeView = JBTextArea("{}").mono().apply { isEditable = false }
-    private val variablesView = JBTextArea("").mono().apply { isEditable = false }
+    private val storeView = Mono("{}", padded = true).apply { isEditable = false }
+    private val variablesView =
+        Mono(padded = true).apply {
+            isEditable = false
+            // A name, its value and where it comes from: broken between words, not inside a URL's host.
+            wrapStyleWord = true
+        }
     private val variableErrors =
         JBTextArea("").apply {
             isEditable = false
@@ -170,7 +173,17 @@ class InspectorPanel(
     init {
         border = JBUI.Borders.empty(8)
         add(form(), BorderLayout.NORTH)
-        val split = OnePixelSplitter(false, 0.65f)
+        // The store and the variables stand beside the events in a wide panel, and under them in a narrow one.
+        val split =
+            object : OnePixelSplitter(false, 0.65f) {
+                override fun doLayout() {
+                    val stacked = width in 1 until JBUI.scale(STACK_WIDTH)
+                    if (orientation != stacked) orientation = stacked
+                    // Stacked, the store would take the height it asks for from the events; the proportion shares it instead, and the store scrolls.
+                    setHonorComponentsMinimumSize(!stacked)
+                    super.doLayout()
+                }
+            }
         split.firstComponent = JBScrollPane(framesHolder())
         split.secondComponent = aside()
         add(split, BorderLayout.CENTER)
@@ -263,12 +276,75 @@ class InspectorPanel(
         pushRequests(store.lastUsed() ?: SavedRequest("", "{{baseUrl}}/"))
     }
 
-    private fun JBTextArea.mono(): JBTextArea =
-        apply {
-            font = JBFont.create(Font(Font.MONOSPACED, Font.PLAIN, JBFont.label().size))
+    /**
+     * Text in the monospaced face at the size of the theme's labels, with room inside its frame when
+     * [padded]. Both are set again when the IDE is zoomed or the theme changes, which installs the
+     * theme's own font and margin over them.
+     */
+    private class Mono(
+        text: String = "",
+        rows: Int = 0,
+        columns: Int = 0,
+        private val padded: Boolean = false,
+    ) : JBTextArea(text, rows, columns) {
+        init {
             lineWrap = true
             wrapStyleWord = false
+            restyle()
         }
+
+        override fun updateUI() {
+            super.updateUI()
+            restyle()
+        }
+
+        private fun restyle() {
+            font = monoFont()
+            if (padded) margin = JBUI.insets(PAD_V, PAD_H)
+        }
+    }
+
+    /**
+     * A label in [style], set again when the IDE is zoomed or the theme changes. Swing renders a label
+     * whose text starts with `<html>` as HTML, images and all. Event names, content types and saved
+     * names come from a server or a shared file, so every label here is text. The flag has to be there
+     * before the text is set: Swing reads it when the text changes.
+     */
+    private class Plain(
+        text: String,
+        private val style: Int,
+    ) : JBLabel() {
+        init {
+            putClientProperty("html.disable", true)
+            this.text = text
+            restyle()
+        }
+
+        override fun updateUI() {
+            super.updateUI()
+            restyle()
+        }
+
+        private fun restyle() {
+            if (style != Font.PLAIN) font = JBFont.label().deriveFont(style)
+        }
+    }
+
+    /** A scroll pane that keeps room for [lines] lines of [text] in the font it has at the moment. */
+    private class Lines(
+        private val text: JBTextArea,
+        private val lines: Int,
+    ) : JBScrollPane(text) {
+        override fun getMinimumSize(): Dimension = Dimension(super.getMinimumSize().width, room())
+
+        override fun getPreferredSize(): Dimension = super.getPreferredSize().let { Dimension(it.width, maxOf(it.height, room())) }
+
+        private fun room(): Int {
+            val outer = insets
+            val inner = text.insets
+            return lines * text.getFontMetrics(text.font).height + outer.top + outer.bottom + inner.top + inner.bottom
+        }
+    }
 
     /**
      * The fields over the action buttons. Each field gives way when the tool window is narrow, and the
@@ -278,13 +354,19 @@ class InspectorPanel(
         val fields =
             panel {
                 row("Request:") {
-                    cell(choices).align(AlignX.FILL).resizableColumn().applyToComponent { narrows() }
-                    button("Save") { save() }.applyToComponent { toolTipText = "Save the current request to ${store.requestsPath()}" }
-                    cell(deleteButton).applyToComponent {
+                    // Save and Delete go under the list where it would be too narrow to read beside them.
+                    val save =
+                        JButton("Save").apply {
+                            toolTipText = "Save the current request to ${store.requestsPath()}"
+                            addActionListener { save() }
+                        }
+                    deleteButton.apply {
                         toolTipText = "Delete the selected saved request"
                         addActionListener { delete() }
                     }
-                    cell(dirty)
+                    cell(
+                        Line(listOf(choices), Line(listOf(save, deleteButton, dirty)), stretch = true),
+                    ).align(AlignX.FILL).resizableColumn()
                 }
                 row("") { cell(requestProblems).align(AlignX.FILL).resizableColumn() }
                 row("URL:") {
@@ -309,71 +391,40 @@ class InspectorPanel(
                 }
             }
         val actions =
-            Wrapping().apply {
-                add(JButton("Connect", AllIcons.Actions.Execute).apply { addActionListener { connect() } })
-                add(
-                    stopButton.apply {
-                        icon = AllIcons.Actions.Suspend
-                        addActionListener {
-                            stop()
-                            setStatus("idle", null)
-                        }
-                    },
-                )
-                add(JButton("Clear").apply { addActionListener { clearFrames("Cleared.") } })
-                add(
-                    JButton("Reset signals").apply {
-                        addActionListener {
-                            signals = JsonObject.EMPTY
-                            storeView.text = "{}"
-                        }
-                    },
-                )
-                add(
-                    JButton("Copy as curl").apply {
-                        toolTipText = "Copy an equivalent curl command"
-                        addActionListener { copyCurl() }
-                    },
-                )
-            }
-        // The status keeps to the right end of the row, and is cut before it takes the room of the buttons.
-        val row =
-            JPanel(BorderLayout(JBUI.scale(GAP), 0)).apply {
-                add(actions, BorderLayout.CENTER)
-                add(status.apply { beside = actions }, BorderLayout.EAST)
-            }
+            listOf(
+                JButton("Connect", AllIcons.Actions.Execute).apply { addActionListener { connect() } },
+                stopButton.apply {
+                    icon = AllIcons.Actions.Suspend
+                    addActionListener {
+                        stop()
+                        setStatus("idle", null)
+                    }
+                },
+                JButton("Clear").apply { addActionListener { clearFrames("Cleared.") } },
+                JButton("Reset signals").apply {
+                    addActionListener {
+                        signals = JsonObject.EMPTY
+                        storeView.text = "{}"
+                    }
+                },
+                JButton("Copy as curl").apply {
+                    toolTipText = "Copy an equivalent curl command"
+                    addActionListener { copyCurl() }
+                },
+            )
+        // The status keeps to the right end of the buttons' last line, or of a line of its own, and is cut only where a line is too short for it.
+        val row = Line(actions, status).apply { border = JBUI.Borders.empty(GAP, 0) }
         return JPanel(BorderLayout()).apply {
             add(fields, BorderLayout.CENTER)
             add(row, BorderLayout.SOUTH)
         }
     }
 
-    /**
-     * The status of the request, whole while the buttons [beside] it have a line to themselves, and
-     * cut when they would lose it; its tooltip has it whole.
-     */
+    /** The status of the request; its tooltip has it whole where a line is too short for it. */
     private class Status : JBLabel() {
-        var beside: JComponent? = null
-
         init {
             putClientProperty("html.disable", true)
             text = "idle"
-        }
-
-        override fun getPreferredSize(): Dimension {
-            val whole = super.getPreferredSize()
-            return Dimension(minOf(whole.width, maxOf(JBUI.scale(STATUS_WIDTH), left())), whole.height)
-        }
-
-        override fun getMinimumSize(): Dimension = Dimension(0, super.getMinimumSize().height)
-
-        /** The room of the row that the buttons on one line leave. */
-        private fun left(): Int {
-            val row = parent ?: return 0
-            val buttons = beside ?: return 0
-            val gap = JBUI.scale(GAP)
-            val line = buttons.components.sumOf { it.preferredSize.width + gap } + gap + buttons.insets.left + buttons.insets.right
-            return row.width - line - gap
         }
     }
 
@@ -384,13 +435,24 @@ class InspectorPanel(
      */
     private class Wrapped(
         text: String,
+        private val mono: Boolean = false,
     ) : JBTextArea(text) {
         init {
             isEditable = false
             isOpaque = false
             lineWrap = true
-            wrapStyleWord = true
-            font = JBFont.label()
+            // Code and markup break where the line ends, words where a word does.
+            wrapStyleWord = !mono
+            restyle()
+        }
+
+        override fun updateUI() {
+            super.updateUI()
+            restyle()
+        }
+
+        private fun restyle() {
+            font = if (mono) monoFont() else JBFont.label()
         }
 
         /** As high as its text is at the width it has, and asking for little width itself: a text area asks for the width it was last given, and would hold a form at it. */
@@ -417,14 +479,54 @@ class InspectorPanel(
         minimumSize = Dimension(JBUI.scale(40), minimumSize.height)
     }
 
-    /** A row of buttons that goes on to a new line where the panel ends. Its height follows from its width, so a new width is laid out again. */
-    private class Wrapping : JPanel(WrapLayout(FlowLayout.LEFT, JBUI.scale(GAP), JBUI.scale(4))) {
+    /**
+     * The [lead] components from the left, going on to a new line where the panel ends, and [trail], when
+     * given, at the right end of the last line, or of a line of its own where it has no room. With [stretch]
+     * the one lead component takes the room the trail leaves, and the trail goes under it, from the left,
+     * once the lead would be narrower than a few words. Its height follows from its width, so a new width is
+     * laid out again; it asks for little width itself, so a narrow panel can hold it.
+     */
+    private class Line(
+        private val lead: List<JComponent>,
+        private val trail: JComponent? = null,
+        private val stretch: Boolean = false,
+    ) : JPanel(null) {
         init {
-            // The layout sets its gap before the first button too; taken back, so the row starts where the fields do.
-            border = JBUI.Borders.emptyLeft(-GAP)
+            isOpaque = false
+            lead.forEach(::add)
+            trail?.let(::add)
         }
 
-        override fun getMinimumSize(): Dimension = Dimension(JBUI.scale(40), super.getMinimumSize().height)
+        override fun doLayout() {
+            place(width, true)
+        }
+
+        override fun getPreferredSize(): Dimension {
+            val whole =
+                lead.sumOf { it.preferredSize.width + JBUI.scale(GAP) } + (trail?.preferredSize?.width ?: -JBUI.scale(GAP)) +
+                    insets.left + insets.right
+            val w = if (width > 0) width else whole
+            return Dimension(whole, place(w, false))
+        }
+
+        override fun getMinimumSize(): Dimension = Dimension(JBUI.scale(40), preferredSize.height)
+
+        /** The baseline of the first lead component, so the label of a row stands by it and not halfway down the lines. */
+        override fun getBaseline(
+            width: Int,
+            height: Int,
+        ): Int {
+            val first = lead.firstOrNull() ?: return -1
+            val p = first.preferredSize
+            val own = first.getBaseline(p.width, p.height)
+            if (own < 0) return -1
+            val h = place(width, false) - insets.top - insets.bottom
+            // On one line the components are centred on it; on more, the first stands at the top.
+            val oneLine = h <= maxOf(p.height, trail?.preferredSize?.height ?: 0)
+            return insets.top + (if (stretch && oneLine) (h - p.height) / 2 else 0) + own
+        }
+
+        override fun getBaselineResizeBehavior(): BaselineResizeBehavior = BaselineResizeBehavior.CONSTANT_ASCENT
 
         override fun setBounds(
             x: Int,
@@ -436,6 +538,75 @@ class InspectorPanel(
             super.setBounds(x, y, width, height)
             // After the layout under way: one asked for in the middle of it is forgotten when it ends.
             if (wider) SwingUtilities.invokeLater { revalidate() }
+        }
+
+        /** The height of what [c] shows at [width]: a line goes on to more lines in a narrow one. */
+        private fun heightAt(
+            c: JComponent,
+            width: Int,
+        ): Int = if (c is Line) c.place(width, false) else c.preferredSize.height
+
+        /** Lay the components out in [w], when [apply], and say how high they are then. */
+        fun place(
+            w: Int,
+            apply: Boolean,
+        ): Int {
+            val gap = JBUI.scale(GAP)
+            val between = JBUI.scale(4)
+            val left = insets.left
+            val top = insets.top
+            val room = maxOf(0, w - left - insets.right)
+            val t = trail?.preferredSize
+            if (stretch) {
+                val l = lead.single()
+                val lh = l.preferredSize.height
+                val tw = minOf(t?.width ?: 0, room)
+                val beside = room - (if (t == null) 0 else gap + t.width)
+                if (beside >= JBUI.scale(STRETCH_MIN) || t == null) {
+                    val th = t?.height ?: 0
+                    val h = maxOf(lh, th)
+                    if (apply) {
+                        l.setBounds(left, top + (h - lh) / 2, maxOf(0, beside), lh)
+                        trail?.setBounds(left + room - tw, top + (h - th) / 2, tw, th)
+                    }
+                    return h + top + insets.bottom
+                }
+                val th = heightAt(trail, tw)
+                if (apply) {
+                    l.setBounds(left, top, room, lh)
+                    trail.setBounds(left, top + lh + between, tw, th)
+                }
+                return lh + between + th + top + insets.bottom
+            }
+            // Each component on its line and at its x, then each line as high as its highest, the others centred on it.
+            val lines = ArrayList<MutableList<Pair<JComponent, Int>>>().apply { add(ArrayList()) }
+            var x = 0
+            for (c in lead) {
+                val cw = minOf(c.preferredSize.width, room)
+                if (x > 0 && x + cw > room) {
+                    lines.add(ArrayList())
+                    x = 0
+                }
+                lines.last() += c to x
+                x += cw + gap
+            }
+            if (trail != null && t != null) {
+                val tw = minOf(t.width, room)
+                if (x > 0 && x + tw > room) lines.add(ArrayList())
+                lines.last() += trail to room - tw
+            }
+            var y = 0
+            for ((i, line) in lines.withIndex()) {
+                val h = line.maxOfOrNull { it.first.preferredSize.height } ?: 0
+                if (apply) {
+                    for ((c, cx) in line) {
+                        val p = c.preferredSize
+                        c.setBounds(left + cx, top + y + (h - p.height) / 2, minOf(p.width, room), p.height)
+                    }
+                }
+                y += h + if (i < lines.lastIndex) between else 0
+            }
+            return y + top + insets.bottom
         }
     }
 
@@ -472,8 +643,9 @@ class InspectorPanel(
     private fun aside(): JComponent =
         panel {
             row { label("Signal store").bold() }
-            row { scrollCell(storeView).align(com.intellij.ui.dsl.builder.Align.FILL).resizableColumn() }.resizableRow()
-            collapsibleGroup("Variables") {
+            row { cell(Lines(storeView, STORE_LINES)).align(com.intellij.ui.dsl.builder.Align.FILL).resizableColumn() }.resizableRow()
+            // Not indented, so its box lines up with the store's.
+            collapsibleGroup("Variables", indent = false) {
                 row { scrollCell(variablesView).align(AlignX.FILL) }
                 row { cell(variableErrors).align(AlignX.FILL) }
                 row {
@@ -874,9 +1046,8 @@ class InspectorPanel(
 
     private fun addComment(text: String) {
         prepend(
-            plainLabel("${time(System.currentTimeMillis())}  : $text").apply {
+            Plain("${time(System.currentTimeMillis())}  : $text", Font.ITALIC).apply {
                 foreground = JBColor.GRAY
-                font = font.deriveFont(Font.ITALIC)
                 border = JBUI.Borders.empty(2, 4)
             },
         )
@@ -917,13 +1088,14 @@ class InspectorPanel(
             prepend(text)
         } else {
             val links =
-                JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(4), 0)).apply {
-                    isOpaque = false
-                    if (define != null) {
-                        add(ActionLink(if (define.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(define) })
-                    }
-                    if (useBaseUrl != null) add(ActionLink("Use $useBaseUrl in ${Requests.ENV_FILE}") { useBaseUrl(useBaseUrl) })
-                }
+                Line(
+                    listOfNotNull(
+                        define?.let { names ->
+                            ActionLink(if (names.isEmpty()) "Edit variables" else "Add to ${Requests.ENV_FILE}") { editVariables(names) }
+                        },
+                        useBaseUrl?.let { url -> ActionLink("Use $url in ${Requests.ENV_FILE}") { useBaseUrl(url) } },
+                    ),
+                ).apply { border = JBUI.Borders.emptyLeft(4) }
             prepend(
                 JPanel(BorderLayout()).apply {
                     isOpaque = false
@@ -961,45 +1133,23 @@ class InspectorPanel(
     ): JComponent {
         val card = JPanel(BorderLayout())
         card.border = JBUI.Borders.compound(JBUI.Borders.emptyBottom(6), JBUI.Borders.customLine(JBColor.border(), 1))
-        val head = JPanel(BorderLayout())
-        head.border = JBUI.Borders.empty(3, 6)
-        head.background = JBColor.namedColor("Editor.background", JBColor.PanelBackground)
-        val left =
-            JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.X_AXIS)
-                isOpaque = false
-            }
-        header.forEachIndexed { i, h ->
-            left.add(
-                plainLabel(h).apply {
-                    if (i == 1) {
-                        foreground = color
-                        font = font.deriveFont(Font.BOLD)
-                    }
-                    border = JBUI.Borders.emptyRight(10)
-                },
+        // The time keeps to the right end, and goes on to a line of its own where the names leave it no room.
+        val head =
+            Line(
+                header.mapIndexed { i, h -> if (i == 1) Plain(h, Font.BOLD).apply { foreground = color } else plainLabel(h) },
+                plainLabel(right).apply { foreground = JBColor.GRAY },
             )
-        }
-        head.add(left, BorderLayout.WEST)
-        head.add(
-            plainLabel(right).apply {
-                foreground = JBColor.GRAY
-                horizontalAlignment = SwingConstants.RIGHT
-            },
-            BorderLayout.EAST,
-        )
+        head.border = JBUI.Borders.empty(3, 6)
+        head.isOpaque = true
+        head.background = JBColor.namedColor("Editor.background", JBColor.PanelBackground)
         card.add(head, BorderLayout.NORTH)
         val body =
             panel {
                 for ((k, v) in rows) {
-                    row(k) {
-                        cell(
-                            JBTextArea(cut(v)).mono().apply {
-                                isEditable = false
-                                isOpaque = false
-                                border = JBUI.Borders.empty()
-                            },
-                        ).align(AlignX.FILL)
+                    // A row's name is the server's, a data line's first word: text, never Swing HTML.
+                    row(plainLabel(k)) {
+                        cell(Wrapped(cut(v), mono = true).apply { border = JBUI.Borders.empty() })
+                            .align(AlignX.FILL)
                             .resizableColumn()
                     }
                 }
@@ -1017,16 +1167,7 @@ class InspectorPanel(
             value.split('\n').joinToString("\n") { if (it.length <= MAX_SHOWN) it else it.take(MAX_SHOWN) + CUT }
         }
 
-    /**
-     * Swing renders a label whose text starts with `<html>` as HTML, images and all. Event names,
-     * content types and saved names come from a server or a shared file, so every label here is
-     * text. The flag has to be there before the text is set: Swing reads it when the text changes.
-     */
-    private fun plainLabel(text: String = ""): JBLabel =
-        JBLabel().apply {
-            putClientProperty("html.disable", true)
-            this.text = text
-        }
+    private fun plainLabel(text: String = ""): JBLabel = Plain(text, Font.PLAIN)
 
     private fun notify(message: String) {
         Notification(Streamlord.NOTIFICATION_GROUP, message, NotificationType.INFORMATION).notify(project)
@@ -1042,7 +1183,22 @@ class InspectorPanel(
         private const val GAP = 6
         private const val FIELD_COLUMNS = 12
         private const val FIELD_WIDTH = 60
-        private const val STATUS_WIDTH = 160
+
+        /** The room inside a text field, around its text, as the URL field has it. */
+        private const val PAD_V = 4
+        private const val PAD_H = 6
+
+        /** The lines the signal store keeps room for, however little the panel has. */
+        private const val STORE_LINES = 6
+
+        /** How narrow the panel may get before the store and the variables go under the events. */
+        private const val STACK_WIDTH = 560
+
+        /** How narrow a field may get beside its buttons before they go under it. */
+        private const val STRETCH_MIN = 120
+
+        /** The monospaced face at the size of the theme's labels, which is scaled already: scaled again, the text would grow by a zoom twice. */
+        fun monoFont(): Font = JBFont.create(Font(Font.MONOSPACED, Font.PLAIN, JBFont.label().size), false)
 
         /** How long a failed request waits for the server to finish logging why. */
         private const val LOG_GRACE_MS = 400L
