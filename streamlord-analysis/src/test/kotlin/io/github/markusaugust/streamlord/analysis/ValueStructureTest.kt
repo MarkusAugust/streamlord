@@ -380,6 +380,16 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a return is the innermost function's, not that of the function it is declared in`() {
+        val inner = "fun badge(n: String): String {\n    fun label(): String { return n }\n    return \"<b>x</b>\"\n}\n"
+        assertEquals(emptyList(), told(inner + "fun page(n: String) = \"<p>\${badge(n)}</p>\""))
+        val outer = "fun plain(n: String): String {\n    fun bold(): String { return \"<b>x</b>\" }\n    return n\n}\n"
+        assertEquals(listOf("\${plain(n)}"), told(outer + "fun page(n: String) = \"<p>\${plain(n)}</p>\""))
+        val none = "fun outer() { fun inner(): String { return \"<b>x</b>\" } }\n"
+        assertEquals(listOf("\${outer()}"), told(none + "fun page() = \"<p>\${outer()}</p>\""))
+    }
+
+    @Test
     fun `a lambda that returns to its label gives more than its last line`() {
         assertEquals(
             1,

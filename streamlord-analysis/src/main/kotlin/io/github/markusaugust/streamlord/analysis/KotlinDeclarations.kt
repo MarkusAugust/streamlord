@@ -1131,10 +1131,10 @@ private fun declarations(
                 }
 
                 word == "return" -> {
-                    // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
-                    val into = stack.mapNotNull { it.function }
-                    val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
-                    for (g in into) if (value == null) g.body = null else g.returns.add(value)
+                    // A `return` without a label is the innermost function's, whatever functions that one is declared in.
+                    val into = stack.lastOrNull { it.function != null }?.function
+                    val value = if (src.getOrNull(end) == '@' || into == null) null else f.begin(Span(end))
+                    if (value == null) into?.body = null else into?.returns?.add(value)
                 }
 
                 // A getter takes nothing: `get("/")` after a value is a call.
