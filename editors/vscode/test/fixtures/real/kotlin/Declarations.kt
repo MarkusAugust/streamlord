@@ -105,3 +105,13 @@ fun counted(rows: List<Int>) =
         ->
         "<li>$index: $count</li>"
     }
+
+// A return in a function declared in another is that function's: nothing is said of ${stamped(n)}.
+fun stamped(n: String): String {
+    fun label(): String {
+        return n
+    }
+    return "<b>x</b>"
+}
+
+fun stamping(n: String) = "<p>${stamped(n)}</p>"

@@ -670,8 +670,9 @@ private class ScopeFrame(
     var body: Span? = null
     val returns = ArrayList<Span>()
 
-    /** For a function's block: its parameters. */
+    /** For a function's block: its parameters, and whether the block is surely that function's, with nothing but its type before it. */
     var function: ScopeFrame? = null
+    var sure = false
 
     /** The word last read in this frame with nothing but space after it, and for a function's parameters the function's name. */
     var word: String? = null
@@ -1132,14 +1133,17 @@ private fun declarations(
             when {
                 reference -> {}
 
-                word == "fun" || (word == "constructor" && !ctorOfClass) -> {
+                // A constructor is declared in a class's body; anywhere else the word is a name.
+                word == "fun" || (word == "constructor" && !ctorOfClass && f.kind == "class") -> {
                     f.fn = true
                     f.funModifiers = f.modifiers
                 }
 
                 word == "return" -> {
-                    // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
-                    val into = stack.mapNotNull { it.function }
+                    // A `return` is the innermost function's. Where its block may be another's, a function still being typed
+                    // or a type the text does not read, it counts as the outer one's too, which can only make that less.
+                    val blocks = stack.filter { it.function != null }
+                    val into = blocks.drop(maxOf(0, blocks.indexOfLast { it.sure })).mapNotNull { it.function }
                     val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
                     for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
@@ -1300,6 +1304,7 @@ private fun declarations(
                     g.ends += p.decls
                     f.pending = null
                     g.function = p.fn?.also { it.body = Span(i + 1) }
+                    g.sure = p.fn?.let { i - it.closeAt < 1_000 && RETURN_TYPE.matchEntire(blank.substring(it.closeAt, i)) != null } == true
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
