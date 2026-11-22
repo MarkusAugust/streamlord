@@ -43,14 +43,12 @@ private fun requireDuration(
     flags.firstOrNull { it.second }?.let { throw IllegalArgumentException(ModifierRules.flagWithoutDuration(it.first, name)) }
 }
 
-private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
-
 private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 private fun HTMLTag.write(
-    name: String,
+    suffix: String,
     value: String,
-) = DatastarAttributes.write(this, name, value)
+) = DatastarAttributes.write(this, suffix, value)
 
 // The timing wrapper the Pro listeners share with the free ones, in the free builders' order.
 private fun StringBuilder.appendTiming(
@@ -255,7 +253,7 @@ public fun HTMLTag.dataAnimate(
     expression: String,
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
-    write(ds("animate${AnimateModifiers().apply(modifiers).build()}"), expr(expression))
+    write("animate${AnimateModifiers().apply(modifiers).build()}", expr(expression))
 }
 
 /**
@@ -270,12 +268,12 @@ public fun HTMLTag.dataAnimate(
     modifiers: AnimateModifiers.() -> Unit = {},
 ) {
     val mods = AnimateModifiers().apply(modifiers).build()
-    write(ds("animate:" + Casing.withModifiers(attribute, Casing.attributeKey(attribute, "dataAnimate"), mods)), expr(expression))
+    write("animate:" + Casing.withModifiers(attribute, Casing.attributeKey(attribute, "dataAnimate"), mods), expr(expression))
 }
 
 /** `data-custom-validity="expression"` (Pro): an expression yielding `''` when valid, a message otherwise. */
 public fun HTMLTag.dataCustomValidity(expression: String) {
-    write(ds("custom-validity"), expr(expression))
+    write("custom-validity", expr(expression))
 }
 
 /**
@@ -288,7 +286,7 @@ public fun HTMLTag.dataMatchMedia(
 ) {
     val (key, mod) = Casing.key(Casing.signalName(signal), null, Case.CAMEL)
     val mods = mod?.let { "__case.${it.wire}" } ?: ""
-    write(ds("match-media:" + Casing.heldKey(signal, Casing.withModifiers(signal, key, mods))), js(mediaQuery))
+    write("match-media:" + Casing.heldKey(signal, Casing.withModifiers(signal, key, mods)), js(mediaQuery))
 }
 
 /** `data-on-raf="expression"` (Pro): run on every animation frame. */
@@ -296,7 +294,7 @@ public fun HTMLTag.dataOnRaf(
     expression: String,
     modifiers: RafModifiers.() -> Unit = {},
 ) {
-    write(ds("on-raf${RafModifiers().apply(modifiers).build()}"), expr(expression))
+    write("on-raf${RafModifiers().apply(modifiers).build()}", expr(expression))
 }
 
 /** `data-on-resize="expression"` (Pro): run when the element's size changes. */
@@ -304,7 +302,7 @@ public fun HTMLTag.dataOnResize(
     expression: String,
     modifiers: ResizeModifiers.() -> Unit = {},
 ) {
-    write(ds("on-resize${ResizeModifiers().apply(modifiers).build()}"), expr(expression))
+    write("on-resize${ResizeModifiers().apply(modifiers).build()}", expr(expression))
 }
 
 /**
@@ -324,7 +322,7 @@ public fun HTMLTag.dataPersist(
 ) {
     val name =
         buildString {
-            append(ds("persist"))
+            append("persist")
             val modifiers = if (session) "__session" else ""
             key?.let { append(':').append(Casing.withModifiers(it, Casing.plainKey(it), modifiers)) } ?: append(modifiers)
         }
@@ -345,7 +343,7 @@ public fun HTMLTag.dataQueryString(
 ) {
     val name =
         buildString {
-            append(ds("query-string"))
+            append("query-string")
             if (omitEmpty) append("__filter")
             if (history) append("__history")
         }
@@ -354,7 +352,7 @@ public fun HTMLTag.dataQueryString(
 
 /** `data-replace-url="expression"` (Pro): replace the browser URL without a reload. */
 public fun HTMLTag.dataReplaceUrl(expression: String) {
-    write(ds("replace-url"), expr(expression))
+    write("replace-url", expr(expression))
 }
 
 /** `data-scroll-into-view` (Pro): scroll the element into the viewport when it appears. */
@@ -366,7 +364,7 @@ public fun HTMLTag.dataScrollIntoView(
 ) {
     val name =
         buildString {
-            append(ds("scroll-into-view"))
+            append("scroll-into-view")
             behavior?.let { append(it.modifier) }
             horizontal?.let { append(it.modifier) }
             vertical?.let { append(it.modifier) }
@@ -377,5 +375,5 @@ public fun HTMLTag.dataScrollIntoView(
 
 /** `data-view-transition="expression"` (Pro): set the element's `view-transition-name`. */
 public fun HTMLTag.dataViewTransition(expression: String) {
-    write(ds("view-transition"), expr(expression))
+    write("view-transition", expr(expression))
 }

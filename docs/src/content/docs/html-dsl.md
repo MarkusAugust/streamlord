@@ -104,15 +104,14 @@ event.
 
 ## An attribute without a helper
 
-A Datastar plugin of your own, or an attribute the DSL has no helper for, is written with the three
-calls the helpers use: `DatastarAttributes.name` puts the prefix in front,
-`DatastarAttributes.expression` checks the expression and hands it to kotlinx.html so the browser
-reads it back as written, and `DatastarAttributes.write` sets the attribute, refusing a second
-value for one the element has.
+A Datastar plugin of your own, or an attribute the DSL has no helper for, is written with the two
+calls the helpers use: `DatastarAttributes.expression` checks the expression and hands it to
+kotlinx.html so the browser reads it back as written, and `DatastarAttributes.write` puts the
+prefix in front of the name and sets the attribute, refusing a second value for one the element has.
 
 ```kotlin sample=html
 div {
-    DatastarAttributes.write(this, DatastarAttributes.name("tooltip"), DatastarAttributes.expression("\$hint"))
+    DatastarAttributes.write(this, "tooltip", DatastarAttributes.expression("\$hint"))
 }
 ```
 

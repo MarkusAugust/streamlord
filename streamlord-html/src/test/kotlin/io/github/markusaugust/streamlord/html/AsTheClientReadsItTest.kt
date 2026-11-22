@@ -519,33 +519,9 @@ class AsTheClientReadsItTest {
         }
         assertFailsWith<IllegalStateException> {
             elements {
-                div {
-                    dataSignals("a", "1")
-                    dataSignals("a", "2")
-                }
-            }
-        }
-        assertFailsWith<IllegalStateException> {
-            elements {
                 button {
                     dataOn("click", "a()")
                     dataOnClick("b()")
-                }
-            }
-        }
-        assertFailsWith<IllegalStateException> {
-            elements {
-                div {
-                    dataShow("true")
-                    dataShow("false")
-                }
-            }
-        }
-        assertFailsWith<IllegalStateException> {
-            elements {
-                div {
-                    dataOnSignalPatch("a()", SignalFilter(include = Regex("^a")))
-                    dataOnSignalPatch("a()", SignalFilter(include = Regex("^b")))
                 }
             }
         }

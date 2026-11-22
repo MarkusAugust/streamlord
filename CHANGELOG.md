@@ -25,7 +25,7 @@ All notable changes to Streamlord are recorded here. The format follows
   `dataSignals(..., ifMissing = true)`, are written as before, and so is the same value given again.
   A function that wrote a default for its caller to replace with a second call now takes the value
   as a parameter. A helper of your own writes through the same check with
-  `DatastarAttributes.write(tag, name, value)`.
+  `DatastarAttributes.write(tag, "tooltip", value)`, which writes `data-tooltip`.
 
 ### The analysis
 

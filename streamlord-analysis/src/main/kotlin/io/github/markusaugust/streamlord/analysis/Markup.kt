@@ -1283,26 +1283,23 @@ public class MarkupValidator(
     ): List<Issue> {
         if (tag.attributes.size < 2) return emptyList()
         val kept = HashMap<String, Attribute>()
-        val dropped =
+        val issues =
             tag.attributes.mapNotNull { attr ->
                 val lower = attr.name.asciiLowercase()
                 val first = kept[lower] ?: return@mapNotNull null.also { kept[lower] = attr }
                 val same = decodeEntities(first.value.orEmpty()).text == decodeEntities(attr.value.orEmpty()).text
-                attr.takeIf { !same && catalog.parseAttributeName(lower, prefix)?.spec != null }
+                if (same || catalog.parseAttributeName(lower, prefix)?.spec == null) return@mapNotNull null
+                Issue(
+                    attr.nameStart,
+                    attr.nameEnd,
+                    "The browser keeps the first $lower of an element and drops this one, so Datastar never reads it. " +
+                        "Move its value into the first.",
+                    Severity.WARNING,
+                    IssueCode.REPEATED_ATTRIBUTE,
+                )
             }
-        if (dropped.isEmpty() || tag.attributes.any { ATTRIBUTE_NAME.matchEntire(it.name) == null }) return emptyList()
-        if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
-        return dropped.map { attr ->
-            val lower = attr.name.asciiLowercase()
-            Issue(
-                attr.nameStart,
-                attr.nameEnd,
-                "The browser keeps the first $lower of an element and drops this one, so Datastar never reads it. " +
-                    "Move its value into the first.",
-                Severity.WARNING,
-                IssueCode.REPEATED_ATTRIBUTE,
-            )
-        }
+        if (issues.isEmpty() || tag.attributes.any { ATTRIBUTE_NAME.matchEntire(it.name) == null }) return emptyList()
+        return if (tagSource != null && hasTemplateSyntax(tagSource)) emptyList() else issues
     }
 
     /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */

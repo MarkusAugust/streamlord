@@ -48,16 +48,18 @@ public object DatastarAttributes {
     public fun expression(expression: String): String = value(ExpressionGuard.check(expression))
 
     /**
-     * Writes the attribute [name] on [tag], as every DSL helper does. An element holds one attribute
-     * of a name, in any capitals, so a second [value] for one it has would replace the first, and a
-     * second `dataSignals` leave the signals of the first undeclared: that is refused. The same value
-     * given again changes nothing and is let through.
+     * Writes the Datastar attribute [suffix] names, `on:click__once` under the [prefix], on [tag],
+     * as every DSL helper does. An element holds one attribute of a name, in any capitals, so a
+     * second [value] for one it has would replace the first, and a second `dataSignals` leave the
+     * signals of the first undeclared: that is refused. The same value given again changes nothing
+     * and is let through.
      */
     public fun write(
         tag: HTMLTag,
-        name: String,
+        suffix: String,
         value: String,
     ) {
+        val name = name(suffix)
         check(tag.attributes.none { (written, held) -> written.equals(name, ignoreCase = true) && held != value }) {
             "$name is already written on this <${tag.tagName}>, and an element holds one attribute of a name: " +
                 "a second value would replace the first. Write the attribute once."
@@ -66,14 +68,12 @@ public object DatastarAttributes {
     }
 }
 
-private fun ds(suffix: String): String = DatastarAttributes.name(suffix)
-
 private fun expr(expression: String): String = DatastarAttributes.expression(expression)
 
 private fun HTMLTag.write(
-    name: String,
+    suffix: String,
     value: String,
-) = DatastarAttributes.write(this, name, value)
+) = DatastarAttributes.write(this, suffix, value)
 
 /*
  * The `data-*` attributes of Datastar 1.0.5 as kotlinx.html extension functions.
@@ -100,7 +100,7 @@ public fun HTMLTag.dataSignals(
     expression: String,
     ifMissing: Boolean = false,
 ) {
-    write(ds("signals${signalMods(null, ifMissing)}"), expr(expression))
+    write("signals${signalMods(null, ifMissing)}", expr(expression))
 }
 
 /**
@@ -131,7 +131,7 @@ public fun HTMLTag.dataSignals(
         }
         checkKeys(value, key)
     }
-    write(ds("signals${signalMods(null, ifMissing)}"), JsonWriter.writeExpression(signals))
+    write("signals${signalMods(null, ifMissing)}", JsonWriter.writeExpression(signals))
 }
 
 /**
@@ -145,7 +145,7 @@ public fun HTMLTag.dataSignals(
     ifMissing: Boolean = false,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), null, Case.CAMEL)
-    write(ds("signals:" + Casing.heldKey(name, Casing.withModifiers(name, key, signalMods(mod, ifMissing)))), expr(expression))
+    write("signals:" + Casing.heldKey(name, Casing.withModifiers(name, key, signalMods(mod, ifMissing))), expr(expression))
 }
 
 /**
@@ -172,7 +172,7 @@ public fun HTMLTag.dataSignals(
 ) {
     val named = signals.map { (name, value) -> Casing.signalName(name) to checkKeys(value, name) }
     val nested = SignalNames.nest(named) { name, reason -> throw InvalidSignalNameException(name, reason) }
-    write(ds("signals${signalMods(null, ifMissing)}"), JsonWriter.writeExpression(nested))
+    write("signals${signalMods(null, ifMissing)}", JsonWriter.writeExpression(nested))
 }
 
 /** [value] itself, once every key in a map in it is one the client can hold. */
@@ -202,7 +202,7 @@ private fun checkKeys(
 
 /** `data-computed="{name: () => expression}"`: the values are callables. The keys are used as written; see [dataSignals]. */
 public fun HTMLTag.dataComputed(expression: String) {
-    write(ds("computed"), expr(expression))
+    write("computed", expr(expression))
 }
 
 /** `data-computed:name="expression"`, with [name] written as [dataSignals] writes it. */
@@ -211,7 +211,7 @@ public fun HTMLTag.dataComputed(
     expression: String,
 ) {
     val (key, mod) = Casing.key(Casing.signalName(name), null, Case.CAMEL)
-    write(ds("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod)))), expr(expression))
+    write("computed:" + Casing.heldKey(name, Casing.withModifiers(name, key, caseMod(mod))), expr(expression))
 }
 
 /** `data-json-signals`: renders the signal store as JSON into the element. Handy while debugging. */
@@ -219,7 +219,7 @@ public fun HTMLTag.dataJsonSignals(
     filter: SignalFilter? = null,
     terse: Boolean = false,
 ) {
-    write(ds(if (terse) "json-signals__terse" else "json-signals"), filter?.toJs() ?: "")
+    write(if (terse) "json-signals__terse" else "json-signals", filter?.toJs() ?: "")
 }
 
 // ---- Lifecycle --------------------------------------------------------------------------------
@@ -229,12 +229,12 @@ public fun HTMLTag.dataInit(
     expression: String,
     modifiers: InitModifiers.() -> Unit = {},
 ) {
-    write(ds("init${InitModifiers().apply(modifiers).build()}"), expr(expression))
+    write("init${InitModifiers().apply(modifiers).build()}", expr(expression))
 }
 
 /** `data-effect="expression"`, re-run whenever a signal it reads changes. */
 public fun HTMLTag.dataEffect(expression: String) {
-    write(ds("effect"), expr(expression))
+    write("effect", expr(expression))
 }
 
 // ---- Events -----------------------------------------------------------------------------------
@@ -252,7 +252,7 @@ public fun HTMLTag.dataOn(
     val mods = OnModifiers().apply(modifiers)
     val (key, mod) = Casing.key(event, mods.case, Case.KEBAB)
     mods.case = mod
-    write(ds("on:" + Casing.withModifiers(event, key, mods.build())), expr(expression))
+    write("on:" + Casing.withModifiers(event, key, mods.build()), expr(expression))
 }
 
 public fun HTMLTag.dataOnClick(
@@ -304,8 +304,8 @@ public fun HTMLTag.dataOnSignalPatch(
     filter: SignalFilter? = null,
     modifiers: TimingModifiers.() -> Unit = {},
 ) {
-    write(ds("on-signal-patch${TimingModifiers().apply(modifiers).build()}"), expr(expression))
-    filter?.let { write(ds("on-signal-patch-filter"), it.toJs()) }
+    write("on-signal-patch${TimingModifiers().apply(modifiers).build()}", expr(expression))
+    filter?.let { write("on-signal-patch-filter", it.toJs()) }
 }
 
 /** `data-on-interval`. */
@@ -313,7 +313,7 @@ public fun HTMLTag.dataOnInterval(
     expression: String,
     modifiers: IntervalModifiers.() -> Unit = {},
 ) {
-    write(ds("on-interval${IntervalModifiers().apply(modifiers).build()}"), expr(expression))
+    write("on-interval${IntervalModifiers().apply(modifiers).build()}", expr(expression))
 }
 
 /** `data-on-intersect`. */
@@ -321,7 +321,7 @@ public fun HTMLTag.dataOnIntersect(
     expression: String,
     modifiers: IntersectModifiers.() -> Unit = {},
 ) {
-    write(ds("on-intersect${IntersectModifiers().apply(modifiers).build()}"), expr(expression))
+    write("on-intersect${IntersectModifiers().apply(modifiers).build()}", expr(expression))
 }
 
 // ---- Binding and references -------------------------------------------------------------------
@@ -331,12 +331,12 @@ public fun HTMLTag.dataBind(
     signal: String,
     modifiers: BindModifiers.() -> Unit = {},
 ) {
-    write(ds("bind${BindModifiers().apply(modifiers).build()}"), Casing.signalName(signal))
+    write("bind${BindModifiers().apply(modifiers).build()}", Casing.signalName(signal))
 }
 
 /** `data-ref="name"`: expose the element as a signal. */
 public fun HTMLTag.dataRef(name: String) {
-    write(ds("ref"), Casing.signalName(name))
+    write("ref", Casing.signalName(name))
 }
 
 /**
@@ -345,22 +345,22 @@ public fun HTMLTag.dataRef(name: String) {
  * it, so put it on the element whose action fetches.
  */
 public fun HTMLTag.dataIndicator(signal: String) {
-    write(ds("indicator"), Casing.signalName(signal))
+    write("indicator", Casing.signalName(signal))
 }
 
 // ---- Display ----------------------------------------------------------------------------------
 
 public fun HTMLTag.dataText(expression: String) {
-    write(ds("text"), expr(expression))
+    write("text", expr(expression))
 }
 
 public fun HTMLTag.dataShow(expression: String) {
-    write(ds("show"), expr(expression))
+    write("show", expr(expression))
 }
 
 /** `data-class="{name: expression}"`. The keys are used as written; see [dataSignals]. */
 public fun HTMLTag.dataClass(expression: String) {
-    write(ds("class"), expr(expression))
+    write("class", expr(expression))
 }
 
 /** `data-class:name="expression"`. A camelCase [name] is written as `is-open__case.camel`, so the class stays `isOpen`; see [Casing]. */
@@ -377,12 +377,12 @@ public fun HTMLTag.dataClass(
             "Write it in one case, or, for a class you cannot rename, use the object form, " +
                 "dataClass(\"{'$name': ...}\"), whose keys Datastar uses as written",
         )
-    write(ds("class:" + Casing.withModifiers(name, key, caseMod(mod))), expr(expression))
+    write("class:" + Casing.withModifiers(name, key, caseMod(mod)), expr(expression))
 }
 
 /** `data-style="{property: expression}"`. */
 public fun HTMLTag.dataStyle(expression: String) {
-    write(ds("style"), expr(expression))
+    write("style", expr(expression))
 }
 
 /**
@@ -401,12 +401,12 @@ public fun HTMLTag.dataStyle(
             "is a custom property with capitals, which Datastar cannot set in either form; name it in lowercase",
         )
     }
-    write(ds("style:${Casing.plainKey(property)}"), expr(expression))
+    write("style:${Casing.plainKey(property)}", expr(expression))
 }
 
 /** `data-attr="{name: expression}"`. */
 public fun HTMLTag.dataAttr(expression: String) {
-    write(ds("attr"), expr(expression))
+    write("attr", expr(expression))
 }
 
 /**
@@ -418,24 +418,24 @@ public fun HTMLTag.dataAttr(
     name: String,
     expression: String,
 ) {
-    write(ds("attr:${Casing.attributeKey(name, "dataAttr")}"), expr(expression))
+    write("attr:${Casing.attributeKey(name, "dataAttr")}", expr(expression))
 }
 
 // ---- Morphing and walker control --------------------------------------------------------------
 
 /** `data-ignore`: Datastar leaves this subtree alone. `self` limits it to the element itself. */
 public fun HTMLTag.dataIgnore(self: Boolean = false) {
-    write(ds(if (self) "ignore__self" else "ignore"), "")
+    write(if (self) "ignore__self" else "ignore", "")
 }
 
 /** `data-ignore-morph`: this element is never morphed. */
 public fun HTMLTag.dataIgnoreMorph() {
-    write(ds("ignore-morph"), "")
+    write("ignore-morph", "")
 }
 
 /** `data-preserve-attr="open class"`: keep these attributes through a morph. */
 public fun HTMLTag.dataPreserveAttr(vararg names: String) {
-    write(ds("preserve-attr"), DatastarAttributes.value(names.joinToString(" ")))
+    write("preserve-attr", DatastarAttributes.value(names.joinToString(" ")))
 }
 
 /**
@@ -443,7 +443,7 @@ public fun HTMLTag.dataPreserveAttr(vararg names: String) {
  * expressions are compiled through nonce-bearing script elements instead of `eval`.
  */
 public fun HTMLTag.dataNonce(nonce: String) {
-    write(ds("nonce"), CspNonce.checked(nonce))
+    write("nonce", CspNonce.checked(nonce))
 }
 
 // ---- helpers ----------------------------------------------------------------------------------
