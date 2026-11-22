@@ -498,7 +498,7 @@ public object Requests {
 
                 PARAMS -> {
                     if (value !is JsonObject) {
-                        errors += "$INVALID: params must be an object of names and values, such as {\"partsnummer\": \"123\"}."
+                        errors += "$INVALID: params must be an object of names and values, such as {\"orderNumber\": \"123\"}."
                     } else {
                         val before = errors.size
                         for ((name, v) in value) {

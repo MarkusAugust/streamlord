@@ -2596,8 +2596,8 @@ now requires Trusted Types. Several signatures changed: read Breaking changes fi
 ### Fixed
 
 - `streamlord-analysis`, for both editors: a route whose mapping had no leading slash, such as
-  `@RequestMapping("api/hent")` or Ktor's `route("api")`, was found as `api/hent/visning`, and
-  the Stream Inspector opened it as `http://localhost:8080api/hent/visning`. Every route path now
+  `@RequestMapping("api/orders")` or Ktor's `route("api")`, was found as `api/orders/view`, and
+  the Stream Inspector opened it as `http://localhost:8080api/orders/view`. Every route path now
   starts with `/`.
 - `streamlord-analysis`: `Requests.sendableUrl` refuses a host or a port that `java.net.URI`
   cannot read, such as `localhost:8080api`, `localhost:8080:` or `my_service`, and says which.

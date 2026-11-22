@@ -22,7 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * The port a server listens on is set in a profile, an environment variable or the run
  * configuration, and the inspector cannot read all of those. The server says it once when it
- * starts, "Tomcat started on port 9102 (http) with context path '/'", and that line is the answer
+ * starts, "Tomcat started on port 9090 (http) with context path '/'", and that line is the answer
  * wherever the port came from. The last lines are kept too, so a failed request can show the
  * warning the server logged about it.
  */

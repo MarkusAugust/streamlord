@@ -169,7 +169,7 @@ other response is shown with its `datastar-*` headers and its body, of which 1 M
     "requests": [
       {
         "name": "feed",
-        "url": "{{baseUrl}}/api/feed/{{partsnummer}}",
+        "url": "{{baseUrl}}/api/orders/{{orderNumber}}",
         "method": "POST",
         "signals": { "search": "ash" },
         "headers": { "X-Id": "7" }
@@ -203,7 +203,7 @@ other response is shown with its `datastar-*` headers and its body, of which 1 M
     "baseUrl": "http://127.0.0.1:8081",
     "signals": { "search": "ash" },
     "headers": { "Authorization": "Bearer dev-token" },
-    "params": { "partsnummer": "3000507723", "instans": "m1" }
+    "params": { "orderNumber": "42", "region": "eu" }
   }
   ```
 
@@ -212,11 +212,11 @@ other response is shown with its `datastar-*` headers and its body, of which 1 M
   | `{{baseUrl}}` | the URL | the text, without a trailing slash |
   | `{{signals}}` | the signals field | the object, as written in the file |
   | `{{headers}}` | the headers field | one `Name: value` line per entry |
-  | `{{partsnummer}}`, any name in `params` | the URL or the headers | the text, encoded in the URL |
+  | `{{orderNumber}}`, any name in `params` | the URL or the headers | the text, encoded in the URL |
 
   Type `{{` in a field to pick from the ones that are set. Without `baseUrl` in the file,
   `{{baseUrl}}` is where the server you started from a run configuration said it listens, read
-  from its own log (`Tomcat started on port 9102 (http) with context path '/'`, or Ktor's
+  from its own log (`Tomcat started on port 9090 (http) with context path '/'`, or Ktor's
   `Responding at …`), so the port and context path are right wherever they were set. With
   nothing running, it is the Default base URL setting, `http://localhost:8080` unless you change
   it.
@@ -231,7 +231,7 @@ other response is shown with its `datastar-*` headers and its body, of which 1 M
   reached through; when the file's `baseUrl` is not where a running server said it started, a
   link sets the file's value to that one, changing nothing else. `localhost` is tried as `::1`
   too, as curl and the browser do. An error response is shown with the warnings and errors the
-  server logged while answering it, such as Spring's `Required request parameter 'partsnummer'
+  server logged while answering it, such as Spring's `Required request parameter 'orderNumber'
   … is not present`.
 - **Gutter icons** on every Ktor route (`route("/api") { get("/feed") }`) and Spring mapping
   (`@GetMapping("/feed")` under a class `@RequestMapping`): "Open in Stream Inspector" prefills

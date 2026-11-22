@@ -586,19 +586,19 @@ All notable changes to the Streamlord extension are recorded here.
 
 - Stream Inspector: `{{baseUrl}}` follows the server you started from a debug session. The
   inspector reads the line the server logs as it starts, Spring Boot's
-  `Tomcat started on port 9102 (http) with context path '/'` or Ktor's `Responding at …`, so
+  `Tomcat started on port 9090 (http) with context path '/'` or Ktor's `Responding at …`, so
   the port and context path are right wherever they were set. `.streamlord/env.json` still comes
   first, and the default only when nothing runs; the Variables box says which it is.
 - Stream Inspector: when the env file's `baseUrl` is refused and a running server said it
   started elsewhere, the error says where and offers **Use … in .streamlord/env.json**, which
   changes that value and nothing else in the file.
 - Stream Inspector: an error response shows the warnings and errors the server logged while
-  answering it, such as Spring's `Required request parameter 'partsnummer' … is not present`,
+  answering it, such as Spring's `Required request parameter 'orderNumber' … is not present`,
   in place of the note that the reason is in the log.
 - Open in Stream Inspector writes the whole URL the handler needs. Each path parameter and each
   required `@RequestParam` becomes a `{{name}}`, and each required `@RequestHeader("X-Id")` a
-  line in the headers, so `@GetMapping("/visning")` with a required `partsnummer` opens as
-  `{{baseUrl}}/api/hent/visning?partsnummer={{partsnummer}}`. The lens names the optional
+  line in the headers, so `@GetMapping("/view")` with a required `orderNumber` opens as
+  `{{baseUrl}}/api/orders/view?orderNumber={{orderNumber}}`. The lens names the optional
   ones it leaves out. The dialog that asked for `{id}` is gone.
 - Stream Inspector: `.streamlord/env.json` holds the values in `params`, so they are kept between
   runs and stay out of the shared `inspector.json`. A param that is not there yet is reported
@@ -608,7 +608,7 @@ All notable changes to the Streamlord extension are recorded here.
 - Stream Inspector: an env file that is not valid JSON says where, such as `at line 3, column 1`
   for a comma after the last value.
 - Open in Stream Inspector: a Spring or Ktor mapping without its leading slash, such as
-  `@RequestMapping("api/hent")`, opened as `{{baseUrl}}api/hent/visning`. The path now always
+  `@RequestMapping("api/orders")`, opened as `{{baseUrl}}api/orders/view`. The path now always
   starts with `/`.
 - Stream Inspector: a URL whose host or port the IntelliJ inspector cannot read is refused here
   too, with what is wrong: `The port in localhost:8080api is not a number. Is a / missing between
