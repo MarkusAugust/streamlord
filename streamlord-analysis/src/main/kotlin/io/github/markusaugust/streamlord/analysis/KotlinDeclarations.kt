@@ -315,6 +315,10 @@ private val LAMBDA_PARAMETERS =
     regex(
         """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*(?:,\s*)?->""",
     )
+
+/** How far back from its closing bracket a `catch` is read for its variable and the type. */
+private const val CATCH_VARIABLE_LENGTH = 500
+
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
 private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = regex(TYPE)
@@ -1372,17 +1376,23 @@ private fun declarations(
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
             } else if (g.kind == "catch" && c == ')') {
-                // The variable is last in the brackets, `name: Type`, whatever annotations stand before it.
-                val text = blank.substring(g.open + 1, i)
-                val colon = text.lastIndexOf(':')
-                val name = text.substring(0, maxOf(colon, 0)).trimEnd().takeLastWhile { isWordPart(it) }
+                // The variable is all the brackets hold, `name: Type`, but for annotations before it; `object : Type` is a value.
+                // It is read in their last stretch, so brackets in brackets cost no more than their length.
+                val from = maxOf(g.open + 1, i - CATCH_VARIABLE_LENGTH)
+                val tail = blank.substring(from, i)
+                val colon = tail.lastIndexOf(':')
+                val before = tail.substring(0, maxOf(colon, 0)).trimEnd()
+                val name = before.takeLastWhile { isWordPart(it) }
                 val type =
-                    text
+                    tail
                         .substring(colon + 1)
                         .trim()
                         .removeSuffix(",")
                         .trimEnd()
-                if (name.firstOrNull()?.isDigit() == false && WHOLE_TYPE.matchEntire(type) != null) {
+                var first = g.open + 1
+                while (first < i && blank[first].isWhitespace()) first++
+                val alone = first == from + before.length - name.length || blank[first] == '@'
+                if (name.firstOrNull()?.isDigit() == false && name != "object" && alone && WHOLE_TYPE.matchEntire(type) != null) {
                     outer.caught = add(name, Declaration(g.open + 1, g.open, type).also { it.end = i + 1 })
                 }
             }

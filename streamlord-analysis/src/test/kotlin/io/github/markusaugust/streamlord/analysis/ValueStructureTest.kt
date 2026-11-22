@@ -394,7 +394,7 @@ class ValueStructureTest {
         // A catch still being typed has no block, and takes none of what follows.
         val typed = "fun f(xs: List<Int>) {\n    try { } catch (e: Exception)\n    xs.forEach { x: Int -> println(\"<b>\$x</b>\") }\n}\n"
         assertEquals(emptyList(), told(typed))
-        // Its variable is in sight in its brackets alone, and brackets that end in no variable name none.
+        // Its variable is in sight in its brackets alone, and brackets that hold more than one variable name none.
         for (brackets in listOf("(e: Exception)", "(e: Exception x)")) {
             assertEquals(emptyList(), told("fun f(e: Int) {\n    try { } catch $brackets\n    println(\"<b>\$e</b>\")\n}\n"), brackets)
         }
@@ -403,6 +403,11 @@ class ValueStructureTest {
             "fun f(e: Int) {\n    attempt { } catch { println(\"<b>\$e</b>\") }\n" +
                 "    attempt { } catch (e) { m: Int -> println(\"<b>\$m</b>\") }\n}\n"
         assertEquals(emptyList(), told(infix))
+        // Brackets that hold more than a variable and its annotations name none, and their block is no catch's.
+        for (brackets in listOf("(a: B, e: Exception)", "(a: e: Exception)", "(object : Exception)")) {
+            val src = "fun f(e: Int, x: Any) {\n    x.catch $brackets { m: String -> println(\"<b>\$e \$m</b>\") }\n}\n"
+            assertEquals(listOf("\$m"), told(src), brackets)
+        }
         val many = "fun f() {\n    try { } catch (" + "@A ".repeat(5_000) + "e: Exception) { println(\"<b>\$e</b>\") }\n}\n"
         assertEquals(listOf("\$e"), told(many))
     }
@@ -450,6 +455,9 @@ class ValueStructureTest {
         }) { fileFacts(it) }
         assertGrowsLinearly("a long word in a catch that names nothing", 200, { n: Int ->
             "// ${made++}\nfun f() {\n    try { } catch (" + "e".repeat(n * 40) + ") { }\n}\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("brackets after catch, one in another", 200, { n: Int ->
+            "// ${made++}\nfun f() {\n    x " + "catch(".repeat(n * 10) + "e: E" + ")".repeat(n * 10) + "\n}\n"
         }) { fileFacts(it) }
         assertGrowsLinearly("spaces in a catch that names nothing", 200, { n: Int ->
             "// ${made++}\nfun f() {\n    try { } catch (e: Exception" + " ".repeat(n * 40) + "x) { }\n}\n"
