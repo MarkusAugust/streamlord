@@ -209,6 +209,17 @@ All notable changes to Streamlord are recorded here. The format follows
   room for six lines, and the variables break between words. In a narrow panel nothing is cut or
   drawn over: Save and Delete go under the request list, an event's time and the status to a line
   of their own, and the store and the variables under the events.
+- VS Code's Stream Inspector fits a narrow panel and keeps the store in sight. Its fields went
+  past the right edge, the status out of view, and the signal store sat under every event, so a
+  long stream pushed it out of reach. Now the fields give way, Save and Delete go under the
+  request list together, an event's time and the status go to a line of their own, and a URL in
+  an error breaks rather than run past the edge. The events and the store each scroll, the store
+  under the events with a share of the height where the panel is narrow, and in a short panel the
+  page scrolls to them. A label stands on the line of its field's text.
+- In VS Code, the route of the code lens that first opens the Stream Inspector is the one filled
+  in. The page asked for the form once it was ready and was answered with the last request; a
+  page loaded again later still gets the last request.
+- The note on a response that is no stream, in IntelliJ, breaks between words, as VS Code shows it.
 - The Stream Inspector shows the name of a data line as text. A server that sent
   `data: <html><img src=...> v` had the name rendered as Swing HTML in IntelliJ, its image fetched.
 - HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of
