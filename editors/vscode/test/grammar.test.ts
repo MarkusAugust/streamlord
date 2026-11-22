@@ -493,6 +493,18 @@ describe("html injection grammar", () => {
     const long = await tokenLines("source.kotlin", ['val h = """<ul>', "  <li>a</li>", '</ul>"""', "val after = 1"]);
     assert.ok(html(long[1]!) && html(long[2]!), "the lines of a raw literal");
     assert.ok(!html(long[3]!), "and the line after it");
+    // A template is passed whole with what it holds: a raw string, a char that is a quote, strings in braces three deep.
+    for (const whole of [
+      `val a = """<ul>\${items.joinToString("") { """<li class="a">\$it</li>""" }}</ul>""" + tail`,
+      `val b = "<p>\${a.map { b -> b.map { c -> c.let { "x" } } }}</p>" + tail`,
+      `val c = "<p>\${'"'}</p>" + tail`,
+      `val d = "<p>\${"""x"""}</p>" + tail`,
+    ]) {
+      const t = await tokenLines("source.kotlin", [whole, "val after = 1"]);
+      assert.match(t[0]!.filter((x) => x.text.includes("</")).map((x) => x.scopes.join(" ")).pop() ?? "", /html/, `${whole}: the closing tag is HTML`);
+      assert.ok(t[0]!.filter((x) => x.text.includes("tail")).every((x) => !x.scopes.some((s) => s.includes("html") || s.startsWith("string"))), `${whole}: what follows it is code`);
+      assert.ok(!html(t[1]!) && t[1]!.every((x) => !x.scopes.some((s) => s.startsWith("string"))), `${whole}: and so is the next line`);
+    }
     // A template is passed whole with the strings in it, so the literal ends where Kotlin ends it.
     const nested = await tokenLines("source.kotlin", [`val t = "<p class=\\"\${if (a) "x" else "y"}\\">\${f("z")}</p>" + tail`, "val after = 1"]);
     assert.match(scopeOf(nested[0]!, "</p>"), /html/);
@@ -931,6 +943,7 @@ describe("what is not Datastar's", () => {
     assertGrowsLinearly("a literal of opening tags alone", 40, (n) => `val h = "${"<p ".repeat(n)}"`, kotlin);
     assertGrowsLinearly("a raw literal of quotes that never ends", 40, (n) => `val h = """<p>${'" '.repeat(n)}`, kotlin);
     assertGrowsLinearly("a template of strings", 20, (n) => `val h = "<p>\${f(${'"a", '.repeat(n)}"b")}</p>"`, kotlin);
+    assertGrowsLinearly("templates after a quote that never closes", 20, (n) => `// writes "<p>${"\${a} ".repeat(n)}`, kotlin);
   });
 
   it("reads a long line of DSL calls in time that grows with it", async () => {

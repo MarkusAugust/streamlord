@@ -97,10 +97,17 @@ function marked(quote, raw, content, inner, single = []) {
   }));
 }
 
-/** The text of a plain literal up to its closing quote: a template is passed whole, with the strings in it. */
-const PLAIN_BODY = r`(?:[^"\\\n$]|\\.|\$\{(?:[^{}"\n]|"(?:[^"\\\n]|\\.)*"|\{(?:[^{}"\n]|"(?:[^"\\\n]|\\.)*")*\})*\}|\$)*`;
-/** The text of a raw literal up to the quotes that close it on its line, the last three of a run. */
-const RAW_BODY = r`(?:[^"\n]|"(?!""(?!")))*`;
+/** A raw string on one line, ended by the last three quotes of a run. */
+const RAW_STRING = r`"""(?:[^"\n]|"(?!""(?!")))*"""`;
+/** What a template holds between its braces: the strings and chars in it whole, and braces [depth] deep. */
+const inTemplate = (depth) =>
+  r`(?:[^{}"'\n]|` + RAW_STRING + r`|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)'` + (depth > 0 ? r`|\{` + inTemplate(depth - 1) + r`\}` : "") + ")*";
+/**
+ * The text of a literal up to the quote that closes it on its line, where [dollars] open a template: a template is
+ * passed whole, so a quote inside one ends nothing. Atomic, since what it passed is never read another way.
+ */
+const bodyOf = (raw, dollars) =>
+  "(?>(?:" + (raw ? r`[^"\n$]|"(?!""(?!"))` : r`[^"\\\n$]|\\.`) + "|" + r`\$`.repeat(dollars) + r`\{` + inTemplate(3) + r`\}|\$)*)`;
 
 /**
  * A string that holds HTML or JavaScript: raw or plain, its templates marked. One that ends on its line is a single
@@ -110,18 +117,19 @@ const RAW_BODY = r`(?:[^"\n]|"(?!""(?!")))*`;
  */
 function embedded(begin, captures, raw, content, inner) {
   const quote = raw ? '"""' : '"';
-  const body = raw ? RAW_BODY : PLAIN_BODY;
   const single = raw ? [{ include: "#dollar-escape" }] : [];
   const text = (n) => ({ name: MARKERS[n] + " " + content, patterns: [...(raw ? [] : [{ include: "#kotlin-escapes" }]), ...(n === 1 ? single : []), { include: inner }] });
+  // The body by the dollars the literal opens with, most first, as the region's rules read them.
+  const bodies = (group) => "(?:" + [3, 2, 1].map((n) => opened(n, quote) + (group ? "(" : "") + bodyOf(raw, n) + (group ? ")" : "")).join("|") + ")";
   const first = groupsOf(begin).count + 1;
   const onItsLine = {
-    match: begin + "(?:" + [3, 2, 1].map((n) => opened(n, quote) + "(" + body + ")").join("|") + ")(" + quote + ")",
+    match: begin + bodies(true) + "(" + quote + ")",
     captures: { ...captures, [first]: text(3), [first + 1]: text(2), [first + 2]: text(1), [first + 3]: { name: raw ? RAW_END : DQ_END } },
     name: STRING,
   };
   if (!raw) return onItsLine;
   const goesOn = {
-    begin: begin + "(?!" + body + quote + ")",
+    begin: begin + "(?!" + bodies(false) + quote + ")",
     beginCaptures: captures,
     end: '(""")',
     endCaptures: { 1: { name: RAW_END } },
