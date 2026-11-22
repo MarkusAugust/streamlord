@@ -311,21 +311,20 @@ public class ProjectIndex(
         constantsUnion = null
     }
 
-    /** Whether [text] calls one of the short helpers on no receiver: a file without such a call reads the same in every module. */
-    private fun callsShortHelper(text: String): Boolean {
-        val helpers = Catalog.default.signalNameHelpers.keys
-        return CALL.findAll(text).any { m ->
-            if (m.groupValues[1] !in helpers) return@any false
-            var i = m.range.first - 1
-            while (i >= 0 && text[i].isWhitespace()) i--
-            i < 0 || text[i] != '.'
-        }
-    }
-
     private companion object {
         private val WITHOUT_DSL = Modules.known(core = true, htmlDsl = false)
         private val ANALYZER = Analyzer()
         private val NO_FACTS = SignalFacts(emptySet(), emptySet(), emptyMap(), emptyList())
-        private val CALL = regex("""\b([A-Za-z_]\w*)\s*\(""")
     }
+}
+
+private val CALL = regex("""\b([A-Za-z_]\w*)\s*\(""")
+
+/** Whether [text] calls one of the short helpers on no receiver: a file without such a call reads the same in every module. */
+internal fun callsShortHelper(text: String): Boolean {
+    val helpers = Catalog.default.signalNameHelpers.keys
+    // A template's code is code: `"${obj.set("x", 1)}"` calls `set` on a receiver. A name in a comment
+    // counts, as the readings take it there too: counting one too many only costs a second reading.
+    val code by lazy(LazyThreadSafetyMode.NONE) { codeMask(text, lexKotlin(text)).first }
+    return CALL.findAll(text).any { m -> m.groupValues[1] in helpers && text.getOrNull(codeBefore(text, code, m.range.first)) != '.' }
 }

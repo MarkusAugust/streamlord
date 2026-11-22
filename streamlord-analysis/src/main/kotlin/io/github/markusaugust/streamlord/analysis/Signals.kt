@@ -881,7 +881,7 @@ private fun declared(
         val lex = given ?: lexKotlin(src)
         for (site in findCallSites(src, PAIR_CALLS, lex)) {
             if (foreign(site.name, site.nameStart)) continue
-            val removes = removesSignals(src, site)
+            val removes = removesSignals(src, lex.mask, site)
             // A companion's removal is called by a name others use, `names.remove(...)`.
             if (site.name !in Catalog.default.signalCalls && !removes) continue
             val positional = site.positional

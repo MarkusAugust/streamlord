@@ -124,7 +124,7 @@ public fun collectSignalFacts(source: Source): SignalFacts {
 
     val lookups = ArrayList<SignalRead>()
     for (site in findCallSites(src, LOOKUPS, lex)) {
-        if (!onSignals(src, site.nameStart, bound)) continue
+        if (!onSignals(src, lex.mask, site.nameStart, bound)) continue
         val first = site.positional.firstOrNull()?.string ?: continue
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
@@ -190,11 +190,11 @@ private fun resolve(
 /** Whether the accessor whose name starts at [nameStart] is called on something that holds signals. */
 private fun onSignals(
     src: String,
+    code: BooleanArray,
     nameStart: Int,
     bound: Set<String>,
 ): Boolean {
-    var i = nameStart - 1
-    while (i >= 0 && src[i].isWhitespace()) i--
+    var i = codeBefore(src, code, nameStart)
     if (i < 0 || src[i] != '.') return false
     i--
     if (i >= 0 && src[i] == '?') i--

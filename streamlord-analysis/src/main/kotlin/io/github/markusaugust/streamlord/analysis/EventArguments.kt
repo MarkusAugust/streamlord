@@ -190,10 +190,10 @@ private val STREAM_CLASS =
 /** The name written before the `.` of [site] in [src], `PatchElements` of `PatchElements.remove(...)`; "" with no `.`, null with no name. */
 private fun receiver(
     src: String,
+    code: BooleanArray,
     site: CallSite,
 ): String? {
-    var i = site.nameStart - 1
-    while (i >= 0 && src[i].isWhitespace()) i--
+    var i = codeBefore(src, code, site.nameStart)
     if (i < 0 || src[i] != '.') return ""
     i--
     if (i >= 0 && src[i] == '?') i--
@@ -203,9 +203,10 @@ private fun receiver(
 /** The name [site] has among core's calls in [src], a companion's function as `PatchElements.remove`, or null with none. */
 internal fun eventCallName(
     src: String,
+    code: BooleanArray,
     site: CallSite,
 ): String? {
-    val qualified = receiver(src, site)?.takeIf { it.isNotEmpty() }?.let { "$it.${site.name}" }
+    val qualified = receiver(src, code, site)?.takeIf { it.isNotEmpty() }?.let { "$it.${site.name}" }
     return qualified?.takeIf { it in EVENT_CALLS } ?: site.name.takeIf { it in EVENT_CALLS }
 }
 
@@ -231,8 +232,9 @@ internal fun removalRefusals(site: CallSite): List<Pair<KotlinString, String>> {
 /** Whether [site] in [src] is, by its name and receiver, core's removal of signals. */
 internal fun removesSignals(
     src: String,
+    code: BooleanArray,
     site: CallSite,
-): Boolean = eventCallName(src, site)?.let { EVENT_CALLS[it]?.takes } == "signalNames"
+): Boolean = eventCallName(src, code, site)?.let { EVENT_CALLS[it]?.takes } == "signalNames"
 
 /**
  * Which calls of [src] are Streamlord's SSE calls and answers, read once for the file. A call may be
@@ -244,6 +246,7 @@ internal fun removesSignals(
  */
 internal class EventCalls(
     private val src: String,
+    private val code: BooleanArray,
 ) {
     private val imports =
         src
@@ -261,7 +264,7 @@ internal class EventCalls(
     private val streamlord = imports.any { it.startsWith(STREAMLORD) }
     private val shadowed = HashMap<String, Boolean>()
 
-    fun nameOf(site: CallSite): String? = eventCallName(src, site)
+    fun nameOf(site: CallSite): String? = eventCallName(src, code, site)
 
     /**
      * Whether [site] may be core's call: the file imports Streamlord and takes the name from nowhere
@@ -287,7 +290,7 @@ internal class EventCalls(
      * with: a stream, or Ktor's call for its `respond*`; null where the file declares none.
      */
     private fun streamReceiver(site: CallSite): Boolean? {
-        val receiver = receiver(src, site)?.takeIf { it.isNotEmpty() && it != "this" } ?: return null
+        val receiver = receiver(src, code, site)?.takeIf { it.isNotEmpty() && it != "this" } ?: return null
         val type = declarations.typeOf(receiver, site.nameStart) ?: return null
         return type in streamTypes || (site.name.startsWith("respond") && type in KTOR_CALLS)
     }
@@ -296,7 +299,7 @@ internal class EventCalls(
     fun ours(site: CallSite): Boolean {
         if (!named(site)) return false
         if ('.' in nameOf(site)!! || streamReceiver(site) == true) return true
-        val receiver = receiver(src, site) ?: return false
+        val receiver = receiver(src, code, site) ?: return false
         return receiver.isEmpty() || receiver == "this" || STREAM_RECEIVER.containsMatchIn(receiver) ||
             (receiver == "call" && site.name.startsWith("respond"))
     }
