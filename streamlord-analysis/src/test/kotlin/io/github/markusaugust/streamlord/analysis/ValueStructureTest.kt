@@ -498,6 +498,12 @@ class ValueStructureTest {
             "fun label(): String\n    xs.forEach { return n }",
             "fun label()\n    if (xs.isEmpty()) { return n }",
             "fun label(): String /* todo\n    */ run { return n }",
+            // Nor has one whose name is all that is typed, and the brackets on the next line are a statement's.
+            "fun label\n    if (xs.isEmpty()) { return n }",
+            "fun\n    for (x in xs) { return n }",
+            "fun <T> label\n    val x = xs.fold(0) { return n }",
+            "class L {\n        constructor\n        val v = xs.fold(0) { return n }\n    }",
+            "class L { val v = xs.constructor(1) { return n } }",
             // A call of a value named as a constructor is declared.
             "val constructor = { 1 }\n    val x = constructor()\n    if (xs.isEmpty()) { return n }",
             "constructor(1) { return n }",

@@ -622,6 +622,10 @@ private class ScopeFrame(
     val commas = ArrayList<Int>()
     var pending: PendingScope? = null
     var fn = false
+
+    /** Just past the `fun` last read in this frame, and for a function's parameters whether they open on that line: the function's own. */
+    var funAt = -1
+    var own = false
     var cls = false
     var whenBlock = false
     var loop = false
@@ -1133,9 +1137,11 @@ private fun declarations(
             when {
                 reference -> {}
 
-                // A constructor is declared in a class's body; anywhere else the word is a name.
-                word == "fun" || (word == "constructor" && !ctorOfClass && f.kind == "class") -> {
+                // A constructor is declared in a class's body; anywhere else, and after a dot, the word is a name.
+                word == "fun" ||
+                    (word == "constructor" && !ctorOfClass && f.kind == "class" && src.getOrNull(codeBefore(src, code, i)) != '.') -> {
                     f.fn = true
+                    f.funAt = end
                     f.funModifiers = f.modifiers
                 }
 
@@ -1265,6 +1271,8 @@ private fun declarations(
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
             if (c == '(' && f.fn) {
                 g.kind = "params"
+                // A function still being typed has no brackets, and the next line's are a statement's.
+                g.own = src.indexOf('\n', f.funAt).let { it < 0 || it > i }
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
                 g.funModifiers = f.funModifiers
@@ -1304,7 +1312,9 @@ private fun declarations(
                     g.ends += p.decls
                     f.pending = null
                     g.function = p.fn?.also { it.body = Span(i + 1) }
-                    g.sure = p.fn?.let { i - it.closeAt < 1_000 && RETURN_TYPE.matchEntire(blank.substring(it.closeAt, i)) != null } == true
+                    g.sure =
+                        p.fn?.let { it.own && i - it.closeAt < 1_000 && RETURN_TYPE.matchEntire(blank.substring(it.closeAt, i)) != null } ==
+                        true
                 } else if (f.cls) {
                     g.kind = "class"
                     f.cls = false
