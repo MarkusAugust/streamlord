@@ -316,6 +316,9 @@ private val LAMBDA_PARAMETERS =
         """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*->""",
     )
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
+
+/** The variable a `catch` names, last in its brackets, whatever annotations stand before it. */
+private val CATCH_VARIABLE = regex("""($NAME)\s*:\s*($TYPE)\s*,?\s*$""")
 private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = regex(TYPE)
 private val PROPERTY_MODIFIERS = regex("""\b(?:val|var)\b""")
@@ -621,6 +624,10 @@ private class ScopeFrame(
     var cls = false
     var whenBlock = false
     var loop = false
+
+    /** The last letter of a `catch` after a block, whose brackets come next, and the variable they named with where they closed. */
+    var catchAt = -1
+    var caught: Pair<Declaration, Int>? = null
 
     /** The parameters of a class's constructor, waiting for its body. */
     var ctor: List<Declaration>? = null
@@ -1157,6 +1164,11 @@ private fun declarations(
                     f.loop = true
                 }
 
+                // An infix function of that name is called with a lambda, or with brackets that name no variable.
+                word == "catch" -> {
+                    if (codeBefore(src, code, i).let { it >= 0 && src[it] == '}' }) f.catchAt = end - 1
+                }
+
                 (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
                     val constant = f.modifiers and CONST != 0
                     val html = f.modifiers and HTML != 0
@@ -1261,6 +1273,8 @@ private fun declarations(
                 f.fn = false
             } else if (c == '(' && f.cls && f.ctor == null) {
                 g.kind = "ctor"
+            } else if (c == '(' && f.catchAt >= 0 && codeBefore(src, code, i) == f.catchAt) {
+                g.kind = "catch"
             } else if (c == '(' && f.loop) {
                 g.kind = "for"
                 f.loop = false
@@ -1279,8 +1293,13 @@ private fun declarations(
                 f.fn = false
                 f.loop = false
                 val p = f.pending
-                // A lambda in a loop's own brackets is no body of it.
-                if (p != null && p.state == "after" && f.kind != "for") {
+                // A catch has its block right after its brackets; one still being typed has none, and leaves the next block alone.
+                val caught = f.caught?.takeIf { codeBefore(src, code, i) == it.second }?.first
+                f.caught = null
+                if (caught != null) {
+                    g.ends += caught
+                } else if (p != null && p.state == "after" && f.kind != "for") {
+                    // A lambda in a loop's own brackets is no body of it.
                     // The body of the function or the loop whose parameters just closed.
                     g.ends += p.decls
                     f.pending = null
@@ -1359,6 +1378,10 @@ private fun declarations(
                 if (functions != null) declared.add(g to i)
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
+            } else if (g.kind == "catch") {
+                CATCH_VARIABLE.find(blank.substring(g.open + 1, i))?.let { m ->
+                    outer.caught = add(m.groupValues[1], Declaration(g.open + 1, g.open, m.groupValues[2]).also { it.end = i + 1 }) to i
+                }
             }
             i++
             continue

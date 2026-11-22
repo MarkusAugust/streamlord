@@ -390,6 +390,26 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a catch declares its variable for its block, and for nothing else`() {
+        fun page(handler: String, after: String = "\"\"") =
+            "fun load() {}\nfun page(e: Int): String {\n    try { load() } $handler\n    return $after\n}\n"
+        assertEquals(listOf("\$e"), told(page("catch (e: Exception) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (\n        @Suppress(\"x\") e: Exception, // why\n    ) { return \"<b>\$e</b>\" }")))
+        assertEquals(listOf("\$e"), told(page("catch (e: Exception) { return \"\" } catch (e: Error) { return \"<b>\$e</b>\" }")))
+        // Past its block the name is the parameter again, an Int, which is no markup.
+        assertEquals(emptyList(), told(page("catch (e: Exception) { }", "\"<b>\$e</b>\"")))
+        assertEquals(emptyList(), told(page("catch (e: Exception) { } finally { println(\"<b>\$e</b>\") }")))
+        // A catch still being typed has no block, and takes none of what follows.
+        val typed = "fun f(xs: List<Int>) {\n    try { } catch (e: Exception)\n    xs.forEach { x: Int -> println(\"<b>\$x</b>\") }\n}\n"
+        assertEquals(emptyList(), told(typed))
+        // An infix function of that name is a call.
+        val infix = "fun f(e: Int) {\n    attempt { } catch { println(\"<b>\$e</b>\") }\n    attempt { } catch (e) { m: Int -> println(\"<b>\$m</b>\") }\n}\n"
+        assertEquals(emptyList(), told(infix))
+        val many = "fun f() {\n    try { } catch (" + "@A ".repeat(5_000) + "e: Exception) { println(\"<b>\$e</b>\") }\n}\n"
+        assertEquals(listOf("\$e"), told(many))
+    }
+
+    @Test
     fun `a lambda that returns to its label gives more than its last line`() {
         assertEquals(
             1,
