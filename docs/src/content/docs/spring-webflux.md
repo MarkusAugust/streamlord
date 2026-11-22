@@ -25,6 +25,10 @@ event. Return the bare flow from a controller and Spring sets the content type a
 header, so prefer the response. Everything before these is your flow, and everything after is
 Spring's.
 
+A list of events built by a function of your own is a flow like any other:
+`searchEvents(hits).asFlow().asDatastarResponse()`. [Ktor](/ktor/#events-you-already-hold) has
+the function, and [Testing](/testing/#a-function-that-returns-its-events) the test of it.
+
 Markup that holds a value from outside is built with [`interpolate`](/strings/#values-from-outside),
 and `PatchElements` takes the `Html` it returns as it is:
 
@@ -103,8 +107,6 @@ fun save(): ResponseEntity<Flow<ServerSentEvent<String>>> =
     ).asDatastarResponse()
 ```
 
-A list of events you built first is the same answer: `events.asFlow().asDatastarResponse()`.
-
 `ExecuteScript.pushUrl` adds a history entry where `replaceUrl` replaces one, and
 `PatchElements.remove` removes elements, as `removeElements` does on a stream. Each refuses what
 the stream refuses: `redirect` a `javascript:` URL, `remove` a name the client cannot hold.
@@ -149,6 +151,9 @@ on an exchange from a `WebFilter` of your own.
 An answer the browser may keep is one `text/html` body, not a stream: `datastarElements`, which
 [Spring WebMVC](/spring-webmvc/) shows and which works the same here, with an ETag checked on the
 exchange. It is on [Caching](/caching/).
+
+A page served from another origin is on [Security](/security/#a-page-on-another-origin), and the
+limit on incoming signals, `maxSignalsSize` on the bean, on [Signals](/signals/#the-size-limit).
 
 Backpressure strategy, schedulers and the rest of the reactive toolbox are Spring's, and the
 adapter deliberately does not reach into them. If your flow is hot and fast, the usual

@@ -489,7 +489,7 @@ cut off one byte past it. Nothing larger than the cap ever sits in memory. Signa
 or `@delete` travel in the URL, which the server refuses at 4 to 8 KiB, long before the cap,
 so send large ones with `@post` ([Security](/security/#bounded-input) has the numbers). Map
 `SignalsTooLargeException` to `413` in your framework's error handling, and a body that will not
-parse or decode to `400`. See [Security](/security/).
+parse or decode to `400`. See [Security](/security/#bounded-input).
 
 The cap is `maxSignalsSize`:
 
@@ -497,7 +497,8 @@ The cap is `maxSignalsSize`:
 val streamlord = Streamlord(maxSignalsSize = 4096)
 ```
 
-On Ktor, `install(StreamlordPlugin) { maxSignalsSize = 4096 }` does the same, unless the plugin
-is given a `streamlord` of its own, whose limit then holds. On Spring it is the bean's, and a read
-that is not passed the bean has the default. A body is counted in bytes. Signals in the URL are
-counted in characters once decoded, so `é` is one there and two in a body.
+The number is bytes, so that is 4 KiB. On Ktor, `install(StreamlordPlugin) { maxSignalsSize = 4096 }`
+does the same, unless the plugin is given a `streamlord` of its own, whose limit then holds. On
+Spring, set it on the bean you declare; a read that is not passed the bean keeps the default. A
+body is counted in bytes. Signals in the URL are counted in characters once decoded, so `é` is one
+there and two in a body.

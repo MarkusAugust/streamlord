@@ -96,6 +96,7 @@ abstract class ExtractDocSamples : DefaultTask() {
         // collides by name with the one in streamlord-html, and a sample that has to
         // disambiguate an import is teaching the wrong lesson.
         import io.github.markusaugust.streamlord.core.domain.*
+        import io.github.markusaugust.streamlord.core.json.JsonWriter
         import io.github.markusaugust.streamlord.core.port.driven.*
         import io.github.markusaugust.streamlord.core.port.driving.*
         import io.github.markusaugust.streamlord.html.*

@@ -26,8 +26,10 @@ keep-alive comment, 30 seconds unless you set it, `null` for none;
 [Operations](/operations/#heartbeats) has what it does and what it does not.
 `compress = true` gzips the stream when the request passed to `datastarStream` takes it; see
 [Operations](/operations/#compression). `maxSignalsSize` is the most a request may send in
-signals, 1 MiB unless you set it; see [Signals](/signals/#the-size-limit). A page served from
-another origin is on [Security](/security/#a-page-on-another-origin).
+signals, 1 MiB unless you set it; see [Signals](/signals/#the-size-limit).
+
+A page served from another origin needs a CORS mapping that names its methods; see
+[Security](/security/#a-page-on-another-origin).
 
 ## Streaming from a controller
 
@@ -60,9 +62,27 @@ class SearchController(private val streamlord: Streamlord) {
 and runs the block on a thread from its own async executor, and that thread stays with the
 stream until the block returns. Everything inside the block writes one frame.
 
-Events built before the stream opens are sent with `send`, one each, or handed over whole:
-`response.datastarStream(events.asFlow(), streamlord)` writes the same frames as a block that
-sends them. [Ktor](/ktor/#events-you-already-hold) has the example and what it is for.
+Events can also be built before the stream opens, by a function that returns them, and handed
+over whole. One that cannot be built then throws before `datastarStream` is called:
+
+```kotlin sample=spring-controller
+@RestController
+class SearchEventsController(private val streamlord: Streamlord) {
+    @PostMapping("/search")
+    fun search(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+    ): org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody {
+        val signals = request.readSignalsOr(SearchSignals(), streamlord)
+        val events = searchEvents(repository.search(signals.query))
+
+        return response.datastarStream(events.asFlow(), streamlord)
+    }
+}
+```
+
+`searchEvents` is the function on [Ktor](/ktor/#events-you-already-hold); it knows no framework.
+Inside a block, `send` writes one such event, and the frames are the same either way.
 
 Call `datastarStream` before anything writes to the response. One that something has already
 written to through its output stream still streams, without gzip, after a blank line that closes
