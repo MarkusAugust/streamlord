@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.html.InvalidSignalNameException
 import io.github.markusaugust.streamlord.html.SignalFilter
 import io.github.markusaugust.streamlord.html.elements
 import io.github.markusaugust.streamlord.html.signal
+import kotlinx.html.DIV
 import kotlinx.html.div
 import kotlinx.html.input
 import kotlin.test.Test
@@ -205,5 +206,43 @@ class ProDslTest {
     @Test
     fun `a media query signal must be a name a reference reaches`() {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataMatchMedia("über", "(max-width: 600px)") } } }
+    }
+
+    @Test
+    fun `a second value for a pro attribute the element has is refused`() {
+        val helpers =
+            mapOf<String, DIV.(String) -> Unit>(
+                "dataAnimate(expression)" to { dataAnimate("{r: '$it'}") },
+                "dataAnimate(attribute, expression)" to { dataAnimate("r", "'$it'") },
+                "dataCustomValidity" to { dataCustomValidity("'$it'") },
+                "dataMatchMedia" to { dataMatchMedia("wide", "(min-width: ${it.length}0${it}px)") },
+                "dataOnRaf" to { dataOnRaf("$it()") },
+                "dataOnResize" to { dataOnResize("$it()") },
+                "dataPersist" to { dataPersist(filter = SignalFilter.include(it)) },
+                "dataPersist(key)" to { dataPersist("k", SignalFilter.include(it)) },
+                "dataQueryString" to { dataQueryString(SignalFilter.include(it)) },
+                "dataReplaceUrl" to { dataReplaceUrl("'/$it'") },
+                "dataViewTransition" to { dataViewTransition("'$it'") },
+            )
+        for ((name, helper) in helpers) {
+            assertFailsWith<IllegalStateException>(name) {
+                elements {
+                    div {
+                        helper("a")
+                        helper("b")
+                    }
+                }
+            }
+        }
+        assertEquals(
+            """<div data-persist="" data-persist:draft=""></div>""",
+            elements {
+                div {
+                    dataPersist()
+                    dataPersist("draft")
+                    dataPersist()
+                }
+            },
+        )
     }
 }

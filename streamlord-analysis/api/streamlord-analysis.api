@@ -471,6 +471,7 @@ public final class io/github/markusaugust/streamlord/analysis/IssueCode : java/l
 	public static final field PREFIX_MISMATCH Lio/github/markusaugust/streamlord/analysis/IssueCode;
 	public static final field PRO_ACTION Lio/github/markusaugust/streamlord/analysis/IssueCode;
 	public static final field PRO_ATTRIBUTE Lio/github/markusaugust/streamlord/analysis/IssueCode;
+	public static final field REPEATED_ATTRIBUTE Lio/github/markusaugust/streamlord/analysis/IssueCode;
 	public static final field SCOPE_NAME Lio/github/markusaugust/streamlord/analysis/IssueCode;
 	public static final field SCRIPT_CLOSE Lio/github/markusaugust/streamlord/analysis/IssueCode;
 	public static final field SELECTOR_NEWLINE Lio/github/markusaugust/streamlord/analysis/IssueCode;

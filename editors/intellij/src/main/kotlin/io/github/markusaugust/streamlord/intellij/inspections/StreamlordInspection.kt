@@ -283,6 +283,7 @@ internal fun topicOf(code: IssueCode): Topic =
         IssueCode.PREFIX_MISMATCH,
         IssueCode.INDICATOR_WITHOUT_ACTION,
         IssueCode.INDICATOR_ORDER,
+        IssueCode.REPEATED_ATTRIBUTE,
         IssueCode.SIGNAL_NAME,
         IssueCode.COMPUTED_VALUE,
         IssueCode.FILTER_PATTERN,

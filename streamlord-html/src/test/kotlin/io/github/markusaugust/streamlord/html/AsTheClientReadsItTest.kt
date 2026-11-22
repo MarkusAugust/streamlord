@@ -490,4 +490,142 @@ class AsTheClientReadsItTest {
         assertEquals("/(a(b)\\2)/", SignalFilter.regexLiteral(Regex("(a(b)\\2)")))
         assertEquals("/(?<n>a)\\k<n>/", SignalFilter.regexLiteral(Regex("(?<n>a)\\k<n>")))
     }
+
+    // A browser keeps the first of two attributes of one name, and kotlinx.html holds one value a name: the second
+    // dataSignals would replace the first, and its signals never be declared. Run in Chrome 157 with Datastar 1.0.5.
+    @Test
+    fun `a second value for an attribute the element has is refused`() {
+        val e =
+            assertFailsWith<IllegalStateException> {
+                elements {
+                    div {
+                        dataSignals("a" to true)
+                        dataSignals("b" to true)
+                    }
+                }
+            }
+        assertEquals(
+            "data-signals is already written on this <div>, and an element holds one attribute of a name: " +
+                "a second value would replace the first. Write the attribute once.",
+            e.message,
+        )
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataSignals("{a: 1}")
+                    dataSignals("b" to 2)
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            elements {
+                button {
+                    dataOn("click", "a()")
+                    dataOnClick("b()")
+                }
+            }
+        }
+        // What the element was given by kotlinx.html's own map is as much its attribute, in the capitals it was given in.
+        for (written in listOf("data-show", "DATA-Show")) {
+            assertFailsWith<IllegalStateException>(written) {
+                elements {
+                    div {
+                        attributes[written] = "true"
+                        dataShow("false")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `every helper that takes a value refuses a second one`() {
+        val helpers =
+            mapOf<String, DIV.(String) -> Unit>(
+                "dataSignals(expression)" to { dataSignals("{$it: 1}") },
+                "dataSignals(json)" to { dataSignals(JsonParser.parseObject("{\"$it\": 1}")) },
+                "dataSignals(name, expression)" to { dataSignals("n", "'$it'") },
+                "dataSignals(pairs)" to { dataSignals(it to 1) },
+                "dataComputed(expression)" to { dataComputed("{$it: () => 1}") },
+                "dataComputed(name, expression)" to { dataComputed("n", "'$it'") },
+                "dataJsonSignals" to { dataJsonSignals(SignalFilter(include = Regex(it))) },
+                "dataInit" to { dataInit("$it()") },
+                "dataEffect" to { dataEffect("$it()") },
+                "dataOn" to { dataOn("my-event", "$it()") },
+                "dataOnClick" to { dataOnClick("$it()") },
+                "dataOnSubmit" to { dataOnSubmit("$it()") },
+                "dataOnChange" to { dataOnChange("$it()") },
+                "dataOnInput" to { dataOnInput("$it()") },
+                "dataOnKeydown" to { dataOnKeydown("$it()") },
+                "dataOnFetch" to { dataOnFetch("$it()") },
+                "dataOnSignalPatch" to { dataOnSignalPatch("$it()") },
+                "dataOnSignalPatch(filter)" to { dataOnSignalPatch("x()", SignalFilter(include = Regex(it))) },
+                "dataOnInterval" to { dataOnInterval("$it()") },
+                "dataOnIntersect" to { dataOnIntersect("$it()") },
+                "dataBind" to { dataBind(it) },
+                "dataRef" to { dataRef(it) },
+                "dataIndicator" to { dataIndicator(it) },
+                "dataText" to { dataText("'$it'") },
+                "dataShow" to { dataShow("'$it'") },
+                "dataClass(expression)" to { dataClass("{$it: true}") },
+                "dataClass(name, expression)" to { dataClass("n", "'$it'") },
+                "dataStyle(expression)" to { dataStyle("{color: '$it'}") },
+                "dataStyle(property, expression)" to { dataStyle("color", "'$it'") },
+                "dataAttr(expression)" to { dataAttr("{title: '$it'}") },
+                "dataAttr(name, expression)" to { dataAttr("title", "'$it'") },
+                "dataPreserveAttr" to { dataPreserveAttr(it) },
+                "dataNonce" to { dataNonce(it + "AAAAAAAAAAAAAAAAAAAAAA==") },
+            )
+        for ((name, helper) in helpers) {
+            assertFailsWith<IllegalStateException>(name) {
+                elements {
+                    div {
+                        helper("a")
+                        helper("b")
+                    }
+                }
+            }
+            elements {
+                div {
+                    helper("a")
+                    helper("a")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `attributes of different names, and one value given again, are written`() {
+        assertEquals(
+            """<div data-signals="{&quot;a&quot;:true}" data-signals__ifmissing="{&quot;b&quot;:true}"></div>""",
+            elements {
+                div {
+                    dataSignals("a" to true)
+                    dataSignals("b" to true, ifMissing = true)
+                }
+            },
+        )
+        assertEquals(
+            """<div data-signals:a="1" data-signals:b="2" data-class:x="1" data-class:y="2"></div>""",
+            elements {
+                div {
+                    dataSignals("a", "1")
+                    dataSignals("b", "2")
+                    dataClass("x", "1")
+                    dataClass("y", "2")
+                }
+            },
+        )
+        assertEquals(
+            """<div data-show="true" data-ignore-morph=""></div>""",
+            elements {
+                div {
+                    dataShow("true")
+                    dataIgnoreMorph()
+                    dataShow("true")
+                    dataIgnoreMorph()
+                }
+            },
+        )
+    }
 }

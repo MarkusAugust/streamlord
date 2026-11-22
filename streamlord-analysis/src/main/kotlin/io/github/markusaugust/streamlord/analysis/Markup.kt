@@ -411,6 +411,9 @@ internal fun appliedTags(
     return out
 }
 
+/** What a template engine's directive has where an attribute's name stands, `@auth`, `#if(x)`, `{{name}}` or `*ngIf`, and a name does not. */
+private const val DIRECTIVE_CHARACTERS = "@#{}()%$[]*"
+
 /**
  * A value of another library's: Knockout's or Vue's `name: value` binding, or words, as a share
  * button's text.
@@ -1263,7 +1266,43 @@ public class MarkupValidator(
         if (!kotlin) issues += filterWithoutListener(tag, prefix)
         issues += indicatorWithoutAction(tag, prefix, tagSource)
         issues += indicatorAfterInit(tag, prefix, tagSource, movable)
+        issues += repeatedAttributes(tag, prefix, tagSource)
         return issues
+    }
+
+    /**
+     * A Datastar attribute the element already has, in any capitals, with another value: the HTML
+     * parser keeps the first attribute of a name and drops the rest, so the client never reads this
+     * one. A template may write the name once in each branch, so a tag with its syntax is left alone,
+     * and so is one with an engine's directive for a name, `@auth` or `#if(x)`.
+     */
+    private fun repeatedAttributes(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
+    ): List<Issue> {
+        if (tag.attributes.size < 2) return emptyList()
+        val kept = HashMap<String, Attribute>()
+        val issues =
+            tag.attributes.mapNotNull { attr ->
+                val lower = attr.name.asciiLowercase()
+                val first = kept[lower] ?: return@mapNotNull null.also { kept[lower] = attr }
+                val same = decodeEntities(first.value.orEmpty()).text == decodeEntities(attr.value.orEmpty()).text
+                if (same || catalog.parseAttributeName(lower, prefix)?.spec == null) return@mapNotNull null
+                Issue(
+                    attr.nameStart,
+                    attr.nameEnd,
+                    "The browser keeps the first $lower of an element and drops this one, so Datastar never reads it. " +
+                        "Move its value into the first.",
+                    Severity.WARNING,
+                    IssueCode.REPEATED_ATTRIBUTE,
+                )
+            }
+        if (issues.isEmpty() || tag.attributes.any { attr -> attr.name.any { it in DIRECTIVE_CHARACTERS } }) return emptyList()
+        if (tagSource == null) return issues
+        // A tag with no `>` yet runs on into the next one, whose name and attributes are then read as its own.
+        val unclosed = tag.attributes.any { tagSource.getOrNull(it.nameStart - tag.start - 1) == '<' }
+        return if (unclosed || hasTemplateSyntax(tagSource)) emptyList() else issues
     }
 
     /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */
