@@ -10442,6 +10442,8 @@ modifier-args 22-33 warning: Datastar reads __debounce.5x as 5 ms. Write __debou
 modifier-args 58-66 warning: __debounce without a duration waits 0 ms. Write a duration such as __debounce.500ms or __debounce.1s.
   fix "Add .500ms" 66-66 ".500ms"
 == corpus/html.json: character references in expressions
+repeated-attribute 65-74 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
+repeated-attribute 87-96 warning: The browser keeps the first data-text of an element and drops this one, so Datastar never reads it. Move its value into the first.
 == corpus/html.json: issues after character references
 signal-kebab 32-36 warning: Datastar reads $a-b as one signal named a-b, and nothing here declares it: a key a-b is the signal $aB. For a subtraction write $a - b, with spaces.
   fix "Change to $aB" 32-36 "$aB"
@@ -11007,6 +11009,15 @@ empty-expression 32-48 warning: Empty Datastar expression.
 empty-expression 77-79 warning: Empty Datastar expression.
 signal-name 105-107 error: data-bind declares a signal named by spaces alone, which no expression can read.
 missing-key-or-value 116-125 error: data-bind needs a signal, as a key or as a value; without one Datastar raises KeyOrValueRequired.
+== corpus/html.json: a second data-signals on one element, which the browser drops
+repeated-attribute 27-39 warning: The browser keeps the first data-signals of an element and drops this one, so Datastar never reads it. Move its value into the first.
+== corpus/html.json: an attribute repeated in other capitals, and a third time
+repeated-attribute 35-48 warning: The browser keeps the first data-on:click of an element and drops this one, so Datastar never reads it. Move its value into the first.
+repeated-attribute 62-75 warning: The browser keeps the first data-on:click of an element and drops this one, so Datastar never reads it. Move its value into the first.
+== corpus/html.json: attributes of one plugin under different names are each kept
+== corpus/html.json: an attribute repeated with the value it has loses nothing
+== corpus/html.json: an attribute a template writes in each branch is written once
+== corpus/html.json: a repeated attribute that is not Datastar's is the page's own
 == corpus/kotlin-actions.json: a Kotlin template in an option's value or key is an expression, not judged
 unsafe-interpolation 163-170 warning: Kotlin writes ${mode} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
 unsafe-interpolation 234-239 warning: Kotlin writes ${ct} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.

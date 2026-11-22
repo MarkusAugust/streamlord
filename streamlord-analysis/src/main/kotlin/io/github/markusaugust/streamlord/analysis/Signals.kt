@@ -966,8 +966,31 @@ private fun declared(
         val skipped = ignoredTags(src, prefix)
         out.removeAll { d -> skipped.any { d.start in it } }
     }
+    // Nor does an attribute the browser drops, the second of a name on its element.
+    if (out.size > 1) {
+        val dropped =
+            if (language == SourceLanguage.KOTLIN) {
+                (given ?: lexKotlin(src))
+                    .strings
+                    .filter { !it.unterminated && it.text.indexOf(prefix, it.text.indexOf(prefix) + 1) > 0 }
+                    .flatMap { s -> droppedText(s.text, templates = false).map { s.toSource(it.first, it.last) } }
+            } else {
+                droppedText(src)
+            }
+        if (dropped.isNotEmpty()) out.removeAll { d -> dropped.any { d.start in it } }
+    }
     return out
 }
+
+/** The text of each attribute of [html] the HTML parser drops ([droppedAttributes]); a template may write a name once in each branch. */
+private fun droppedText(
+    html: String,
+    templates: Boolean = true,
+): List<IntRange> =
+    tokenize(html, templates)
+        .tags
+        .filter { !it.closing && !(templates && hasTemplateSyntax(html.substring(it.start, it.end))) }
+        .flatMap { tag -> droppedAttributes(tag).map { (_, attr) -> attr.nameStart..maxOf(attr.nameEnd, attr.valueEnd) } }
 
 /** The text of each start tag of [html] the client applies nothing of, as [appliedTags] reads them. */
 private fun ignoredTags(

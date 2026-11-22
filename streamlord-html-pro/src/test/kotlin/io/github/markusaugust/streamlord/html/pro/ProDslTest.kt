@@ -206,4 +206,34 @@ class ProDslTest {
     fun `a media query signal must be a name a reference reaches`() {
         assertFailsWith<InvalidSignalNameException> { elements { div { dataMatchMedia("über", "(max-width: 600px)") } } }
     }
+
+    @Test
+    fun `a second value for a pro attribute the element has is refused`() {
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataReplaceUrl("'/a'")
+                    dataReplaceUrl("'/b'")
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataQueryString(SignalFilter.include("^a"))
+                    dataQueryString(SignalFilter.include("^b"))
+                }
+            }
+        }
+        assertEquals(
+            """<div data-persist="" data-persist:draft=""></div>""",
+            elements {
+                div {
+                    dataPersist()
+                    dataPersist("draft")
+                    dataPersist()
+                }
+            },
+        )
+    }
 }

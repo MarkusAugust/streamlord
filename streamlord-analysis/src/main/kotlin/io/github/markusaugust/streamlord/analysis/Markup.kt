@@ -411,6 +411,16 @@ internal fun appliedTags(
     return out
 }
 
+/** The attributes of [tag] the HTML parser drops, each with the one it keeps: the first of that name, in any capitals. */
+internal fun droppedAttributes(tag: Tag): List<Pair<Attribute, Attribute>> {
+    if (tag.attributes.size < 2) return emptyList()
+    val kept = HashMap<String, Attribute>()
+    return tag.attributes.mapNotNull { attr ->
+        val lower = attr.name.asciiLowercase()
+        kept[lower]?.let { it to attr } ?: null.also { kept[lower] = attr }
+    }
+}
+
 /**
  * A value of another library's: Knockout's or Vue's `name: value` binding, or words, as a share
  * button's text.
@@ -1263,7 +1273,33 @@ public class MarkupValidator(
         if (!kotlin) issues += filterWithoutListener(tag, prefix)
         issues += indicatorWithoutAction(tag, prefix, tagSource)
         issues += indicatorAfterInit(tag, prefix, tagSource, movable)
+        if (!kotlin) issues += repeatedAttributes(tag, prefix, tagSource)
         return issues
+    }
+
+    /**
+     * A Datastar attribute the element already has, in any capitals, with another value: the HTML
+     * parser keeps the first attribute of a name and drops the rest, so the client never reads this
+     * one. A template may write the name once in each branch, so a tag with its syntax is left alone.
+     */
+    private fun repeatedAttributes(
+        tag: Tag,
+        prefix: String,
+        tagSource: String?,
+    ): List<Issue> {
+        if (tagSource != null && hasTemplateSyntax(tagSource)) return emptyList()
+        return droppedAttributes(tag).mapNotNull { (first, attr) ->
+            val lower = attr.name.asciiLowercase()
+            if (first.value == attr.value || catalog.parseAttributeName(lower, prefix)?.spec == null) return@mapNotNull null
+            Issue(
+                attr.nameStart,
+                attr.nameEnd,
+                "The browser keeps the first $lower of an element and drops this one, so Datastar never reads it. " +
+                    "Move its value into the first.",
+                Severity.WARNING,
+                IssueCode.REPEATED_ATTRIBUTE,
+            )
+        }
     }
 
     /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */

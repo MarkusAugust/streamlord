@@ -126,6 +126,35 @@ class ProjectTreeTest {
         assertEquals(listOf(Triple("Routes.kt", IssueCode.SIGNAL_NEVER_DECLARED, "2:54")), found("Routes.kt" to handler, page))
     }
 
+    // The browser keeps the first of two attributes of a name, so the second data-signals declares nothing.
+    @Test
+    fun `a signal only a repeated attribute names is not declared`() {
+        val handler =
+            """
+            @Serializable
+            data class SearchSignals(val query: String = "", val draft: String = "")
+
+            fun route() {
+                val signals = call.readSignalsOr(SearchSignals())
+            }
+            """.trimIndent()
+        val repeated = "<div data-signals=\"{query: ''}\" data-signals=\"{draft: ''}\"></div>\n"
+        assertEquals(
+            listOf(
+                Triple("search.html", IssueCode.REPEATED_ATTRIBUTE, "1:33"),
+                Triple("Routes.kt", IssueCode.SIGNAL_NEVER_DECLARED, "2:54"),
+            ),
+            found("Routes.kt" to handler, "search.html" to repeated).sortedBy { it.first != "search.html" },
+        )
+        val inKotlin = "Page.kt" to "val page = \"<div data-signals='{query: 1}' data-signals='{draft: 2}'></div>\"\n"
+        assertEquals(
+            listOf(IssueCode.REPEATED_ATTRIBUTE, IssueCode.SIGNAL_NEVER_DECLARED),
+            found("Routes.kt" to handler, inKotlin).map { it.second },
+        )
+        val once = "<div data-signals=\"{query: ''}\"><p data-signals=\"{draft: ''}\"></p></div>\n"
+        assertEquals(emptyList(), found("Routes.kt" to handler, "search.html" to once))
+    }
+
     @Test
     fun `fails a build on an error and on an unsafe interpolation that is a warning, not on a hint`() {
         write("Click.kt", swallowed)

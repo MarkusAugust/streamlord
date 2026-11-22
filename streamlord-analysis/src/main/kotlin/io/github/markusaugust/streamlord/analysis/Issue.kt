@@ -134,6 +134,7 @@ public enum class IssueCode(
     PREFIX_MISMATCH("prefix-mismatch"),
     INDICATOR_WITHOUT_ACTION("indicator-without-action"),
     INDICATOR_ORDER("indicator-order"),
+    REPEATED_ATTRIBUTE("repeated-attribute"),
     SIGNAL_NAME("signal-name"),
     COMPUTED_VALUE("computed-value"),
     FILTER_PATTERN("filter-pattern"),

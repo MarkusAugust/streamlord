@@ -490,4 +490,108 @@ class AsTheClientReadsItTest {
         assertEquals("/(a(b)\\2)/", SignalFilter.regexLiteral(Regex("(a(b)\\2)")))
         assertEquals("/(?<n>a)\\k<n>/", SignalFilter.regexLiteral(Regex("(?<n>a)\\k<n>")))
     }
+
+    // A browser keeps the first of two attributes of one name, and kotlinx.html holds one value a name: the second
+    // dataSignals would replace the first, and its signals never be declared. Run in Chrome 157 with Datastar 1.0.5.
+    @Test
+    fun `a second value for an attribute the element has is refused`() {
+        val e =
+            assertFailsWith<IllegalStateException> {
+                elements {
+                    div {
+                        dataSignals("a" to true)
+                        dataSignals("b" to true)
+                    }
+                }
+            }
+        assertEquals(
+            "data-signals is already written on this <div>, as {\"a\":true}, and an element holds one attribute of a name: " +
+                "{\"b\":true} would replace it. Write both in one call.",
+            e.message,
+        )
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataSignals("{a: 1}")
+                    dataSignals("b" to 2)
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataSignals("a", "1")
+                    dataSignals("a", "2")
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            elements {
+                button {
+                    dataOn("click", "a()")
+                    dataOnClick("b()")
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataShow("true")
+                    dataShow("false")
+                }
+            }
+        }
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    dataOnSignalPatch("a()", SignalFilter(include = Regex("^a")))
+                    dataOnSignalPatch("a()", SignalFilter(include = Regex("^b")))
+                }
+            }
+        }
+        // What the element was given by kotlinx.html's own map is as much its attribute.
+        assertFailsWith<IllegalStateException> {
+            elements {
+                div {
+                    attributes["data-show"] = "true"
+                    dataShow("false")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `attributes of different names, and one value given again, are written`() {
+        assertEquals(
+            """<div data-signals="{&quot;a&quot;:true}" data-signals__ifmissing="{&quot;b&quot;:true}"></div>""",
+            elements {
+                div {
+                    dataSignals("a" to true)
+                    dataSignals("b" to true, ifMissing = true)
+                }
+            },
+        )
+        assertEquals(
+            """<div data-signals:a="1" data-signals:b="2" data-class:x="1" data-class:y="2"></div>""",
+            elements {
+                div {
+                    dataSignals("a", "1")
+                    dataSignals("b", "2")
+                    dataClass("x", "1")
+                    dataClass("y", "2")
+                }
+            },
+        )
+        assertEquals(
+            """<div data-show="true" data-ignore-morph=""></div>""",
+            elements {
+                div {
+                    dataShow("true")
+                    dataIgnoreMorph()
+                    dataShow("true")
+                    dataIgnoreMorph()
+                }
+            },
+        )
+    }
 }
