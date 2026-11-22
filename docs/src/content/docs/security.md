@@ -86,7 +86,7 @@ JavaScript, and is not checked.
 
 ## Bounded input
 
-Incoming signals are capped (1 MiB by default, configurable) and the cap applies *while
+Incoming signals are capped (1 MiB by default; [`maxSignalsSize`](/signals/#the-size-limit) changes it) and the cap applies *while
 reading*:
 
 - a declared `Content-Length` above the limit is rejected before a single byte is read;
@@ -488,6 +488,85 @@ On Ktor, `install(StreamlordPlugin) { requireJsonContentType = false }` does the
 This closes the cheapest way in, not every way. A handler that changes something on `GET`, or a
 CORS policy that answers yes to other sites, opens it again, so keep CSRF tokens or `SameSite`
 cookies as well.
+
+## A page on another origin
+
+The page does nothing when clicked, and the console says the request was blocked by CORS policy.
+That is a page calling a service on another origin, a documentation site and its demo, a front
+end and its API, whose service has not said yes. A refusal is quiet on the page and loud in the
+console: the browser names the CORS policy there and not the `403`, the client asks ten more
+times over about three minutes, and then gives up with `FetchFailed`. The `datastar-fetch` event
+says `retrying` and `retries-failed` on the way, for a page that wants to show it.
+
+The browser asks first. Datastar's client sets `Datastar-Request: true` on every request it
+sends, and that header is not one a browser sends unasked, so `@get` is preflighted as well as
+`@post`. The service has to answer yes to the header by name:
+
+```kotlin sample=ktor-application
+install(CORS) {
+    allowHost("docs.example", schemes = listOf("https"))
+    allowHeader("Datastar-Request")
+    allowHeader(HttpHeaders.ContentType)
+    allowHeader("last-event-id")
+    allowMethod(HttpMethod.Put)
+    allowMethod(HttpMethod.Patch)
+    allowMethod(HttpMethod.Delete)
+}
+```
+
+Needs `ktor-server-cors`. Each line is one refusal less, measured with Chrome 148 against Ktor
+3.6.1:
+
+- Without `Datastar-Request` every preflight is a `403` and your handler never runs.
+- `Content-Type` is what `@post`, `@put`, `@patch` and `@query` need, since they declare their
+  body `application/json`.
+- `last-event-id` is sent when a stream whose events carried an `eventId` reconnects. Without the
+  line the stream opens, and its first reconnect is refused, which no first test shows.
+- Ktor answers yes to `GET`, `POST` and `HEAD` on its own; `@put`, `@patch` and `@delete` are
+  named, and `@query` needs `allowMethod(HttpMethod("QUERY"))` as well.
+
+`Accept` needs no line, and Ktor tells the browser it may keep a preflight for a day without
+being asked to. The browser keeps it by URL, method and header names, and `@get` carries the
+signals in the URL, so each new set of signals is asked about again; `@post` to one URL is asked
+about once.
+
+In development the page is usually on `http://localhost` with a port. That is another origin too,
+and the port is part of its name:
+
+```kotlin sample=ktor-application
+install(CORS) {
+    allowHost("localhost:4321", schemes = listOf("http"))
+}
+```
+
+Add that line from a setting production does not have.
+
+On Spring the defaults allow every request header, so `Datastar-Request` needs no line. They also
+allow every origin, and `GET`, `HEAD` and `POST` only. Naming origins and methods replaces both
+lists, so name them all:
+
+```kotlin sample=spring-controller
+@org.springframework.context.annotation.Configuration
+class CorsConfig : org.springframework.web.servlet.config.annotation.WebMvcConfigurer {
+    override fun addCorsMappings(registry: org.springframework.web.servlet.config.annotation.CorsRegistry) {
+        registry
+            .addMapping("/**")
+            .allowedOrigins("https://docs.example")
+            .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE")
+    }
+}
+```
+
+`@query` needs `"QUERY"` in that list. Once you list `allowedHeaders` yourself,
+`Datastar-Request`, `Content-Type` and `last-event-id` go in it. Measured on WebMVC with Spring
+7.0; WebFlux is not measured here.
+
+The client sends no cookies to another origin and has no setting that makes it, so a session
+cookie does not travel: such a service knows its reader by a token it issued and checks, sent in
+the signals or the URL, or sits on the page's own origin. And a policy that answers yes to an
+origin answers yes to every page on it, which is what
+[Forms from other sites](#forms-from-other-sites) counted on not happening: allow the origins you
+serve, by name, over `https`, and `localhost` only where you develop.
 
 ## Signals are the reader's
 

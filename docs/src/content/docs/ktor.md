@@ -37,7 +37,11 @@ long, 30 seconds unless you set it, for the proxies in between, unless the strea
 `compress` gzips every stream whose request takes it; it is on
 [Operations](/operations/#compression). `requireJsonContentType`, on unless you set it to `false`,
 refuses signals in a body not declared `application/json`; it is on
-[Security](/security/#forms-from-other-sites).
+[Security](/security/#forms-from-other-sites). `maxSignalsSize` is the most a request may send in
+signals, 1 MiB unless you set it; it is on [Signals](/signals/#the-size-limit).
+
+A page served from another origin does nothing when clicked until Ktor's CORS plugin allows the
+`Datastar-Request` header; see [Security](/security/#a-page-on-another-origin).
 
 ## One-shot streams
 
@@ -65,6 +69,48 @@ This is the shape most endpoints take. It is a stream in the protocol sense, a
 Read the signals and set a session or a cookie before `respondDatastar`, as the example does. The
 `200` and its headers go out as the stream opens, so a `SignalsTooLargeException` thrown inside
 the block can no longer become a `413`, and a session set there throws `TooLateSessionSetException`.
+
+### Events you already hold
+
+Events are best built before the response opens, as the signals are best read there. One that
+cannot be built, a `PatchSignals` whose text is no JSON, throws `DatastarEventValidationException`.
+Before `respondDatastar` that is an exception `StatusPages` can answer with a status, as it
+answers the ones on [Security](/security/#bounded-input). Inside the block the stream is open: the
+reader gets a `200` and a stream cut short, and Datastar's client asks again, up to ten more times
+over about three minutes, and each one runs your handler again.
+
+```kotlin sample=declarations
+fun searchEvents(hits: List<Hit>): List<DatastarEvent> =
+    listOf(
+        patchElements(selector = "#results", mode = ElementPatchMode.INNER) {
+            ul(classes = "results") {
+                hits.forEach { hit -> li { a(href = hit.url) { +hit.title } } }
+            }
+        },
+        PatchSignals(JsonWriter.write(mapOf("total" to hits.size))),
+    )
+```
+
+```kotlin sample=ktor-routing
+post("/search") {
+    val signals = call.readSignalsOr(SearchSignals())
+    val events = searchEvents(repository.search(signals.query))
+
+    call.respondDatastar { events.forEach { send(it) } }
+}
+```
+
+`send` writes one event you hold. `call.respondDatastar(events.asFlow())` puts the same bytes on
+the wire. A function that returns its events needs no server to test; see
+[Testing](/testing/#a-function-that-returns-its-events).
+
+`patchSignals("total" to hits.size)` belongs to the stream. Outside one, `PatchSignals` takes its
+JSON as text, and `JsonWriter.write` from `core.json` writes that text from a map, escaping every
+string in it.
+
+With `guardElements` on, the guard reads an event as it is sent, so a held one it refuses still
+fails with the stream open. Pass it through `call.streamlord.guard(event)` first where that
+failure is to be a status too.
 
 ## When the block fails
 
