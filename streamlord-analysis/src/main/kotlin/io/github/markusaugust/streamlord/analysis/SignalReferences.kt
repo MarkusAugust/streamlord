@@ -259,8 +259,13 @@ private fun classProperties(defined: Set<String>): Set<String> {
     val kotlinx = HashSet<String>()
     val kotlinxNames = HashSet<String>()
     val jackson = HashMap<String, MutableList<String>>()
+    val opaque = HashSet<String>()
     for (d in defined) {
         when {
+            d.startsWith(OPAQUE_CLASS) -> {
+                opaque += d.removePrefix(OPAQUE_CLASS)
+            }
+
             d.startsWith(SENT_CLASS) -> {
                 sends += d
             }
@@ -286,16 +291,22 @@ private fun classProperties(defined: Set<String>): Set<String> {
     }
     if (sends.isEmpty()) return defined
     // A naming strategy renames a Jackson class's signals, so none is read off its properties.
-    if (RENAMED_CLASSES in defined) jackson.clear()
+    if (RENAMED_CLASSES in defined) {
+        opaque += jackson.keys
+        jackson.clear()
+    }
     val out = LinkedHashSet(defined)
     for (d in sends) {
         val type = d.removePrefix(SENT_CLASS).substringBefore(':')
         val candidates = d.substringAfter("$SENT_CLASS$type:").split('|')
-        val known = { c: String -> c in kotlinx || c in jackson }
+        // A class the analysis cannot read takes part in Kotlin's lookup, and is then the codec's alone.
+        val known = { c: String -> c in kotlinx || c in jackson || c in opaque }
         val qualified =
             candidates.firstOrNull(known)?.takeIf { it == candidates.first() || candidates.count(known) == 1 }
                 ?: nested(candidates.first(), known)
         when {
+            qualified != null && qualified in opaque -> {}
+
             qualified != null && qualified in jackson -> {
                 out += READABLE_CLASS + type
                 out += jackson.getValue(qualified)

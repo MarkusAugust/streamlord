@@ -332,8 +332,9 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
  * (`sends:Form:app.Form|lib.Form`), a `@Serializable` class (`kotlinx:app.Form`), whose properties
  * are defined, a Jackson class with each of its properties (`jackson:app.Form`,
  * `jacksonProperty:app.Form:email`), a signal only where the class is sent, a class of the project
- * whose names the codec alone knows (`opaque:app.Form`), and a naming strategy, which leaves every
- * class to its codec. A class a page is declared from that the analysis cannot
+ * whose names the codec alone knows (`opaque:app.Form`), which takes part in Kotlin's lookup and
+ * sends nothing the check can know, and a Jackson naming strategy, which leaves every Jackson class
+ * to its codec. A class a page is declared from that the analysis cannot
  * read is one only its codec can name, and is marked readable (`class:Form`) only where one of the
  * classes its name may mean is (see [withClassProperties]).
  */
@@ -528,7 +529,7 @@ private fun tagsWriteSignals(
 ): Boolean {
     if (!html.contains("signals", ignoreCase = true)) return false
     val text = withoutComments(html.lowercase(), templates)
-    for (tag in startTags(text)) {
+    for (tag in startTags(text, templates)) {
         var at = text.indexOf("signals", tag.first)
         while (at in tag) {
             if (writesAt(text, at, tag.first, prefix)) return true
@@ -549,6 +550,11 @@ private fun withoutComments(
     for ((open, close) in pairs) {
         var at = lower.indexOf(open)
         while (at >= 0) {
+            // `{{#if}}` opens a Mustache section, not a `{#` comment.
+            if (open == "{#" && at > 0 && lower[at - 1] == '{') {
+                at = lower.indexOf(open, at + 1)
+                continue
+            }
             val end = lower.indexOf(close, at + open.length).let { if (it < 0) lower.length else it + close.length }
             for (k in at until end) chars[k] = ' '
             at = lower.indexOf(open, end)
@@ -557,11 +563,28 @@ private fun withoutComments(
     return chars.concatToString()
 }
 
+/** Where a template construct that starts at [at] of [text] ends, or null for none there: a directive is read from the space before it. */
+private fun constructEnd(
+    text: String,
+    at: Int,
+): Int? {
+    val from = if ((text[at] == '@' || text[at] == '#') && at > 0 && text[at - 1].isWhitespace()) at - 1 else at
+    val m = TEMPLATE_SYNTAX.matchAt(text, from) ?: return null
+    var s = m.range.first
+    while (s < m.range.last && (text[s].isWhitespace() || text[s] == '>')) s++
+    return placeholderEnd(text, s).takeIf { it > at }
+}
+
+private const val CONSTRUCT_STARTS = "{<[$!*#@"
+
 private val COMMENTS = listOf("<!--" to "-->")
 private val TEMPLATE_COMMENTS = listOf("{#" to "#}", "<#--" to "-->", "{{!" to "}}", "<%--" to "--%>")
 
 /** The start tags of [text], each from its `<` to its `>`, a quoted `>` inside it; a script's or a style's body is passed over. */
-private fun startTags(text: String): List<IntRange> {
+private fun startTags(
+    text: String,
+    templates: Boolean,
+): List<IntRange> {
     val out = ArrayList<IntRange>()
     var i = text.indexOf('<')
     while (i >= 0 && i < text.length) {
@@ -577,6 +600,13 @@ private fun startTags(text: String): List<IntRange> {
                 if (c == quote) quote = ' '
             } else if (c == '"' || c == '\'') {
                 quote = c
+            } else if (templates && c in CONSTRUCT_STARTS) {
+                // A template's own construct in a tag, `<#if on>` or `@if(a > 1)`, ends no tag with its `>`.
+                val end = constructEnd(text, j)
+                if (end != null) {
+                    j = end
+                    continue
+                }
             } else if (c == '>') {
                 break
             }
@@ -696,9 +726,9 @@ internal fun collectSignalDefinitions(
         for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) sent += type
         if (sent.isNotEmpty()) {
             val candidates = candidateClasses(src, lex)
-            for (type in sent) out += "$SENT_CLASS$type:${candidates(type).joinToString("|")}"
+            for (type in sent) out += "$SENT_CLASS$type:${candidates.of(type).joinToString("|")}"
         }
-        // A naming strategy leaves every class's names to the codec.
+        // A Jackson naming strategy leaves every Jackson class's names to the codec.
         if (codeRenamesSignals(src, lex)) out += RENAMED_CLASSES
     }
     return out

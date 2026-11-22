@@ -47,8 +47,8 @@ public data class SignalProperty(
  *   sends what it sends, and a read only it could set is still worth a look.
  * @property packageName The file's package, and [imports] what it imports, `app.forms.Form` or
  *   `app.forms.*`: a simple name above is the class they make it, as Kotlin resolves it.
- * @property renamesSignals Whether the file sets a naming strategy for its codec, in code or in
- *   Spring's settings, so that no class's signals go by the names the check reads off it.
+ * @property renamesSignals Whether the file sets a naming strategy for a Jackson mapper that renames, in
+ *   code or in Spring's settings, so that no Jackson class's signals go by the names the check reads off it.
  * @property opaqueClasses The classes the file declares whose names the codec alone knows, by simple
  *   name: a Jackson class with names outside its constructor, or under `@JsonNaming`.
  * @property writesAtRunTime Whether the file writes signals whose names are known only at run time:
@@ -223,7 +223,6 @@ internal fun serializableProperties(
     lex: KotlinLex? = null,
 ): Map<String, List<SignalProperty>> = signalClasses(src, lex).filter { it.serializable }.associate { it.name to it.properties }
 
-// A naming strategy handed to a mapper, Jackson's or kotlinx.serialization's.
 // A naming strategy handed to a Jackson mapper. kotlinx.serialization's is not read: the check judged
 // a `@Serializable` class by its names before it read any strategy, and still does.
 private val NAMING_STRATEGY = regex("""\bPropertyNamingStrateg(?:y|ies)\b|\bpropertyNamingStrategy\b""")
@@ -273,7 +272,7 @@ private fun lineFrom(
 internal fun candidateClasses(
     src: String,
     lex: KotlinLex,
-): (String) -> List<String> {
+): Candidates {
     val imports =
         IMPORT
             .findAll(src)
@@ -283,7 +282,17 @@ internal fun candidateClasses(
     val explicit = imports.filter { !it.endsWith(".*") }.associateBy { it.substringAfterLast('.') }
     val stars = imports.filter { it.endsWith(".*") }.map { it.removeSuffix("*") }
     val own = packageOf(src, lex)
-    return { type -> explicit[type]?.let { listOf(it) } ?: (listOf(if (own.isEmpty()) type else "$own.$type") + stars.map { it + type }) }
+    return Candidates(explicit, stars, own)
+}
+
+/** The classes a simple name may mean, from a file's imports and package. */
+internal class Candidates(
+    private val explicit: Map<String, String>,
+    private val stars: List<String>,
+    private val own: String,
+) {
+    fun of(type: String): List<String> =
+        explicit[type]?.let { listOf(it) } ?: (listOf(if (own.isEmpty()) type else "$own.$type") + stars.map { it + type })
 }
 
 /** The package [src] declares, or the empty one. */
@@ -330,9 +339,9 @@ internal fun matchingParen(
  * @property declared Every signal name the files declare, from markup and from the DSL.
  * @property read Every signal name the files read, through a signals class or a lookup.
  * @property declaredByCodec What a page is declared from, `dataSignals(codec.toJsonValue(...))`,
- *   whose names only the codec knows: a class the check cannot read, or `*` for a value of no named
- *   class, and with a naming strategy set every class it would judge. While it is not empty every
- *   read counts as declared, and [issues] stays empty.
+ *   whose names only the codec knows: a class the check cannot read, a Jackson class under a naming
+ *   strategy, or `*` for a value of no named class. While it is not empty every read counts as
+ *   declared, and [issues] stays empty.
  */
 public data class SignalDriftReport(
     val issues: Map<String, List<Issue>>,
@@ -391,6 +400,8 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
         }
     }
 
+    fun among(type: String): Map<String, List<DeclaredClass>> = opaque[type]?.let { mapOf(type to byName[type].orEmpty() + it) } ?: byName
+
     // A page that declares its signals from an encoded class declares that class's properties. A
     // class this check cannot read, a Jackson one or none named, may declare any name. A patch
     // declares the properties of a class it reads and nothing of one it cannot.
@@ -398,14 +409,14 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     var uncertain = facts.values.any { it.writesAtRunTime }
     for (one in facts.values) {
         for (type in one.encodedTypes) {
-            val found = if (type == ANY_SIGNAL) emptyList() else resolve(one, type, byName)
-            if (found.isEmpty()) byCodec += type
+            // A class the check cannot read takes part in Kotlin's lookup, and declares what only its codec knows.
+            val found = if (type == ANY_SIGNAL) emptyList() else resolve(one, type, among(type))
+            if (found.isEmpty() || found.any { it.opaque }) byCodec += type
             for (c in found) c.properties.forEach { declared += it.name }
         }
         for (type in one.patchedTypes) {
             // The one Kotlin's lookup finds among them all is the one sent.
-            val among = opaque[type]?.let { mapOf(type to byName[type].orEmpty() + it) } ?: byName
-            val sent = resolve(one, type, among)
+            val sent = resolve(one, type, among(type))
             if (sent.any { it.opaque }) uncertain = true
             for (c in sent) c.properties.forEach { declared += it.name }
         }
@@ -416,7 +427,7 @@ public fun signalDrift(facts: Map<String, SignalFacts>): SignalDriftReport {
     val judged = HashSet<Pair<String, String>>()
     for (one in facts.values) {
         for (type in one.signalTypes) {
-            val c = resolve(one, type, byName).singleOrNull() ?: continue
+            val c = resolve(one, type, among(type)).singleOrNull()?.takeIf { !it.opaque } ?: continue
             if (uncertain && type in facts[c.file]?.jacksonClasses.orEmpty()) continue
             judged += c.file to type
         }

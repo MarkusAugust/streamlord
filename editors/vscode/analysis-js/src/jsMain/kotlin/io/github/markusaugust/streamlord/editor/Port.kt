@@ -187,22 +187,14 @@ fun diagnose(
         object : ProjectSignals {
             override fun defined() = defined?.let(::setOf)
 
-            override fun own() = others?.let { collectSignalFacts(file) }
+            // Read once: the check asks for the file's facts, and the drift check again.
+            private val ownFacts by lazy(LazyThreadSafetyMode.NONE) { others?.let { collectSignalFacts(file) } }
+
+            override fun own() = ownFacts
 
             override fun others() = facts(others ?: emptyArray())
 
-            override fun drift(): List<AnalysedIssue>? {
-                val own = own() ?: return null
-                val given = others ?: return null
-                lastDrift?.let { (ownBefore, othersBefore, issues) ->
-                    if (ownBefore == own && othersBefore.size == given.size &&
-                        othersBefore.indices.all { othersBefore[it] === given[it] }
-                    ) {
-                        return issues
-                    }
-                }
-                return signalDriftIn(own) { facts(given) }.also { lastDrift = Triple(own, given.copyOf(), it) }
-            }
+            override fun drift(): List<AnalysedIssue>? = own()?.let { mine -> others?.let { driftOf(mine, it) } }
         }
     val project = projectSignalIssues(file.language, analyzer.signalReferences(file), workspace)
     return (found + project).map(::plain).toTypedArray()
@@ -210,6 +202,21 @@ fun diagnose(
 
 /** The drift check last worked out, for the file's own facts and the other files' as given, which the index hands back the same until one changes. */
 private var lastDrift: Triple<SignalFacts, Array<DriftFacts>, List<AnalysedIssue>>? = null
+
+/** The drift check for a file of [own] facts among [others], the last answer again while neither changed. */
+private fun driftOf(
+    own: SignalFacts,
+    others: Array<DriftFacts>,
+): List<AnalysedIssue> {
+    lastDrift?.let { (ownBefore, othersBefore, issues) ->
+        if (ownBefore == own && othersBefore.size == others.size &&
+            othersBefore.indices.all { othersBefore[it] === others[it] }
+        ) {
+            return issues
+        }
+    }
+    return signalDriftIn(own) { facts(others) }.also { lastDrift = Triple(own, others.copyOf(), it) }
+}
 
 /** What the workspace's other files say about signals, as the analysis holds it. */
 private fun facts(others: Array<DriftFacts>): List<SignalFacts> =
@@ -224,6 +231,10 @@ private fun facts(others: Array<DriftFacts>): List<SignalFacts> =
             o.patched.toSet(),
             o.packageName,
             o.imports.toSet(),
+            o.renamesSignals,
+            o.opaqueClasses.toSet(),
+            o.writesAtRunTime,
+            o.jacksonClasses.toSet(),
         )
     }
 
@@ -327,6 +338,14 @@ interface DriftFacts {
     val reads: Array<String>
     val packageName: String
     val imports: Array<String>
+
+    /** Whether the file sets a naming strategy for a Jackson mapper, and whether it writes signals at run time. */
+    val renamesSignals: Boolean
+    val writesAtRunTime: Boolean
+
+    /** The classes the codec alone names, and the Jackson classes among [classes]. */
+    val opaqueClasses: Array<String>
+    val jacksonClasses: Array<String>
 }
 
 /** What [src] tells the other files about the signals the server reads. */
@@ -356,6 +375,10 @@ private fun plain(facts: SignalFacts): DriftFacts =
                 .toTypedArray(),
         "packageName" to facts.packageName,
         "imports" to facts.imports.plain(),
+        "renamesSignals" to facts.renamesSignals,
+        "writesAtRunTime" to facts.writesAtRunTime,
+        "opaqueClasses" to facts.opaqueClasses.plain(),
+        "jacksonClasses" to facts.jacksonClasses.plain(),
     )
 
 @JsExport

@@ -202,13 +202,13 @@ class JacksonSignalNamesTest {
     }
 
     @Test
-    fun `a kotlinx class and a Jackson class of one name send as before, the kotlinx one read by its name`() {
+    fun `the file's own class is sent before a kotlinx class of its name elsewhere`() {
         files.clear()
         write("src/main/kotlin/app/a/F.kt", "package app.a\n\n@Serializable\ndata class F(val x: Int = 0)\n")
         write("src/main/kotlin/app/b/F.kt", "package app.b\n\n@JsonNaming(SnakeCaseStrategy::class)\ndata class F(val bX: Int = 0)\n")
         write("src/main/kotlin/app/b/Page.kt", "package app.b\n\nfun p() = div { dataSignals(codec.toJsonValue(F())) }\n")
         write("src/main/resources/templates/list.html", "<p data-text=\"${'$'}b_x\"></p>")
-        assertEquals(listOf("list.html: unknown-signal '\$b_x'"), told())
+        assertEquals(emptyList(), told())
     }
 
     @Test
@@ -347,12 +347,12 @@ class JacksonSignalNamesTest {
     }
 
     @Test
-    fun `two nested classes of one name in a package are not told apart, and no read is flagged for it`() {
+    fun `two nested classes of one name in a package are not told apart, so the patch sends nothing, as before`() {
         write("src/main/kotlin/model/Login.kt", "package model\n\nclass LoginPage {\n    data class Form(val title: String = \"\")\n}\n")
         write("src/main/kotlin/model/Signup.kt", "package model\n\nclass SignupPage {\n    class Form {\n        var x = 1\n    }\n}\n")
         write("src/main/kotlin/web/R.kt", "package web\n\nimport model.LoginPage.Form\n\nfun s() { sse.patchSignals(Form()) }\n")
         write("src/main/resources/templates/p.html", "<p data-text=\"${'$'}title\"></p>")
-        assertEquals(emptyList(), told())
+        assertEquals(listOf("p.html: unknown-signal '\$title'"), told())
     }
 
     @Test
@@ -389,6 +389,10 @@ class JacksonSignalNamesTest {
             "src/main/resources/templates/d.jte" to "<div data-signals=\"${'$'}{signals}\"></div>",
             "src/main/resources/templates/e.html" to "<div data-signals=\"[[${'$'}{signals}]]\"></div>",
             "src/main/resources/templates/f.peb" to "<div data-signals:{{ key }}=\"1\"></div>",
+            "src/main/resources/templates/g.mustache" to "{{#items}}<div data-signals=\"{{json}}\"></div>{{/items}}",
+            "src/main/resources/templates/h.html" to "<div {{#if a}}hidden{{/if}} data-signals=\"{{json}}\"></div>",
+            "src/main/resources/templates/i.ftl" to "<input <#if on>checked</#if> data-signals=\"${'$'}{json}\">",
+            "src/main/resources/templates/j.jte" to "<div @if(a > 1)hidden@endif data-signals=\"${'$'}{json}\"></div>",
             "src/main/kotlin/app/K1.kt" to "package app\n\nfun p(json: String) = \"<div data-signals=\\\"${'$'}json\\\"></div>\"\n",
             "src/main/kotlin/app/K2.kt" to "package app\n\nfun FlowContent.p(json: String) = div { dataSignals(json) }\n",
             "src/main/kotlin/app/K3.kt" to "package app\n\nfun FlowContent.p() = div { dataSignals(mapper.writeValueAsString(Form())) }\n",
@@ -430,6 +434,22 @@ class JacksonSignalNamesTest {
             ),
             told(),
         )
+    }
+
+    @Test
+    fun `a class of the file's own package the check cannot read is the one sent, before a star import's`() {
+        files.clear()
+        write(
+            "src/main/kotlin/app/Form.kt",
+            "package app\n\n@JsonNaming(SnakeCaseStrategy::class)\ndata class Form(val userName: String = \"\")\n",
+        )
+        write("src/main/kotlin/lib/Form.kt", "package lib\n\ndata class Form(val other: String = \"\")\n")
+        write("src/main/kotlin/app/Page.kt", "package app\n\nimport lib.*\n\nfun p() = div { dataSignals(codec.toJsonValue(Form())) }\n")
+        write("src/main/resources/templates/p.html", "<p data-text=\"${'$'}user_name\"></p>")
+        assertEquals(emptyList(), told())
+        write("src/main/kotlin/app/Page.kt", "package app\n\nimport lib.*\n\nfun r() { val f = call.readSignals<Form>() }\n")
+        write("src/main/resources/templates/p.html", "<div data-signals=\"{other: ''}\"></div>")
+        assertEquals(emptyList(), told())
     }
 
     @Test

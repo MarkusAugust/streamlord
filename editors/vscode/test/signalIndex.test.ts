@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { files, Uri, workspace } from "./vscode-mock.ts";
 import { SignalIndex } from "../src/signalIndex.ts";
+import { diagnose } from "../src/analysis.ts";
 
 /** An open document as the index reads it: a uri, a language, a version and the text. */
 const doc = (path: string, languageId: string, text: string, version = 1, scheme = "file") =>
@@ -132,6 +133,22 @@ describe("signal index", () => {
     assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [[]]);
     index.readDrift(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 1));
     assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [["query"]]);
+  });
+
+  it("hands the drift check what the others say of signals written at run time and of naming strategies", () => {
+    const form = `package app\n\ndata class Form(val query: String = "")\n\nfun r() { val f = call.readSignals<Form>() }\n`;
+    const never = (other: vscode.TextDocument) => {
+      const index = new SignalIndex(new Set());
+      const handler = doc("/t/Form.kt", "kotlin", form, 1);
+      for (const d of [handler, other]) {
+        index.update(d);
+        index.readDrift(d);
+      }
+      return diagnose(form, true, "data-", [], [...index.allDefinitions()], index.driftExcept(handler.uri), "kotlin", "/t/Form.kt").filter((i) => i.code === "signal-never-declared").length;
+    };
+    assert.equal(never(doc("/t/p.html", "html", `<div data-signals="{other: ''}"></div>`)), 1);
+    assert.equal(never(doc("/t/q.html", "html", `<div data-signals="\${json}"></div>`)), 0);
+    assert.equal(never(doc("/t/application.properties", "properties", "spring.jackson.property-naming-strategy=SNAKE_CASE\n")), 0);
   });
 
   it("rebuilds aside, reads templates from disk and keeps an open document's edits", async () => {
