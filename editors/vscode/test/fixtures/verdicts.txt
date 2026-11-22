@@ -17275,8 +17275,8 @@ unescaped-interpolation 2685-2690 warning: Kotlin writes $page into the HTML as 
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
   fix "Mark $page as markup" 2685-2690 "${Trusted(page)}" (not preferred)
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.Trusted"
-unescaped-interpolation 3183-3185 hint: Kotlin writes $e into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
-  fix "Mark the values with + in interpolate { }, which escapes the values" 3179-3190 "interpolate { \"<b>${+e}</b>\" }.text"
+unescaped-interpolation 2926-2928 hint: Kotlin writes $e into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
+  fix "Mark the values with + in interpolate { }, which escapes the values" 2922-2933 "interpolate { \"<b>${+e}</b>\" }.text"
     edit 45-45 "\nimport io.github.markusaugust.streamlord.core.domain.interpolate"
 == real/kotlin/FragmentMistakes.kt
 interpolate-template 1438-1444 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.

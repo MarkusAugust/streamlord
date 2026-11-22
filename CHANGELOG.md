@@ -47,7 +47,7 @@ All notable changes to Streamlord are recorded here. The format follows
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
-- A Kotlin value in an HTML string is judged by what its name means in three places where it was
+- A Kotlin value in an HTML string is judged by what its name means in two places where it was
   judged by something else:
   - In a `catch` block, `$e` is the exception the `catch` names. It was read as a parameter or a
     value named `e` around the `try`: an `Int` of that name hid the hint, and a `String` made it a
@@ -55,9 +55,6 @@ All notable changes to Streamlord are recorded here. The format follows
   - A lambda's parameters are found where a comma follows the last or a comment stands among them.
     They were not, so `$n` in such a lambda was judged as an unknown name, or as a value named `n`
     outside it.
-  - A function gives what its own `return`s give. A `return` in a function declared inside it was
-    counted as well, so a function that gives only markup was told of where one inside it returned
-    text, and one that returns nothing was taken for markup where one inside it returned some.
 
   Where a name now means something else, a hint may become a warning or a warning a hint, and
   `failures(strict = true)` keeps warnings: a `String` parameter of a lambda with a comma after the

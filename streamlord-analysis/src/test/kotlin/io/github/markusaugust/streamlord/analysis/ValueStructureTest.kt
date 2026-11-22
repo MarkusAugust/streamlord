@@ -380,19 +380,6 @@ class ValueStructureTest {
     }
 
     @Test
-    fun `a return is the innermost function's, not that of the function it is declared in`() {
-        val inner = "fun badge(n: String): String {\n    fun label(): String { return n }\n    return \"<b>x</b>\"\n}\n"
-        assertEquals(emptyList(), told(inner + "fun page(n: String) = \"<p>\${badge(n)}</p>\""))
-        val outer = "fun plain(n: String): String {\n    fun bold(): String { return \"<b>x</b>\" }\n    return n\n}\n"
-        assertEquals(listOf("\${plain(n)}"), told(outer + "fun page(n: String) = \"<p>\${plain(n)}</p>\""))
-        val none = "fun outer() { fun inner(): String { return \"<b>x</b>\" } }\n"
-        assertEquals(listOf("\${outer()}"), told(none + "fun page() = \"<p>\${outer()}</p>\""))
-        // A return to a label leaves the function it stands in unread, and no other.
-        val labelled = "fun badge(xs: List<Int>): String {\n    fun each() { xs.forEach { return@forEach } }\n    return \"<b>x</b>\"\n}\n"
-        assertEquals(emptyList(), told(labelled + "fun page(xs: List<Int>) = \"<p>\${badge(xs)}</p>\""))
-    }
-
-    @Test
     fun `a catch declares its variable for its block, and for nothing else`() {
         fun page(
             handler: String,
@@ -434,31 +421,17 @@ class ValueStructureTest {
     }
 
     @Test
-    fun `a function with no body takes no later block for one, and its returns stay the outer function's`() {
-        val page = "fun page(n: String, xs: List<Int>) = \"<p>\${outer(n, xs)}</p>\""
-        val told = listOf("\${outer(n, xs)}")
-        // A local function still being typed.
-        for (typed in listOf("fun inner(): String", "fun inner()")) {
-            val src = "fun outer(n: String, xs: List<Int>): String {\n    $typed\n    xs.forEach { return n }\n    return \"<b>x</b>\"\n}\n"
-            assertEquals(told, told(src + page), typed)
-        }
-        // A call of a value named as a constructor is declared.
-        val called =
-            "fun outer(n: String, xs: List<Int>, constructor: () -> Int): String {\n    val x = constructor()\n" +
-                "    if (n.isEmpty()) { return n }\n    return \"<b>x</b>\"\n}\n"
-        assertEquals(
-            listOf("\${outer(n, xs, c)}"),
-            told(called + "fun page(n: String, xs: List<Int>, c: () -> Int) = \"<p>\${outer(n, xs, c)}</p>\""),
-        )
-        // A body may open on the line after, and so may what stands before it.
-        for (laid in listOf(
-            "fun inner(): String\n    {",
-            "fun inner():\n        String {",
-            "fun <T> inner(): String\n        where T : Any {",
-        )) {
-            val src = "fun outer(n: String, xs: List<Int>): String {\n    $laid\n        return n\n    }\n    return \"<b>x</b>\"\n}\n"
-            assertEquals(emptyList(), told(src + page), laid)
-        }
+    fun `a block right after a catch's own is no part of the catch`() {
+        val src =
+            "fun f(e: Int, x: Int): String {\n    val r = try { a() } catch (e: Exception) { b() }\n" +
+                "    { x: String -> println(\"<p>\$x</p>\") }\n    return \"<p>\$e</p>\"\n}\n"
+        assertEquals(listOf("\$x"), told(src))
+    }
+
+    @Test
+    fun `a literal in brackets before an arrow names no parameter`() {
+        val src = "fun f(a: Int): String {\n    foo { (\"a\") -> \"<p>\$a</p>\" }\n    return \"\"\n}\n"
+        assertEquals(emptyList(), told(src))
     }
 
     @Test
@@ -474,6 +447,9 @@ class ValueStructureTest {
         var made = 0
         assertGrowsLinearly("comment lines after a first word", 200, { n: Int ->
             "// ${made++}\nfun f(a: Int) {\n    if (a > 0) { return\n" + "        // println(a)\n".repeat(n) + "    }\n}\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("a long word in a catch that names nothing", 200, { n: Int ->
+            "// ${made++}\nfun f() {\n    try { } catch (" + "e".repeat(n * 40) + ") { }\n}\n"
         }) { fileFacts(it) }
         assertGrowsLinearly("spaces in a catch that names nothing", 200, { n: Int ->
             "// ${made++}\nfun f() {\n    try { } catch (e: Exception" + " ".repeat(n * 40) + "x) { }\n}\n"

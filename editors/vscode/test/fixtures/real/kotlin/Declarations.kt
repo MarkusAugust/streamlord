@@ -87,16 +87,6 @@ fun outer(page: String) {
     println("<p>$page</p>")
 }
 
-// A return in a function declared in another is that function's: nothing is said of ${stamped(n)}.
-fun stamped(n: String): String {
-    fun label(): String {
-        return n
-    }
-    return "<b>x</b>"
-}
-
-fun stamping(n: String) = "<p>${stamped(n)}</p>"
-
 // A catch names its variable for its block: $e there is the exception and is told, and after it the Int again.
 fun caught(e: Int): String {
     try {
@@ -108,8 +98,8 @@ fun caught(e: Int): String {
 }
 
 // A lambda's parameters are read past the comma after the last and a comment: nothing is said of $index and $count.
-fun counted(rows: Map<Int, Int>) =
-    rows.map {
+fun counted(rows: List<Int>) =
+    rows.mapIndexed {
         index: Int, // the key
         count: Int,
         ->

@@ -316,9 +316,6 @@ private val LAMBDA_PARAMETERS =
         """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*(?:,\s*)?->""",
     )
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
-
-/** The variable a `catch` names, last in its brackets, whatever annotations stand before it. */
-private val CATCH_VARIABLE = regex("""($NAME)\s*:\s*($TYPE)\s*(?:,\s*)?$""")
 private val NAMES = regex("""($NAME)(?:\s*:\s*($TYPE))?""")
 private val WHOLE_TYPE = regex(TYPE)
 private val PROPERTY_MODIFIERS = regex("""\b(?:val|var)\b""")
@@ -577,24 +574,6 @@ private fun codeBefore(
 }
 
 private val ELSE_NEXT = regex("""^else\b""")
-
-/**
- * Whether a function whose parameters closed before the line break at [at] may still get its body: the line ends in
- * the middle of its type, or the next begins with the body, the type or a `where`.
- */
-private fun bodyMayFollow(
-    src: String,
-    code: BooleanArray,
-    at: Int,
-): Boolean {
-    val before = codeBefore(src, code, at)
-    if (before >= 0 && (src[before] in ":,<(" || src.startsWith("->", before - 1))) return true
-    var next = at
-    while (next < src.length && (src[next].isWhitespace() || !code[next])) next++
-    return next < src.length && (src[next] in "{=:" || BODY_NEXT.matchAt(src, next) != null)
-}
-
-private val BODY_NEXT = regex("""where\b|->""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
@@ -1155,10 +1134,10 @@ private fun declarations(
                 }
 
                 word == "return" -> {
-                    // A `return` without a label is the innermost function's, whatever functions that one is declared in.
-                    val into = stack.lastOrNull { it.function != null }?.function
-                    val value = if (src.getOrNull(end) == '@' || into == null) null else f.begin(Span(end))
-                    if (value == null) into?.body = null else into?.returns?.add(value)
+                    // The `return` of a function declared in another counts as the outer one's too, which can only make it less.
+                    val into = stack.mapNotNull { it.function }
+                    val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
+                    for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
 
                 // A getter takes nothing: `get("/")` after a value is a call.
@@ -1308,6 +1287,7 @@ private fun declarations(
                 val p = f.pending
                 // A catch has its block right after its brackets; one still being typed has none, and leaves the next block alone.
                 val caught = f.caught?.takeIf { codeBefore(src, code, i) == it.end - 1 }
+                f.caught = null
                 if (caught != null) {
                     g.ends += caught
                 } else if (p != null && p.state == "after" && f.kind != "for") {
@@ -1330,7 +1310,7 @@ private fun declarations(
                 } else {
                     // Read in the code alone, as a function's parameters are: a comment among them is blank.
                     val m = LAMBDA_PARAMETERS.matchAt(blank, i + 1)
-                    if (m != null) {
+                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
                         for (part in splitTopLevel(m.groupValues[1])) {
                             val p0 = part.trim()
@@ -1392,8 +1372,18 @@ private fun declarations(
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
             } else if (g.kind == "catch" && c == ')') {
-                CATCH_VARIABLE.find(blank.substring(g.open + 1, i))?.let { m ->
-                    outer.caught = add(m.groupValues[1], Declaration(g.open + 1, g.open, m.groupValues[2]).also { it.end = i + 1 })
+                // The variable is last in the brackets, `name: Type`, whatever annotations stand before it.
+                val text = blank.substring(g.open + 1, i)
+                val colon = text.lastIndexOf(':')
+                val name = text.substring(0, maxOf(colon, 0)).trimEnd().takeLastWhile { isWordPart(it) }
+                val type =
+                    text
+                        .substring(colon + 1)
+                        .trim()
+                        .removeSuffix(",")
+                        .trimEnd()
+                if (name.firstOrNull()?.isDigit() == false && WHOLE_TYPE.matchEntire(type) != null) {
+                    outer.caught = add(name, Declaration(g.open + 1, g.open, type).also { it.end = i + 1 })
                 }
             }
             i++
@@ -1414,9 +1404,6 @@ private fun declarations(
                         p.fn?.body = f.begin(Span(i + 1))
                     } else if (p.fn == null && !c.isWhitespace() && f.kind != "for") {
                         p.state = "stmt"
-                    } else if (p.fn != null && c == '\n' && !bodyMayFollow(src, code, i)) {
-                        // A function with no body, as one being typed: the next block is not its own.
-                        endPending(f, i)
                     }
                 }
 
