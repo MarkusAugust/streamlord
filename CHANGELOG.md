@@ -36,6 +36,32 @@ All notable changes to Streamlord are recorded here. The format follows
   was a `String?`. Compare with `IssueCode.KOTLIN_INTERPOLATION`, and read the name as `code.id`;
   a template that writes `"$code"` still writes the name. Every issue has a code, so code that
   makes an `Issue` passes one. `format()` writes `[kotlin-interpolation]` as before.
+- A class that is not `@Serializable` is read as Jackson writes it, where it turned the signal
+  checks off for the whole project: a page declared from it with `toJsonValue`, a patch of it and a
+  `readSignals<T>()` of it are judged by its public constructor properties, each by its name or its
+  `@JsonProperty`, without one under `@JsonIgnore`, and the class is the one the file's package and
+  imports name. A class with names elsewhere, in a body, a supertype, `@JsonNaming`,
+  `@JsonIgnoreProperties`, `@JsonAlias` or `access`, and every class in a project that sets a naming
+  strategy, in Kotlin code or in Spring's `spring.jackson.property-naming-strategy`, stays the codec's
+  alone, as before. A patch of such a class of the project may set any signal, in both checks, as a
+  page declared from one does; a patch of a class the project does not declare sets none. Where the
+  project writes signals whose names are known only at run time, a page whose `data-signals` a
+  template writes (`th:data-signals`, `data-signals="{{ signals | raw }}"`), `dataSignals(json)` or
+  `attributes["data-signals"] = json` with JSON text, or a patch of JSON text, a Jackson class a
+  handler reads is not judged, as it was not before; a `@Serializable` class and a lookup are.
+- A `@Serializable` class written `@kotlinx.serialization.Serializable`, or with an annotation whose
+  arguments hold parentheses beside it, is read as one, and so is a `@SerialName` or `@JsonProperty`
+  with an annotation or a comment after it. A naming strategy in kotlinx's `Json { namingStrategy = ... }`
+  now does the same for `@Serializable` classes, which were judged by names the codec did not write.
+- **Breaking:** `SourceLanguage` has `SETTINGS`, for Spring's `application.yml`, `.yaml` and
+  `.properties`, which `ProjectFiles.languageOf` names and `checkProject` and both editors read for a
+  naming strategy. A `when` over `SourceLanguage` needs the branch. `SignalFacts.renamesSignals` says
+  a file sets a strategy.
+- A Datastar expression with template syntax in it is read around that syntax, where it was left
+  out whole: `data-text="$cuont + {{ x }}"` in Pebble and `data-text="$cuont + ${x}"` in jte get
+  `unknown-signal`, and go to definition, find usages and rename reach those reads in both
+  editors. A read that the engine's output touches, such as `{{ p }}$a` or `$a{{ i }}`, is left to the
+  template, and a construct that writes nothing, such as `{% if %}`, stops no read.
 - `Fix.leads` says an editor that sorts fixes itself keeps the fix at the top though it is not
   preferred, as the fixes that mark a value with `+` are.
 - `ProjectIndex` holds what a project's files give each other, for a tool that keeps a project in

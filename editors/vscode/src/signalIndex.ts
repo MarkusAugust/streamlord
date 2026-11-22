@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { inSkippedFolder as skipped, languageOfFile, signalPlaces, workspaceFiles, WorkspaceIndex, type DriftFacts, type SignalPlaces } from "./analysis.ts";
 
 /** The markup files read whatever language an extension gives them, the folders left unread with every hidden one, and the caps on what is listed, as the analysis has them. */
-const { markupExtensions: MARKUP_EXTENSIONS, skippedFolders: SKIPPED_FOLDERS, fileCap: FILE_CAP, sizeCap: SIZE_CAP } = workspaceFiles();
+const { markupExtensions: MARKUP_EXTENSIONS, skippedFolders: SKIPPED_FOLDERS, fileCap: FILE_CAP, sizeCap: SIZE_CAP, settingsGlob: SETTINGS_GLOB } = workspaceFiles();
 const SOURCE_GLOB = `**/*.{kt,${MARKUP_EXTENSIONS.join(",")}}`;
 const EXCLUDED_GLOB = `**/{${SKIPPED_FOLDERS.join(",")},.*}/**`;
 
@@ -15,10 +15,13 @@ export interface Selectors {
   classes: Set<string>;
 }
 
+/** How a file is read: Kotlin, markup, or Spring's settings, which only say how the codec names signals. */
+export type Language = "kotlin" | "html" | "settings";
+
 /** What the adapter keeps of a file beside the analysis's index: the version of the document read, null for the disk's. */
 interface FileEntry {
   version: number | null;
-  language: "kotlin" | "html";
+  language: Language;
   /** Where the file defines and reads signals: worked out on the first search, which completion never asks for. */
   places?: Places;
 }
@@ -75,11 +78,16 @@ export class SignalIndex implements vscode.Disposable {
     // Files changed outside the editor: a git checkout, a generated template, a file created or deleted on disk.
     // A watcher takes no exclude: read() leaves out a file in a skipped folder.
     const watcher = vscode.workspace.createFileSystemWatcher(SOURCE_GLOB);
+    const settings = vscode.workspace.createFileSystemWatcher(SETTINGS_GLOB);
     this.disposables.push(
       watcher,
       watcher.onDidCreate((u) => void this.read(u)),
       watcher.onDidChange((u) => void this.read(u)),
       watcher.onDidDelete((u) => this.remove(u.toString())),
+      settings,
+      settings.onDidCreate((u) => void this.read(u)),
+      settings.onDidChange((u) => void this.read(u)),
+      settings.onDidDelete((u) => this.remove(u.toString())),
     );
   }
 
@@ -88,18 +96,20 @@ export class SignalIndex implements vscode.Disposable {
     const next = new Map<string, FileEntry>();
     const index = new WorkspaceIndex(this.prefix());
     // Markup and Kotlin under separate caps, so the pages that define signals are not crowded out by sources.
-    const [markup, kotlin] = await Promise.all([
+    const [markup, kotlin, settings] = await Promise.all([
       vscode.workspace.findFiles(`**/*.{${MARKUP_EXTENSIONS.join(",")}}`, EXCLUDED_GLOB, FILE_CAP),
       vscode.workspace.findFiles("**/*.kt", EXCLUDED_GLOB, FILE_CAP),
+      vscode.workspace.findFiles(SETTINGS_GLOB, EXCLUDED_GLOB, FILE_CAP),
     ]);
-    const files = [...markup, ...kotlin].filter((u) => !inSkippedFolder(u));
+    // The glob of the settings is wider than their names: `applicationContext.properties` is none.
+    const files = [...markup, ...kotlin, ...settings.filter((u) => languageByExtension(u) === "settings")].filter((u) => !inSkippedFolder(u));
     await Promise.all(
       files.map(async (uri) => {
         try {
           const bytes = await vscode.workspace.fs.readFile(uri);
           if (bytes.length > SIZE_CAP) return;
           const language = languageByExtension(uri) ?? "html";
-          index.put(uri.toString(), Buffer.from(bytes).toString("utf8"), language === "kotlin", true);
+          index.put(uri.toString(), Buffer.from(bytes).toString("utf8"), language, true);
           next.set(uri.toString(), { version: null, language });
         } catch {
           // unreadable file: skip
@@ -160,9 +170,9 @@ export class SignalIndex implements vscode.Disposable {
    * Hand the analysis a file's text. Read from disk it is read whole; an open document's change keeps
    * what it said about server reads before until the document is linted ([readDrift]), not on each keystroke.
    */
-  private set(key: string, text: string, language: "kotlin" | "html", version: number | null): void {
+  private set(key: string, text: string, language: Language, version: number | null): void {
     this.byFile.set(key, { version, language });
-    if (this.index.put(key, text, language === "kotlin", version === null)) this.changed.fire();
+    if (this.index.put(key, text, language, version === null)) this.changed.fire();
   }
 
   /** Forget a file, or every file under a folder that was deleted or renamed. */
@@ -172,7 +182,7 @@ export class SignalIndex implements vscode.Disposable {
     if (this.index.remove(key)) this.changed.fire();
   }
 
-  private languageOf(document: vscode.TextDocument): "kotlin" | "html" | null {
+  private languageOf(document: vscode.TextDocument): Language | null {
     if (!INDEXED_SCHEMES.has(document.uri.scheme) || inSkippedFolder(document.uri)) return null;
     if (document.languageId === "kotlin") return "kotlin";
     if (document.languageId === "html" || this.markupLanguages.has(document.languageId)) return "html";
@@ -222,7 +232,7 @@ export class SignalIndex implements vscode.Disposable {
     if (e.places?.prefix === this.prefix()) return e.places;
     const text = await textOf(uri);
     if (text === null) return null;
-    const places = placesIn(text, e.language, this.prefix());
+    const places = placesIn(text, e.language, this.prefix(), vscode.Uri.parse(uri).path);
     // Kept only while the entry is the index's: an edit meanwhile has put a new one in its place.
     if (this.byFile.get(uri) === e) e.places = places;
     return places;
@@ -240,8 +250,8 @@ export function inSkippedFolder(uri: vscode.Uri): boolean {
   return skipped(uri.path.slice(root.length));
 }
 
-function languageByExtension(uri: vscode.Uri): "kotlin" | "html" | null {
-  return languageOfFile(uri.path.slice(uri.path.lastIndexOf("/") + 1)) as "kotlin" | "html" | null;
+function languageByExtension(uri: vscode.Uri): Language | null {
+  return languageOfFile(uri.path.slice(uri.path.lastIndexOf("/") + 1)) as Language | null;
 }
 
 /** The text of a file: an open document's, which may hold edits the disk does not, or else the disk's. */
@@ -256,8 +266,10 @@ export async function textOf(uri: string): Promise<string | null> {
 }
 
 /** Where `text` defines and reads signals. */
-export function placesIn(text: string, language: "kotlin" | "html", prefix: string): Places {
+export function placesIn(text: string, language: Language, prefix: string, path?: string): Places {
   const lineStarts = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
-  return { prefix, names: signalPlaces(text, language === "kotlin", prefix), lineStarts };
+  // Settings name no signal: they only say how the codec names the others.
+  const names = language === "settings" ? { declarations: [], reads: [] } : signalPlaces(text, language === "kotlin", prefix, path);
+  return { prefix, names, lineStarts };
 }

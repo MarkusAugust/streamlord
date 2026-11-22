@@ -56,6 +56,10 @@ public class ProjectIndex(
 
     private val entries = LinkedHashMap<String, Entry>()
     private var definitionsUnion: Set<String>? = null
+
+    /** The drift check over what every file says, worked out once for each [factsRead] and asked of by file. */
+    private var factsRead = 0L
+    private var driftAt: Pair<Long, Map<String, List<Issue>>>? = null
     private var constantsUnion: Set<String>? = null
 
     /**
@@ -87,12 +91,13 @@ public class ProjectIndex(
                 text.hashCode(),
                 names(source),
                 withoutDsl,
-                collectSelectors(text),
+                if (language == SourceLanguage.SETTINGS) Selectors.EMPTY else collectSelectors(text),
                 if (language == SourceLanguage.KOTLIN) declaredNames(text) else null,
                 if (facts) collectSignalFacts(source) else previous?.facts ?: NO_FACTS,
                 stale = !facts,
             )
         entries[path] = next
+        factsRead++
         val defines =
             previous?.names?.definitions.orEmpty() != next.names.definitions ||
                 previous?.withoutDsl?.definitions != next.withoutDsl?.definitions
@@ -116,6 +121,7 @@ public class ProjectIndex(
         val e = entries[path]?.takeIf { it.stale && it.readFrom(text) } ?: return false
         val before = e.facts
         e.facts = collectSignalFacts(source(text, e.language))
+        factsRead++
         e.stale = false
         return factsMatter(path, before, e.facts)
     }
@@ -132,6 +138,7 @@ public class ProjectIndex(
             val (key, e) = each.next()
             if (key != path && !key.startsWith(folder)) continue
             each.remove()
+            factsRead++
             told = told || tells(e) || factsMatter(key, e.facts, NO_FACTS)
         }
         if (told) dropUnions()
@@ -236,7 +243,17 @@ public class ProjectIndex(
             override fun own() = entries[path]?.facts
 
             override fun others() = entries.entries.filter { it.key != path }.map { it.value.facts }
+
+            override fun drift() = entries[path]?.let { drifted()[path].orEmpty() }
         }
+
+    /** The drift check's issues by file, for what every file says now. */
+    private fun drifted(): Map<String, List<Issue>> {
+        driftAt?.let { (at, issues) -> if (at == factsRead) return issues }
+        val issues = signalDrift(entries.mapValues { it.value.facts }).issues
+        driftAt = factsRead to issues
+        return issues
+    }
 
     /** Whether the facts of the file at [path] changing from [a] to [b] can change how the server's reads are judged in another file. */
     private fun factsMatter(
@@ -245,20 +262,21 @@ public class ProjectIndex(
         b: SignalFacts,
     ): Boolean {
         if (a.signalTypes != b.signalTypes || a.encodedTypes != b.encodedTypes || a.patchedTypes != b.patchedTypes) return true
+        // A naming strategy decides every class's names.
+        if (a.renamesSignals != b.renamesSignals || a.writesAtRunTime != b.writesAtRunTime) return true
         // The package and the imports decide which class a name of the file is.
         if (a.packageName != b.packageName || a.imports != b.imports) return true
         val declared = (a.declared - b.declared) + (b.declared - a.declared)
         val shapes = { f: SignalFacts -> f.classes.mapTo(HashSet()) { (name, properties) -> name to properties.map { it.name } } }
-        val classes = (shapes(a) - shapes(b) + (shapes(b) - shapes(a))).mapTo(HashSet()) { it.first }
+        val classes =
+            (shapes(a) - shapes(b) + (shapes(b) - shapes(a))).mapTo(HashSet()) { it.first } +
+                (a.opaqueClasses - b.opaqueClasses) + (b.opaqueClasses - a.opaqueClasses)
         if (declared.isEmpty() && classes.isEmpty()) return false
-        // A declared name counts where another file reads it, and a class where another reads into it or
-        // declares a page from it: one more class of a name may leave a read naming two.
+        // A declared name counts where another file reads it, and a class where a file, this one too, reads
+        // into it, patches it or declares a page from it: one more class of a name may leave a read naming two.
         return entries.any { (key, e) ->
-            key != path &&
-                (
-                    e.serverReads.any { it in declared } ||
-                        classes.any { it in e.facts.encodedTypes || it in e.facts.patchedTypes || it in e.facts.signalTypes }
-                )
+            (key != path && e.serverReads.any { it in declared }) ||
+                classes.any { it in e.facts.encodedTypes || it in e.facts.patchedTypes || it in e.facts.signalTypes }
         }
     }
 

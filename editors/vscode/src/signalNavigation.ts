@@ -67,7 +67,7 @@ export class SignalNavigationProvider implements vscode.DefinitionProvider, vsco
     // A git diff or an untitled buffer is no file of the workspace, which is what a rename edits.
     if (!INDEXED_SCHEMES.has(document.uri.scheme)) return null;
     const language = document.languageId === "kotlin" ? "kotlin" : "html";
-    const places = placesIn(document.getText(), language, this.prefix());
+    const places = placesIn(document.getText(), language, this.prefix(), document.uri.path);
     return signalSiteAt(places.names, this.index.allDefinitions(), document.offsetAt(position)) ?? null;
   }
 

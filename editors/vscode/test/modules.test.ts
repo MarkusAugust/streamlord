@@ -39,6 +39,14 @@ describe("which Streamlord modules a Kotlin file can use", () => {
   });
 });
 
+describe("a template's reads", () => {
+  it("are read with the rules of the engine its path names", () => {
+    const src = "<p data-text=\"`${$count}` + $total\"></p>";
+    assert.deepEqual(placesIn(src, "html", "data-", "/t/row.jte").names.reads.map((r) => r.name), ["total"]);
+    assert.deepEqual(placesIn(src, "html", "data-", "/t/page.html").names.reads.map((r) => r.name), ["count", "total"]);
+  });
+});
+
 describe("a DSL-named call in a file without the DSL", () => {
   // `$count` is Kotlin's own template, the trap; `\$total` hands Datastar the signal.
   const src = `fun f() { dataText("$count + 1"); dataText("\\$total"); dataOnClick("@post('/x')") }`;

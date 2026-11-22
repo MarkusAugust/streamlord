@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as vscode from "vscode";
 import { files, Uri, workspace } from "./vscode-mock.ts";
 import { SignalIndex } from "../src/signalIndex.ts";
+import { diagnose } from "../src/analysis.ts";
 
 /** An open document as the index reads it: a uri, a language, a version and the text. */
 const doc = (path: string, languageId: string, text: string, version = 1, scheme = "file") =>
@@ -29,6 +30,28 @@ describe("signal index", () => {
     index.update(doc("/t/page.j2", "jinja-html", `<div data-signals:open="false"></div>`));
     index.update(doc("/t/notes.txt", "plaintext", `<div data-signals:nope="1"></div>`));
     assert.deepEqual([...index.allDefinitions()].sort(), ["open", "query"]);
+  });
+
+  it("reads Spring's settings for a naming strategy, which leaves the classes' names to the codec", async () => {
+    const index = new SignalIndex(new Set());
+    index.update(doc("/w/src/main/resources/application.yml", "yaml", "server:\n  port: 8080\n"));
+    index.update(doc("/w/src/main/resources/logback.yml", "yaml", "spring.jackson.property-naming-strategy: SNAKE_CASE\n"));
+    assert.deepEqual([...index.allDefinitions()], []);
+    index.update(doc("/w/src/main/resources/application.yml", "yaml", "spring.jackson.property-naming-strategy: SNAKE_CASE\n", 2));
+    assert.deepEqual([...index.allDefinitions()], ["renamed:classes"]);
+    files.set("/d/application-dev.properties", encode("spring.jackson.property-naming-strategy=SNAKE_CASE\n"));
+    const findFiles = workspace.findFiles;
+    files.set("/d/applicationContext.properties", encode(`<div data-signals:ctx="1"></div>\n`));
+    workspace.findFiles = async (glob?: unknown) =>
+      String(glob).includes("application") ? [Uri.file("/d/application-dev.properties"), Uri.file("/d/applicationContext.properties")] : [];
+    try {
+      const fromDisk = new SignalIndex(new Set());
+      await fromDisk.rebuild();
+      assert.deepEqual([...fromDisk.allDefinitions()], ["renamed:classes"]);
+    } finally {
+      workspace.findFiles = findFiles;
+      files.clear();
+    }
   });
 
   it("gives the analysis the constants no file declares as anything else", () => {
@@ -110,6 +133,22 @@ describe("signal index", () => {
     assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [[]]);
     index.readDrift(doc("/t/a.html", "html", `<p data-text="$query"></p>`, 1));
     assert.deepEqual(index.driftExcept(handler.uri).map((f) => f.declared), [["query"]]);
+  });
+
+  it("hands the drift check what the others say of signals written at run time and of naming strategies", () => {
+    const form = `package app\n\ndata class Form(val query: String = "")\n\nfun r() { val f = call.readSignals<Form>() }\n`;
+    const never = (other: vscode.TextDocument) => {
+      const index = new SignalIndex(new Set());
+      const handler = doc("/t/Form.kt", "kotlin", form, 1);
+      for (const d of [handler, other]) {
+        index.update(d);
+        index.readDrift(d);
+      }
+      return diagnose(form, true, "data-", [], [...index.allDefinitions()], index.driftExcept(handler.uri), "kotlin", "/t/Form.kt").filter((i) => i.code === "signal-never-declared").length;
+    };
+    assert.equal(never(doc("/t/p.html", "html", `<div data-signals="{other: ''}"></div>`)), 1);
+    assert.equal(never(doc("/t/q.html", "html", `<div data-signals="\${json}"></div>`)), 0);
+    assert.equal(never(doc("/t/application.properties", "properties", "spring.jackson.property-naming-strategy=SNAKE_CASE\n")), 0);
   });
 
   it("rebuilds aside, reads templates from disk and keeps an open document's edits", async () => {
@@ -203,7 +242,7 @@ describe("signal index", () => {
       await index.rebuild();
       assert.deepEqual([...index.allDefinitions()], ["kept"]);
       const glob = "**/{build,node_modules,.gradle,dist,out,target,.*}/**";
-      assert.deepEqual(excludes, [glob, glob]);
+      assert.deepEqual(excludes, [glob, glob, glob]);
       for (const p of skipped) {
         listeners.create?.(Uri.file(p));
         listeners.change?.(Uri.file(p));

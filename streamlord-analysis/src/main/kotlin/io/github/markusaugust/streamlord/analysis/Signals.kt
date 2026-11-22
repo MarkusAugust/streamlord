@@ -12,7 +12,8 @@ import kotlin.concurrent.Volatile
  * generous: better to offer a name twice than to miss it.
  */
 
-public enum class SourceLanguage { KOTLIN, HTML }
+/** How a file is read: Kotlin, markup, or the settings of a Spring application, read only for how its codec names signals. */
+public enum class SourceLanguage { KOTLIN, HTML, SETTINGS }
 
 // A helper names a signal as it is written: set("fooBar", 1) is $fooBar. A name with a hyphen is
 // refused at runtime (signalNameHyphenIssues) and collected as written. The helpers that do not
@@ -195,6 +196,9 @@ private val PATCH_CALLS =
     Catalog.default.signalCalls
         .filterValues { "value" in it }
         .keys
+
+/** A call that writes signals as JSON text, which a patch sends whatever is in it. */
+internal val JSON_TEXT = regex("""\.(?:writeValueAsString|encodeToString|toJson|toJsonString)\s*\(""")
 private val CONSTRUCTED = regex("""^\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-9_]*)\s*(?:<[^()]*>)?\s*\(""")
 
 /**
@@ -204,6 +208,18 @@ private val CONSTRUCTED = regex("""^\s*(?:[a-z_][A-Za-z0-9_]*\.)*([A-Z][A-Za-z0-
  * elsewhere, and a variable whose class the file does not write down declares nothing.
  */
 internal fun patchedSignalTypes(
+    src: String,
+    lex: KotlinLex,
+): Set<String> {
+    // The definitions and the facts of a file both ask: the answer is kept for the text last read.
+    lastPatched?.let { (text, types) -> if (text === src) return types }
+    return readPatchedTypes(src, lex).also { lastPatched = src to it }
+}
+
+@Volatile
+private var lastPatched: Pair<String, Set<String>>? = null
+
+private fun readPatchedTypes(
     src: String,
     lex: KotlinLex,
 ): Set<String> {
@@ -220,8 +236,17 @@ internal fun patchedSignalTypes(
                     ?.get(1)
                     ?.let { if (it in VALUE_TYPES) null else named(it) }
                 ?: IDENTIFIER_ARG.find(a.text)?.let { m ->
-                    declarations.typeOf(m.groupValues[1], site.nameStart)?.let { if (it in VALUE_TYPES) null else named(it) }
+                    declarations.typeOf(m.groupValues[1], site.nameStart)?.let {
+                        if (it == "String") {
+                            ANY_SIGNAL
+                        } else if (it in VALUE_TYPES) {
+                            null
+                        } else {
+                            named(it)
+                        }
+                    }
                 }
+                ?: ANY_SIGNAL.takeIf { JSON_TEXT.containsMatchIn(a.text) }
         type?.let { out += it }
     }
     return out
@@ -303,11 +328,24 @@ private fun named(type: String): String = if (type in UNNAMED_TYPES) ANY_SIGNAL 
 
 /**
  * What the definitions say about a class, written with a `:`, which no signal name holds: a class
- * a page is declared from, and a `@Serializable` class whose properties are defined. A class in the
- * first and not the second is one only its codec can name (see [isKnownSignal]).
+ * a page is declared from, a class a page or a patch sends with the classes its name may mean
+ * (`sends:Form:app.Form|lib.Form`), a `@Serializable` class (`kotlinx:app.Form`), whose properties
+ * are defined, a Jackson class with each of its properties (`jackson:app.Form`,
+ * `jacksonProperty:app.Form:email`), a signal only where the class is sent, a class of the project
+ * whose names the codec alone knows (`opaque:app.Form`), which takes part in Kotlin's lookup and
+ * sends nothing the check can know, and a Jackson naming strategy, which leaves every Jackson class
+ * to its codec. A class a page is declared from that the analysis cannot
+ * read is one only its codec can name, and is marked readable (`class:Form`) only where one of the
+ * classes its name may mean is (see [withClassProperties]).
  */
 internal const val ENCODED_CLASS: String = "toJsonValue:"
+internal const val SENT_CLASS: String = "sends:"
 internal const val READABLE_CLASS: String = "class:"
+internal const val KOTLINX_CLASS: String = "kotlinx:"
+internal const val JACKSON_CLASS: String = "jackson:"
+internal const val OPAQUE_CLASS: String = "opaque:"
+internal const val RENAMED_CLASSES: String = "renamed:classes"
+internal const val JACKSON_PROPERTY_OF: String = "jacksonProperty:"
 
 /**
  * A name a DSL call or core declares with a hyphen, which Streamlord refuses at render or send time,
@@ -412,6 +450,7 @@ public data class SignalDeclaration(
  * helpers are somebody else's and name no signal: their names, `set` and `toggle`, are other APIs' too.
  */
 public fun collectSignals(source: Source): Set<String> {
+    if (source.language == SourceLanguage.SETTINGS) return emptySet()
     val foreign = foreignHelpers(source)
     val src = source.text
     val language = source.language
@@ -438,17 +477,209 @@ internal fun collectDeclaredSignals(
 ): Set<String> = collect(src, language, reads = true, NOT_FOREIGN, prefix)
 
 /**
+ * Whether [src] writes signals whose names are known only at run time: a `data-signals` a template
+ * writes, Thymeleaf's `th:data-signals` or `th:attr`, a key with template syntax in it, or a value
+ * that is no object (`data-signals="{{ signals | raw }}"`, `"${'$'}{json}"`), in markup or in an HTML
+ * string of Kotlin; in Kotlin also `dataSignals(json)` or `attributes["data-signals"] = json` with
+ * JSON text, and a patch of JSON written at run time. A mention in a comment or in text writes none.
+ */
+internal fun writesSignalsAtRunTime(
+    src: String,
+    language: SourceLanguage,
+    prefix: String,
+    lex: KotlinLex? = null,
+    patched: Set<String>? = null,
+): Boolean {
+    if (!src.contains("signals", ignoreCase = true)) return false
+    if (language == SourceLanguage.HTML) return tagsWriteSignals(src, prefix, templates = true)
+    if (language != SourceLanguage.KOTLIN) return false
+    val code = lex ?: lexKotlin(src)
+    val inStrings =
+        code.strings.any {
+            it.text.contains("signals", ignoreCase = true) &&
+                tagsWriteSignals(it.text, prefix, templates = false)
+        }
+    if (inStrings || ANY_SIGNAL in (patched ?: patchedSignalTypes(src, code))) return true
+    val declarations by lazy(LazyThreadSafetyMode.NONE) { Declarations(src) }
+    for (site in findCallSites(src, setOf("dataSignals"), code)) {
+        val a = site.positional.singleOrNull() ?: continue
+        if (a.string != null) continue
+        val text = a.text.trim()
+        if (JSON_TEXT.containsMatchIn(text)) return true
+        if (IDENTIFIER_ARG.matchEntire(text) != null && declarations.typeOf(text, site.nameStart) == "String") return true
+    }
+    return ATTRIBUTES_SET.findAll(src).any { m ->
+        code.mask[m.range.first] &&
+            src.getOrNull(m.range.last + 1).let { it != null && it != '"' }
+    }
+}
+
+// `attributes["data-signals"] = ` with what follows it, the kotlinx.html way to write any attribute.
+private val ATTRIBUTES_SET = regex("""\battributes\s*\[\s*"[\w-]*signals"\s*\]\s*=\s*""")
+
+/**
+ * Whether a start tag of [html] writes signals whose names are known only at run time (see
+ * [writesSignalsAtRunTime]): read in one pass that keeps to start tags, past comments, scripts and
+ * styles, and looks only where `signals` stands.
+ */
+private fun tagsWriteSignals(
+    html: String,
+    prefix: String,
+    templates: Boolean,
+): Boolean {
+    if (!html.contains("signals", ignoreCase = true)) return false
+    val text = withoutComments(html.lowercase(), templates)
+    for (tag in startTags(text, templates)) {
+        var at = text.indexOf("signals", tag.first)
+        while (at in tag) {
+            if (writesAt(text, at, tag.first, prefix)) return true
+            at = text.indexOf("signals", at + 7)
+        }
+    }
+    return false
+}
+
+/** [lower] with each comment blanked out, a template's too with [templates], every offset kept. */
+private fun withoutComments(
+    lower: String,
+    templates: Boolean,
+): String {
+    val pairs = if (templates) COMMENTS + TEMPLATE_COMMENTS else COMMENTS
+    if (pairs.none { lower.contains(it.first) }) return lower
+    val chars = lower.toCharArray()
+    for ((open, close) in pairs) {
+        var at = lower.indexOf(open)
+        while (at >= 0) {
+            // `{{#if}}` opens a Mustache section, not a `{#` comment.
+            if (open == "{#" && at > 0 && lower[at - 1] == '{') {
+                at = lower.indexOf(open, at + 1)
+                continue
+            }
+            val end = lower.indexOf(close, at + open.length).let { if (it < 0) lower.length else it + close.length }
+            for (k in at until end) chars[k] = ' '
+            at = lower.indexOf(open, end)
+        }
+    }
+    return chars.concatToString()
+}
+
+/** Where a template construct that starts at [at] of [text] ends, or null for none there: a directive is read from the space before it. */
+private fun constructEnd(
+    text: String,
+    at: Int,
+): Int? {
+    val from = if ((text[at] == '@' || text[at] == '#') && at > 0 && text[at - 1].isWhitespace()) at - 1 else at
+    val m = TEMPLATE_SYNTAX.matchAt(text, from) ?: return null
+    var s = m.range.first
+    while (s < m.range.last && (text[s].isWhitespace() || text[s] == '>')) s++
+    return placeholderEnd(text, s).takeIf { it > at }
+}
+
+private const val CONSTRUCT_STARTS = "{<[$!*#@"
+
+private val COMMENTS = listOf("<!--" to "-->")
+private val TEMPLATE_COMMENTS = listOf("{#" to "#}", "<#--" to "-->", "{{!" to "}}", "<%--" to "--%>")
+
+/** The start tags of [text], each from its `<` to its `>`, a quoted `>` inside it; a script's or a style's body is passed over. */
+private fun startTags(
+    text: String,
+    templates: Boolean,
+): List<IntRange> {
+    val out = ArrayList<IntRange>()
+    var i = text.indexOf('<')
+    while (i >= 0 && i < text.length) {
+        if (i + 1 >= text.length || !text[i + 1].isLetter()) {
+            i = text.indexOf('<', i + 1)
+            continue
+        }
+        var j = i + 1
+        var quote = ' '
+        while (j < text.length) {
+            val c = text[j]
+            if (quote != ' ') {
+                if (c == quote) quote = ' '
+            } else if (c == '"' || c == '\'') {
+                quote = c
+            } else if (templates && c in CONSTRUCT_STARTS) {
+                // A template's own construct in a tag, `<#if on>` or `@if(a > 1)`, ends no tag with its `>`.
+                val end = constructEnd(text, j)
+                if (end != null) {
+                    j = end
+                    continue
+                }
+            } else if (c == '>') {
+                break
+            }
+            j++
+        }
+        out += i..minOf(j, text.length - 1)
+        var end = i + 1
+        while (end < text.length && (text[end].isLetterOrDigit() || text[end] == '-')) end++
+        val name = text.substring(i + 1, end)
+        val next = if (name == "script" || name == "style") text.indexOf("</$name", j) else j
+        i = if (next < 0) -1 else text.indexOf('<', next + 1)
+    }
+    return out
+}
+
+/** Whether the `signals` at [at], in the start tag from [tagStart], names an attribute that writes signals at run time. */
+private fun writesAt(
+    text: String,
+    at: Int,
+    tagStart: Int,
+    prefix: String,
+): Boolean {
+    var start = at
+    while (start > tagStart && text[start - 1].let { it.isLetterOrDigit() || it == ':' || it == '-' || it == '_' }) start--
+    val after = at + "signals".length
+    val name = text.substring(start, after)
+    val signals = prefix + "signals"
+    if (name == "th:$signals" || name == "data-th-$signals") return true
+    var i = after
+    // `th:attr="data-signals=${'$'}{...}"`: Thymeleaf writes each attribute the list names.
+    if (name.endsWith(signals) && THYMELEAF_ATTR_OPEN.containsMatchIn(text.substring(tagStart, start))) {
+        while (i < text.length && text[i].isWhitespace()) i++
+        return text.startsWith("=", i)
+    }
+    if (name != signals) return false
+    if (text.startsWith("__", i)) {
+        while (i < text.length && text[i] != '=' && text[i] != ':' && !text[i].isWhitespace() &&
+            text[i] != '>'
+        ) {
+            i++
+        }
+    }
+    if (text.startsWith(":", i)) return KEY_OPENERS.any { text.startsWith(it, i + 1) }
+    while (i < text.length && text[i].isWhitespace()) i++
+    if (!text.startsWith("=", i)) return false
+    i++
+    while (i < text.length && text[i].isWhitespace()) i++
+    if (text.startsWith("\\", i)) i++
+    val quoted = text.getOrNull(i) == '"' || text.getOrNull(i) == '\''
+    if (quoted) i++
+    while (i < text.length && text[i] == ' ') i++
+    val c = text.getOrNull(i) ?: return false
+    if (c == '"' || c == '\'' || c == '\\' || c == '>' || c.isWhitespace()) return false
+    return c != '{' || text.startsWith("{{", i) || text.startsWith("{%", i)
+}
+
+// A `th:attr` whose quoted value is still open: the attributes it lists are Thymeleaf's to write.
+private val THYMELEAF_ATTR_OPEN = regex("""th:attr\s*=\s*\\?["'][^"']*$""")
+
+private val KEY_OPENERS = listOf("\${", "{{", "{%", "<%", "[[", "th:", PLACEHOLDER)
+
+/**
  * The signals this source defines, which a `$name` in an expression is checked against: what
  * [collectDeclaredSignals] finds without the reads (a bare `$name` in markup, a `${'$'}name` in
  * Kotlin), plus the properties of `@Serializable` classes, which a handler patches as well as
  * reads, and every signal an expression assigns to.
  *
- * Three kinds of entry are no signal names, and hold a `:` so that none is mistaken for one:
- * `class:Form` for a `@Serializable` class whose properties are here, `toJsonValue:Form` for a
- * class a page is declared from, and `refused:is-open` for a name Streamlord refuses. [isKnownSignal]
- * reads them together.
+ * Some entries are no signal names, and hold a `:` so that none is mistaken for one: the marks of
+ * the classes a page is declared from or a codec writes (see [ENCODED_CLASS]), and `refused:is-open`
+ * for a name Streamlord refuses. [withClassProperties] and [isKnownSignal] read them together.
  */
 public fun collectSignalDefinitions(source: Source): Set<String> {
+    if (source.language == SourceLanguage.SETTINGS) return if (settingsRenameSignals(source.text)) setOf(RENAMED_CLASSES) else emptySet()
     val foreign = foreignHelpers(source)
     return collectSignalDefinitions(source.text, source.language, { name, _ -> name in foreign }, prefix = source.prefix)
 }
@@ -472,10 +703,33 @@ internal fun collectSignalDefinitions(
     for (d in definedAt(src, language, spread, foreign, lex, prefix, refused)) out += if (d in refused) REFUSED + d.name else d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
-        for (type in serializableProperties(src).keys) out += READABLE_CLASS + type
-        // A page declared from a class defines what its codec writes: the properties for a
-        // @Serializable one, any name for one the analysis cannot read, or for a value of no named class.
-        for (type in encodedSignalTypes(src, foreign, lex!!)) out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+        val own = packageOf(src, lex!!)
+        // A class is known by its package too, so that another of its name is not taken for it.
+        for (c in signalClasses(src, lex)) {
+            val qualified = if (own.isEmpty()) c.name else "$own.${c.name}"
+            if (c.serializable) {
+                out += KOTLINX_CLASS + qualified
+            } else if (c.readable) {
+                out += JACKSON_CLASS + qualified
+                for (p in c.properties) out += "$JACKSON_PROPERTY_OF$qualified:${p.name}"
+            } else {
+                out += OPAQUE_CLASS + qualified
+            }
+        }
+        // A page declared from a class defines what its codec writes: the properties for a class
+        // the analysis reads, any name for one it cannot read, or for a value of no named class.
+        val sent = LinkedHashSet<String>()
+        for (type in encodedSignalTypes(src, foreign, lex)) {
+            out += if (type == ANY_SIGNAL) ANY_SIGNAL else ENCODED_CLASS + type
+            if (type != ANY_SIGNAL) sent += type
+        }
+        for (type in patchedSignalTypes(src, lex)) if (type != ANY_SIGNAL) sent += type
+        if (sent.isNotEmpty()) {
+            val candidates = candidateClasses(src, lex)
+            for (type in sent) out += "$SENT_CLASS$type:${candidates.of(type).joinToString("|")}"
+        }
+        // A Jackson naming strategy leaves every Jackson class's names to the codec.
+        if (codeRenamesSignals(src, lex)) out += RENAMED_CLASSES
     }
     return out
 }
@@ -486,6 +740,7 @@ internal fun collectSignalDefinitions(
  * that names them, so neither is here.
  */
 public fun signalDeclarations(source: Source): List<SignalDeclaration> {
+    if (source.language == SourceLanguage.SETTINGS) return emptyList()
     val foreign = foreignHelpers(source)
     return definedAt(source.text, source.language, Spread(), { name, _ -> name in foreign }, prefix = source.prefix).sortedWith(
         compareBy({
@@ -576,7 +831,7 @@ private fun definedAt(
 ): List<SignalDeclaration> {
     val out = ArrayList(declared(src, language, spread, foreign, lex, prefix, refused))
     if (language == SourceLanguage.KOTLIN) {
-        for (properties in serializableProperties(src).values) {
+        for (properties in serializableProperties(src, lex ?: lexKotlin(src)).values) {
             // Under @SerialName the name is the annotation's string, which a rename may rewrite.
             for (p in properties) {
                 val kind = if (src.getOrNull(p.start - 1) == '"') SignalDeclaration.Kind.NAME else SignalDeclaration.Kind.PROPERTY

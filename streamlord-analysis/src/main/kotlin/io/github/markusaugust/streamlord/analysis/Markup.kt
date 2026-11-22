@@ -15,6 +15,7 @@ import io.github.markusaugust.streamlord.core.domain.TextPlace
 import io.github.markusaugust.streamlord.core.domain.templateConstructEnd
 import io.github.markusaugust.streamlord.core.domain.walkMarkup
 import io.github.markusaugust.streamlord.core.json.JsonParser
+import kotlin.concurrent.Volatile
 import kotlin.math.abs
 import kotlin.math.floor
 
@@ -286,6 +287,18 @@ public data class MarkupOptions(
 public fun tokenize(
     html: String,
     templates: Boolean = true,
+): Tokens {
+    // A file's reads and what it writes at run time both read its tags: they are kept for the text last read.
+    lastTokens?.let { (key, tokens) -> if (key.first === html && key.second == templates) return tokens }
+    return readTokens(html, templates).also { lastTokens = (html to templates) to it }
+}
+
+@Volatile
+private var lastTokens: Pair<Pair<String, Boolean>, Tokens>? = null
+
+private fun readTokens(
+    html: String,
+    templates: Boolean,
 ): Tokens {
     val tags = ArrayList<Tag>()
     val topLevelText = ArrayList<TextRun>()

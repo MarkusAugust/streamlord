@@ -19,6 +19,7 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
 import com.intellij.util.ForcefulReparseModificationTracker
+import io.github.markusaugust.streamlord.analysis.Issue
 import io.github.markusaugust.streamlord.analysis.ProjectFiles
 import io.github.markusaugust.streamlord.analysis.ProjectIndex
 import io.github.markusaugust.streamlord.analysis.ProjectSignals
@@ -31,6 +32,7 @@ import io.github.markusaugust.streamlord.intellij.analysis.ProjectLibraries
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordAnalysis
 import io.github.markusaugust.streamlord.intellij.analysis.StreamlordLibrary
 import io.github.markusaugust.streamlord.intellij.analysis.UiThreadWork
+import io.github.markusaugust.streamlord.intellij.analysis.templateEngine
 import io.github.markusaugust.streamlord.intellij.settings.StreamlordSettings
 import org.jetbrains.kotlin.idea.KotlinFileType
 import java.util.concurrent.CancellationException
@@ -107,7 +109,11 @@ class SignalIndex(
 
     /** Where [file] reads signals, from its current text, calls to something other than Streamlord among them. */
     fun readsIn(file: PsiFile): List<SignalReference> =
-        ask(file) { key -> reads(key) { StreamlordAnalysis.getInstance(project).source(file.text, languageOf(vfOf(file))!!) } }
+        ask(file) { key ->
+            reads(key) {
+                StreamlordAnalysis.getInstance(project).source(file.text, languageOf(vfOf(file))!!).copy(engine = templateEngine(file))
+            }
+        }
             ?: emptyList()
 
     /** Every place in the project that defines the signal [name], and with [inside] every one that defines a signal under it. */
@@ -133,8 +139,11 @@ class SignalIndex(
         val inside = "$name."
         val analysis = StreamlordAnalysis.getInstance(project)
         return places { key, vf ->
-            reads(key) { textOf(vf)?.let { text -> languageOf(vf)?.let { analysis.source(text, it) } } }
-                ?.filter { it.name == name || it.name.startsWith(inside) }
+            reads(key) {
+                textOf(vf)?.let { text ->
+                    languageOf(vf)?.let { analysis.source(text, it).copy(engine = ProjectFiles.engineOf(vf.name)) }
+                }
+            }?.filter { it.name == name || it.name.startsWith(inside) }
                 ?.map { Triple(it.start, it.end, it.name) }
         }
     }
@@ -162,14 +171,26 @@ class SignalIndex(
 
             override fun others(): Iterable<SignalFacts> {
                 if (key == null) return emptyList()
-                refresh()
-                for ((waiting, vf) in locked { waiting().mapNotNull { path -> files[path]?.file?.let { path to it } } }) {
-                    ProgressManager.checkCanceled()
-                    val text = textOf(vf) ?: continue
-                    locked { readFacts(waiting, text) }
-                }
+                readWaiting()
                 return locked { signalsFor(key).others() }
             }
+
+            // Worked out once for every file the inspection judges until a file changes, as the analysis keeps it.
+            override fun drift(): List<Issue>? {
+                if (key == null) return null
+                readWaiting()
+                return locked { signalsFor(key).drift() }
+            }
+        }
+    }
+
+    /** Reads every project file again, and what each file whose facts wait says about the signals the server reads. */
+    private fun readWaiting() {
+        refresh()
+        for ((waiting, vf) in locked { waiting().mapNotNull { path -> files[path]?.file?.let { path to it } } }) {
+            ProgressManager.checkCanceled()
+            val text = textOf(vf) ?: continue
+            locked { readFacts(waiting, text) }
         }
     }
 
@@ -356,13 +377,21 @@ class SignalIndex(
         markup += FileTypeIndex.getFiles(HtmlFileType.INSTANCE, scope)
         // A template file is markup whatever type the IDE gives it, so it is found by its extension.
         for (extension in markupExtensions()) markup += FilenameIndex.getAllFilesByExt(project, extension, scope)
+        // Spring's settings, found by name: they say how the codec names signals.
+        val settings =
+            SETTINGS_EXTENSIONS
+                .asSequence()
+                .flatMap { FilenameIndex.getAllFilesByExt(project, it, scope) }
+                .filter { ProjectFiles.isSettings(it.name) && indexable(it) }
+                .take(ProjectFiles.FILE_CAP)
         val files =
             markup.asSequence().filter(::indexable).take(ProjectFiles.FILE_CAP) +
                 FileTypeIndex
                     .getFiles(KotlinFileType.INSTANCE, scope)
                     .asSequence()
                     .filter(::indexable)
-                    .take(ProjectFiles.FILE_CAP)
+                    .take(ProjectFiles.FILE_CAP) +
+                settings
         return files.toList().also { listed = counts to it }
     }
 
@@ -382,15 +411,21 @@ class SignalIndex(
     /** HTML's own extensions and the template extensions in the settings, which the inspections read as markup too. */
     private fun markupExtensions(): Set<String> = ProjectFiles.HTML_EXTENSIONS + StreamlordSettings.getInstance(project).templateExtensions
 
-    /** Kotlin sources and markup, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
+    /** Kotlin sources, markup and Spring's settings, as the VS Code extension reads them; a Gradle script (`.kts`) declares no signals. */
     private fun languageOf(vf: VirtualFile): SourceLanguage? =
-        when (vf.fileType) {
-            KotlinFileType.INSTANCE -> if (vf.extension == "kt") SourceLanguage.KOTLIN else null
-            HtmlFileType.INSTANCE -> SourceLanguage.HTML
-            else -> if (vf.extension?.lowercase() in markupExtensions()) SourceLanguage.HTML else null
+        if (ProjectFiles.isSettings(vf.name)) {
+            SourceLanguage.SETTINGS
+        } else {
+            when (vf.fileType) {
+                KotlinFileType.INSTANCE -> if (vf.extension == "kt") SourceLanguage.KOTLIN else null
+                HtmlFileType.INSTANCE -> SourceLanguage.HTML
+                else -> if (vf.extension?.lowercase() in markupExtensions()) SourceLanguage.HTML else null
+            }
         }
 
     companion object {
         fun getInstance(project: Project): SignalIndex = project.service()
+
+        private val SETTINGS_EXTENSIONS = listOf("properties", "yml", "yaml")
     }
 }

@@ -163,12 +163,29 @@ DSL, a template, an Astro page. A file it never sees is a file whose declaration
 and a missing declaration is what the check reports.
 
 A page declared from a class, `dataSignals(codec.toJsonValue(SearchSignals()))`, declares that
-class's properties when it is `@Serializable`, and the check reads them; it names the class from
-the constructor, a type argument, or the type of a variable the file declares. When the class is
-not `@Serializable`, as with Jackson, or the file does not say which class it is, as with
-`toJsonValue(load())` or a parameter typed `JsonObject`, only the codec knows the names, so every
-read counts as declared and the check reports nothing anywhere. `report.declaredByCodec` names
-what did that, which is why the test above asserts it is empty. A property counts as declared
+class's properties, and the check reads them; it names the class from the constructor, a type
+argument, or the type of a variable the file declares. A `@Serializable` class's properties go by
+their `@SerialName`. Any other class is read as Jackson writes it: a public constructor property
+goes by its name or by its `@JsonProperty`, and one under `@JsonIgnore` is left out. A Jackson class
+with names outside its constructor, in a body or a supertype, or under `@JsonIgnoreProperties`,
+`@JsonAlias` or a property's `access`, is left to the codec.
+
+Where the names are the codec's alone, every read counts as declared and the check reports
+nothing anywhere: a class under `@JsonNaming`, a file that does not say which class it is, as with
+`toJsonValue(load())` or a parameter typed `JsonObject`, and a project that sets a naming strategy.
+The check finds a strategy in code, Jackson's `PropertyNamingStrategies` or kotlinx's
+`namingStrategy`, and in Spring's settings, `spring.jackson.property-naming-strategy` in an
+`application.yml`, `.yaml` or `.properties`. Give it those files as
+`Source(text, SourceLanguage.SETTINGS)`; `checkProject` and both editors read them on their own.
+A strategy set in Java code is not seen, since the check reads no Java.
+
+A Jackson class a handler reads is not judged either where the project writes signals whose names
+are known only at run time: a page whose `data-signals` a template writes, such as Thymeleaf's
+`th:data-signals="${signals}"` or Pebble's `data-signals="{{ signals | raw }}"`, `dataSignals(json)`
+with JSON text, or a handler that patches JSON text. A `@Serializable` class and a lookup such as
+`signals.string("query")` are judged all the same.
+`report.declaredByCodec` names what turned the check off, which is why the test above asserts it
+is empty. A property counts as declared
 even when the page writes it as `null`, which the client does not store, so give a signal the
 page must hold a value.
 

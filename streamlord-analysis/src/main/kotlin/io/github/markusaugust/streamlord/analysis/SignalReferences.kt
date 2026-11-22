@@ -2,6 +2,7 @@ package io.github.markusaugust.streamlord.analysis
 
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.regex
+import kotlin.concurrent.Volatile
 
 /*
  * The signals a Datastar expression reads, with their offsets, and the check of each against the
@@ -97,26 +98,80 @@ internal fun unshadowed(
 internal fun helperSignalReference(text: String): SignalReference? =
     if (PLAIN_HELPER_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
 
-/** The signals the expressions of an HTML fragment or document read, with offsets relative to [html]. */
+/**
+ * The signals the expressions of an HTML fragment or document read, with offsets relative to [html].
+ * Where an engine of [engine]'s kind writes into a value, the reads are those around what it
+ * writes; a read it adjoins, `{{ p }}$a`, `$a{{ i }}` or `$a.{{ k }}`, is the engine's to finish.
+ */
 internal fun markupSignalReferences(
     html: String,
     catalog: Catalog,
     prefix: String,
     templates: Boolean = true,
+    engine: TemplateEngine? = null,
 ): List<SignalReference> {
     val out = ArrayList<SignalReference>()
     for (tag in appliedTags(tokenize(html, templates).tags, prefix)) {
         for (attr in tag.attributes) {
             val spec = catalog.parseAttributeName(attr.name.lowercase(), prefix)?.spec ?: continue
             val value = attr.value ?: continue
-            if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank() || hasTemplateSyntax(value)) continue
-            val decoded = decodeEntities(value)
+            if (spec.valueKind != ValueKind.EXPRESSION || value.isBlank()) continue
+            val written = templatePlaceholders(value, engine)
+            val chars = value.toCharArray()
+            for (range in written) {
+                for (k in range) chars[k] = ' '
+            }
+            val decoded = decodeEntities(chars.concatToString())
             for (ref in expressionSignalReferences(decoded.text)) {
-                out += ref.copy(start = attr.valueStart + decoded.toSource(ref.start), end = attr.valueStart + decoded.toSource(ref.end))
+                val start = decoded.toSource(ref.start)
+                val end = decoded.toSource(ref.end)
+                if (finished(value, written, start, end, engine)) continue
+                out += ref.copy(start = attr.valueStart + start, end = attr.valueStart + end)
             }
         }
     }
     return out
+}
+
+/** A character that carries a name on, read after it: `$a` and then `b`, `1`, `.b`, `[0]` or `-b`. */
+private fun carriesOn(c: Char?) = c != null && (c.isLetterOrDigit() || c == '_' || c == '.' || c == '[' || c == '-')
+
+/** A character that a name carries on from, read before it: `x$a` is one name in JavaScript. */
+private fun carriesInto(c: Char?) = c != null && (c.isLetterOrDigit() || c == '_' || c == '$')
+
+/**
+ * Whether what [written], the constructs of [value], write beside the read from [start] to [end]
+ * finishes it: text written right before the dollar or right after the name, as in `{{ p }}$a`,
+ * `$a{{ i }}` and `$a.{{ k }}`, or text that stands beyond a run of constructs that write nothing,
+ * as in `x{% if c %}$a`. A run that leads to another branch, `{% else %}`, ends what stands beside it.
+ */
+private fun finished(
+    value: String,
+    written: List<IntRange>,
+    start: Int,
+    end: Int,
+    engine: TemplateEngine?,
+): Boolean {
+    var before = start
+    var branch = false
+    while (true) {
+        val r = written.lastOrNull { it.last + 1 == before } ?: break
+        if (!writesNothing(value, r, engine)) return true
+        branch = branch || opensBranch(value, r)
+        before = r.first
+    }
+    if (before < start && !branch && carriesInto(value.getOrNull(before - 1))) return true
+    val gap = value.getOrNull(end)
+    if ((gap == '.' || gap == '[' || gap == '-') && written.any { it.first == end + 1 }) return true
+    var after = end
+    branch = false
+    while (true) {
+        val r = written.firstOrNull { it.first == after } ?: break
+        if (!writesNothing(value, r, engine)) return true
+        branch = branch || opensBranch(value, r)
+        after = r.last + 1
+    }
+    return after > end && !branch && carriesOn(value.getOrNull(after))
 }
 
 /**
@@ -130,9 +185,21 @@ internal fun isKnownSignal(
     path: String,
     defined: Set<String>,
 ): Boolean {
+    if (anyKnown(defined)) return true
+    return isKnownPath(path, defined)
+}
+
+/** Whether [defined] may hold any signal: a spread of a variable, or a page declared from a class the analysis cannot read. */
+private fun anyKnown(defined: Set<String>): Boolean =
+    ANY_SIGNAL in defined || defined.any { it.startsWith(ENCODED_CLASS) && READABLE_CLASS + it.removePrefix(ENCODED_CLASS) !in defined }
+
+/** [isKnownSignal] for a path, where [defined] is known not to hold any signal. */
+private fun isKnownPath(
+    path: String,
+    defined: Set<String>,
+): Boolean {
     fun has(p: String) = p in defined || REFUSED + p in defined
-    if (has(path) || ANY_SIGNAL in defined) return true
-    if (defined.any { it.startsWith(ENCODED_CLASS) && READABLE_CLASS + it.removePrefix(ENCODED_CLASS) !in defined }) return true
+    if (has(path)) return true
     var p = path
     while ('.' in p) {
         p = p.substringBeforeLast('.')
@@ -162,16 +229,132 @@ internal fun nearestSignal(
 internal fun unknownSignalIssues(
     refs: List<SignalReference>,
     defined: Set<String>,
-): List<Issue> = refs.mapNotNull { unknownSignalIssue(it, defined) }
+): List<Issue> {
+    val known = withClassProperties(defined)
+    // What may hold any signal holds every read, asked once rather than for each.
+    if (refs.isEmpty() || anyKnown(known)) return emptyList()
+    return refs.mapNotNull { unknownSignalIssue(it, known) }
+}
+
+/**
+ * [defined] with the properties of each Jackson class a page or a patch sends, as the names they
+ * are, and the class marked as one the analysis reads. Of the classes a name may mean, an import
+ * decides, and otherwise the file's own package before one star import alone; an import of a
+ * nested class, `model.Outer.Form`, means the `Form` of `model`. A `@Serializable` class of the
+ * name anywhere is read as before. A class the analysis cannot read, or any Jackson class under a
+ * naming strategy, adds nothing: the check is then as it was before it read Jackson classes.
+ */
+internal fun withClassProperties(defined: Set<String>): Set<String> {
+    lastWithProperties?.let { (given, made) -> if (given === defined) return made }
+    val made = classProperties(defined)
+    lastWithProperties = defined to made
+    return made
+}
+
+@Volatile
+private var lastWithProperties: Pair<Set<String>, Set<String>>? = null
+
+private fun classProperties(defined: Set<String>): Set<String> {
+    val sends = ArrayList<String>()
+    val kotlinx = HashSet<String>()
+    val kotlinxNames = HashSet<String>()
+    val jackson = HashMap<String, MutableList<String>>()
+    val opaque = HashSet<String>()
+    for (d in defined) {
+        when {
+            d.startsWith(OPAQUE_CLASS) -> {
+                opaque += d.removePrefix(OPAQUE_CLASS)
+            }
+
+            d.startsWith(SENT_CLASS) -> {
+                sends += d
+            }
+
+            d.startsWith(KOTLINX_CLASS) -> {
+                d.removePrefix(KOTLINX_CLASS).let {
+                    kotlinx += it
+                    kotlinxNames += it.substringAfterLast('.')
+                }
+            }
+
+            d.startsWith(JACKSON_CLASS) -> {
+                jackson.getOrPut(d.removePrefix(JACKSON_CLASS)) { ArrayList() }
+            }
+
+            d.startsWith(JACKSON_PROPERTY_OF) -> {
+                d.removePrefix(JACKSON_PROPERTY_OF).let {
+                    jackson.getOrPut(it.substringBeforeLast(':')) { ArrayList() } +=
+                        it.substringAfterLast(':')
+                }
+            }
+        }
+    }
+    if (sends.isEmpty()) return defined
+    // A naming strategy renames a Jackson class's signals, so none is read off its properties.
+    if (RENAMED_CLASSES in defined) {
+        opaque += jackson.keys
+        jackson.clear()
+    }
+    val out = LinkedHashSet(defined)
+    for (d in sends) {
+        val type = d.removePrefix(SENT_CLASS).substringBefore(':')
+        val candidates = d.substringAfter("$SENT_CLASS$type:").split('|')
+        // A class the analysis cannot read takes part in Kotlin's lookup, and is then the codec's alone.
+        val known = { c: String -> c in kotlinx || c in jackson || c in opaque }
+        val qualified =
+            candidates.firstOrNull(known)?.takeIf { it == candidates.first() || candidates.count(known) == 1 }
+                ?: nested(candidates.first(), known)
+        when {
+            qualified != null && qualified in opaque -> {}
+
+            qualified != null && qualified in jackson -> {
+                out += READABLE_CLASS + type
+                out += jackson.getValue(qualified)
+            }
+
+            qualified != null || type in kotlinxNames -> {
+                out += READABLE_CLASS + type
+            }
+        }
+    }
+    return out
+}
+
+/** Whether [written], a class as an import names it, is [declared] nested in a class of the same package: `model.Outer.Form` and `model.Form`. */
+internal fun nests(
+    written: String,
+    declared: String,
+): Boolean = written != declared && nested(written) { it == declared } == declared
+
+/** The class an import of a nested class, `model.Outer.Form`, names among those [known] by package and name: `model.Form`. */
+private fun nested(
+    written: String,
+    known: (String) -> Boolean,
+): String? {
+    val parts = written.split('.')
+    if (parts.size < 3) return null
+    val name = parts.last()
+    // Between the package and the name stand classes, `Outer`, not the packages of `model.sub.Form`.
+    var found: String? = null
+    for (end in parts.size - 2 downTo 1) {
+        if (!parts[end].first().isUpperCase()) break
+        val declared = parts.subList(0, end).joinToString(".") + ".$name"
+        if (known(declared)) {
+            if (found != null) return null
+            found = declared
+        }
+    }
+    return found
+}
 
 private fun unknownSignalIssue(
     ref: SignalReference,
     defined: Set<String>,
 ): Issue? {
-    if (isKnownSignal(ref.name, defined)) return null
+    if (isKnownPath(ref.name, defined)) return null
     val head = ref.name.substringBefore('.')
     // `$telefon.length`: the misspelling is the signal, not the property read on it.
-    val misspelt = if (head != ref.name && !isKnownSignal(head, defined)) head else ref.name
+    val misspelt = if (head != ref.name && !isKnownPath(head, defined)) head else ref.name
     val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
     // A helper writes its name as it stands, and only a plain name goes back into one.

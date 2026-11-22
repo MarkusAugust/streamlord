@@ -753,6 +753,7 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectFiles {
 	public final fun getSKIPPED_FOLDERS ()Ljava/util/Set;
 	public final fun getTEMPLATE_EXTENSIONS ()Ljava/util/List;
 	public final fun inSkippedFolder (Ljava/lang/String;)Z
+	public final fun isSettings (Ljava/lang/String;)Z
 	public final fun languageOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
 }
 
@@ -808,8 +809,13 @@ public final class io/github/markusaugust/streamlord/analysis/ProjectKt {
 
 public abstract interface class io/github/markusaugust/streamlord/analysis/ProjectSignals {
 	public abstract fun defined ()Ljava/util/Set;
+	public fun drift ()Ljava/util/List;
 	public abstract fun others ()Ljava/lang/Iterable;
 	public abstract fun own ()Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+}
+
+public final class io/github/markusaugust/streamlord/analysis/ProjectSignals$DefaultImpls {
+	public static fun drift (Lio/github/markusaugust/streamlord/analysis/ProjectSignals;)Ljava/util/List;
 }
 
 public abstract interface class io/github/markusaugust/streamlord/analysis/ProjectTree {
@@ -1184,9 +1190,12 @@ public final class io/github/markusaugust/streamlord/analysis/SignalDriftReport 
 }
 
 public final class io/github/markusaugust/streamlord/analysis/SignalFacts {
-	public fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;)V
-	public synthetic fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;ZLjava/util/Set;ZLjava/util/Set;)V
+	public synthetic fun <init> (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;ZLjava/util/Set;ZLjava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()Ljava/util/Set;
+	public final fun component10 ()Ljava/util/Set;
+	public final fun component11 ()Z
+	public final fun component12 ()Ljava/util/Set;
 	public final fun component2 ()Ljava/util/Set;
 	public final fun component3 ()Ljava/util/Map;
 	public final fun component4 ()Ljava/util/List;
@@ -1194,17 +1203,22 @@ public final class io/github/markusaugust/streamlord/analysis/SignalFacts {
 	public final fun component6 ()Ljava/util/Set;
 	public final fun component7 ()Ljava/lang/String;
 	public final fun component8 ()Ljava/util/Set;
-	public final fun copy (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;)Lio/github/markusaugust/streamlord/analysis/SignalFacts;
-	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/SignalFacts;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+	public final fun component9 ()Z
+	public final fun copy (Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;ZLjava/util/Set;ZLjava/util/Set;)Lio/github/markusaugust/streamlord/analysis/SignalFacts;
+	public static synthetic fun copy$default (Lio/github/markusaugust/streamlord/analysis/SignalFacts;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/util/List;Ljava/util/Set;Ljava/util/Set;Ljava/lang/String;Ljava/util/Set;ZLjava/util/Set;ZLjava/util/Set;ILjava/lang/Object;)Lio/github/markusaugust/streamlord/analysis/SignalFacts;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getClasses ()Ljava/util/Map;
 	public final fun getDeclared ()Ljava/util/Set;
 	public final fun getEncodedTypes ()Ljava/util/Set;
 	public final fun getImports ()Ljava/util/Set;
+	public final fun getJacksonClasses ()Ljava/util/Set;
 	public final fun getLookups ()Ljava/util/List;
+	public final fun getOpaqueClasses ()Ljava/util/Set;
 	public final fun getPackageName ()Ljava/lang/String;
 	public final fun getPatchedTypes ()Ljava/util/Set;
+	public final fun getRenamesSignals ()Z
 	public final fun getSignalTypes ()Ljava/util/Set;
+	public final fun getWritesAtRunTime ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -1354,6 +1368,7 @@ public final class io/github/markusaugust/streamlord/analysis/Source {
 public final class io/github/markusaugust/streamlord/analysis/SourceLanguage : java/lang/Enum {
 	public static final field HTML Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
 	public static final field KOTLIN Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
+	public static final field SETTINGS Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/github/markusaugust/streamlord/analysis/SourceLanguage;
 	public static fun values ()[Lio/github/markusaugust/streamlord/analysis/SourceLanguage;

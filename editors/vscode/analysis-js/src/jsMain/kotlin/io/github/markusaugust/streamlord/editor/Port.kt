@@ -25,6 +25,7 @@ import io.github.markusaugust.streamlord.analysis.declaredNames
 import io.github.markusaugust.streamlord.analysis.hover
 import io.github.markusaugust.streamlord.analysis.projectSignalIssues
 import io.github.markusaugust.streamlord.analysis.signalDeclarations
+import io.github.markusaugust.streamlord.analysis.signalDriftIn
 import io.github.markusaugust.streamlord.analysis.signalSites
 import io.github.markusaugust.streamlord.analysis.signatureHelp
 import io.github.markusaugust.streamlord.analysis.siteAt
@@ -186,12 +187,35 @@ fun diagnose(
         object : ProjectSignals {
             override fun defined() = defined?.let(::setOf)
 
-            override fun own() = others?.let { collectSignalFacts(file) }
+            // Read once: the check asks for the file's facts, and the drift check again.
+            private val ownFacts by lazy(LazyThreadSafetyMode.NONE) { others?.let { collectSignalFacts(file) } }
+
+            override fun own() = ownFacts
 
             override fun others() = facts(others ?: emptyArray())
+
+            override fun drift(): List<AnalysedIssue>? = own()?.let { mine -> others?.let { driftOf(mine, it) } }
         }
     val project = projectSignalIssues(file.language, analyzer.signalReferences(file), workspace)
     return (found + project).map(::plain).toTypedArray()
+}
+
+/** The drift check last worked out, for the file's own facts and the other files' as given, which the index hands back the same until one changes. */
+private var lastDrift: Triple<SignalFacts, Array<DriftFacts>, List<AnalysedIssue>>? = null
+
+/** The drift check for a file of [own] facts among [others], the last answer again while neither changed. */
+private fun driftOf(
+    own: SignalFacts,
+    others: Array<DriftFacts>,
+): List<AnalysedIssue> {
+    lastDrift?.let { (ownBefore, othersBefore, issues) ->
+        if (ownBefore == own && othersBefore.size == others.size &&
+            othersBefore.indices.all { othersBefore[it] === others[it] }
+        ) {
+            return issues
+        }
+    }
+    return signalDriftIn(own) { facts(others) }.also { lastDrift = Triple(own, others.copyOf(), it) }
 }
 
 /** What the workspace's other files say about signals, as the analysis holds it. */
@@ -207,6 +231,10 @@ private fun facts(others: Array<DriftFacts>): List<SignalFacts> =
             o.patched.toSet(),
             o.packageName,
             o.imports.toSet(),
+            o.renamesSignals,
+            o.opaqueClasses.toSet(),
+            o.writesAtRunTime,
+            o.jacksonClasses.toSet(),
         )
     }
 
@@ -246,6 +274,9 @@ interface WorkspaceFiles {
     /** How many markup files and how many Kotlin files are listed, and the size above which a listed file is left unread. */
     val fileCap: Int
     val sizeCap: Int
+
+    /** A glob of Spring's settings files, read for how the codec names signals. */
+    val settingsGlob: String
 }
 
 @JsExport
@@ -255,19 +286,21 @@ fun workspaceFiles(): WorkspaceFiles =
         "markupExtensions" to (ProjectFiles.HTML_EXTENSIONS + ProjectFiles.TEMPLATE_EXTENSIONS).plain(),
         "fileCap" to ProjectFiles.FILE_CAP,
         "sizeCap" to ProjectFiles.SIZE_CAP,
+        "settingsGlob" to "**/application*.{properties,yml,yaml}",
     )
 
 /** Whether the file at [path], counted from the workspace folder that holds it, lies in a folder left unread. */
 @JsExport
 fun inSkippedFolder(path: String): Boolean = ProjectFiles.inSkippedFolder(path)
 
-/** How a file named [name] is read where VS Code gives it no language the extension reads: `kotlin`, `html`, or null for a file left unread. */
+/** How a file named [name] is read where VS Code gives it no language the extension reads: `kotlin`, `html`, `settings`, or null for a file left unread. */
 @JsExport
 fun languageOfFile(name: String): String? =
     when (ProjectFiles.languageOf(name)) {
         SourceLanguage.KOTLIN -> "kotlin"
         SourceLanguage.HTML -> "html"
-        else -> null
+        SourceLanguage.SETTINGS -> "settings"
+        null -> null
     }
 
 /** What one file gives the workspace: the signals it names and defines, its ids and classes, and what its Kotlin lets other files see. */
@@ -305,6 +338,14 @@ interface DriftFacts {
     val reads: Array<String>
     val packageName: String
     val imports: Array<String>
+
+    /** Whether the file sets a naming strategy for a Jackson mapper, and whether it writes signals at run time. */
+    val renamesSignals: Boolean
+    val writesAtRunTime: Boolean
+
+    /** The classes the codec alone names, and the Jackson classes among [classes]. */
+    val opaqueClasses: Array<String>
+    val jacksonClasses: Array<String>
 }
 
 /** What [src] tells the other files about the signals the server reads. */
@@ -334,6 +375,10 @@ private fun plain(facts: SignalFacts): DriftFacts =
                 .toTypedArray(),
         "packageName" to facts.packageName,
         "imports" to facts.imports.plain(),
+        "renamesSignals" to facts.renamesSignals,
+        "writesAtRunTime" to facts.writesAtRunTime,
+        "opaqueClasses" to facts.opaqueClasses.plain(),
+        "jacksonClasses" to facts.jacksonClasses.plain(),
     )
 
 @JsExport
@@ -371,13 +416,23 @@ class WorkspaceIndex(
     private var constants: Pair<Set<String>, Array<String>>? = null
     private val drift = HashMap<String, Pair<SignalFacts, DriftFacts>>()
 
-    /** Reads [text] as the file [key]; without [facts], what it says of the server's reads waits for [readFacts]. */
+    /** Reads [text] as the file [key] in [language], as [languageOfFile] names it; without [facts], what it says of the server's reads waits for [readFacts]. */
     fun put(
         key: String,
         text: String,
-        kotlin: Boolean,
+        language: String,
         facts: Boolean,
-    ): Boolean = index.put(key, text, if (kotlin) SourceLanguage.KOTLIN else SourceLanguage.HTML, facts)
+    ): Boolean =
+        index.put(
+            key,
+            text,
+            when (language) {
+                "kotlin" -> SourceLanguage.KOTLIN
+                "settings" -> SourceLanguage.SETTINGS
+                else -> SourceLanguage.HTML
+            },
+            facts,
+        )
 
     fun readFacts(
         key: String,
@@ -483,8 +538,9 @@ fun signalPlaces(
     src: String,
     kotlin: Boolean,
     prefix: String,
+    path: String? = null,
 ): SignalPlaces {
-    val file = source(src, kotlin, prefix)
+    val file = source(src, kotlin, prefix, engine = path?.let(ProjectFiles::engineOf))
     return plain(
         "declarations" to signalDeclarations(file).map(::plain).toTypedArray(),
         "reads" to
