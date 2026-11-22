@@ -248,6 +248,8 @@
     {"name":"a repeated attribute between Edge directives is one a branch","source":"<div @unless(x) data-show=\"true\" @end @unless(y) data-show=\"false\" @end></div>","issues":[]},
     {"name":"a repeated attribute in JTE branches written against a quote is one a branch","source":"<div class=\"x\"@if(open) data-show=\"true\"@else data-show=\"false\"@endif></div>","issues":[]},
     {"name":"a repeated attribute in Velocity branches written against a quote is one a branch","source":"<div class=\"x\"#if($open) data-show=\"true\"#else data-show=\"false\"#end></div>","issues":[]},
-    {"name":"an attribute repeated with the value it has once decoded, or with none and an empty one, loses nothing","source":"<div data-show=\"1 &amp;&amp; 2\" data-show=\"1 && 2\" data-ignore-morph data-ignore-morph=\"\"></div>","issues":[]}
+    {"name":"an attribute repeated with the value it has once decoded, or with none and an empty one, loses nothing","source":"<div data-show=\"1 &amp;&amp; 2\" data-show=\"1 && 2\" data-ignore-morph data-ignore-morph=\"\"></div>","issues":[]},
+    {"name":"a tag still being typed above one with the same attribute has not repeated it","source":"<ul>\n  <li data-on:click=\"a()\"\n  <li data-on:click=\"b()\">x</li>\n</ul>","issues":[]},
+    {"name":"a repeated attribute beside a key in other letters, a bound class and an underscore","source":"<div data-signals:beløp=\"0\" :class=\"x\" _=\"on click\" data-show=\"true\" data-show=\"false\"></div>","issues":[{"code":"signal-name","start":18,"end":23},{"code":"repeated-attribute","start":69,"end":78,"severity":"warning"}]}
   ]
 }

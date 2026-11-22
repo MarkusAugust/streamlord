@@ -411,8 +411,8 @@ internal fun appliedTags(
     return out
 }
 
-/** A name an attribute has in plain HTML, Datastar's keys and modifiers with it: not `@auth`, `#if(x)` or `{{name}}`. */
-private val ATTRIBUTE_NAME = regex("""[A-Za-z][\w:.-]*""")
+/** What a template engine's directive has where an attribute's name stands, `@auth`, `#if(x)`, `{{name}}` or `*ngIf`, and a name does not. */
+private const val DIRECTIVE_CHARACTERS = "@#{}()%$[]*"
 
 /**
  * A value of another library's: Knockout's or Vue's `name: value` binding, or words, as a share
@@ -1266,7 +1266,7 @@ public class MarkupValidator(
         if (!kotlin) issues += filterWithoutListener(tag, prefix)
         issues += indicatorWithoutAction(tag, prefix, tagSource)
         issues += indicatorAfterInit(tag, prefix, tagSource, movable)
-        if (!kotlin) issues += repeatedAttributes(tag, prefix, tagSource)
+        issues += repeatedAttributes(tag, prefix, tagSource)
         return issues
     }
 
@@ -1274,7 +1274,7 @@ public class MarkupValidator(
      * A Datastar attribute the element already has, in any capitals, with another value: the HTML
      * parser keeps the first attribute of a name and drops the rest, so the client never reads this
      * one. A template may write the name once in each branch, so a tag with its syntax is left alone,
-     * and so is one with a name no attribute has, `@auth` or `#if(x)`, a directive of an engine's.
+     * and so is one with an engine's directive for a name, `@auth` or `#if(x)`.
      */
     private fun repeatedAttributes(
         tag: Tag,
@@ -1298,8 +1298,11 @@ public class MarkupValidator(
                     IssueCode.REPEATED_ATTRIBUTE,
                 )
             }
-        if (issues.isEmpty() || tag.attributes.any { ATTRIBUTE_NAME.matchEntire(it.name) == null }) return emptyList()
-        return if (tagSource != null && hasTemplateSyntax(tagSource)) emptyList() else issues
+        if (issues.isEmpty() || tag.attributes.any { attr -> attr.name.any { it in DIRECTIVE_CHARACTERS } }) return emptyList()
+        if (tagSource == null) return issues
+        // A tag with no `>` yet runs on into the next one, whose name and attributes are then read as its own.
+        val unclosed = tag.attributes.any { tagSource.getOrNull(it.nameStart - tag.start - 1) == '<' }
+        return if (unclosed || hasTemplateSyntax(tagSource)) emptyList() else issues
     }
 
     /** `data-on-signal-patch-filter` with no `data-on-signal-patch` beside it, the one plugin that reads it (onSignalPatch.ts). */

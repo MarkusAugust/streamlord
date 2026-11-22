@@ -11023,6 +11023,10 @@ repeated-attribute 62-75 warning: The browser keeps the first data-on:click of a
 == corpus/html.json: a repeated attribute in JTE branches written against a quote is one a branch
 == corpus/html.json: a repeated attribute in Velocity branches written against a quote is one a branch
 == corpus/html.json: an attribute repeated with the value it has once decoded, or with none and an empty one, loses nothing
+== corpus/html.json: a tag still being typed above one with the same attribute has not repeated it
+== corpus/html.json: a repeated attribute beside a key in other letters, a bound class and an underscore
+signal-name 18-23 warning: Datastar's client reads this key as the signal beløp, which no $name reaches: Datastar reads only ASCII letters, digits and _ after a $, so the browser looks for a JavaScript variable instead; only the bracket form $['beløp'] reads it.
+repeated-attribute 69-78 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
 == corpus/kotlin-actions.json: a Kotlin template in an option's value or key is an expression, not judged
 unsafe-interpolation 163-170 warning: Kotlin writes ${mode} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
 unsafe-interpolation 234-239 warning: Kotlin writes ${ct} into data-on, which Datastar runs as an expression or follows as a signal path. Text from outside becomes code there, even inside quotes. Put the value in an attribute of its own, such as data-label, and read it in the expression with el.dataset.label; only a number or a boolean is safe to write in.
@@ -11496,6 +11500,9 @@ interpolate-template 201-203 warning: interpolate escapes e here, so the tags it
 interpolate-template 108-110 warning: interpolate escapes rows.joinToString("") here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-markup-strings.json: a joinToString of a List<Html> is markup in a Kotlin template
 == corpus/kotlin-markup-strings.json: a joinToString of a List<String> is text
+== corpus/kotlin-markup-strings.json: an attribute repeated in a string of markup, escaped and raw
+repeated-attribute 36-45 warning: The browser keeps the first data-show of an element and drops this one, so Datastar never reads it. Move its value into the first.
+repeated-attribute 94-103 warning: The browser keeps the first data-text of an element and drops this one, so Datastar never reads it. Move its value into the first.
 == corpus/kotlin-modifiers.json: modifiers the DSL refuses as it renders
 modifier-args 151-165 error: Streamlord throws at render: leading needs duration, which is not set.
 modifier-args 207-222 error: Streamlord throws at render: threshold must be between 0 and 100.
