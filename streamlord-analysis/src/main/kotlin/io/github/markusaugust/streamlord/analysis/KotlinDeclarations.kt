@@ -313,7 +313,7 @@ private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
 private val LAMBDA_PARAMETERS =
     regex(
-        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*->""",
+        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*,?\s*->""",
     )
 private val FOR_VARIABLE = regex("""\s*(\([^()]*\)|$NAME)(?:\s*:\s*($TYPE))?\s+in\b""")
 
@@ -1316,8 +1316,9 @@ private fun declarations(
                     g.kind = "when"
                     f.whenBlock = false
                 } else {
-                    val m = LAMBDA_PARAMETERS.matchAt(src, i + 1)
-                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] }) {
+                    // Read in the code alone, as a function's parameters are: a comment among them is blank.
+                    val m = LAMBDA_PARAMETERS.matchAt(blank, i + 1)
+                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
                         for (part in splitTopLevel(m.groupValues[1])) {
                             val p0 = part.trim()

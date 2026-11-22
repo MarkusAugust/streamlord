@@ -410,6 +410,21 @@ class ValueStructureTest {
     }
 
     @Test
+    fun `a lambda's parameters are read past a comma after the last and a comment among them`() {
+        val comma = "fun f(xs: Map<Int, Int>) {\n    xs.forEach { i: Int,\n        n: Int,\n        -> println(\"<b>\$i \$n</b>\") }\n}\n"
+        assertEquals(emptyList(), told(comma))
+        val line = "fun f(xs: Map<Int, Int>) {\n    xs.forEach { i: Int, // the key\n        n: Int -> println(\"<b>\$i \$n</b>\") }\n}\n"
+        assertEquals(emptyList(), told(line))
+        val block = "val f = { a: String, /* c */ title: Int, -> \"<p>\$title</p>\" }\n"
+        assertEquals(emptyList(), told(block))
+        // The parameter is the one in sight, not a value of its name around the lambda.
+        val shadow = "fun f(title: Int, xs: List<String>) = xs.map { title: String, -> \"<p>\$title</p>\" }\n"
+        assertEquals(listOf("\$title"), told(shadow))
+        // A literal with an arrow in it names no parameter.
+        assertEquals(listOf("\$n"), told("fun f(n: String) = run { \"n: Int, -> \$n\"; \"<b>\$n</b>\" }\n"))
+    }
+
+    @Test
     fun `a lambda that returns to its label gives more than its last line`() {
         assertEquals(
             1,
