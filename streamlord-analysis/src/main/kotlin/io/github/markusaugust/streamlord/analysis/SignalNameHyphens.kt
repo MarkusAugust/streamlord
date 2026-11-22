@@ -60,7 +60,7 @@ internal fun signalNameHyphenIssues(
 
     if (site.name in EXPRESSION_HELPERS) {
         // cache.set("user-id", x), Hamcrest's not("x") and a header's set("datastar-request", ...) are somebody else's.
-        if (site.name !in helpers || src.lastNonSpaceBefore(site.nameStart) == '.') return out
+        if (site.name !in helpers || src.getOrNull(codeBefore(src, lex.mask, site.nameStart)) == '.') return out
         if (site.name in SHARED_NAME_HELPERS && !insideDslCall(site.nameStart)) return out
         val s = (first ?: site.named("name"))?.string ?: return out
         SignalNames.withoutReferenceHyphens(s.text)?.let {
@@ -234,9 +234,13 @@ internal fun signalNameHyphenSites(
 ): List<Pair<CallSite, List<Issue>>> {
     val out = ArrayList<Pair<CallSite, List<Issue>>>()
     collectHyphenSites(src, lex, helpers, dslCalls, foreign, enclosed = false, shift = 0, depth = 0, out = out)
-    // A removal by a name others use too, `remove`, or on a class of the file's own, is not core's.
-    val core = EventCalls(src)
-    out.removeAll { (site, _) -> site.name in removalCallNames && !(core.named(site) && removesSignals(src, site)) }
+    // A removal by a name others use too, `remove`, or on a class of the file's own, is not core's. One
+    // in a template has its receiver there, in code the lexer's own mask counts as the literal's.
+    if (out.any { it.first.name in removalCallNames }) {
+        val code = fileFacts(src, lex).code
+        val core = EventCalls(src, code)
+        out.removeAll { (site, _) -> site.name in removalCallNames && !(core.named(site) && removesSignals(src, code, site)) }
+    }
     return out.sortedBy { it.first.nameStart }
 }
 

@@ -182,6 +182,17 @@ All notable changes to Streamlord are recorded here. The format follows
   `tokenizeAttributeName` are no longer public, nor `AttributesIndex`, `ExpressionOption` and
   `SignalNameString`: `datastarStrings` and `datastarName` answer what they were put together for.
 
+- A call under a comment that ends in a full stop is no longer taken for a call on a receiver:
+  `increment("click-count")` below `// Count the click.` gets its `signal-name-hyphen` error, and
+  the helpers that read signals, the options set to an expression, `Trusted(...)` and a function
+  with a `@Language("HTML")` parameter are read there as they are elsewhere. So are a stream's
+  calls, `patchSignals("{bad")` under `// Sends the update to the page.` gets its error, and a
+  short helper such as `set(...)` in a module without the DSL. `string("query")` under
+  `// Not one of the signals.` is no longer a read of the signal `query`. A `while` or a `catch`
+  after `do { } // once more.` or `try { } // tried.` is now read as the loop's end or the handler
+  it is, and `interpolate { }` under `// have fun` is read as the call it is, where it was taken
+  for a function declared by the name.
+
 ### Editors
 
 - HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of
@@ -244,6 +255,9 @@ All notable changes to Streamlord are recorded here. The format follows
 - IntelliJ shows `one-value`, as VS Code does: the comma that `postExpr`, `peek` and the other
   helpers that write an expression as one value turn into the comma operator. It is under
   "Datastar expression".
+- Both editors offer "Open in Stream Inspector" on a Ktor route under a comment that ends in a
+  full stop, `// Opens the stream.` above `get("/counter") { }`, where they took the full stop for
+  the dot of a call on a receiver, `client.get(...)`, and left the route out.
 
 ## [0.23.0] - 2026-11-16
 

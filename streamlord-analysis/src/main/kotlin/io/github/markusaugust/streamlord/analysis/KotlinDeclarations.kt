@@ -61,6 +61,8 @@ internal class FileFacts(
     val src: String,
     /** `true` where the character is code: outside literals and comments, or in a template's code. */
     val code: BooleanArray,
+    /** `true` where the character is in a comment. */
+    val comments: BooleanArray,
     val names: Map<String, List<Declaration>>,
     /** Every function the file declares, by its name. */
     val functions: Map<String, List<FunctionDeclaration>> = emptyMap(),
@@ -74,7 +76,7 @@ internal class FileFacts(
         val marked = functions.filterValues { list -> list.any { it.html.isNotEmpty() } }.keys
         val out = HashSet<Int>()
         for (site in if (marked.isEmpty()) emptyList() else findCallSites(src, marked, lexKotlin(src))) {
-            if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+            if (src.getOrNull(codeBefore(src, code, site.nameStart)) == '.') continue
             val candidates = functions[site.name].orEmpty()
             val meant =
                 candidates.filter { f -> f.owner?.let { site.nameStart in it } == true }.minByOrNull { it.owner!!.last - it.owner.first }
@@ -144,7 +146,7 @@ internal class FileFacts(
         }
         if ("Trusted" in src && !shadowsCore(src, "Trusted")) {
             for (site in findCallSites(src, setOf("Trusted"), lex)) {
-                if (src.lastNonSpaceBefore(site.nameStart) == '.') continue
+                if (src.getOrNull(codeBefore(src, code, site.nameStart)) == '.') continue
                 // Its argument, a literal or a sum of them: each that writes a tag, called in it by nothing else.
                 val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
                 val written = lex.stringsIn(arg.start, arg.end).filter { TAG.containsMatchIn(it.text) }
@@ -211,9 +213,9 @@ internal fun fileFacts(
     lastFacts?.let { if (it.src == src) return it }
     otherFacts?.let { if (it.src == src) return it }
     val l = lex ?: lexKotlin(src)
-    val code = codeMask(src, l.strings, l.mask)
+    val (code, comments) = codeMask(src, l)
     val functions = HashMap<String, MutableList<FunctionDeclaration>>()
-    return FileFacts(src, code, declarations(src, code, l.comments, functions), functions).also { lastFacts = it }
+    return FileFacts(src, code, comments, declarations(src, code, comments, functions), functions).also { lastFacts = it }
 }
 
 @Volatile
@@ -249,7 +251,7 @@ public fun declaredNames(src: String): DeclaredNames {
     lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
-            ?: lexKotlin(src).let { declarations(src, codeMask(src, it.strings, it.mask), it.comments) }
+            ?: codeMask(src, lexKotlin(src)).let { (code, comments) -> declarations(src, code, comments) }
     val constants = HashSet<String>()
     val others = HashSet<String>()
     for ((name, list) in names) {
@@ -273,25 +275,29 @@ public fun projectConstants(files: Iterable<DeclaredNames>): Set<String> {
     return out - others
 }
 
-/** The lexer's mask with the code of every `${...}` template marked as code, its braces too. */
-private fun codeMask(
+/**
+ * The lexer's mask with the code of every `${...}` template marked as code, its braces too, and its
+ * comment map with the comments in that code: where the code is, and which of the rest is comment.
+ */
+internal fun codeMask(
     src: String,
-    strings: List<KotlinString>,
-    mask: BooleanArray,
-): BooleanArray {
-    val code = mask.copyOf()
+    lex: KotlinLex,
+): Pair<BooleanArray, BooleanArray> {
+    val code = lex.mask.copyOf()
+    val comments = lex.comments.copyOf()
     // Outermost first, so a literal inside a template is blanked before its own templates are marked.
-    for (s in withNested(strings)) {
+    for (s in withNested(lex.strings)) {
         for (ip in s.interpolations) {
             if (ip.kind != InterpolationKind.BRACED || src.getOrNull(ip.end - 1) != '}') continue
             val open = src.indexOf('{', ip.start)
-            val inner = lexKotlin(src.substring(open + 1, ip.end - 1)).mask
-            inner.copyInto(code, open + 1)
+            val inner = lexKotlin(src.substring(open + 1, ip.end - 1))
+            inner.mask.copyInto(code, open + 1)
+            inner.comments.copyInto(comments, open + 1)
             code[open] = true
             code[ip.end - 1] = true
         }
     }
-    return code
+    return code to comments
 }
 
 private const val NAME = """[\p{L}_][\p{L}\p{Nd}_]*"""
@@ -337,6 +343,7 @@ private val LAMBDA_TYPE = regex(""":\s*(.+)$""")
 private fun goesOn(
     src: String,
     code: BooleanArray,
+    comments: BooleanArray,
     k: Int,
 ): Boolean =
     when (src[k]) {
@@ -360,7 +367,7 @@ private fun goesOn(
         }
 
         ')' -> {
-            branchFollows(src, code, k)
+            branchFollows(src, code, comments, k)
         }
 
         // `x as?` wants its type.
@@ -369,7 +376,8 @@ private fun goesOn(
         }
 
         else -> {
-            isWordPart(src[k]) && (WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1)) || infixWaits(src, code, k))
+            isWordPart(src[k]) &&
+                (WORD_THAT_GOES_ON.containsMatchIn(src.substring(maxOf(0, k - 8), k + 1)) || infixWaits(src, code, comments, k))
         }
     }
 
@@ -415,6 +423,7 @@ private val NO_OPERAND =
 private fun infixWaits(
     src: String,
     code: BooleanArray,
+    comments: BooleanArray,
     k: Int,
 ): Boolean {
     if (!src[k].isLetter() && src[k] != '_' && src[k] != '`') return false
@@ -450,7 +459,7 @@ private fun infixWaits(
             val head = open?.let { codeBefore(src, code, it) } ?: -1
             var name = head
             while (name >= 0 && isWordPart(src[name])) name--
-            if (!branchFollows(src, code, j) && !(head >= 0 && isWordPart(src[head]) && src.getOrNull(name) == '@')) run++
+            if (!branchFollows(src, code, comments, j) && !(head >= 0 && isWordPart(src[head]) && src.getOrNull(name) == '@')) run++
             break
         }
         // `x!! to` and `n++ to`: what ends an operand.
@@ -501,6 +510,7 @@ private fun closesTypeArguments(
 private fun branchFollows(
     src: String,
     code: BooleanArray,
+    comments: BooleanArray,
     k: Int,
 ): Boolean {
     var depth = 0
@@ -515,10 +525,10 @@ private fun branchFollows(
     val head = CONDITION_HEAD.find(src.substring(from, j)) ?: return false
     val word = from + head.range.first + head.value.indexOfFirst { it.isLetter() }
     // A handler's `catch (e: E)` follows the `}` of a block; `flow.catch(f)` and `catch(f)` are calls.
-    if (src.startsWith("catch", word)) return src.lastNonSpaceBefore(word) == '}'
+    if (src.startsWith("catch", word)) return src.getOrNull(pastComments(src, comments, word)) == '}'
     if (!src.startsWith("while", word)) return true
     // `do { } while (c)`, and `do x while (c)` on one line, have their branch before it.
-    if (src.lastNonSpaceBefore(word) == '}') return false
+    if (src.getOrNull(pastComments(src, comments, word)) == '}') return false
     val line = src.substring(src.lastIndexOf('\n', word - 1) + 1, word)
     return !DO_BEFORE.containsMatchIn(line)
 }
@@ -566,8 +576,11 @@ private fun opening(
     return null
 }
 
-/** The last character of code before [at], past white space and comments; -1 when there is none. */
-private fun codeBefore(
+/**
+ * The last character of code before [at], past white space, comments and literals; -1 when there
+ * is none. The full stop that ends a comment on the line above is not a receiver's dot.
+ */
+internal fun codeBefore(
     src: String,
     code: BooleanArray,
     at: Int,
@@ -716,33 +729,39 @@ internal fun inComment(
     return src.startsWith("//", from) || src.startsWith("/*", from)
 }
 
+/**
+ * The last offset before [at] past white space and comments, -1 when there is none. A literal
+ * stops it, as it is the end of a value: the offset is then the literal's last character, even
+ * where its text after a template reads like a comment, `"${dir}// y"`.
+ */
+private fun pastComments(
+    src: String,
+    comments: BooleanArray,
+    at: Int,
+): Int {
+    var k = at - 1
+    while (k >= 0 && (src[k].isWhitespace() || comments[k])) k--
+    return k
+}
+
 /** Whether the line break at [at] ends an expression: nothing before it or after it carries the expression on. */
 internal fun lineEnds(
     src: String,
     code: BooleanArray,
+    comments: BooleanArray,
     at: Int,
     elseGoesOn: Boolean = true,
 ): Boolean {
-    var k = at - 1
-    while (k >= 0 && (!code[k] || src[k].isWhitespace())) {
-        if (!code[k] && !src[k].isWhitespace()) {
-            var from = k
-            while (from > 0 && !code[from - 1]) from--
-            // A literal the line ends in is the end of a value; a comment is passed over.
-            if (!src.startsWith("//", from) && !src.startsWith("/*", from)) break
-            k = from
-        }
-        k--
-    }
-    if (k >= 0 && code[k] && goesOn(src, code, k)) return false
+    var k = pastComments(src, comments, at)
+    if (k >= 0 && code[k] && goesOn(src, code, comments, k)) return false
     val last = k
     k = at + 1
     // A comment at the next line's start is passed over; a literal there opens a line of its own.
     while (k < src.length) {
         if (src[k].isWhitespace()) {
             k++
-        } else if (!code[k] && inComment(src, code, k)) {
-            while (k < src.length && !code[k]) k++
+        } else if (comments[k]) {
+            while (k < src.length && comments[k]) k++
         } else {
             break
         }
@@ -1427,7 +1446,7 @@ private fun declarations(
             i++
             continue
         }
-        if (f.values.isNotEmpty() && (c == ';' || (c == '\n' && lineEnds(src, code, i)))) f.endValues(i)
+        if (f.values.isNotEmpty() && (c == ';' || (c == '\n' && lineEnds(src, code, comments, i)))) f.endValues(i)
         val p = f.pending
         if (p != null) {
             when (p.state) {
@@ -1441,11 +1460,11 @@ private fun declarations(
                 }
 
                 "stmt" -> {
-                    if (c == ';' || (c == '\n' && lineEnds(src, code, i, elseGoesOn = p.ifs > 0))) endPending(f, i)
+                    if (c == ';' || (c == '\n' && lineEnds(src, code, comments, i, elseGoesOn = p.ifs > 0))) endPending(f, i)
                 }
 
                 else -> {
-                    if (c == ';' || (c == '\n' && p.started && lineEnds(src, code, i))) {
+                    if (c == ';' || (c == '\n' && p.started && lineEnds(src, code, comments, i))) {
                         endPending(f, i)
                     } else if (!c.isWhitespace()) {
                         p.started = true

@@ -219,9 +219,8 @@ internal fun interpolateBlocks(
     INTERPOLATE_BLOCK.findAll(src).filter { code[it.range.first] }.mapNotNullTo(ArrayList()) { m ->
         val name = m.range.first + m.value.indexOf("interpolate")
         // A function declared by the name is no call of it.
-        if (src.lastNonSpaceBefore(m.range.first) == 'n' &&
-            src.substring(maxOf(0, m.range.first - 40), m.range.first).trimEnd().endsWith("fun")
-        ) {
+        val before = codeBefore(src, code, m.range.first)
+        if (before >= 2 && src.startsWith("fun", before - 2) && !isWordPart(src.getOrNull(before - 3))) {
             return@mapNotNullTo null
         }
         // The braces of code, a template's code among it: a block may stand in a template of another's markup.
@@ -379,7 +378,7 @@ public class Analyzer(
         val foreign = foreignCalls(opts)
         val hyphenated = hyphenatedSignals(src, SourceLanguage.KOTLIN, opts.prefix, foreign, lex)
         val dsl = opts.modules.htmlDsl
-        val eventCalls = EventCalls(src)
+        val eventCalls = EventCalls(src, lex.mask)
         // At a DSL call the DSL is there; an import from elsewhere may still take a helper's name.
         val siteHelpers by lazy(LazyThreadSafetyMode.NONE) { unshadowed(src, EXPRESSION_HELPERS) }
         for (site in findCallSites(src, allSiteNames, lex)) {
@@ -653,7 +652,7 @@ public class Analyzer(
             val at = m.range.first
             if (!lex.mask[at] || DECLARED_BEFORE.containsMatchIn(src.substring(maxOf(0, at - 16), at))) continue
             // Set in the lambda of a backend action's options, and on nothing else: `form.payloadExpr` is another's.
-            if (src.lastNonSpaceBefore(at) == '.' || lambdas.none { at in it }) continue
+            if (src.getOrNull(codeBefore(src, lex.mask, at)) == '.' || lambdas.none { at in it }) continue
             val name = m.groupValues[1]
             val after = m.range.last + 1
             if ("map" !in catalog.expressionOptions.getValue(name)) {
@@ -999,7 +998,7 @@ public class Analyzer(
                 ?: emptyList()
         for (site in helpers) {
             // A call on a receiver, `filter.not("x")`, is not the top-level helper.
-            if (src.lastNonSpaceBefore(site.nameStart) == '.' || foreign(site.name, site.nameStart)) continue
+            if (src.getOrNull(codeBefore(src, lex.mask, site.nameStart)) == '.' || foreign(site.name, site.nameStart)) continue
             val arg = site.positional.firstOrNull() ?: site.named("name")
             val s = arg?.string?.takeUnless { it.unterminated } ?: continue
             add(s, listOfNotNull(helperSignalReference(s.text)), site)

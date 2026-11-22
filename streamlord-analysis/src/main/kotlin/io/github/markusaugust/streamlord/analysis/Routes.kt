@@ -114,7 +114,7 @@ private fun findKtorRoutes(src: String): List<Route> {
             continue
         }
         val call = if (parens.last() == 0) ktorCall(src, mask, i) else null
-        if (call == null || hasReceiver(src, i)) {
+        if (call == null || src.getOrNull(codeBefore(src, mask, i)) == '.') {
             i++
             continue
         }
@@ -195,16 +195,6 @@ private fun ktorQuery(
         .distinct()
         .map { RouteParam(it, required = false) }
         .toList()
-}
-
-/** Whether the call at [start] is made on something: `client.post(...)`, also with the dot on the line above. */
-private fun hasReceiver(
-    src: String,
-    start: Int,
-): Boolean {
-    var i = start - 1
-    while (i >= 0 && src[i] in " \t\r\n") i--
-    return i >= 0 && src[i] == '.'
 }
 
 private fun annotationPath(args: String): String =

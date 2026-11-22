@@ -1166,7 +1166,7 @@ class ValueStructureTest {
             "items.forEach { return@forEach x }" to "println(1)",
         )) {
             val src = "fun f(a: Int, b: Int, ok: Boolean, x: Int) {\n    $line\n    $next\n}"
-            assertEquals(true, lineEnds(src, fileFacts(src).code, src.indexOf('\n', src.indexOf(line))), line)
+            assertEquals(true, lineEnds(src, fileFacts(src).code, fileFacts(src).comments, src.indexOf('\n', src.indexOf(line))), line)
         }
         val called = "fun outer(x: String, nums: List<Int>) {\n    for (x: Int in nums) use(x)\n    catching(\"<p>\$x</p>\")\n}"
         assertEquals(listOf("\$x"), told(called))
@@ -1213,5 +1213,19 @@ class ValueStructureTest {
         assertGrowsLinearly("lines that close nothing", 200, { n: Int ->
             "// ${made++}\n" + "val a = run {\n".repeat(n) + ")\n".repeat(n)
         }) { fileFacts(it) }
+    }
+
+    @Test
+    fun `a while is judged by the code before it, past a comment and not into a literal`() {
+        val loop = "fun f(x: Int, c: Boolean) {\n    val s = \"\${x}\"\n    while (c)\n        g()\n}"
+        assertEquals(false, lineEnds(loop, fileFacts(loop).code, fileFacts(loop).comments, loop.indexOf('\n', loop.indexOf("while"))))
+        val tail = "fun f(c: Boolean) {\n    do { g() } // once more.\n    while (c)\n    h()\n}"
+        assertEquals(true, lineEnds(tail, fileFacts(tail).code, fileFacts(tail).comments, tail.indexOf('\n', tail.indexOf("while"))))
+    }
+
+    @Test
+    fun `a comment that ends in fun above interpolate does not make it a declaration`() {
+        val src = "fun f(a: String) {\n    // have fun\n    interpolate { \"<p>\${+a}</p>\" }\n}"
+        assertEquals(1, interpolateBlocks(src, fileFacts(src).code).size)
     }
 }
