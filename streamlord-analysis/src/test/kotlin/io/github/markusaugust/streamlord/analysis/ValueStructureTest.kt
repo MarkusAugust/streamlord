@@ -1265,4 +1265,13 @@ class ValueStructureTest {
             for (file in files) assertEquals(told(file.replace(annotation, "@A")), told(file), file)
         }
     }
+
+    @Test
+    fun `an annotation left open in a constructor ends where the next property begins`() {
+        val open = "class P(\n    @Foo(\n    val id: Int,\n    val name: String,\n) {\n    fun page() = \"<p>\$id \$name</p>\"\n}\n"
+        assertEquals(listOf("\$name"), told(open))
+        val mark = "class P(@Language(\"HTML\" val q: String, val n: Int) {\n    fun page() = \"<p>\$q \$n</p>\"\n}\n"
+        // A mark not yet closed marks nothing, and the properties after it are declared: `n` is an Int.
+        assertEquals(listOf("\$q"), told(mark))
+    }
 }

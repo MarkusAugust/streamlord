@@ -892,9 +892,13 @@ private fun annotationEnd(
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
         if (closes >= 0 && depth.sum() == 0) return k + 1
+        // No argument of an annotation holds a property: one written there begins past an annotation left open.
+        if (code[k] && VAL_OR_VAR.matchAt(src, k) != null && !isWordPart(src.getOrNull(k - 1))) return k
     }
     return open
 }
+
+private val VAL_OR_VAR = regex("""va[lr](?![\p{L}\p{Nd}_])""")
 
 /**
  * Just past the type arguments of an annotation's name that ends at [at], `<B<C>>` or `<(Int) -> Unit>`, with blanks before
