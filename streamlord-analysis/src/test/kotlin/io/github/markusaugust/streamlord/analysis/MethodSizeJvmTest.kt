@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
  * times slower. The scanner of a file's declarations was one byte under it, and one more rule put the whole reading of a
  * file past it. So every method of the analysis stays under it.
  */
-class MethodSizeTest {
+class MethodSizeJvmTest {
     @Test
     fun `every method of the analysis is small enough for the JIT to compile`() {
         val classes =
