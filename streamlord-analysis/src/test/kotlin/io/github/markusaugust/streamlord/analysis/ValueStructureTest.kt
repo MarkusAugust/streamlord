@@ -1288,4 +1288,23 @@ class ValueStructureTest {
         assertEquals(told(unnamed.replace("fun (String).(", "fun String.(")), told(unnamed))
         assertEquals(listOf("\$n"), told(unnamed))
     }
+
+    @Test
+    fun `a modifier's word that a line or a lambda carries on into is an operand, not the next declaration's`() {
+        val open = "open class P {\n    val a = b%s\n    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
+        for (line in listOf(" +\n        open", " ?:\n        open", " as\n        open", " in\n        open", " <\n        open")) {
+            assertEquals(told(open.format(line).replace("open\n", "other\n")), told(open.format(line)), line)
+        }
+        val ifElse = open.format(" else\n        open").replace("val a = b", "val a = if (c) x")
+        assertEquals(told(ifElse.replace("open\n", "other\n")), told(ifElse))
+        for (lambda in listOf("b { } open value", "b.let { } open value // c")) {
+            val src = open.format("").replace("val a = b", "val a = $lambda")
+            assertEquals(told(src.replace(" open value", " other value")), told(src), lambda)
+        }
+        val constant = "val a = \"a\" +\n    const\nval title = \"<b>x</b>\"\nfun page() = \"<p>\$title</p>\"\n"
+        assertEquals(told(constant.replace("const\n", "other\n")), told(constant))
+        // After a function's or a class's body a declaration may begin on the same line.
+        val member = "abstract class P {\n    fun a() {} open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
+        assertEquals(listOf("\$title"), told(member))
+    }
 }

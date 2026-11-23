@@ -1131,6 +1131,13 @@ private fun declarations(
         f.ctor = null
     }
 
+    /** Whether the line that ends at the line break [at] carries on: its last code, past comments, wants what follows. */
+    fun goesOnAt(at: Int): Boolean {
+        var k = at - 1
+        while (k >= 0 && (src[k].isWhitespace() || comments[k])) k--
+        return k >= 0 && code[k] && goesOn(src, code, comments, k)
+    }
+
     /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
     fun receiverIn(open: Int): Boolean {
         var depth = 0
@@ -1200,7 +1207,8 @@ private fun declarations(
     var i = 0
     while (i < src.length) {
         val f = stack.last()
-        if (src[i] == '\n' && f.after == 1) f.after = 0
+        // A line that carries on, `a +` or `else`, gives its next line's first word to its expression, not to a declaration.
+        if (src[i] == '\n' && f.after == 1 && !goesOnAt(i)) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
             if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {
@@ -1481,8 +1489,9 @@ private fun declarations(
             }
             endPending(g, i + 1)
             g.endValues(i)
-            // `fun a() {} open` then a line break: a declaration may begin after a block.
-            if (c == '}') outer.after = 0
+            // `fun a() {} open val b`: after a function's or a class's body a declaration may begin on the same line, and
+            // after a lambda's the expression goes on, `b { } open value`.
+            if (c == '}' && (g.function != null || g.kind == "class")) outer.after = 0
             g.function?.body?.end = i + 1
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1
