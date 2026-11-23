@@ -754,6 +754,28 @@ private fun afterValue(
     return if (src[k] == ')') k + 1 != annotationClosed else src[k] == ']' || src[k] == '}'
 }
 
+/**
+ * Whether a line carries on at its break: its last code, past blanks and comments, wants what follows. The breaks are asked
+ * in order, and each character is looked at once however many of them ask.
+ */
+private class LineBreaks(
+    private val src: String,
+    private val code: BooleanArray,
+    private val comments: BooleanArray,
+) {
+    private var asked = -1
+    private var last = -1
+
+    fun carriesOn(at: Int): Boolean {
+        var k = at - 1
+        while (k > asked && (src[k].isWhitespace() || comments[k])) k--
+        // A line of nothing but blanks and comments leaves the last code where it was.
+        if (k > asked) last = k
+        asked = at
+        return last >= 0 && code[last] && goesOn(src, code, comments, last)
+    }
+}
+
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
 /** Whether the character at [k], outside code, is a comment's and not a literal's, by what stands where code stopped. */
@@ -970,8 +992,8 @@ private fun typeArgumentsEnd(
             // The arrow of a function type closes nothing.
             src[j] == '>' && src[j - 1] != '-' -> if (--depth == 0) return j + 1
 
-            // The next annotation, or the end of a statement, is past type arguments that never closed.
-            src[j] in ";{}=@" -> return null
+            // The end of a statement is past type arguments that never closed.
+            src[j] in ";{}=" -> return null
         }
     }
     return null
@@ -1176,19 +1198,12 @@ private fun declarations(
         f.ctor = null
     }
 
-    /** Whether the line that ends at the line break [at] carries on: its last code, past comments, wants what follows. */
-    fun goesOnAt(at: Int): Boolean {
-        var k = at - 1
-        // No further back than any line's worth: past it the line ended, as before a line could carry on.
-        while (k >= 0 && at - k < 2_000 && (src[k].isWhitespace() || comments[k])) k--
-        return k >= 0 && at - k < 2_000 && code[k] && goesOn(src, code, comments, k)
-    }
+    val breaks = LineBreaks(src, code, comments)
 
     /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
     fun receiverIn(open: Int): Boolean {
         var depth = 0
-        // A receiver's type is short: a function type or a nullable one.
-        for (k in open until minOf(src.length, open + 500)) {
+        for (k in open until minOf(src.length, open + 2_000)) {
             if (!code[k]) continue
             if (src[k] == '(') depth++
             if (src[k] == ')' && --depth == 0) return RECEIVER_DOT.matchAt(blank, k + 1) != null
@@ -1338,7 +1353,7 @@ private fun declarations(
     while (i < src.length) {
         val f = stack.last()
         // A line that carries on, `a +` or `else`, gives its next line's first word to its expression, not to a declaration.
-        if (src[i] == '\n' && f.after == 1 && !goesOnAt(i)) f.after = 0
+        if (src[i] == '\n' && f.after == 1 && !breaks.carriesOn(i)) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
             if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {

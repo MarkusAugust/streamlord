@@ -1365,4 +1365,12 @@ class ValueStructureTest {
         val ctor = "class C1(@Ann(K.`val`) val x: Int, val y: Int) {\n    val z = x\n}\n"
         assertEquals(listOf(8), fileFacts(ctor).names["y"].orEmpty().map { it.start })
     }
+
+    @Test
+    fun `a type annotation in an annotation's type arguments, and a long comment before a line break, keep the modifiers right`() {
+        assertEquals(listOf(true to false), modifiers("@A<@TB String>(\"x\") private const val C = 1\n", "C"))
+        assertEquals(listOf(true to false), modifiers("object Q {\n    @A<List<@TB String>>(s = \"x\") const val C = 1\n}\n", "C"))
+        val comment = "open class P {\n    val open = 1\n    val a = 2 + /* " + "c".repeat(2_500) + " */\n        open\n    val c = 3\n}\n"
+        assertEquals(listOf(false to false), modifiers(comment, "c"))
+    }
 }
