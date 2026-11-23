@@ -1166,7 +1166,8 @@ class ValueStructureTest {
             "items.forEach { return@forEach x }" to "println(1)",
         )) {
             val src = "fun f(a: Int, b: Int, ok: Boolean, x: Int) {\n    $line\n    $next\n}"
-            assertEquals(true, lineEnds(src, fileFacts(src).code, fileFacts(src).comments, fileFacts(src).types, src.indexOf('\n', src.indexOf(line))), line)
+            val facts = fileFacts(src)
+            assertEquals(true, lineEnds(src, facts.code, facts.comments, facts.types, src.indexOf('\n', src.indexOf(line))), line)
         }
         val called = "fun outer(x: String, nums: List<Int>) {\n    for (x: Int in nums) use(x)\n    catching(\"<p>\$x</p>\")\n}"
         assertEquals(listOf("\$x"), told(called))
@@ -1218,9 +1219,9 @@ class ValueStructureTest {
     @Test
     fun `a while is judged by the code before it, past a comment and not into a literal`() {
         val loop = "fun f(x: Int, c: Boolean) {\n    val s = \"\${x}\"\n    while (c)\n        g()\n}"
-        assertEquals(false, lineEnds(loop, fileFacts(loop).code, fileFacts(loop).comments, fileFacts(loop).types, loop.indexOf('\n', loop.indexOf("while"))))
+        assertEquals(false, fileFacts(loop).let { lineEnds(loop, it.code, it.comments, it.types, loop.indexOf('\n', loop.indexOf("while"))) })
         val tail = "fun f(c: Boolean) {\n    do { g() } // once more.\n    while (c)\n    h()\n}"
-        assertEquals(true, lineEnds(tail, fileFacts(tail).code, fileFacts(tail).comments, fileFacts(tail).types, tail.indexOf('\n', tail.indexOf("while"))))
+        assertEquals(true, fileFacts(tail).let { lineEnds(tail, it.code, it.comments, it.types, tail.indexOf('\n', tail.indexOf("while"))) })
     }
 
     @Test
