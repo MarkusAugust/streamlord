@@ -1232,8 +1232,6 @@ private fun overridable(
     contract: Boolean?,
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
 
-private val PARAMETER_NAME = regex("""($NAME)\s*:""")
-
 /** An annotation's name and the parenthesis that opens its arguments; `this@Page.f(` and `return@forEach(` name a label. */
 private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*\(""")
 
@@ -1349,36 +1347,46 @@ private fun withoutComments(
 ): String = CharArray(src.length) { if (comments.getOrElse(it) { false } && src[it] != '\n') ' ' else src[it] }.concatToString()
 
 /**
+ * Where the parameters between [open] and [close] are cut: the brackets themselves and each of [commas], the commas
+ * the scanner found outside other brackets, but for those in a type's brackets. A `<` is a type's bracket only right
+ * after a name, `Map<String, Int>`, as Kotlin writes a type, and a `>` closes only a `<` that is open, so a comparison
+ * in a default, `1 >= 2`, cuts nothing.
+ */
+private fun parameterCuts(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    close: Int,
+    commas: List<Int>,
+): List<Int> {
+    val cuts = arrayListOf(open)
+    var angles = 0
+    var next = 0
+    for (i in open + 1 until close) {
+        if (next < commas.size && commas[next] == i) {
+            if (angles == 0) cuts += i
+            next++
+        }
+        if (!code[i]) continue
+        if (src[i] == '<' && isWordPart(src[i - 1])) angles++
+        if (src[i] == '>' && src[i - 1] != '-' && angles > 0) angles--
+    }
+    cuts += close
+    return cuts
+}
+
+/**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
- * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
- * outside brackets, the `<...>` of a type among them and the `->` of a function type not.
+ * `@Language("HTML")`, by place and by name, as [html] has them from the parameters' reading, and what the scanner kept
+ * of its result.
  */
 private fun functionAt(
     src: String,
-    code: BooleanArray,
     g: ScopeFrame,
     close: Int,
+    html: Set<Any>,
 ): Pair<String, FunctionDeclaration>? {
     val name = g.name ?: return null
-    val html = HashSet<Any>()
-    var depth = 0
-    var from = g.open + 1
-    var k = 0
-    for (i in g.open + 1..close) {
-        // A comma or a bracket in a string cuts nothing.
-        val c = if (code[i]) src[i] else ' '
-        if (i < close && c in "([{<") depth++
-        if (i < close && (c in ")]}" || (c == '>' && src[i - 1] != '-'))) depth--
-        if (i == close || (c == ',' && depth == 0)) {
-            val parameter = src.substring(from, i)
-            if (HTML_ANNOTATION.containsMatchIn(parameter)) {
-                html += k
-                PARAMETER_NAME.find(parameter.replace(HTML_ANNOTATION, ""))?.let { html += it.groupValues[1] }
-            }
-            from = i + 1
-            k++
-        }
-    }
     val owner = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
     val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
     // Between the parameters and the body stands the type or nothing, or the function is not read.
@@ -1401,8 +1409,8 @@ private fun declarations(
     comments: BooleanArray,
     functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
-    // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
-    val declared = ArrayList<Pair<ScopeFrame, Int>>()
+    // Each function's brackets, where they close and its marked parameters, by place and by name, read once the classes have closed.
+    val declared = ArrayList<Triple<ScopeFrame, Int, Set<Any>>>()
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
 
@@ -1472,15 +1480,19 @@ private fun declarations(
         return out.concatToString()
     }
 
-    /** Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can see the properties of. */
+    /**
+     * Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can
+     * see the properties of. Each parameter marked HTML goes into [marked] by its place and its name.
+     */
     fun parameters(
         f: ScopeFrame,
         close: Int,
         visible: Boolean = false,
         holder: ScopeFrame? = null,
+        marked: MutableSet<Any>? = null,
     ): List<Declaration> {
         val out = ArrayList<Declaration>()
-        val cuts = listOf(f.open) + f.commas + close
+        val cuts = parameterCuts(src, code, f.open, close, f.commas)
         for (k in 0 until cuts.size - 1) {
             val text = blank.substring(cuts[k] + 1, cuts[k + 1])
             val written = withoutAnnotations(cuts[k] + 1, cuts[k + 1])
@@ -1489,6 +1501,13 @@ private fun declarations(
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
             val arguments = if (vararg || m.groups[3] == null) null else typeArgumentsAt(written, m.range.last + 1)?.text
+            // The mark is one of the annotations before the name, in code: one in the default's text marks nothing.
+            val nameAt = PARAMETER.groupRange(written, m, 2)!!.first
+            val html = HTML_ANNOTATION.findAll(text.substring(0, nameAt)).any { code[cuts[k] + 1 + it.range.first] }
+            if (html && marked != null) {
+                marked += k
+                marked += m.groupValues[2]
+            }
             out +=
                 add(
                     m.groupValues[2],
@@ -1496,7 +1515,7 @@ private fun declarations(
                         cuts[k] + 1 + m.range.first,
                         f.open,
                         type,
-                        html = HTML_ANNOTATION.containsMatchIn(text),
+                        html = html,
                         overridable = holder != null && overridable(modifiers, holder.declares.first, holder.declares.second),
                         typeArguments = arguments,
                         shared =
@@ -1836,8 +1855,9 @@ private fun declarations(
             g.closeAt = i + 1
             if (g.kind == "params") {
                 val around = outer.pending?.takeIf { it.unended }?.decls ?: emptyList()
-                handOver(PendingScope(parameters(g, i) + around, g))
-                if (functions != null) declared.add(g to i)
+                val marked = HashSet<Any>()
+                handOver(PendingScope(parameters(g, i, marked = marked) + around, g))
+                if (functions != null) declared.add(Triple(g, i, marked))
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
             } else if (g.kind == "catch" && c == ')') {
@@ -1902,7 +1922,7 @@ private fun declarations(
         f.endValues(src.length)
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((g, close) in declared) functionAt(blank, code, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
+    for ((g, close, marked) in declared) functionAt(blank, g, close, marked)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
     return names
 }
 

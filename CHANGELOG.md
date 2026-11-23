@@ -29,6 +29,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- A parameter marked `@Language("HTML")` is found by its place after a comparison among the
+  parameters before it, `keep: (Int) -> Boolean = { it > 0 }` or `big: Boolean = 1 >= 2`: an argument
+  handed to it is markup. Before, the comparison moved the mark onto the first parameter. The mark is
+  read among the annotations before a parameter's name, so `@Language("HTML")` written in a default's
+  text, `example: String = """@Language("HTML")"""`, marks nothing (#301, #302).
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
   `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and
