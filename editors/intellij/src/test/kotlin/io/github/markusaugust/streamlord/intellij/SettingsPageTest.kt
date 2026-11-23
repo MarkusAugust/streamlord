@@ -73,6 +73,28 @@ class SettingsPageTest : BasePlatformTestCase() {
     private fun notes(panel: InspectorPanel) =
         UIUtil.findComponentsOfType(panel, JBTextArea::class.java).filter { !it.isEditable }.map { it.text }
 
+    // The page's warning under a field is HTML, and the path is the project's shared settings: text there.
+    fun `test the warning under the requests file path shows the path as text`() {
+        val before = settings.state.requestsFile
+        try {
+            page(before) { page, field ->
+                field.text = "../<b>x</b>.json"
+                // What the page says as the path is typed.
+                val panel = page.createComponent() as com.intellij.openapi.ui.DialogPanel
+                val warning =
+                    panel.validationsOnInput[field]
+                        .orEmpty()
+                        .mapNotNull { it.validate() }
+                        .single()
+                        .message
+                assertFalse(warning, "<b>" in warning)
+                assertTrue(warning, "&lt;b&gt;x&lt;/b&gt;" in warning)
+            }
+        } finally {
+            settings.state.requestsFile = before
+        }
+    }
+
     fun `test a requests file path with a problem is refused when the page is applied`() {
         val before = settings.state.requestsFile
         val problems =

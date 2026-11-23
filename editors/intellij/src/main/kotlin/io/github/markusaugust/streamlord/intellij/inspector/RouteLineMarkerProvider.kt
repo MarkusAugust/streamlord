@@ -4,6 +4,7 @@ import com.intellij.codeInsight.daemon.LineMarkerInfo
 import com.intellij.codeInsight.daemon.LineMarkerProvider
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.markup.GutterIconRenderer
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.PsiElement
 import com.intellij.psi.impl.source.tree.LeafPsiElement
 import com.intellij.psi.util.CachedValueProvider
@@ -26,11 +27,13 @@ class RouteLineMarkerProvider : LineMarkerProvider {
         val label =
             "Open in Stream Inspector · ${route.method} ${route.path}" +
                 if (optional.isEmpty()) "" else " (optional: ${optional.joinToString(", ")})"
+        // The tooltip is HTML, and the path is the project's code: text there. The accessible name is read as text already.
+        val tooltip = StringUtil.escapeXmlEntities(label)
         return LineMarkerInfo(
             element,
             element.textRange,
             AllIcons.Actions.Lightning,
-            { label },
+            { tooltip },
             { _, _ -> InspectorService.getInstance(file.project).openWithRoute(route) },
             GutterIconRenderer.Alignment.LEFT,
             { label },

@@ -7,6 +7,7 @@ import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.command.undo.UndoManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.TestDialog
 import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.util.Disposer
@@ -573,6 +574,28 @@ class InspectorTest : BasePlatformTestCase() {
         assertEquals(listOf("Open in Stream Inspector · GET /api/counter", "Open in Stream Inspector · POST /x/y"), texts)
     }
 
+    // A tooltip is HTML, and the requests file's path is the project's shared settings: text there.
+    fun `test the Save tooltip shows the requests file path as text`() {
+        val settings = StreamlordSettings.getInstance(project)
+        val before = settings.state.requestsFile
+        settings.state.requestsFile = "<b>x</b>/inspector.json"
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            val tip = button(panel, "Save").toolTipText
+            assertFalse(tip, "<b>" in tip)
+            assertTrue(tip, "&lt;b&gt;x&lt;/b&gt;" in tip)
+        } finally {
+            settings.state.requestsFile = before
+        }
+    }
+
+    // The gutter's tooltip is HTML, and a route's path is the project's code: a cloned project's `get("/<b>x</b>")` is text there.
+    fun `test a route's tooltip shows its path as text`() {
+        myFixture.configureByText("Api.kt", "fun Route.api() {\n  get(\"/<b>x</b>\") { }\n}")
+        val tooltip = myFixture.findAllGutters().mapNotNull { it.tooltipText }.single { "Stream Inspector" in it }
+        assertEquals("Open in Stream Inspector · GET /&lt;b&gt;x&lt;/b&gt;", tooltip)
+    }
+
     /** A process the test writes the output of, as a run configuration's would arrive. */
     private class FakeProcess : ProcessHandler() {
         override fun destroyProcessImpl() = notifyProcessTerminated(0)
@@ -1082,6 +1105,32 @@ class InspectorTest : BasePlatformTestCase() {
             assertFalse(area.isVisible)
         } finally {
             settings.state.requestsFile = Requests.REQUESTS_FILE
+            remove(Requests.REQUESTS_FILE)
+        }
+    }
+
+    // IntelliJ's message alert, its default on every OS, reads a message as HTML, and a saved name comes from a file the project shares.
+    fun `test the Delete dialog shows a saved name as text`() {
+        val name = "<b>x</b><img src='http://127.0.0.1:1/d'>"
+        val forged = SavedRequest(name, "/a", "GET", "", "")
+        RequestStore.getInstance(project).save(forged)
+        val asked = ArrayList<String>()
+        val dialog =
+            TestDialogManager.setTestDialog { message ->
+                asked += message
+                Messages.NO
+            }
+        try {
+            val panel = InspectorPanel(project, testRootDisposable)
+            await(panel.pushRequests(forged))
+            button(panel, "Delete").doClick()
+            val message = asked.single()
+            // HTML on both paths, so the name is escaped on each: the alert reads every message as HTML, and the dialog one that opens with <html>.
+            assertTrue(message, message.startsWith("<html>"))
+            assertFalse(message, "<b>" in message || "<img" in message)
+            assertTrue(message, StringUtil.escapeXmlEntities(name) in message)
+        } finally {
+            TestDialogManager.setTestDialog(dialog)
             remove(Requests.REQUESTS_FILE)
         }
     }

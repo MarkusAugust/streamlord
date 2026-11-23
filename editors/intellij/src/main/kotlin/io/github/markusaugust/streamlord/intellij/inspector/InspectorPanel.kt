@@ -357,7 +357,8 @@ class InspectorPanel(
                     // Save and Delete go under the list where it would be too narrow to read beside them.
                     val save =
                         JButton("Save").apply {
-                            toolTipText = "Save the current request to ${store.requestsPath()}"
+                            // A tooltip is HTML, and the path is the project's shared settings: text there.
+                            toolTipText = "Save the current request to ${StringUtil.escapeXmlEntities(store.requestsPath())}"
                             addActionListener { save() }
                         }
                     deleteButton.apply {
@@ -787,7 +788,10 @@ class InspectorPanel(
         val choice = choices.selectedItem as? Choice ?: return
         val name = choice.request?.name ?: return
         if (!choice.saved) return
-        val ok = Messages.showYesNoDialog(project, "Delete saved request “$name”?", "Delete Request", "Delete", "Cancel", null)
+        // IntelliJ's message alert, its default on every OS, reads a message as HTML, and the dialog it falls back to one that
+        // opens with <html>: so it is HTML on both, and the name, which comes from a file the project shares, is escaped.
+        val message = "<html>Delete saved request “${StringUtil.escapeXmlEntities(name)}”?</html>"
+        val ok = Messages.showYesNoDialog(project, message, "Delete Request", "Delete", "Cancel", null)
         if (ok != Messages.YES) return
         change("Could not delete the request.", { store.deleting(name) }) { _, _ ->
             pushRequests(SavedRequest("", url.text, method.selectedItem as String, signalsField.text, headersField.text))
