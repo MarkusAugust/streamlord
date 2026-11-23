@@ -62,4 +62,17 @@ class ValueQuestionsTest {
             assertEquals(emptyList(), unlisted, "asked about though not listed")
         }
     }
+
+    @Test
+    fun `a part that is only a comment, as while a value is typed, is asked nothing and stops nothing`() {
+        for (src in listOf(
+            "fun f(a: String?) = \"<p>\${ a ?: /* c */ }</p>\"",
+            "fun f(a: String) = \"<p>\${ a + /* c */ }</p>\"",
+            "fun f(a: String) = \"<p>\${ (/* c */) }</p>\"",
+        )) {
+            val source = Source(src, SourceLanguage.KOTLIN, modules = Modules.known(core = true, htmlDsl = true))
+            val asked = analyzer.valueQuestions(source).map { src.substring(it.start, it.end) }
+            assertEquals(src.substring(src.indexOf('$'), src.indexOf("</p>")), asked.first(), src)
+        }
+    }
 }

@@ -547,21 +547,40 @@ internal fun lastCall(t: String): Call? {
 }
 
 /** [text] with each comment a blank, so its quotes and brackets are none: a literal is passed over whole. */
-internal fun uncommented(text: String): String {
+internal fun uncommented(text: String): String = uncommented(text, null)
+
+/** [uncommented] of [text], with the offset in [text] each of its characters is written at: a comment's blank at the comment. */
+internal fun uncommentedAt(text: String): Pair<String, IntArray> {
+    val at = IntArray(text.length)
+    val out = uncommented(text, at)
+    return out to at.copyOf(out.length)
+}
+
+private fun uncommented(
+    text: String,
+    at: IntArray?,
+): String {
     val out = StringBuilder()
     var k = 0
     while (k < text.length) {
         val end =
             when {
-                text.startsWith("//", k) -> text.indexOf('\n', k).let { if (it < 0) text.length else it }
-                text.startsWith("/*", k) -> text.indexOf("*/", k + 2).let { if (it < 0) text.length else it + 2 }
+                text.startsWith("//", k) || text.startsWith("/*", k) -> commentEnd(text, k)
                 text[k] == '"' || text[k] == '\'' -> literalEnd(text, k)
                 else -> -1
             }
         if (end < 0) {
+            at?.set(out.length, k)
             out.append(text[k++])
+        } else if (text[k] == '/') {
+            at?.set(out.length, k)
+            out.append(' ')
+            k = end
         } else {
-            out.append(if (text[k] == '/') " " else text.substring(k, end))
+            for (j in k until end) {
+                at?.set(out.length, j)
+                out.append(text[j])
+            }
             k = end
         }
     }
