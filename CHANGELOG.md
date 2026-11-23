@@ -29,6 +29,20 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- Declarations are read as Kotlin's parser reads them in more shapes, and the check of values written
+  into markup follows:
+  - an annotation in backticks or with type arguments, `` @`A` `` or `@A<B<C>>`, no longer hides
+    the `open`, `const` or `@Language("HTML")` beside it, nor the parameter after it;
+  - an annotation with brackets or quotes in its arguments, `@Deprecated("m", ReplaceWith("x"))`
+    or `@Named("a)b")`, no longer hides the parameter after it;
+  - an annotation still being typed in a constructor, `@Foo(` with no `)`, no longer hides the
+    properties after it;
+  - a receiver in brackets, `fun ((Int) -> Unit).call(n: Int)`, is no parameter list, and a
+    function without a name may have a receiver, `fun String.(): String = ...`;
+  - a modifier's word that is an operand, `b +` then `open` on the next line, or an infix call,
+    `b { } open value` or `b private const`, no longer marks the declaration after it;
+  - a local `val` has no getter, so a call of `get()` after it is a call.
+
 - What a comment writes defines and reads no signal: `// set("count", 1)`, a KDoc that mentions
   `` `toggle("open")` `` or `` `dataBind("name")` ``, `// <div data-signals:total="1">` and
   `// $count++` gave their names to completion, to navigation and to the checks of signals. A
