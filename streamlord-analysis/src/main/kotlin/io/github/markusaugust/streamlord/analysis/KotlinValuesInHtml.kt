@@ -296,6 +296,8 @@ internal fun Analyzer.checkInterpolateBlock(
     src: String,
     opts: Reading,
     hyphenated: Set<String>,
+    // Whether the string is the value of a `val` of the block, which may go to the markup or to a log.
+    valueOfVal: Boolean = false,
 ): List<Issue> {
     val all = s.interpolations.filter { markedValue(it) != null }
     val read =
@@ -328,6 +330,7 @@ internal fun Analyzer.checkInterpolateBlock(
         hyphenated,
         ArrayList(),
         marks.map { all[it].start until all[it].end },
+        valueOfVal,
     )
 }
 
@@ -368,6 +371,8 @@ private fun Analyzer.judgeInterpolated(
     hyphenated: Set<String>,
     issues: ArrayList<Issue>,
     spans: List<IntRange>? = null,
+    // Whether the block's string is the value of a `val` of the block, which may go to the markup or to a log.
+    valueOfVal: Boolean = false,
 ): List<Issue> {
     val block = formatArg == null
     val view = markupView(src, format)
@@ -445,7 +450,7 @@ private fun Analyzer.judgeInterpolated(
                 formatArg == null -> {
                     // After a + written without a space, a mark's own + would make ++ of the two.
                     val tight = ip.start > 0 && src[ip.start - 1] == '+'
-                    listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed, first = ip.start == s.start, tight))
+                    listOf(markFix(format, ip, shown, asIs, !nullable && !indentTrimmed && !valueOfVal, first = ip.start == s.start, tight))
                 }
 
                 else -> {
@@ -470,7 +475,10 @@ private fun Analyzer.judgeInterpolated(
                 }
 
                 landing.position in ESCAPED_POSITIONS -> {
-                    if (block) {
+                    if (block && valueOfVal) {
+                        "$base Where this string goes into the block's markup, mark it with +, and interpolate escapes it; where " +
+                            "it goes elsewhere, a log, it is no markup, and a + would be written there."
+                    } else if (block) {
                         "$base Mark it with +, and interpolate escapes it."
                     } else {
                         "$base Make it a %s placeholder and pass the value to interpolate."
@@ -1161,14 +1169,6 @@ internal fun Analyzer.judgeValues(
         ): Issue = Issue(ip.start, ip.end, message, severity, code, valueLink(landing), fixes)
 
         fun unescaped(): Issue {
-            if (vouches && !fact.isMarkup()) {
-                val message =
-                    "Kotlin writes $shown into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, " +
-                        "$shown included. If $shown can hold text from outside, build this markup with " +
-                        (if (canInterpolate) "interpolate { } and mark $shown with +" else "kotlinx.html") + ", which escapes it."
-                // The rewrite escapes every value, one the author built too, so it is offered and not preferred.
-                return issue(message + rewriteNote(), severity, IssueCode.UNESCAPED_INTERPOLATION, rewritten(false))
-            }
             // A String in element text may be markup the author built, which only the author knows: then
             // both the rewrite, which escapes it, and Trusted, which keeps it, are offered, and neither first.
             val text = landing.position == Position.TEXT
@@ -1183,6 +1183,15 @@ internal fun Analyzer.judgeValues(
                             )
                     ) &&
                     !mayBeNull(src, ip.text, s.start) && !collectionShown(src, ip.text, s.start)
+            // In Trusted's own text the rewrite is offered as anywhere, first where the value is no markup the author may
+            // have built; wrapping the value in Trusted once more says nothing.
+            if (vouches && !fact.isMarkup()) {
+                val message =
+                    "Kotlin writes $shown into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, " +
+                        "$shown included. If $shown can hold text from outside, build this markup with " +
+                        (if (canInterpolate) "interpolate { } and mark $shown with +" else "kotlinx.html") + ", which escapes it."
+                return issue(message + rewriteNote(), severity, IssueCode.UNESCAPED_INTERPOLATION, rewritten(!trust))
+            }
             // A Trusted or an Html that opens a `+` chain would be joined to nothing, since Kotlin has no plus for
             // either: no such fix there, nor such advice.
             val opens = ip.start == s.start

@@ -38,10 +38,10 @@ All notable changes to Streamlord are recorded here. The format follows
 - `Trusted` written with its package, `io.github.markusaugust.streamlord.core.domain.Trusted(...)`,
   or under an alias, `import ...Trusted as T`, is read as core's: its argument is markup, coloured
   and judged. VS Code colours the qualified name too; an alias it cannot see.
-- A literal a `val` of `interpolate`'s block is set to, which the block hands only to calls that are
-  statements of their own, `log.warn(err)`, is no markup of the block: it is no longer coloured as
-  HTML, nor told to mark its values with `+`, whose mark would have gone into the log. Written
-  anywhere else, into the markup, a sum or another call, its values are judged as before.
+- A value in a string a `val` of `interpolate`'s block is set to is told where a mark belongs: in the
+  block's markup, and not in a string that goes elsewhere, such as a log, where the `+` would be
+  written into the log text. Where such a string goes only its uses tell, which the analysis cannot
+  follow, so the value is warned of as before and the fix that marks it is no longer preferred.
 
 - Long and unfinished text no longer stops the analysis of a file. A lambda with thousands of
   parameters, a type's `<` that never closes and a string that never closes each threw a stack

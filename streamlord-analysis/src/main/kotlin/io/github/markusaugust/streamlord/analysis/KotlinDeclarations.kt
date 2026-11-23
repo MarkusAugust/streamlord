@@ -131,9 +131,9 @@ internal class FileFacts(
     }
 
     /**
-     * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that marks a
-     * value, or that writes a tag and is no [loggedOnly] value, and stands in no call's arguments, where a Datastar
-     * expression or a log message would; or one of [trustedLiterals] that writes a tag.
+     * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
+     * tag or marks a value and stands in no call's arguments, where a Datastar expression or a log message would, or one
+     * of [trustedLiterals] that writes a tag.
      */
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
@@ -141,11 +141,7 @@ internal class FileFacts(
         if ("interpolate" in src && !shadowsCore(src, "interpolate")) {
             for (b in interpolateBlocks(src, code)) {
                 val literals = lex.stringsIn(b.braces.first, b.braces.last)
-                val written =
-                    literals.filter {
-                        it.interpolations.any { ip -> markedValue(ip) != null } ||
-                            (TAG.containsMatchIn(it.text) && !loggedOnly(it.start, b.braces))
-                    }
+                val written = literals.filter { TAG.containsMatchIn(it.text) || it.interpolations.any { ip -> markedValue(ip) != null } }
                 out += outsideArguments(src, code, b.braces.first, written)
             }
         }
@@ -218,99 +214,16 @@ internal class FileFacts(
     fun inTrusted(at: Int): Boolean = trustedAt(at) != null
 
     /**
-     * Whether the literal at [at] in the block of `interpolate` whose braces are [block] is the value of a `val` declared in
-     * the block itself whose name the block hands only to calls that are statements of their own, a log's: no markup of
-     * the block, where a mark would be written into the log. A name written anywhere else, in a template, a sum, the
-     * block's result or another call's arguments, may reach the markup, and the literal is the block's as before.
+     * Whether the literal at [at] stands in the value of a `val` declared in the block of `interpolate` whose braces are
+     * [block], and not in a lambda or a function of it: where that string goes, to the markup or to a log, only its uses
+     * tell, which the text cannot follow.
      */
-    fun loggedOnly(
+    fun inBlockValue(
         at: Int,
         block: IntRange,
     ): Boolean {
-        val (name, d) = valued.owner.getOrNull(at)?.let { valued.declarations.getOrNull(it) } ?: return false
-        val v = d.value ?: return false
-        // Declared in the block, not in a lambda or a function of it: its scope ends with the block.
-        if (d.at !in block || d.end < block.last || d.end > block.last + 1) return false
-        return handedOnlyToStatements(name, (v.end.takeIf { it >= 0 } ?: v.start) until block.last)
-    }
-
-    /** Whether each use of [name] in [range] is an argument of a call that is a statement of its own. */
-    private fun handedOnlyToStatements(
-        name: String,
-        range: IntRange,
-    ): Boolean {
-        val at = uses[name] ?: return true
-        // The first use at or after the range's start, found by halves: the common library has no search of an IntArray.
-        var lo = 0
-        var hi = at.size
-        while (lo < hi) {
-            val mid = (lo + hi) ushr 1
-            if (at[mid] < range.first) lo = mid + 1 else hi = mid
-        }
-        var i = lo
-        while (i < at.size && at[i] <= range.last) {
-            val k = at[i++]
-            if (src.getOrNull(k - 1) == '.') continue
-            // A use in a template, `$name` or in `${...}`, is written into a string; one in code must be a statement's argument.
-            val template = !code[k] && !comments[k] && src.getOrNull(k - 1) == '$'
-            if (template || (code[k] && (!bareCode[k] || !statementArgument(k)))) return false
-        }
-        return true
-    }
-
-    // Where each name of the file is written, its text and its code alike, read once.
-    private val uses: Map<String, IntArray> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val out = HashMap<String, ArrayList<Int>>()
-        var k = 0
-        while (k < src.length) {
-            if (isWordPart(src[k]) && !isWordPart(src.getOrNull(k - 1))) {
-                var end = k + 1
-                while (end < src.length && isWordPart(src[end])) end++
-                out.getOrPut(src.substring(k, end)) { ArrayList() } += k
-                k = end
-            } else {
-                k++
-            }
-        }
-        out.mapValues { it.value.toIntArray() }
-    }
-
-    // The code outside literals: a template's code is no statement's.
-    private val bareCode: BooleanArray by lazy(LazyThreadSafetyMode.PUBLICATION) { lexKotlin(src).mask }
-
-    /** Whether [at] stands in the arguments of a call that is a statement of its own: `log.warn(err)`, and nothing more on its line. */
-    private fun statementArgument(at: Int): Boolean {
-        var depth = 0
-        var open = -1
-        var j = at - 1
-        while (j >= 0 && open < 0) {
-            val c = src[j]
-            if (bareCode[j]) {
-                if (c == ')' || c == ']' || c == '}') depth++
-                if ((c == '(' || c == '[' || c == '{') && depth-- == 0) open = if (c == '(') j else return false
-                if (depth == 0 && (c == ';' || c == '\n')) return false
-            }
-            j--
-        }
-        if (open < 0) return false
-        // What is called: a name or a chain of them, the first thing of its statement.
-        var head = open - 1
-        while (head >= 0 && (isWordPart(src[head]) || src[head] == '.' || src[head] == '?')) head--
-        while (head >= 0 && (src[head] == ' ' || src[head] == '\t')) head--
-        if (head >= 0 && src[head] != '\n' && src[head] != ';' && src[head] != '{') return false
-        // The call closes its statement.
-        var close = open
-        depth = 0
-        while (close < src.length) {
-            if (bareCode[close]) {
-                if (src[close] == '(') depth++
-                if (src[close] == ')' && --depth == 0) break
-            }
-            close++
-        }
-        var after = close + 1
-        while (after < src.length && (src[after] == ' ' || src[after] == '\t' || comments[after])) after++
-        return after >= src.length || src[after] == '\n' || src[after] == '\r' || src[after] == ';' || src[after] == '}'
+        val (_, d) = valued.owner.getOrNull(at)?.let { valued.declarations.getOrNull(it) } ?: return false
+        return d.at in block && d.end >= block.last && d.end <= block.last + 1
     }
 
     // The `val`s of the file with a value, and at each offset the innermost whose value stands there, worked out once:

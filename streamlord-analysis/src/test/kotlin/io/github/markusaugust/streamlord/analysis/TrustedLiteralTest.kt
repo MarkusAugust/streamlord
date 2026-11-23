@@ -71,21 +71,21 @@ class TrustedLiteralTest {
     }
 
     @Test
-    fun `a literal a val of interpolate's block is set to is no markup of the block, unless it marks a value`() {
+    fun `a value in a val of interpolate's block is told that a mark is right only where the string goes into the markup`() {
+        // Whether the string goes to the markup or to a log only its uses tell, which the text cannot follow: the value is
+        // warned of as before, the advice says where a mark belongs, and the fix is not preferred.
         val log =
             imports +
                 "fun page(x: String) = interpolate {\n    val err = \"warn: <b>\$x</b>\"\n    log.warn(err)\n    \"<p>\${+x}</p>\"\n}\n"
-        assertEquals(false, html(log, "\"warn"))
-        assertEquals(emptyList(), issues(log).map { log.substring(it.start, it.end) + " " + it.code.id })
-        val comparison = imports + "fun page(x: String) = interpolate {\n    val cmp = \"\\\$a<b\"\n    \"<p>\${+x}</p>\"\n}\n"
-        assertEquals(false, html(comparison, "\"\\\$a<b"))
-        // One whose value goes into the block's markup has its values judged there, and the mark is the advice.
-        val part = imports + "fun page(x: String) = interpolate {\n    val part = \"<b>\$x</b>\"\n    \"<p>\$part</p>\"\n}\n"
-        assertEquals(listOf("\$x interpolate-template"), issues(part).map { part.substring(it.start, it.end) + " " + it.code.id })
-        // One that marks a value is the block's markup, wherever it stands.
-        val row = imports + "fun page(x: String) = interpolate {\n    val row = \"<li>\${+x}</li>\"\n    \"<ul>\$row</ul>\"\n}\n"
-        assertEquals(true, html(row, "\"<li>"))
-        assertEquals(true, html(row, "\"<ul>"))
+        val told = issues(log).single { log.substring(it.start, it.end) == "\$x" }
+        assertEquals(IssueCode.INTERPOLATE_TEMPLATE, told.code)
+        assertTrue(told.message.contains("where it goes elsewhere, a log, it is no markup, and a + would be written there"), told.message)
+        assertEquals(listOf(false), told.fixes.map { it.preferred })
+        // A string the block writes itself, its result, is told to mark the value, and the fix is preferred as ever.
+        val result = imports + "fun page(x: String) = interpolate { \"<p>\$x</p>\" }\n"
+        val own = issues(result).single { result.substring(it.start, it.end) == "\$x" }
+        assertTrue(!own.message.contains("a log"), own.message)
+        assertEquals(listOf(true), own.fixes.map { it.preferred })
     }
 
     @Test
@@ -112,11 +112,6 @@ class TrustedLiteralTest {
                 "    return interpolate {\n        val part = \"Hi <b>\$x</b>\"\n        \"<p>\${wrap(part)}</p>\"\n    }",
             )
         for (body in shapes) assertTrue(warnsOnX(body), body)
-        // Handed only to calls that stand as statements of their own, a log's, it is no markup.
-        val logged =
-            "    return interpolate {\n        val err = \"warn: <b>\$x</b>\"\n        log.warn(err)\n        println(\"x\", err)\n" +
-                "        \"<p>\${+x}</p>\"\n    }"
-        assertEquals(false, warnsOnX(logged), logged)
     }
 
     @Test

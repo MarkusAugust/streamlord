@@ -490,11 +490,9 @@ public class Analyzer(
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
             val block = blocks.lastOrNull { s.start in it.braces }?.takeUnless { inMarkedValue(lex.strings, s, it.braces) }
-            // Trusted's argument is the markup Trusted vouches for, judged as such; a literal a `val` of the block hands only
-            // to a log is no markup of the block unless it marks a value.
+            // Trusted's argument is the markup Trusted vouches for, judged as such and not as the block's.
             val marks = whole.interpolations.any { markedValue(it) != null }
-            val logged = block != null && facts.loggedOnly(s.start, block.braces)
-            if (block != null && !facts.inTrusted(s.start) && (isHtmlString(src, s) || ('<' in whole.text && !logged) || marks)) {
+            if (block != null && !facts.inTrusted(s.start) && (isHtmlString(src, s) || '<' in whole.text || marks)) {
                 val issues =
                     checkInterpolateBlock(
                         whole,
@@ -503,6 +501,7 @@ public class Analyzer(
                         src,
                         opts,
                         hyphenated,
+                        facts.inBlockValue(s.start, block.braces),
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
