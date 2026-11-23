@@ -1303,6 +1303,9 @@ class ValueStructureTest {
         }
         val constant = "val a = \"a\" +\n    const\nval title = \"<b>x</b>\"\nfun page() = \"<p>\$title</p>\"\n"
         assertEquals(told(constant.replace("const\n", "other\n")), told(constant))
+        // The `*` of a star import ends its line, and the next declaration is the constant it says.
+        val imported = "import a.b.*\nconst val NAME = \"<b>x</b>\"\nfun page() = \"<p>\$NAME</p>\"\n"
+        assertEquals(emptyList(), told(imported))
         // After a function's or a class's body a declaration may begin on the same line.
         val member = "abstract class P {\n    fun a() {} open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
         assertEquals(listOf("\$title"), told(member))
