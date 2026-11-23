@@ -354,7 +354,12 @@ private fun goesOn(
             (k - from) % 2 == 0
         }
 
-        '=', '*', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> {
+        // The `*` of `import a.*` ends its line.
+        '*' -> {
+            src.getOrNull(k - 1) != '.'
+        }
+
+        '=', '/', '%', '&', '|', ':', '.', ',', '(', '<' -> {
             true
         }
 
@@ -640,6 +645,12 @@ private class ScopeFrame(
     var funAt = -1
     var own = false
     var cls = false
+
+    /** Whether the `object` just read has no name and is a value, `val o = object { }`. */
+    var anonymous = false
+
+    /** Whether a declaration may begin after this frame's `}` on its line: a named class's body or an `init` block. */
+    var member = false
     var whenBlock = false
     var loop = false
 
@@ -713,6 +724,55 @@ private class ScopeFrame(
         for (v in ended) v.end = at
         lastValues = ended.ifEmpty { return }
         values.removeAll(ended)
+    }
+}
+
+/**
+ * Whether a value stands before the word at [at], past blanks and comments: a name, a literal, a call's or an index's
+ * bracket or a lambda's brace. A modifier the declaration already has, [said], and the arguments of an annotation that
+ * ends at [annotationClosed] are none.
+ */
+private fun afterValue(
+    src: String,
+    code: BooleanArray,
+    comments: BooleanArray,
+    at: Int,
+    said: Boolean,
+    annotationClosed: Int,
+): Boolean {
+    var k = at - 1
+    // A line break outside a comment is one the line carried on past, or the word would begin a declaration: no further
+    // back than the line, and not past what any line holds.
+    while (k >= 0 && at - k < 2_000 && (src[k] == ' ' || src[k] == '\t' || comments[k])) k--
+    if (k < 0) return false
+    if (src[k] == '\n' || src[k] == '\r' || at - k >= 2_000 || !code[k]) return true
+    if (isWordPart(src[k])) {
+        var from = k
+        while (from > 0 && isWordPart(src[from - 1])) from--
+        return !(said && MODIFIER_WORDS.containsKey(src.substring(from, k + 1)))
+    }
+    return if (src[k] == ')') k + 1 != annotationClosed else src[k] == ']' || src[k] == '}'
+}
+
+/**
+ * Whether a line carries on at its break: its last code, past blanks and comments, wants what follows. The breaks are asked
+ * in order, and each character is looked at once however many of them ask.
+ */
+private class LineBreaks(
+    private val src: String,
+    private val code: BooleanArray,
+    private val comments: BooleanArray,
+) {
+    private var asked = -1
+    private var last = -1
+
+    fun carriesOn(at: Int): Boolean {
+        var k = at - 1
+        while (k > asked && (src[k].isWhitespace() || comments[k])) k--
+        // A line of nothing but blanks and comments leaves the last code where it was.
+        if (k > asked) last = k
+        asked = at
+        return last >= 0 && code[last] && goesOn(src, code, comments, last)
     }
 }
 
@@ -852,7 +912,12 @@ private val FUN_HEAD = regex("""[ \t]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>[ \t]*)?(?:[\p
 private const val FUN_HEAD_LENGTH = 300
 private val STATEMENT_WORDS = "if for while when do try return throw else in is as super this typeof".split(" ").toSet()
 
-private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
+// A function without a name may have a receiver, `fun String.()`, which one in brackets has too, `fun (String).()`.
+private val UNNAMED =
+    mapOf(
+        "object" to regex("""\s*[:{]"""),
+        "fun" to regex("""\s*(?:[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>)?\??\s*\.\s*)?\("""),
+    )
 private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
 
 /** The words that may stand before a declaration, each with what it says of it. */
@@ -863,18 +928,26 @@ private val MODIFIER_WORDS: Map<String, Int> =
         mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES, "companion" to COMPANION)
 
 private val QUOTED = regex("`[^`\n]+`")
-private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
+
+// A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
+private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
+private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
 /** What stands between a modifier and the declaration on its line: words and annotations, twelve at most, so that no line is too long to read. */
-private val DECLARES_AFTER = regex("""(?:[ \t]+(?:[a-z]+|@[^\s(]+(?:\([^()\n]*\))?)){0,12}[ \t]+(?:va[lr]|fun|class|interface|object)\b""")
+private val DECLARES_AFTER =
+    regex(
+        """(?:[ \t]+(?:[a-z]+|@[^\s(<]+(?:[ \t]*<(?:[^<>\n]|->|<(?:[^<>\n]|->|<(?:[^<>\n]|->)*>)*>)*>)?(?:\([^()\n]*\))?)){0,12}""" +
+            """[ \t]+(?:va[lr]|fun|class|interface|object)\b""",
+    )
 
-/** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
+/** Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none is. */
 private fun annotationEnd(
     src: String,
     code: BooleanArray,
     at: Int,
 ): Int {
-    val name = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
+    val named = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
+    val name = typeArgumentsEnd(src, code, named) ?: named
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
     val depth = IntArray(3)
@@ -884,8 +957,46 @@ private fun annotationEnd(
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
         if (closes >= 0 && depth.sum() == 0) return k + 1
+        // No argument of an annotation holds a property: one written there begins past an annotation left open.
+        // `` K.`val` `` is a name in backticks.
+        if (src[k] == 'v' && code[k] && !isWordPart(src.getOrNull(k - 1)) && src.getOrNull(k - 1) != '`' &&
+            VAL_OR_VAR.matchAt(src, k) != null
+        ) {
+            return k
+        }
     }
     return open
+}
+
+private val VAL_OR_VAR = regex("""va[lr](?![\p{L}\p{Nd}_])""")
+
+/**
+ * Just past the type arguments of an annotation's name that ends at [at], `<B<C>>` or `<(Int) -> Unit>`, with blanks before
+ * them on its line; null where none close.
+ */
+private fun typeArgumentsEnd(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Int? {
+    var k = at
+    while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
+    if (src.getOrNull(k) != '<') return null
+    var depth = 0
+    // An annotation's type arguments are short: a type or two.
+    for (j in k until minOf(src.length, k + 500)) {
+        if (!code[j]) continue
+        when {
+            src[j] == '<' -> depth++
+
+            // The arrow of a function type closes nothing.
+            src[j] == '>' && src[j - 1] != '-' -> if (--depth == 0) return j + 1
+
+            // The end of a statement is past type arguments that never closed.
+            src[j] in ";{}=" -> return null
+        }
+    }
+    return null
 }
 
 /**
@@ -1087,6 +1198,40 @@ private fun declarations(
         f.ctor = null
     }
 
+    val breaks = LineBreaks(src, code, comments)
+
+    /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
+    fun receiverIn(open: Int): Boolean {
+        var depth = 0
+        for (k in open until minOf(src.length, open + 2_000)) {
+            if (!code[k]) continue
+            if (src[k] == '(') depth++
+            if (src[k] == ')' && --depth == 0) return RECEIVER_DOT.matchAt(blank, k + 1) != null
+            // No type holds a block, a value or another function.
+            if (src[k] in "{}=;" || (src[k] == 'f' && src.startsWith("fun", k) && !isWordPart(src.getOrNull(k + 3)))) return false
+        }
+        return false
+    }
+
+    /** What is written from [from] to [to], each annotation blank, the brackets and quotes of its arguments and its type arguments too. */
+    fun withoutAnnotations(
+        from: Int,
+        to: Int,
+    ): String {
+        val out = blank.toCharArray(from, to)
+        var i = from
+        while (i < to) {
+            val end = if (src[i] == '@' && code[i]) minOf(annotationEnd(src, code, i), to) else i
+            if (end > i) {
+                for (j in i until end) if (out[j - from] != '\n') out[j - from] = ' '
+                i = end
+            } else {
+                i++
+            }
+        }
+        return out.concatToString()
+    }
+
     /** Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can see the properties of. */
     fun parameters(
         f: ScopeFrame,
@@ -1098,7 +1243,7 @@ private fun declarations(
         val cuts = listOf(f.open) + f.commas + close
         for (k in 0 until cuts.size - 1) {
             val text = blank.substring(cuts[k] + 1, cuts[k + 1])
-            val m = PARAMETER.find(text) ?: continue
+            val m = PARAMETER.find(withoutAnnotations(cuts[k] + 1, cuts[k + 1])) ?: continue
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
@@ -1123,10 +1268,92 @@ private fun declarations(
 
     /** The names of a list such as `a, b: Int`, and the type of each. */
     fun listed(list: String): List<Pair<String, String?>> = NAMES.findAll(list).map { it.groupValues[1] to it.groups[2]?.value }.toList()
+
+    /** The properties a `val` or a `var` just before [end] declares in [f], one or a destructured list. */
+    fun property(
+        f: ScopeFrame,
+        word: String,
+        end: Int,
+    ) {
+        val constant = f.modifiers and CONST != 0
+        val html = f.modifiers and HTML != 0
+        val local = f.kind != "top" && f.kind != "class"
+        val cls = f.takeIf { it.kind == "class" }
+        val overridable = !local && overridable(f.modifiers, cls?.extended, cls?.contract)
+        val shared = !local && !f.hidden && f.modifiers and PRIVATE == 0
+        val scopeStart = { at: Int ->
+            if (local) {
+                at
+            } else if (f.kind == "top") {
+                0
+            } else {
+                f.open
+            }
+        }
+        // `when (val x = ...)`: the scope is the one the brackets stand in.
+        val owner = if (f.kind == "paren" || f.kind == "for") stack.getOrNull(stack.size - 2) ?: f else f
+        val destructured = DESTRUCTURED.matchAt(src, end)
+        if (destructured != null) {
+            val listStart = end + destructured.value.indexOf('(') + 1
+            for (n in NAMES.findAll(destructured.groupValues[1])) {
+                val at = listStart + n.range.first
+                val d =
+                    add(
+                        n.groupValues[1],
+                        Declaration(at, scopeStart(at), null, constant = constant, html = html, shared = shared),
+                    )
+                if (owner.kind != "top") owner.ends += d
+            }
+        } else {
+            val m = VAL_AFTER.matchAt(src, end)
+            // `val String.shout`: an extension, read on a receiver and never by its name alone.
+            if (m != null && m.groupValues[1].isEmpty()) {
+                val at = VAL_AFTER.groupRange(src, m, 2)!!.first
+                val bare = m.groups[4] == null && m.groups[5] == null
+                val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
+                val markup = initialiser != null
+                val trusted = initialiser?.first == "Trusted"
+                val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
+                val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
+                // The value of a `val` set once, which a name then stands for.
+                val set = VALUE_AFTER.matchAt(src, arguments?.range?.last?.plus(1) ?: (m.range.last + 1))?.range?.last
+                val valueAt = if (bare && !markup) set?.plus(1) else VAL_AFTER.groupRange(src, m, 5)?.first
+                val d =
+                    add(
+                        m.groupValues[2],
+                        Declaration(
+                            at,
+                            scopeStart(at),
+                            m.groups[3]?.value,
+                            m.groups[4]?.value,
+                            if (constant) m.groups[5]?.value else null,
+                            constant,
+                            html,
+                            m.groups[5] != null,
+                            markup,
+                            if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
+                            arguments?.groupValues?.get(1),
+                            valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
+                            shared,
+                            trusted,
+                            trustedText,
+                            aliased = initialiser?.third == true,
+                            overridable = overridable,
+                        ),
+                    )
+                if (owner.kind != "top") owner.ends += d
+            }
+        }
+    }
+
+    // Where the last annotation read ends: a modifier after its arguments is a declaration's.
+    var annotationClosed = -1
+
     var i = 0
     while (i < src.length) {
         val f = stack.last()
-        if (src[i] == '\n' && f.after == 1) f.after = 0
+        // A line that carries on, `a +` or `else`, gives its next line's first word to its expression, not to a declaration.
+        if (src[i] == '\n' && f.after == 1 && !breaks.carriesOn(i)) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
             if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {
@@ -1152,10 +1379,11 @@ private fun declarations(
             val ctorOfClass = word == "constructor" && f.cls
             // In a function's expression an `object` or a `fun` without a name is a value, and the parameters are in sight in it.
             val unnamed = if (f.pending?.unended == true && f.modifiers and COMPANION == 0) UNNAMED[word]?.matchAt(src, end) else null
-            // A receiver in brackets has a dot after it, the parameters of a function without a name none.
+            // A receiver in brackets has a dot after it, the parameters of a function without a name none; after a receiver's
+            // dot a name is a function's, and a bracket the parameters of one without a name.
             val after = if (word == "fun") unnamed?.let { src.substring(it.range.last, minOf(src.length, it.range.last + 2_000)) } else null
-            val value =
-                unnamed != null && (after == null || RECEIVER_DOT.matchAt(after, maxOf(0, closing(after, depths(after), 0))) == null)
+            val dot = after?.let { RECEIVER_DOT.matchAt(it, maxOf(0, closing(it, depths(it), 0))) }
+            val value = unnamed != null && (dot == null || after.substring(dot.range.last + 1).trimStart().startsWith("("))
             if (word in DECLARATION_WORDS && !reference && !ctorOfClass && !value) {
                 // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
                 endPending(f, i)
@@ -1180,13 +1408,19 @@ private fun declarations(
                     for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
 
-                // A getter takes nothing: `get("/")` after a value is a call.
+                // A getter takes nothing: `get("/")` after a value is a call. Only a property of a class or the top level has
+                // one; after a local `get()` is a call too.
                 word == "get" -> {
-                    if (GETTER_AFTER.matchAt(src, end) != null) for (v in f.lastValues) v.getter = true
+                    if ((f.kind == "top" || f.kind == "class") &&
+                        GETTER_AFTER.matchAt(src, end) != null
+                    ) {
+                        for (v in f.lastValues) v.getter = true
+                    }
                 }
 
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
+                    f.anonymous = word == "object" && f.modifiers and COMPANION == 0 && UNNAMED.getValue("object").matchAt(src, end) != null
                     f.privateClass = (if (f.word == "fun") f.funModifiers else f.modifiers) and PRIVATE != 0
                     val contract = word == "interface"
                     f.declares = (contract || (word == "class" && f.modifiers and EXTENDED != 0)) to contract
@@ -1201,79 +1435,21 @@ private fun declarations(
                 }
 
                 (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
-                    val constant = f.modifiers and CONST != 0
-                    val html = f.modifiers and HTML != 0
-                    val local = f.kind != "top" && f.kind != "class"
-                    val cls = f.takeIf { it.kind == "class" }
-                    val overridable = !local && overridable(f.modifiers, cls?.extended, cls?.contract)
-                    val shared = !local && !f.hidden && f.modifiers and PRIVATE == 0
-                    val scopeStart = { at: Int ->
-                        if (local) {
-                            at
-                        } else if (f.kind == "top") {
-                            0
-                        } else {
-                            f.open
-                        }
-                    }
-                    // `when (val x = ...)`: the scope is the one the brackets stand in.
-                    val owner = if (f.kind == "paren" || f.kind == "for") stack.getOrNull(stack.size - 2) ?: f else f
-                    val destructured = DESTRUCTURED.matchAt(src, end)
-                    if (destructured != null) {
-                        val listStart = end + destructured.value.indexOf('(') + 1
-                        for (n in NAMES.findAll(destructured.groupValues[1])) {
-                            val at = listStart + n.range.first
-                            val d =
-                                add(
-                                    n.groupValues[1],
-                                    Declaration(at, scopeStart(at), null, constant = constant, html = html, shared = shared),
-                                )
-                            if (owner.kind != "top") owner.ends += d
-                        }
-                    } else {
-                        val m = VAL_AFTER.matchAt(src, end)
-                        // `val String.shout`: an extension, read on a receiver and never by its name alone.
-                        if (m != null && m.groupValues[1].isEmpty()) {
-                            val at = VAL_AFTER.groupRange(src, m, 2)!!.first
-                            val bare = m.groups[4] == null && m.groups[5] == null
-                            val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
-                            val markup = initialiser != null
-                            val trusted = initialiser?.first == "Trusted"
-                            val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
-                            val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
-                            // The value of a `val` set once, which a name then stands for.
-                            val set = VALUE_AFTER.matchAt(src, arguments?.range?.last?.plus(1) ?: (m.range.last + 1))?.range?.last
-                            val valueAt = if (bare && !markup) set?.plus(1) else VAL_AFTER.groupRange(src, m, 5)?.first
-                            val d =
-                                add(
-                                    m.groupValues[2],
-                                    Declaration(
-                                        at,
-                                        scopeStart(at),
-                                        m.groups[3]?.value,
-                                        m.groups[4]?.value,
-                                        if (constant) m.groups[5]?.value else null,
-                                        constant,
-                                        html,
-                                        m.groups[5] != null,
-                                        markup,
-                                        if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
-                                        arguments?.groupValues?.get(1),
-                                        valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
-                                        shared,
-                                        trusted,
-                                        trustedText,
-                                        aliased = initialiser?.third == true,
-                                        overridable = overridable,
-                                    ),
-                                )
-                            if (owner.kind != "top") owner.ends += d
-                        }
-                    }
+                    property(f, word, end)
                 }
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
-            val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 || DECLARES_AFTER.matchAt(src, end) != null }
+            // After a value on its line, `b private const val`, it is an infix call's.
+            val says =
+                MODIFIER_WORDS[word]?.takeIf {
+                    f.after == 0 ||
+                        (
+                            DECLARES_AFTER.matchAt(
+                                src,
+                                end,
+                            ) != null && !afterValue(src, code, comments, i, f.modifiers != 0, annotationClosed)
+                        )
+                }
             if (says == null) f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
@@ -1289,13 +1465,14 @@ private fun declarations(
             if (f.pending?.fn == null) f.pending?.state = "stmt"
             if (f.pending?.state == "expr") f.pending?.started = true
             if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == annotated - 1) f.modifiers = f.modifiers or HTML
+            annotationClosed = annotated
             i = annotated
             continue
         }
         if (c == '(' || c == '[' || c == '{') {
             if (f.kind != "for") f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
-            if (c == '(' && f.fn) {
+            if (c == '(' && f.fn && !receiverIn(i)) {
                 g.kind = "params"
                 // A function still being typed has no brackets, and the next ones are a statement's.
                 val head = if (i - f.funAt < FUN_HEAD_LENGTH) FUN_HEAD.matchEntire(src.substring(f.funAt, i)) else null
@@ -1344,6 +1521,7 @@ private fun declarations(
                         true
                 } else if (f.cls) {
                     g.kind = "class"
+                    g.member = !f.anonymous
                     f.cls = false
                     g.extended = f.declares.first
                     g.contract = f.declares.second
@@ -1380,6 +1558,8 @@ private fun declarations(
                     }
                 }
             }
+            // An `init` block is a member, and a declaration may begin after it on its line.
+            if (c == '{' && f.kind == "class" && f.word == "init") g.member = true
             f.reset()
             stack += g
             i++
@@ -1406,8 +1586,9 @@ private fun declarations(
             }
             endPending(g, i + 1)
             g.endValues(i)
-            // `fun a() {} open` then a line break: a declaration may begin after a block.
-            if (c == '}') outer.after = 0
+            // `fun a() {} open val b`: after a function's or a class's body a declaration may begin on the same line, and
+            // after a lambda's the expression goes on, `b { } open value`.
+            if (c == '}' && (g.function != null || g.member)) outer.after = 0
             g.function?.body?.end = i + 1
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1

@@ -1228,4 +1228,149 @@ class ValueStructureTest {
         val src = "fun f(a: String) {\n    // have fun\n    interpolate { \"<p>\${+a}</p>\" }\n}"
         assertEquals(1, interpolateBlocks(src, fileFacts(src).code).size)
     }
+
+    @Test
+    fun `an annotation in backticks or with type arguments is read whole, as a plain one is`() {
+        val shapes =
+            listOf("@A<String>", "@A <String>", "@A<B<C<D>>>", "@A<(Int) -> Unit>", "@A<\n    String>", "@`A`", "@`a`.b", "@a.`b`")
+        for (annotation in shapes) {
+            val files =
+                listOf(
+                    "abstract class P {\n    $annotation open\n    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n",
+                    "object O {\n    @Language(\"HTML\") $annotation val title = load()\n    fun page() = \"<p>\$title</p>\"\n}\n",
+                    "class P($annotation val title: String) {\n    fun page() = \"<p>\$title</p>\"\n}\n",
+                    "fun f($annotation n: String) = \"<p>\$n</p>\"\n",
+                )
+            for (file in files) assertEquals(told(file.replace(annotation, "@A")), told(file), file)
+        }
+    }
+
+    @Test
+    fun `a parameter's annotation is passed over whole, nested brackets and quotes in its arguments too`() {
+        val annotations =
+            listOf(
+                "@set:Deprecated(\"m\", ReplaceWith(\"x\"))",
+                "@Named(\"a\\\"b)\")",
+                "@Pattern(regexp = \"^(a|b)\$\")",
+                "@Named(value = Q(\"b\"))",
+                "@A<String>",
+            )
+        for (annotation in annotations) {
+            val files =
+                listOf(
+                    "class P(\n    $annotation var foo: String,\n) {\n    fun page() = \"<p>\$foo</p>\"\n}\n",
+                    "fun f($annotation n: String) = \"<p>\$n</p>\"\n",
+                    "fun f(@Language(\"HTML\") $annotation body: String) = \"<p>\$body</p>\"\n",
+                )
+            for (file in files) assertEquals(told(file.replace(annotation, "@A")), told(file), file)
+        }
+    }
+
+    @Test
+    fun `an annotation left open in a constructor ends where the next property begins`() {
+        val open = "class P(\n    @Foo(\n    val id: Int,\n    val name: String,\n) {\n    fun page() = \"<p>\$id \$name</p>\"\n}\n"
+        assertEquals(listOf("\$name"), told(open))
+        val mark = "class P(@Language(\"HTML\" val q: String, val n: Int) {\n    fun page() = \"<p>\$q \$n</p>\"\n}\n"
+        // A mark not yet closed marks nothing, and the properties after it are declared: `n` is an Int.
+        assertEquals(listOf("\$q"), told(mark))
+    }
+
+    @Test
+    fun `a receiver in brackets is no parameter list, and a function without a name may have a receiver`() {
+        for (receiver in listOf("((Int) -> Unit).", "((Int) -> Unit)?.", "( (Int) -> Unit ) ? . ", "(/* ( */ String).")) {
+            val named = "fun ${receiver}call(n: Int) = \"<b>\$n</b>\"\n"
+            assertEquals(told(named.replace(receiver, "String.")), told(named), named)
+        }
+        // `fun String.()` and `fun (String).()` have no name, and the outer function's parameters are in sight in them.
+        assertEquals(emptyList(), told("fun a(n: Int): String.() -> String = fun String.(): String = \"<p>\$n</p>\"\n"))
+        assertEquals(emptyList(), told("fun a(n: Int): String.() -> String = fun (String).(): String = \"<p>\$n</p>\"\n"))
+        val unnamed = "fun f(n: String) = fun (String).(m: Int) = \"<b>\$n \$m</b>\"\n"
+        assertEquals(told(unnamed.replace("fun (String).(", "fun String.(")), told(unnamed))
+        assertEquals(listOf("\$n"), told(unnamed))
+    }
+
+    @Test
+    fun `a modifier's word that a line or a lambda carries on into is an operand, not the next declaration's`() {
+        fun open(line: String) =
+            "open class P {\n    val a = b$line\n    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
+        for (line in listOf(" +\n        open", " ?:\n        open", " as\n        open", " in\n        open", " <\n        open")) {
+            assertEquals(told(open(line).replace("open\n", "other\n")), told(open(line)), line)
+        }
+        val ifElse = open(" else\n        open").replace("val a = b", "val a = if (c) x")
+        assertEquals(told(ifElse.replace("open\n", "other\n")), told(ifElse))
+        for (lambda in listOf("b { } open value", "b.let { } open value // c")) {
+            val src = open("").replace("val a = b", "val a = $lambda")
+            assertEquals(told(src.replace(" open value", " other value")), told(src), lambda)
+        }
+        val constant = "val a = \"a\" +\n    const\nval title = \"<b>x</b>\"\nfun page() = \"<p>\$title</p>\"\n"
+        assertEquals(told(constant.replace("const\n", "other\n")), told(constant))
+        // The `*` of a star import ends its line, and the next declaration is the constant it says.
+        val imported = "import a.b.*\nconst val NAME = \"<b>x</b>\"\nfun page() = \"<p>\$NAME</p>\"\n"
+        assertEquals(emptyList(), told(imported))
+        // After a function's or a class's body a declaration may begin on the same line.
+        val member = "abstract class P {\n    fun a() {} open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
+        assertEquals(listOf("\$title"), told(member))
+    }
+
+    @Test
+    fun `a modifier's word after a value on its line is an infix call's, and marks no declaration`() {
+        val lines =
+            listOf(
+                "fun a() = b private const val title = \"<b>x</b>\"",
+                "fun a() = b private const @A val title = \"<b>x</b>\"",
+                "fun z() = a private open val title = \"<b>x</b>\"",
+                "val a = \"<i>\" open val title = \"<b>x</b>\"",
+                "val a = 1 open @A @A @A val title = \"<b>x</b>\"",
+            )
+        for (line in lines) {
+            val src = "open class P {\n    $line\n    fun page() = \"<p>\$title</p>\"\n}\n"
+            val plain = line.replace(Regex("\\b(private|const|open)\\b"), "other")
+            assertEquals(told(src.replace(line, plain)), told(src), line)
+        }
+        // A modifier after an annotation's arguments is the declaration's.
+        assertEquals(
+            listOf("\$title"),
+            told("open class P {\n    @A(1) open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"),
+        )
+    }
+
+    @Test
+    fun `a local value has no getter, so a call of get() after it is a call`() {
+        for (src in listOf(
+            "fun h(q: String): String {\n    val t = \"<b>\$q</b>\"; get(); return \"<p>\$t</p>\"\n}\n",
+            "fun h(q: String): String {\n    val t = q\n    get()\n    return \"<p>\$t</p>\"\n}\n",
+        )) {
+            assertEquals(told(src.replace("get()", "other()")), told(src), src)
+        }
+    }
+
+    /** What the file declares by [name]: whether it is a constant and whether another may stand in for it. */
+    private fun modifiers(
+        src: String,
+        name: String,
+    ) = fileFacts(src).names[name].orEmpty().map { it.constant to it.overridable }
+
+    @Test
+    fun `after an init block a declaration may begin on its line, and after an object's value it may not`() {
+        assertEquals(listOf(true to false), modifiers("object Q {\n    init { } private const val Z = \"x\"\n}\n", "Z"))
+        assertEquals(listOf(false to true), modifiers("open class A {\n    init { println() } open val y = 2\n}\n", "y"))
+        assertEquals(listOf(false to false), modifiers("open class A {\n    val o = object { } open val y = 2\n}\n", "y"))
+    }
+
+    @Test
+    fun `a name in backticks in an annotation's arguments, val too, is part of them`() {
+        val top = "object K { const val `val` = \"v\" }\n@Suppress(K.`val`) private const val TOP = 3\n"
+        assertEquals(listOf(true to false), modifiers(top, "TOP"))
+        assertEquals(listOf(false to true), modifiers("open class C2 {\n    @Ann(K.`val`) open val q = 1\n}\n", "q"))
+        val ctor = "class C1(@Ann(K.`val`) val x: Int, val y: Int) {\n    val z = x\n}\n"
+        assertEquals(listOf(8), fileFacts(ctor).names["y"].orEmpty().map { it.start })
+    }
+
+    @Test
+    fun `a type annotation in an annotation's type arguments, and a long comment before a line break, keep the modifiers right`() {
+        assertEquals(listOf(true to false), modifiers("@A<@TB String>(\"x\") private const val C = 1\n", "C"))
+        assertEquals(listOf(true to false), modifiers("object Q {\n    @A<List<@TB String>>(s = \"x\") const val C = 1\n}\n", "C"))
+        val comment = "open class P {\n    val open = 1\n    val a = 2 + /* " + "c".repeat(2_500) + " */\n        open\n    val c = 3\n}\n"
+        assertEquals(listOf(false to false), modifiers(comment, "c"))
+    }
 }

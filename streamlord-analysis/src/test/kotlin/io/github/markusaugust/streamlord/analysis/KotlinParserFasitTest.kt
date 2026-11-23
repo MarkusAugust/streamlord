@@ -10,8 +10,13 @@ import org.jetbrains.kotlin.com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtBlockExpression
+import org.jetbrains.kotlin.psi.KtCallableDeclaration
 import org.jetbrains.kotlin.psi.KtCatchClause
+import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtClassBody
+import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtConstantExpression
 import org.jetbrains.kotlin.psi.KtDestructuringDeclaration
 import org.jetbrains.kotlin.psi.KtDoWhileExpression
@@ -23,6 +28,7 @@ import org.jetbrains.kotlin.psi.KtModifierList
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtParameter
+import org.jetbrains.kotlin.psi.KtPrimaryConstructor
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPsiFactory
 import org.jetbrains.kotlin.psi.KtReturnExpression
@@ -250,6 +256,29 @@ class KotlinParserFasitTest {
                 else -> null
             }
 
+        /**
+         * What the modifiers of a property or a constructor's property say, as the parser reads them: whether it is a
+         * constant, whether it is marked HTML, and whether another declaration may stand in for it, a member of [cls].
+         */
+        fun modifiers(
+            declaration: KtCallableDeclaration,
+            name: PsiElement,
+            d: Declaration,
+            cls: KtClassOrObject?,
+        ) {
+            val const = declaration.hasModifier(KtTokens.CONST_KEYWORD)
+            if (d.constant != const) difference("const", name, "analysis ${if (d.constant) "reads" else "misses"} const")
+            val html = declaration.annotationEntries.any { HTML_ANNOTATION.containsMatchIn(it.text) }
+            if (d.html != html) difference("html", name, "analysis ${if (d.html) "reads" else "misses"} the HTML mark")
+            val contract = cls is KtClass && cls.isInterface()
+            val extended = contract || (cls is KtClass && EXTENDABLE.any { cls.hasModifier(it) })
+            val own = declaration.hasModifier(KtTokens.OPEN_KEYWORD) || declaration.hasModifier(KtTokens.ABSTRACT_KEYWORD)
+            val overridable = cls != null && (own || contract || (declaration.hasModifier(KtTokens.OVERRIDE_KEYWORD) && extended))
+            if (d.overridable != overridable) {
+                difference("overridable", name, "analysis ${if (d.overridable) "reads" else "misses"} that another may stand in for it")
+            }
+        }
+
         file.accept(
             object : KtTreeVisitorVoid() {
                 override fun visitProperty(property: KtProperty) {
@@ -293,6 +322,7 @@ class KotlinParserFasitTest {
                         }
                     }
                     if (property.isLocal) localEnd(property.parent)?.let { scope(name, property, it, local = true) }
+                    if (d != null) modifiers(property, name, d, (property.parent as? KtClassBody)?.parent as? KtClassOrObject)
                 }
 
                 override fun visitNamedFunction(function: KtNamedFunction) {
@@ -363,6 +393,14 @@ class KotlinParserFasitTest {
                 override fun visitParameter(parameter: KtParameter) {
                     super.visitParameter(parameter)
                     val owner = parameter.parent?.parent ?: return
+                    // A constructor's property is declared, and its modifiers read, as a member of its class.
+                    if (owner is KtPrimaryConstructor && parameter.hasValOrVar()) {
+                        val name = parameter.nameIdentifier ?: return
+                        val d = declarationOf(name, owner)
+                        if (d == null) difference("undeclared", name, "the analysis declares no ${name.text} here")
+                        d?.let { modifiers(parameter, name, it, owner.getContainingClassOrObject()) }
+                        return
+                    }
                     val end =
                         when (owner) {
                             is KtNamedFunction -> if (owner.bodyExpression == null) return else owner.textRange.endOffset
@@ -451,6 +489,9 @@ private fun withoutTrailingComments(
     while (k > 0 && (src[k - 1].isWhitespace() || comment[k - 1])) k--
     return k
 }
+
+/** The modifiers by which a class can be extended. */
+private val EXTENDABLE = listOf(KtTokens.OPEN_KEYWORD, KtTokens.ABSTRACT_KEYWORD, KtTokens.SEALED_KEYWORD)
 
 /** One line, cut to 200 characters: enough to tell two readings apart. */
 private fun String.oneLine(): String = replace("\n", "⏎").let { if (it.length > 200) it.take(197) + "..." else it }
