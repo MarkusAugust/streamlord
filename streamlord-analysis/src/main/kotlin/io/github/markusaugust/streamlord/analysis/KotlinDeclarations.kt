@@ -1348,7 +1348,10 @@ private fun withoutComments(
 
 /**
  * Where the parameters between [open] and [close] are cut: the brackets themselves and each of [commas], the commas
- * the scanner found outside other brackets, but for those in a type's brackets, `Map<String, Int>`.
+ * the scanner found outside other brackets, but for those in a type's brackets, `Map<String, Int>`. A `<` is a type's
+ * when its `>` closes it before anything a type cannot hold: a comma reaches the next parameter only past its name's
+ * `:` or a default's `=` outside round brackets, and no type holds a brace or a `;`. So a comparison, `x<y, b: Int`
+ * or `{ it<0 }`, opens none, and `(x: Int) -> Unit` or `T & Any` in the brackets closes nothing. Read in one pass.
  */
 private fun parameterCuts(
     src: String,
@@ -1357,53 +1360,40 @@ private fun parameterCuts(
     close: Int,
     commas: List<Int>,
 ): List<Int> {
-    val cuts = arrayListOf(open)
-    var typed = -1
-    for (comma in commas) {
-        // The type's brackets before the comma, read once each.
-        var i = maxOf(cuts.last() + 1, typed)
-        while (i < comma) {
-            if (code[i] && src[i] == '<') {
-                val end = typeArgumentsEnd(src, code, i, close)
-                if (end > comma) typed = end
-                if (end > 0) i = end - 1
-            }
-            i++
-        }
-        if (comma >= typed) cuts += comma
-    }
-    cuts += close
-    return cuts
-}
-
-/**
- * Just past the `>` that closes the type's brackets [open] opens, or -1 where they hold what no type holds. As Kotlin's
- * parser has it, only names, dots, commas, `?`, `*`, annotations, a function type's brackets and arrow, and brackets of
- * the same kind stand in them, so a comparison, `x<y, b: Int` or `{ it<0 }`, opens none.
- */
-private fun typeArgumentsEnd(
-    src: String,
-    code: BooleanArray,
-    open: Int,
-    close: Int,
-): Int {
-    var angles = 0
+    // Each `<` still open, with the depth of round brackets it was opened at, and where its outermost one opened.
+    val angles = ArrayList<Int>()
     var parens = 0
-    for (i in open until close) {
+    var outer = -1
+    val typed = ArrayList<IntRange>()
+    for (i in open + 1 until close) {
         if (!code[i]) continue
         val c = src[i]
         when {
-            c == '<' -> angles++
-            c == '>' && src[i - 1] == '-' -> {}
-            c == '>' -> if (--angles == 0) return i + 1
+            c == '<' -> {
+                if (angles.isEmpty()) outer = i
+                angles += parens
+            }
+            c == '>' && src[i - 1] != '-' && angles.lastOrNull() == parens -> {
+                angles.removeAt(angles.size - 1)
+                if (angles.isEmpty()) typed += outer..i
+            }
             c == '(' -> parens++
-            c == ')' -> if (--parens < 0) return -1
-            c == '-' -> if (src.getOrNull(i + 1) != '>') return -1
-            isWordPart(c) || c.isWhitespace() || c in ".,?*@`" -> {}
-            else -> return -1
+            c == ')' -> {
+                parens--
+                while (angles.isNotEmpty() && angles.last() > parens) angles.removeAt(angles.size - 1)
+            }
+            c in "{};" -> angles.clear()
+            c == ':' || c == '=' -> while (angles.isNotEmpty() && angles.last() == parens) angles.removeAt(angles.size - 1)
         }
     }
-    return -1
+    val cuts = arrayListOf(open)
+    var k = 0
+    for (comma in commas) {
+        while (k < typed.size && typed[k].last < comma) k++
+        if (k == typed.size || comma !in typed[k]) cuts += comma
+    }
+    cuts += close
+    return cuts
 }
 
 /**
@@ -1530,7 +1520,7 @@ private fun declarations(
             val m = PARAMETER.find(written)
             if (m == null) {
                 // A name the pattern does not read, `` `the body` ``, is not declared, but its mark still holds its place.
-                val colon = (0 until text.length).firstOrNull { text[it] == ':' && code[cuts[k] + 1 + it] } ?: text.length
+                val colon = (0 until written.length).firstOrNull { written[it] == ':' && code[cuts[k] + 1 + it] } ?: written.length
                 if (HTML_ANNOTATION.findAll(text.substring(0, colon)).any { code[cuts[k] + 1 + it.range.first] }) marked?.add(k)
                 continue
             }

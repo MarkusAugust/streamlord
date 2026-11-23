@@ -32,8 +32,8 @@ All notable changes to Streamlord are recorded here. The format follows
 - A parameter marked `@Language("HTML")` is found by its place after a comparison among the
   parameters before it, spaced or not, `keep: (Int) -> Boolean = { it > 0 }` or `big: Boolean = 1<2`:
   an argument handed to it is markup. Before, the comparison moved the mark onto the first parameter.
-  A type's brackets are read as Kotlin's parser reads them, so `Map <String, Int>` and a backticked
-  type cut no parameter in two either. The mark is read among the annotations before a parameter's
+  No comma in a type's brackets cuts a parameter in two either, `Map <String, Int>`,
+  `Map<String, (x: Int) -> Unit>` or `Map<T, T & Any>`. The mark is read among the annotations before a parameter's
   name, so `@Language("HTML")` written in a default's text, `example: String = """@Language("HTML")"""`,
   marks nothing (#301, #302).
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does

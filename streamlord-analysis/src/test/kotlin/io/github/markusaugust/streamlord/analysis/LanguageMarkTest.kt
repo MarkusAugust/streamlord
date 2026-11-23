@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -39,14 +40,26 @@ class LanguageMarkTest {
         assertEquals(setOf(1, "b"), marked("fun f(a: `My Type`<Int, Int>, @Language(\"HTML\") b: String) = b", "f"))
         assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, (Int) -> Unit>?, @Language(\"HTML\") b: String) = b", "f"))
         assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, Int> = emptyMap<String, Int>(), @Language(\"HTML\") b: String) = b", "f"))
+        assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, (x: Int) -> Unit>, @Language(\"HTML\") b: String) = b", "f"))
+        assertEquals(setOf(1, "b"), marked("fun <T> f(a: Map<T, T & Any>, @Language(\"HTML\") b: String) = b", "f"))
+        assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, @Ann(x = 1) Int>, @Language(\"HTML\") b: String) = b", "f"))
     }
 
     @Test
     fun `a parameter with a backticked name is marked by its place`() {
         assertEquals(setOf(1), marked("fun f(x: Int, @Language(\"HTML\") `the body`: String) = 1", "f"))
+        assertEquals(setOf(1), marked("fun f(x: Int, @param:Language(\"HTML\") `the body`: String) = 1", "f"))
         val src = "fun f(x: Int, @Language(\"HTML\") `body`: String) = 1\nval p = f(1, \"<p>x</p>\")"
         assertEquals(setOf(1), marked(src, "f").filterIsInstance<Int>().toSet())
         assertEquals(true, (language + src).indexOf("\"<p>") in fileFacts(language + src).htmlArguments)
+    }
+
+    @Test
+    fun `brackets that never close as a type's are read in time that grows with them`() {
+        var made = 0
+        assertGrowsLinearly("comparisons in a default", 2_000, { n: Int ->
+            "// ${made++}\nfun f(a: Boolean = " + "a<".repeat(n) + "a, @Language(\"HTML\") b: String) = b\n"
+        }) { fileFacts(it) }
     }
 
     @Test
