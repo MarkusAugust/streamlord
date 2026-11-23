@@ -131,9 +131,9 @@ internal class FileFacts(
     }
 
     /**
-     * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that writes a
-     * tag or marks a value and stands in no call's arguments, where a Datastar expression or a log message would, or the
-     * argument of core's `Trusted` that writes a tag.
+     * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that marks a
+     * value, or that writes a tag and is no `val`'s value, and stands in no call's arguments, where a Datastar
+     * expression or a log message would; or one of [trustedLiterals] that writes a tag.
      */
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = HashSet<Int>()
@@ -141,20 +141,58 @@ internal class FileFacts(
         if ("interpolate" in src && !shadowsCore(src, "interpolate")) {
             for (b in interpolateBlocks(src, code)) {
                 val literals = lex.stringsIn(b.braces.first, b.braces.last)
-                val written = literals.filter { TAG.containsMatchIn(it.text) || it.interpolations.any { ip -> markedValue(ip) != null } }
+                val written =
+                    literals.filter {
+                        it.interpolations.any { ip -> markedValue(ip) != null } || (TAG.containsMatchIn(it.text) && !inValue(it.start))
+                    }
                 out += outsideArguments(src, code, b.braces.first, written)
             }
         }
-        if ("Trusted" in src && !shadowsCore(src, "Trusted")) {
-            for (site in findCallSites(src, setOf("Trusted"), lex)) {
-                if (src.getOrNull(codeBefore(src, code, site.nameStart)) == '.') continue
-                // Its argument, a literal or a sum of them: each that writes a tag, called in it by nothing else.
-                val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
-                val written = lex.stringsIn(arg.start, arg.end).filter { TAG.containsMatchIn(it.text) }
-                out += outsideArguments(src, code, site.openParen, written)
-            }
+        val lexed = lex.strings.associateBy { it.start }
+        out += trustedLiterals.filter { lexed[it]?.text?.let(TAG::containsMatchIn) == true }
+        out
+    }
+
+    /**
+     * Where each literal starts that is the argument of core's `Trusted`, under its name, an alias or its package, or a
+     * literal of a sum that is: markup the author vouches for, called in it by nothing else.
+     */
+    val trustedLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val out = HashSet<Int>()
+        val names = coreAliases(src).filterValues { it == "Trusted" }.keys + "Trusted"
+        if (names.none { it in src }) return@lazy out
+        val lex = lexKotlin(src)
+        val own = !shadowsCore(src, "Trusted")
+        for (site in findCallSites(src, names, lex)) {
+            val dot = codeBefore(src, code, site.nameStart)
+            // Called on a receiver it is somebody else's, unless the receiver is core's package written out.
+            val qualified = src.getOrNull(dot) == '.' && site.name == "Trusted" && qualifiedByCore(src, dot)
+            if (!qualified && (src.getOrNull(dot) == '.' || (site.name == "Trusted" && !own))) continue
+            val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
+            out += outsideArguments(src, code, site.openParen, lex.stringsIn(arg.start, arg.end))
         }
         out
+    }
+
+    /** Whether [at] stands in the value a `val` is set to. */
+    fun inValue(at: Int): Boolean = valued.getOrElse(at) { false }
+
+    // Where the values of the file's `val`s stand, worked out once: how many open at each offset, less how many end.
+    private val valued: BooleanArray by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val open = IntArray(src.length + 1)
+        for (list in names.values) {
+            for (d in list) {
+                val v = d.value ?: continue
+                if (v.start >= src.length) continue
+                open[v.start]++
+                open[(if (v.end < 0) v.start + 1 else v.end).coerceIn(v.start + 1, src.length)]--
+            }
+        }
+        var depth = 0
+        BooleanArray(src.length) { k ->
+            depth += open[k]
+            depth > 0
+        }
     }
 
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
@@ -1170,11 +1208,21 @@ private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
 
+/** Whether the `.` at [dot] ends core's package written out, `io.github.markusaugust.streamlord.core.domain.Trusted`. */
+private fun qualifiedByCore(
+    src: String,
+    dot: Int,
+): Boolean {
+    val from = dot - DOMAIN.length
+    return from >= 0 && src.startsWith(DOMAIN, from) && !isWordPart(src.getOrNull(from - 1)) && src.getOrNull(from - 1) != '.'
+}
+
 /**
  * Where those of [literals], in the order of the file, start that stand in no call's arguments within the bracket that
  * opens at [open]: in parentheses, square brackets, or a lambda handed to a call. The braces of a branch,
  * `if (c) { ... }`, `else { }`, `"a" -> { }`, are the block's own. One pass over the bracket.
  */
+
 private fun outsideArguments(
     src: String,
     code: BooleanArray,

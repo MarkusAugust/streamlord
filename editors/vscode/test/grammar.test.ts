@@ -341,6 +341,13 @@ describe("kotlin injection grammar", () => {
     assert.ok(await plain(`fun f(name: String) = interpolate { "render $name" }`), "a literal of the block that writes no tag");
     assert.ok(await plain(`fun f(url: String) = Trusted("https://cdn.example.com/$url")`), "Trusted's argument that writes no tag");
     assert.ok(await plain(`public value class Trusted(val html: String)`), "Trusted's declaration");
+    const qualified = `fun f() = io.github.markusaugust.streamlord.core.domain.Trusted("bold <b>text</b>")`;
+    assert.match(scopeOf(await tokens("source.kotlin", qualified), "b"), tag, "Trusted written with core's package");
+    const qualifiedWrapped = await tokenLines("source.kotlin", [`fun f() = io.github.markusaugust.streamlord.core.domain.Trusted(`, `    "bold <b>wrapped</b>",`, `)`]);
+    assert.match(scopeOf(qualifiedWrapped[1]!, "b"), tag, "and its argument on a line of its own");
+    assert.ok(await plain(`fun f() = other.Trusted("bold <b>text</b>")`), "somebody else's Trusted, called on a receiver");
+    const logged = await tokenLines("source.kotlin", [`fun f(x: String) = interpolate {`, `    val err = "warn: <b>$x</b>"`, `    "<p>\${+x}</p>"`, `}`]);
+    assert.ok(logged[1]!.every((x) => !x.scopes.some((s) => s.includes("html"))), "a literal a val of the block is set to");
     const after = await tokens("source.kotlin", `fun r() = interpolate { """plain""" }.also { log("<b>x</b>") }`);
     assert.doesNotMatch(scopeOf(after, "plain"), /html/, "a raw literal of the block that writes no tag before its closing quotes");
     const prefixed = await tokens("source.kotlin", `fun f() = interpolate(listOf("data-")) { "Hi <b>\${+n}</b>" }`);

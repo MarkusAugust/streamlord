@@ -490,7 +490,9 @@ public class Analyzer(
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
             val block = blocks.lastOrNull { s.start in it.braces }?.takeUnless { inMarkedValue(lex.strings, s, it.braces) }
-            if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
+            // A literal a `val` of the block is set to is no markup of it unless it marks a value: it may go to a log.
+            val marks = whole.interpolations.any { markedValue(it) != null }
+            if (block != null && (isHtmlString(src, s) || ('<' in whole.text && !facts.inValue(s.start)) || marks)) {
                 val issues =
                     checkInterpolateBlock(
                         whole,
