@@ -1122,6 +1122,25 @@ private fun declarations(
         f.ctor = null
     }
 
+    /** What is written from [from] to [to], each annotation blank, the brackets and quotes of its arguments and its type arguments too. */
+    fun withoutAnnotations(
+        from: Int,
+        to: Int,
+    ): String {
+        val out = blank.toCharArray(from, to)
+        var i = from
+        while (i < to) {
+            val end = if (src[i] == '@' && code[i]) minOf(annotationEnd(src, code, i), to) else i
+            if (end > i) {
+                for (j in i until end) if (out[j - from] != '\n') out[j - from] = ' '
+                i = end
+            } else {
+                i++
+            }
+        }
+        return out.concatToString()
+    }
+
     /** Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can see the properties of. */
     fun parameters(
         f: ScopeFrame,
@@ -1133,7 +1152,7 @@ private fun declarations(
         val cuts = listOf(f.open) + f.commas + close
         for (k in 0 until cuts.size - 1) {
             val text = blank.substring(cuts[k] + 1, cuts[k + 1])
-            val m = PARAMETER.find(text) ?: continue
+            val m = PARAMETER.find(withoutAnnotations(cuts[k] + 1, cuts[k + 1])) ?: continue
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value

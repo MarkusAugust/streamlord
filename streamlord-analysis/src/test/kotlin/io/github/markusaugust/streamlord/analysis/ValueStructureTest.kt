@@ -1244,4 +1244,25 @@ class ValueStructureTest {
             for (file in files) assertEquals(told(file.replace(annotation, "@A")), told(file), file)
         }
     }
+
+    @Test
+    fun `a parameter's annotation is passed over whole, nested brackets and quotes in its arguments too`() {
+        val annotations =
+            listOf(
+                "@set:Deprecated(\"m\", ReplaceWith(\"x\"))",
+                "@Named(\"a\\\"b)\")",
+                "@Pattern(regexp = \"^(a|b)\$\")",
+                "@Named(value = Q(\"b\"))",
+                "@A<String>",
+            )
+        for (annotation in annotations) {
+            val files =
+                listOf(
+                    "class P(\n    $annotation var foo: String,\n) {\n    fun page() = \"<p>\$foo</p>\"\n}\n",
+                    "fun f($annotation n: String) = \"<p>\$n</p>\"\n",
+                    "fun f(@Language(\"HTML\") $annotation body: String) = \"<p>\$body</p>\"\n",
+                )
+            for (file in files) assertEquals(told(file.replace(annotation, "@A")), told(file), file)
+        }
+    }
 }
