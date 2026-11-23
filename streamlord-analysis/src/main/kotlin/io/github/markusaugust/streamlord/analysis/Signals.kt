@@ -847,9 +847,14 @@ private fun definedAt(
             withNested((lex ?: lexKotlin(src)).strings).flatMap { s -> s.interpolations.filter { it.kind == InterpolationKind.SIMPLE } }
         }
     }
+    // Nor is an assignment written in a comment, `// $count++`, a page's.
+    val comments by lazy(LazyThreadSafetyMode.NONE) {
+        if (language == SourceLanguage.KOTLIN) codeMask(src, lex ?: lexKotlin(src)).second else BooleanArray(0)
+    }
     for (m in ASSIGNED_SIGNAL.findAll(src)) {
         val name = ASSIGNED_SIGNAL.groupAt(src, m, 1) ?: ASSIGNED_SIGNAL.groupAt(src, m, 2)!!
         val at = name.range.first - 1
+        if (comments.getOrElse(at) { false }) continue
         if (templates.none { at >= it.start && at < it.end }) out += declarationAt(name, 0)
     }
     return out.filter { PLACEHOLDER !in it.name }.distinct()
@@ -915,11 +920,13 @@ private fun declared(
                 }
             }
         }
+        // A call is code: the name of a helper in a comment or a string is none, in a template's code it is.
+        val code by lazy(LazyThreadSafetyMode.NONE) { codeMask(src, lex).first }
         for (re in KOTLIN_PATTERNS) {
             for (m in re.findAll(src)) {
                 // Each pattern starts at the name of the call it reads.
                 val name = m.value.substringBefore('(')
-                if (foreign(name, m.range.first)) continue
+                if (!code[m.range.first] || foreign(name, m.range.first)) continue
                 // A helper called on a receiver, `headers.set("Cache-Control", ...)`, is not the top-level helper.
                 if (name in SIGNAL_NAME_HELPERS && onReceiver(src, m.range.first)) continue
                 named(declarationAt(re.groupAt(src, m, 1)!!, 0))
@@ -961,7 +968,9 @@ private fun declared(
             lex.strings
                 .filter { !it.unterminated && it.text.contains(prefix + "ignore", ignoreCase = true) }
                 .flatMap { s -> ignoredTags(s.text, prefix, templates = false).map { s.toSource(it.first, it.last) } }
-        out.removeAll { d -> ignored(d.start) || inStrings.any { d.start in it } }
+        // Markup written in a comment, `// <div data-signals:count="1">`, is no page's.
+        val comments = codeMask(src, lex).second
+        out.removeAll { d -> comments.getOrElse(d.start) { false } || ignored(d.start) || inStrings.any { d.start in it } }
     } else if (src.contains(prefix + "ignore", ignoreCase = true)) {
         val skipped = ignoredTags(src, prefix)
         out.removeAll { d -> skipped.any { d.start in it } }
@@ -1005,10 +1014,19 @@ private fun collect(
     for (d in declared(src, language, spread, foreign, prefix = prefix)) out += d.name
     if (spread.any) out += ANY_SIGNAL
     if (language == SourceLanguage.KOTLIN) {
-        if (reads) for (re in KOTLIN_READS) for (m in re.findAll(src)) out += m.groupValues[1]
+        val lex by lazy(LazyThreadSafetyMode.NONE) { lexKotlin(src) }
+        // Where the code is, a template's included, and the comments: what a comment writes is read by no page.
+        val masks by lazy(LazyThreadSafetyMode.NONE) { codeMask(src, lex) }
+        if (reads) {
+            for (re in KOTLIN_READS) {
+                for (m in re.findAll(src)) {
+                    if (!masks.second[m.range.first]) out += m.groupValues[1]
+                }
+            }
+        }
         // In a `$$"..."` literal a shorter run of dollars is text, as an escaped one is elsewhere: `$count` reads a signal.
         if (reads) {
-            for (s in withNested(lexKotlin(src).strings)) {
+            for (s in withNested(lex.strings)) {
                 if (s.dollars < 2) continue
                 for (m in BARE_SIGNAL.findAll(src.substring(s.contentStart, s.contentEnd))) {
                     val at = s.contentStart + m.range.first
@@ -1017,8 +1035,13 @@ private fun collect(
             }
         }
         if (reads) {
+            // A call is code: the name of a helper in a comment or a string is none, in a template's code it is.
             for (m in HELPER_READS.findAll(src)) {
-                if (foreign(m.value.substringBefore('('), m.range.first) || onReceiver(src, m.range.first)) continue
+                if (!masks.first[m.range.first] || foreign(m.value.substringBefore('('), m.range.first) ||
+                    onReceiver(src, m.range.first)
+                ) {
+                    continue
+                }
                 out += m.groupValues[1]
             }
         }
