@@ -1114,7 +1114,10 @@ private val QUOTED = regex("`[^`\n]+`")
 
 // A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
 private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
-private val ANNOTATION = regex("""@(?:[a-z]+:\s*(?!(?:va[lr]|fun|class|interface|object)\b))?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
+
+// A use-site target's colon may have blanks after it, but no declaration's word: `@field:` alone is being typed.
+private val ANNOTATION =
+    regex("""@(?:[a-z]+:\s*(?!(?:va[lr]|fun|class|interface|object)\b))?""" + """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
 /** The words a modifier declares something with, on its line. */
 private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
@@ -1167,7 +1170,6 @@ private fun overridable(
     extended: Boolean?,
     contract: Boolean?,
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
-
 
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
