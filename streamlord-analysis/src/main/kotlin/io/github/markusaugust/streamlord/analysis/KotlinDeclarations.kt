@@ -716,6 +716,33 @@ private class ScopeFrame(
     }
 }
 
+/**
+ * Whether a value stands before the word at [at], past blanks and comments: a name, a literal, a call's or an index's
+ * bracket or a lambda's brace. A modifier the declaration already has, [said], and the arguments of an annotation that
+ * ends at [annotationClosed] are none.
+ */
+private fun afterValue(
+    src: String,
+    code: BooleanArray,
+    comments: BooleanArray,
+    at: Int,
+    said: Boolean,
+    annotationClosed: Int,
+): Boolean {
+    var k = at - 1
+    // A line break outside a comment is one the line carried on past, or the word would begin a declaration: no further
+    // back than the line, and not past what any line holds.
+    while (k >= 0 && at - k < 2_000 && (src[k] == ' ' || src[k] == '\t' || comments[k])) k--
+    if (k < 0) return false
+    if (src[k] == '\n' || src[k] == '\r' || at - k >= 2_000 || !code[k]) return true
+    if (isWordPart(src[k])) {
+        var from = k
+        while (from > 0 && isWordPart(src[from - 1])) from--
+        return !(said && MODIFIER_WORDS.containsKey(src.substring(from, k + 1)))
+    }
+    return if (src[k] == ')') k + 1 != annotationClosed else src[k] == ']' || src[k] == '}'
+}
+
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
 /** Whether the character at [k], outside code, is a comment's and not a literal's, by what stands where code stopped. */
@@ -1204,34 +1231,86 @@ private fun declarations(
 
     /** The names of a list such as `a, b: Int`, and the type of each. */
     fun listed(list: String): List<Pair<String, String?>> = NAMES.findAll(list).map { it.groupValues[1] to it.groups[2]?.value }.toList()
-    // Where the last annotation read ends: a modifier after its arguments is a declaration's.
-    var annotationClosed = -1
 
-    /** Where the word whose last character is at [k] starts. */
-    fun wordStart(k: Int): Int {
-        var j = k
-        while (j > 0 && isWordPart(src[j - 1])) j--
-        return j
-    }
-
-    /**
-     * Whether a value stands before the word at [at], past blanks and comments: a name, a literal, a call's or an index's
-     * bracket or a lambda's brace. A modifier the declaration already has, [said], and an annotation's arguments are none.
-     */
-    fun afterValue(
-        at: Int,
-        said: Boolean,
-    ): Boolean {
-        var k = at - 1
-        while (k >= 0 && (src[k].isWhitespace() || comments[k])) k--
-        return when {
-            k < 0 -> false
-            !code[k] -> true
-            isWordPart(src[k]) -> !(said && MODIFIER_WORDS.containsKey(src.substring(wordStart(k), k + 1)))
-            src[k] == ')' -> k + 1 != annotationClosed
-            else -> src[k] == ']' || src[k] == '}'
+    /** The properties a `val` or a `var` just before [end] declares in [f], one or a destructured list. */
+    fun property(
+        f: ScopeFrame,
+        word: String,
+        end: Int,
+    ) {
+        val constant = f.modifiers and CONST != 0
+        val html = f.modifiers and HTML != 0
+        val local = f.kind != "top" && f.kind != "class"
+        val cls = f.takeIf { it.kind == "class" }
+        val overridable = !local && overridable(f.modifiers, cls?.extended, cls?.contract)
+        val shared = !local && !f.hidden && f.modifiers and PRIVATE == 0
+        val scopeStart = { at: Int ->
+            if (local) {
+                at
+            } else if (f.kind == "top") {
+                0
+            } else {
+                f.open
+            }
+        }
+        // `when (val x = ...)`: the scope is the one the brackets stand in.
+        val owner = if (f.kind == "paren" || f.kind == "for") stack.getOrNull(stack.size - 2) ?: f else f
+        val destructured = DESTRUCTURED.matchAt(src, end)
+        if (destructured != null) {
+            val listStart = end + destructured.value.indexOf('(') + 1
+            for (n in NAMES.findAll(destructured.groupValues[1])) {
+                val at = listStart + n.range.first
+                val d =
+                    add(
+                        n.groupValues[1],
+                        Declaration(at, scopeStart(at), null, constant = constant, html = html, shared = shared),
+                    )
+                if (owner.kind != "top") owner.ends += d
+            }
+        } else {
+            val m = VAL_AFTER.matchAt(src, end)
+            // `val String.shout`: an extension, read on a receiver and never by its name alone.
+            if (m != null && m.groupValues[1].isEmpty()) {
+                val at = VAL_AFTER.groupRange(src, m, 2)!!.first
+                val bare = m.groups[4] == null && m.groups[5] == null
+                val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
+                val markup = initialiser != null
+                val trusted = initialiser?.first == "Trusted"
+                val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
+                val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
+                // The value of a `val` set once, which a name then stands for.
+                val set = VALUE_AFTER.matchAt(src, arguments?.range?.last?.plus(1) ?: (m.range.last + 1))?.range?.last
+                val valueAt = if (bare && !markup) set?.plus(1) else VAL_AFTER.groupRange(src, m, 5)?.first
+                val d =
+                    add(
+                        m.groupValues[2],
+                        Declaration(
+                            at,
+                            scopeStart(at),
+                            m.groups[3]?.value,
+                            m.groups[4]?.value,
+                            if (constant) m.groups[5]?.value else null,
+                            constant,
+                            html,
+                            m.groups[5] != null,
+                            markup,
+                            if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
+                            arguments?.groupValues?.get(1),
+                            valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
+                            shared,
+                            trusted,
+                            trustedText,
+                            aliased = initialiser?.third == true,
+                            overridable = overridable,
+                        ),
+                    )
+                if (owner.kind != "top") owner.ends += d
+            }
         }
     }
+
+    // Where the last annotation read ends: a modifier after its arguments is a declaration's.
+    var annotationClosed = -1
 
     var i = 0
     while (i < src.length) {
@@ -1313,75 +1392,7 @@ private fun declarations(
                 }
 
                 (word == "val" || word == "var") && f.kind != "params" && f.kind != "ctor" -> {
-                    val constant = f.modifiers and CONST != 0
-                    val html = f.modifiers and HTML != 0
-                    val local = f.kind != "top" && f.kind != "class"
-                    val cls = f.takeIf { it.kind == "class" }
-                    val overridable = !local && overridable(f.modifiers, cls?.extended, cls?.contract)
-                    val shared = !local && !f.hidden && f.modifiers and PRIVATE == 0
-                    val scopeStart = { at: Int ->
-                        if (local) {
-                            at
-                        } else if (f.kind == "top") {
-                            0
-                        } else {
-                            f.open
-                        }
-                    }
-                    // `when (val x = ...)`: the scope is the one the brackets stand in.
-                    val owner = if (f.kind == "paren" || f.kind == "for") stack.getOrNull(stack.size - 2) ?: f else f
-                    val destructured = DESTRUCTURED.matchAt(src, end)
-                    if (destructured != null) {
-                        val listStart = end + destructured.value.indexOf('(') + 1
-                        for (n in NAMES.findAll(destructured.groupValues[1])) {
-                            val at = listStart + n.range.first
-                            val d =
-                                add(
-                                    n.groupValues[1],
-                                    Declaration(at, scopeStart(at), null, constant = constant, html = html, shared = shared),
-                                )
-                            if (owner.kind != "top") owner.ends += d
-                        }
-                    } else {
-                        val m = VAL_AFTER.matchAt(src, end)
-                        // `val String.shout`: an extension, read on a receiver and never by its name alone.
-                        if (m != null && m.groupValues[1].isEmpty()) {
-                            val at = VAL_AFTER.groupRange(src, m, 2)!!.first
-                            val bare = m.groups[4] == null && m.groups[5] == null
-                            val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
-                            val markup = initialiser != null
-                            val trusted = initialiser?.first == "Trusted"
-                            val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
-                            val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
-                            // The value of a `val` set once, which a name then stands for.
-                            val set = VALUE_AFTER.matchAt(src, arguments?.range?.last?.plus(1) ?: (m.range.last + 1))?.range?.last
-                            val valueAt = if (bare && !markup) set?.plus(1) else VAL_AFTER.groupRange(src, m, 5)?.first
-                            val d =
-                                add(
-                                    m.groupValues[2],
-                                    Declaration(
-                                        at,
-                                        scopeStart(at),
-                                        m.groups[3]?.value,
-                                        m.groups[4]?.value,
-                                        if (constant) m.groups[5]?.value else null,
-                                        constant,
-                                        html,
-                                        m.groups[5] != null,
-                                        markup,
-                                        if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
-                                        arguments?.groupValues?.get(1),
-                                        valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
-                                        shared,
-                                        trusted,
-                                        trustedText,
-                                        aliased = initialiser?.third == true,
-                                        overridable = overridable,
-                                    ),
-                                )
-                            if (owner.kind != "top") owner.ends += d
-                        }
-                    }
+                    property(f, word, end)
                 }
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
@@ -1389,7 +1400,12 @@ private fun declarations(
             val says =
                 MODIFIER_WORDS[word]?.takeIf {
                     f.after == 0 ||
-                        (DECLARES_AFTER.matchAt(src, end) != null && !afterValue(i, f.modifiers != 0))
+                        (
+                            DECLARES_AFTER.matchAt(
+                                src,
+                                end,
+                            ) != null && !afterValue(src, code, comments, i, f.modifiers != 0, annotationClosed)
+                        )
                 }
             if (says == null) f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
