@@ -29,6 +29,19 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- A parameter marked `@Language("HTML")` is found by its place after a comparison among the
+  parameters before it, spaced or not, `keep: (Int) -> Boolean = { it > 0 }` or `big: Boolean = 1<2`:
+  an argument handed to it is markup. Before, the comparison moved the mark onto the first parameter.
+  No comma in a type's brackets cuts a parameter in two either, `Map <String, Int>`,
+  `Map<String, (x: Int) -> Unit>` or `Map<T, T & Any>`. The mark is read among the annotations before a parameter's
+  name, so `@Language("HTML")` written in a default's text, `example: String = """@Language("HTML")"""`,
+  marks nothing (#301, #302).
+- A type's brackets are read once for the file, as Kotlin's grammar has a type's arguments, and every
+  reading of a type uses that: a parameter list's commas, where a line ends, an annotation's type
+  arguments, a declared type's arguments and the joined values of a string. A value whose type ends in
+  `List<(Int) -> Unit>` or `Map<String, () -> Unit>` now ends where Kotlin ends it, a lambda's parameter
+  typed `Map<String, Int>` is declared, an annotation in a type's brackets, `List<@A Html>`, is no part
+  of the type read, and `inline fun <reified T>` and `val <T : Any> T.x` hold a type's brackets.
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
   `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and

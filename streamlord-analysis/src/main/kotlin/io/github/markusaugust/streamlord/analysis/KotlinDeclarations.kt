@@ -64,6 +64,8 @@ internal class FileFacts(
     val code: BooleanArray,
     /** `true` where the character is in a comment. */
     val comments: BooleanArray,
+    /** Each type's brackets, as [typeBrackets] reads them. */
+    val types: IntArray,
     val names: Map<String, List<Declaration>>,
     /** Every function the file declares, by its name. */
     val functions: Map<String, List<FunctionDeclaration>> = emptyMap(),
@@ -285,8 +287,9 @@ internal fun fileFacts(
     otherFacts?.let { if (it.src == src) return it }
     val l = lex ?: lexKotlin(src)
     val (code, comments) = codeMask(src, l)
+    val types = typeBrackets(src, code, comments)
     val functions = HashMap<String, MutableList<FunctionDeclaration>>()
-    return FileFacts(src, code, comments, declarations(src, code, comments, functions), functions).also { lastFacts = it }
+    return FileFacts(src, code, comments, types, declarations(src, code, comments, types, functions), functions).also { lastFacts = it }
 }
 
 @Volatile
@@ -322,7 +325,9 @@ public fun declaredNames(src: String): DeclaredNames {
     lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
-            ?: codeMask(src, lexKotlin(src)).let { (code, comments) -> declarations(src, code, comments) }
+            ?: codeMask(src, lexKotlin(src)).let { (code, comments) ->
+                declarations(src, code, comments, typeBrackets(src, code, comments))
+            }
     val constants = HashSet<String>()
     val others = HashSet<String>()
     for ((name, list) in names) {
@@ -404,26 +409,16 @@ private class Read(
     val end: Int,
 )
 
-/** The type arguments `<...>` after [at], blanks before them: what they hold, with one level of brackets as `List<Map<K, V>>` has. */
+/** The brackets of the type arguments after [at], [blanks] before them, as [typeBrackets] reads them, from `<` to `>`. */
 private fun typeArgumentsAt(
-    src: CharSequence,
+    src: String,
+    types: IntArray,
     at: Int,
-): Read? {
+    blanks: String = " \t\r\n",
+): IntRange? {
     var k = at
-    while (k < src.length && src[k].isWhitespace()) k++
-    if (src.getOrNull(k) != '<') return null
-    val open = k
-    k++
-    while (k < src.length && src[k] != '>') {
-        if (src[k] == '<') {
-            k++
-            while (k < src.length && src[k] != '<' && src[k] != '>') k++
-            if (src.getOrNull(k) != '>') return null
-        }
-        k++
-    }
-    if (k >= src.length) return null
-    return Read(src.substring(open + 1, k), k + 1)
+    while (k < src.length && src[k] in blanks) k++
+    return if (src.getOrNull(k) != '<' || types[k] < 0) null else k..types[k]
 }
 
 /** The range of the string literal without a template a declaration is set to just after [at], `= "x"`, and nothing more. */
@@ -483,6 +478,7 @@ private fun pastWhiteSpace(
 /** The parameters a lambda's block names before its arrow, from [at]: what they are written as, and just past the arrow. */
 private fun lambdaParameters(
     src: String,
+    types: IntArray,
     at: Int,
 ): Read? {
     val start = pastWhiteSpace(src, at)
@@ -506,8 +502,8 @@ private fun lambdaParameters(
         if (src.getOrNull(colon) == ':') {
             val from = pastWhiteSpace(src, colon + 1)
             var to = from
-            while (to < src.length && (src[to] in ".<>?`" || nameCharAt(src, to, first = false) > 0)) {
-                to += if (src[to] in ".<>?`") 1 else nameCharAt(src, to, first = false)
+            while (to < src.length && (src[to] in ".?`" || types[to] > to || nameCharAt(src, to, first = false) > 0)) {
+                to = if (types[to] > to) types[to] + 1 else to + (if (src[to] in ".?`") 1 else nameCharAt(src, to, first = false))
             }
             if (to > from) end = to
         }
@@ -541,6 +537,7 @@ private fun goesOn(
     src: String,
     code: BooleanArray,
     comments: BooleanArray,
+    types: IntArray,
     k: Int,
 ): Boolean =
     when (src[k]) {
@@ -565,7 +562,7 @@ private fun goesOn(
         }
 
         '>' -> {
-            src.getOrNull(k - 1) == '-' || !closesTypeArguments(src, code, k)
+            src.getOrNull(k - 1) == '-' || types[k] < 0
         }
 
         ')' -> {
@@ -674,39 +671,9 @@ private fun infixWaits(
     return run % 2 == 0 && run > 0
 }
 
-private val INFIX_OPERATOR = regex("""\s(?:and|or|xor|shl|shr|ushr)\s""")
-
 private val DO_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_.])do(?:\s|\{)""")
 
 private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
-
-/** Whether the `>` at [k] closes type arguments a `<` opened before it on its line. */
-private fun closesTypeArguments(
-    src: String,
-    code: BooleanArray,
-    k: Int,
-): Boolean {
-    var depth = 0
-    var j = k
-    while (j >= 0 && src[j] != '\n') {
-        // The `>` of an arrow, `() -> Int`, closes nothing.
-        if (code[j] && src[j] == '>' && src.getOrNull(j - 1) != '-') depth++
-        // `n<a && n>` compares: no type argument holds `&`, `|`, `=`, `+` or `%`.
-        if (code[j] && depth > 0 && src[j] in "&|=+%") return false
-        if (code[j] && depth > 0 && src[j] == '*' && src.getOrNull(j - 1) == ' ' && src.getOrNull(j + 1) == ' ') return false
-        // `List<Int>`: a type's name, then a type at once; `b < c` and `n<3` compare.
-        if (code[j] && src[j] == '<' &&
-            --depth == 0
-        ) {
-            val first = src.getOrNull(j + 1)
-            // `n<m and n>` compares: no type argument holds an infix operator.
-            if (INFIX_OPERATOR.containsMatchIn(src.substring(j, k))) return false
-            return isWordPart(src.getOrNull(j - 1)) && first != null && (first.isLetter() || first in "*(@?`_")
-        }
-        j--
-    }
-    return false
-}
 
 /** Whether the `)` at [k] closes the condition of an `if`, a `when` or a loop, whose branch follows on the next line. */
 private fun branchFollows(
@@ -960,6 +927,7 @@ private class LineBreaks(
     private val src: String,
     private val code: BooleanArray,
     private val comments: BooleanArray,
+    private val types: IntArray,
 ) {
     private var asked = -1
     private var last = -1
@@ -986,13 +954,13 @@ private class LineBreaks(
 
     fun carriesOn(at: Int): Boolean {
         val k = before(at)
-        return k >= 0 && code[k] && goesOn(src, code, comments, k)
+        return k >= 0 && code[k] && goesOn(src, code, comments, types, k)
     }
 
     fun ends(
         at: Int,
         elseGoesOn: Boolean = true,
-    ): Boolean = lineEnds(src, code, comments, at, elseGoesOn, before(at), after(at))
+    ): Boolean = lineEnds(src, code, comments, types, at, elseGoesOn, before(at), after(at))
 }
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -1039,13 +1007,14 @@ internal fun lineEnds(
     src: String,
     code: BooleanArray,
     comments: BooleanArray,
+    types: IntArray,
     at: Int,
     elseGoesOn: Boolean = true,
     // What the break follows and what follows it, past blanks and comments: a literal stops both, as it is a value.
     last: Int = pastComments(src, comments, at),
     k: Int = pastBlanks(src, comments, at),
 ): Boolean {
-    if (last >= 0 && code[last] && goesOn(src, code, comments, last)) return false
+    if (last >= 0 && code[last] && goesOn(src, code, comments, types, last)) return false
     val next = src.substring(k, minOf(src.length, k + 12))
     // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
     if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true
@@ -1164,10 +1133,11 @@ private val DECLARES_AFTER =
 private fun annotationEnd(
     src: String,
     code: BooleanArray,
+    types: IntArray,
     at: Int,
 ): Int {
     val named = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
-    val name = typeArgumentsEnd(src, code, named) ?: named
+    val name = typeArgumentsAt(src, types, named, blanks = " \t")?.let { it.last + 1 } ?: named
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
     val depth = IntArray(3)
@@ -1193,35 +1163,6 @@ private fun annotationEnd(
 private val VAL_OR_VAR = regex("""va[lr](?![\p{L}\p{Nd}_])""")
 
 /**
- * Just past the type arguments of an annotation's name that ends at [at], `<B<C>>` or `<(Int) -> Unit>`, with blanks before
- * them on its line; null where none close.
- */
-private fun typeArgumentsEnd(
-    src: String,
-    code: BooleanArray,
-    at: Int,
-): Int? {
-    var k = at
-    while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
-    if (src.getOrNull(k) != '<') return null
-    var depth = 0
-    // An annotation's type arguments are short: a type or two.
-    for (j in k until minOf(src.length, k + 500)) {
-        if (!code[j]) continue
-        when {
-            src[j] == '<' -> depth++
-
-            // The arrow of a function type closes nothing.
-            src[j] == '>' && src[j - 1] != '-' -> if (--depth == 0) return j + 1
-
-            // The end of a statement is past type arguments that never closed.
-            src[j] in ";{}=" -> return null
-        }
-    }
-    return null
-}
-
-/**
  * Whether another declaration may stand in for one with these [modifiers], a member of a class that can be [extended]
  * and is a [contract], an interface, each null of a class the text does not show: it is `open` or `abstract`, a member
  * of an interface, or an `override` in a class that can be extended or that the text does not show.
@@ -1231,8 +1172,6 @@ private fun overridable(
     extended: Boolean?,
     contract: Boolean?,
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
-
-private val PARAMETER_NAME = regex("""($NAME)\s*:""")
 
 /** An annotation's name and the parenthesis that opens its arguments; `this@Page.f(` and `return@forEach(` name a label. */
 private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*\(""")
@@ -1348,37 +1287,120 @@ private fun withoutComments(
     comments: BooleanArray,
 ): String = CharArray(src.length) { if (comments.getOrElse(it) { false } && src[it] != '\n') ' ' else src[it] }.concatToString()
 
+/** The words a name may follow in a type's brackets, `<out T>`, `<reified T>`, `<suspend () -> Unit>`. */
+private val PROJECTION_WORDS = setOf("in", "out", "reified", "suspend")
+
+/** The words whose type parameters may be bounded right after them, `fun <T : Any>`, and those after the name they declare, `class Box<T : Any>`. */
+private val BOUNDED_AFTER = setOf("fun", "val", "var")
+private val BOUNDED_NAMED = setOf("class", "interface")
+
+/**
+ * Each type's brackets in the code: at a `<` that opens them, where its `>` stands, and at that `>`, where the `<`
+ * stands; -1 elsewhere. Read in one pass, as Kotlin's grammar has a type's arguments: names joined by `.`, `?`, `&`
+ * and commas, a projection's `in`, `out` or `*`, annotations, a function type's brackets and arrow, and brackets of
+ * the same kind; the arguments of an annotation in round brackets may hold anything but a brace or a `;`. A `:` stands
+ * only in the type parameters a `fun`, `val`, `var`, `class` or `interface` declares, `<T : Any>`. Anything else, a
+ * number, a literal, an operator, two names in a row or a brace, makes the `<` a comparison: `x<y, b: Int`, `{ it<0 }`
+ * and `n<m and n>` open none, and `n < 0 || v is Pair<*, *>` opens one, at `Pair`.
+ */
+internal fun typeBrackets(
+    src: String,
+    code: BooleanArray,
+    comments: BooleanArray,
+): IntArray {
+    val pairs = IntArray(src.length) { -1 }
+    // Each `<` still open: where it stands, the depth of round brackets it was opened at, and whether a bound's `:` may follow.
+    val open = ArrayList<Triple<Int, Int, Boolean>>()
+    var parens = 0
+    // The last token: `w` a name, `m` an annotation's name, `<` a `<` or a comma, else the character itself.
+    var last = ' '
+    // Where the last name and the one before it stand, read in place.
+    var word = 0 until 0
+    var previous = 0 until 0
+
+    fun among(
+        name: IntRange,
+        words: Set<String>,
+    ) = words.any { it.length == name.last - name.first + 1 && src.startsWith(it, name.first) }
+
+    fun drop(above: Int) {
+        while (open.isNotEmpty() && open.last().second >= above) open.removeAt(open.size - 1)
+    }
+    var i = 0
+    while (i < src.length) {
+        val c = src[i]
+        val own = open.lastOrNull()?.second == parens
+        if (!code[i]) {
+            // A literal stands in no type; an annotation's arguments may hold one.
+            if (!comments[i]) drop(parens)
+        } else if (c == '@') {
+            // An annotation's name, `@a.B` or `@field:A`, is one token, its arguments brackets of their own.
+            i = ANNOTATION.matchAt(src, i)?.let { it.range.last + 1 } ?: (i + 1)
+            last = 'm'
+            continue
+        } else if (isWordPart(c) || c == '`') {
+            var end = i + 1
+            if (c == '`') end = src.indexOf('`', end).takeIf { it > 0 && '\n' !in src.substring(i, it) }?.plus(1) ?: end
+            while (c != '`' && end < src.length && code[end] && isWordPart(src[end])) end++
+            // A name after a name, `n<m and`, or a number, `x<1`, stands in no type.
+            if (own && (c.isDigit() || (last == 'w' && !among(word, PROJECTION_WORDS)))) drop(parens)
+            previous = word
+            word = i until end
+            last = 'w'
+            i = end
+            continue
+        } else {
+            // A star stands alone, `<*>` or `<A, *>`, one `&` joins `T & Any`, and `->` points after a function type's
+            // brackets; any other operator compares.
+            val fits =
+                when (c) {
+                    '<' -> open.add(Triple(i, parens, among(word, BOUNDED_AFTER) || (last == 'w' && among(previous, BOUNDED_NAMED))))
+                    '(', ',', '.', '?' -> true
+                    '*' -> last == '<'
+                    '&' -> src.getOrNull(i + 1) != '&' && src.getOrNull(i - 1) != '&'
+                    ':' -> open.lastOrNull()?.third == true
+                    '-' -> src.getOrNull(i + 1) == '>' && last == ')'
+                    else -> c.isWhitespace() || c in ">){};"
+                }
+            if (own && !fits) drop(parens)
+            when {
+                c == '>' && own && src[i - 1] != '-' -> {
+                    val at = open.removeAt(open.size - 1).first
+                    pairs[at] = i
+                    pairs[i] = at
+                }
+
+                c == '(' -> {
+                    parens++
+                }
+
+                c == ')' -> {
+                    drop(parens--)
+                }
+
+                c in "{};" -> {
+                    drop(Int.MIN_VALUE)
+                }
+            }
+            if (!c.isWhitespace()) last = if (c == ',') '<' else c
+        }
+        i++
+    }
+    return pairs
+}
+
 /**
  * The function whose parameters [g] holds, up to [close]: its name, the class it is declared in, each parameter marked
- * `@Language("HTML")`, by place and by name, and what the scanner kept of its result. The parameters are cut at commas
- * outside brackets, the `<...>` of a type among them and the `->` of a function type not.
+ * `@Language("HTML")`, by place and by name, as [html] has them from the parameters' reading, and what the scanner kept
+ * of its result.
  */
 private fun functionAt(
     src: String,
-    code: BooleanArray,
     g: ScopeFrame,
     close: Int,
+    html: Set<Any>,
 ): Pair<String, FunctionDeclaration>? {
     val name = g.name ?: return null
-    val html = HashSet<Any>()
-    var depth = 0
-    var from = g.open + 1
-    var k = 0
-    for (i in g.open + 1..close) {
-        // A comma or a bracket in a string cuts nothing.
-        val c = if (code[i]) src[i] else ' '
-        if (i < close && c in "([{<") depth++
-        if (i < close && (c in ")]}" || (c == '>' && src[i - 1] != '-'))) depth--
-        if (i == close || (c == ',' && depth == 0)) {
-            val parameter = src.substring(from, i)
-            if (HTML_ANNOTATION.containsMatchIn(parameter)) {
-                html += k
-                PARAMETER_NAME.find(parameter.replace(HTML_ANNOTATION, ""))?.let { html += it.groupValues[1] }
-            }
-            from = i + 1
-            k++
-        }
-    }
     val owner = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
     val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
     // Between the parameters and the body stands the type or nothing, or the function is not read.
@@ -1399,10 +1421,11 @@ private fun declarations(
     src: String,
     code: BooleanArray,
     comments: BooleanArray,
+    types: IntArray,
     functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
 ): Map<String, List<Declaration>> {
-    // Each function's name, the class body it is declared in and its marked parameters, read once the classes have closed.
-    val declared = ArrayList<Pair<ScopeFrame, Int>>()
+    // Each function's brackets, where they close and its marked parameters, by place and by name, read once the classes have closed.
+    val declared = ArrayList<Triple<ScopeFrame, Int, Set<Any>>>()
     val names = HashMap<String, ArrayList<Declaration>>()
     val aliases = aliasesIn(src, code)
 
@@ -1438,7 +1461,7 @@ private fun declarations(
         f.ctor = null
     }
 
-    val breaks = LineBreaks(src, code, comments)
+    val breaks = LineBreaks(src, code, comments, types)
 
     /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
     fun receiverIn(open: Int): Boolean {
@@ -1461,7 +1484,7 @@ private fun declarations(
         val out = blank.toCharArray(from, to)
         var i = from
         while (i < to) {
-            val end = if (src[i] == '@' && code[i]) minOf(annotationEnd(src, code, i), to) else i
+            val end = if (src[i] == '@' && code[i]) minOf(annotationEnd(src, code, types, i), to) else i
             if (end > i) {
                 for (j in i until end) if (out[j - from] != '\n') out[j - from] = ' '
                 i = end
@@ -1472,23 +1495,49 @@ private fun declarations(
         return out.concatToString()
     }
 
-    /** Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can see the properties of. */
+    /**
+     * Each parameter between the brackets of a function or a constructor; [visible] for a constructor other files can
+     * see the properties of. Each parameter marked HTML goes into [marked] by its place and its name.
+     */
     fun parameters(
         f: ScopeFrame,
         close: Int,
         visible: Boolean = false,
         holder: ScopeFrame? = null,
+        marked: MutableSet<Any>? = null,
     ): List<Declaration> {
         val out = ArrayList<Declaration>()
         val cuts = listOf(f.open) + f.commas + close
         for (k in 0 until cuts.size - 1) {
             val text = blank.substring(cuts[k] + 1, cuts[k + 1])
             val written = withoutAnnotations(cuts[k] + 1, cuts[k + 1])
-            val m = PARAMETER.find(written) ?: continue
+            val m = PARAMETER.find(written)
+            if (m == null) {
+                // A name the pattern does not read, `` `the body` ``, is not declared, but its mark still holds its place.
+                val colon = (0 until written.length).firstOrNull { written[it] == ':' && code[cuts[k] + 1 + it] } ?: written.length
+                if (HTML_ANNOTATION.findAll(text.substring(0, colon)).any { code[cuts[k] + 1 + it.range.first] }) marked?.add(k)
+                continue
+            }
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
-            val arguments = if (vararg || m.groups[3] == null) null else typeArgumentsAt(written, m.range.last + 1)?.text
+            val arguments =
+                if (vararg ||
+                    m.groups[3] == null
+                ) {
+                    null
+                } else {
+                    typeArgumentsAt(blank, types, cuts[k] + 1 + m.range.last + 1)?.let {
+                        withoutAnnotations(it.first + 1, it.last)
+                    }
+                }
+            // The mark is one of the annotations before the name, in code: one in the default's text marks nothing.
+            val nameAt = PARAMETER.groupRange(written, m, 2)!!.first
+            val html = HTML_ANNOTATION.findAll(text.substring(0, nameAt)).any { code[cuts[k] + 1 + it.range.first] }
+            if (html && marked != null) {
+                marked += k
+                marked += m.groupValues[2]
+            }
             out +=
                 add(
                     m.groupValues[2],
@@ -1496,7 +1545,7 @@ private fun declarations(
                         cuts[k] + 1 + m.range.first,
                         f.open,
                         type,
-                        html = HTML_ANNOTATION.containsMatchIn(text),
+                        html = html,
                         overridable = holder != null && overridable(modifiers, holder.declares.first, holder.declares.second),
                         typeArguments = arguments,
                         shared =
@@ -1556,9 +1605,9 @@ private fun declarations(
                 val markup = initialiser != null
                 val trusted = initialiser?.first == "Trusted"
                 val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
-                val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { typeArgumentsAt(src, it.last + 1) }
+                val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { typeArgumentsAt(blank, types, it.last + 1) }
                 // The value of a `val` set once, which a name then stands for.
-                val set = VALUE_AFTER.matchAt(src, arguments?.end ?: (m.range.last + 1))?.range?.last
+                val set = VALUE_AFTER.matchAt(src, arguments?.let { it.last + 1 } ?: (m.range.last + 1))?.range?.last
                 val valueAt = if (bare && !markup) set?.plus(1) else literal?.first
                 val d =
                     add(
@@ -1574,7 +1623,7 @@ private fun declarations(
                             literal != null,
                             markup,
                             if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
-                            arguments?.text,
+                            arguments?.let { withoutAnnotations(it.first + 1, it.last) },
                             valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
                             shared,
                             trusted,
@@ -1591,9 +1640,12 @@ private fun declarations(
     // Where the last annotation read ends: a modifier after its arguments is a declaration's.
     var annotationClosed = -1
 
+    // Just past the type's brackets the scanner is in, whose commas part no list: `Map<String, Int>`.
+    var typed = -1
     var i = 0
     while (i < src.length) {
         val f = stack.last()
+        if (types[i] > i) typed = maxOf(typed, types[i])
         // A line that carries on, `a +` or `else`, gives its next line's first word to its expression, not to a declaration.
         if (src[i] == '\n' && f.after == 1 && !breaks.carriesOn(i)) f.after = 0
         if (!code[i]) {
@@ -1701,7 +1753,7 @@ private fun declarations(
         // A name in backticks is a name whatever it holds, and `@` after a word or `super<A>` names a label.
         val quoted = if (c == '`') QUOTED.matchAt(src, i)?.also { f.reset() } else null
         val label = c != '@' || src.getOrNull(i - 1)?.let { isWordPart(it) || it == '>' } == true
-        val annotated = if (label) i + (quoted?.value?.length ?: 0) else annotationEnd(src, code, i)
+        val annotated = if (label) i + (quoted?.value?.length ?: 0) else annotationEnd(src, code, types, i)
         if (annotated > i) {
             // What an annotation stands first in has begun: a loop's statement, a function's expression.
             if (f.pending?.fn == null) f.pending?.state = "stmt"
@@ -1775,7 +1827,7 @@ private fun declarations(
                     f.whenBlock = false
                 } else {
                     // Read in the code alone, as a function's parameters are: a comment among them is blank.
-                    val m = lambdaParameters(blank, i + 1)
+                    val m = lambdaParameters(blank, types, i + 1)
                     if (m != null && (i + 1 until m.end).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
                         for (part in splitTopLevel(m.text)) {
@@ -1836,8 +1888,9 @@ private fun declarations(
             g.closeAt = i + 1
             if (g.kind == "params") {
                 val around = outer.pending?.takeIf { it.unended }?.decls ?: emptyList()
-                handOver(PendingScope(parameters(g, i) + around, g))
-                if (functions != null) declared.add(g to i)
+                val marked = HashSet<Any>()
+                handOver(PendingScope(parameters(g, i, marked = marked) + around, g))
+                if (functions != null) declared.add(Triple(g, i, marked))
             } else if (g.kind == "ctor") {
                 outer.ctor = parameters(g, i, !classHidden(outer), outer)
             } else if (g.kind == "catch" && c == ')') {
@@ -1865,7 +1918,7 @@ private fun declarations(
             continue
         }
         if (c == ',') {
-            f.commas += i
+            if (i > typed) f.commas += i
             i++
             continue
         }
@@ -1902,7 +1955,10 @@ private fun declarations(
         f.endValues(src.length)
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((g, close) in declared) functionAt(blank, code, g, close)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
+    for ((g, close, marked) in declared) {
+        val (name, f) = functionAt(blank, g, close, marked) ?: continue
+        functions!!.getOrPut(name) { ArrayList() } += f
+    }
     return names
 }
 

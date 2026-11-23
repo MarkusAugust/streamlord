@@ -31,6 +31,9 @@ internal class Operands(
     private val src: String,
     private val mask: BooleanArray,
 ) {
+    // The file's type brackets, read only where a `<` follows a value.
+    private val types by lazy { fileFacts(src).types }
+
     private fun ch(k: Int): Char? = src.getOrNull(k)
 
     /** Past spaces, tabs and comments from [from], and past line breaks too with [newlines]. */
@@ -120,28 +123,15 @@ internal class Operands(
     }
 
     /**
-     * Just past the `<...>` at [open] where it holds types alone, and with [call] a bracket follows,
-     * as the type arguments of a call have it: `foo<String>(a)`. -1 where `<` compares.
+     * Just past the type arguments at [open], and with [call] a bracket follows, as the type arguments of a call have
+     * it: `foo<String>(a)`. -1 where `<` compares.
      */
     private fun typeArgumentsEnd(
         open: Int,
         call: Boolean,
     ): Int {
-        var depth = 0
-        var k = open
-        while (k < src.length) {
-            val c = src[k]
-            if (c == '<') {
-                depth++
-            } else if (c == '>') {
-                if (--depth == 0) break
-            } else if (!(c.isLetterOrDigit() || c in "_.,?* \t\n\r`")) {
-                return -1
-            }
-            k++
-        }
-        if (k >= src.length) return -1
-        return if (!call || ch(skip(k + 1, false)).let { it == '(' || it == '{' }) k + 1 else -1
+        val close = types.getOrElse(open) { -1 }.takeIf { it > open } ?: return -1
+        return if (!call || ch(skip(close + 1, false)).let { it == '(' || it == '{' }) close + 1 else -1
     }
 
     /**
