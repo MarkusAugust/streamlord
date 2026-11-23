@@ -55,4 +55,19 @@ class LongInputTest {
             fileFacts(it)
         }
     }
+
+    @Test
+    fun `an annotated value or a label in an annotation's arguments is no annotation left open`() {
+        val src =
+            "annotation class A(val x: Int)\n@A(@Suppress(\"X\") 1) const val K = 1\n" +
+                "open class U {\n    @A(x = this@U.hashCode()) open val o = 1\n}\n"
+        val facts = fileFacts(src)
+        assertEquals(listOf(true), facts.names["K"].orEmpty().map { it.constant })
+        assertEquals(listOf(true), facts.names["o"].orEmpty().map { it.overridable })
+    }
+
+    @Test
+    fun `a lambda's parameter may be named with a letter past the first plane`() {
+        assertEquals(1, fileFacts("fun f() = listOf(1).map { \uD835\uDC65 -> \uD835\uDC65 }\n").names["\uD835\uDC65"].orEmpty().size)
+    }
 }

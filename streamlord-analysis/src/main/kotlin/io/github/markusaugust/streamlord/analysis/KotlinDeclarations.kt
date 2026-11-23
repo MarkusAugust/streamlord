@@ -1,5 +1,6 @@
 package io.github.markusaugust.streamlord.analysis
 
+import io.github.markusaugust.streamlord.core.client.codePointFrom
 import io.github.markusaugust.streamlord.core.client.regex
 import kotlin.concurrent.Volatile
 
@@ -373,6 +374,32 @@ private fun plainLiteralAt(
     return open..k
 }
 
+/** Whether only blanks stand before [at] on its line. */
+private fun firstOnLine(
+    src: String,
+    at: Int,
+): Boolean {
+    var k = at - 1
+    while (k >= 0 && (src[k] == ' ' || src[k] == '\t')) k--
+    return k < 0 || src[k] == '\n' || src[k] == '\r'
+}
+
+/**
+ * How many characters the letter, digit or `_` of a name at [at] takes, 0 where none stands there: a letter past the first
+ * plane takes two. The [first] of a name is no digit.
+ */
+private fun nameCharAt(
+    src: String,
+    at: Int,
+    first: Boolean,
+): Int {
+    val c = src.getOrNull(at) ?: return 0
+    if (c == '_' || c.isLetter() || (!first && c.isDigit())) return 1
+    if (!c.isHighSurrogate() || at + 1 >= src.length) return 0
+    val point = src.codePointFrom(at)
+    return if (if (first) startsName(point) else continuesName(point)) 2 else 0
+}
+
 /** The first offset from [at] that is no white space. */
 private fun pastWhiteSpace(
     src: String,
@@ -398,8 +425,9 @@ private fun lambdaParameters(
             val close = src.indexOf(')', k)
             if (close < 0 || src.indexOf('(', k + 1) in 0 until close) return null
             k = close + 1
-        } else if (src.getOrNull(k)?.let { it.isLetter() || it == '_' } == true) {
-            while (k < src.length && (src[k].isLetterOrDigit() || src[k] == '_')) k++
+        } else if (nameCharAt(src, k, first = true) > 0) {
+            k += nameCharAt(src, k, first = true)
+            while (nameCharAt(src, k, first = false) > 0) k += nameCharAt(src, k, first = false)
         } else {
             return null
         }
@@ -408,7 +436,9 @@ private fun lambdaParameters(
         if (src.getOrNull(colon) == ':') {
             val from = pastWhiteSpace(src, colon + 1)
             var to = from
-            while (to < src.length && (src[to].isLetterOrDigit() || src[to] in "_.<>?`")) to++
+            while (to < src.length && (src[to] in ".<>?`" || nameCharAt(src, to, first = false) > 0)) {
+                to += if (src[to] in ".<>?`") 1 else nameCharAt(src, to, first = false)
+            }
             if (to > from) end = to
         }
         val next = pastWhiteSpace(src, end)
@@ -1077,8 +1107,8 @@ private fun annotationEnd(
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
         if (closes >= 0 && depth.sum() == 0) return k + 1
-        // An argument is no annotation of its own: one written there is past an annotation left open.
-        if (k > open && src[k] == '@' && code[k]) break
+        // An annotation first on its line is past an annotation left open; `@A(@B 1)` annotates a value, and `this@A` names a label.
+        if (k > open && src[k] == '@' && code[k] && firstOnLine(src, k)) break
         // No argument of an annotation holds a property: one written there begins past an annotation left open.
         // `` K.`val` `` is a name in backticks.
         if (src[k] == 'v' && code[k] && !isWordPart(src.getOrNull(k - 1)) && src.getOrNull(k - 1) != '`' &&
