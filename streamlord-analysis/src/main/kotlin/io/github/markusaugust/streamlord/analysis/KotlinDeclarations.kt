@@ -1373,12 +1373,17 @@ private fun parameterCuts(
                 angles += parens
                 opened += i
             }
+
             // Each `<` its `>` closes is a type's, though one around it may be a comparison's, `n < 0 || v is Pair<*, *>`.
             c == '>' && src[i - 1] != '-' && angles.lastOrNull() == parens -> {
                 angles.removeAt(angles.size - 1)
                 typed += opened.removeAt(opened.size - 1)..i
             }
-            c == '(' -> parens++
+
+            c == '(' -> {
+                parens++
+            }
+
             c == ')' -> {
                 parens--
                 while (angles.isNotEmpty() && angles.last() > parens) {
@@ -1386,15 +1391,18 @@ private fun parameterCuts(
                     opened.removeAt(opened.size - 1)
                 }
             }
+
             c in "{};" -> {
                 angles.clear()
                 opened.clear()
             }
-            c == ':' || c == '=' ->
+
+            c == ':' || c == '=' -> {
                 while (angles.isNotEmpty() && angles.last() == parens) {
                     angles.removeAt(angles.size - 1)
                     opened.removeAt(opened.size - 1)
                 }
+            }
         }
     }
     // An inner type's brackets close before an outer one's: by where they open, those inside another are left out.
@@ -1964,7 +1972,10 @@ private fun declarations(
         f.endValues(src.length)
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
-    for ((g, close, marked) in declared) functionAt(blank, g, close, marked)?.let { (name, f) -> functions!!.getOrPut(name) { ArrayList() } += f }
+    for ((g, close, marked) in declared) {
+        val (name, f) = functionAt(blank, g, close, marked) ?: continue
+        functions!!.getOrPut(name) { ArrayList() } += f
+    }
     return names
 }
 
