@@ -1348,9 +1348,7 @@ private fun withoutComments(
 
 /**
  * Where the parameters between [open] and [close] are cut: the brackets themselves and each of [commas], the commas
- * the scanner found outside other brackets, but for those in a type's brackets. A `<` is a type's bracket only right
- * after a name, `Map<String, Int>`, as Kotlin writes a type, and a `>` closes only a `<` that is open, so a comparison
- * in a default, `1 >= 2`, cuts nothing.
+ * the scanner found outside other brackets, but for those in a type's brackets, `Map<String, Int>`.
  */
 private fun parameterCuts(
     src: String,
@@ -1360,19 +1358,52 @@ private fun parameterCuts(
     commas: List<Int>,
 ): List<Int> {
     val cuts = arrayListOf(open)
-    var angles = 0
-    var next = 0
-    for (i in open + 1 until close) {
-        if (next < commas.size && commas[next] == i) {
-            if (angles == 0) cuts += i
-            next++
+    var typed = -1
+    for (comma in commas) {
+        // The type's brackets before the comma, read once each.
+        var i = maxOf(cuts.last() + 1, typed)
+        while (i < comma) {
+            if (code[i] && src[i] == '<') {
+                val end = typeArgumentsEnd(src, code, i, close)
+                if (end > comma) typed = end
+                if (end > 0) i = end - 1
+            }
+            i++
         }
-        if (!code[i]) continue
-        if (src[i] == '<' && isWordPart(src[i - 1])) angles++
-        if (src[i] == '>' && src[i - 1] != '-' && angles > 0) angles--
+        if (comma >= typed) cuts += comma
     }
     cuts += close
     return cuts
+}
+
+/**
+ * Just past the `>` that closes the type's brackets [open] opens, or -1 where they hold what no type holds. As Kotlin's
+ * parser has it, only names, dots, commas, `?`, `*`, annotations, a function type's brackets and arrow, and brackets of
+ * the same kind stand in them, so a comparison, `x<y, b: Int` or `{ it<0 }`, opens none.
+ */
+private fun typeArgumentsEnd(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    close: Int,
+): Int {
+    var angles = 0
+    var parens = 0
+    for (i in open until close) {
+        if (!code[i]) continue
+        val c = src[i]
+        when {
+            c == '<' -> angles++
+            c == '>' && src[i - 1] == '-' -> {}
+            c == '>' -> if (--angles == 0) return i + 1
+            c == '(' -> parens++
+            c == ')' -> if (--parens < 0) return -1
+            c == '-' -> if (src.getOrNull(i + 1) != '>') return -1
+            isWordPart(c) || c.isWhitespace() || c in ".,?*@`" -> {}
+            else -> return -1
+        }
+    }
+    return -1
 }
 
 /**
@@ -1496,7 +1527,13 @@ private fun declarations(
         for (k in 0 until cuts.size - 1) {
             val text = blank.substring(cuts[k] + 1, cuts[k + 1])
             val written = withoutAnnotations(cuts[k] + 1, cuts[k + 1])
-            val m = PARAMETER.find(written) ?: continue
+            val m = PARAMETER.find(written)
+            if (m == null) {
+                // A name the pattern does not read, `` `the body` ``, is not declared, but its mark still holds its place.
+                val colon = (0 until text.length).firstOrNull { text[it] == ':' && code[cuts[k] + 1 + it] } ?: text.length
+                if (HTML_ANNOTATION.findAll(text.substring(0, colon)).any { code[cuts[k] + 1 + it.range.first] }) marked?.add(k)
+                continue
+            }
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
