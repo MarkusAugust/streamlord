@@ -1788,7 +1788,8 @@ private fun declarations(
         if (c == '(' || c == '[' || c == '{') {
             if (f.kind != "for") f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
-            if (c == '(' && f.fn && !receiverIn(i)) {
+            // A function type in the type parameters, `fun <T : (Int) -> Unit>`, is no parameter list.
+            if (c == '(' && f.fn && i > typed && !receiverIn(i)) {
                 g.kind = "params"
                 // A function still being typed has no brackets, and the next ones are a statement's.
                 val head = if (i - f.funAt < FUN_HEAD_LENGTH) FUN_HEAD.matchEntire(src.substring(f.funAt, i)) else null
