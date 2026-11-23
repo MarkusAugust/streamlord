@@ -210,7 +210,14 @@ internal class FileFacts(
         range: IntRange,
     ): Boolean {
         val at = uses[name] ?: return true
-        var i = at.binarySearch(range.first).let { if (it < 0) -it - 1 else it }
+        // The first use at or after the range's start, found by halves: the common library has no search of an IntArray.
+        var lo = 0
+        var hi = at.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (at[mid] < range.first) lo = mid + 1 else hi = mid
+        }
+        var i = lo
         while (i < at.size && at[i] <= range.last) {
             val k = at[i++]
             if (src.getOrNull(k - 1) == '.') continue
