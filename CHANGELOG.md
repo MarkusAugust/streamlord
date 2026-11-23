@@ -46,7 +46,9 @@ All notable changes to Streamlord are recorded here. The format follows
   annotation for the file, Spring's routes and the rewrite's file header included, and type
   parameters and a handler's parameters cut by the type brackets. A lambda's parameter typed
   `Map<String, () -> Unit>` is declared, and a function whose type parameters hold a function type,
-  `fun <T : (Int) -> Unit, R> f(r: R)`, has its parameters read (#342).
+  `fun <T : (Int) -> Unit, R> f(r: R)`, has its parameters read. An annotation's arguments may follow
+  blanks or a line break, `@RequestMapping ("/api")`, and a use-site target a blank, `@file: JvmName("X")`,
+  as Kotlin allows, while `@Composable () -> Unit` stays a function type (#342).
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
   `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and

@@ -49,7 +49,7 @@ private val SPRING_MAPPINGS =
 private val KTOR_VERB = regex("""\b(route|get|post|put|patch|delete|sse)\s*""")
 private val KTOR_PATH = regex("""\(\s*"([^"\n]*)"""")
 private val SPRING_ANNOTATION =
-    regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
+    regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b""")
 
 private val MODIFIERS = setOf("public", "internal", "private", "protected", "open", "final", "abstract", "sealed", "data", "inner")
 private val DECLARATIONS = setOf("class", "interface", "object", "fun", "val", "var", "typealias")
@@ -290,8 +290,14 @@ private fun findSpringRoutes(src: String): List<Route> {
         val at = m.range.first
         if (!mask[at]) continue
         val name = m.groupValues[1]
-        val args = m.groupValues[2]
-        val target = annotatedClass(src, mask, types, annotationEnd(src, mask, types, at))
+        val end = annotationEnd(src, mask, types, at)
+        val args =
+            src
+                .substring(m.range.last + 1, end)
+                .trim()
+                .removePrefix("(")
+                .removeSuffix(")")
+        val target = annotatedClass(src, mask, types, end)
         if (target >= 0) {
             if (name == "RequestMapping") prefixes[target] = annotationPath(args)
             continue
@@ -299,7 +305,7 @@ private fun findSpringRoutes(src: String): List<Route> {
         val owner = bodies.lastOrNull { it.open < at && at < it.close }
         val prefix = owner?.let { prefixes[it.keyword] } ?: ""
         val method = if (name == "RequestMapping") annotationMethod(args) ?: "GET" else SPRING_MAPPINGS[name] ?: "GET"
-        val params = handlerParameters(src, mask, types, annotationEnd(src, mask, types, at)).mapNotNull(::springParam)
+        val params = handlerParameters(src, mask, types, end).mapNotNull(::springParam)
         routes +=
             Route(
                 method,

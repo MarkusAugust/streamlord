@@ -91,30 +91,18 @@ internal class FileFacts(
         out
     }
 
-    /** The arguments of each annotation, `@Deprecated("<b>x</b>")`, from parenthesis to parenthesis: they say something of the code and hold no markup. */
+    /** Each annotation, `@Deprecated("<b>x</b>")`, to its end: its arguments say something of the code and hold no markup. */
     private val annotationArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        ANNOTATION_OPEN
-            .findAll(src)
-            .filter { code[it.range.first] && code[it.range.last] }
-            .mapNotNull { m ->
-                var depth = 0
-                for (k in m.range.last until src.length) {
-                    if (!code[k]) continue
-                    if (src[k] == '(') depth++
-                    if (src[k] == ')' && --depth == 0) return@mapNotNull m.range.last..k
-                }
-                null
-            }
-            // An annotation in another's arguments lies in it: the ranges, merged, follow one another.
-            .fold(ArrayList<IntRange>()) { merged, r ->
-                val last = merged.lastOrNull()
-                if (last != null && r.first <= last.last) {
-                    merged[merged.lastIndex] = last.first..maxOf(last.last, r.last)
-                } else {
-                    merged += r
-                }
-                merged
-            }
+        val out = ArrayList<IntRange>()
+        var at = src.indexOf('@')
+        while (at >= 0) {
+            // `this@Page` and `return@forEach` name a label; an annotation in another's arguments lies in it.
+            val label = src.getOrNull(at - 1)?.let { isWordPart(it) || it in ">.`" } == true
+            val end = if (code[at] && !label) annotationEnd(src, code, types, at) else at
+            if (end > at) out += at until end
+            at = src.indexOf('@', maxOf(end, at + 1))
+        }
+        out
     }
 
     /** Whether [at] stands in an annotation's arguments. */
@@ -1078,28 +1066,15 @@ internal fun splitTopLevel(
     val out = ArrayList<String>()
     var depth = 0
     var from = 0
-    var k = 0
-    while (k < text.length) {
-        val c = text[k]
-        when {
-            types[offset + k] > offset + k -> {
-                k = types[offset + k] - offset
-            }
-
-            c in "([{" -> {
-                depth++
-            }
-
-            c in ")]}" -> {
-                depth--
-            }
-
-            c == ',' && depth == 0 -> {
-                out += text.substring(from, k)
-                from = k + 1
-            }
+    for ((k, c) in text.withIndex()) {
+        // [types] holds the `>` at a `<` that opens a type's brackets, and the `<` at its `>`.
+        val pair = types[offset + k]
+        if (c in "([{" || pair > offset + k) depth++
+        if (c in ")]}" || pair in 0 until offset + k) depth--
+        if (c == ',' && depth == 0) {
+            out += text.substring(from, k)
+            from = k + 1
         }
-        k++
     }
     out += text.substring(from)
     return out
@@ -1139,7 +1114,7 @@ private val QUOTED = regex("`[^`\n]+`")
 
 // A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
 private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
-private val ANNOTATION = regex("""@(?:[a-z]+:\s*)?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
+private val ANNOTATION = regex("""@(?:[a-z]+:\s*(?!(?:va[lr]|fun|class|interface|object)\b))?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
 /** The words a modifier declares something with, on its line. */
 private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
@@ -1162,7 +1137,11 @@ internal fun annotationEnd(
         val closes = if (code[k]) ")]}".indexOf(src[k]) else -1
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
-        if (closes >= 0 && depth.sum() == 0) return k + 1
+        // `@Composable () -> Unit`: the brackets after a blank are a function type's where an arrow follows them.
+        if (closes >= 0 && depth.sum() == 0) {
+            val next = (k + 1 until src.length).firstOrNull { !src[it].isWhitespace() } ?: src.length
+            return if (open > name && src.startsWith("->", next)) name else k + 1
+        }
         // An annotation first on its line is past an annotation left open; `@A(@B 1)` annotates a value, and `this@A` names a label.
         if (k > open && src[k] == '@' && code[k] && firstOnLine(src, k)) break
         // No argument of an annotation holds a property: one written there begins past an annotation left open.
@@ -1189,8 +1168,6 @@ private fun overridable(
     contract: Boolean?,
 ): Boolean = modifiers and EXTENDED != 0 || contract == true || (modifiers and OVERRIDES != 0 && extended != false)
 
-/** An annotation's name and the parenthesis that opens its arguments; `this@Page.f(` and `return@forEach(` name a label. */
-private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*\s*\(""")
 
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")

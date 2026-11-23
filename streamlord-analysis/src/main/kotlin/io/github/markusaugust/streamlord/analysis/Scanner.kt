@@ -349,7 +349,7 @@ internal fun lexKotlin(src: String): KotlinLex {
 
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one, on a use site and with a prefix or a suffix too. */
 internal const val HTML_LANGUAGE =
-    """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
+    """@(?:[a-z]+:\s*)?(?:org\.intellij\.lang\.annotations\.)?Language\s*\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
 
 private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
 private val LEADING_ANNOTATIONS = regex("""^(?:\s*@[\p{L}_][\p{L}\p{Nd}_.:]*(?:\([^()]*\))?)+""")
