@@ -31,15 +31,17 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
-  `interpolate { }` and mark the value. The fixes that wrapped the value in `Trusted` once more, or
-  rewrote the literal into `interpolate { }` inside `Trusted(...)`, which does not compile, are gone.
+  `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`. The
+  fix that wrapped the value in `Trusted` once more is gone. The same holds where Trusted's argument
+  is a sum that opens with a value, has a literal in a template, or stands in `interpolate`'s block,
+  where the block's own mark would have been written into the page.
 - `Trusted` written with its package, `io.github.markusaugust.streamlord.core.domain.Trusted(...)`,
   or under an alias, `import ...Trusted as T`, is read as core's: its argument is markup, coloured
   and judged. VS Code colours the qualified name too; an alias it cannot see.
-- A literal a `val` of `interpolate`'s block is set to is no markup of the block unless it marks a
-  value: `val err = "warn: <b>$x</b>"` for a log is no longer coloured as HTML, and is no longer
-  told to mark `$x` with `+`, whose mark would have gone into the log. Where such a `val` is written
-  into the block's markup, its values are judged there as before.
+- A literal a `val` of `interpolate`'s block is set to, which the block hands only to calls that are
+  statements of their own, `log.warn(err)`, is no markup of the block: it is no longer coloured as
+  HTML, nor told to mark its values with `+`, whose mark would have gone into the log. Written
+  anywhere else, into the markup, a sum or another call, its values are judged as before.
 
 - Long and unfinished text no longer stops the analysis of a file. A lambda with thousands of
   parameters, a type's `<` that never closes and a string that never closes each threw a stack

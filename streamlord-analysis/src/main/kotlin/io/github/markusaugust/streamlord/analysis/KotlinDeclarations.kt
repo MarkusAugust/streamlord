@@ -132,7 +132,7 @@ internal class FileFacts(
 
     /**
      * Where each literal starts that is markup by where it stands: one of the block of core's `interpolate` that marks a
-     * value, or that writes a tag and is no `val`'s value, and stands in no call's arguments, where a Datastar
+     * value, or that writes a tag and is no [loggedOnly] value, and stands in no call's arguments, where a Datastar
      * expression or a log message would; or one of [trustedLiterals] that writes a tag.
      */
     val markupLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
@@ -143,56 +143,153 @@ internal class FileFacts(
                 val literals = lex.stringsIn(b.braces.first, b.braces.last)
                 val written =
                     literals.filter {
-                        it.interpolations.any { ip -> markedValue(ip) != null } || (TAG.containsMatchIn(it.text) && !inValue(it.start))
+                        it.interpolations.any { ip -> markedValue(ip) != null } ||
+                            (TAG.containsMatchIn(it.text) && !loggedOnly(it.start, b.braces))
                     }
                 out += outsideArguments(src, code, b.braces.first, written)
             }
         }
-        val lexed = lex.strings.associateBy { it.start }
+        val lexed = withNested(lex.strings).associateBy { it.start }
         out += trustedLiterals.filter { lexed[it]?.text?.let(TAG::containsMatchIn) == true }
         out
     }
 
     /**
-     * Where each literal starts that is the argument of core's `Trusted`, under its name, an alias or its package, or a
-     * literal of a sum that is: markup the author vouches for, called in it by nothing else.
+     * Where the argument of each call of core's `Trusted` stands, under its name, an alias or its package, in code or in a
+     * template's code: markup the author vouches for, whatever it is built of.
      */
-    val trustedLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val out = HashSet<Int>()
+    val trustedArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val out = ArrayList<IntRange>()
         val names = coreAliases(src).filterValues { it == "Trusted" }.keys + "Trusted"
         if (names.none { it in src }) return@lazy out
         val lex = lexKotlin(src)
         val own = !shadowsCore(src, "Trusted")
-        for (site in findCallSites(src, names, lex)) {
+        for (site in findCallSites(src, names, KotlinLex(lex.strings, code, lex.comments))) {
             val dot = codeBefore(src, code, site.nameStart)
             // Called on a receiver it is somebody else's, unless the receiver is core's package written out.
-            val qualified = src.getOrNull(dot) == '.' && site.name == "Trusted" && qualifiedByCore(src, dot)
+            val qualified = src.getOrNull(dot) == '.' && site.name == "Trusted" && qualifiedByCore(src, code, dot)
             if (!qualified && (src.getOrNull(dot) == '.' || (site.name == "Trusted" && !own))) continue
             val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
-            out += outsideArguments(src, code, site.openParen, lex.stringsIn(arg.start, arg.end))
+            out += arg.start until arg.end
         }
         out
     }
 
-    /** Whether [at] stands in the value a `val` is set to. */
-    fun inValue(at: Int): Boolean = valued.getOrElse(at) { false }
+    /** Where each literal starts that is [trustedArguments]' text: the argument or a literal of a sum that is, called in it by nothing else. */
+    val trustedLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        // The literals in a template's code too: `Trusted("<p>${"<b>$x</b>"}</p>")`, or Trusted called in a template.
+        val all = withNested(lexKotlin(src).strings)
+        trustedArguments.flatMapTo(HashSet()) { arg ->
+            outsideArguments(src, code, arg.first - 1, all.filter { it.start >= arg.first && it.end <= arg.last + 1 })
+        }
+    }
 
-    // Where the values of the file's `val`s stand, worked out once: how many open at each offset, less how many end.
-    private val valued: BooleanArray by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val open = IntArray(src.length + 1)
-        for (list in names.values) {
-            for (d in list) {
-                val v = d.value ?: continue
-                if (v.start >= src.length) continue
-                open[v.start]++
-                open[(if (v.end < 0) v.start + 1 else v.end).coerceIn(v.start + 1, src.length)]--
+    /** Whether [at] stands in the argument of core's `Trusted`. */
+    fun inTrusted(at: Int): Boolean = trustedArguments.any { at in it }
+
+    /**
+     * Whether the literal at [at] in the block of `interpolate` whose braces are [block] is the value of a `val` declared in
+     * the block itself whose name the block hands only to calls that are statements of their own, a log's: no markup of
+     * the block, where a mark would be written into the log. A name written anywhere else, in a template, a sum, the
+     * block's result or another call's arguments, may reach the markup, and the literal is the block's as before.
+     */
+    fun loggedOnly(
+        at: Int,
+        block: IntRange,
+    ): Boolean {
+        val (name, d) = valued.owner.getOrNull(at)?.let { valued.declarations.getOrNull(it) } ?: return false
+        val v = d.value ?: return false
+        // Declared in the block, not in a lambda or a function of it: its scope ends with the block.
+        if (d.at !in block || d.end < block.last || d.end > block.last + 1) return false
+        return handedOnlyToStatements(name, (v.end.takeIf { it >= 0 } ?: v.start) until block.last)
+    }
+
+    /** Whether each use of [name] in [range] is an argument of a call that is a statement of its own. */
+    private fun handedOnlyToStatements(
+        name: String,
+        range: IntRange,
+    ): Boolean {
+        val at = uses[name] ?: return true
+        var i = at.binarySearch(range.first).let { if (it < 0) -it - 1 else it }
+        while (i < at.size && at[i] <= range.last) {
+            val k = at[i++]
+            if (src.getOrNull(k - 1) == '.') continue
+            // A use in a template, `$name` or in `${...}`, is written into a string; one in code must be a statement's argument.
+            val template = !code[k] && !comments[k] && src.getOrNull(k - 1) == '$'
+            if (template || (code[k] && (!bareCode[k] || !statementArgument(k)))) return false
+        }
+        return true
+    }
+
+    // Where each name of the file is written, its text and its code alike, read once.
+    private val uses: Map<String, IntArray> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val out = HashMap<String, ArrayList<Int>>()
+        var k = 0
+        while (k < src.length) {
+            if (isWordPart(src[k]) && !isWordPart(src.getOrNull(k - 1))) {
+                var end = k + 1
+                while (end < src.length && isWordPart(src[end])) end++
+                out.getOrPut(src.substring(k, end)) { ArrayList() } += k
+                k = end
+            } else {
+                k++
             }
         }
+        out.mapValues { it.value.toIntArray() }
+    }
+
+    // The code outside literals: a template's code is no statement's.
+    private val bareCode: BooleanArray by lazy(LazyThreadSafetyMode.PUBLICATION) { lexKotlin(src).mask }
+
+    /** Whether [at] stands in the arguments of a call that is a statement of its own: `log.warn(err)`, and nothing more on its line. */
+    private fun statementArgument(at: Int): Boolean {
         var depth = 0
-        BooleanArray(src.length) { k ->
-            depth += open[k]
-            depth > 0
+        var open = -1
+        var j = at - 1
+        while (j >= 0 && open < 0) {
+            val c = src[j]
+            if (bareCode[j]) {
+                if (c == ')' || c == ']' || c == '}') depth++
+                if ((c == '(' || c == '[' || c == '{') && depth-- == 0) open = if (c == '(') j else return false
+                if (depth == 0 && (c == ';' || c == '\n')) return false
+            }
+            j--
         }
+        if (open < 0) return false
+        // What is called: a name or a chain of them, the first thing of its statement.
+        var head = open - 1
+        while (head >= 0 && (isWordPart(src[head]) || src[head] == '.' || src[head] == '?')) head--
+        while (head >= 0 && (src[head] == ' ' || src[head] == '\t')) head--
+        if (head >= 0 && src[head] != '\n' && src[head] != ';' && src[head] != '{') return false
+        // The call closes its statement.
+        var close = open
+        depth = 0
+        while (close < src.length) {
+            if (bareCode[close]) {
+                if (src[close] == '(') depth++
+                if (src[close] == ')' && --depth == 0) break
+            }
+            close++
+        }
+        var after = close + 1
+        while (after < src.length && (src[after] == ' ' || src[after] == '\t' || comments[after])) after++
+        return after >= src.length || src[after] == '\n' || src[after] == '\r' || src[after] == ';' || src[after] == '}'
+    }
+
+    // The `val`s of the file with a value, and at each offset the innermost whose value stands there, worked out once:
+    // each value painted over the ones it stands in, which start before it.
+    private val valued: Valued by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val declarations =
+            names
+                .flatMap { (name, list) -> list.filter { it.value != null }.map { name to it } }
+                .sortedBy { it.second.value!!.start }
+        val owner = IntArray(src.length) { -1 }
+        for ((k, entry) in declarations.withIndex()) {
+            val v = entry.second.value!!
+            val end = (if (v.end < 0) v.start + 1 else v.end).coerceAtMost(src.length)
+            for (j in v.start until end) owner[j] = k
+        }
+        Valued(declarations, owner)
     }
 
     /** The edit that imports each name the fixes write, by its qualified name, empty where the file has the import. */
@@ -1208,12 +1305,20 @@ private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
 
-/** Whether the `.` at [dot] ends core's package written out, `io.github.markusaugust.streamlord.core.domain.Trusted`. */
+/** The `val`s of a file with a value, by name, and the index among them of the innermost whose value stands at each offset. */
+private class Valued(
+    val declarations: List<Pair<String, Declaration>>,
+    val owner: IntArray,
+)
+
+/** Whether the `.` at [dot] ends core's package written out, `io.github.markusaugust.streamlord.core.domain.Trusted`, blanks before it too. */
 private fun qualifiedByCore(
     src: String,
+    code: BooleanArray,
     dot: Int,
 ): Boolean {
-    val from = dot - DOMAIN.length
+    val end = codeBefore(src, code, dot) + 1
+    val from = end - DOMAIN.length
     return from >= 0 && src.startsWith(DOMAIN, from) && !isWordPart(src.getOrNull(from - 1)) && src.getOrNull(from - 1) != '.'
 }
 

@@ -970,9 +970,9 @@ internal fun Analyzer.judgeValues(
     // A fix writes interpolate or Trusted only where the name is core's: not somebody else's call or import.
     val canInterpolate = coreNameUsable(src, "interpolate", sdk)
     val canTrust = coreNameUsable(src, "Trusted", sdk)
-    // A literal Trusted itself holds is markup its author vouches for whole: wrapping a value of it in Trusted says
-    // nothing more, and interpolate cannot stand inside it.
-    val vouches = core && s.start in fileFacts(src).trustedLiterals
+    // A literal Trusted itself holds is markup its author vouches for whole, a value of it too: wrapping that value in
+    // Trusted once more says nothing. The rewrite, interpolate's `.text`, is still a String for Trusted to take.
+    val vouches = core && fileFacts(src).inTrusted(s.start)
     // A literal Trusted is markup the author wrote, read in place: the other placeholders are judged against it.
     val written = HashMap<Int, String>()
     for ((k, ip) in s.interpolations.withIndex()) {
@@ -1068,7 +1068,7 @@ internal fun Analyzer.judgeValues(
     }
     // interpolate(...) can take the string only when every value is one it accepts where it lands.
     val fixable by lazy(LazyThreadSafetyMode.NONE) {
-        canInterpolate && !vouches && unfit == null && placeholders.all { keeps[it] || it in vouched.keys || it in kept }
+        canInterpolate && unfit == null && placeholders.all { keeps[it] || it in vouched.keys || it in kept }
     }
     // The first values it does not take as they are: what the message of another value names.
     val inTheWay by lazy(LazyThreadSafetyMode.NONE) { placeholders.filterNot { keeps[it] || it in kept }.take(2) }
@@ -1110,7 +1110,7 @@ internal fun Analyzer.judgeValues(
 
         // What the rewrite does with another value, or why none is offered: the first value in the way.
         fun rewriteNote(): String {
-            if (!canInterpolate || trusted[k] || vouches) return ""
+            if (!canInterpolate || trusted[k]) return ""
             if (!unfit.isNullOrEmpty()) return " Marking the values is not offered here: $unfit."
             // A value that may be null, which a template writes as null and the rewrite as nothing.
             val nothing =
@@ -1145,7 +1145,7 @@ internal fun Analyzer.judgeValues(
                     "Kotlin writes $shown into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, " +
                         "$shown included. If $shown can hold text from outside, build this markup with " +
                         (if (canInterpolate) "interpolate { } and mark $shown with +" else "kotlinx.html") + ", which escapes it."
-                return issue(message, severity, IssueCode.UNESCAPED_INTERPOLATION)
+                return issue(message + rewriteNote(), severity, IssueCode.UNESCAPED_INTERPOLATION, rewritten())
             }
             // A String in element text may be markup the author built, which only the author knows: then
             // both the rewrite, which escapes it, and Trusted, which keeps it, are offered, and neither first.

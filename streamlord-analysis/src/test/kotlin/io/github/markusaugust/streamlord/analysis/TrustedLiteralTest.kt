@@ -31,7 +31,10 @@ class TrustedLiteralTest {
                 found.single().message,
                 call,
             )
-            assertEquals(emptyList(), found.single().fixes.map { it.title }, call)
+            // The rewrite gives Trusted interpolate's text, a String, in which the value is escaped; no fix wraps it in Trusted.
+            val fixes = found.single().fixes
+            assertEquals(listOf("Mark the values with + in interpolate { }, which escapes the values"), fixes.map { it.title }, call)
+            assertTrue(fixes.single().text.contains("\${+name}") && fixes.single().text.endsWith(".text"), fixes.single().text)
         }
     }
 
@@ -39,7 +42,9 @@ class TrustedLiteralTest {
     fun `Trusted written with its package or under an alias is core's`() {
         val qualified = "fun page(q: String) = io.github.markusaugust.streamlord.core.domain.Trusted(\"q <b>\$q</b>\")\n"
         val aliased = "import io.github.markusaugust.streamlord.core.domain.Trusted as T\nfun page(q: String) = T(\"q <b>\$q</b>\")\n"
-        for (src in listOf(qualified, aliased)) {
+        val spaced = qualified.replace("domain.Trusted", "domain .Trusted")
+        val wrapped = qualified.replace("domain.Trusted", "domain\n    .Trusted")
+        for (src in listOf(qualified, aliased, spaced, wrapped)) {
             assertTrue(html(src, "\"q <b>"), src)
             assertEquals(
                 listOf("\$q"),
@@ -81,5 +86,54 @@ class TrustedLiteralTest {
         val row = imports + "fun page(x: String) = interpolate {\n    val row = \"<li>\${+x}</li>\"\n    \"<ul>\$row</ul>\"\n}\n"
         assertEquals(true, html(row, "\"<li>"))
         assertEquals(true, html(row, "\"<ul>"))
+    }
+
+    @Test
+    fun `a val of the block whose value may reach the markup keeps its values judged`() {
+        fun warnsOnX(body: String): Boolean {
+            val src = imports + "fun wrap(s: String) = s\nfun page(x: String, xs: List<String>, c: Boolean): Html {\n$body\n}\n"
+            return issues(src).any { src.substring(it.start, it.end) == "\$x" }
+        }
+        val shapes =
+            listOf(
+                // The block a val is set to.
+                "    val html = interpolate { \"Hi <b>\$x</b>\" }\n    return html",
+                // A val of the block that is its result, or is written into it.
+                "    return interpolate {\n        val html = \"Hi <b>\$x</b>\"\n        html\n    }",
+                "    return interpolate {\n        val part = \"Hi <b>\$x</b>\"\n        \"<p>\$part</p>\"\n    }",
+                "    return interpolate {\n        val part = \"Hi <b>\$x</b>\"\n        \"<p>\" + part\n    }",
+                "    return interpolate {\n        val part = \"Hi <b>\$x</b>\"\n        \"<p>\${part}</p>\"\n    }",
+                "    return interpolate {\n        val part = if (c) \"Hi <b>\$x</b>\" else \"none\"\n        \"<p>\$part</p>\"\n    }",
+                "    return interpolate {\n        val part = wrap(\"Hi <b>\$x</b>\")\n        \"<p>\$part</p>\"\n    }",
+                // A val in a lambda or a local function of the block.
+                "    return interpolate {\n        fun row(x: String): String {\n" +
+                    "            val r = \"Hi <li>\$x</li>\"\n            return r\n        }\n        \"<ul>\${row(x)}</ul>\"\n    }",
+                // A val passed to a call that is no statement of its own, but a value.
+                "    return interpolate {\n        val part = \"Hi <b>\$x</b>\"\n        \"<p>\${wrap(part)}</p>\"\n    }",
+            )
+        for (body in shapes) assertTrue(warnsOnX(body), body)
+        // Handed only to calls that stand as statements of their own, a log's, it is no markup.
+        val logged =
+            "    return interpolate {\n        val err = \"warn: <b>\$x</b>\"\n        log.warn(err)\n        println(\"x\", err)\n" +
+                "        \"<p>\${+x}</p>\"\n    }"
+        assertEquals(false, warnsOnX(logged), logged)
+    }
+
+    @Test
+    fun `Trusted's literal in interpolate's block is judged as Trusted's, and never told to take the block's mark`() {
+        val shapes =
+            listOf(
+                "interpolate {\n    val t = Trusted(\"Hi <i>\$name</i>\")\n    \"<li>\${+t}</li>\"\n}",
+                "interpolate { \"<li>\${+Trusted(\"Hi <i>\$name</i>\")}</li>\" }",
+                "interpolate { \"<li>\${Trusted(\"Hi <i>\$name</i>\")}</li>\" }",
+            )
+        for (shape in shapes) {
+            val src = imports + "fun page(name: String) = $shape\n"
+            val found = issues(src).filter { src.substring(it.start, it.end) == "\$name" }
+            assertEquals(listOf(IssueCode.UNESCAPED_INTERPOLATION), found.map { it.code }, shape)
+            assertTrue(found.single().message.contains("Trusted(...) vouches for"), shape)
+            // The fix builds the markup with an interpolate of its own, whose mark is its own block's.
+            for (fix in found.single().fixes) assertTrue(fix.text.contains("interpolate {") && fix.text.endsWith(".text"), fix.text)
+        }
     }
 }
