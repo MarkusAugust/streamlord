@@ -1360,37 +1360,52 @@ private fun parameterCuts(
     close: Int,
     commas: List<Int>,
 ): List<Int> {
-    // Each `<` still open, with the depth of round brackets it was opened at, and where its outermost one opened.
+    // Each `<` still open, with the depth of round brackets it was opened at, and where it opened.
     val angles = ArrayList<Int>()
+    val opened = ArrayList<Int>()
     var parens = 0
-    var outer = -1
     val typed = ArrayList<IntRange>()
     for (i in open + 1 until close) {
         if (!code[i]) continue
         val c = src[i]
         when {
             c == '<' -> {
-                if (angles.isEmpty()) outer = i
                 angles += parens
+                opened += i
             }
+            // Each `<` its `>` closes is a type's, though one around it may be a comparison's, `n < 0 || v is Pair<*, *>`.
             c == '>' && src[i - 1] != '-' && angles.lastOrNull() == parens -> {
                 angles.removeAt(angles.size - 1)
-                if (angles.isEmpty()) typed += outer..i
+                typed += opened.removeAt(opened.size - 1)..i
             }
             c == '(' -> parens++
             c == ')' -> {
                 parens--
-                while (angles.isNotEmpty() && angles.last() > parens) angles.removeAt(angles.size - 1)
+                while (angles.isNotEmpty() && angles.last() > parens) {
+                    angles.removeAt(angles.size - 1)
+                    opened.removeAt(opened.size - 1)
+                }
             }
-            c in "{};" -> angles.clear()
-            c == ':' || c == '=' -> while (angles.isNotEmpty() && angles.last() == parens) angles.removeAt(angles.size - 1)
+            c in "{};" -> {
+                angles.clear()
+                opened.clear()
+            }
+            c == ':' || c == '=' ->
+                while (angles.isNotEmpty() && angles.last() == parens) {
+                    angles.removeAt(angles.size - 1)
+                    opened.removeAt(opened.size - 1)
+                }
         }
     }
+    // An inner type's brackets close before an outer one's: by where they open, those inside another are left out.
+    typed.sortBy { it.first }
+    val outermost = ArrayList<IntRange>()
+    for (r in typed) if (outermost.isEmpty() || r.first > outermost.last().last) outermost += r
     val cuts = arrayListOf(open)
     var k = 0
     for (comma in commas) {
-        while (k < typed.size && typed[k].last < comma) k++
-        if (k == typed.size || comma !in typed[k]) cuts += comma
+        while (k < outermost.size && outermost[k].last < comma) k++
+        if (k == outermost.size || comma !in outermost[k]) cuts += comma
     }
     cuts += close
     return cuts

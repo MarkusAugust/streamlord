@@ -42,6 +42,8 @@ class LanguageMarkTest {
         assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, Int> = emptyMap<String, Int>(), @Language(\"HTML\") b: String) = b", "f"))
         assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, (x: Int) -> Unit>, @Language(\"HTML\") b: String) = b", "f"))
         assertEquals(setOf(1, "b"), marked("fun <T> f(a: Map<T, T & Any>, @Language(\"HTML\") b: String) = b", "f"))
+        assertEquals(setOf(1, "b"), marked("fun f(a: Boolean = n < 0 || v is Pair<*, *>, @Language(\"HTML\") b: String) = b", "f"))
+        assertEquals(setOf(1, "b"), marked("fun f(a: Boolean = x < g<A, B>(), @Language(\"HTML\") b: String) = b", "f"))
         assertEquals(setOf(1, "b"), marked("fun f(a: Map<String, @Ann(x = 1) Int>, @Language(\"HTML\") b: String) = b", "f"))
     }
 
