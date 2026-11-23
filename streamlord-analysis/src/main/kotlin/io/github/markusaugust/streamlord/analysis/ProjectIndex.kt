@@ -323,8 +323,10 @@ private val CALL = regex("""\b([A-Za-z_]\w*)\s*\(""")
 /** Whether [text] calls one of the short helpers on no receiver: a file without such a call reads the same in every module. */
 internal fun callsShortHelper(text: String): Boolean {
     val helpers = Catalog.default.signalNameHelpers.keys
-    // A template's code is code: `"${obj.set("x", 1)}"` calls `set` on a receiver. A name in a comment
-    // counts, as the readings take it there too: counting one too many only costs a second reading.
+    // A call is code, as the readings take it: a name in a comment or a string is none, and a template's
+    // code is code, where `"${obj.set("x", 1)}"` calls `set` on a receiver.
     val code by lazy(LazyThreadSafetyMode.NONE) { codeMask(text, lexKotlin(text)).first }
-    return CALL.findAll(text).any { m -> m.groupValues[1] in helpers && text.getOrNull(codeBefore(text, code, m.range.first)) != '.' }
+    return CALL.findAll(text).any { m ->
+        m.groupValues[1] in helpers && code[m.range.first] && text.getOrNull(codeBefore(text, code, m.range.first)) != '.'
+    }
 }

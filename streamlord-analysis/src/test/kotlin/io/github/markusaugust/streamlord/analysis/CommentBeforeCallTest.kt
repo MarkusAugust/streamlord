@@ -58,8 +58,10 @@ class CommentBeforeCallTest {
     fun `a short helper on a receiver in a template is no call of the helper`() {
         assertEquals(true, callsShortHelper("// Sets it.\nfun f() = set(\"x\", 1)"))
         assertEquals(false, callsShortHelper("fun f() = \"\${obj.set(\"x\", 1)}\""))
-        // The readings take a call in a comment too, so it counts.
-        assertEquals(true, callsShortHelper("// Someone else's set(\"count\", 1) defines no signal.\nfun f() = 1"))
+        // A call in a comment or a string is none, as the readings take it.
+        assertEquals(false, callsShortHelper("// Someone else's set(\"count\", 1) defines no signal.\nfun f() = 1"))
+        assertEquals(false, callsShortHelper("val note = \"set(x)\""))
+        assertEquals(true, callsShortHelper("val s = \"\${set(\"x\", 1)}\""))
     }
 
     @Test
