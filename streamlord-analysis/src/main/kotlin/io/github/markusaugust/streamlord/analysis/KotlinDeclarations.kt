@@ -409,17 +409,16 @@ private class Read(
     val end: Int,
 )
 
-/** The type arguments `<...>` after [at], [blanks] before them, as [typeBrackets] reads them: what they hold, and just past them. */
+/** The brackets of the type arguments after [at], [blanks] before them, as [typeBrackets] reads them, from `<` to `>`. */
 private fun typeArgumentsAt(
     src: String,
     types: IntArray,
     at: Int,
     blanks: String = " \t\r\n",
-): Read? {
+): IntRange? {
     var k = at
     while (k < src.length && src[k] in blanks) k++
-    if (src.getOrNull(k) != '<' || types[k] < 0) return null
-    return Read(src.substring(k + 1, types[k]), types[k] + 1)
+    return if (src.getOrNull(k) != '<' || types[k] < 0) null else k..types[k]
 }
 
 /** The range of the string literal without a template a declaration is set to just after [at], `= "x"`, and nothing more. */
@@ -479,6 +478,7 @@ private fun pastWhiteSpace(
 /** The parameters a lambda's block names before its arrow, from [at]: what they are written as, and just past the arrow. */
 private fun lambdaParameters(
     src: String,
+    types: IntArray,
     at: Int,
 ): Read? {
     val start = pastWhiteSpace(src, at)
@@ -502,8 +502,8 @@ private fun lambdaParameters(
         if (src.getOrNull(colon) == ':') {
             val from = pastWhiteSpace(src, colon + 1)
             var to = from
-            while (to < src.length && (src[to] in ".<>?`" || nameCharAt(src, to, first = false) > 0)) {
-                to += if (src[to] in ".<>?`") 1 else nameCharAt(src, to, first = false)
+            while (to < src.length && (src[to] in ".?`" || types[to] > to || nameCharAt(src, to, first = false) > 0)) {
+                to = if (types[to] > to) types[to] + 1 else to + (if (src[to] in ".?`") 1 else nameCharAt(src, to, first = false))
             }
             if (to > from) end = to
         }
@@ -1137,7 +1137,7 @@ private fun annotationEnd(
     at: Int,
 ): Int {
     val named = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
-    val name = typeArgumentsAt(src, types, named, blanks = " \t")?.end ?: named
+    val name = typeArgumentsAt(src, types, named, blanks = " \t")?.let { it.last + 1 } ?: named
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
     val depth = IntArray(3)
@@ -1287,18 +1287,19 @@ private fun withoutComments(
     comments: BooleanArray,
 ): String = CharArray(src.length) { if (comments.getOrElse(it) { false } && src[it] != '\n') ' ' else src[it] }.concatToString()
 
-/** The words a type's projection may open with before the type itself, `<out T>`, `<suspend () -> Unit>`. */
-private val PROJECTION_WORDS = setOf("in", "out", "suspend")
+/** The words a name may follow in a type's brackets, `<out T>`, `<reified T>`, `<suspend () -> Unit>`. */
+private val PROJECTION_WORDS = setOf("in", "out", "reified", "suspend")
 
-/** The words that declare type parameters bounds may follow, `class Box<T : Any>`. */
-private val BOUNDED = setOf("class", "interface", "typealias")
+/** The words whose type parameters may be bounded right after them, `fun <T : Any>`, and those after the name they declare, `class Box<T : Any>`. */
+private val BOUNDED_AFTER = setOf("fun", "val", "var")
+private val BOUNDED_NAMED = setOf("class", "interface")
 
 /**
  * Each type's brackets in the code: at a `<` that opens them, where its `>` stands, and at that `>`, where the `<`
  * stands; -1 elsewhere. Read in one pass, as Kotlin's grammar has a type's arguments: names joined by `.`, `?`, `&`
  * and commas, a projection's `in`, `out` or `*`, annotations, a function type's brackets and arrow, and brackets of
  * the same kind; the arguments of an annotation in round brackets may hold anything but a brace or a `;`. A `:` stands
- * only in the type parameters a `fun`, `class`, `interface` or `typealias` declares, `<T : Any>`. Anything else, a
+ * only in the type parameters a `fun`, `val`, `var`, `class` or `interface` declares, `<T : Any>`. Anything else, a
  * number, a literal, an operator, two names in a row or a brace, makes the `<` a comparison: `x<y, b: Int`, `{ it<0 }`
  * and `n<m and n>` open none, and `n < 0 || v is Pair<*, *>` opens one, at `Pair`.
  */
@@ -1313,8 +1314,14 @@ internal fun typeBrackets(
     var parens = 0
     // The last token: `w` a name, `m` an annotation's name, `<` a `<` or a comma, else the character itself.
     var last = ' '
-    var word = ""
-    var previous = ""
+    // Where the last name and the one before it stand, read in place.
+    var word = 0 until 0
+    var previous = 0 until 0
+
+    fun among(
+        name: IntRange,
+        words: Set<String>,
+    ) = words.any { it.length == name.last - name.first + 1 && src.startsWith(it, name.first) }
 
     fun drop(above: Int) {
         while (open.isNotEmpty() && open.last().second >= above) open.removeAt(open.size - 1)
@@ -1326,27 +1333,33 @@ internal fun typeBrackets(
         if (!code[i]) {
             // A literal stands in no type; an annotation's arguments may hold one.
             if (!comments[i]) drop(parens)
+        } else if (c == '@') {
+            // An annotation's name, `@a.B` or `@field:A`, is one token, its arguments brackets of their own.
+            i = ANNOTATION.matchAt(src, i)?.let { it.range.last + 1 } ?: (i + 1)
+            last = 'm'
+            continue
         } else if (isWordPart(c) || c == '`') {
             var end = i + 1
             if (c == '`') end = src.indexOf('`', end).takeIf { it > 0 && '\n' !in src.substring(i, it) }?.plus(1) ?: end
             while (c != '`' && end < src.length && code[end] && isWordPart(src[end])) end++
             // A name after a name, `n<m and`, or a number, `x<1`, stands in no type.
-            if (own && (c.isDigit() || (last == 'w' && word !in PROJECTION_WORDS))) drop(parens)
+            if (own && (c.isDigit() || (last == 'w' && !among(word, PROJECTION_WORDS)))) drop(parens)
             previous = word
-            word = src.substring(i, end)
-            last = if (src.getOrNull(i - 1) == '@') 'm' else 'w'
+            word = i until end
+            last = 'w'
             i = end
             continue
         } else {
-            // A star stands alone, `<*>` or `<A, *>`, one `&` joins `T & Any`, and `->` points; any other operator compares.
+            // A star stands alone, `<*>` or `<A, *>`, one `&` joins `T & Any`, and `->` points after a function type's
+            // brackets; any other operator compares.
             val fits =
                 when (c) {
-                    '<' -> open.add(Triple(i, parens, word == "fun" || (last == 'w' && previous in BOUNDED)))
-                    '(', ',', '.', '?', '@' -> true
+                    '<' -> open.add(Triple(i, parens, among(word, BOUNDED_AFTER) || (last == 'w' && among(previous, BOUNDED_NAMED))))
+                    '(', ',', '.', '?' -> true
                     '*' -> last == '<'
                     '&' -> src.getOrNull(i + 1) != '&' && src.getOrNull(i - 1) != '&'
                     ':' -> open.lastOrNull()?.third == true
-                    '-' -> src.getOrNull(i + 1) == '>'
+                    '-' -> src.getOrNull(i + 1) == '>' && last == ')'
                     else -> c.isWhitespace() || c in ">){};"
                 }
             if (own && !fits) drop(parens)
@@ -1508,7 +1521,16 @@ private fun declarations(
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
-            val arguments = if (vararg || m.groups[3] == null) null else typeArgumentsAt(blank, types, cuts[k] + 1 + m.range.last + 1)?.text
+            val arguments =
+                if (vararg ||
+                    m.groups[3] == null
+                ) {
+                    null
+                } else {
+                    typeArgumentsAt(blank, types, cuts[k] + 1 + m.range.last + 1)?.let {
+                        withoutAnnotations(it.first + 1, it.last)
+                    }
+                }
             // The mark is one of the annotations before the name, in code: one in the default's text marks nothing.
             val nameAt = PARAMETER.groupRange(written, m, 2)!!.first
             val html = HTML_ANNOTATION.findAll(text.substring(0, nameAt)).any { code[cuts[k] + 1 + it.range.first] }
@@ -1585,7 +1607,7 @@ private fun declarations(
                 val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
                 val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { typeArgumentsAt(blank, types, it.last + 1) }
                 // The value of a `val` set once, which a name then stands for.
-                val set = VALUE_AFTER.matchAt(src, arguments?.end ?: (m.range.last + 1))?.range?.last
+                val set = VALUE_AFTER.matchAt(src, arguments?.let { it.last + 1 } ?: (m.range.last + 1))?.range?.last
                 val valueAt = if (bare && !markup) set?.plus(1) else literal?.first
                 val d =
                     add(
@@ -1601,7 +1623,7 @@ private fun declarations(
                             literal != null,
                             markup,
                             if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
-                            arguments?.text,
+                            arguments?.let { withoutAnnotations(it.first + 1, it.last) },
                             valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
                             shared,
                             trusted,
@@ -1805,7 +1827,7 @@ private fun declarations(
                     f.whenBlock = false
                 } else {
                     // Read in the code alone, as a function's parameters are: a comment among them is blank.
-                    val m = lambdaParameters(blank, i + 1)
+                    val m = lambdaParameters(blank, types, i + 1)
                     if (m != null && (i + 1 until m.end).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
                         for (part in splitTopLevel(m.text)) {

@@ -26,12 +26,14 @@ private const val OPERATOR_CHARS = "=!<>&|?:.+-*/%"
 /** How far back the statement a literal stands in is looked for. */
 private const val REACH = 4000
 
-/** [mask] is the lexer's: `false` inside literals and comments. [types] are the file's type brackets, as [typeBrackets] reads them. */
+/** [mask] is the lexer's: `false` inside literals and comments. */
 internal class Operands(
     private val src: String,
     private val mask: BooleanArray,
-    private val types: IntArray,
 ) {
+    // The file's type brackets, read only where a `<` follows a value.
+    private val types by lazy { fileFacts(src).types }
+
     private fun ch(k: Int): Char? = src.getOrNull(k)
 
     /** Past spaces, tabs and comments from [from], and past line breaks too with [newlines]. */

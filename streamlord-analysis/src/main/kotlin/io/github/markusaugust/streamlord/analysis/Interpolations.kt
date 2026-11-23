@@ -317,7 +317,7 @@ internal fun chainFrom(
     first: KotlinString,
     mask: BooleanArray,
 ): KotlinString? {
-    val read = Operands(src, mask, fileFacts(src).types)
+    val read = Operands(src, mask)
     val text = StringBuilder()
     val map = ArrayList<Int>()
     val interpolations = ArrayList<Interpolation>()
