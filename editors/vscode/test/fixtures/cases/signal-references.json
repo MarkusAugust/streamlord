@@ -46,6 +46,7 @@
     {"name":"no fix when nothing is close","defined":["teller"],"path":"telefon","nearest":null},
     {"name":"a fix when a name is close","defined":["teller","total"],"path":"telelr","nearest":"teller"},
     {"name":"of two names as near, the suggestion is the first by name, whatever order the project was read in","defined":["b","count","a"],"path":"s","nearest":"a"},
-    {"name":"no near name a DSL call writes with a hyphen, which Streamlord refuses, so no page has it","language":"kotlin","src":"import io.github.markusaugust.streamlord.html.*\nfun f() = div { dataSignals(\"is-open\" to false); dataText(\"\\$isOpen\") }","unknown":["\\$isOpen"],"fixes":[[]],"messages":["No markup or code in the project defines the signal 'isOpen'."]}
+    {"name":"no near name a DSL call writes with a hyphen, which Streamlord refuses, so no page has it","language":"kotlin","src":"import io.github.markusaugust.streamlord.html.*\nfun f() = div { dataSignals(\"is-open\" to false); dataText(\"\\$isOpen\") }","unknown":["\\$isOpen"],"fixes":[[]],"messages":["No markup or code in the project defines the signal 'isOpen'."]},
+    {"name":"a helper's read in a template's code is a reference, and an unknown signal there is one","language":"kotlin","src":"import io.github.markusaugust.streamlord.html.*\nfun FlowContent.f() = div {\n    set(\"shown\", true)\n    val a = signal(\"shown\")\n    +\"${signal(\"hidden\")} ${\"x\" + signal(\"shown\")}\"\n}","refs":[["shown","shown"],["hidden","hidden"],["shown","shown"]],"unknown":["hidden"]}
   ]
 }

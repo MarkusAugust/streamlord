@@ -35,6 +35,19 @@ All notable changes to Streamlord are recorded here. The format follows
   helper's name in a string is no call either. A call in a template's code, `"${set("count", 1)}"`,
   still is. A file with such a comment is no longer read twice in a module without the DSL.
 
+- A helper's read in a template's code, `"${signal("shown")}"`, is a reference: Find Usages and
+  rename find it, and a signal it names that nothing defines is unknown there too. The readings of
+  signals already took it.
+
+- A `}` or a quote in a comment in a template's code, `"${ a /* } */ }"`, or a `}` in a line comment
+  before a line break, no longer ends the template, so what follows the literal is read as code
+  again. Block comments nest there as Kotlin's do.
+
+- A comment in a value written into markup, `val v = (/* all */ rows).joinToString("")` or
+  `"${ (/* all */ rows).joinToString("") }"`, no longer keeps the editor from being asked about what
+  the value is built on, so IntelliJ's type of `rows` decides whether it is markup, as it does
+  without the comment.
+
 - The build check is one line: `fun markup() = Analyzer().checkProject()` reads the project under
   `src/main` and fails with every finding that fails a build, each written as a compiler writes
   it. `checkProject(strict = true)` fails on what `failures(strict = true)` keeps. See

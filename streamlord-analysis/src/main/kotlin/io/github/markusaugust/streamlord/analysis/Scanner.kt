@@ -336,27 +336,8 @@ internal fun lexKotlin(src: String): KotlinLex {
             i = j
             continue
         }
-        if (c == '/' && src.getOrNull(i + 1) == '/') {
-            val nl = src.indexOf('\n', i)
-            val end = if (nl < 0) src.length else nl
-            blank(i, end, comment = true)
-            i = end
-            continue
-        }
-        if (c == '/' && src.getOrNull(i + 1) == '*') {
-            var depth = 1
-            var j = i + 2
-            while (j < src.length && depth > 0) {
-                if (src.startsWith("/*", j)) {
-                    depth++
-                    j += 2
-                } else if (src.startsWith("*/", j)) {
-                    depth--
-                    j += 2
-                } else {
-                    j++
-                }
-            }
+        if (c == '/' && (src.getOrNull(i + 1) == '/' || src.getOrNull(i + 1) == '*')) {
+            val j = commentEnd(src, i)
             blank(i, j, comment = true)
             i = j
             continue

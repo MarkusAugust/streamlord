@@ -65,29 +65,47 @@ internal class Reading(
         val template = text[start] == '$'
         val region = text.substring(start, end)
         val whole = region.trimStart('$').removeSurrounding("{", "}").trim()
+        // A part is written as the readings see it, each comment a blank: where it is in the file runs from its first character to its last.
+        val (seen, offsets) = uncommentedAt(region)
 
         fun ranges(part: String): List<Pair<Int, Int>> {
-            val t = part.trim()
-            if (t.isEmpty()) return emptyList()
-            if (template && t == whole) return listOf(start to end)
+            if (template && part.trim() == whole) return listOf(start to end)
             val code = fileFacts(text).code
-            val name = isWordPart(t.first())
+            val out = LinkedHashSet<Pair<Int, Int>>()
 
-            // Not the letters of a longer name, `it` of `items`, nor the text of a literal, `n` of `"n"`.
-            fun elsewhere(at: Int): Boolean {
-                if (!code[at] && t.first() != '"') return true
-                if (name && isWordPart(text.getOrNull(at - 1))) return true
-                if (isWordPart(t.last()) && isWordPart(text.getOrNull(at + t.length))) return true
-                val before = text.substring(start, at).trimEnd().lastOrNull()
-                return name && (before == '.' || before == ':' || text.substring(at + t.length, end).trimStart().startsWith("->"))
+            // Where [t] is written in what the readings see, not as the letters of a longer name, `it` of `items`, nor the text of a literal, `n` of `"n"`.
+            fun find(t: String) {
+                if (t.isEmpty()) return
+                val name = isWordPart(t.first())
+
+                fun elsewhere(
+                    at: Int,
+                    from: Int,
+                    to: Int,
+                ): Boolean {
+                    if (!code[from] && t.first() != '"') return true
+                    if (name && isWordPart(text.getOrNull(from - 1))) return true
+                    if (isWordPart(t.last()) && isWordPart(text.getOrNull(to))) return true
+                    val before = codeBefore(text, code, from).takeIf { it >= start }?.let { text[it] }
+                    var after = at + t.length
+                    while (after < seen.length && seen[after].isWhitespace()) after++
+                    return name && (before == '.' || before == ':' || seen.startsWith("->", after))
+                }
+                var at = seen.indexOf(t)
+                while (at >= 0) {
+                    val from = start + offsets[at]
+                    val to = start + offsets[at + t.length - 1] + 1
+                    if (!elsewhere(at, from, to)) out += from to to
+                    at = seen.indexOf(t, at + 1)
+                }
             }
-            val out = ArrayList<Pair<Int, Int>>()
-            var at = region.indexOf(t)
-            while (at >= 0) {
-                if (!elsewhere(start + at)) out += start + at to start + at + t.length
-                at = region.indexOf(t, at + 1)
-            }
-            return out
+            // A part of a template's code is written with its comments, which the readings see as blanks outside a literal and
+            // as they are inside one, a literal of the value being passed over whole.
+            val written = part.trim()
+            val blanked = uncommented(written).trim()
+            find(blanked)
+            if (written != blanked) find(written)
+            return out.sortedBy { it.first }
         }
 
         fun <T> agreed(
@@ -993,12 +1011,16 @@ public class Analyzer(
                 add(s, markupSignalReferences(s.text, catalog, opts.prefix, templates = false), site)
             }
         }
+        // A helper in a template's code is a call too, `"${signal("shown")}"`, as the readings of signals take it.
+        val code by lazy(LazyThreadSafetyMode.NONE) { codeMask(src, lex).first }
         val helpers =
-            dslHelpers(src, HELPER_READ_CALLS, opts.modules.htmlDsl).takeIf { it.isNotEmpty() }?.let { findCallSites(src, it, lex) }
+            dslHelpers(src, HELPER_READ_CALLS, opts.modules.htmlDsl)
+                .takeIf { it.isNotEmpty() }
+                ?.let { findCallSites(src, it, KotlinLex(lex.strings, code, lex.comments)) }
                 ?: emptyList()
         for (site in helpers) {
             // A call on a receiver, `filter.not("x")`, is not the top-level helper.
-            if (src.getOrNull(codeBefore(src, lex.mask, site.nameStart)) == '.' || foreign(site.name, site.nameStart)) continue
+            if (src.getOrNull(codeBefore(src, code, site.nameStart)) == '.' || foreign(site.name, site.nameStart)) continue
             val arg = site.positional.firstOrNull() ?: site.named("name")
             val s = arg?.string?.takeUnless { it.unterminated } ?: continue
             add(s, listOfNotNull(helperSignalReference(s.text)), site)

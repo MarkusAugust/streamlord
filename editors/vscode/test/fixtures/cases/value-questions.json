@@ -1020,6 +1020,95 @@
         "$greeted hint",
         "${buildString { append(q); appendHTML().div { +q } }} hint"
       ]
+    },
+    {
+      "name": "a comment in a value does not keep what it is built on from being asked about",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.Html\nclass Page(val rows: List<Html>)\nfun f(page: Page): String {\n    val v = (/* all */ page.rows).joinToString(\"\")\n    return \"<p>$v</p>\"\n}\n",
+      "questions": [
+        {
+          "text": "$v",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "(/* all */ page.rows).joinToString(\"\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "(/* all */ page.rows)",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        }
+      ],
+      "issues": [],
+      "unanswered": [
+        "$v hint"
+      ]
+    },
+    {
+      "name": "a comment in a template's code does not keep what the value is built on from being asked about",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.Html\nfun f(rows: List<Html>) = \"<p>${ (/* c */ rows).joinToString(\"\") }</p>\"\n",
+      "questions": [
+        {
+          "text": "${ (/* c */ rows).joinToString(\"\") }",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "(/* c */ rows)",
+          "type": "kotlin.collections.List<io.github.markusaugust.streamlord.core.domain.Html>",
+          "fact": "markup"
+        }
+      ],
+      "issues": [],
+      "unanswered": [
+        "${ (/* c */ rows).joinToString(\"\") } hint"
+      ]
+    },
+    {
+      "name": "a quote in a comment in a template's code is no quote, so a value after the literal is asked about",
+      "kotlin": "fun f(a: Int, q: String): String {\n    val v = \"${a /* \" */}\" + q.trim() /* x */\n    return \"<p>$v</p>\"\n}\n",
+      "questions": [
+        {
+          "text": "$v",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "q.trim()",
+          "type": "kotlin.String",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "$v warning"
+      ],
+      "unanswered": [
+        "$v hint"
+      ]
+    },
+    {
+      "name": "a comment in a template's code inside a literal of a template's code is passed over as well",
+      "kotlin": "import io.github.markusaugust.streamlord.core.domain.Html\nfun f(rows: List<Html>) = \"<p>${ \"${ (/* c */ rows).joinToString(\"\") }\" }</p>\"\n",
+      "questions": [
+        {
+          "text": "${ \"${ (/* c */ rows).joinToString(\"\") }\" }",
+          "type": "kotlin.String",
+          "fact": "string"
+        },
+        {
+          "text": "(/* c */ rows).joinToString(\"\")",
+          "type": "kotlin.String",
+          "fact": "string"
+        }
+      ],
+      "issues": [
+        "${ \"${ (/* c */ rows).joinToString(\"\") }\" } warning"
+      ],
+      "unanswered": [
+        "${ \"${ (/* c */ rows).joinToString(\"\") }\" } hint"
+      ]
     }
   ]
 }

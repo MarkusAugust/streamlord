@@ -97,6 +97,28 @@ internal fun charLiteralEnd(
     return j
 }
 
+/** The offset just past the comment that opens at [at]: a line comment up to its line break, a block comment past its end, the ones nested in it too. */
+internal fun commentEnd(
+    src: String,
+    at: Int,
+): Int {
+    if (src.startsWith("//", at)) return src.indexOf('\n', at).let { if (it < 0) src.length else it }
+    var depth = 1
+    var j = at + 2
+    while (j < src.length && depth > 0) {
+        if (src.startsWith("/*", j)) {
+            depth++
+            j += 2
+        } else if (src.startsWith("*/", j)) {
+            depth--
+            j += 2
+        } else {
+            j++
+        }
+    }
+    return j
+}
+
 /** Does a string literal start at [at]: a quote, or a run of dollars followed by a quote? */
 internal fun isStringStart(
     src: String,
@@ -238,6 +260,10 @@ internal fun readKotlinStringAt(
                     } else if (cj == '\'') {
                         // A brace in a character literal ('}') is not the end of the template.
                         j = charLiteralEnd(src, j)
+                        continue
+                    } else if (cj == '/' && (src.getOrNull(j + 1) == '/' || src.getOrNull(j + 1) == '*')) {
+                        // Nor is one in a comment of the template's code.
+                        j = commentEnd(src, j)
                         continue
                     }
                     j++

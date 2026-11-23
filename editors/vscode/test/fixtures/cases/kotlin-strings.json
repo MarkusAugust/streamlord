@@ -14,6 +14,11 @@
     {"name":"takes a literal with a comment before or after it as the string argument (1)","src":"dataOnClick(/* why */ \"x\")","calls":["dataOnClick","dataText"],"sites":[["x"]]},
     {"name":"takes a literal with a comment before or after it as the string argument (2)","src":"dataOnClick(\n  // why\n  \"x\",\n)","calls":["dataOnClick","dataText"],"sites":[["x"]]},
     {"name":"takes a literal with a comment before or after it as the string argument (3)","src":"dataText(\"x\" /* after */)","calls":["dataOnClick","dataText"],"sites":[["x"]]},
-    {"name":"takes a literal with a comment before or after it as the string argument (4)","src":"dataText(\n  \"x\",\n  // trailing\n)","calls":["dataOnClick","dataText"],"sites":[["x"]]}
+    {"name":"takes a literal with a comment before or after it as the string argument (4)","src":"dataText(\n  \"x\",\n  // trailing\n)","calls":["dataOnClick","dataText"],"sites":[["x"]]},
+    {"name":"a } in a line comment in a template's code does not end the template","src":"\"<p>${ a // c }\n}</p>\"","at":0,"text":"<p>__kt__</p>","interpolations":[["braced"," a // c }\n"]]},
+    {"name":"a } in a block comment in a template's code does not end the template","src":"\"<p>${ /* } */ b }</p>\"","at":0,"text":"<p>__kt__</p>","interpolations":[["braced"," /* } */ b "]]},
+    {"name":"block comments nest in a template's code, as Kotlin's do","src":"\"${ /* /* } */ } */ c }!\"","at":0,"text":"__kt__!","interpolations":[["braced"," /* /* } */ } */ c "]]},
+    {"name":"a } in a line comment in a raw string's template does not end the template","src":"\"\"\"<p>${ d // }\n}</p>\"\"\"","at":0,"text":"<p>__kt__</p>","interpolations":[["braced"," d // }\n"]]},
+    {"name":"slashes in a template's string or a division are no comment","src":"\"${ f(\"a // }\") / 2 }!\"","at":0,"text":"__kt__!","interpolations":[["braced"," f(\"a // }\") / 2 "]]}
   ]
 }

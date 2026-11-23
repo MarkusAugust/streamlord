@@ -169,6 +169,11 @@ internal fun literalEnd(
                     j = literalEnd(e, j)
                     continue
                 }
+                // A brace or a quote in a comment of the template's code is neither.
+                if (e.startsWith("//", j) || e.startsWith("/*", j)) {
+                    j = commentEnd(e, j)
+                    continue
+                }
                 if (e[j] == '{') {
                     depth++
                 } else if (e[j] == '}') {
