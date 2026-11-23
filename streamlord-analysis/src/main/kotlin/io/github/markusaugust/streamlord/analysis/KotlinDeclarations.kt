@@ -154,8 +154,8 @@ internal class FileFacts(
      * Where the argument of each call of core's `Trusted` stands, under its name, an alias or its package, in code or in a
      * template's code: markup the author vouches for, whatever it is built of.
      */
-    val trustedArguments: List<TrustedArgument> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val out = ArrayList<TrustedArgument>()
+    val trustedArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val out = ArrayList<IntRange>()
         val names = coreAliases(src).filterValues { it == "Trusted" }.keys + "Trusted"
         if (names.none { it in src }) return@lazy out
         val lex = lexKotlin(src)
@@ -166,24 +166,9 @@ internal class FileFacts(
             val qualified = src.getOrNull(dot) == '.' && site.name == "Trusted" && qualifiedByCore(src, code, dot)
             if (!qualified && (src.getOrNull(dot) == '.' || (site.name == "Trusted" && !own))) continue
             val arg = site.named("html") ?: site.positional.firstOrNull() ?: continue
-            out += TrustedArgument(arg.start until arg.end, readByBlock(site, if (qualified) dot - DOMAIN.length else site.nameStart))
+            out += arg.start until arg.end
         }
         out
-    }
-
-    /**
-     * Whether the Trusted called at [site], written from [start], is the whole of an unmarked `${...}` of a literal of
-     * `interpolate`'s block: its text goes into the block's markup as written, and a `+` in it is the block's mark.
-     */
-    private fun readByBlock(
-        site: CallSite,
-        start: Int,
-    ): Boolean {
-        var before = start - 1
-        while (before > 0 && src[before].isWhitespace()) before--
-        var after = site.closeParen + 1
-        while (after < src.length && src[after].isWhitespace()) after++
-        return src.startsWith("\${", before - 1) && src.getOrNull(after) == '}' && blocks.any { before in it.braces }
     }
 
     // The blocks of core's interpolate in the file.
@@ -195,7 +180,7 @@ internal class FileFacts(
     val trustedLiterals: Set<Int> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         // The literals in a template's code too: `Trusted("<p>${"<b>$x</b>"}</p>")`, or Trusted called in a template.
         val all = withNested(lexKotlin(src).strings)
-        trustedArguments.flatMapTo(HashSet()) { (arg) ->
+        trustedArguments.flatMapTo(HashSet()) { arg ->
             outsideArguments(src, code, arg.first - 1, all.filter { it.start >= arg.first && it.end <= arg.last + 1 })
         }
     }
@@ -204,10 +189,10 @@ internal class FileFacts(
      * The argument of core's `Trusted` that [at] stands in, where nothing stands between: a block of `interpolate` in the
      * argument, the one a fix writes, `Trusted(interpolate { ... }.text)`, is that block's own markup.
      */
-    fun trustedAt(at: Int): TrustedArgument? {
-        val arg = trustedArguments.filter { at in it.range }.maxByOrNull { it.range.first } ?: return null
+    fun trustedAt(at: Int): IntRange? {
+        val arg = trustedArguments.filter { at in it }.maxByOrNull { it.first } ?: return null
         val block = blocks.filter { at in it.braces }.maxByOrNull { it.braces.first }
-        return arg.takeIf { block == null || block.braces.first < arg.range.first }
+        return arg.takeIf { block == null || block.braces.first < arg.first }
     }
 
     /** Whether [at] stands in the argument of core's `Trusted`, with no block of `interpolate` between: see [trustedAt]. */
@@ -215,8 +200,8 @@ internal class FileFacts(
 
     /**
      * Whether the literal at [at] stands in the value of a `val` declared in the block of `interpolate` whose braces are
-     * [block], and not in a lambda or a function of it: where that string goes, to the markup or to a log, only its uses
-     * tell, which the text cannot follow.
+     * [block] (the `val` itself not in a lambda or a function of the block; the literal anywhere in its value): where that
+     * string goes, to the markup or to a log, only the uses of the `val` tell, which the text cannot follow.
      */
     fun inBlockValue(
         at: Int,
@@ -1254,12 +1239,6 @@ private val ANNOTATION_OPEN = regex("""(?<![\p{L}\p{Nd}_>.`])@(?:[a-z]+:)?[\p{L}
 
 /** A tag, an end tag, a comment or a doctype, anywhere in a literal: `a < b` and `<3` are none. */
 private val TAG = regex("""<[A-Za-z/!]""")
-
-/** Where the argument of a call of core's `Trusted` stands, and whether the call is [readByBlock]: see [FileFacts.trustedArguments]. */
-internal data class TrustedArgument(
-    val range: IntRange,
-    val readByBlock: Boolean,
-)
 
 /** The `val`s of a file with a value, by name, and the index among them of the innermost whose value stands at each offset. */
 private class Valued(

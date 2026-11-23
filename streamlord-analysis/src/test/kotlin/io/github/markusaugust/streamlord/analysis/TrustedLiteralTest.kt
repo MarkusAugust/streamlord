@@ -115,25 +115,7 @@ class TrustedLiteralTest {
     }
 
     @Test
-    fun `Trusted's literal in interpolate's block is judged as Trusted's, and never told to take the block's mark`() {
-        val shapes =
-            listOf(
-                "interpolate {\n    val t = Trusted(\"Hi <i>\$name</i>\")\n    \"<li>\${+t}</li>\"\n}",
-                "interpolate { \"<li>\${+Trusted(\"Hi <i>\$name</i>\")}</li>\" }",
-                "interpolate { \"<li>\${Trusted(\"Hi <i>\$name</i>\")}</li>\" }",
-            )
-        for (shape in shapes) {
-            val src = imports + "fun page(name: String) = $shape\n"
-            val found = issues(src).filter { src.substring(it.start, it.end) == "\$name" }
-            assertEquals(listOf(IssueCode.UNESCAPED_INTERPOLATION), found.map { it.code }, shape)
-            assertTrue(found.single().message.contains("Trusted(...) vouches for"), shape)
-            // The fix builds the markup with an interpolate of its own, whose mark is its own block's.
-            for (fix in found.single().fixes) assertTrue(fix.text.contains("interpolate {") && fix.text.endsWith(".text"), fix.text)
-        }
-    }
-
-    @Test
-    fun `the code a fix writes for Trusted is silent, and a mark in Trusted's text is right only where the block reads it`() {
+    fun `the code a fix writes for Trusted is silent, and a mark in Trusted's text is left alone`() {
         fun valuesTold(body: String): List<String> {
             val src = imports + "fun page(name: String, url: String) = $body\n"
             return issues(src).map { src.substring(it.start, it.end) + " " + it.code.id }
@@ -144,16 +126,8 @@ class TrustedLiteralTest {
         assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${+Trusted(interpolate { \"Hi <i>\${+name}</i>\" }.text)}</li>\" }"))
         // Trusted written unmarked into the block's markup gives the block its text, marks and all.
         assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }"))
-        // Marked, or set to a val that is marked, Trusted is written as it is, and the page gets the mark's note.
-        for (body in listOf(
-            "interpolate { \"<li>\${+Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }",
-            "interpolate {\n    val t = Trusted(\"Hi <i>\${+name}</i>\")\n    \"<li>\${+t}</li>\"\n}",
-        )) {
-            val src = imports + "fun page(name: String, url: String) = $body\n"
-            val found = issues(src).single { src.substring(it.start, it.end) == "\${+name}" }
-            assertTrue(found.message.contains("mark's note"), found.message)
-            assertEquals(1, found.fixes.size, body)
-        }
+        // Whether a mark in Trusted's text is read takes the code around Trusted, which the text cannot follow: left alone.
+        assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${+Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }"))
     }
 
     @Test

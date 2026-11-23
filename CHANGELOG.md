@@ -31,10 +31,10 @@ All notable changes to Streamlord are recorded here. The format follows
 
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
-  `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`. The
-  fix that wrapped the value in `Trusted` once more is gone. The same holds where Trusted's argument
-  is a sum that opens with a value, has a literal in a template, or stands in `interpolate`'s block,
-  where the block's own mark would have been written into the page.
+  `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and
+  in element text the fix is not preferred, since Trusted says its text is markup. The fix that
+  wrapped the value in `Trusted` once more is gone. The same holds where Trusted's argument is a sum
+  that opens with a value or has a literal in a template.
 - `Trusted` written with its package, `io.github.markusaugust.streamlord.core.domain.Trusted(...)`,
   or under an alias, `import ...Trusted as T`, is read as core's: its argument is markup, coloured
   and judged. VS Code colours the qualified name too; an alias it cannot see.

@@ -980,8 +980,7 @@ internal fun Analyzer.judgeValues(
     val canTrust = coreNameUsable(src, "Trusted", sdk)
     // A literal Trusted itself holds is markup its author vouches for whole, a value of it too: wrapping that value in
     // Trusted once more says nothing. The rewrite, interpolate's `.text`, is still a String for Trusted to take.
-    val vouchedBy = if (core) fileFacts(src).trustedAt(s.start) else null
-    val vouches = vouchedBy != null
+    val vouches = core && fileFacts(src).inTrusted(s.start)
     // A literal Trusted is markup the author wrote, read in place: the other placeholders are judged against it.
     val written = HashMap<Int, String>()
     for ((k, ip) in s.interpolations.withIndex()) {
@@ -1106,26 +1105,8 @@ internal fun Analyzer.judgeValues(
     val operands = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
     for ((k, ip) in s.interpolations.withIndex()) {
         if (k in written) continue
-        // A `+` in Trusted's text is the block's mark where the block reads that text unmarked; anywhere else Trusted is
-        // written as it is, and the mark's note with it.
-        if (vouchedBy != null && markedValue(ip) != null) {
-            if (!vouchedBy.readByBlock) {
-                val shown = valueShown(ip)
-                issues +=
-                    Issue(
-                        ip.start,
-                        ip.end,
-                        "The + of $shown marks nothing here: Trusted(...) is written as it is, so the page gets the mark's note " +
-                            "where $shown stands, and not its value. Build Trusted's text with an interpolate { } of its own, " +
-                            "whose + is its own.",
-                        Severity.WARNING,
-                        IssueCode.UNESCAPED_INTERPOLATION,
-                        valueLink(landings[k]),
-                        if (canInterpolate) listOf(trustedRewrite(src, s)) else emptyList(),
-                    )
-            }
-            continue
-        }
+        // A `+` in Trusted's text is a mark of the block around it, which only the code around it can tell: left alone.
+        if (vouches && markedValue(ip) != null) continue
         val landing = landings[k]
         val fact = told[k].plain()
         val shown = valueShown(ip)
@@ -1190,7 +1171,8 @@ internal fun Analyzer.judgeValues(
                     "Kotlin writes $shown into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, " +
                         "$shown included. If $shown can hold text from outside, build this markup with " +
                         (if (canInterpolate) "interpolate { } and mark $shown with +" else "kotlinx.html") + ", which escapes it."
-                return issue(message + rewriteNote(), severity, IssueCode.UNESCAPED_INTERPOLATION, rewritten(!trust))
+                // In element text the author vouched for the text as markup, which the rewrite would escape: not preferred.
+                return issue(message + rewriteNote(), severity, IssueCode.UNESCAPED_INTERPOLATION, rewritten(!trust && !text))
             }
             // A Trusted or an Html that opens a `+` chain would be joined to nothing, since Kotlin has no plus for
             // either: no such fix there, nor such advice.
