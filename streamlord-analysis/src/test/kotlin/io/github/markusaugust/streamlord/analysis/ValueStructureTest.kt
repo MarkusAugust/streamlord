@@ -1228,4 +1228,20 @@ class ValueStructureTest {
         val src = "fun f(a: String) {\n    // have fun\n    interpolate { \"<p>\${+a}</p>\" }\n}"
         assertEquals(1, interpolateBlocks(src, fileFacts(src).code).size)
     }
+
+    @Test
+    fun `an annotation in backticks or with type arguments is read whole, as a plain one is`() {
+        val shapes =
+            listOf("@A<String>", "@A <String>", "@A<B<C<D>>>", "@A<(Int) -> Unit>", "@A<\n    String>", "@`A`", "@`a`.b", "@a.`b`")
+        for (annotation in shapes) {
+            val files =
+                listOf(
+                    "abstract class P {\n    $annotation open\n    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n",
+                    "object O {\n    @Language(\"HTML\") $annotation val title = load()\n    fun page() = \"<p>\$title</p>\"\n}\n",
+                    "class P($annotation val title: String) {\n    fun page() = \"<p>\$title</p>\"\n}\n",
+                    "fun f($annotation n: String) = \"<p>\$n</p>\"\n",
+                )
+            for (file in files) assertEquals(told(file.replace(annotation, "@A")), told(file), file)
+        }
+    }
 }

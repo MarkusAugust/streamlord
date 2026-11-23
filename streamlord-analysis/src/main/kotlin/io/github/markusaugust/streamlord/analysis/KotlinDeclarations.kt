@@ -863,18 +863,26 @@ private val MODIFIER_WORDS: Map<String, Int> =
         mapOf("private" to PRIVATE, "const" to CONST, "override" to OVERRIDES, "companion" to COMPANION)
 
 private val QUOTED = regex("`[^`\n]+`")
-private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|[\p{L}_][\p{L}\p{Nd}_.]*)""")
+
+// A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
+private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
+private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
 /** What stands between a modifier and the declaration on its line: words and annotations, twelve at most, so that no line is too long to read. */
-private val DECLARES_AFTER = regex("""(?:[ \t]+(?:[a-z]+|@[^\s(]+(?:\([^()\n]*\))?)){0,12}[ \t]+(?:va[lr]|fun|class|interface|object)\b""")
+private val DECLARES_AFTER =
+    regex(
+        """(?:[ \t]+(?:[a-z]+|@[^\s(<]+(?:[ \t]*<(?:[^<>\n]|->|<(?:[^<>\n]|->|<(?:[^<>\n]|->)*>)*>)*>)?(?:\([^()\n]*\))?)){0,12}""" +
+            """[ \t]+(?:va[lr]|fun|class|interface|object)\b""",
+    )
 
-/** Just past the annotation written at [at], its arguments too where they close, or [at] where none is. */
+/** Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none is. */
 private fun annotationEnd(
     src: String,
     code: BooleanArray,
     at: Int,
 ): Int {
-    val name = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
+    val named = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
+    val name = typeArgumentsEnd(src, code, named) ?: named
     // `@[A B]` holds its annotations in the bracket.
     val open = if (src[name - 1] == '[') name - 1 else name
     val depth = IntArray(3)
@@ -886,6 +894,33 @@ private fun annotationEnd(
         if (closes >= 0 && depth.sum() == 0) return k + 1
     }
     return open
+}
+
+/**
+ * Just past the type arguments of an annotation's name that ends at [at], `<B<C>>` or `<(Int) -> Unit>`, with blanks before
+ * them on its line; null where none close.
+ */
+private fun typeArgumentsEnd(
+    src: String,
+    code: BooleanArray,
+    at: Int,
+): Int? {
+    var k = at
+    while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
+    if (src.getOrNull(k) != '<') return null
+    var depth = 0
+    for (j in k until minOf(src.length, k + 5_000)) {
+        if (!code[j]) continue
+        when {
+            src[j] == '<' -> depth++
+
+            // The arrow of a function type closes nothing.
+            src[j] == '>' && src[j - 1] != '-' -> if (--depth == 0) return j + 1
+
+            src[j] in ";{}=" -> return null
+        }
+    }
+    return null
 }
 
 /**

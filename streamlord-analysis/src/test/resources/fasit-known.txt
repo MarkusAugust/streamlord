@@ -7,7 +7,6 @@ editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/Stre
 editors/vscode/analysis-js/src/jsMain/kotlin/io/github/markusaugust/streamlord/editor/InspectorPort.kt | scope | streamRequest | request | when (val request = Requests.streamRequest(url, method, signals ?: "", entries(headers))) { | analysis «never» parser «   )⏎        }⏎    }⏎⏎@JsExport⏎fun resp»
 editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | Case783.page | v | val v = try { | analysis «try {⏎        load(n)⏎    }⏎    catch» parser «try {⏎        load(n)⏎    }⏎    catch⏎    (e: Exception) {⏎        "<b>x</b>"⏎    }»
 editors/vscode/test/fixtures/kotlin-layouts/comments.kt | const | Case1035 | title | val title = "<b>x</b>" | analysis reads const
-editors/vscode/test/fixtures/kotlin-layouts/comments.kt | const | Case931 | title | @A<String> const /* c */ val title = "<b>x</b>" | analysis misses const
 editors/vscode/test/fixtures/kotlin-layouts/comments.kt | overridable | Case1046.P | title | SELECT a F""") open /* c */ val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/comments.kt | overridable | Case955.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/comments.kt | undeclared | Case832.ext | m | fun (/* ( */ String).ext(m: Int) = "<b>$m</b>" | the analysis declares no m here
@@ -36,8 +35,6 @@ editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | undecla
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | undeclared | Case281.g | body | fun g(@Language("HTML") @Deprecated("x", ReplaceWith("y")) body: String, title: String = "Hi $x") = body | the analysis declares no body here
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | value | Case261.T | f | val f: List<(Int) -> Unit> = listOf() | analysis reads none, parser «listOf()»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | const | Case803.f | title | val title = "<b>x</b>" | analysis reads const
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | html | Case815 | title | @Language("HTML") @`a`.b val title = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | html | Case819 | title | @Language("HTML") @A<(Int) -> Unit> val title = load() | analysis misses the HTML mark
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | overridable | Case802.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | undeclared | Case737.b | body | fun b(@Language("HTML") @Deprecated("x", ReplaceWith("y")) body: String, title: String = "Hi <b>x</b>") = body + title | the analysis declares no body here
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | undeclared | Case737.c | body | fun c(@Language("HTML") @Pattern(regexp = "^(a|b)$") body: String, title: String = "Hi <b>x</b>") = body + title | the analysis declares no body here
@@ -47,33 +44,19 @@ editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-4.kt | undecla
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | const | Case833.f | t | a const val t = "<b>" | analysis reads const
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | const | Case834 | title | val title = "<b>x</b>" | analysis reads const
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | const | Case848 | title | val title = "<b>x</b>" | analysis reads const
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | getter | Case828.P | title | val title = "<b>x</b>" | analysis misses a getter
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | getter | Case829.P | title | val title = "<b>x</b>" | analysis misses a getter
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | html | Case820 | title | @Language("HTML") @A<B<C<D>>> val title = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | html | Case821 | title | @Language("HTML") @A <String> val title = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | html | Case822 | title | String> val title = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | html | Case890 | title | @Language("HTML") @A<String> val title = load() | analysis misses the HTML mark
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case835.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case839.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case840.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case843.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case847.P | title | val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case883.P.a | title | val a = "<i>" open val title = "<b>x</b>" | analysis reads that another may stand in for it
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-5.kt | overridable | Case889.P | title | open @A<String> val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | const | Case935 | title | fun a() = b private const @A val title = "<b>x</b>" | analysis reads const
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | const | Case956 | title | val title = "<b>x</b>" | analysis reads const
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | const | Case999 | title | """) val title = "<b>x</b>" | analysis misses const
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | getter | Case1004.P | title | val title = "<b>x</b>" | analysis misses a getter
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | html | Case912 | title | @Language("HTML") @`A` val title = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | html | Case913 | title | @Language("HTML") @a.`b` val title = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | html | Case927 | title | val title: String = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case911.P | title | open @`A` val title = "<b>x</b>" | analysis misses that another may stand in for it
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case928.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case930.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case933.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case937.P | title | fun z() = a private open val title = "<b>x</b>" | analysis reads that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case947.P.a | title | val a = 1 open @A @A @A @A @A @A @A @A @A @A @A @A val title = "<b>x</b>" | analysis reads that another may stand in for it
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case994.P | title | val a = 1; open @A<B, C> val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | Case935 | a | fun a() = b private const @A val title = "<b>x</b>" | analysis «b private const @A val title = "<b>x</b>"» parser «b private const»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | Case937.P | z | fun z() = a private open val title = "<b>x</b>" | analysis «a private open val title = "<b>x</b>"» parser «a private open»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-7.kt | const | Case1036 | title | val title = "<b>x</b>" | analysis reads const
