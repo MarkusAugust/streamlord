@@ -1082,9 +1082,18 @@ internal fun splitTopLevel(
     while (k < text.length) {
         val c = text[k]
         when {
-            types[offset + k] > offset + k -> k = types[offset + k] - offset
-            c in "([{" -> depth++
-            c in ")]}" -> depth--
+            types[offset + k] > offset + k -> {
+                k = types[offset + k] - offset
+            }
+
+            c in "([{" -> {
+                depth++
+            }
+
+            c in ")]}" -> {
+                depth--
+            }
+
             c == ',' && depth == 0 -> {
                 out += text.substring(from, k)
                 from = k + 1
@@ -1130,7 +1139,7 @@ private val QUOTED = regex("`[^`\n]+`")
 
 // A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
 private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
-private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
+private val ANNOTATION = regex("""@(?:[a-z]+:\s*)?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
 /** The words a modifier declares something with, on its line. */
 private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
@@ -1144,8 +1153,9 @@ internal fun annotationEnd(
 ): Int {
     val named = (ANNOTATION.matchAt(src, at) ?: return at).range.last + 1
     val name = typeArgumentsAt(src, types, named, blanks = " \t")?.let { it.last + 1 } ?: named
-    // `@[A B]` holds its annotations in the bracket.
-    val open = if (src[name - 1] == '[') name - 1 else name
+    // `@[A B]` holds its annotations in the bracket; Kotlin allows blanks, a line break too, before the arguments, `@A ("x")`.
+    val args = (name until src.length).firstOrNull { !src[it].isWhitespace() }?.takeIf { src[it] == '(' } ?: name
+    val open = if (src[name - 1] == '[') name - 1 else args
     val depth = IntArray(3)
     for (k in open until if (src.getOrNull(open) == '(' || open < name) minOf(src.length, open + 5_000) else open) {
         if (code[k] && src[k] in "([{") depth["([{".indexOf(src[k])]++

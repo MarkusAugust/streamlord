@@ -21,7 +21,6 @@ editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope |
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | undeclared | Case251.pick | n | for (@Suppress("x") n: Int in xs) println(n) | the analysis declares no n here
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | const | Case999 | title | """) val title = "<b>x</b>" | analysis misses const
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | getter | Case1004.P | title | val title = "<b>x</b>" | analysis misses a getter
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case930.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | Case935 | a | fun a() = b private const @A val title = "<b>x</b>" | analysis «b private const @A val title = "<b>x</b>"» parser «b private const»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | Case937.P | z | fun z() = a private open val title = "<b>x</b>" | analysis «a private open val title = "<b>x</b>"» parser «a private open»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-7.kt | html | Case1007 | title | val title: String = load() | analysis misses the HTML mark
