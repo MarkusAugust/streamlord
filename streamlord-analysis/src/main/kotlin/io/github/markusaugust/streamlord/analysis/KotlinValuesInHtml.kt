@@ -1105,8 +1105,6 @@ internal fun Analyzer.judgeValues(
     val operands = s.interpolations.any { it.kind == InterpolationKind.OPERAND }
     for ((k, ip) in s.interpolations.withIndex()) {
         if (k in written) continue
-        // A `+` in Trusted's text is a mark of the block around it, which only the code around it can tell: left alone.
-        if (vouches && markedValue(ip) != null) continue
         val landing = landings[k]
         val fact = told[k].plain()
         val shown = valueShown(ip)
@@ -1166,7 +1164,8 @@ internal fun Analyzer.judgeValues(
                     !mayBeNull(src, ip.text, s.start) && !collectionShown(src, ip.text, s.start)
             // In Trusted's own text the rewrite is offered as anywhere, first where the value is no markup the author may
             // have built; wrapping the value in Trusted once more says nothing.
-            if (vouches && !fact.isMarkup()) {
+            // A `+` in Trusted's text is judged as before: whether a block reads it only the code around Trusted tells (#338).
+            if (vouches && !fact.isMarkup() && markedValue(ip) == null) {
                 val message =
                     "Kotlin writes $shown into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, " +
                         "$shown included. If $shown can hold text from outside, build this markup with " +
