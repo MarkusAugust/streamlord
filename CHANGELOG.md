@@ -29,6 +29,12 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- Long and unfinished text no longer stops the analysis of a file. A lambda with thousands of
+  parameters, a type's `<` that never closes and a string that never closes each threw a stack
+  overflow on the JVM, and the whole file got no answers. Thousands of unclosed annotations, and
+  thousands of blank or comment lines after an operator, took seconds; they now take a fraction of
+  one.
+
 - Declarations are read as Kotlin's parser reads them in more shapes, and the check of values written
   into markup follows:
   - an annotation in backticks or with type arguments, `` @`A` `` or `@A<B<C>>`, no longer hides
