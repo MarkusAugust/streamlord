@@ -1307,4 +1307,26 @@ class ValueStructureTest {
         val member = "abstract class P {\n    fun a() {} open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
         assertEquals(listOf("\$title"), told(member))
     }
+
+    @Test
+    fun `a modifier's word after a value on its line is an infix call's, and marks no declaration`() {
+        val lines =
+            listOf(
+                "fun a() = b private const val title = \"<b>x</b>\"",
+                "fun a() = b private const @A val title = \"<b>x</b>\"",
+                "fun z() = a private open val title = \"<b>x</b>\"",
+                "val a = \"<i>\" open val title = \"<b>x</b>\"",
+                "val a = 1 open @A @A @A val title = \"<b>x</b>\"",
+            )
+        for (line in lines) {
+            val src = "open class P {\n    $line\n    fun page() = \"<p>\$title</p>\"\n}\n"
+            val plain = line.replace(Regex("\\b(private|const|open)\\b"), "other")
+            assertEquals(told(src.replace(line, plain)), told(src), line)
+        }
+        // A modifier after an annotation's arguments is the declaration's.
+        assertEquals(
+            listOf("\$title"),
+            told("open class P {\n    @A(1) open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"),
+        )
+    }
 }

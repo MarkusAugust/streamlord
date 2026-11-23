@@ -1204,6 +1204,35 @@ private fun declarations(
 
     /** The names of a list such as `a, b: Int`, and the type of each. */
     fun listed(list: String): List<Pair<String, String?>> = NAMES.findAll(list).map { it.groupValues[1] to it.groups[2]?.value }.toList()
+    // Where the last annotation read ends: a modifier after its arguments is a declaration's.
+    var annotationClosed = -1
+
+    /** Where the word whose last character is at [k] starts. */
+    fun wordStart(k: Int): Int {
+        var j = k
+        while (j > 0 && isWordPart(src[j - 1])) j--
+        return j
+    }
+
+    /**
+     * Whether a value stands before the word at [at], past blanks and comments: a name, a literal, a call's or an index's
+     * bracket or a lambda's brace. A modifier the declaration already has, [said], and an annotation's arguments are none.
+     */
+    fun afterValue(
+        at: Int,
+        said: Boolean,
+    ): Boolean {
+        var k = at - 1
+        while (k >= 0 && (src[k].isWhitespace() || comments[k])) k--
+        return when {
+            k < 0 -> false
+            !code[k] -> true
+            isWordPart(src[k]) -> !(said && MODIFIER_WORDS.containsKey(src.substring(wordStart(k), k + 1)))
+            src[k] == ')' -> k + 1 != annotationClosed
+            else -> src[k] == ']' || src[k] == '}'
+        }
+    }
+
     var i = 0
     while (i < src.length) {
         val f = stack.last()
@@ -1356,7 +1385,12 @@ private fun declarations(
                 }
             }
             // `open` in `door.open` is a name, and says nothing of what the next line declares.
-            val says = MODIFIER_WORDS[word]?.takeIf { f.after == 0 || DECLARES_AFTER.matchAt(src, end) != null }
+            // After a value on its line, `b private const val`, it is an infix call's.
+            val says =
+                MODIFIER_WORDS[word]?.takeIf {
+                    f.after == 0 ||
+                        (DECLARES_AFTER.matchAt(src, end) != null && !afterValue(i, f.modifiers != 0))
+                }
             if (says == null) f.reset()
             f.modifiers = f.modifiers or (says ?: 0)
             f.word = word
@@ -1372,6 +1406,7 @@ private fun declarations(
             if (f.pending?.fn == null) f.pending?.state = "stmt"
             if (f.pending?.state == "expr") f.pending?.started = true
             if (HTML_ANNOTATION.matchAt(src, i)?.range?.last == annotated - 1) f.modifiers = f.modifiers or HTML
+            annotationClosed = annotated
             i = annotated
             continue
         }
