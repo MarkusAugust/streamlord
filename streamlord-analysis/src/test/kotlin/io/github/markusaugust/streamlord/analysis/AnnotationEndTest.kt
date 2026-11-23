@@ -32,4 +32,13 @@ class AnnotationEndTest {
         val facts = fileFacts(src)
         assertEquals(listOf(true, true), listOf("x", "s").map { facts.names.containsKey(it) })
     }
+
+    @Test
+    fun `a long literal in an annotation's arguments, a query, is read to its end`() {
+        val query = "SELECT a FROM b WHERE (c = d)\n".repeat(200)
+        val src = "@Query(\"\"\"$query\"\"\")\nfun f() = 1\n"
+        assertEquals(true, fileFacts(src).inAnnotation(src.indexOf("\"\"\"")))
+        val header = "@file:Suppress(\"\"\"$query\"\"\")\n\nfun g() = 1\n"
+        assertEquals(header.indexOf("\n\nfun"), importEdits(header, "a.b", "C").single().start)
+    }
 }

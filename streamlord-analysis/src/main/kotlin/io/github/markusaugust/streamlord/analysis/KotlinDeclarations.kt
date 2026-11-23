@@ -1135,7 +1135,11 @@ internal fun annotationEnd(
     val args = (name until src.length).firstOrNull { !src[it].isWhitespace() }?.takeIf { src[it] == '(' } ?: name
     val open = if (src[name - 1] == '[') name - 1 else args
     val depth = IntArray(3)
-    for (k in open until if (src.getOrNull(open) == '(' || open < name) minOf(src.length, open + 5_000) else open) {
+    // Past 5,000 characters of code an annotation is one left open; a long literal in it, a query, counts for nothing.
+    var budget = if (src.getOrNull(open) == '(' || open < name) 5_000 else 0
+    var k = open - 1
+    while (++k < src.length && budget > 0) {
+        if (code[k]) budget--
         if (code[k] && src[k] in "([{") depth["([{".indexOf(src[k])]++
         val closes = if (code[k]) ")]}".indexOf(src[k]) else -1
         // A bracket that closes none of its kind is past an annotation left open.
