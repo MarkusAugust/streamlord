@@ -220,6 +220,12 @@ All notable changes to Streamlord are recorded here. The format follows
   in. The page asked for the form once it was ready and was answered with the last request; a
   page loaded again later still gets the last request.
 - The note on a response that is no stream, in IntelliJ, breaks between words, as VS Code shows it.
+- IntelliJ shows text it does not control as text where the platform reads HTML: a saved
+  request's name in the Delete dialog, a route's path in the tooltip of its gutter icon, and the
+  requests file's path in the Save button's tooltip and under the field in the settings. IntelliJ's
+  message alert, its default on every OS, and every tooltip read HTML, so a name in the shared
+  `inspector.json`, a path in a cloned project or in the shared `.idea/streamlord.xml`, such as
+  `<b>x</b>`, was set in bold.
 - The Stream Inspector shows the name of a data line as text. A server that sent
   `data: <html><img src=...> v` had the name rendered as Swing HTML in IntelliJ, its image fetched.
 - HTML in a Kotlin string is coloured where the analysis reads HTML. A literal of the block of

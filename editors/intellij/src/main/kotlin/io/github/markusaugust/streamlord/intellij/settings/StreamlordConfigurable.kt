@@ -4,6 +4,7 @@ import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.bindItem
@@ -90,8 +91,10 @@ class StreamlordConfigurable(
                         .bindText(state::requestsFile)
                         .align(AlignX.FILL)
                         // Said here, where the path is written, and not first when a request is saved.
-                        .validationOnInput { field -> Requests.requestsPathProblem(field.text)?.let { error(it) } }
-                        .applyToComponent { requestsFile = this }
+                        // The warning is HTML, and the path may be the project's shared settings: text there.
+                        .validationOnInput { field ->
+                            Requests.requestsPathProblem(field.text)?.let { error(StringUtil.escapeXmlEntities(it)) }
+                        }.applyToComponent { requestsFile = this }
                         .comment("Project-relative; ${Requests.REQUESTS_FILE} by default. Commit it to share requests with the team.")
                 }
                 row {
