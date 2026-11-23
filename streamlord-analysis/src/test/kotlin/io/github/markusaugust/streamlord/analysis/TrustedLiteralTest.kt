@@ -136,4 +136,35 @@ class TrustedLiteralTest {
             for (fix in found.single().fixes) assertTrue(fix.text.contains("interpolate {") && fix.text.endsWith(".text"), fix.text)
         }
     }
+
+    @Test
+    fun `the code a fix writes for Trusted is silent, and a mark in Trusted's text is right only where the block reads it`() {
+        fun valuesTold(body: String): List<String> {
+            val src = imports + "fun page(name: String, url: String) = $body\n"
+            return issues(src).map { src.substring(it.start, it.end) + " " + it.code.id }
+        }
+        // What the rewrite writes: Trusted takes interpolate's text, whose mark is that interpolate's own.
+        assertEquals(emptyList(), valuesTold("Trusted(interpolate { \"Hi <i>\${+name}</i>\" }.text)"))
+        assertEquals(emptyList(), valuesTold("Trusted(interpolate { \"<a href=\\\"\${+url}\\\">x</a>\" }.text)"))
+        assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${+Trusted(interpolate { \"Hi <i>\${+name}</i>\" }.text)}</li>\" }"))
+        // Trusted written unmarked into the block's markup gives the block its text, marks and all.
+        assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }"))
+        // Marked, or set to a val that is marked, Trusted is written as it is, and the page gets the mark's note.
+        for (body in listOf(
+            "interpolate { \"<li>\${+Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }",
+            "interpolate {\n    val t = Trusted(\"Hi <i>\${+name}</i>\")\n    \"<li>\${+t}</li>\"\n}",
+        )) {
+            val src = imports + "fun page(name: String, url: String) = $body\n"
+            val found = issues(src).single { src.substring(it.start, it.end) == "\${+name}" }
+            assertTrue(found.message.contains("mark's note"), found.message)
+            assertEquals(1, found.fixes.size, body)
+        }
+    }
+
+    @Test
+    fun `the rewrite inside Trusted is offered but not preferred, since it escapes what the author may have built`() {
+        val src = imports + "fun page(prefix: String, x: String) = Trusted(prefix + \"<b>\$x</b>\")\n"
+        val fixes = issues(src).single { src.substring(it.start, it.end) == "\$x" }.fixes
+        assertEquals(listOf(false), fixes.map { it.preferred })
+    }
 }

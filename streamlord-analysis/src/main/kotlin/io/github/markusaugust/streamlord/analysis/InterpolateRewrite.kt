@@ -741,3 +741,20 @@ internal fun countBelow(
     }
     return lo
 }
+
+/**
+ * The fix for a literal of Trusted's argument that holds a marked value: the literal in an interpolate of its own, whose
+ * text Trusted takes, `Trusted(interpolate { "<i>${+name}</i>" }.text)`, so the mark is that block's and is read.
+ */
+internal fun trustedRewrite(
+    src: String,
+    s: KotlinString,
+): Fix =
+    Fix(
+        "Build Trusted's text with interpolate { }, which reads its marks",
+        s.start,
+        s.end,
+        "interpolate { ${src.substring(s.start, s.end)} }.text",
+        importEdits(src, DOMAIN, "interpolate"),
+        preferred = false,
+    )
