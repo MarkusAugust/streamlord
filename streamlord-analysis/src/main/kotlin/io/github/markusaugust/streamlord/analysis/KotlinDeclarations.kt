@@ -307,20 +307,117 @@ private const val TYPE = """(?:[\p{L}_][\p{L}\p{Nd}_.]*|`[^`\n]+`)(?:\.(?:[\p{L}
 private val VAL_AFTER =
     regex(
         """\s*(?:<[^<>]*>\s*)?((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
-            """(?:\s*=\s*(?:(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)|("(?:[^"\\$\n]|\\[^$])*"))(?=[ \t]*(?:[\n\r;})\],]|//|$)))?""",
+            """(?:\s*=\s*(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)$VALUE_END)?""",
     )
 private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
 private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
+
+// What may follow a literal a declaration is set to, for the literal to be all it is set to.
+private const val VALUE_END = """(?=[ \t]*(?:[\n\r;})\],]|//|$))"""
+private val VALUE_ENDS = regex(VALUE_END)
 private val PARAMETER =
     regex(
-        """^\s*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?(?:$TYPE_ARGUMENTS)?""",
+        """^\s*(?:@(?:[a-z]+:)?[\p{L}_][\p{L}\p{Nd}_.]*(?:\s*\([^)]*\))?\s*)*((?:\p{L}+\s+)*?)($NAME)\s*:\s*($TYPE)?""",
     )
-private val TYPE_ARGUMENTS_AFTER = regex(TYPE_ARGUMENTS)
 private val VALUE_AFTER = regex("""\s*=(?!=)\s*""")
-private val LAMBDA_PARAMETERS =
-    regex(
-        """\s*((?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?(?:\s*,\s*(?:\([^()]*\)|$NAME)(?:\s*:\s*[\p{L}\p{Nd}_.<>?`]+)?)*)\s*(?:,\s*)?->""",
-    )
+private val SET_TO = regex("""\s*=\s*""")
+
+/*
+ * A list of names, a type's arguments and a literal are read by a loop and not by a pattern that repeats a choice: the
+ * JVM's patterns take a frame of the stack for each time round, and thousands of them overflow it.
+ */
+
+/** What a loop read: the [text] it found, and [end], just past where it was written. */
+private class Read(
+    val text: String,
+    val end: Int,
+)
+
+/** The type arguments `<...>` after [at], blanks before them: what they hold, with one level of brackets as `List<Map<K, V>>` has. */
+private fun typeArgumentsAt(
+    src: CharSequence,
+    at: Int,
+): Read? {
+    var k = at
+    while (k < src.length && src[k].isWhitespace()) k++
+    if (src.getOrNull(k) != '<') return null
+    val open = k
+    k++
+    while (k < src.length && src[k] != '>') {
+        if (src[k] == '<') {
+            k++
+            while (k < src.length && src[k] != '<' && src[k] != '>') k++
+            if (src.getOrNull(k) != '>') return null
+        }
+        k++
+    }
+    if (k >= src.length) return null
+    return Read(src.substring(open + 1, k), k + 1)
+}
+
+/** The range of the string literal without a template a declaration is set to just after [at], `= "x"`, and nothing more. */
+private fun plainLiteralAt(
+    src: String,
+    at: Int,
+): IntRange? {
+    val set = SET_TO.matchAt(src, at) ?: return null
+    val open = set.range.last + 1
+    if (src.getOrNull(open) != '"') return null
+    var k = open + 1
+    while (k < src.length && src[k] != '"') {
+        val c = src[k]
+        if (c == '$' || c == '\n' || (c == '\\' && (k + 1 >= src.length || src[k + 1] == '$'))) return null
+        k += if (c == '\\') 2 else 1
+    }
+    if (k >= src.length || VALUE_ENDS.matchAt(src, k + 1) == null) return null
+    return open..k
+}
+
+/** The first offset from [at] that is no white space. */
+private fun pastWhiteSpace(
+    src: String,
+    at: Int,
+): Int {
+    var k = at
+    while (k < src.length && src[k].isWhitespace()) k++
+    return k
+}
+
+/** The parameters a lambda's block names before its arrow, from [at]: what they are written as, and just past the arrow. */
+private fun lambdaParameters(
+    src: String,
+    at: Int,
+): Read? {
+    val start = pastWhiteSpace(src, at)
+    var k = start
+    var end = -1
+    var arrow = -1
+    while (arrow < 0) {
+        // A name, or a destructuring list in brackets.
+        if (src.getOrNull(k) == '(') {
+            val close = src.indexOf(')', k)
+            if (close < 0 || src.indexOf('(', k + 1) in 0 until close) return null
+            k = close + 1
+        } else if (src.getOrNull(k)?.let { it.isLetter() || it == '_' } == true) {
+            while (k < src.length && (src[k].isLetterOrDigit() || src[k] == '_')) k++
+        } else {
+            return null
+        }
+        end = k
+        val colon = pastWhiteSpace(src, k)
+        if (src.getOrNull(colon) == ':') {
+            val from = pastWhiteSpace(src, colon + 1)
+            var to = from
+            while (to < src.length && (src[to].isLetterOrDigit() || src[to] in "_.<>?`")) to++
+            if (to > from) end = to
+        }
+        val next = pastWhiteSpace(src, end)
+        if (src.getOrNull(next) != ',' && !src.startsWith("->", next)) return null
+        k = if (src.startsWith("->", next)) next else pastWhiteSpace(src, next + 1)
+        if (src.startsWith("->", k)) arrow = k
+    }
+    return Read(src.substring(start, end), arrow + 2)
+}
 
 /** How far back from its closing bracket a `catch` is read for its variable and the type. */
 private const val CATCH_VARIABLE_LENGTH = 500
@@ -755,8 +852,9 @@ private fun afterValue(
 }
 
 /**
- * Whether a line carries on at its break: its last code, past blanks and comments, wants what follows. The breaks are asked
- * in order, and each character is looked at once however many of them ask.
+ * What the line breaks of a file say: whether a line carries on at its break, and whether an expression ends there. The
+ * breaks are asked in order, and each character is looked at once however many of them ask: what lies before a break is
+ * read back to the break asked before, and what follows it forward once for all the breaks it follows.
  */
 private class LineBreaks(
     private val src: String,
@@ -765,15 +863,36 @@ private class LineBreaks(
 ) {
     private var asked = -1
     private var last = -1
+    private var next = -1
 
-    fun carriesOn(at: Int): Boolean {
+    /** The last character before [at] that is neither blank nor a comment's, -1 when there is none. */
+    fun before(at: Int): Int {
         var k = at - 1
         while (k > asked && (src[k].isWhitespace() || comments[k])) k--
         // A line of nothing but blanks and comments leaves the last code where it was.
         if (k > asked) last = k
         asked = at
-        return last >= 0 && code[last] && goesOn(src, code, comments, last)
+        return last
     }
+
+    /** The first character after [at] that is neither blank nor a comment's, the length when there is none. */
+    fun after(at: Int): Int {
+        if (next > at) return next
+        var k = at + 1
+        while (k < src.length && (src[k].isWhitespace() || comments[k])) k++
+        next = k
+        return k
+    }
+
+    fun carriesOn(at: Int): Boolean {
+        val k = before(at)
+        return k >= 0 && code[k] && goesOn(src, code, comments, k)
+    }
+
+    fun ends(
+        at: Int,
+        elseGoesOn: Boolean = true,
+    ): Boolean = lineEnds(src, code, comments, at, elseGoesOn, before(at), after(at))
 }
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
@@ -804,6 +923,17 @@ private fun pastComments(
     return k
 }
 
+/** The first offset after [at] past white space and comments; a comment at the next line's start is passed over. */
+private fun pastBlanks(
+    src: String,
+    comments: BooleanArray,
+    at: Int,
+): Int {
+    var k = at + 1
+    while (k < src.length && (src[k].isWhitespace() || comments[k])) k++
+    return k
+}
+
 /** Whether the line break at [at] ends an expression: nothing before it or after it carries the expression on. */
 internal fun lineEnds(
     src: String,
@@ -811,21 +941,11 @@ internal fun lineEnds(
     comments: BooleanArray,
     at: Int,
     elseGoesOn: Boolean = true,
+    // What the break follows and what follows it, past blanks and comments: a literal stops both, as it is a value.
+    last: Int = pastComments(src, comments, at),
+    k: Int = pastBlanks(src, comments, at),
 ): Boolean {
-    var k = pastComments(src, comments, at)
-    if (k >= 0 && code[k] && goesOn(src, code, comments, k)) return false
-    val last = k
-    k = at + 1
-    // A comment at the next line's start is passed over; a literal there opens a line of its own.
-    while (k < src.length) {
-        if (src[k].isWhitespace()) {
-            k++
-        } else if (comments[k]) {
-            while (k < src.length && comments[k]) k++
-        } else {
-            break
-        }
-    }
+    if (last >= 0 && code[last] && goesOn(src, code, comments, last)) return false
     val next = src.substring(k, minOf(src.length, k + 12))
     // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
     if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true
@@ -957,6 +1077,8 @@ private fun annotationEnd(
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
         if (closes >= 0 && depth.sum() == 0) return k + 1
+        // An argument is no annotation of its own: one written there is past an annotation left open.
+        if (k > open && src[k] == '@' && code[k]) break
         // No argument of an annotation holds a property: one written there begins past an annotation left open.
         // `` K.`val` `` is a name in backticks.
         if (src[k] == 'v' && code[k] && !isWordPart(src.getOrNull(k - 1)) && src.getOrNull(k - 1) != '`' &&
@@ -1243,11 +1365,12 @@ private fun declarations(
         val cuts = listOf(f.open) + f.commas + close
         for (k in 0 until cuts.size - 1) {
             val text = blank.substring(cuts[k] + 1, cuts[k + 1])
-            val m = PARAMETER.find(withoutAnnotations(cuts[k] + 1, cuts[k + 1])) ?: continue
+            val written = withoutAnnotations(cuts[k] + 1, cuts[k + 1])
+            val m = PARAMETER.find(written) ?: continue
             val modifiers = m.groupValues[1].split(' ', '\t', '\n', '\r').fold(0) { all, word -> all or (MODIFIER_WORDS[word] ?: 0) }
             val vararg = VARARG.containsMatchIn(m.groupValues[1])
             val type = if (vararg) null else m.groups[3]?.value
-            val arguments = if (vararg) null else m.groups[4]?.value
+            val arguments = if (vararg || m.groups[3] == null) null else typeArgumentsAt(written, m.range.last + 1)?.text
             out +=
                 add(
                     m.groupValues[2],
@@ -1309,15 +1432,16 @@ private fun declarations(
             // `val String.shout`: an extension, read on a receiver and never by its name alone.
             if (m != null && m.groupValues[1].isEmpty()) {
                 val at = VAL_AFTER.groupRange(src, m, 2)!!.first
-                val bare = m.groups[4] == null && m.groups[5] == null
+                val literal = if (m.groups[4] == null) plainLiteralAt(src, m.range.last + 1) else null
+                val bare = m.groups[4] == null && literal == null
                 val initialiser = if (bare) markupInitialiser(src, m.range.last + 1, aliases) else null
                 val markup = initialiser != null
                 val trusted = initialiser?.first == "Trusted"
                 val trustedText = if (trusted && word == "val") literalTrusted(src, initialiser.second) else null
-                val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { TYPE_ARGUMENTS_AFTER.matchAt(src, it.last + 1) }
+                val arguments = VAL_AFTER.groupRange(src, m, 3)?.let { typeArgumentsAt(src, it.last + 1) }
                 // The value of a `val` set once, which a name then stands for.
-                val set = VALUE_AFTER.matchAt(src, arguments?.range?.last?.plus(1) ?: (m.range.last + 1))?.range?.last
-                val valueAt = if (bare && !markup) set?.plus(1) else VAL_AFTER.groupRange(src, m, 5)?.first
+                val set = VALUE_AFTER.matchAt(src, arguments?.end ?: (m.range.last + 1))?.range?.last
+                val valueAt = if (bare && !markup) set?.plus(1) else literal?.first
                 val d =
                     add(
                         m.groupValues[2],
@@ -1326,13 +1450,13 @@ private fun declarations(
                             scopeStart(at),
                             m.groups[3]?.value,
                             m.groups[4]?.value,
-                            if (constant) m.groups[5]?.value else null,
+                            if (constant) literal?.let { src.substring(it) } else null,
                             constant,
                             html,
-                            m.groups[5] != null,
+                            literal != null,
                             markup,
                             if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
-                            arguments?.groupValues?.get(1),
+                            arguments?.text,
                             valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
                             shared,
                             trusted,
@@ -1533,10 +1657,10 @@ private fun declarations(
                     f.whenBlock = false
                 } else {
                     // Read in the code alone, as a function's parameters are: a comment among them is blank.
-                    val m = LAMBDA_PARAMETERS.matchAt(blank, i + 1)
-                    if (m != null && (i + 1 until i + 1 + m.value.length).all { code[it] || comments[it] }) {
+                    val m = lambdaParameters(blank, i + 1)
+                    if (m != null && (i + 1 until m.end).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
-                        for (part in splitTopLevel(m.groupValues[1])) {
+                        for (part in splitTopLevel(m.text)) {
                             val p0 = part.trim()
                             val list =
                                 if (p0.startsWith("(")) {
@@ -1627,7 +1751,7 @@ private fun declarations(
             i++
             continue
         }
-        if (f.values.isNotEmpty() && (c == ';' || (c == '\n' && lineEnds(src, code, comments, i)))) f.endValues(i)
+        if (f.values.isNotEmpty() && (c == ';' || (c == '\n' && breaks.ends(i)))) f.endValues(i)
         val p = f.pending
         if (p != null) {
             when (p.state) {
@@ -1641,11 +1765,11 @@ private fun declarations(
                 }
 
                 "stmt" -> {
-                    if (c == ';' || (c == '\n' && lineEnds(src, code, comments, i, elseGoesOn = p.ifs > 0))) endPending(f, i)
+                    if (c == ';' || (c == '\n' && breaks.ends(i, elseGoesOn = p.ifs > 0))) endPending(f, i)
                 }
 
                 else -> {
-                    if (c == ';' || (c == '\n' && p.started && lineEnds(src, code, comments, i))) {
+                    if (c == ';' || (c == '\n' && p.started && breaks.ends(i))) {
                         endPending(f, i)
                     } else if (!c.isWhitespace()) {
                         p.started = true
