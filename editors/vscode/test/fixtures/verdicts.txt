@@ -11316,8 +11316,8 @@ interpolate-template 232-236 warning: Kotlin fills in the value `name` before in
 interpolate-template 247-248 warning: Kotlin fills in the value `a` before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
   fix "Mark the value `a` with +, which interpolate escapes" 247-248 "+a"
 == corpus/kotlin-interpolate-block.json: a string in a value marked as Trusted is that value's, and no markup of the block
-unescaped-interpolation 268-271 hint: Kotlin writes $it into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...).
-  fix "Mark the values with + in interpolate { }, which escapes the values: \"<li>$it</li>\"" 263-277 "interpolate { \"<li>${+it}</li>\" }.text"
+unescaped-interpolation 268-271 hint: Kotlin writes $it into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, $it included. If $it can hold text from outside, build this markup with interpolate { } and mark $it with +, which escapes it.
+  fix "Mark the values with + in interpolate { }, which escapes the values: \"<li>$it</li>\"" 263-277 "interpolate { \"<li>${+it}</li>\" }.text" (not preferred)
 == corpus/kotlin-interpolate-block.json: a string that calls what everything has without a receiver gets no rewrite: in the block it is the block's
 unescaped-interpolation 102-115 hint: Kotlin writes ${toString()} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. Marking the values is not offered here: in the block of interpolate, this and a call without a receiver such as toString() are the block's.
 unescaped-interpolation 118-123 warning: Kotlin writes $note into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: in the block of interpolate, this and a call without a receiver such as toString() are the block's.

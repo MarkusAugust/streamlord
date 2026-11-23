@@ -499,6 +499,7 @@ public class Analyzer(
                         src,
                         opts,
                         hyphenated,
+                        facts.inBlockValue(s.start, block.braces),
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue

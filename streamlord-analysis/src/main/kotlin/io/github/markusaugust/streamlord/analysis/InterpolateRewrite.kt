@@ -7,7 +7,7 @@ import io.github.markusaugust.streamlord.core.client.regex
  * the file may use, Trusted for a value the author vouches for, the imports, and the per cent signs.
  */
 
-private const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
+internal const val DOMAIN = "io.github.markusaugust.streamlord.core.domain"
 
 /** How every title of the rewrite to `interpolate` starts. */
 internal const val REWRITE_TITLE = "Mark the values with + in interpolate { }"
@@ -240,10 +240,13 @@ internal fun asCoreCall(
     text: String,
     name: String,
 ): String? {
-    val m = CALLEE.find(text) ?: return null
+    // Written with core's package, the name is core's whatever the file imports.
+    val qualified = text.trimStart().removePrefix("$DOMAIN.").takeIf { it.length < text.trimStart().length }
+    val m = CALLEE.find(qualified ?: text) ?: return null
     val callee = m.groupValues[2]
-    val rest = text.substring(CALLEE.groupRange(text, m, 2)!!.last + 1 + m.groupValues[1].length)
+    val rest = (qualified ?: text).substring(CALLEE.groupRange(qualified ?: text, m, 2)!!.last + 1 + m.groupValues[1].length)
     return when {
+        qualified != null -> if (callee == name) name + rest else null
         callee == name -> if (shadowsCore(src, name)) null else name + rest
         coreAliases(src)[callee] == name -> name + rest
         else -> null

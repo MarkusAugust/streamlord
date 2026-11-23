@@ -29,6 +29,20 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
+  with it: it vouches for all of its text, the value too. The advice is to build that markup with
+  `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and
+  in element text the fix is not preferred, since Trusted says its text is markup. The fix that
+  wrapped the value in `Trusted` once more is gone. The same holds where Trusted's argument is a sum
+  that opens with a value or has a literal in a template.
+- `Trusted` written with its package, `io.github.markusaugust.streamlord.core.domain.Trusted(...)`,
+  or under an alias, `import ...Trusted as T`, is read as core's: its argument is markup, coloured
+  and judged. VS Code colours the qualified name too; an alias it cannot see.
+- A value in a string a `val` of `interpolate`'s block is set to is told where a mark belongs: in the
+  block's markup, and not in a string that goes elsewhere, such as a log, where the `+` would be
+  written into the log text. Where such a string goes only its uses tell, which the analysis cannot
+  follow, so the value is warned of as before and the fix that marks it is no longer preferred.
+
 - Long and unfinished text no longer stops the analysis of a file. A lambda with thousands of
   parameters, a type's `<` that never closes and a string that never closes each threw a stack
   overflow on the JVM, and the whole file got no answers. Thousands of unclosed annotations, and

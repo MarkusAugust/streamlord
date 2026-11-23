@@ -68,8 +68,10 @@ const htmlLiterals = (before, after) =>
  * that Kotlin's grammar keeps the name and the brace, and the brackets it opens.
  */
 const AFTER_INTERPOLATE = r`(?:^|[^\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?interpolate[ \t]{0,4}(?:\([^()\n]{0,60}(?:\([^()\n]{0,60}\)[^()\n]{0,20})?\)[ \t]{0,4})?\{[ \t]{0,8}`;
+/** Core's `Trusted`, by its name or its qualified name: not called on a receiver of somebody else's. */
+const TRUSTED = r`(?:^|[^\w.\x60])(?:io\.github\.markusaugust\.streamlord\.core\.domain\.)?Trusted`;
 /** Just after `Trusted(` and its argument's name: a literal there is an argument, so this is a call and no declaration. */
-const AFTER_TRUSTED = r`(?:^|[^\w.\x60])Trusted[ \t]{0,4}\([ \t]{0,4}(?:html[ \t]{0,4}=[ \t]{0,4})?`;
+const AFTER_TRUSTED = TRUSTED + r`[ \t]{0,4}\([ \t]{0,4}(?:html[ \t]{0,4}=[ \t]{0,4})?`;
 /** What makes Trusted's argument markup, as the analysis reads it: a tag on its line. */
 const TRUSTED_TAG = r`(?=(?:[^"\\\n]|\\.)*<[A-Za-z/!])`;
 /** Not the first argument of an annotation, `@Deprecated("<b>x</b>")`, which says something of the code; `this@Page.f(` names a label. */
@@ -484,7 +486,7 @@ export function kotlinInjectionGrammar(catalog) {
     "trusted-call-next-line": {
       comment:
         "Trusted(\n    \"bold <b>text</b>\",\n): the argument on a line of its own. The region opens at the end of the line, after Kotlin's grammar has read `Trusted(`, and ends after the argument or at the closing parenthesis.",
-      begin: r`(?<=(?:^|[^\w.\x60])Trusted[ \t]{0,4}\()(?<!(?:class|fun)[ \t]{1,4}Trusted[ \t]{0,4}\()(?=[ \t]*$)`,
+      begin: r`(?<=` + TRUSTED + r`[ \t]{0,4}\()(?<!(?:class|fun)[ \t]{1,4}Trusted[ \t]{0,4}\()(?=[ \t]*$)`,
       end: r`(?<=")|(?=\))`,
       patterns: [...htmlLiterals(r`^\s*(?:html\s*=\s*)?`, () => TRUSTED_TAG), { include: "source.kotlin" }],
     },
