@@ -1274,4 +1274,18 @@ class ValueStructureTest {
         // A mark not yet closed marks nothing, and the properties after it are declared: `n` is an Int.
         assertEquals(listOf("\$q"), told(mark))
     }
+
+    @Test
+    fun `a receiver in brackets is no parameter list, and a function without a name may have a receiver`() {
+        for (receiver in listOf("((Int) -> Unit).", "((Int) -> Unit)?.", "( (Int) -> Unit ) ? . ", "(/* ( */ String).")) {
+            val named = "fun ${receiver}call(n: Int) = \"<b>\$n</b>\"\n"
+            assertEquals(told(named.replace(receiver, "String.")), told(named), named)
+        }
+        // `fun String.()` and `fun (String).()` have no name, and the outer function's parameters are in sight in them.
+        assertEquals(emptyList(), told("fun a(n: Int): String.() -> String = fun String.(): String = \"<p>\$n</p>\"\n"))
+        assertEquals(emptyList(), told("fun a(n: Int): String.() -> String = fun (String).(): String = \"<p>\$n</p>\"\n"))
+        val unnamed = "fun f(n: String) = fun (String).(m: Int) = \"<b>\$n \$m</b>\"\n"
+        assertEquals(told(unnamed.replace("fun (String).(", "fun String.(")), told(unnamed))
+        assertEquals(listOf("\$n"), told(unnamed))
+    }
 }

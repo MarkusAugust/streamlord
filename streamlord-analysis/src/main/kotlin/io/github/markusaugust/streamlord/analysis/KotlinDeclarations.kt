@@ -852,7 +852,12 @@ private val FUN_HEAD = regex("""[ \t]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>[ \t]*)?(?:[\p
 private const val FUN_HEAD_LENGTH = 300
 private val STATEMENT_WORDS = "if for while when do try return throw else in is as super this typeof".split(" ").toSet()
 
-private val UNNAMED = mapOf("object" to regex("""\s*[:{]"""), "fun" to regex("""\s*\("""))
+// A function without a name may have a receiver, `fun String.()`, which one in brackets has too, `fun (String).()`.
+private val UNNAMED =
+    mapOf(
+        "object" to regex("""\s*[:{]"""),
+        "fun" to regex("""\s*(?:[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>)?\??\s*\.\s*)?\("""),
+    )
 private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
 
 /** The words that may stand before a declaration, each with what it says of it. */
@@ -1126,6 +1131,17 @@ private fun declarations(
         f.ctor = null
     }
 
+    /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
+    fun receiverIn(open: Int): Boolean {
+        var depth = 0
+        for (k in open until minOf(src.length, open + 2_000)) {
+            if (!code[k]) continue
+            if (src[k] == '(') depth++
+            if (src[k] == ')' && --depth == 0) return RECEIVER_DOT.matchAt(blank, k + 1) != null
+        }
+        return false
+    }
+
     /** What is written from [from] to [to], each annotation blank, the brackets and quotes of its arguments and its type arguments too. */
     fun withoutAnnotations(
         from: Int,
@@ -1210,10 +1226,11 @@ private fun declarations(
             val ctorOfClass = word == "constructor" && f.cls
             // In a function's expression an `object` or a `fun` without a name is a value, and the parameters are in sight in it.
             val unnamed = if (f.pending?.unended == true && f.modifiers and COMPANION == 0) UNNAMED[word]?.matchAt(src, end) else null
-            // A receiver in brackets has a dot after it, the parameters of a function without a name none.
+            // A receiver in brackets has a dot after it, the parameters of a function without a name none; after a receiver's
+            // dot a name is a function's, and a bracket the parameters of one without a name.
             val after = if (word == "fun") unnamed?.let { src.substring(it.range.last, minOf(src.length, it.range.last + 2_000)) } else null
-            val value =
-                unnamed != null && (after == null || RECEIVER_DOT.matchAt(after, maxOf(0, closing(after, depths(after), 0))) == null)
+            val dot = after?.let { RECEIVER_DOT.matchAt(it, maxOf(0, closing(it, depths(it), 0))) }
+            val value = unnamed != null && (dot == null || after.substring(dot.range.last + 1).trimStart().startsWith("("))
             if (word in DECLARATION_WORDS && !reference && !ctorOfClass && !value) {
                 // A new declaration ends a function's expression body, a loop body without braces, or a class without one.
                 endPending(f, i)
@@ -1353,7 +1370,7 @@ private fun declarations(
         if (c == '(' || c == '[' || c == '{') {
             if (f.kind != "for") f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
-            if (c == '(' && f.fn) {
+            if (c == '(' && f.fn && !receiverIn(i)) {
                 g.kind = "params"
                 // A function still being typed has no brackets, and the next ones are a statement's.
                 val head = if (i - f.funAt < FUN_HEAD_LENGTH) FUN_HEAD.matchEntire(src.substring(f.funAt, i)) else null
