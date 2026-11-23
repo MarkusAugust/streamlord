@@ -1069,18 +1069,28 @@ private fun textInitialiser(
     return src.substring(at + call.value.indexOf("interpolate"), open + close)
 }
 
-/** `text` cut at each comma outside brackets. */
-internal fun splitTopLevel(text: String): List<String> {
+/** [text], written at [offset] of the file, cut at each comma outside brackets, a type's of [types] among them. */
+internal fun splitTopLevel(
+    text: String,
+    types: IntArray,
+    offset: Int,
+): List<String> {
     val out = ArrayList<String>()
     var depth = 0
     var from = 0
-    for ((k, c) in text.withIndex()) {
-        if (c == '(' || c == '<') depth++
-        if (c == ')' || c == '>') depth--
-        if (c == ',' && depth == 0) {
-            out += text.substring(from, k)
-            from = k + 1
+    var k = 0
+    while (k < text.length) {
+        val c = text[k]
+        when {
+            types[offset + k] > offset + k -> k = types[offset + k] - offset
+            c in "([{" -> depth++
+            c in ")]}" -> depth--
+            c == ',' && depth == 0 -> {
+                out += text.substring(from, k)
+                from = k + 1
+            }
         }
+        k++
     }
     out += text.substring(from)
     return out
@@ -1122,15 +1132,11 @@ private val QUOTED = regex("`[^`\n]+`")
 private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
 private val ANNOTATION = regex("""@(?:[a-z]+:)?(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
-/** What stands between a modifier and the declaration on its line: words and annotations, twelve at most, so that no line is too long to read. */
-private val DECLARES_AFTER =
-    regex(
-        """(?:[ \t]+(?:[a-z]+|@[^\s(<]+(?:[ \t]*<(?:[^<>\n]|->|<(?:[^<>\n]|->|<(?:[^<>\n]|->)*>)*>)*>)?(?:\([^()\n]*\))?)){0,12}""" +
-            """[ \t]+(?:va[lr]|fun|class|interface|object)\b""",
-    )
+/** The words a modifier declares something with, on its line. */
+private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
 
 /** Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none is. */
-private fun annotationEnd(
+internal fun annotationEnd(
     src: String,
     code: BooleanArray,
     types: IntArray,
@@ -1463,6 +1469,25 @@ private fun declarations(
 
     val breaks = LineBreaks(src, code, comments, types)
 
+    /** Whether a declaration's word follows [at] on its line, past words and annotations, twelve at most: `private @A<B> val`. */
+    fun declaresAfter(at: Int): Boolean {
+        var k = at
+        repeat(13) {
+            val from = k
+            while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
+            if (k == from) return false
+            if (src.getOrNull(k) == '@') {
+                k = annotationEnd(src, code, types, k)
+                return@repeat
+            }
+            val end = (k until src.length).firstOrNull { src[it] !in 'a'..'z' } ?: src.length
+            if (end == k || isWordPart(src.getOrNull(end))) return false
+            if (src.substring(k, end) in DECLARES) return true
+            k = end
+        }
+        return false
+    }
+
     /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
     fun receiverIn(open: Int): Boolean {
         var depth = 0
@@ -1738,10 +1763,7 @@ private fun declarations(
                 MODIFIER_WORDS[word]?.takeIf {
                     f.after == 0 ||
                         (
-                            DECLARES_AFTER.matchAt(
-                                src,
-                                end,
-                            ) != null && !afterValue(src, code, comments, i, f.modifiers != 0, annotationClosed)
+                            declaresAfter(end) && !afterValue(src, code, comments, i, f.modifiers != 0, annotationClosed)
                         )
                 }
             if (says == null) f.reset()
@@ -1830,7 +1852,7 @@ private fun declarations(
                     val m = lambdaParameters(blank, types, i + 1)
                     if (m != null && (i + 1 until m.end).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
-                        for (part in splitTopLevel(m.text)) {
+                        for (part in splitTopLevel(m.text, types, pastWhiteSpace(blank, i + 1))) {
                             val p0 = part.trim()
                             val list =
                                 if (p0.startsWith("(")) {
