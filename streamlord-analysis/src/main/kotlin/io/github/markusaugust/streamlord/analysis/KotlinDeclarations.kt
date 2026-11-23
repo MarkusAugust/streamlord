@@ -325,7 +325,9 @@ public fun declaredNames(src: String): DeclaredNames {
     lastVisible?.let { if (it.first == src) return it.second }
     val names =
         lastFacts?.takeIf { it.src == src }?.names
-            ?: codeMask(src, lexKotlin(src)).let { (code, comments) -> declarations(src, code, comments, typeBrackets(src, code, comments)) }
+            ?: codeMask(src, lexKotlin(src)).let { (code, comments) ->
+                declarations(src, code, comments, typeBrackets(src, code, comments))
+            }
     val constants = HashSet<String>()
     val others = HashSet<String>()
     for ((name, list) in names) {
@@ -668,7 +670,6 @@ private fun infixWaits(
     }
     return run % 2 == 0 && run > 0
 }
-
 
 private val DO_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_.])do(?:\s|\{)""")
 
@@ -1350,10 +1351,23 @@ internal fun typeBrackets(
                 }
             if (own && !fits) drop(parens)
             when {
-                c == '>' && own && src[i - 1] != '-' -> open.removeAt(open.size - 1).first.let { pairs[it] = i; pairs[i] = it }
-                c == '(' -> parens++
-                c == ')' -> drop(parens--)
-                c in "{};" -> drop(Int.MIN_VALUE)
+                c == '>' && own && src[i - 1] != '-' -> {
+                    val at = open.removeAt(open.size - 1).first
+                    pairs[at] = i
+                    pairs[i] = at
+                }
+
+                c == '(' -> {
+                    parens++
+                }
+
+                c == ')' -> {
+                    drop(parens--)
+                }
+
+                c in "{};" -> {
+                    drop(Int.MIN_VALUE)
+                }
             }
             if (!c.isWhitespace()) last = if (c == ',') '<' else c
         }

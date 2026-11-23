@@ -1219,9 +1219,15 @@ class ValueStructureTest {
     @Test
     fun `a while is judged by the code before it, past a comment and not into a literal`() {
         val loop = "fun f(x: Int, c: Boolean) {\n    val s = \"\${x}\"\n    while (c)\n        g()\n}"
-        assertEquals(false, fileFacts(loop).let { lineEnds(loop, it.code, it.comments, it.types, loop.indexOf('\n', loop.indexOf("while"))) })
+        assertEquals(
+            false,
+            fileFacts(loop).let { lineEnds(loop, it.code, it.comments, it.types, loop.indexOf('\n', loop.indexOf("while"))) },
+        )
         val tail = "fun f(c: Boolean) {\n    do { g() } // once more.\n    while (c)\n    h()\n}"
-        assertEquals(true, fileFacts(tail).let { lineEnds(tail, it.code, it.comments, it.types, tail.indexOf('\n', tail.indexOf("while"))) })
+        assertEquals(
+            true,
+            fileFacts(tail).let { lineEnds(tail, it.code, it.comments, it.types, tail.indexOf('\n', tail.indexOf("while"))) },
+        )
     }
 
     @Test
