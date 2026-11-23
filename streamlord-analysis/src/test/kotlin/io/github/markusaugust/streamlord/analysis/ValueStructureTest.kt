@@ -1291,14 +1291,15 @@ class ValueStructureTest {
 
     @Test
     fun `a modifier's word that a line or a lambda carries on into is an operand, not the next declaration's`() {
-        val open = "open class P {\n    val a = b%s\n    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
+        fun open(line: String) =
+            "open class P {\n    val a = b$line\n    val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"
         for (line in listOf(" +\n        open", " ?:\n        open", " as\n        open", " in\n        open", " <\n        open")) {
-            assertEquals(told(open.format(line).replace("open\n", "other\n")), told(open.format(line)), line)
+            assertEquals(told(open(line).replace("open\n", "other\n")), told(open(line)), line)
         }
-        val ifElse = open.format(" else\n        open").replace("val a = b", "val a = if (c) x")
+        val ifElse = open(" else\n        open").replace("val a = b", "val a = if (c) x")
         assertEquals(told(ifElse.replace("open\n", "other\n")), told(ifElse))
         for (lambda in listOf("b { } open value", "b.let { } open value // c")) {
-            val src = open.format("").replace("val a = b", "val a = $lambda")
+            val src = open("").replace("val a = b", "val a = $lambda")
             assertEquals(told(src.replace(" open value", " other value")), told(src), lambda)
         }
         val constant = "val a = \"a\" +\n    const\nval title = \"<b>x</b>\"\nfun page() = \"<p>\$title</p>\"\n"
@@ -1341,5 +1342,27 @@ class ValueStructureTest {
         )) {
             assertEquals(told(src.replace("get()", "other()")), told(src), src)
         }
+    }
+
+    /** What the file declares by [name]: whether it is a constant and whether another may stand in for it. */
+    private fun modifiers(
+        src: String,
+        name: String,
+    ) = fileFacts(src).names[name].orEmpty().map { it.constant to it.overridable }
+
+    @Test
+    fun `after an init block a declaration may begin on its line, and after an object's value it may not`() {
+        assertEquals(listOf(true to false), modifiers("object Q {\n    init { } private const val Z = \"x\"\n}\n", "Z"))
+        assertEquals(listOf(false to true), modifiers("open class A {\n    init { println() } open val y = 2\n}\n", "y"))
+        assertEquals(listOf(false to false), modifiers("open class A {\n    val o = object { } open val y = 2\n}\n", "y"))
+    }
+
+    @Test
+    fun `a name in backticks in an annotation's arguments, val too, is part of them`() {
+        val top = "object K { const val `val` = \"v\" }\n@Suppress(K.`val`) private const val TOP = 3\n"
+        assertEquals(listOf(true to false), modifiers(top, "TOP"))
+        assertEquals(listOf(false to true), modifiers("open class C2 {\n    @Ann(K.`val`) open val q = 1\n}\n", "q"))
+        val ctor = "class C1(@Ann(K.`val`) val x: Int, val y: Int) {\n    val z = x\n}\n"
+        assertEquals(listOf(8), fileFacts(ctor).names["y"].orEmpty().map { it.start })
     }
 }

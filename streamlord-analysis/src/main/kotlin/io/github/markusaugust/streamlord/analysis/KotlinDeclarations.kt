@@ -645,6 +645,12 @@ private class ScopeFrame(
     var funAt = -1
     var own = false
     var cls = false
+
+    /** Whether the `object` just read has no name and is a value, `val o = object { }`. */
+    var anonymous = false
+
+    /** Whether a declaration may begin after this frame's `}` on its line: a named class's body or an `init` block. */
+    var member = false
     var whenBlock = false
     var loop = false
 
@@ -930,7 +936,12 @@ private fun annotationEnd(
         if (closes >= 0 && --depth[closes] < 0) break
         if (closes >= 0 && depth.sum() == 0) return k + 1
         // No argument of an annotation holds a property: one written there begins past an annotation left open.
-        if (code[k] && VAL_OR_VAR.matchAt(src, k) != null && !isWordPart(src.getOrNull(k - 1))) return k
+        // `` K.`val` `` is a name in backticks.
+        if (src[k] == 'v' && code[k] && !isWordPart(src.getOrNull(k - 1)) && src.getOrNull(k - 1) != '`' &&
+            VAL_OR_VAR.matchAt(src, k) != null
+        ) {
+            return k
+        }
     }
     return open
 }
@@ -950,7 +961,8 @@ private fun typeArgumentsEnd(
     while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
     if (src.getOrNull(k) != '<') return null
     var depth = 0
-    for (j in k until minOf(src.length, k + 5_000)) {
+    // An annotation's type arguments are short: a type or two.
+    for (j in k until minOf(src.length, k + 500)) {
         if (!code[j]) continue
         when {
             src[j] == '<' -> depth++
@@ -958,7 +970,8 @@ private fun typeArgumentsEnd(
             // The arrow of a function type closes nothing.
             src[j] == '>' && src[j - 1] != '-' -> if (--depth == 0) return j + 1
 
-            src[j] in ";{}=" -> return null
+            // The next annotation, or the end of a statement, is past type arguments that never closed.
+            src[j] in ";{}=@" -> return null
         }
     }
     return null
@@ -1166,17 +1179,21 @@ private fun declarations(
     /** Whether the line that ends at the line break [at] carries on: its last code, past comments, wants what follows. */
     fun goesOnAt(at: Int): Boolean {
         var k = at - 1
-        while (k >= 0 && (src[k].isWhitespace() || comments[k])) k--
-        return k >= 0 && code[k] && goesOn(src, code, comments, k)
+        // No further back than any line's worth: past it the line ended, as before a line could carry on.
+        while (k >= 0 && at - k < 2_000 && (src[k].isWhitespace() || comments[k])) k--
+        return k >= 0 && at - k < 2_000 && code[k] && goesOn(src, code, comments, k)
     }
 
     /** Whether the bracket at [open] holds a receiver's type, `fun ((Int) -> Unit).call()`: a dot follows where it closes. */
     fun receiverIn(open: Int): Boolean {
         var depth = 0
-        for (k in open until minOf(src.length, open + 2_000)) {
+        // A receiver's type is short: a function type or a nullable one.
+        for (k in open until minOf(src.length, open + 500)) {
             if (!code[k]) continue
             if (src[k] == '(') depth++
             if (src[k] == ')' && --depth == 0) return RECEIVER_DOT.matchAt(blank, k + 1) != null
+            // No type holds a block, a value or another function.
+            if (src[k] in "{}=;" || (src[k] == 'f' && src.startsWith("fun", k) && !isWordPart(src.getOrNull(k + 3)))) return false
         }
         return false
     }
@@ -1388,6 +1405,7 @@ private fun declarations(
 
                 word == "class" || word == "interface" || word == "object" -> {
                     f.cls = true
+                    f.anonymous = word == "object" && f.modifiers and COMPANION == 0 && UNNAMED.getValue("object").matchAt(src, end) != null
                     f.privateClass = (if (f.word == "fun") f.funModifiers else f.modifiers) and PRIVATE != 0
                     val contract = word == "interface"
                     f.declares = (contract || (word == "class" && f.modifiers and EXTENDED != 0)) to contract
@@ -1488,6 +1506,7 @@ private fun declarations(
                         true
                 } else if (f.cls) {
                     g.kind = "class"
+                    g.member = !f.anonymous
                     f.cls = false
                     g.extended = f.declares.first
                     g.contract = f.declares.second
@@ -1524,6 +1543,8 @@ private fun declarations(
                     }
                 }
             }
+            // An `init` block is a member, and a declaration may begin after it on its line.
+            if (c == '{' && f.kind == "class" && f.word == "init") g.member = true
             f.reset()
             stack += g
             i++
@@ -1552,7 +1573,7 @@ private fun declarations(
             g.endValues(i)
             // `fun a() {} open val b`: after a function's or a class's body a declaration may begin on the same line, and
             // after a lambda's the expression goes on, `b { } open value`.
-            if (c == '}' && (g.function != null || g.kind == "class")) outer.after = 0
+            if (c == '}' && (g.function != null || g.member)) outer.after = 0
             g.function?.body?.end = i + 1
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1
