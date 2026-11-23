@@ -9,7 +9,6 @@ editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | Case783.p
 editors/vscode/test/fixtures/kotlin-layouts/comments.kt | overridable | Case1046.P | title | SELECT a F""") open /* c */ val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | Case166 | outer | fun outer(x: String) { | analysis «» parser «»
 editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | Case938 | a | fun a() = b private const val title = "<b>x</b>" | analysis «b private const val title = "<b>x</b>"» parser «b private const»
-editors/vscode/test/fixtures/kotlin-layouts/local-functions-2.kt | getter | Case916.outer | title | val title = load(); get() = "<i>" | analysis reads a getter
 editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | returns | Case162 | outer | fun outer(n: String, a: Boolean, rows: List<Int>): String { | analysis «"x"⏎    else return "<p>$n</p>" | "<p>$n</p>" | ""» parser «"x" | "<p>$n</p>" | ""»
 editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | Case123.f | m | for (n in a) for (m in n) for (k in m) println(k) | analysis «m in n) for (k in m) println(k)⏎    prin» parser « (k in m) println(k)⏎    println("<p>$n<»
 editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | scope | Case123.f | n | for (n in a) for (m in n) for (k in m) println(k) | analysis «n in a) for (m in n) for (k in m) printl» parser « (k in m) println(k)⏎    println("<p>$n<»

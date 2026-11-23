@@ -1332,4 +1332,14 @@ class ValueStructureTest {
             told("open class P {\n    @A(1) open val title = \"<b>x</b>\"\n    fun page() = \"<p>\$title</p>\"\n}\n"),
         )
     }
+
+    @Test
+    fun `a local value has no getter, so a call of get() after it is a call`() {
+        for (src in listOf(
+            "fun h(q: String): String {\n    val t = \"<b>\$q</b>\"; get(); return \"<p>\$t</p>\"\n}\n",
+            "fun h(q: String): String {\n    val t = q\n    get()\n    return \"<p>\$t</p>\"\n}\n",
+        )) {
+            assertEquals(told(src.replace("get()", "other()")), told(src), src)
+        }
+    }
 }

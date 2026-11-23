@@ -1376,9 +1376,14 @@ private fun declarations(
                     for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
 
-                // A getter takes nothing: `get("/")` after a value is a call.
+                // A getter takes nothing: `get("/")` after a value is a call. Only a property of a class or the top level has
+                // one; after a local `get()` is a call too.
                 word == "get" -> {
-                    if (GETTER_AFTER.matchAt(src, end) != null) for (v in f.lastValues) v.getter = true
+                    if ((f.kind == "top" || f.kind == "class") &&
+                        GETTER_AFTER.matchAt(src, end) != null
+                    ) {
+                        for (v in f.lastValues) v.getter = true
+                    }
                 }
 
                 word == "class" || word == "interface" || word == "object" -> {
