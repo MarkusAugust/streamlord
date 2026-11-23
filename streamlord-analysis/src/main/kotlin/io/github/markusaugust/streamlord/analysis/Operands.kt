@@ -26,10 +26,11 @@ private const val OPERATOR_CHARS = "=!<>&|?:.+-*/%"
 /** How far back the statement a literal stands in is looked for. */
 private const val REACH = 4000
 
-/** [mask] is the lexer's: `false` inside literals and comments. */
+/** [mask] is the lexer's: `false` inside literals and comments. [types] are the file's type brackets, as [typeBrackets] reads them. */
 internal class Operands(
     private val src: String,
     private val mask: BooleanArray,
+    private val types: IntArray,
 ) {
     private fun ch(k: Int): Char? = src.getOrNull(k)
 
@@ -120,28 +121,15 @@ internal class Operands(
     }
 
     /**
-     * Just past the `<...>` at [open] where it holds types alone, and with [call] a bracket follows,
-     * as the type arguments of a call have it: `foo<String>(a)`. -1 where `<` compares.
+     * Just past the type arguments at [open], and with [call] a bracket follows, as the type arguments of a call have
+     * it: `foo<String>(a)`. -1 where `<` compares.
      */
     private fun typeArgumentsEnd(
         open: Int,
         call: Boolean,
     ): Int {
-        var depth = 0
-        var k = open
-        while (k < src.length) {
-            val c = src[k]
-            if (c == '<') {
-                depth++
-            } else if (c == '>') {
-                if (--depth == 0) break
-            } else if (!(c.isLetterOrDigit() || c in "_.,?* \t\n\r`")) {
-                return -1
-            }
-            k++
-        }
-        if (k >= src.length) return -1
-        return if (!call || ch(skip(k + 1, false)).let { it == '(' || it == '{' }) k + 1 else -1
+        val close = types.getOrElse(open) { -1 }.takeIf { it > open } ?: return -1
+        return if (!call || ch(skip(close + 1, false)).let { it == '(' || it == '{' }) close + 1 else -1
     }
 
     /**

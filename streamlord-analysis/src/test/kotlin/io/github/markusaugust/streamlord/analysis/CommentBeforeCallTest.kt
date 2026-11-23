@@ -12,7 +12,7 @@ class CommentBeforeCallTest {
     private fun ends(
         src: String,
         at: Int,
-    ) = fileFacts(src).let { lineEnds(src, it.code, it.comments, at) }
+    ) = fileFacts(src).let { lineEnds(src, it.code, it.comments, it.types, at) }
 
     @Test
     fun `a literal handed to a parameter marked HTML is markup under such a comment`() {
