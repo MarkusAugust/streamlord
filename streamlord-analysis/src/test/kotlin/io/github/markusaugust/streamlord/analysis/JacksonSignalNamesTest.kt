@@ -184,8 +184,8 @@ class JacksonSignalNamesTest {
     @Test
     fun `a JsonNaming in a comment hides no naming strategy in the code after it`() {
         val src =
-            "/** @JsonNaming(SnakeCaseStrategy::class) */\n" +
-                "val m = mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)\n"
+            "// see @JsonNaming(\n" +
+                "val m = mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)\nval s = \")\"\n"
         assertEquals(true, codeRenamesSignals(src, lexKotlin(src)))
     }
 

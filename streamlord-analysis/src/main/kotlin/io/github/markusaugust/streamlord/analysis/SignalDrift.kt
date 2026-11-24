@@ -240,7 +240,7 @@ internal fun codeRenamesSignals(
             .findAll(src)
             .filter { lex.mask[it.range.first] }
             .map {
-                it.range.first..maxOf(it.range.last, matching(src, lex.mask, it.range.last))
+                it.range.first..maxOf(it.range.last, matching(src, lex.mask, it.range.last, alone = true))
             }.toList()
     val imports = IMPORT_LINE.findAll(src).map { it.range }.toList()
     return NAMING_STRATEGY.findAll(src).any { m ->

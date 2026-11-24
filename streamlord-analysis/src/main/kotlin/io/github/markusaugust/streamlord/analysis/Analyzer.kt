@@ -701,11 +701,20 @@ public class Analyzer(
         val out = ArrayList<IntRange>()
         for (site in findCallSites(src, backendHelpers, lex)) {
             for (arg in site.args) if (src.getOrNull(arg.start) == '{') out += arg.start until arg.end
-            if (!site.trailingLambda) continue
-            val open = src.indexOf('{', site.closeParen + 1)
-            if (open >= 0) matching(src, lex.mask, open).takeIf { it >= 0 }?.let { out += open..it }
+            trailingLambda(site, src, lex)?.let { out += it }
         }
         return out
+    }
+
+    /** The braces of [site]'s trailing lambda, matched in code by braces alone, to the end of the file where it never closes. */
+    private fun trailingLambda(
+        site: CallSite,
+        src: String,
+        lex: KotlinLex,
+    ): IntRange? {
+        if (!site.trailingLambda) return null
+        val open = src.indexOf('{', site.closeParen + 1).takeIf { it >= 0 } ?: return null
+        return open..matching(src, lex.mask, open, alone = true).let { if (it < 0) src.length - 1 else it }
     }
 
     /** Whether [s] stands in a template of a literal of the block at [braces] that marks its value with `+`: it is that value's then. */
@@ -1571,12 +1580,7 @@ public class Analyzer(
     private fun trailingLambdaText(
         site: CallSite,
         src: String,
-    ): String {
-        if (!site.trailingLambda) return ""
-        val open = src.indexOf('{', site.closeParen + 1)
-        if (open < 0) return ""
-        return src.substring(open, matching(src, lex(src).mask, open, alone = true).let { if (it < 0) src.length else it + 1 })
-    }
+    ): String = trailingLambda(site, src, lex(src))?.let { src.substring(it.first, it.last + 1) } ?: ""
 
     private fun checkScriptSite(
         site: CallSite,

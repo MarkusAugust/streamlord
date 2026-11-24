@@ -51,8 +51,7 @@ All notable changes to Streamlord are recorded here. The format follows
   as Kotlin allows: `@Language ("HTML")` now marks. `@Composable () -> Unit` and `@Composable (() -> Unit)?`
   stay function types, and a long literal in an annotation, a query, is read to its end (#342).
 - A function's return type is read past its type arguments, `List<Int>?`, `Map<String, () -> Unit>` and
-  `List<List<List<Int>>>`, so the values it returns are read as Kotlin's parser reads them; so are a
-  function's head after type parameters that hold brackets and a property's type parameters. A Spring
+  `List<List<List<Int>>>`, so the values it returns are read as Kotlin's parser reads them. A Spring
   handler parameter's annotation is read to its end, `@RequestParam(defaultValue = ")") q: String`
   (#343). A `@JsonNaming` in a comment no longer hides a naming strategy in the code, a modifiers lambda is
   read past a brace in a string or a comment, and a constructor's annotations are read to their end.

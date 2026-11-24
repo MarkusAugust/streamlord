@@ -25,6 +25,21 @@ class OneBracketMatchTest {
     }
 
     @Test
+    fun `a backend helper's option lambda is its own braces, to the end of the file where they never close`() {
+        val call = "fun FlowContent.f() {\n    div { dataOnClick(post(\"/x\") { "
+        val open = dsl + call + "payloadExpr = \"1\"; headers("
+        assertEquals(listOf("payloadExpr"), Analyzer().expressionOptions(open).map { it.name })
+        val next = dsl + call + "headers(\n }\n other { payloadExpr = \"1\" }\n ) }) }\n}\n"
+        assertEquals(emptyList(), Analyzer().expressionOptions(next).map { it.name })
+    }
+
+    @Test
+    fun `a constructor list with a bracket left open in a default is read to its own parenthesis`() {
+        val src = "data class Form(val a: Int = x[, val b: String)\n"
+        assertEquals(listOf("a"), signalClasses(src).single { it.name == "Form" }.properties.map { it.name })
+    }
+
+    @Test
     fun `a constructor's annotations are read to their end, whatever their strings hold`() {
         val src = "data class Form @Inject @Named(\")\") constructor(val firstName: String)\n"
         assertEquals(listOf("firstName"), signalClasses(src).single { it.name == "Form" }.properties.map { it.name })

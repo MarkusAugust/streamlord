@@ -75,7 +75,7 @@ class TypeBracketsTest {
 
     @Test
     fun `a function's return type and type parameters are read past their type brackets`() {
-        for (type in listOf("Map<String, () -> Unit>", "List<List<List<Int>>>", "List<Int>?", "List <Int>")) {
+        for (type in listOf("Map<String, () -> Unit>", "List<List<List<Int>>>", "List<Int>?", "List <Int>", "List\n<Int>")) {
             val src = "fun f(): $type = TODO()\n"
             assertEquals(listOf(type), fileFacts(src).functions["f"].orEmpty().map { it.type }, type)
         }

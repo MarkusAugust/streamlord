@@ -100,7 +100,7 @@ private fun readClasses(
             out += opaque(name)
             continue
         }
-        val closed = matching(src, lex.mask, open)
+        val closed = matching(src, lex.mask, open, alone = true)
         // Still being typed, a signals class's list is what stands before the first blank line: its signals stay known meanwhile.
         val close = closed.takeIf { it >= 0 } ?: if (serializable) BLANK_LINE.find(src, open)?.range?.first ?: src.length else -1
         if (close < 0) {
@@ -216,7 +216,7 @@ private fun addsNoNames(
         while (i < src.length && src[i].isWhitespace()) i++
     }
     if (!src.startsWith("{", i)) return true
-    val close = matching(src, lex.mask, i)
+    val close = matching(src, lex.mask, i, alone = true)
     if (close < 0) return false
     val companions =
         COMPANION
@@ -224,7 +224,7 @@ private fun addsNoNames(
             .filter { lex.mask[i + 1 + it.range.first] }
             .map { m ->
                 val open = i + 1 + m.range.last
-                open..matching(src, lex.mask, open).let { if (it < 0) close else it }
+                open..matching(src, lex.mask, open, alone = true).let { if (it < 0) close else it }
             }.toList()
     return NAMES_IN_BODY.findAll(src.substring(i + 1, close)).none { m ->
         val at = i + 1 + m.range.first
