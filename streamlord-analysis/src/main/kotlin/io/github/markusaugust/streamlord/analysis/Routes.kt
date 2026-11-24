@@ -49,7 +49,7 @@ private val SPRING_MAPPINGS =
 private val KTOR_VERB = regex("""\b(route|get|post|put|patch|delete|sse)\s*""")
 private val KTOR_PATH = regex("""\(\s*"([^"\n]*)"""")
 private val SPRING_ANNOTATION =
-    regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b\s*(?:\(([^)]*)\))?""")
+    regex("""@(RequestMapping|GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping)\b""")
 
 private val MODIFIERS = setOf("public", "internal", "private", "protected", "open", "final", "abstract", "sealed", "data", "inner")
 private val DECLARATIONS = setOf("class", "interface", "object", "fun", "val", "var", "typealias")
@@ -202,42 +202,18 @@ private fun annotationPath(args: String): String =
 
 private fun annotationMethod(args: String): String? = REQUEST_METHOD.find(args)?.groupValues?.get(1)
 
-/** The offset just past the annotation at [at], arguments included, whatever parentheses its strings hold. */
-private fun annotationEnd(
-    src: String,
-    mask: BooleanArray,
-    at: Int,
-): Int {
-    var i = at + 1
-    while (i < src.length && (src[i].isLetterOrDigit() || src[i] in "_.:")) i++
-    var j = i
-    while (j < src.length && src[j].isWhitespace()) j++
-    if (j >= src.length || src[j] != '(') return i
-    var depth = 0
-    while (j < src.length) {
-        if (mask[j]) {
-            if (src[j] == '(') {
-                depth++
-            } else if (src[j] == ')' && --depth == 0) {
-                return j + 1
-            }
-        }
-        j++
-    }
-    return src.length
-}
-
 /** The offset of `class` or `interface` when what follows [from] is the rest of a class header, else -1. */
 private fun annotatedClass(
     src: String,
     mask: BooleanArray,
+    types: IntArray,
     from: Int,
 ): Int {
     var i = from
     while (true) {
         while (i < src.length && (!mask[i] || src[i].isWhitespace())) i++
         if (i < src.length && src[i] == '@') {
-            i = annotationEnd(src, mask, i)
+            i = annotationEnd(src, mask, types, i)
             continue
         }
         val word = WORD.matchAt(src, i)?.value
@@ -303,7 +279,9 @@ private fun classBodies(
 
 private fun findSpringRoutes(src: String): List<Route> {
     val routes = ArrayList<Route>()
-    val mask = lexKotlin(src).mask
+    val lex = lexKotlin(src)
+    val mask = lex.mask
+    val types = typeBrackets(src, mask, lex.comments)
     val bodies = classBodies(src, mask)
     // A method takes the mapping of the class it stands in, and only that one: a class without
     // @RequestMapping has no prefix, and Spring does not join the mapping of an enclosing class.
@@ -312,8 +290,14 @@ private fun findSpringRoutes(src: String): List<Route> {
         val at = m.range.first
         if (!mask[at]) continue
         val name = m.groupValues[1]
-        val args = m.groupValues[2]
-        val target = annotatedClass(src, mask, annotationEnd(src, mask, at))
+        val end = annotationEnd(src, mask, types, at)
+        val args =
+            src
+                .substring(m.range.last + 1, end)
+                .trim()
+                .removePrefix("(")
+                .removeSuffix(")")
+        val target = annotatedClass(src, mask, types, end)
         if (target >= 0) {
             if (name == "RequestMapping") prefixes[target] = annotationPath(args)
             continue
@@ -321,7 +305,7 @@ private fun findSpringRoutes(src: String): List<Route> {
         val owner = bodies.lastOrNull { it.open < at && at < it.close }
         val prefix = owner?.let { prefixes[it.keyword] } ?: ""
         val method = if (name == "RequestMapping") annotationMethod(args) ?: "GET" else SPRING_MAPPINGS[name] ?: "GET"
-        val params = handlerParameters(src, mask, annotationEnd(src, mask, at)).mapNotNull(::springParam)
+        val params = handlerParameters(src, mask, types, end).mapNotNull(::springParam)
         routes +=
             Route(
                 method,
@@ -343,6 +327,7 @@ private fun findSpringRoutes(src: String): List<Route> {
 private fun handlerParameters(
     src: String,
     mask: BooleanArray,
+    types: IntArray,
     from: Int,
 ): List<String> {
     var i = from
@@ -359,13 +344,15 @@ private fun handlerParameters(
     var depth = 0
     var start = i + 1
     while (i < src.length) {
+        // A type's brackets, `Map<String, Int>`, part no parameters.
+        if (types[i] > i) i = types[i]
         if (mask[i]) {
             when (src[i]) {
-                '(', '[', '{', '<' -> {
+                '(', '[', '{' -> {
                     depth++
                 }
 
-                ')', ']', '}', '>' -> {
+                ')', ']', '}' -> {
                     if (--depth == 0) {
                         params += src.substring(start, i)
                         break

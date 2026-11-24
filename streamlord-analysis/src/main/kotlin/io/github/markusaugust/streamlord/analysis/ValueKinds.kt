@@ -132,7 +132,7 @@ internal fun mayBeNull(
 private val MAP_LOOKUP = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\[[^\[\]]*]""")
 private val MAP_TYPE = regex("""^(?:Mutable|Hash|LinkedHash|Sorted)?Map\b""")
 
-private val TYPE_PARAMETERS = regex("""(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<((?:[^<>]|<[^<>]*>)*)>""")
+private val TYPE_PARAMETERS = regex("""(?:\bfun\s*|\b(?:class|interface)\s+[\p{L}_][\p{L}\p{Nd}_]*\s*)<""")
 private val TYPE_PARAMETER =
     regex("""(?s)^\s*(?:(?:in|out|reified)\s+)*([\p{L}_][\p{L}\p{Nd}_]*)\s*(?::\s*(.+?))?\s*$""")
 
@@ -148,8 +148,9 @@ private fun nullableTypeParameter(
     val known =
         facts.typeParameters ?: HashMap<String, Boolean>().also { out ->
             for (m in TYPE_PARAMETERS.findAll(src)) {
-                if (!facts.code[m.range.first]) continue
-                for (p in splitTopLevel(m.groupValues[1])) {
+                val open = m.range.last
+                if (!facts.code[m.range.first] || facts.types[open] < 0) continue
+                for (p in splitTopLevel(src.substring(open + 1, facts.types[open]), facts.types, open + 1)) {
                     val d = TYPE_PARAMETER.find(p) ?: continue
                     val bound = d.groups[2]?.value?.trim()
                     out[d.groupValues[1]] = out[d.groupValues[1]] == true || bound == null || bound.endsWith("?")

@@ -61,7 +61,15 @@ class TypeBracketsTest {
 
     @Test
     fun `a lambda's parameter whose type has type arguments is declared`() {
-        val src = "val g = { f: Map<String, Int>, s: Int -> \"<p>\$s</p>\" }"
-        assertEquals(emptyList(), Analyzer().analyzeKotlin(src).filter { it.code == IssueCode.UNESCAPED_INTERPOLATION })
+        for (type in listOf("Map<String, Int>", "Map<String, () -> Unit>")) {
+            val src = "val g = { f: $type, s: Int -> \"<p>\$s</p>\" }"
+            assertEquals(emptyList(), Analyzer().analyzeKotlin(src).filter { it.code == IssueCode.UNESCAPED_INTERPOLATION }, type)
+        }
+    }
+
+    @Test
+    fun `a type parameter after one bounded by a function type is read`() {
+        val src = "fun <T : (Int) -> Unit, R> f(r: R) = \"<p>\$r</p>\""
+        assertEquals(true, mayBeNull(src, "r", src.indexOf("\$r")))
     }
 }

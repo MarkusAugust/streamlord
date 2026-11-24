@@ -543,7 +543,7 @@ internal fun importEdits(
         val last = imports.lastOrNull()
         if (last != null) return@getOrPut listOf(Edit(last.end, last.end, "${nl}import $fq"))
         if (pkgLine != null) return@getOrPut listOf(Edit(pkgLine.end, pkgLine.end, "$nl${nl}import $fq"))
-        val head = fileHeaderEnd(src, facts.code)
+        val head = fileHeaderEnd(src, facts.code, facts.types)
         if (head == 0) return@getOrPut listOf(Edit(0, 0, "import $fq$nl$nl"))
         // A blank line after the header and one before the code that follows, as Kotlin style has it.
         var k = head
@@ -603,6 +603,7 @@ private fun keywordLines(
 private fun fileHeaderEnd(
     src: String,
     code: BooleanArray,
+    types: IntArray,
 ): Int {
     var end = 0
     if (src.startsWith("#!")) {
@@ -615,7 +616,11 @@ private fun fileHeaderEnd(
         while (k < src.length && isSpace(src[k])) k++
         if (k >= src.length) return end
         if (code[k] && src.startsWith("@file:", k)) {
-            k = annotationEnd(src, code, k + 6)
+            // Kotlin reads `@file:` before a modifier, `@file:\n\nprivate fun`, as an annotation of that name, but it is one
+            // being typed: it ends past its colon, as one past which no annotation is read does.
+            val past = annotationEnd(src, code, types, k)
+            val name = src.substring(k + 6, maxOf(past, k + 6)).substringBefore('(').trim()
+            k = if (past > k && name !in MODIFIER_WORDS) past else k + 6
             end = k
             continue
         }
@@ -644,36 +649,6 @@ private fun fileHeaderEnd(
 
 /** The spaces and line breaks the head of a file is read past: ASCII only. */
 private fun isSpace(c: Char): Boolean = c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C'
-
-/** Just past the annotation whose name starts at [from], after `@file:`: a name and its arguments, or a bracketed list. */
-private fun annotationEnd(
-    src: String,
-    code: BooleanArray,
-    from: Int,
-): Int {
-    var k = from
-    while (k < src.length && (src[k] == ' ' || src[k] == '\t')) k++
-    if (k < src.length && src[k] != '[') {
-        while (k < src.length && (src[k].isLetterOrDigit() || src[k] == '_' || src[k] == '.')) k++
-        var a = k
-        while (a < src.length && (src[a] == ' ' || src[a] == '\t')) a++
-        if (a >= src.length || src[a] != '(') return k
-        k = a
-    }
-    if (k >= src.length) return k
-    var depth = 0
-    while (k < src.length) {
-        if (code[k]) {
-            if (src[k] == '(' || src[k] == '[') {
-                depth++
-            } else if (src[k] == ')' || src[k] == ']') {
-                if (--depth == 0) return k + 1
-            }
-        }
-        k++
-    }
-    return k
-}
 
 /** Where each `%s` of `interpolate`'s format starts in [text], as core counts them: `%%` is one per cent sign and never a placeholder. */
 internal fun percentPlaceholders(text: String): List<Int> {

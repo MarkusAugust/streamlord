@@ -106,7 +106,6 @@ private val PLAIN_LITERAL = regex(""""([^"\\$]*)"""")
 /** What stands before the URL in the content of a refresh: a delay, a separator and `url=`, with a quote where one is written. */
 private val REFRESH_BEFORE_URL = regex("""\s*\d+(?:\.\d*)?\s*[;,]\s*(?:[Uu][Rr][Ll]\s*=\s*)?['"]?""")
 private val CONST_VAL_BEFORE = regex("""\bconst\s+val\s+[^=\n]*=\s*\z""")
-private val ANNOTATION_BEFORE = regex("""@[\p{L}_][\p{L}\p{Nd}_.:]*\s*\z""")
 
 private val FORMAT_SPECIFIER = regex("""%[-#+0,(]*\d*(?:\.\d+)?[dfxXoeEgGcb](?![A-Za-z])""")
 
@@ -1392,23 +1391,10 @@ private fun Analyzer.refreshUrlStart(
         REFRESH_BEFORE_URL.matchEntire(decodeEntities(before()).text) != null
 
 /** Whether the literal at [start] stands where Kotlin takes a constant alone: the argument of an annotation, or a `const val`. */
-private fun Analyzer.constantOnly(
+private fun constantOnly(
     src: String,
     start: Int,
-): Boolean {
-    val before = src.substring(maxOf(0, start - 400), start)
-    if (CONST_VAL_BEFORE.containsMatchIn(before)) return true
-    // The bracket the literal is an argument in, and what it belongs to.
-    var depth = 0
-    for (k in before.indices.reversed()) {
-        val c = before[k]
-        if (c == ')' || c == ']') depth++
-        if ((c == '(' || c == '[') && depth-- == 0) return ANNOTATION_BEFORE.containsMatchIn(before.substring(0, k))
-        // A line that goes on from no argument list is where the statement starts.
-        if (c == '\n' && depth == 0 && before.lastNonSpaceBefore(k).let { it != ',' && it != '(' && it != '[' }) return false
-    }
-    return false
-}
+): Boolean = fileFacts(src).inAnnotation(start) || CONST_VAL_BEFORE.containsMatchIn(src.substring(maxOf(0, start - 400), start))
 
 /** Where a value interpolate refuses stands, as the issue of another value names it. */
 private fun Analyzer.refusedPlace(

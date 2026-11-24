@@ -5,7 +5,6 @@ editors/intellij/src/main/kotlin/io/github/markusaugust/streamlord/intellij/spel
 editors/intellij/src/test/kotlin/io/github/markusaugust/streamlord/intellij/StreamlordProject.kt | returns |  | jarOf | private fun jarOf(type: Class<*>): () -> File = { File(PathUtil.getJarPathForClass(type)) } | analysis reads none, parser «{ File(PathUtil.getJarPathForClass(type)) }»
 editors/vscode/analysis-js/src/jsMain/kotlin/io/github/markusaugust/streamlord/editor/InspectorPort.kt | scope | streamRequest | request | when (val request = Requests.streamRequest(url, method, signals ?: "", entries(headers))) { | analysis «never» parser «   )⏎        }⏎    }⏎⏎@JsExport⏎fun resp»
 editors/vscode/test/fixtures/kotlin-layouts/catch-finally.kt | value | Case783.page | v | val v = try { | analysis «try {⏎        load(n)⏎    }⏎    catch» parser «try {⏎        load(n)⏎    }⏎    catch⏎    (e: Exception) {⏎        "<b>x</b>"⏎    }»
-editors/vscode/test/fixtures/kotlin-layouts/comments.kt | overridable | Case1046.P | title | SELECT a F""") open /* c */ val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | Case166 | outer | fun outer(x: String) { | analysis «» parser «»
 editors/vscode/test/fixtures/kotlin-layouts/infix-calls.kt | returns | Case938 | a | fun a() = b private const val title = "<b>x</b>" | analysis «b private const val title = "<b>x</b>"» parser «b private const»
 editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-1.kt | returns | Case162 | outer | fun outer(n: String, a: Boolean, rows: List<Int>): String { | analysis «"x"⏎    else return "<p>$n</p>" | "<p>$n</p>" | ""» parser «"x" | "<p>$n</p>" | ""»
@@ -19,19 +18,11 @@ editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | 
 editors/vscode/test/fixtures/kotlin-layouts/loops-without-braces-3.kt | scope | Case708.pick | x | for (x: Int? in xs) use(x ?: return) else println("<b>$x</b>") | analysis «println("<b>$x</b>")⏎    println("<i>$x<» parser «xs) use(x ?: return) else println("<b>$x»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | scope | Case231.f | x | if (c) for (x in xs) println(x) else println("<i>$x</i>") | analysis «println("<i>$x</i>")⏎    println("<p>$x<» parser «(x in xs) println(x) else println("<i>$x»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-2.kt | undeclared | Case251.pick | n | for (@Suppress("x") n: Int in xs) println(n) | the analysis declares no n here
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | const | Case999 | title | """) val title = "<b>x</b>" | analysis misses const
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | getter | Case1004.P | title | val title = "<b>x</b>" | analysis misses a getter
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | overridable | Case930.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | Case935 | a | fun a() = b private const @A val title = "<b>x</b>" | analysis «b private const @A val title = "<b>x</b>"» parser «b private const»
 editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-6.kt | returns | Case937.P | z | fun z() = a private open val title = "<b>x</b>" | analysis «a private open val title = "<b>x</b>"» parser «a private open»
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-7.kt | html | Case1007 | title | val title: String = load() | analysis misses the HTML mark
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-7.kt | overridable | Case1009.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-7.kt | overridable | Case1010.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
-editors/vscode/test/fixtures/kotlin-layouts/marks-and-annotations-7.kt | overridable | Case1047.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/misc-1.kt | undeclared | Case111.f | `in` | fun f(`in`: String, rows: List<Int>) { | the analysis declares no `in` here
 editors/vscode/test/fixtures/kotlin-layouts/misc-2.kt | overridable | Case926.P | title | val title = "<b>x</b>" | analysis misses that another may stand in for it
 editors/vscode/test/fixtures/kotlin-layouts/misc-2.kt | returns | Case623.outer | size | fun <T> size(n: T): Int where T : Number = n.toInt() | analysis reads none, parser «n.toInt()»
-editors/vscode/test/fixtures/kotlin-layouts/misc-2.kt | undeclared | Case1011.show | title | """) title: String, b: String) = "<p>$title$b</p>" | the analysis declares no title here
 editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | scope | Case89.Svc.three | x | fun three(id: Long): String = when (val x = repo.find(id)) { | analysis «) = "<b>$name</b>"⏎}⏎}⏎⏎// rev309/cases2» parser «else -> x.name⏎    }⏎    fun four(id: Lo»
 editors/vscode/test/fixtures/kotlin-layouts/not-null-and-casts.kt | value | Case485.f | e | val e: () -> Unit = cb | analysis reads none, parser «cb»
 editors/vscode/test/fixtures/kotlin-layouts/round8-annotation-space-paren.kt | value | Case82 | f | @Language("HTML") val f = @Ann ("Hi <b>x</b>") | analysis «@Ann ("Hi <b>x</b>")» parser «@Ann ("Hi <b>x</b>")⏎fun g(n: String) = "<p>$n</p>"»

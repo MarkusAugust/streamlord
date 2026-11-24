@@ -349,10 +349,9 @@ internal fun lexKotlin(src: String): KotlinLex {
 
 /** IntelliJ's injection annotation for HTML, by its short name or its qualified one, on a use site and with a prefix or a suffix too. */
 internal const val HTML_LANGUAGE =
-    """@(?:[a-z]+:)?(?:org\.intellij\.lang\.annotations\.)?Language\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
+    """@(?:[a-z]+:\s*)?(?:org\.intellij\.lang\.annotations\.)?Language\s*\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
 
 private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-private val LEADING_ANNOTATIONS = regex("""^(?:\s*@[\p{L}_][\p{L}\p{Nd}_.:]*(?:\([^()]*\))?)+""")
 private val PARAMETER_AFTER_MARKER =
     regex(
         """^\s*(?:(?:private|protected|internal|public|override|open|final|vararg|crossinline|noinline)\s+)*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""",
@@ -383,9 +382,9 @@ public fun isHtmlString(
     // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal, behind other
     // annotations too.
     val at = from + last.range.last + 1
-    // Annotations' arguments and comments read as space: `@Named("x")body` and `@Named("x") /* c */ body` hold a parameter.
+    // Annotations and comments read as space: `@Named("x")body` and `@Named("x") /* c */ body` hold a parameter.
     val bare = CharArray(after.length) { k -> if (facts.inAnnotation(at + k) || !facts.code[at + k]) ' ' else after[k] }.concatToString()
-    if (PARAMETER_AFTER_MARKER.containsMatchIn(bare.replace(LEADING_ANNOTATIONS, ""))) return false
+    if (PARAMETER_AFTER_MARKER.containsMatchIn(bare)) return false
     // A literal between the mark and this one takes it: a quote in a comment or an annotation's arguments is none.
     return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) && !inComment(src, facts.code, at + it) }
 }

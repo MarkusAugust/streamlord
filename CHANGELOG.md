@@ -42,6 +42,14 @@ All notable changes to Streamlord are recorded here. The format follows
   `List<(Int) -> Unit>` or `Map<String, () -> Unit>` now ends where Kotlin ends it, a lambda's parameter
   typed `Map<String, Int>` is declared, an annotation in a type's brackets, `List<@A Html>`, is no part
   of the type read, and `inline fun <reified T>` and `val <T : Any> T.x` hold a type's brackets.
+- The rest of the analysis reads annotations and type brackets the same way: one reading of an
+  annotation for the file, Spring's routes and the rewrite's file header included, and type
+  parameters and a handler's parameters cut by the type brackets. A lambda's parameter typed
+  `Map<String, () -> Unit>` is declared, and a function whose type parameters hold a function type,
+  `fun <T : (Int) -> Unit, R> f(r: R)`, has its parameters read. An annotation's arguments may follow
+  blanks or a line break, `@RequestMapping ("/api")`, and so may a use-site target's name, `@file: JvmName("X")`,
+  as Kotlin allows: `@Language ("HTML")` now marks. `@Composable () -> Unit` and `@Composable (() -> Unit)?`
+  stay function types, and a long literal in an annotation, a query, is read to its end (#342).
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
   `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and
