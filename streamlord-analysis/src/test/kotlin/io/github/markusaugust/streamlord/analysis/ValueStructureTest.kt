@@ -1196,15 +1196,23 @@ class ValueStructureTest {
         val page = "\nfun page(name: String) = \"<p>\$name</p>\""
         for (marked in listOf(
             "@Language(\"HTML\") var out = \"Hi <b>\$name</b>\"",
-            "@Language(\"HTML\") val html: String get() = \"Hi <b>\$name</b>\"",
             "open class Page { @Language(\"HTML\") open fun head(title: String): String = \"Title <b>\$title</b>\" }",
-            "class Page { @Language(\"HTML\") val greeting by lazy { \"Hello <b>\$name</b>\" } }",
             "interface View { @Language(\"HTML\") fun render(): String = \"Hello <b>\$name</b>\" }",
             "@Language(\"HTML\") fun list(items: List<String>): String {\n    items.forEach { if (it.isEmpty()) return@forEach }\n    return \"Items <b>\$name</b>\"\n}",
         )) {
             val src = "import org.intellij.lang.annotations.Language\nval name = load()\n$marked$page"
             val literal = analyzer.lex(src).strings.first { "<b>" in it.text }
             assertEquals(true, isHtmlString(src, literal), marked)
+        }
+        // As the Kotlin plugin reads a mark: a getter and a lambda are declarations of their own, which a mark on the
+        // property does not reach.
+        for (own in listOf(
+            "@Language(\"HTML\") val html: String get() = \"Hi <b>\$name</b>\"",
+            "class Page { @Language(\"HTML\") val greeting by lazy { \"Hello <b>\$name</b>\" } }",
+        )) {
+            val src = "import org.intellij.lang.annotations.Language\nval name = load()\n$own$page"
+            val literal = analyzer.lex(src).strings.first { "<b>" in it.text }
+            assertEquals(false, isHtmlString(src, literal), own)
         }
     }
 

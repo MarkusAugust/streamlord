@@ -359,7 +359,7 @@ internal fun chainFrom(
             while (true) {
                 var plus = read.skip(i, false)
                 if (src.getOrNull(plus).let { it == '\n' || it == '\r' } && newlines()) plus = read.skip(i, true)
-                if (!read.plusAt(plus)) return
+                if (!plusAt(src, plus)) return
                 val k = read.skip(plus + 1, true)
                 if (isStringStart(src, k)) {
                     lit = readKotlinStringAt(src, k)?.takeIf { !it.unterminated } ?: return

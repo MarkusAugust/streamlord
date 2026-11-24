@@ -74,6 +74,8 @@ class CompletionContextsTest {
         for (src in listOf(
             "val x = \"<div data-show=\\\"\\\$a > 1\\\" data-on:click__\"",
             "fun side() = \"\"\"\n<div class=\"card\"\n     data-on:click__\n\"\"\"",
+            // A sum is markup whole, a later literal marked by the comment as well: it stands in the first one's tag.
+            "// language=HTML\nval s = \"<div\" + \" data-on:click__\"",
         )) {
             assertTrue("debounce" in at(src), src)
         }

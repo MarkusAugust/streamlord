@@ -47,12 +47,24 @@ internal class Declaration(
     var end: Int = Int.MAX_VALUE
 }
 
-/** Where a value is written: from [start] to just past it, [end], -1 until its statement has ended; [getter] where a `val` has a getter after it. */
+/**
+ * Where a value is written: from [start] to just past it, [end], -1 until its statement has ended; [getter] where a `val`
+ * has a getter after it; [html] where what it is the value of is marked `@Language("HTML")`; and [returned] where a
+ * `return` gives it.
+ */
 internal class Span(
     val start: Int,
     var end: Int = -1,
     var getter: Boolean = false,
-)
+    var html: Boolean = false,
+    val returned: Boolean = false,
+) {
+    /** For a `return`'s value, the `if`s in it still without their `else`: an `else` beyond them ends it. */
+    var ifs = 0
+
+    /** Whether it is what a `val` or `var` is set to where it is declared. */
+    var initialiser = false
+}
 
 /**
  * What the analysis needs of a whole file, read once: where the code is (template code included),
@@ -69,6 +81,8 @@ internal class FileFacts(
     val names: Map<String, List<Declaration>>,
     /** Every function the file declares, by its name. */
     val functions: Map<String, List<FunctionDeclaration>> = emptyMap(),
+    /** Where each literal starts that `@Language("HTML")` or `// language=HTML` reaches, as the Kotlin plugin reads a mark. */
+    val languageMarks: Set<Int> = emptySet(),
 ) {
     /**
      * Where each literal starts that the file hands straight to a parameter marked `@Language("HTML")`
@@ -277,7 +291,9 @@ internal fun fileFacts(
     val (code, comments) = codeMask(src, l)
     val types = typeBrackets(src, code, comments)
     val functions = HashMap<String, MutableList<FunctionDeclaration>>()
-    return FileFacts(src, code, comments, types, declarations(src, code, comments, types, functions), functions).also { lastFacts = it }
+    val marks = HashSet<Int>()
+    val names = declarations(src, code, comments, types, functions, marks)
+    return FileFacts(src, code, comments, types, names, functions, marks).also { lastFacts = it }
 }
 
 @Volatile
@@ -660,6 +676,15 @@ private fun infixWaits(
 
 private val DO_BEFORE = regex("""(?:^|[^\p{L}\p{Nd}_.])do(?:\s|\{)""")
 
+/** The frames a mark on a declaration reaches through: brackets of a call, a condition, a loop or a `catch`, a `when`'s branches, the file. */
+private val REACHED_THROUGH = setOf("paren", "when", "top", "for", "catch")
+
+/** A `// language=` or `/* language= */` comment and the language it names. */
+private val LANGUAGE_COMMENT = regex("""(?://|/\*)\s*language=([\w-]+)(?=\s|\*/|$)""")
+
+/** How far past a `// language=` comment what it marks may begin, as far as the Kotlin plugin looks for it. */
+private const val LANGUAGE_COMMENT_REACH = 120
+
 private val CONDITION_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
 
 /** Whether the `)` at [k] closes the condition of an `if`, a `when` or a loop, whose branch follows on the next line. */
@@ -745,8 +770,6 @@ internal fun codeBefore(
     while (j >= 0 && (src[j].isWhitespace() || !code[j])) j--
     return j
 }
-
-private val ELSE_NEXT = regex("""^else\b""")
 
 /** The words that start a declaration of their own, ending a function's expression body. */
 private val DECLARATION_WORDS = setOf("fun", "val", "var", "class", "interface", "object", "init", "constructor", "typealias")
@@ -842,8 +865,29 @@ private class ScopeFrame(
     /** The values that just ended in this frame, one in another, while only modifiers follow: a `get()` then is their getter. */
     var lastValues = emptyList<Span>()
 
+    /** How many of [values] are what a `val` or `var` is being set to. */
+    var initialising = 0
+
     /** The values written in this frame whose statements have not ended. */
     val values = ArrayList<Span>()
+
+    /** For a block: whether it may be a lambda's, being no branch's, loop's or function's body. */
+    var lambda = false
+
+    /** The `// language=` comment last read here, just past it and whether it names HTML, until what follows it begins. */
+    var comment: Pair<Int, Boolean>? = null
+
+    /** Whether the element a `// language=` comment stands before, to the end of its statement, is HTML. */
+    var element: Boolean? = null
+
+    /** The same of the frames around this one when it opened: their element holds in it too. */
+    var outerElement: Boolean? = null
+
+    /** Whether the statement [element] stands in has ended: what begins next is in it only if it is a property's getter. */
+    var elementEnded = false
+
+    /** For parameters: where each literal in them starts, the mark of its parameter read when they close. */
+    val literals = ArrayList<Int>()
 
     /** For a function's parameters: where its body is written, none once it returns to a label, and what each `return` of a block gives. */
     var body: Span? = null
@@ -852,6 +896,9 @@ private class ScopeFrame(
     /** For a function's block: its parameters, and whether the block is surely that function's, with nothing but its type before it. */
     var function: ScopeFrame? = null
     var sure = false
+
+    /** Whether the statement has an `if` or a `when` that is an operand, `"a" + if (c) ...`: none of its branches is a whole value. */
+    var branchOperand = false
 
     /** The word last read in this frame with nothing but space after it, and for a function's parameters the function's name. */
     var word: String? = null
@@ -873,8 +920,9 @@ private class ScopeFrame(
     fun endValues(at: Int) {
         val ended = values.filter { it.start <= at }
         for (v in ended) v.end = at
+        initialising -= ended.count { it.initialiser }
         lastValues = ended.ifEmpty { return }
-        values.removeAll(ended)
+        values.removeAll { it.start <= at }
     }
 }
 
@@ -952,17 +1000,6 @@ private class LineBreaks(
 
 internal fun isWordPart(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
-/** Whether the character at [k], outside code, is a comment's and not a literal's, by what stands where code stopped. */
-internal fun inComment(
-    src: String,
-    code: BooleanArray,
-    k: Int,
-): Boolean {
-    var from = k
-    while (from > 0 && !code[from - 1]) from--
-    return src.startsWith("//", from) || src.startsWith("/*", from)
-}
-
 /**
  * The last offset before [at] past white space and comments, -1 when there is none. A literal
  * stops it, as it is the end of a value: the offset is then the literal's last character, even
@@ -1004,7 +1041,7 @@ internal fun lineEnds(
     if (last >= 0 && code[last] && goesOn(src, code, comments, types, last)) return false
     val next = src.substring(k, minOf(src.length, k + 12))
     // An `else` on the next line is the statement's own only where it has an `if`; else an outer `if`'s.
-    if (!elseGoesOn && ELSE_NEXT.containsMatchIn(next)) return true
+    if (!elseGoesOn && elseAt(src, k)) return true
     // `try { }` goes on with a `catch` or `finally` after its block; `catchUp(x)` is a call of its own.
     if (last >= 0 && src[last] == '}' && handlerFollows(src, code, k, last)) return false
     return !LINE_GOES_ON_AFTER.containsMatchIn(next)
@@ -1268,7 +1305,7 @@ private fun compared(
     return listOf("==", "!=").any { src.startsWith(it, before - 1) || src.startsWith(it, after) } || src.startsWith("->", after)
 }
 
-private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do|when)\s*$""")
+private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:try|finally|do|when)\s*$""")
 
 /** Whether the brace at [brace] opens a branch: after `else`, `try`, `->`, or the parentheses of `if`, `when`, a loop or `catch`. */
 private fun branch(
@@ -1280,17 +1317,48 @@ private fun branch(
     var k = brace - 1
     while (k > open && (!code[k] || src[k].isWhitespace())) k--
     if (k <= open) return false
-    if (src[k] == '>' && src.getOrNull(k - 1) == '-') return true
-    if (src[k] == ')') {
-        var depth = 0
-        while (k > open) {
-            if (code[k] && src[k] == ')') depth++
-            if (code[k] && src[k] == '(' && --depth == 0) break
-            k--
-        }
-        return CONDITION_HEAD.containsMatchIn(src.substring(maxOf(open, k - 20), k))
+    if (opensBranch(src, code, open, k)) return true
+    return src[k] != ')' && BRANCH_WORD.containsMatchIn(src.substring(maxOf(open, k - 20, 0), k + 1))
+}
+
+/** The words after which a value begins whole: `return if (c) ...`. */
+private val VALUE_WORDS = setOf("return", "else", "throw")
+
+/** Whether the word `else` begins at [k]. */
+private fun elseAt(
+    src: String,
+    k: Int,
+) = src.startsWith("else", k) && !isWordPart(src.getOrNull(k + 4))
+
+/** How far [declarations]'s `wholeBranch` follows a value: a `return`'s, or what a local is set to. */
+private const val RETURNED = 0
+private const val LOCAL_SET = 1
+
+/** Whether the code ending at [k] opens a branch of what follows: `else`, `->` or the `)` of a condition, its `(` after [open]. */
+private fun opensBranch(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    k: Int,
+): Boolean =
+    (k >= 1 && src.startsWith("->", k - 1)) || (src[k] == ')' && closesCondition(src, code, open, k)) ||
+        (k >= 3 && elseAt(src, k - 3) && !isWordPart(src.getOrNull(k - 4)))
+
+/** Whether the `)` at [k] closes the condition of an `if`, a `when`, a loop or a `catch`, its `(` after [open]. */
+private fun closesCondition(
+    src: String,
+    code: BooleanArray,
+    open: Int,
+    k: Int,
+): Boolean {
+    var depth = 0
+    var j = k
+    while (j > open) {
+        if (code[j] && src[j] == ')') depth++
+        if (code[j] && src[j] == '(' && --depth == 0) break
+        j--
     }
-    return BRANCH_WORD.containsMatchIn(src.substring(maxOf(open, k - 20), k + 1))
+    return CONDITION_HEAD.containsMatchIn(src.substring(maxOf(open, j - 20, 0), maxOf(j, 0)))
 }
 
 /** [src] with each comment blank, one space for each of its characters but a line break, so that every offset holds. */
@@ -1436,6 +1504,7 @@ private fun declarations(
     comments: BooleanArray,
     types: IntArray,
     functions: MutableMap<String, MutableList<FunctionDeclaration>>? = null,
+    marks: MutableSet<Int> = HashSet(),
 ): Map<String, List<Declaration>> {
     // Each function's brackets, where they close and its marked parameters, by place and by name, read once the classes have closed.
     val declared = ArrayList<Triple<ScopeFrame, Int, Set<Any>>>()
@@ -1475,6 +1544,156 @@ private fun declarations(
     }
 
     val breaks = LineBreaks(src, code, comments, types)
+
+    // The literals each value is set to whole, or as a sum's operands: a returned local's are marked.
+    val setTo = HashMap<Span, ArrayList<Int>>()
+
+    // Each name a marked `return` gives whole, `return s`, and where: the literal its local is set to is marked.
+    val returnedNames = ArrayList<Pair<String, Int>>()
+
+    // What each `val` or `var` is set to where it is declared.
+    val initialisers = HashMap<Declaration, Span>()
+
+    /** Whether the operand that ends at [end] ends there: a `)`, `]`, `}`, `,`, `else` or the statement's end follows it. */
+    fun endsOperand(end: Int): Boolean {
+        val after = pastBlanks(src, comments, end - 1)
+        val line = (end until after).firstOrNull { src[it] == '\n' }
+        // Asked on its own: the breaks the scan asks are asked in order, and this one is ahead of them.
+        return after >= src.length || src[after] in "});,]" || elseAt(src, after) ||
+            (line != null && lineEnds(src, code, comments, types, line))
+    }
+
+    /**
+     * Records in [f] an `if` or a `when` at [at] that is an operand, an operator standing before it, and for the innermost
+     * `return`'s value in [f] the `if`s and `else`s it holds: `if (c) return "a" else "b"` returns no `"b"`.
+     */
+    fun branchWord(
+        f: ScopeFrame,
+        word: String,
+        at: Int,
+    ) {
+        // The last value begun is the innermost `return`'s, and an `else` of an `if` around the `return` ends it.
+        val v = f.values.lastOrNull()?.takeIf { it.returned }
+        if (v != null && word == "if") v.ifs++
+        if (v != null && word == "else" && v.ifs-- == 0) {
+            v.end = pastComments(src, comments, at) + 1
+            f.values.remove(v)
+        }
+        if (word != "if" && word != "when") return
+        // An operator ending the code before it, on its line or the one above, which a literal there is not.
+        val before = pastComments(src, comments, at)
+        val c = src.getOrNull(before)
+        if (c == null || !code[before]) return
+        // An infix word before it on its line, `"a" to if (c) ...`, is an operator too, but for the words that begin a value.
+        if (isWordPart(c) && (before until at).none { src[it] == '\n' }) {
+            var w = before
+            while (w > 0 && isWordPart(src[w - 1])) w--
+            if (src.substring(w, before + 1) !in VALUE_WORDS) f.branchOperand = true
+            return
+        }
+        if (!goesOn(src, code, comments, types, before)) return
+        val previous = src.getOrNull(before - 1)
+        if (c in "+-*/%|&<.!" || (c == '>' && previous != '-') || (c == '=' && previous != null && previous in "=!<>")) {
+            f.branchOperand = true
+        }
+    }
+
+    /**
+     * Whether the literal or name from [at] to [end], in [f] whose value begins at [from], is a whole branch of it as the
+     * Kotlin plugin follows one into a [RETURNED] value: through `if`, `?:` and a sum, not into a call, brackets or another
+     * operator; into what a local is [LOCAL_SET] through a sum alone. A name stands alone, and the plugin looks through
+     * `trimIndent()` and `trimMargin()`, a literal's then being no operand of a sum.
+     */
+    fun wholeBranch(
+        f: ScopeFrame,
+        from: Int,
+        at: Int,
+        end: Int,
+        mode: Int,
+    ): Boolean {
+        if (end < 0) return false
+        val trimmed = TRIM_CALL.matchAt(src, pastBlanks(src, comments, end - 1))
+        val operandEnd = trimmed?.range?.last?.plus(1) ?: end
+        val after = pastBlanks(src, comments, operandEnd - 1)
+        val before = codeBefore(src, code, at)
+        val sums = !isWordPart(src[at]) && trimmed == null
+        val branches = mode == RETURNED && !f.branchOperand
+        val opens =
+            before < from || (sums && plusAt(src, before) && src.getOrNull(before - 1) != '+') ||
+                (branches && ((before >= 1 && src.startsWith("?:", before - 1)) || opensBranch(src, code, from, before)))
+        val closes =
+            endsOperand(operandEnd) || (sums && plusAt(src, after)) ||
+                (branches && src.startsWith("?:", after))
+        return opens && closes && (branches || !elseAt(src, after))
+    }
+
+    /**
+     * Records whether a mark reaches the literal at [at], as the Kotlin plugin reads one: the closest `// language=`
+     * comment, before the element it stands in; else the declaration it is the value of, reached without passing a block,
+     * a lambda or a class's body; else the marked function a `return` it is a whole branch of returns from. In
+     * parameters it is the parameter's, read when they close.
+     */
+    fun reach(at: Int) {
+        stack.last().let { it.element ?: it.outerElement }?.let {
+            if (it) marks += at
+            return
+        }
+        for (k in stack.indices.reversed()) {
+            val f = stack[k]
+            val v = f.values.lastOrNull { it.start <= at }
+            if (v != null) {
+                // A return's value, and what a local is set to, is followed in its own frame alone, into no brackets.
+                val direct = k == stack.lastIndex
+                val end = if (direct && (v.returned || v.initialiser)) readKotlinStringAt(src, at)?.end ?: -1 else -1
+                if (v.html && (!v.returned || (direct && wholeBranch(f, v.start, at, end, RETURNED)))) marks += at
+                if (v.initialiser && direct && wholeBranch(f, v.start, at, end, LOCAL_SET)) setTo.getOrPut(v) { ArrayList() } += at
+                return
+            }
+            // A template's braces, `"${...}"`, are none of the literal's own.
+            val template = f.kind == "block" && f.open > 0 && src[f.open - 1] == '$' && !code[f.open - 1]
+            if (f.kind == "params" || f.kind == "ctor") f.literals += at
+            if (!template && f.kind !in REACHED_THROUGH) return
+        }
+    }
+
+    /** Whether the word at [at] begins a getter of a property in [f]: `get()`. After a value, `get("/")` is a call. */
+    fun getterAt(
+        f: ScopeFrame,
+        at: Int,
+    ) = (f.kind == "top" || f.kind == "class") && src.startsWith("get", at) && !isWordPart(src.getOrNull(at + 3)) &&
+        GETTER_AFTER.matchAt(src, at + 3) != null
+
+    /**
+     * Whether a mark reaches what a `return` read now gives: in a local's value, `val a = if (c) "x" else return "<b>"`,
+     * the local's own; else that of [inner], the innermost function's block. A lambda between them stops either.
+     */
+    fun returnMarked(inner: ScopeFrame?): Boolean {
+        val local = stack.lastOrNull { it.initialising > 0 }?.takeIf { inner == null || stack.indexOf(it) >= stack.indexOf(inner) }
+        val owner = local ?: inner ?: return false
+        val marked = local?.values?.last { it.initialiser }?.html ?: (inner!!.function!!.funModifiers and HTML != 0)
+        return marked && stack.subList(stack.indexOf(owner) + 1, stack.size).none { it.lambda }
+    }
+
+    /** Records [word], from [at] to [end], where a marked `return` in [f] gives it whole: `return s`. */
+    fun returnedName(
+        f: ScopeFrame,
+        word: String,
+        at: Int,
+        end: Int,
+    ) {
+        val v = f.values.lastOrNull { it.start <= at } ?: return
+        if (v.html && v.returned && src.getOrNull(at - 1) != '.' && wholeBranch(f, v.start, at, end, RETURNED)) returnedNames += word to at
+    }
+
+    /** Ends the element a `// language=` comment marked in [f] where what begins at [at] is no getter of it. */
+    fun endElement(
+        f: ScopeFrame,
+        at: Int,
+    ) {
+        if (!f.elementEnded) return
+        f.elementEnded = false
+        if (!getterAt(f, at)) f.element = null
+    }
 
     /** Whether a declaration's word follows [at] past words and annotations, twelve at most: `private @A<B> val`. */
     fun declaresAfter(at: Int): Boolean {
@@ -1617,6 +1836,11 @@ private fun declarations(
         val destructured = DESTRUCTURED.matchAt(src, end)
         if (destructured != null) {
             val listStart = end + destructured.value.indexOf('(') + 1
+            // What it is set to is its value, which its mark reaches as a `val`'s does.
+            SET_TO.matchAt(src, end + destructured.value.length)?.let {
+                f.begin(Span(it.range.last + 1, html = html)).initialiser = true
+                f.initialising++
+            }
             for (n in NAMES.findAll(destructured.groupValues[1])) {
                 val at = listStart + n.range.first
                 val d =
@@ -1641,6 +1865,10 @@ private fun declarations(
                 // The value of a `val` set once, which a name then stands for.
                 val set = VALUE_AFTER.matchAt(src, arguments?.let { it.last + 1 } ?: (m.range.last + 1))?.range?.last
                 val valueAt = if (bare && !markup) set?.plus(1) else literal?.first
+                val value = valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) }
+                // What it is set to is its value however it is written, which the mark on it reaches.
+                val initialised = value ?: set?.let { f.begin(Span(it + 1)) }
+                initialised?.html = html
                 val d =
                     add(
                         m.groupValues[2],
@@ -1656,7 +1884,7 @@ private fun declarations(
                             markup,
                             if (bare && !markup) textInitialiser(src, m.range.last + 1) else null,
                             arguments?.let { withoutAnnotations(it.first + 1, it.last) },
-                            valueAt?.takeIf { word == "val" }?.let { f.begin(Span(it)) },
+                            value,
                             shared,
                             trusted,
                             trustedText,
@@ -1665,8 +1893,29 @@ private fun declarations(
                         ),
                     )
                 if (owner.kind != "top") owner.ends += d
+                initialised?.let {
+                    initialisers[d] = it
+                    it.initialiser = true
+                    f.initialising++
+                }
             }
         }
+    }
+
+    /** Where what follows a `// language=` comment in [f] begins at [at]: it is the element, within [LANGUAGE_COMMENT_REACH] characters. */
+    fun begins(
+        f: ScopeFrame,
+        at: Int,
+    ) {
+        val (end, html) = f.comment ?: return
+        // What touches the comment, `/* language=HTML */"..."`, is none it stands before.
+        f.element = html.takeIf { at - end in 1..LANGUAGE_COMMENT_REACH }
+        f.comment = null
+        // Inside an expression on its line, `c -> /* language=HTML */ "b"`, it marks what follows it alone, not the rest of
+        // the statement; after a sum's `+`, on its line or the next, it marks nothing.
+        val k = pastComments(src, comments, at)
+        f.elementEnded = k >= 0 && (k until at).none { src[it] == '\n' } && !(code[k] && src[k] in "{};=(,")
+        if (k >= 0 && code[k] && src[k] == '+') f.element = null
     }
 
     // Where the last annotation read ends: a modifier after its arguments is a declaration's.
@@ -1682,26 +1931,46 @@ private fun declarations(
         if (src[i] == '\n' && f.after == 1 && !breaks.carriesOn(i)) f.after = 0
         if (!code[i]) {
             // A literal is a value, and what stands before it is written before no declaration; a comment is passed over.
-            if ((i == 0 || code[i - 1]) && !src.startsWith("//", i) && !src.startsWith("/*", i)) {
+            if ((i == 0 || code[i - 1] || comments[i - 1]) && !comments[i]) {
                 f.reset()
                 if (f.kind != "for") f.pending?.begun(brace = false)
+                endElement(f, i)
+                begins(f, i)
+                if (isStringStart(src, i)) reach(i)
+            } else if (comments[i] && (i == 0 || !comments[i - 1])) {
+                val m = LANGUAGE_COMMENT.matchAt(src, i)
+                if (m != null) {
+                    var end = i
+                    while (end < src.length && comments[end]) end++
+                    f.comment = end to m.groupValues[1].equals("html", ignoreCase = true)
+                    f.element = null
+                } else if (!src.startsWith("/**", i)) {
+                    // Another comment between a mark and what follows it, but a documentation comment, takes the mark away.
+                    f.comment = null
+                }
             }
             i++
             continue
         }
         val c = src[i]
+        if (!c.isWhitespace()) {
+            endElement(f, i)
+            begins(f, i)
+        }
         if ((c.isLetter() || c == '_') && !isWordPart(src.getOrNull(i - 1))) {
             // A loop's own brackets hold its variable, not its statement.
             if (f.kind != "for") f.pending?.begun(brace = false)
             f.pending?.takeIf { it.state == "stmt" }?.let { p ->
                 if (src.startsWith("if", i) && !isWordPart(src.getOrNull(i + 2))) p.ifs++
-                if (src.startsWith("else", i) && !isWordPart(src.getOrNull(i + 4)) && p.ifs > 0) p.ifs--
+                if (elseAt(src, i) && p.ifs > 0) p.ifs--
             }
             var end = i + 1
             while (end < src.length && isWordPart(src[end])) end++
             val word = src.substring(i, end)
             // `Row::class` names a class and declares none.
             val reference = src.startsWith("::", i - 2)
+            returnedName(f, word, i, end)
+            branchWord(f, word, i)
             val ctorOfClass = word == "constructor" && f.cls
             // In a function's expression an `object` or a `fun` without a name is a value, and the parameters are in sight in it.
             val unnamed = if (f.pending?.unended == true && f.modifiers and COMPANION == 0) UNNAMED[word]?.matchAt(src, end) else null
@@ -1730,17 +1999,25 @@ private fun declarations(
                     // or a type the text does not read, it counts as the outer one's too, which can only make that less.
                     val blocks = stack.filter { it.function != null }
                     val into = blocks.drop(maxOf(0, blocks.indexOfLast { it.sure })).mapNotNull { it.function }
-                    val value = if (src.getOrNull(end) == '@' || into.isEmpty()) null else f.begin(Span(end))
+                    val marked = returnMarked(blocks.lastOrNull())
+                    val value =
+                        if (src.getOrNull(end) == '@' ||
+                            into.isEmpty()
+                        ) {
+                            null
+                        } else {
+                            f.begin(Span(end, html = marked, returned = true))
+                        }
                     for (g in into) if (value == null) g.body = null else g.returns.add(value)
                 }
 
                 // A getter takes nothing: `get("/")` after a value is a call. Only a property of a class or the top level has
                 // one; after a local `get()` is a call too.
                 word == "get" -> {
-                    if ((f.kind == "top" || f.kind == "class") &&
-                        GETTER_AFTER.matchAt(src, end) != null
-                    ) {
+                    if (getterAt(f, i)) {
                         for (v in f.lastValues) v.getter = true
+                        // A getter marked itself has its value, past `()`, marked: the property's mark reaches none of it.
+                        if (f.modifiers and HTML != 0) f.begin(Span(GETTER_AFTER.matchAt(src, end)!!.range.last + 1, html = true))
                     }
                 }
 
@@ -1795,6 +2072,7 @@ private fun declarations(
         if (c == '(' || c == '[' || c == '{') {
             if (f.kind != "for") f.pending?.begun(brace = c == '{')
             val g = ScopeFrame(i, if (c == '{') "block" else "paren")
+            g.outerElement = f.element ?: f.outerElement
             // A function type in the type parameters, `fun <T : (Int) -> Unit>`, is no parameter list.
             if (c == '(' && f.fn && i > typed && !receiverIn(i)) {
                 g.kind = "params"
@@ -1857,10 +2135,12 @@ private fun declarations(
                     g.kind = "when"
                     f.whenBlock = false
                 } else {
+                    g.lambda = !branch(src, code, f.open, i)
                     // Read in the code alone, as a function's parameters are: a comment among them is blank.
                     val m = lambdaParameters(blank, types, i + 1)
                     if (m != null && (i + 1 until m.end).all { code[it] || comments[it] }) {
                         g.kind = "lambda"
+                        g.lambda = true
                         for (part in splitTopLevel(m.text, types, pastWhiteSpace(blank, i + 1))) {
                             val p0 = part.trim()
                             val list =
@@ -1917,14 +2197,21 @@ private fun declarations(
             g.function?.body?.end = i + 1
             for (d in g.ends) d.end = i + 1
             g.closeAt = i + 1
+            val marked = HashSet<Any>()
             if (g.kind == "params") {
                 val around = outer.pending?.takeIf { it.unended }?.decls ?: emptyList()
-                val marked = HashSet<Any>()
                 handOver(PendingScope(parameters(g, i, marked = marked) + around, g))
                 if (functions != null) declared.add(Triple(g, i, marked))
             } else if (g.kind == "ctor") {
-                outer.ctor = parameters(g, i, !classHidden(outer), outer)
-            } else if (g.kind == "catch" && c == ')') {
+                outer.ctor = parameters(g, i, !classHidden(outer), outer, marked)
+            }
+            // A default's literal is its parameter's, marked where the parameter is.
+            var before = 0
+            for (literal in g.literals) {
+                while (before < g.commas.size && g.commas[before] < literal) before++
+                if (before in marked) marks += literal
+            }
+            if (g.kind == "catch" && c == ')') {
                 // The variable is all the brackets hold, `name: Type`, but for annotations before it; `object : Type` is a value.
                 // It is read in their last stretch, so brackets in brackets cost no more than their length.
                 val from = maxOf(g.open + 1, i - CATCH_VARIABLE_LENGTH)
@@ -1950,17 +2237,31 @@ private fun declarations(
         }
         if (c == ',') {
             if (i > typed) f.commas += i
+            f.element = null
+            f.branchOperand = false
             i++
             continue
         }
-        if (f.values.isNotEmpty() && (c == ';' || (c == '\n' && breaks.ends(i)))) f.endValues(i)
+        // In a `when`'s braces an `else` on the next line is its own branch.
+        val open = f.values.isNotEmpty() || f.element != null || f.branchOperand
+        if (open && (c == ';' || (c == '\n' && breaks.ends(i, f.kind != "when")))) {
+            f.endValues(i)
+            f.branchOperand = false
+            // An annotation's line ends no element, and a property's getter on the next line is in it.
+            // Read once for each element, not again at each blank line after it.
+            if (f.element == null) {
+                f.elementEnded = false
+            } else if (!f.elementEnded && breaks.before(i) + 1 != annotationClosed) {
+                f.elementEnded = true
+            }
+        }
         val p = f.pending
         if (p != null) {
             when (p.state) {
                 "after" -> {
                     if (c == '=' && src.getOrNull(i + 1) != '=' && p.fn != null) {
                         p.state = "expr"
-                        p.fn?.body = f.begin(Span(i + 1))
+                        p.fn?.body = f.begin(Span(i + 1, html = p.fn!!.funModifiers and HTML != 0))
                     } else if (p.fn == null && !c.isWhitespace() && f.kind != "for") {
                         p.state = "stmt"
                     }
@@ -1990,7 +2291,26 @@ private fun declarations(
         val (name, f) = functionAt(blank, types, g, close, marked) ?: continue
         functions!!.getOrPut(name) { ArrayList() } += f
     }
+    // A returned local's literals are marked by the declaration the name is of.
+    markReturnedLocals(names, initialisers, setTo, returnedNames, marks)
     return names
+}
+
+/**
+ * Marks the literals a local is set to that a marked `return` gives by name, once every name's scope is read,
+ * `val s = "<b>"; return s`: the nearest declaration of the name decides, and it must be a local.
+ */
+private fun markReturnedLocals(
+    names: Map<String, List<Declaration>>,
+    initialisers: Map<Declaration, Span>,
+    setTo: Map<Span, List<Int>>,
+    returnedNames: List<Pair<String, Int>>,
+    marks: MutableSet<Int>,
+) {
+    for ((name, at) in returnedNames) {
+        val local = names[name]?.let { nearestDeclaration(it, at) }?.takeIf { it.start == it.at } ?: continue
+        marks += initialisers[local]?.let { setTo[it] }.orEmpty()
+    }
 }
 
 /** A value as the file writes it, comments left out, from [start] to [end]. */
@@ -2068,6 +2388,14 @@ internal fun declarationOf(
     at: Int,
 ): Declaration? {
     val list = fileFacts(src).names[name] ?: return null
+    return nearestDeclaration(list, at)
+}
+
+/** The declaration in [list], sorted by where each is in sight, that is in sight at [at] and seen last before it: the nearest. */
+private fun nearestDeclaration(
+    list: List<Declaration>,
+    at: Int,
+): Declaration? {
     var lo = 0
     var hi = list.size
     while (lo < hi) {
