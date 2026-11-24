@@ -175,7 +175,7 @@ private fun constantName(arg: Arg): String? = CONSTANT_NAME.find(arg.text)?.grou
 private val CASE_ARG = regex("""^\s*Case\.[A-Z]+\s*$""")
 private val CASE_VALUE = regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
-private val OBJECT_FORM = regex("""^\s*[{\[]""")
+internal val OPENS_OBJECT_OR_ARRAY = regex("""^\s*[{\[]""")
 private val HAS_CAPITAL = regex("""[A-Z]""")
 
 // A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
@@ -1339,7 +1339,7 @@ public class Analyzer(
         if (key.interpolations.isNotEmpty() || objectForm) return emptyList()
         val name = key.text
         // dataSignals("{fooBar: 1}", ...) is the object form: an expression, not a key.
-        if (OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        if (OPENS_OBJECT_OR_ARRAY.containsMatchIn(name)) return emptyList()
         // A key that names a signal goes through Casing.signalName, which refuses more than a key.
         val signalKey = spec.keyCase == KeyCase.CAMEL
         (
@@ -1559,7 +1559,7 @@ public class Analyzer(
         val first = site.positional.takeIf { it.size >= 2 || site.named("expression") != null }?.firstOrNull()
         val key = (named ?: first)?.string ?: return emptyList()
         val name = key.text
-        if (key.interpolations.isNotEmpty() || OBJECT_FORM.containsMatchIn(name)) return emptyList()
+        if (key.interpolations.isNotEmpty() || OPENS_OBJECT_OR_ARRAY.containsMatchIn(name)) return emptyList()
         AttributeKeys.nameProblem(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
         if (!HAS_CAPITAL.containsMatchIn(name)) {
             val modifiers = if (addsModifiers(site, spec, src)) "__" else ""

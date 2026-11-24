@@ -1267,7 +1267,6 @@ private fun compared(
 }
 
 private val BRANCH_WORD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:else|try|finally|do|when)\s*$""")
-private val BRANCH_HEAD = regex("""(?:^|[^\p{L}\p{Nd}_])(?:if|when|for|while|catch)\s*$""")
 
 /** Whether the brace at [brace] opens a branch: after `else`, `try`, `->`, or the parentheses of `if`, `when`, a loop or `catch`. */
 private fun branch(
@@ -1287,7 +1286,7 @@ private fun branch(
             if (code[k] && src[k] == '(' && --depth == 0) break
             k--
         }
-        return BRANCH_HEAD.containsMatchIn(src.substring(maxOf(open, k - 20), k))
+        return CONDITION_HEAD.containsMatchIn(src.substring(maxOf(open, k - 20), k))
     }
     return BRANCH_WORD.containsMatchIn(src.substring(maxOf(open, k - 20), k + 1))
 }

@@ -220,7 +220,7 @@ private val SIGNAL_NAME = regex("""\w+(?:[.-]\w+)*""")
 private val SCOPE_WORD = regex("""(?:^|[^A-Za-z0-9_$])([a-z]*)$""")
 private val SELECTOR_TOKEN = regex("""[#.]?[\w-]*$""")
 private val ACTION_WORD = regex("""@[A-Za-z_][A-Za-z0-9_]*""")
-private val OPTION_WORD = regex("""[A-Za-z_$][\w$]*""")
+internal val JS_NAME = regex("""[A-Za-z_$][\w$]*""")
 private val ATTRIBUTE_WORD = regex("""[A-Za-z][A-Za-z0-9_:.-]*""")
 private val KOTLIN_WORD = regex("""[A-Za-z_][A-Za-z0-9_]*""")
 private val VALUE_WORD = regex("""[\w-]+""")
@@ -488,7 +488,7 @@ private class Asked(
             .pieces(0)
             .drop(1)
             .mapNotNull { piece -> colons.firstOrNull { it in piece }?.let { js.substring(piece.first, it).trim() } }
-            .filter { OPTION_WORD.matchEntire(it) != null }
+            .filter { JS_NAME.matchEntire(it) != null }
             .toSet()
     }
 
@@ -707,7 +707,7 @@ private class Asked(
             val foreign = kotlin && analyzer.inForeignDslCall(text, offset, modules)
             if (action != null && !foreign) return Hover(range, actionDoc(action, withKotlin, catalog))
         }
-        wordAt(OPTION_WORD)?.let { range ->
+        wordAt(JS_NAME)?.let { range ->
             val word = text.substring(range)
             // The key it is when the caret stands at its end: an option of a backend action, or a key of a signal filter.
             val key = expression(range.last + 1)?.takeIf { it.allowActions }?.let { actionCallAt(it.before, it.before.length)?.option }
@@ -774,7 +774,7 @@ private class Asked(
     private fun codeWord(e: ExpressionAtCaret): Hover? {
         // Kotlin's own dollar, `${'$'}count`, is the `$` the client reads: the word is read from the name after it.
         val dollar = if (kotlin) wordAt(KOTLIN_DOLLAR_SIGNAL) else null
-        val range = dollar ?: wordAt(CLIENT_SIGNAL) ?: wordAt(OPTION_WORD) ?: return null
+        val range = dollar ?: wordAt(CLIENT_SIGNAL) ?: wordAt(JS_NAME) ?: return null
         val word = if (dollar != null) "$" + text.substring(range.first + KOTLIN_DOLLAR.length, range.last + 1) else text.substring(range)
         val read = if (dollar != null) expression(range.first + KOTLIN_DOLLAR.length)?.before?.dropLast(1) ?: return null else e.before
         val inBefore = if (dollar != null) read.length else e.before.length - (offset - range.first)

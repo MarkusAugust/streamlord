@@ -38,9 +38,7 @@ import io.github.markusaugust.streamlord.analysis.DatastarFrame
 import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RequestsFile
 import io.github.markusaugust.streamlord.analysis.SavedRequest
-import io.github.markusaugust.streamlord.core.json.JsonNull
 import io.github.markusaugust.streamlord.core.json.JsonObject
-import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -978,7 +976,7 @@ class InspectorPanel(
         val text = frame.args["signals"] ?: return
         val patched = Requests.patchedStore(signals, text, frame.args["onlyIfMissing"]) ?: return
         signals = patched.store
-        storeView.text = cut(pretty(signals))
+        storeView.text = cut(signals.toPrettyJson())
         patched.message?.let(::error)
     }
 
@@ -1217,34 +1215,5 @@ class InspectorPanel(
             runCatching {
                 "${r.method} ${java.net.URI(r.url.replace(Regex("""\{\{[^}]+\}\}"""), "http://x")).path}"
             }.getOrDefault("${r.method} ${r.url}")
-
-        /** Two-space indented JSON, as the VS Code inspector shows it. */
-        fun pretty(
-            v: JsonValue,
-            indent: String = "",
-        ): String =
-            when (v) {
-                is JsonObject -> {
-                    if (v.isEmpty()) {
-                        "{}"
-                    } else {
-                        v.entries.joinToString(",\n", "{\n", "\n$indent}") { (k, x) ->
-                            "$indent  ${io.github.markusaugust.streamlord.core.json.JsonString(k).toJson()}: ${pretty(x, "$indent  ")}"
-                        }
-                    }
-                }
-
-                is io.github.markusaugust.streamlord.core.json.JsonArray -> {
-                    if (v.isEmpty()) "[]" else v.joinToString(",\n", "[\n", "\n$indent]") { "$indent  ${pretty(it, "$indent  ")}" }
-                }
-
-                is JsonNull -> {
-                    "null"
-                }
-
-                else -> {
-                    v.toJson()
-                }
-            }
     }
 }

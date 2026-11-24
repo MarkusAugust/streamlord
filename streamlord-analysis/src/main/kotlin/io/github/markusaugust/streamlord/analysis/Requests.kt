@@ -195,7 +195,7 @@ public object Requests {
                             is JsonString -> signals.value
 
                             // As written in the file: a second writer would spell numbers past 2^53 and escapes its own way.
-                            is JsonObject, is JsonArray -> rawMember(json, index) ?: prettyJson(signals)
+                            is JsonObject, is JsonArray -> rawMember(json, index) ?: signals.toPrettyJson()
 
                             else -> ""
                         },
@@ -1499,32 +1499,6 @@ public object Requests {
             .replace("%28", "(")
             .replace("%29", ")")
             .replace("%7E", "~")
-
-    private fun prettyJson(
-        v: JsonValue,
-        indent: String = "",
-    ): String =
-        when (v) {
-            is JsonObject -> {
-                if (v.isEmpty()) {
-                    "{}"
-                } else {
-                    v.entries.joinToString(
-                        ",\n",
-                        "{\n",
-                        "\n$indent}",
-                    ) { (k, x) -> "$indent  ${JsonString(k).toJson()}: ${prettyJson(x, "$indent  ")}" }
-                }
-            }
-
-            is JsonArray -> {
-                if (v.isEmpty()) "[]" else v.joinToString(",\n", "[\n", "\n$indent]") { "$indent  ${prettyJson(it, "$indent  ")}" }
-            }
-
-            else -> {
-                v.toJson()
-            }
-        }
 }
 
 /** A signal store after a patch: the [store] shown, and what the inspector says of the patch where it is not folded whole. */

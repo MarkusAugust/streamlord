@@ -42,7 +42,6 @@ private const val SHORT = 40
 // What JavaScript's Number reads as a number: white space alone is 0, and a sign is no part of a hexadecimal, octal or binary one.
 private val NUMERIC_STRING =
     regex("""\s*(?:[+-]?(?:Infinity|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)?\s*""")
-private val IDENTIFIER = regex("""[A-Za-z_$][\w$]*""")
 
 internal fun ArgumentKind.phrase(): String =
     when (this) {
@@ -391,7 +390,7 @@ internal fun actionArgumentIssues(
                 // A parameter the signature names is named; one it writes out, as @peek(() => expr), is shown in it.
                 val takes =
                     "@${spec.name} takes ${kind.phrase()}" +
-                        (if (IDENTIFIER.matchEntire(parameter) != null) " as $parameter" else ", as in ${spec.signature}") + ", and "
+                        (if (JS_NAME.matchEntire(parameter) != null) " as $parameter" else ", as in ${spec.signature}") + ", and "
                 val url = spec.kind == "backend" && n == 0
                 // new URL() writes an array as its items joined by commas, and only an empty one has no length.
                 if (url && v.written == Written.ARRAY && js.substring(v.start + 1, v.end - 1).isNotBlank()) continue

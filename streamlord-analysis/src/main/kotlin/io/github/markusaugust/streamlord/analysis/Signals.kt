@@ -137,7 +137,6 @@ private val JSON_CALLS =
     Catalog.default.signalCalls
         .filterValues { "json" in it }
         .keys
-private val JSON_OBJECT = regex("""^\s*\{""")
 
 /**
  * `toJsonValue(...)` handed to `dataSignals`: the page declares what the codec makes of the value.
@@ -750,11 +749,11 @@ public fun signalDeclarations(source: Source): List<SignalDeclaration> {
 }
 
 /**
- * A name a rename may write: dotted parts of ASCII letters, digits and `_`, not opening with a
+ * A name a rename or a fix may write into a helper: dotted parts of ASCII letters, digits and `_`, not opening with a
  * digit. What a `$name` reads and what a Kotlin string holds without a template or a name the DSL
  * refuses: a `$` would be a template in Kotlin and `-` throws in a DSL call.
  */
-private val RENAMABLE = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
+internal val DOTTED_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
 
 /** The characters of a key and its modifiers, as [KEYED_ATTRIBUTE] reads them. */
 private val KEY_TAIL = regex("""[\p{L}\p{N}_.-]*""")
@@ -771,7 +770,7 @@ public fun signalRenameText(
     d: SignalDeclaration,
     newName: String,
 ): String? {
-    if (RENAMABLE.matchEntire(newName) == null) return null
+    if (DOTTED_NAME.matchEntire(newName) == null) return null
     return when (d.kind) {
         SignalDeclaration.Kind.NAME -> {
             newName
@@ -816,7 +815,7 @@ public fun signalReadRenameText(
     signal: String,
     newName: String,
 ): String? {
-    if (RENAMABLE.matchEntire(newName) == null || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
+    if (DOTTED_NAME.matchEntire(newName) == null || newName.substringBeforeLast('.', "") != signal.substringBeforeLast('.', "")) return null
     return newName.substringAfterLast('.')
 }
 
@@ -898,7 +897,7 @@ private fun declared(
                 // patchSignals("""{"count": 1}"""): the signals as JSON text.
                 if (site.name in JSON_CALLS) {
                     val s = a.string
-                    s?.text?.takeIf { JSON_OBJECT.containsMatchIn(it) }?.let { json ->
+                    s?.text?.takeIf { OPENS_WITH_BRACE.containsMatchIn(it) }?.let { json ->
                         val open = json.indexOf('{') + 1
                         for (k in objectKeys(json.substring(open, maxOf(open, json.lastIndexOf('}'))), spread)) {
                             val at = s.toSource(open + k.nameStart, open + k.nameStart + k.key.length)
@@ -994,7 +993,7 @@ private fun objectDeclarations(
     s: KotlinString,
     under: String,
 ): List<SignalDeclaration> {
-    if (!JSON_OBJECT.containsMatchIn(s.text)) return emptyList()
+    if (!OPENS_WITH_BRACE.containsMatchIn(s.text)) return emptyList()
     val open = s.text.indexOf('{') + 1
     return objectKeys(s.text.substring(open, maxOf(open, s.text.lastIndexOf('}')))).map { k ->
         val at = s.toSource(open + k.nameStart, open + k.nameStart + k.key.length)

@@ -118,7 +118,7 @@ internal fun List<IntRange>.around(at: Int): IntRange? = lastOrNull { at in it }
 
 private val FUN_BEFORE = regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
 private val NAMED_ARG = regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
-private val TRAILING_LAMBDA = regex("""^\s*\{""")
+internal val OPENS_WITH_BRACE = regex("""^\s*\{""")
 
 /** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
 private val TRIM_CALL = regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
@@ -236,7 +236,7 @@ private fun parseArgs(
                     if (c != ')') return null
                     finish(i)
                     val after = src.substring(i + 1, minOf(src.length, i + 40))
-                    return ParsedArgs(i, args, TRAILING_LAMBDA.containsMatchIn(after))
+                    return ParsedArgs(i, args, OPENS_WITH_BRACE.containsMatchIn(after))
                 }
                 depth--
             }

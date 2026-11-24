@@ -41,13 +41,6 @@ internal val HELPER_READ_CALLS: Set<String> =
         .keys
 
 /**
- * A name a fix can write back into a helper: dotted parts, without a hyphen, which the helper
- * refuses (see [signalNameHyphenIssues]), or brackets, whose key a plain name would not replace
- * as written.
- */
-private val PLAIN_HELPER_NAME = regex("""[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*""")
-
-/**
  * A file that uses the DSL: a helper call elsewhere, `redis.increment("visits")` or Hamcrest's
  * `not("error")`, is somebody else's. A line starts after `\n` alone and is indented with spaces
  * and tabs.
@@ -96,7 +89,7 @@ internal fun unshadowed(
 
 /** The signal the literal first argument of a helper in [HELPER_READ_CALLS] reads, with offsets relative to its text. */
 internal fun helperSignalReference(text: String): SignalReference? =
-    if (PLAIN_HELPER_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
+    if (DOTTED_NAME.matchEntire(text) != null && PLACEHOLDER !in text) SignalReference(0, text.length, text) else null
 
 /**
  * The signals the expressions of an HTML fragment or document read, with offsets relative to [html].
@@ -358,7 +351,7 @@ private fun unknownSignalIssue(
     val nearest = nearestSignal(misspelt, defined)
     // The fix rewrites the name and leaves the dollar as written, which in Kotlin may be `${'$'}`.
     // A helper writes its name as it stands, and only a plain name goes back into one.
-    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || PLAIN_HELPER_NAME.matchEntire(it) != null }
+    val near = nearest?.takeIf { ref.site?.name !in HELPER_READ_CALLS || DOTTED_NAME.matchEntire(it) != null }
     val nameStart = ref.end - ref.name.length
     return Issue(
         start = ref.start,

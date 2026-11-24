@@ -129,14 +129,8 @@ public fun collectSignalFacts(source: Source): SignalFacts {
         lookups += SignalRead(first.text, first.contentStart, first.contentEnd)
     }
 
-    val packageName =
-        PACKAGE
-            .findAll(src)
-            .firstOrNull { lex.mask[it.range.first] }
-            ?.groupValues
-            ?.get(1)
-            .orEmpty()
-    val imports = IMPORT.findAll(src).filter { lex.mask[it.range.first] }.mapTo(LinkedHashSet()) { it.groupValues[1] }
+    val packageName = packageOf(src, lex)
+    val imports = importsOf(src, lex).toCollection(LinkedHashSet())
     val classes = signalClasses(src, lex)
     val patched = patchedSignalTypes(src, lex)
     return SignalFacts(
@@ -273,12 +267,7 @@ internal fun candidateClasses(
     src: String,
     lex: KotlinLex,
 ): Candidates {
-    val imports =
-        IMPORT
-            .findAll(src)
-            .filter { lex.mask[it.range.first] }
-            .map { it.groupValues[1] }
-            .toList()
+    val imports = importsOf(src, lex)
     val explicit = imports.filter { !it.endsWith(".*") }.associateBy { it.substringAfterLast('.') }
     val stars = imports.filter { it.endsWith(".*") }.map { it.removeSuffix("*") }
     val own = packageOf(src, lex)
@@ -294,6 +283,17 @@ internal class Candidates(
     fun of(type: String): List<String> =
         explicit[type]?.let { listOf(it) } ?: (listOf(if (own.isEmpty()) type else "$own.$type") + stars.map { it + type })
 }
+
+/** What [src] imports, each in code, a star import with its `.*`. */
+private fun importsOf(
+    src: String,
+    lex: KotlinLex,
+): List<String> =
+    IMPORT
+        .findAll(src)
+        .filter { lex.mask[it.range.first] }
+        .map { it.groupValues[1] }
+        .toList()
 
 /** The package [src] declares, or the empty one. */
 internal fun packageOf(
