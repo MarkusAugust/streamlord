@@ -39,6 +39,7 @@ import io.github.markusaugust.streamlord.analysis.Requests
 import io.github.markusaugust.streamlord.analysis.RequestsFile
 import io.github.markusaugust.streamlord.analysis.SavedRequest
 import io.github.markusaugust.streamlord.core.json.JsonObject
+import io.github.markusaugust.streamlord.core.json.toPrettyJson
 import io.github.markusaugust.streamlord.intellij.Streamlord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

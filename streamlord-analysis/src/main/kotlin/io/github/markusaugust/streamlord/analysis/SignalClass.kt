@@ -73,6 +73,7 @@ private fun readClasses(
     lex: KotlinLex,
 ): List<SignalClass> {
     val out = ArrayList<SignalClass>()
+    val types by lazy { typeBrackets(src, lex.mask, lex.comments) }
     // An interface or a type alias is a class of the project whose names the check cannot read.
     for (m in OTHER_TYPE.findAll(src)) if (lex.mask[m.range.first]) out += opaque(m.groupValues[1])
     for (m in CLASS.findAll(src)) {
@@ -94,12 +95,12 @@ private fun readClasses(
             out += opaque(name)
             continue
         }
-        val open = constructorOpen(src, m.range.last + 1)
+        val open = constructorOpen(src, lex.mask, types, m.range.last + 1)
         if (open == null) {
             out += opaque(name)
             continue
         }
-        val closed = closing(src, lex, open, '(', ')')
+        val closed = matching(src, lex.mask, open)
         // Still being typed, a signals class's list is what stands before the first blank line: its signals stay known meanwhile.
         val close = closed.takeIf { it >= 0 } ?: if (serializable) BLANK_LINE.find(src, open)?.range?.first ?: src.length else -1
         if (close < 0) {
@@ -156,6 +157,8 @@ private fun renamed(
 /** Where the constructor of a class whose name ends before [from] opens: after `constructor`, its modifiers and annotations, if any. */
 private fun constructorOpen(
     src: String,
+    code: BooleanArray,
+    types: IntArray,
     from: Int,
 ): Int? {
     var i = from
@@ -167,7 +170,7 @@ private fun constructorOpen(
             }
 
             src.startsWith("@", i) -> {
-                i = fileFacts(src).let { annotationEnd(src, it.code, it.types, i) }.takeIf { it > i } ?: return null
+                i = annotationEnd(src, code, types, i).takeIf { it > i } ?: return null
             }
 
             else -> {
@@ -213,7 +216,7 @@ private fun addsNoNames(
         while (i < src.length && src[i].isWhitespace()) i++
     }
     if (!src.startsWith("{", i)) return true
-    val close = closing(src, lex, i, '{', '}')
+    val close = matching(src, lex.mask, i)
     if (close < 0) return false
     val companions =
         COMPANION
@@ -221,7 +224,7 @@ private fun addsNoNames(
             .filter { lex.mask[i + 1 + it.range.first] }
             .map { m ->
                 val open = i + 1 + m.range.last
-                open..closing(src, lex, open, '{', '}').let { if (it < 0) close else it }
+                open..matching(src, lex.mask, open).let { if (it < 0) close else it }
             }.toList()
     return NAMES_IN_BODY.findAll(src.substring(i + 1, close)).none { m ->
         val at = i + 1 + m.range.first
@@ -244,25 +247,6 @@ private fun depths(
         if (lex.mask[start + k] && (c == ')' || c == ']' || c == '}')) depth--
     }
     return out
-}
-
-/** The offset of the [closing] bracket in code that closes the [opening] one at [open], or -1: one in a string or a comment counts for nothing. */
-internal fun closing(
-    src: String,
-    lex: KotlinLex,
-    open: Int,
-    opening: Char,
-    closing: Char,
-): Int {
-    var depth = 0
-    for (i in open until src.length) {
-        if (!lex.mask[i]) continue
-        when (src[i]) {
-            opening -> depth++
-            closing -> if (--depth == 0) return i
-        }
-    }
-    return -1
 }
 
 /**

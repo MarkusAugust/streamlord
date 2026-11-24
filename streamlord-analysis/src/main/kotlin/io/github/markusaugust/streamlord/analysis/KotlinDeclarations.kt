@@ -1087,8 +1087,8 @@ private const val HTML = 16
 private const val COMPANION = 32
 
 /**
- * What stands between `fun` and a function's own brackets, on its line: type parameters, a receiver and the name, or
- * nothing. Brackets after anything else, or after a word that begins a statement, are not its parameters.
+ * What stands between `fun`, past its type parameters, and a function's own brackets, on its line: a receiver and the
+ * name, or nothing. Brackets after anything else, or after a word that begins a statement, are not its parameters.
  */
 private val FUN_HEAD = regex("""[ \t]*(?:[\p{L}_`][^\s()]*\.[ \t]*)?(?:($NAME)|`[^`\n]+`)?[ \t]*""")
 private const val FUN_HEAD_LENGTH = 300
@@ -2019,7 +2019,7 @@ private fun returnType(
     val m = RETURN_TYPE.matchAt(src, from)!!
     val type = RETURN_TYPE.groupRange(src, m, 1)
     // `: List<Int>?`: the type's arguments, then its question mark.
-    var end = type?.let { typeArgumentsAt(src, types, it.last + 1, "")?.last?.plus(1) ?: (it.last + 1) } ?: (m.range.last + 1)
+    var end = type?.let { typeArgumentsAt(src, types, it.last + 1, " \t")?.last?.plus(1) ?: (it.last + 1) } ?: (m.range.last + 1)
     if (type != null && end > type.last + 1 && src.getOrNull(end) == '?') end++
     return (type?.let { src.substring(it.first, end) } ?: "").takeIf { (end until to).all { src[it].isWhitespace() } }
 }

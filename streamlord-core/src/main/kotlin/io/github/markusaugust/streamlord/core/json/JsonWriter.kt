@@ -320,3 +320,29 @@ public object JsonWriter {
         sb.append('"')
     }
 }
+
+/** This value as JSON indented two spaces a level, an empty object or array written compact: how the editors show a store and save it. */
+@InternalStreamlordApi
+public fun JsonValue.toPrettyJson(): String = prettyJson(this, "")
+
+private fun prettyJson(
+    v: JsonValue,
+    indent: String,
+): String =
+    when {
+        v is JsonObject && v.isNotEmpty() -> {
+            v.entries.joinToString(
+                ",\n",
+                "{\n",
+                "\n$indent}",
+            ) { (k, x) -> "$indent  ${JsonString(k).toJson()}: ${prettyJson(x, "$indent  ")}" }
+        }
+
+        v is JsonArray && v.isNotEmpty() -> {
+            v.joinToString(",\n", "[\n", "\n$indent]") { "$indent  ${prettyJson(it, "$indent  ")}" }
+        }
+
+        else -> {
+            v.toJson()
+        }
+    }

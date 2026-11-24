@@ -176,7 +176,7 @@ private val CASE_ARG = regex("""^\s*Case\.[A-Z]+\s*$""")
 private val CASE_VALUE = regex("""Case\.([A-Z]+)""")
 private val CASE_IN_LAMBDA = regex("""\bcase\s*=\s*Case\.([A-Z]+)""")
 internal val OPENS_OBJECT_OR_ARRAY = regex("""^\s*[{\[]""")
-private val HAS_CAPITAL = regex("""[A-Z]""")
+internal val HAS_CAPITAL = regex("""[A-Z]""")
 
 // A property set in a lambda of modifiers, `{ once = true }`, and its value; `==` is a comparison and
 // `val once = 1` a variable of the lambda's own.
@@ -703,7 +703,7 @@ public class Analyzer(
             for (arg in site.args) if (src.getOrNull(arg.start) == '{') out += arg.start until arg.end
             if (!site.trailingLambda) continue
             val open = src.indexOf('{', site.closeParen + 1)
-            if (open >= 0) closing(src, lex, open, '{', '}').takeIf { it >= 0 }?.let { out += open..it }
+            if (open >= 0) matching(src, lex.mask, open).takeIf { it >= 0 }?.let { out += open..it }
         }
         return out
     }
@@ -1575,16 +1575,7 @@ public class Analyzer(
         if (!site.trailingLambda) return ""
         val open = src.indexOf('{', site.closeParen + 1)
         if (open < 0) return ""
-        var depth = 0
-        for (i in open until src.length) {
-            val c = src[i]
-            if (c == '{') {
-                depth++
-            } else if (c == '}' && --depth == 0) {
-                return src.substring(open, i + 1)
-            }
-        }
-        return src.substring(open)
+        return src.substring(open, matching(src, lex(src).mask, open).let { if (it < 0) src.length else it + 1 })
     }
 
     private fun checkScriptSite(

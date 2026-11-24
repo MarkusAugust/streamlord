@@ -235,7 +235,13 @@ internal fun codeRenamesSignals(
     lex: KotlinLex,
 ): Boolean {
     if (!src.contains("amingStrateg")) return false
-    val own = JSON_NAMING.findAll(src).map { it.range.first..maxOf(it.range.last, closing(src, lex, it.range.last, '(', ')')) }.toList()
+    val own =
+        JSON_NAMING
+            .findAll(src)
+            .filter { lex.mask[it.range.first] }
+            .map {
+                it.range.first..maxOf(it.range.last, matching(src, lex.mask, it.range.last))
+            }.toList()
     val imports = IMPORT_LINE.findAll(src).map { it.range }.toList()
     return NAMING_STRATEGY.findAll(src).any { m ->
         lex.mask[m.range.first] && own.none { m.range.first in it } && imports.none { m.range.first in it } &&

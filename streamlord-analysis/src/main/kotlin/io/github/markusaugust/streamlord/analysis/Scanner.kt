@@ -56,6 +56,28 @@ public data class CallSite(
     }
 }
 
+/** The bracket that matches the one at [at] in [src], after it or before it, what [mask] says is no code stepped over; -1 where none does. */
+internal fun matching(
+    src: String,
+    mask: BooleanArray,
+    at: Int,
+): Int {
+    val step = if (src[at] in "([{") 1 else -1
+    var depth = 0
+    var k = at
+    while (k in src.indices) {
+        if (mask[k]) {
+            when (src[k]) {
+                '(', '[', '{' -> depth += step
+                ')', ']', '}' -> depth -= step
+            }
+            if (depth == 0) return k
+        }
+        k += step
+    }
+    return -1
+}
+
 /** The string literals of a Kotlin file and a mask of which offsets are code. */
 public class KotlinLex internal constructor(
     public val strings: List<KotlinString>,

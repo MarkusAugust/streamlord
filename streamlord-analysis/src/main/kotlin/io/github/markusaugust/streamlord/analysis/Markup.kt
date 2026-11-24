@@ -39,17 +39,12 @@ private val JS_RADIX = regex("0([xob])([0-9a-f]+)")
 /** The modifiers whose value the client reads from the first tag, empty or not: `tagFirst` and `tagToMs` in tags.ts. */
 private val FIRST_TAG_READ = setOf(ModifierType.DURATION, ModifierType.INT, ModifierType.IDENT)
 
-/** The white space JavaScript's `Number` trims: its WhiteSpace and LineTerminator. */
-private const val JS_SPACE =
-    "\t\u000B\u000C\uFEFF \u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A" +
-        "\u202F\u205F\u3000\n\r\u2028\u2029"
-
 /**
  * JavaScript's `Number` of [tag], a modifier argument, which holds no dot and which the browser
  * has lowercased: none is 0, and `1e1` and `0x32` are numbers too. Null where it gives NaN.
  */
 private fun jsNumber(tag: String): Double? {
-    val t = tag.trim { it in JS_SPACE }.asciiLowercase()
+    val t = tag.trim(::isJsSpace).asciiLowercase()
     if (t.isEmpty()) return 0.0
     if (JS_DECIMAL.matchEntire(t) != null) return t.toDouble()
     val m = JS_RADIX.matchEntire(t) ?: return null
@@ -112,13 +107,12 @@ private val NAME_LIKE = regex("""[\p{L}\p{Nd}_$.-]+""")
 
 /** A `$name` in a filter, which the client evaluates without rewriting signals. */
 private val FILTER_SIGNAL = regex("""\$[A-Za-z_][\w$]*""")
-private val WORD_CHAR_CLASS = regex("""\w""")
+internal val WORD_CHAR_CLASS = regex("""\w""")
 private val IDENT = regex("""^[A-Za-z_][A-Za-z0-9_-]*$""")
 private val SIGNAL_NAME = regex("""^[A-Za-z_$][A-Za-z0-9_.$-]*$""")
 
 // A signal's name as the client reads one after `$`, without the `$`.
 private val BARE_SIGNAL = regex("""[A-Za-z_]\w*(?:[.-]\w+)*""")
-private val HAS_CAPITAL = regex("""[A-Z]""")
 private val HAS_LOWERCASE = regex("""[a-z]""")
 
 /** A JavaScript escape in a key as written: `\\` is a backslash, `\'` a quote. */

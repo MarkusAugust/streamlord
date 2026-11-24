@@ -22,7 +22,6 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 private val SPACED_ACTION = regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
-private val WORD_CHAR = regex("""\w""")
 
 /** A `${` with a brace inside before it closes: what keeps the client's pattern from taking a template literal whole. */
 private val BRACED_INTERPOLATION = regex("""\$\{[^{}]*\{""")
@@ -956,7 +955,7 @@ public class ExpressionValidator(
                     )
                 continue
             }
-            if (WORD_CHAR.matchEntire(next.toString()) != null) {
+            if (WORD_CHAR_CLASS.matchEntire(next.toString()) != null) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
                 val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =

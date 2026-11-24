@@ -13,26 +13,6 @@ public sealed interface JsonValue {
 
     /** Render as compact JSON text. */
     public fun toJson(): String = JsonWriter.write(this)
-
-    /** Render as JSON indented two spaces a level, [indent] where this value stands, as the inspectors show a store. */
-    public fun toPrettyJson(indent: String = ""): String =
-        when {
-            this is JsonObject && isNotEmpty() -> {
-                entries.joinToString(
-                    ",\n",
-                    "{\n",
-                    "\n$indent}",
-                ) { (k, v) -> "$indent  ${JsonString(k).toJson()}: ${v.toPrettyJson("$indent  ")}" }
-            }
-
-            this is JsonArray && isNotEmpty() -> {
-                joinToString(",\n", "[\n", "\n$indent]") { "$indent  ${it.toPrettyJson("$indent  ")}" }
-            }
-
-            else -> {
-                toJson()
-            }
-        }
 }
 
 /**

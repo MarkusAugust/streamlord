@@ -54,8 +54,8 @@ All notable changes to Streamlord are recorded here. The format follows
   `List<List<List<Int>>>`, so the values it returns are read as Kotlin's parser reads them; so are a
   function's head after type parameters that hold brackets and a property's type parameters. A Spring
   handler parameter's annotation is read to its end, `@RequestParam(defaultValue = ")") q: String`
-  (#343). The analysis reads JavaScript's white space, a file's imports and a JSON store's indentation
-  in one place each, the last in core as `JsonValue.toPrettyJson()`.
+  (#343). The analysis matches a bracket in code, reads JavaScript's white space and indents a JSON
+  store in one place each, the last in core.
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
   `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and

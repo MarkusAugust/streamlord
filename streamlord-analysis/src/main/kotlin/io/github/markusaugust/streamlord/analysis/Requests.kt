@@ -16,6 +16,7 @@ import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonValue
 import io.github.markusaugust.streamlord.core.json.SignalPatchException
 import io.github.markusaugust.streamlord.core.json.mergePatchAsClient
+import io.github.markusaugust.streamlord.core.json.toPrettyJson
 import io.github.markusaugust.streamlord.core.protocol.DatastarProtocol
 
 /*
