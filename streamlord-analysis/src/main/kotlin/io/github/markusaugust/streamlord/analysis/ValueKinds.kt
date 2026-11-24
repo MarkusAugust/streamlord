@@ -95,43 +95,129 @@ internal fun trustedName(
 }
 
 /**
- * Whether a value may be null as far as the text shows: whether any value it may result in is
- * `null` itself, a name declared with a `?` type, a safe call with no `?:` in it, or a lookup in
- * a name declared a map, which may miss. One left of `?:` never gives null. A template writes
- * null as `null`, and `interpolate` writes nothing.
+ * Whether a value may be null as far as the text shows: whether a value it may result in, one left
+ * of `?:` aside, is `null` itself, a name declared with a `?` type, one with a `?.` and no `?:` in
+ * its text, or one its chain shows to be null ([chainShowsNull]). A template writes null as `null`,
+ * and `interpolate` writes nothing. The chain only adds: what it reads never makes a value one that
+ * is not null.
  */
 internal fun mayBeNull(
     src: String,
     value: String,
     at: Int,
+): Boolean = mayBeNull(src, value, at, emptyMap(), null)
+
+/**
+ * [mayBeNull] with what each name a lambda around [value] stands for, [bound], and, for a part of a chain, how many links were
+ * read before it, [links]: a part is read by its chain alone, since a `?.` elsewhere in its text may give it nothing.
+ */
+private fun mayBeNull(
+    src: String,
+    value: String,
+    at: Int,
+    bound: Map<String, Boolean>,
+    links: Int?,
 ): Boolean =
     templateValues(value).any { v ->
         val t = v.text
         when {
-            v.nonNull -> {
-                false
-            }
-
-            t == "null" -> {
-                true
-            }
-
-            KOTLIN_NAME.matchEntire(t) != null -> {
-                declarationOf(src, t, at)?.type?.let { it.endsWith("?") || nullableTypeParameter(src, it) } ==
-                    true
-            }
-
-            "?:" in t -> {
-                false
-            }
-
-            else -> {
-                "?." in t ||
-                    MAP_LOOKUP.matchEntire(t)?.let { declarationOf(src, it.groupValues[1], at)?.type }?.let(MAP_TYPE::containsMatchIn) ==
-                    true
-            }
+            v.nonNull -> false
+            t == "null" -> true
+            t in bound -> bound.getValue(t)
+            KOTLIN_NAME.matchEntire(t) != null -> declarationOf(src, t, at)?.type?.let { typeMayBeNull(src, it) } == true
+            else -> (links == null && "?:" !in t && "?." in t) || chainShowsNull(src, t, at, bound, links ?: 0)
         }
     }
+
+/** How many links of a chain are read: each reads the rest again, so a chain is read no further, and a long one costs its length. */
+private const val CHAIN_LINKS = 8
+
+/**
+ * Whether the chain [t] ends in shows it may be null: a safe call, a call named `...OrNull`,
+ * `takeIf`, `takeUnless`, `find` or `findLast`, a lookup in a map, an element of a collection
+ * declared to hold null or of a `listOf(...)` holding one, the receiver of `also { }` or
+ * `apply { }`, what the lambda of `let { }`, `run { }` or `with(x) { }` gives, with its parameter or
+ * `this` standing for the receiver, and either side of `ifEmpty { }` or `ifBlank { }`.
+ */
+private fun chainShowsNull(
+    src: String,
+    t: String,
+    at: Int,
+    bound: Map<String, Boolean>,
+    links: Int,
+): Boolean {
+    if (links >= CHAIN_LINKS) return false
+
+    fun of(v: String) = mayBeNull(src, v, at, bound, links + 1)
+
+    fun given(
+        lambda: String,
+        names: Map<String, Boolean> = emptyMap(),
+    ) = lambdaResult(lambda).let { it.isNotEmpty() && mayBeNull(src, it, at, bound + names, links + 1) }
+
+    // A lookup in a map may miss; an element of a collection is null where it is declared to hold null.
+    fun elementOf(name: String) =
+        name !in bound && declarationOf(src, name, at)?.let { MAP_TYPE.containsMatchIn(it.type.orEmpty()) || nullableElements(it) } == true
+
+    val call = lastCall(t)
+    val receiver = call?.receiver
+    val lambda = call?.lambda
+    val name = call?.name.orEmpty()
+    val lookup = MAP_LOOKUP.matchEntire(t)
+    return when {
+        lookup != null -> elementOf(lookup.groupValues[1])
+        SAFE_PROPERTY.containsMatchIn(t) || call?.safe == true -> true
+        call == null -> false
+        receiver == null && lambda != null && name == "run" -> given(lambda)
+        receiver == null && lambda != null && name == "with" -> given(lambda, scope(src, lambda, "with", of(call.args)))
+        receiver == null -> false
+        name.endsWith("OrNull") || name in MAY_GIVE_NULL -> true
+        lambda != null && (name == "also" || name == "apply") -> of(receiver)
+        lambda != null && (name == "let" || name == "run") -> given(lambda, scope(src, lambda, name, of(receiver)))
+        lambda != null && (name == "ifEmpty" || name == "ifBlank") -> of(receiver) || given(lambda)
+        name in ELEMENT_CALLS && KOTLIN_NAME.matchEntire(receiver) != null -> elementOf(receiver)
+        name in ELEMENT_CALLS -> collectionElements(receiver)?.any { of(it) } == true
+        else -> false
+    }
+}
+
+/** Whether a value declared [type] may be null: a `?` type, or a type parameter that may stand for one. */
+private fun typeMayBeNull(
+    src: String,
+    type: String,
+): Boolean = type.endsWith("?") || nullableTypeParameter(src, type)
+
+/**
+ * The names that stand for what a lambda of the call [name] is called on, each giving [nullable]: `this` and `this@name`, or `let`'s
+ * parameter, `it` where none is named. A parameter written with its type gives what the type says; the names of a destructuring show nothing.
+ */
+private fun scope(
+    src: String,
+    lambda: String,
+    name: String,
+    nullable: Boolean,
+): Map<String, Boolean> {
+    if (name != "let") return mapOf("this" to nullable, "this@$name" to nullable)
+    val head = LAMBDA_HEAD.find(lambda)?.let { it.value.removeSuffix("->").trim() } ?: return mapOf("it" to nullable)
+    val parameter = head.substringBefore(':').trim()
+    if (KOTLIN_NAME.matchEntire(parameter) == null) return emptyMap()
+    return mapOf(parameter to if (':' in head) typeMayBeNull(src, head.substringAfter(':').trim()) else nullable)
+}
+
+/** Whether [d] is declared a collection whose elements may be null, `List<String?>`. */
+private fun nullableElements(d: Declaration): Boolean {
+    val element = d.typeArguments?.trim() ?: return false
+    return d.type?.let { COLLECTION_TYPE.matchEntire(it) } != null && ',' !in element && element.endsWith("?")
+}
+
+/** A property read by a safe call at the end of a chain, `q?.length`. */
+private val SAFE_PROPERTY = regex("""\?\.\s*[\p{L}_][\p{L}\p{Nd}_]*$""")
+
+/** The calls that give null when they find nothing or the test fails, besides those named `...OrNull`. */
+private val MAY_GIVE_NULL = setOf("takeIf", "takeUnless", "find", "findLast")
+
+/** The calls that give an element of a collection, or a value of a map. */
+private val ELEMENT_CALLS = setOf("first", "last", "single", "random", "elementAt", "get")
 
 /** A name indexed once, `m[key]`, with nothing after it. */
 private val MAP_LOOKUP = regex("""([\p{L}_][\p{L}\p{Nd}_]*)\[[^\[\]]*]""")
@@ -449,15 +535,7 @@ internal fun callKind(
 ): ValueFact? {
     val call = lastCall(t) ?: return null
     val receiver = call.receiver ?: return null
-    if (!wholeOperand(receiver) ||
-        t
-            .trim()
-            .substring(receiver.length)
-            .trimStart()
-            .startsWith("?")
-    ) {
-        return null
-    }
+    if (!wholeOperand(receiver) || call.safe) return null
     if (call.name in NUMBER_CONVERSIONS) return if (call.lambda == null && call.args.isBlank()) ValueFact.NUMBER else null
     // Whatever it is called on, and `x!!.toString()` too.
     if (call.name == "toString") return if (call.lambda == null && call.args.isBlank()) ValueFact.STRING else null
@@ -516,6 +594,8 @@ internal class Call(
     val receiver: String?,
     val args: String,
     val lambda: String?,
+    /** Whether it is a safe call, `receiver?.name()`. */
+    val safe: Boolean = false,
 )
 
 /** The call that ends [t], or null when [t] does not end in one. */
@@ -549,7 +629,7 @@ internal fun lastCall(t: String): Call? {
     val before = e.substring(0, end - name.value.length).trimEnd()
     if (before.isEmpty()) return Call(name.groupValues[1], null, args, lambda)
     val dot = SAFE_CALL_DOT.find(before) ?: return null
-    return Call(name.groupValues[1], before.substring(0, before.length - dot.value.length), args, lambda)
+    return Call(name.groupValues[1], before.substring(0, before.length - dot.value.length), args, lambda, dot.value.startsWith("?"))
 }
 
 /** [text] with each comment a blank, so its quotes and brackets are none: a literal is passed over whole. */

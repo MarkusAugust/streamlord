@@ -13,10 +13,12 @@ dependencies {
 kotlin.compilerOptions.optIn.add("io.github.markusaugust.streamlord.core.InternalStreamlordApi")
 
 /*
- * The cases are text: rewrite-probes.json, and every cell of value-matrix.json. The generator asks
- * the analysis for each fix and each context action, and writes the function before and after each
- * as Kotlin, which the test source set compiles against core. A fix that leaves code the compiler
- * refuses fails the build there, with the case named in the file.
+ * The cases are text: rewrite-probes.json and every cell of value-matrix.json, for which the
+ * generator asks the analysis for each fix and each context action and writes the function before
+ * and after each as Kotlin, which the test source set compiles against core. A fix that leaves code
+ * the compiler refuses fails the build there, with the case named in the file. Each value of
+ * nullable-values.json is written as a function the compiler types, so the test can ask whether it
+ * may be null.
  */
 val cases = rootProject.layout.projectDirectory.dir("editors/vscode/test/fixtures/cases")
 val probes = layout.buildDirectory.dir("generated/probes")
@@ -26,7 +28,9 @@ val generateProbes =
         group = "build"
         classpath = generator.runtimeClasspath
         mainClass.set("io.github.markusaugust.streamlord.probes.GenerateKt")
-        inputs.files(cases.file("rewrite-probes.json"), cases.file("value-matrix.json")).withPathSensitivity(PathSensitivity.RELATIVE)
+        inputs
+            .files(cases.file("rewrite-probes.json"), cases.file("value-matrix.json"), cases.file("nullable-values.json"))
+            .withPathSensitivity(PathSensitivity.RELATIVE)
         outputs.dir(probes)
         args(cases.asFile.path, probes.get().asFile.path)
     }

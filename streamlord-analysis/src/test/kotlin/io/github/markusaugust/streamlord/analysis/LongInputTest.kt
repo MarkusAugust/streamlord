@@ -70,4 +70,13 @@ class LongInputTest {
     fun `a lambda's parameter may be named with a letter past the first plane`() {
         assertEquals(1, fileFacts("fun f() = listOf(1).map { \uD835\uDC65 -> \uD835\uDC65 }\n").names["\uD835\uDC65"].orEmpty().size)
     }
+
+    @Test
+    fun `a value that ends in a long chain of calls is read without overflowing the stack, in time that grows with it`() {
+        for (link in listOf(".also { }", ".let { it }")) {
+            val chain = { n: Int -> "// ${made++}\nfun f(q: String?) = \"<p title=\\\"${'$'}{q" + link.repeat(n) + "}\\\">x</p>\"\n" }
+            Analyzer().analyzeKotlin(chain(10_000))
+            assertGrowsLinearly("a chain of $link", 100, chain) { Analyzer().analyzeKotlin(it) }
+        }
+    }
 }
