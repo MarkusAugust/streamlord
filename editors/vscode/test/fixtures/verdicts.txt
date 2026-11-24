@@ -15281,6 +15281,43 @@ unsafe-interpolation 119-123 warning: Kotlin writes ${x} into data-show, which D
 unescaped-interpolation 32-34 warning: Kotlin writes $q into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for $q where it is null, and Kotlin writes null.
   fix "Mark the values with + in interpolate { }, which escapes the values" 20-43 "interpolate { \"<p title=\\\"${+q}\\\">x</p>\" }.text" (not preferred)
     edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: a String that may be null right of ?: is a value the placeholder may give: the rewrite is not preferred, as for an if whose branch may be null
+unescaped-interpolation 43-52 warning: Kotlin writes ${s ?: q} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${s ?: q} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 31-61 "interpolate { \"<p title=\\\"${+(s ?: q)}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: a String that may be null left of ?: never gives null: the rewrite is preferred
+unescaped-interpolation 43-52 warning: Kotlin writes ${q ?: s} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 31-61 "interpolate { \"<p title=\\\"${+(q ?: s)}\\\">x</p>\" }.text"
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: a value that may be null right of ?: is not preferred to become a %s placeholder
+interpolate-template 171-180 warning: Kotlin fills in ${s ?: q} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate. Where ${s ?: q} is null, interpolate writes nothing, and Kotlin writes null.
+  fix "Make ${s ?: q} a %s placeholder, which interpolate escapes" 171-180 "%s" (not preferred)
+    edit 185-185 ", s ?: q"
+== fixes.json: an Html in brackets handed to interpolate in element text is written as it is, not markup held as a String
+== fixes.json: an Html on either side of ?: handed to interpolate in element text is written as it is
+== fixes.json: an Html on either side of ?: in a template of interpolate's markup may be made a placeholder, as an if of two Html may
+interpolate-template 167-176 warning: Kotlin fills in ${k ?: g} before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is.
+  fix "Make ${k ?: g} a %s placeholder, where interpolate writes it as it is" 167-176 "%s"
+    edit 181-181 ", k ?: g"
+== fixes.json: an Html in brackets in a template of interpolate's markup may be made a placeholder, as the Html alone may
+interpolate-template 157-163 warning: Kotlin fills in ${(h)} before interpolate reads the markup, so interpolate reads what it holds as markup too: a %s in it is a placeholder and a %% a per cent sign, and interpolate throws or changes the markup. Make it a %s placeholder and pass the Html: interpolate writes an Html or a Trusted there as it is.
+  fix "Make ${(h)} a %s placeholder, where interpolate writes it as it is" 157-163 "%s"
+    edit 168-168 ", (h)"
+== fixes.json: a value right of ?: is judged as it is alone: a safe call in a call's arguments may be what the call gives
+unescaped-interpolation 55-80 warning: Kotlin writes ${s ?: t.plus(u?.length)} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${s ?: t.plus(u?.length)} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 43-89 "interpolate { \"<p title=\\\"${+(s ?: t.plus(u?.length))}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: a safe call in a lambda may be what the lambda gives
+unescaped-interpolation 32-55 hint: Kotlin writes ${s.let { it?.trim() }} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${s.let { it?.trim() }} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 20-64 "interpolate { \"<p title=\\\"${+(s.let { it?.trim() })}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: a comparison binds looser than ?:, so a == b ?: c is a Boolean, which is not warned, as a == b is not
+== fixes.json: the text of an Html in brackets handed to interpolate in element text is still markup held as a String
+interpolate-template 157-159 warning: interpolate escapes (h.text) here, so the tags it holds are printed as text: it is markup held as a String. Pass the Html itself, join a list of Html with joinToHtml(), or wrap markup you built yourself in Trusted(...).
+== fixes.json: a safe call in the arguments of a call that hands it on may be what the call gives
+unescaped-interpolation 32-60 hint: Kotlin writes ${listOf(q?.trim()).first()} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${listOf(q?.trim()).first()} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 20-69 "interpolate { \"<p title=\\\"${+(listOf(q?.trim()).first())}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
 == completions.json: the types of @intl as its first argument, quoted
 completions, alone
   "'datetime'" value 0..0

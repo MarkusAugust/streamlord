@@ -29,6 +29,11 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- A value made of `?:` or brackets is judged as an `if` of the same values is. `${s ?: q}`
+  with `q: String?` no longer has the rewrite to `interpolate` preferred, since `q` may be null
+  and `interpolate` writes nothing where the template wrote `null`. An `Html` in brackets or on
+  either side of `?:`, `interpolate("<p>%s</p>", k ?: g)`, is no longer warned as markup held as
+  a String, and `a == b ?: c` is no longer warned, as `a == b` is not.
 - `@Language("HTML")` and `// language=HTML` reach as far as the Kotlin plugin injects them. A
   marked function's returns count through `if`, `?:`, a sum and `trimIndent()`, and so do the
   literals a returned local is set to, alone or in a sum, `val s = "<b>" + x; return s`; a mark

@@ -124,8 +124,7 @@ internal fun withNested(strings: List<KotlinString>): List<KotlinString> {
  * A braced template whose every result is a literal the author wrote: `${if (n == 1) "error"
  * else "errors"}`, a number, `true`. Its value is markup the source spells out.
  */
-internal fun literalOnly(expr: String): Boolean =
-    (branches(expr) ?: listOf(expr)).all { LITERAL.matchEntire(it.trim()) != null || plainString(it.trim()) }
+internal fun literalOnly(expr: String): Boolean = templateValues(expr).all { LITERAL.matchEntire(it.text) != null || plainString(it.text) }
 
 internal val QUOTE_OPENING = regex("""^\$*"""")
 

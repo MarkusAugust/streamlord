@@ -95,18 +95,23 @@ internal fun trustedName(
 }
 
 /**
- * Whether a value can be null as far as the text shows: `null` itself, a name declared with a
- * `?` type, a safe call with no `?:` after it, or a lookup in a name declared a map, which may
- * miss. A template writes null as `null`, and `interpolate` writes nothing.
+ * Whether a value may be null as far as the text shows: whether any value it may result in is
+ * `null` itself, a name declared with a `?` type, a safe call with no `?:` in it, or a lookup in
+ * a name declared a map, which may miss. One left of `?:` never gives null. A template writes
+ * null as `null`, and `interpolate` writes nothing.
  */
 internal fun mayBeNull(
     src: String,
     value: String,
     at: Int,
 ): Boolean =
-    (branches(value) ?: listOf(value)).any { v ->
-        val t = v.trim()
+    templateValues(value).any { v ->
+        val t = v.text
         when {
+            v.nonNull -> {
+                false
+            }
+
             t == "null" -> {
                 true
             }
@@ -171,6 +176,8 @@ internal class TemplateValue(
 internal fun templateValues(expr: String): List<TemplateValue> {
     val t = unparen(expr)
     branches(t)?.let { b -> return b.flatMap { templateValues(it) } }
+    // A comparison, a test, `&&` and `||` bind looser than `?:`: `a == b ?: c` is a Boolean.
+    if (BOOLEAN_OPERATOR.containsMatchIn(outsideBrackets(t))) return listOf(TemplateValue(t, false))
     val sides = splitTop(t, "?:")
     if (sides.size > 1) {
         return sides.flatMapIndexed { k, v -> templateValues(v).map { TemplateValue(it.text, it.nonNull || k < sides.size - 1) } }
@@ -920,6 +927,12 @@ private val NUMBER_CALLS =
             .split(" ")
 private val NUMBER_PROPERTY = regex("""[\p{L}\p{Nd}_)\]]\s*\??\.\s*(?:size|length|lastIndex)$""")
 
+/** [e] with what stands in brackets or in a literal blanked out: its operators of its own. */
+private fun outsideBrackets(e: String): String {
+    val d = depths(e)
+    return CharArray(e.length) { if (d[it] == 0) e[it] else ' ' }.concatToString()
+}
+
 /** Outside brackets: an operator whose result is a Boolean, which binds looser than any that may give a String. */
 private val BOOLEAN_OPERATOR = regex("""&&|\|\||[=!]==?|\s(?:<=|>=|<|>|!?in|!?is)\s""")
 
@@ -944,8 +957,7 @@ private fun shapeKind(
     editor: Editor?,
 ): ValueFact? {
     val e = unparen(value)
-    val d = depths(e)
-    val top = CharArray(e.length) { if (d[it] == 0) e[it] else ' ' }.concatToString()
+    val top = outsideBrackets(e)
     if (BOOLEAN_OPERATOR.containsMatchIn(top)) return ValueFact.BOOLEAN
     if (OTHER_OPERATOR.containsMatchIn(top)) return null
     // Cut at each binary operator: one after an operand, so a sign stays with what it signs.
@@ -978,8 +990,7 @@ internal fun numberShaped(value: String): Boolean {
     val e = unparen(value)
     if (e.isEmpty()) return false
     if (KOTLIN_NUMBER.matchEntire(e) != null) return true
-    val d = depths(e)
-    val top = CharArray(e.length) { if (d[it] == 0) e[it] else ' ' }.concatToString()
+    val top = outsideBrackets(e)
     if (BOOLEAN_OPERATOR.containsMatchIn(top)) return true
     if (OTHER_OPERATOR.containsMatchIn(top) || splitTop(e, "+").size > 1) return false
     if (ARITHMETIC.containsMatchIn(top)) return true
@@ -1065,10 +1076,10 @@ private fun heldAsMarkup(
     value: String,
     at: Int,
 ): Boolean =
-    (branches(value) ?: listOf(value)).all { v ->
-        val t = v.trim()
+    templateValues(value).all { v ->
+        val t = v.text
         if (KOTLIN_NAME.matchEntire(t) != null) {
-            declaredKind(src, t, at).isMarkup()
+            declaredKind(src, t, at, v.nonNull).isMarkup()
         } else {
             val call = MARKUP_CALL_START.find(t)
             call != null && closing(t, depths(t), call.value.length - 1) == t.length
