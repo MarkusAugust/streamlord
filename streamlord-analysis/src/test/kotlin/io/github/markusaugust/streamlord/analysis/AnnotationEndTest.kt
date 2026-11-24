@@ -53,8 +53,9 @@ class AnnotationEndTest {
             val src = "@file:\n\n$next\n"
             assertEquals(6, importEdits(src, "a.b", "C").single().start, next)
         }
-        val named = "@file:\nJvmName(\"X\")\n\nfun f() = 1\n"
-        assertEquals(named.indexOf("\n\nfun"), importEdits(named, "a.b", "C").single().start)
+        for (named in listOf("@file:\nJvmName(\"X\")\n\nfun f() = 1\n", "@file:data.Foo(\"x\")\n\nfun f() = 1\n")) {
+            assertEquals(named.indexOf("\n\nfun"), importEdits(named, "a.b", "C").single().start, named)
+        }
         val facts = fileFacts("class A {\n    @get:\n    typealias\n}\n")
         val at = "class A {\n    ".length
         assertEquals(at, annotationEnd("class A {\n    @get:\n    typealias\n}\n", facts.code, facts.types, at))

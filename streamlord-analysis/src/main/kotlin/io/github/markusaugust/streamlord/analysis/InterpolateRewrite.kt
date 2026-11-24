@@ -619,7 +619,13 @@ private fun fileHeaderEnd(
             // Kotlin reads `@file:` before a modifier, `@file:\n\nprivate fun`, as an annotation of that name, but it is one
             // being typed: it ends past its colon, as one past which no annotation is read does.
             val past = annotationEnd(src, code, types, k)
-            val name = (k + 6 until past).firstOrNull { !src[it].isWhitespace() }?.let { src.substring(it, past).takeWhile(::isWordPart) }
+            val name =
+                (k + 6 until past).firstOrNull { !src[it].isWhitespace() }?.let {
+                    src.substring(it, past).takeWhile { c ->
+                        isWordPart(c) ||
+                            c == '.'
+                    }
+                }
             k = if (past > k && name !in MODIFIER_WORDS) past else k + 6
             end = k
             continue
