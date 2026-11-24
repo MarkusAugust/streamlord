@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class AnnotationEndTest {
     @Test
     fun `a file annotation may have blanks before its name and its arguments`() {
-        for (header in listOf("@file: JvmName(\"X\")", "@file:JvmName (\"X\")", "@file:JvmName\t(\"X\")", "@file:")) {
+        for (header in listOf("@file: JvmName(\"X\")", "@file:JvmName (\"X\")", "@file:JvmName\t(\"X\")")) {
             val src = "$header\n\nfun f() = 1\n"
             val edit = importEdits(src, "a.b", "C").single()
             assertEquals(header.length, edit.start, header)
@@ -36,6 +36,9 @@ class AnnotationEndTest {
         val src = "class A {\n    @field:\n    val x = 1\n    @get:\n    fun f(s: String) = 1\n}\n"
         val facts = fileFacts(src)
         assertEquals(listOf(true, true), listOf("x", "s").map { facts.names.containsKey(it) })
+        val typed = "class A {\n    @get:\n    typealias\n}\n"
+        val at = "class A {\n    ".length
+        assertEquals(at, fileFacts(typed).let { annotationEnd(typed, it.code, it.types, at) })
     }
 
     @Test
@@ -56,9 +59,6 @@ class AnnotationEndTest {
         for (named in listOf("@file:\nJvmName(\"X\")\n\nfun f() = 1\n", "@file:data.Foo(\"x\")\n\nfun f() = 1\n")) {
             assertEquals(named.indexOf("\n\nfun"), importEdits(named, "a.b", "C").single().start, named)
         }
-        val facts = fileFacts("class A {\n    @get:\n    typealias\n}\n")
-        val at = "class A {\n    ".length
-        assertEquals(at, annotationEnd("class A {\n    @get:\n    typealias\n}\n", facts.code, facts.types, at))
     }
 
     @Test

@@ -1130,7 +1130,10 @@ private val ANNOTATION =
             """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?(?![\p{L}\p{Nd}_]|\s*:))""",
     )
 
-/** Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none is. */
+/**
+ * Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none
+ * is. Brackets after a blank that hold or precede a function type's arrow, `@Composable () -> Unit`, are the type's.
+ */
 internal fun annotationEnd(
     src: String,
     code: BooleanArray,
