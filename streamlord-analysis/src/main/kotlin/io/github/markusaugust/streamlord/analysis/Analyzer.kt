@@ -1575,7 +1575,7 @@ public class Analyzer(
         if (!site.trailingLambda) return ""
         val open = src.indexOf('{', site.closeParen + 1)
         if (open < 0) return ""
-        return src.substring(open, matching(src, lex(src).mask, open).let { if (it < 0) src.length else it + 1 })
+        return src.substring(open, matching(src, lex(src).mask, open, alone = true).let { if (it < 0) src.length else it + 1 })
     }
 
     private fun checkScriptSite(

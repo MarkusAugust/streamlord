@@ -2019,7 +2019,7 @@ private fun returnType(
     val m = RETURN_TYPE.matchAt(src, from)!!
     val type = RETURN_TYPE.groupRange(src, m, 1)
     // `: List<Int>?`: the type's arguments, then its question mark.
-    var end = type?.let { typeArgumentsAt(src, types, it.last + 1, " \t")?.last?.plus(1) ?: (it.last + 1) } ?: (m.range.last + 1)
+    var end = type?.let { typeArgumentsAt(src, types, it.last + 1)?.last?.plus(1) ?: (it.last + 1) } ?: (m.range.last + 1)
     if (type != null && end > type.last + 1 && src.getOrNull(end) == '?') end++
     return (type?.let { src.substring(it.first, end) } ?: "").takeIf { (end until to).all { src[it].isWhitespace() } }
 }

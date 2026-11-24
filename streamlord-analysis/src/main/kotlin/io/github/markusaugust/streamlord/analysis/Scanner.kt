@@ -56,17 +56,23 @@ public data class CallSite(
     }
 }
 
-/** The bracket that matches the one at [at] in [src], after it or before it, what [mask] says is no code stepped over; -1 where none does. */
+/**
+ * The bracket that matches the one at [at] in [src], after it or before it, what [mask] says is no code stepped over; -1
+ * where none does. With [alone] only brackets of its own kind count, so one of another kind left open while it is typed
+ * carries it no further: a lambda's braces around `println(`.
+ */
 internal fun matching(
     src: String,
     mask: BooleanArray,
     at: Int,
+    alone: Boolean = false,
 ): Int {
     val step = if (src[at] in "([{") 1 else -1
+    val kind = "([{)]}".indexOf(src[at]) % 3
     var depth = 0
     var k = at
     while (k in src.indices) {
-        if (mask[k]) {
+        if (mask[k] && (!alone || "([{)]}".indexOf(src[k]) % 3 == kind)) {
             when (src[k]) {
                 '(', '[', '{' -> depth += step
                 ')', ']', '}' -> depth -= step
