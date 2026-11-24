@@ -370,11 +370,10 @@ private const val NAME = """[\p{L}_][\p{L}\p{Nd}_]*"""
 private const val TYPE = """(?:[\p{L}_][\p{L}\p{Nd}_.]*|`[^`\n]+`)(?:\.(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`))*\??"""
 private val VAL_AFTER =
     regex(
-        """\s*(?:<[^<>]*>\s*)?((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
+        """\s*((?:$NAME\s*\.\s*)*)($NAME)(?:\s*:\s*($TYPE))?""" +
             """(?:\s*=\s*(-?\d[\d_]*(?:\.\d+)?(?:[uU][lL]?|[LlFfDd])?|true|false)$VALUE_END)?""",
     )
 private val DESTRUCTURED = regex("""\s*\(([^()]*)\)""")
-private const val TYPE_ARGUMENTS = """\s*<((?:[^<>]|<[^<>]*>)*)>"""
 
 // What may follow a literal a declaration is set to, for the literal to be all it is set to.
 private const val VALUE_END = """(?=[ \t]*(?:[\n\r;})\],]|//|$))"""
@@ -1091,7 +1090,7 @@ private const val COMPANION = 32
  * What stands between `fun` and a function's own brackets, on its line: type parameters, a receiver and the name, or
  * nothing. Brackets after anything else, or after a word that begins a statement, are not its parameters.
  */
-private val FUN_HEAD = regex("""[ \t]*(?:<(?:[^<>\n]|<[^<>\n]*>)*>[ \t]*)?(?:[\p{L}_`][^\s()]*\.[ \t]*)?(?:($NAME)|`[^`\n]+`)?[ \t]*""")
+private val FUN_HEAD = regex("""[ \t]*(?:[\p{L}_`][^\s()]*\.[ \t]*)?(?:($NAME)|`[^`\n]+`)?[ \t]*""")
 private const val FUN_HEAD_LENGTH = 300
 private val STATEMENT_WORDS = "if for while when do try return throw else in is as super this typeof".split(" ").toSet()
 
@@ -1406,6 +1405,7 @@ internal fun typeBrackets(
  */
 private fun functionAt(
     src: String,
+    types: IntArray,
     g: ScopeFrame,
     close: Int,
     html: Set<Any>,
@@ -1414,11 +1414,11 @@ private fun functionAt(
     val owner = g.owner?.let { it.open..(if (it.closeAt < 0) src.length else it.closeAt) }
     val body = g.body?.takeIf { it.end >= 0 && !overridable(g.funModifiers, g.owner?.extended, g.owner?.contract) }
     // Between the parameters and the body stands the type or nothing, or the function is not read.
-    val type = body?.takeIf { it.start - close < 1_000 }?.let { RETURN_TYPE.matchEntire(src.substring(close + 1, it.start - 1)) }
+    val type = body?.takeIf { it.start - close < 1_000 }?.let { returnType(src, types, close + 1, it.start - 1) }
     val results = if (body != null && src[body.start - 1] == '{') g.returns else listOfNotNull(body)
     val values = if (type == null || html.isNotEmpty()) emptyList() else results
     return name to
-        FunctionDeclaration(owner, html, g.open, g.local, type != null && g.funModifiers and HTML != 0, type?.groups?.get(1)?.value, values)
+        FunctionDeclaration(owner, html, g.open, g.local, type != null && g.funModifiers and HTML != 0, type?.ifEmpty { null }, values)
 }
 
 /**
@@ -1624,7 +1624,7 @@ private fun declarations(
                 if (owner.kind != "top") owner.ends += d
             }
         } else {
-            val m = VAL_AFTER.matchAt(src, end)
+            val m = VAL_AFTER.matchAt(src, typeArgumentsAt(src, types, end)?.let { it.last + 1 } ?: end)
             // `val String.shout`: an extension, read on a receiver and never by its name alone.
             if (m != null && m.groupValues[1].isEmpty()) {
                 val at = VAL_AFTER.groupRange(src, m, 2)!!.first
@@ -1796,7 +1796,8 @@ private fun declarations(
             if (c == '(' && f.fn && i > typed && !receiverIn(i)) {
                 g.kind = "params"
                 // A function still being typed has no brackets, and the next ones are a statement's.
-                val head = if (i - f.funAt < FUN_HEAD_LENGTH) FUN_HEAD.matchEntire(src.substring(f.funAt, i)) else null
+                val named = typeArgumentsAt(src, types, f.funAt, " \t")?.let { it.last + 1 } ?: f.funAt
+                val head = if (i - f.funAt < FUN_HEAD_LENGTH && named <= i) FUN_HEAD.matchEntire(src.substring(named, i)) else null
                 g.own = head != null && head.groupValues[1] !in STATEMENT_WORDS
                 g.owner = f.takeIf { it.kind == "class" }
                 g.local = f.kind != "class" && f.kind != "top"
@@ -1838,7 +1839,7 @@ private fun declarations(
                     f.pending = null
                     g.function = p.fn?.also { it.body = Span(i + 1) }
                     g.sure =
-                        p.fn?.let { it.own && i - it.closeAt < 1_000 && RETURN_TYPE.matchEntire(blank.substring(it.closeAt, i)) != null } ==
+                        p.fn?.let { it.own && i - it.closeAt < 1_000 && returnType(blank, types, it.closeAt, i) != null } ==
                         true
                 } else if (f.cls) {
                     g.kind = "class"
@@ -1983,7 +1984,7 @@ private fun declarations(
     }
     for (list in names.values) list.sortWith(compareBy<Declaration>({ it.start }, { it.at }))
     for ((g, close, marked) in declared) {
-        val (name, f) = functionAt(blank, g, close, marked) ?: continue
+        val (name, f) = functionAt(blank, types, g, close, marked) ?: continue
         functions!!.getOrPut(name) { ArrayList() } += f
     }
     return names
@@ -2000,7 +2001,25 @@ internal class ValueText(
 internal const val RECEIVER = """[\p{L}_][\p{L}\p{Nd}_.]*(?:<(?:[^<>]|<[^<>]*>)*>)?\??\s*\.\s*"""
 
 private val GETTER_AFTER = regex("""\s*\(\s*\)""")
-private val RETURN_TYPE = regex("""\s*(?::\s*($TYPE(?:$TYPE_ARGUMENTS)?))?\s*""")
+private val RETURN_TYPE = regex("""\s*(?::\s*($TYPE))?""")
+
+/**
+ * What stands between a function's parameters and its body, [from] to [to]: nothing, or `: Type` with its type arguments
+ * as [types] reads them. Null where anything else stands, else the type, empty where none is written.
+ */
+private fun returnType(
+    src: String,
+    types: IntArray,
+    from: Int,
+    to: Int,
+): String? {
+    val m = RETURN_TYPE.matchAt(src, from)!!
+    val type = RETURN_TYPE.groupRange(src, m, 1)
+    // `: List<Int>?`: the type's arguments, then its question mark.
+    var end = type?.let { typeArgumentsAt(src, types, it.last + 1, "")?.last?.plus(1) ?: (it.last + 1) } ?: (m.range.last + 1)
+    if (type != null && end > type.last + 1 && src.getOrNull(end) == '?') end++
+    return (type?.let { src.substring(it.first, end) } ?: "").takeIf { (end until to).all { src[it].isWhitespace() } }
+}
 
 /**
  * The functions [name] can mean at [at] where it is called without a receiver: the members of the class the call is in,

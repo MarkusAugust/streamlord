@@ -60,7 +60,8 @@ private val POSITIONAL_PATH = regex("""^\s*(?:\[\s*)?"([^"]*)"""")
 private val REQUEST_METHOD = regex("""RequestMethod\.([A-Z]+)""")
 private val SLASHES = regex("""/{2,}""")
 
-public fun findRoutes(src: String): List<Route> = (findKtorRoutes(src) + findSpringRoutes(src)).sortedBy { it.offset }
+public fun findRoutes(src: String): List<Route> =
+    lexKotlin(src).let { lex -> (findKtorRoutes(src, lex.mask) + findSpringRoutes(src, lex)).sortedBy { it.offset } }
 
 private fun joinPath(
     prefix: String,
@@ -77,9 +78,11 @@ private class Frame(
     val depth: Int,
 )
 
-private fun findKtorRoutes(src: String): List<Route> {
+private fun findKtorRoutes(
+    src: String,
+    mask: BooleanArray,
+): List<Route> {
     val routes = ArrayList<Route>()
-    val mask = lexKotlin(src).mask
     val stack = ArrayList<Frame>()
     // The parentheses open in each block: a call inside one is an argument, not a statement.
     val parens = arrayListOf(0)
@@ -277,9 +280,11 @@ private fun classBodies(
     return bodies
 }
 
-private fun findSpringRoutes(src: String): List<Route> {
+private fun findSpringRoutes(
+    src: String,
+    lex: KotlinLex,
+): List<Route> {
     val routes = ArrayList<Route>()
-    val lex = lexKotlin(src)
     val mask = lex.mask
     val types = typeBrackets(src, mask, lex.comments)
     val bodies = classBodies(src, mask)
@@ -305,7 +310,7 @@ private fun findSpringRoutes(src: String): List<Route> {
         val owner = bodies.lastOrNull { it.open < at && at < it.close }
         val prefix = owner?.let { prefixes[it.keyword] } ?: ""
         val method = if (name == "RequestMapping") annotationMethod(args) ?: "GET" else SPRING_MAPPINGS[name] ?: "GET"
-        val params = handlerParameters(src, mask, types, end).mapNotNull(::springParam)
+        val params = handlerParameters(src, mask, types, end).mapNotNull { springParam(src, mask, types, it) }
         routes +=
             Route(
                 method,
@@ -329,7 +334,7 @@ private fun handlerParameters(
     mask: BooleanArray,
     types: IntArray,
     from: Int,
-): List<String> {
+): List<IntRange> {
     var i = from
     while (i < src.length) {
         if (mask[i]) {
@@ -340,7 +345,7 @@ private fun handlerParameters(
     }
     while (i < src.length && !(mask[i] && src[i] == '(')) i++
     if (i >= src.length) return emptyList()
-    val params = ArrayList<String>()
+    val params = ArrayList<IntRange>()
     var depth = 0
     var start = i + 1
     while (i < src.length) {
@@ -354,14 +359,14 @@ private fun handlerParameters(
 
                 ')', ']', '}' -> {
                     if (--depth == 0) {
-                        params += src.substring(start, i)
+                        params += start until i
                         break
                     }
                 }
 
                 ',' -> {
                     if (depth == 1) {
-                        params += src.substring(start, i)
+                        params += start until i
                         start = i + 1
                     }
                 }
@@ -369,11 +374,10 @@ private fun handlerParameters(
         }
         i++
     }
-    return params.map { it.trim() }.filter { it.isNotEmpty() }
+    return params.filter { r -> r.any { !src[it].isWhitespace() } }
 }
 
-private val PARAM_ANNOTATION = regex("""@(RequestParam|RequestHeader)\b\s*(?:\(([^)]*)\))?""")
-private val ANY_ANNOTATION = regex("""@[\w.:]+(?:\s*\([^)]*\))?""")
+private val PARAM_ANNOTATION = regex("""@(RequestParam|RequestHeader)\b""")
 private val DECLARATION = regex("""(?s)^(?:\w+\s+)*(\w+)\s*:\s*([^=]+?)\s*(?:=.*)?$""")
 private val NAMED_ARG = regex("""(?:value|name)\s*=\s*"([^"]*)"""")
 private val NOT_REQUIRED = regex("""required\s*=\s*false|defaultValue\s*=""")
@@ -382,10 +386,37 @@ private val NOT_REQUIRED = regex("""required\s*=\s*false|defaultValue\s*=""")
 private val ALL_OF_THEM = regex("""^(?:[\w.]*\.)?(?:Map|MultiValueMap|HttpHeaders)\b""")
 
 /** A `@RequestParam` or `@RequestHeader` parameter: which of the two, its name on the wire and whether it is required. */
-private fun springParam(text: String): Pair<String, RouteParam>? {
-    val annotation = PARAM_ANNOTATION.find(text) ?: return null
-    val args = annotation.groupValues[2]
-    val declaration = DECLARATION.find(ANY_ANNOTATION.replace(text, " ").trim()) ?: return null
+private fun springParam(
+    src: String,
+    mask: BooleanArray,
+    types: IntArray,
+    range: IntRange,
+): Pair<String, RouteParam>? {
+    // Each annotation read to its end: the parameter's mark and its arguments, and what is left the declaration.
+    var annotation: MatchResult? = null
+    var args = ""
+    val rest = StringBuilder()
+    var k = range.first
+    while (k <= range.last) {
+        val end = if (src[k] == '@' && mask[k]) annotationEnd(src, mask, types, k) else k
+        if (end == k) {
+            rest.append(src[k++])
+            continue
+        }
+        PARAM_ANNOTATION.matchAt(src, k)?.let {
+            annotation = it
+            args =
+                src
+                    .substring(it.range.last + 1, end)
+                    .trim()
+                    .removePrefix("(")
+                    .removeSuffix(")")
+        }
+        rest.append(' ')
+        k = end
+    }
+    val mark = annotation ?: return null
+    val declaration = DECLARATION.find(rest.trim()) ?: return null
     val type = declaration.groupValues[2].trim()
     if (ALL_OF_THEM.containsMatchIn(type)) return null
     val name =
@@ -393,5 +424,5 @@ private fun springParam(text: String): Pair<String, RouteParam>? {
             ?: POSITIONAL_PATH.find(args)?.groupValues?.get(1)
             ?: declaration.groupValues[1]
     val required = !NOT_REQUIRED.containsMatchIn(args) && !type.endsWith("?")
-    return annotation.groupValues[1] to RouteParam(name, required)
+    return mark.groupValues[1] to RouteParam(name, required)
 }

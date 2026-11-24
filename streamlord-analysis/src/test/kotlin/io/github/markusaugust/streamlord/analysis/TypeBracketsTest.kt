@@ -72,4 +72,21 @@ class TypeBracketsTest {
         val src = "fun <T : (Int) -> Unit, R> f(r: R) = \"<p>\$r</p>\""
         assertEquals(true, mayBeNull(src, "r", src.indexOf("\$r")))
     }
+
+    @Test
+    fun `a function's return type and type parameters are read past their type brackets`() {
+        for (type in listOf("Map<String, () -> Unit>", "List<List<List<Int>>>", "List<Int>?")) {
+            val src = "fun f(): $type = TODO()\n"
+            assertEquals(listOf(type), fileFacts(src).functions["f"].orEmpty().map { it.type }, type)
+        }
+        val bounded = "fun <T : Comparable<List<T>>> g(x: T): String = \"\"\n"
+        assertEquals(listOf("String"), fileFacts(bounded).functions["g"].orEmpty().map { it.type })
+    }
+
+    @Test
+    fun `a property with type parameters is read past them`() {
+        val src = "val <T : Comparable<T>> T.x: Int get() = 1\nval y: Int = 2\n"
+        val names = fileFacts(src).names
+        assertEquals(listOf(false, true), listOf("x", "y").map { names.containsKey(it) })
+    }
 }
