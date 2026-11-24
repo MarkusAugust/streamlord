@@ -235,7 +235,7 @@ internal fun codeRenamesSignals(
     lex: KotlinLex,
 ): Boolean {
     if (!src.contains("amingStrateg")) return false
-    val own = JSON_NAMING.findAll(src).map { it.range.first..maxOf(it.range.last, matchingParen(src, it.range.last)) }.toList()
+    val own = JSON_NAMING.findAll(src).map { it.range.first..maxOf(it.range.last, closing(src, lex, it.range.last, '(', ')')) }.toList()
     val imports = IMPORT_LINE.findAll(src).map { it.range }.toList()
     return NAMING_STRATEGY.findAll(src).any { m ->
         lex.mask[m.range.first] && own.none { m.range.first in it } && imports.none { m.range.first in it } &&
@@ -306,21 +306,6 @@ internal fun packageOf(
         ?.groupValues
         ?.get(1)
         .orEmpty()
-
-/** The offset of the `)` that closes the `(` at [open], or -1. Nesting only; a parenthesis in a string is rare here. */
-internal fun matchingParen(
-    src: String,
-    open: Int,
-): Int {
-    var depth = 0
-    for (i in open until src.length) {
-        when (src[i]) {
-            '(' -> depth++
-            ')' -> if (--depth == 0) return i
-        }
-    }
-    return -1
-}
 
 /**
  * What the drift check saw, and what it found.

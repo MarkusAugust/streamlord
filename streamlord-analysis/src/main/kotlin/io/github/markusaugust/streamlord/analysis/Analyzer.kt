@@ -703,7 +703,7 @@ public class Analyzer(
             for (arg in site.args) if (src.getOrNull(arg.start) == '{') out += arg.start until arg.end
             if (!site.trailingLambda) continue
             val open = src.indexOf('{', site.closeParen + 1)
-            closingBrace(src, lex, open)?.let { out += open..it }
+            if (open >= 0) closing(src, lex, open, '{', '}').takeIf { it >= 0 }?.let { out += open..it }
         }
         return out
     }
@@ -718,22 +718,6 @@ public class Analyzer(
             outer.start in braces && outer.start < s.start && s.end <= outer.end &&
                 outer.interpolations.any { it.start <= s.start && s.end <= it.end && markedValue(it) != null }
         }
-
-    /** Where the brace that opens at [open] closes, counting the braces of code alone; null when it never does. */
-    private fun closingBrace(
-        src: String,
-        lex: KotlinLex,
-        open: Int,
-    ): Int? {
-        if (open < 0) return null
-        var depth = 0
-        for (k in open until src.length) {
-            if (!lex.mask[k]) continue
-            if (src[k] == '{') depth++
-            if (src[k] == '}' && --depth == 0) return k
-        }
-        return null
-    }
 
     /** The DSL's backend helpers, `get` and `getExpr` and the rest, which take a lambda of FetchOptions. */
     private val backendHelpers: Set<String> =

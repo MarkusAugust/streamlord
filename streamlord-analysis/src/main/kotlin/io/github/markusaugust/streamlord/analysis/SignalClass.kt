@@ -99,7 +99,7 @@ private fun readClasses(
             out += opaque(name)
             continue
         }
-        val closed = codeParen(src, lex, open)
+        val closed = closing(src, lex, open, '(', ')')
         // Still being typed, a signals class's list is what stands before the first blank line: its signals stay known meanwhile.
         val close = closed.takeIf { it >= 0 } ?: if (serializable) BLANK_LINE.find(src, open)?.range?.first ?: src.length else -1
         if (close < 0) {
@@ -167,9 +167,7 @@ private fun constructorOpen(
             }
 
             src.startsWith("@", i) -> {
-                i++
-                while (i < src.length && (src[i].isLetterOrDigit() || src[i] == '_' || src[i] == '.' || src[i] == ':')) i++
-                if (src.startsWith("(", i)) i = matchingParen(src, i).takeIf { it >= 0 }?.plus(1) ?: return null
+                i = fileFacts(src).let { annotationEnd(src, it.code, it.types, i) }.takeIf { it > i } ?: return null
             }
 
             else -> {
@@ -215,7 +213,7 @@ private fun addsNoNames(
         while (i < src.length && src[i].isWhitespace()) i++
     }
     if (!src.startsWith("{", i)) return true
-    val close = codeBrace(src, lex, i)
+    val close = closing(src, lex, i, '{', '}')
     if (close < 0) return false
     val companions =
         COMPANION
@@ -223,7 +221,7 @@ private fun addsNoNames(
             .filter { lex.mask[i + 1 + it.range.first] }
             .map { m ->
                 val open = i + 1 + m.range.last
-                open..codeBrace(src, lex, open).let { if (it < 0) close else it }
+                open..closing(src, lex, open, '{', '}').let { if (it < 0) close else it }
             }.toList()
     return NAMES_IN_BODY.findAll(src.substring(i + 1, close)).none { m ->
         val at = i + 1 + m.range.first
@@ -248,21 +246,8 @@ private fun depths(
     return out
 }
 
-/** The offset of the code `)` that closes the `(` at [open], or -1: a parenthesis in a string or a comment counts for nothing. */
-private fun codeParen(
-    src: String,
-    lex: KotlinLex,
-    open: Int,
-): Int = closing(src, lex, open, '(', ')')
-
-/** The offset of the code `}` that closes the `{` at [open], or -1. */
-private fun codeBrace(
-    src: String,
-    lex: KotlinLex,
-    open: Int,
-): Int = closing(src, lex, open, '{', '}')
-
-private fun closing(
+/** The offset of the [closing] bracket in code that closes the [opening] one at [open], or -1: one in a string or a comment counts for nothing. */
+internal fun closing(
     src: String,
     lex: KotlinLex,
     open: Int,
