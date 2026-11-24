@@ -470,7 +470,7 @@ internal fun collectionShown(
 ): Boolean =
     depth < VALUE_DEPTH &&
         templateValues(value).all { v ->
-            val t = unparen(v.text)
+            val t = v.text
             val cast = CAST.find(t)
             val sum = splitTop(t, "+")
             val call = lastCall(t)
