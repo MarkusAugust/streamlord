@@ -313,9 +313,11 @@ private class Asked(
 
     /** The attribute name at the caret in an HTML string of a Kotlin file, or in the markup of a `+` chain that opens with a tag. */
     fun nameInKotlin(): NameAtCaret? {
-        val html = analyzer.htmlStringAt(text, offset, modules)
+        // A sum is markup whole, as the Kotlin plugin injects it: a later literal of a chain that opens with a tag is in its tag.
+        val chain = analyzer.chainAt(text, offset)
+        val html = analyzer.htmlStringAt(text, offset, modules)?.takeIf { chain == null || chain.start == it.start }
         if (html != null) return if (offset > html.contentStart && offset <= html.contentEnd) nameAtCaret(html, offset, prefix) else null
-        return analyzer.chainAt(text, offset)?.let { nameAtCaret(it, offset, prefix) }
+        return chain?.let { nameAtCaret(it, offset, prefix) }
     }
 
     private fun selectors(

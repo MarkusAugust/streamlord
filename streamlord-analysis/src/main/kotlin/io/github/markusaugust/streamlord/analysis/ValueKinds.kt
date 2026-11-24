@@ -469,8 +469,6 @@ private fun wholeOperand(e: String): Boolean {
     return e.indices.all { d[it] != 0 || OPERAND_CHAR.matchEntire(e[it].toString()) != null }
 }
 
-private val TRIM_CALL = regex("""^\s*\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)\s*$""")
-
 // Lines as `USES_HTML_DSL` reads them: they start after `\n` alone and are indented with spaces and tabs.
 private val USES_ELEMENTS =
     regex(
@@ -500,7 +498,7 @@ private fun htmlLiteral(t: String): Boolean {
     val end = literalEnd(t, at)
     if (end < at + 2 || t[end - 1] != '"') return false
     val rest = t.substring(end)
-    if (rest.isNotBlank() && TRIM_CALL.matchEntire(rest) == null) return false
+    if (rest.isNotBlank() && TRIM_CALL.matchEntire(rest.trim()) == null) return false
     val content = t.substring(minOf(end, at + (if (t.startsWith("\"\"\"", at)) 3 else 1)), end)
     return opensWithTag(content, trimMargin = "trimMargin" in rest)
 }

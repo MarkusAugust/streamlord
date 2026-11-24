@@ -26,6 +26,12 @@ private const val OPERATOR_CHARS = "=!<>&|?:.+-*/%"
 /** How far back the statement a literal stands in is looked for. */
 private const val REACH = 4000
 
+/** Whether a `+` that joins stands at [at] of [src]: not `++` and not `+=`. */
+internal fun plusAt(
+    src: String,
+    at: Int,
+): Boolean = src.getOrNull(at) == '+' && src.getOrNull(at + 1) != '+' && src.getOrNull(at + 1) != '='
+
 /** [mask] is the lexer's: `false` inside literals and comments. */
 internal class Operands(
     private val src: String,
@@ -216,9 +222,6 @@ internal class Operands(
         return end
     }
 
-    /** Whether a `+` that joins stands at [at]: not `++` and not `+=`. */
-    fun plusAt(at: Int): Boolean = ch(at) == '+' && ch(at + 1) != '+' && ch(at + 1) != '='
-
     /**
      * Just past the term of a sum that starts at [from], operands joined with `*`, `/` and `%`, each
      * of which binds tighter than plus; -1 where this cannot read it. With [newlines] a line break
@@ -347,7 +350,7 @@ internal class Operands(
             if (sum < 0) sum = pos
             val op = skip(end, newlines)
             if (op == plus) return Leading(sum, end, true)
-            if (plusAt(op) || (ch(op) == '-' && ch(op + 1).let { it != '-' && it != '=' && it != '>' })) {
+            if (plusAt(src, op) || (ch(op) == '-' && ch(op + 1).let { it != '-' && it != '=' && it != '>' })) {
                 pos = skip(op + 1, true)
                 continue
             }

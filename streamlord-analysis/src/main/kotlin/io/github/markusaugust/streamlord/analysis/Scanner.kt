@@ -149,7 +149,7 @@ private val NAMED_ARG = regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
 internal val OPENS_WITH_BRACE = regex("""^\s*\{""")
 
 /** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
-private val TRIM_CALL = regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
+internal val TRIM_CALL = regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
 
 /** The offset of the first character from [from] that is neither whitespace nor part of a comment. */
 private fun skipTrivia(
@@ -379,18 +379,12 @@ internal fun lexKotlin(src: String): KotlinLex {
 internal const val HTML_LANGUAGE =
     """@(?:[a-z]+:\s*)?(?:org\.intellij\.lang\.annotations\.)?Language\s*\(\s*(?:value\s*=\s*)?"html"\s*(?:,[^()]*)?\)"""
 
-private val HTML_MARKER = regex("""$HTML_LANGUAGE|//\s*language\s*=\s*html\b""", RegexOption.IGNORE_CASE)
-private val PARAMETER_AFTER_MARKER =
-    regex(
-        """^\s*(?:(?:private|protected|internal|public|override|open|final|vararg|crossinline|noinline)\s+)*(?:va[lr]\s+)?[A-Za-z_][A-Za-z0-9_]*\s*:\s*String\??\s*(?:=[^,)]*)?[,)]""",
-    )
-
 /**
- * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, or when IntelliJ's
- * mark stands before it, `@Language("HTML")` on the function or property or a `// language=HTML` comment, which
- * reaches the next literal only, past those of other annotations' arguments. A literal handed straight to a parameter
- * of the file's own function that carries the mark is HTML too, and so is one that is markup by where it stands, in
- * the block of `interpolate` or handed to `Trusted`. No literal of an annotation's arguments is.
+ * Does a string literal hold HTML? Yes when its text opens with a tag, a comment or a doctype, or when IntelliJ's mark
+ * reaches it as the Kotlin plugin reads one ([FileFacts.languageMarks]): `@Language("HTML")` on what it is the value of
+ * or a `// language=HTML` comment before what it stands in. A literal handed straight to a parameter of the file's own
+ * function that carries the mark is HTML too, and so is one that is markup by where it stands, in the block of
+ * `interpolate` or handed to `Trusted`. No literal of an annotation's arguments is.
  */
 public fun isHtmlString(
     src: String,
@@ -399,20 +393,6 @@ public fun isHtmlString(
     val facts = fileFacts(src)
     // An annotation's arguments say something of the code: no literal of them is markup.
     if (facts.inAnnotation(s.start)) return false
-    if (textOpensWithTag(markupView(src, s))) return true
-    if (s.start in facts.htmlArguments || s.start in facts.markupLiterals) return true
-    // A mark reaches the next literal after it, past those of other annotations' arguments.
-    val from = maxOf(0, s.start - 240)
-    val before = src.substring(from, s.start)
-    // `@Language("HTML")` in a comment marks nothing; `// language=HTML` is a comment.
-    val last = HTML_MARKER.findAll(before).lastOrNull { it.value.startsWith("/") || facts.code[from + it.range.first] } ?: return false
-    val after = before.substring(last.range.last + 1)
-    // `fun f(@Language("HTML") html: String? = null, ...)` marks a parameter, not the next literal, behind other
-    // annotations too.
-    val at = from + last.range.last + 1
-    // Annotations and comments read as space: `@Named("x")body` and `@Named("x") /* c */ body` hold a parameter.
-    val bare = CharArray(after.length) { k -> if (facts.inAnnotation(at + k) || !facts.code[at + k]) ' ' else after[k] }.concatToString()
-    if (PARAMETER_AFTER_MARKER.containsMatchIn(bare)) return false
-    // A literal between the mark and this one takes it: a quote in a comment or an annotation's arguments is none.
-    return after.indices.none { after[it] == '"' && !facts.inAnnotation(at + it) && !inComment(src, facts.code, at + it) }
+    return textOpensWithTag(markupView(src, s)) || s.start in facts.htmlArguments || s.start in facts.markupLiterals ||
+        s.start in facts.languageMarks
 }

@@ -65,10 +65,43 @@ class LanguageMarkTest {
     }
 
     @Test
+    fun `the returns on one line are read in time that grows with them`() {
+        var made = 0
+        val returns = { n: Int -> (0 until n).joinToString(" else ") { "if (x == $it) return $it" } }
+        assertGrowsLinearly("returns on one line", 2_000, { n: Int ->
+            "// ${made++}\nfun f(x: Int): Int { ${returns(n)} else return -1 }\n"
+        }) { fileFacts(it) }
+        val texts = { n: Int -> (0 until n).joinToString(" else ") { "if (x == $it) return \"$it\"" } }
+        assertGrowsLinearly("marked returns on one line", 2_000, { n: Int ->
+            "// ${made++}\n@Language(\"HTML\") fun f(x: Int): String { ${texts(n)} else return \"\" }\n"
+        }) { fileFacts(language + it) }
+    }
+
+    @Test
+    fun `blank lines after a mark's annotated line, one long sum and nested blocks are read in time that grows with them`() {
+        var made = 0
+        assertGrowsLinearly("blank lines after an annotation", 2_000, { n: Int ->
+            "// ${made++}\n// language=HTML\n@Foo(1)\n" + "\n".repeat(n) + "val x = \"a\"\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("a sum on one line", 2_000, { n: Int ->
+            "// ${made++}\nval x = " + "\"a\" + ".repeat(n) + "\"a\"\n"
+        }) { fileFacts(it) }
+        assertGrowsLinearly("nested blocks", 500, { n: Int ->
+            "// ${made++}\nfun f(c: Boolean) {\n" + "if (c) {\n\"a\"\n".repeat(n) + "}\n".repeat(n) + "}\n"
+        }) { fileFacts(it) }
+    }
+
+    @Test
     fun `a mark written in a parameter's default marks nothing`() {
         val src = "fun f(example: String = \"\"\"@Language(\"HTML\")\"\"\", title: String) = \"<p>\$example</p>\""
         assertEquals(emptySet(), marked(src, "f"))
         val told = Analyzer().analyzeKotlin(language + src).filter { it.code == IssueCode.UNESCAPED_INTERPOLATION }
         assertEquals(listOf("\$example"), told.map { (language + src).substring(it.start, it.end) })
+    }
+
+    @Test
+    fun `a literal in a marked literal's template is marked, as the Kotlin plugin injects it`() {
+        val src = "@Language(\"HTML\")\nval t = \"Outer <i>\${\"Inner <b>x</b>\"}</i>\"\n"
+        assertEquals(true, src.indexOf("\"Inner") in fileFacts(src).languageMarks)
     }
 }
