@@ -22,7 +22,6 @@ import io.github.markusaugust.streamlord.core.domain.ElementsGuard
 private val SPACED_ACTION = regex("""@([A-Za-z_$][A-Za-z0-9_$]*)(\s+)\(""")
 private val SIGNAL_PREFIX = regex("""\$([A-Za-z_][A-Za-z0-9_.]*)?$""")
 private val ACTION_PREFIX = regex("""@([A-Za-z_][A-Za-z0-9_]*)?$""")
-private val WORD_CHAR = regex("""\w""")
 
 /** A `${` with a brace inside before it closes: what keeps the client's pattern from taking a template literal whole. */
 private val BRACED_INTERPOLATION = regex("""\$\{[^{}]*\{""")
@@ -397,7 +396,7 @@ internal fun jsRegions(text: String): ByteArray {
                 i = j
             }
 
-            c.isJsWhitespace() -> {
+            isJsSpace(c) -> {
                 lastWord = word
                 i++
             }
@@ -410,11 +409,6 @@ internal fun jsRegions(text: String): ByteArray {
     }
     return kind
 }
-
-/** The characters `String.prototype.trim` removes: WhiteSpace and LineTerminator, which `Char.isWhitespace` is not. */
-private const val JS_WHITESPACE = "\t\n\u000B\u000C\r \u00A0\u1680\u2028\u2029\u202F\u205F\u3000\uFEFF"
-
-internal fun Char.isJsWhitespace(): Boolean = this in JS_WHITESPACE || this in '\u2000'..'\u200A'
 
 private const val JS_SPACE = """[\t\n\u000B\u000C\r \u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]"""
 
@@ -500,7 +494,7 @@ internal fun clientSignalReads(text: String): List<Rewrite> {
  * Whether [trimmed] opens with `return` and white space, the client's `/^return\s/`: a function
  * body the author wrote, which `genRx` compiles as it stands and does not split into statements.
  */
-internal fun opensWithReturn(trimmed: String): Boolean = trimmed.startsWith("return") && trimmed.getOrNull(6)?.isJsWhitespace() == true
+internal fun opensWithReturn(trimmed: String): Boolean = trimmed.startsWith("return") && trimmed.getOrNull(6)?.let(::isJsSpace) == true
 
 /**
  * The function body Datastar compiles from [text] (engine.ts, `genRx`, in 1.0.5). The text is
@@ -532,10 +526,10 @@ internal fun clientScript(
         js.append(piece)
     }
 
-    fun jsTrim(s: String): String = s.trim { it.isJsWhitespace() }
-    val start = text.indexOfFirst { !it.isJsWhitespace() }
+    fun jsTrim(s: String): String = s.trim(::isJsSpace)
+    val start = text.indexOfFirst { !isJsSpace(it) }
     if (start < 0) return ClientScript("", intArrayOf(text.length))
-    val end = text.indexOfLast { !it.isJsWhitespace() } + 1
+    val end = text.indexOfLast { !isJsSpace(it) } + 1
     val trimmed = text.substring(start, end)
     val statements = if (returnsValue && !opensWithReturn(trimmed)) clientStatements(trimmed) else emptyList()
     if (statements.isEmpty()) {
@@ -561,9 +555,9 @@ internal fun clientScript(
 
 /** The offsets of the `;` at which the client splits a value-returning [text] into statements. */
 private fun statementSplits(text: String): Set<Int> {
-    val start = text.indexOfFirst { !it.isJsWhitespace() }
+    val start = text.indexOfFirst { !isJsSpace(it) }
     if (start < 0) return emptySet()
-    val trimmed = text.substring(start, text.indexOfLast { !it.isJsWhitespace() } + 1)
+    val trimmed = text.substring(start, text.indexOfLast { !isJsSpace(it) } + 1)
     val covered = BooleanArray(trimmed.length)
     for (r in clientStatements(trimmed)) for (k in r) covered[k] = true
     return trimmed.indices
@@ -891,7 +885,7 @@ public class ExpressionValidator(
                     (awaitEnd until err.pos).none { rewritten.js[it] == '\n' || rewritten.js[it] == '\r' } &&
                     rewritten.js
                         .substring(0, err.after)
-                        .trimEnd { it.isJsWhitespace() }
+                        .trimEnd(::isJsSpace)
                         .lastOrNull() != '.' &&
                     parsed.finished.none { it.type == JsKind.MEMBER && it.end == awaitEnd }
             val awaitAt = if (awaited) toText(err.after) else null
@@ -961,7 +955,7 @@ public class ExpressionValidator(
                     )
                 continue
             }
-            if (WORD_CHAR.matchEntire(next.toString()) != null) {
+            if (WORD_CHAR_CLASS.matchEntire(next.toString()) != null) {
                 val written = CLIENT_SIGNAL.matchAt(js, p)?.value ?: "$"
                 val run = rewritten.runs.firstOrNull { p in it.range }
                 val why =
@@ -1005,7 +999,7 @@ public class ExpressionValidator(
         }
 
         // A `;` inside brackets splits the expression all the same, and what it computed is lost.
-        if (returnsValue == true && err == null && !opensWithReturn(text.trim { it.isJsWhitespace() })) issues += statementSplitIssue(text)
+        if (returnsValue == true && err == null && !opensWithReturn(text.trim(::isJsSpace))) issues += statementSplitIssue(text)
         // An object under `filterSignals`, which the client reads with the same `toRegExp`: its properties are known for
         // its own once it is closed.
         val filters = parsed.finished.filter { it.key?.name == "filterSignals" && it.inner?.type == JsKind.OBJECT }
@@ -1231,10 +1225,10 @@ private fun updatedBefore(
     at: Int,
 ): Boolean {
     var k = at
-    while (k > 0 && text[k - 1].isJsWhitespace()) k--
+    while (k > 0 && isJsSpace(text[k - 1])) k--
     if (k < 2 || !(text.startsWith("++", k - 2) || text.startsWith("--", k - 2))) return false
     var b = k - 2
-    while (b > 0 && text[b - 1].isJsWhitespace()) b--
+    while (b > 0 && isJsSpace(text[b - 1])) b--
     val before = text.getOrNull(b - 1)
     return !(before.isJsNamePart() || before == ')' || before == ']')
 }

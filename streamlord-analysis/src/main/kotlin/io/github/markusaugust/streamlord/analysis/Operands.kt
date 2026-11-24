@@ -76,23 +76,7 @@ internal class Operands(
         return k
     }
 
-    /** The bracket that matches the one at [at], after it or before it, strings and comments stepped over; -1 where none does. */
-    fun matching(at: Int): Int {
-        val step = if (src[at] in "([{") 1 else -1
-        var depth = 0
-        var k = at
-        while (k in src.indices) {
-            if (mask[k]) {
-                when (src[k]) {
-                    '(', '[', '{' -> depth += step
-                    ')', ']', '}' -> depth -= step
-                }
-                if (depth == 0) return k
-            }
-            k += step
-        }
-        return -1
-    }
+    fun matching(at: Int): Int = matching(src, mask, at)
 
     /** Just past the bracket that closes the one at [open], or -1. */
     private fun closed(open: Int): Int = matching(open).let { if (it < 0) -1 else it + 1 }

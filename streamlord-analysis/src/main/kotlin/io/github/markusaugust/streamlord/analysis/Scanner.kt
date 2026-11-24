@@ -56,6 +56,34 @@ public data class CallSite(
     }
 }
 
+/**
+ * The bracket that matches the one at [at] in [src], after it or before it, what [mask] says is no code stepped over; -1
+ * where none does. With [alone] only brackets of its own kind count, so one of another kind left open while it is typed
+ * carries it no further: a lambda's braces around `println(`.
+ */
+internal fun matching(
+    src: String,
+    mask: BooleanArray,
+    at: Int,
+    alone: Boolean = false,
+): Int {
+    val step = if (src[at] in "([{") 1 else -1
+    val kind = "([{)]}".indexOf(src[at]) % 3
+    var depth = 0
+    var k = at
+    while (k in src.indices) {
+        if (mask[k] && (!alone || "([{)]}".indexOf(src[k]) % 3 == kind)) {
+            when (src[k]) {
+                '(', '[', '{' -> depth += step
+                ')', ']', '}' -> depth -= step
+            }
+            if (depth == 0) return k
+        }
+        k += step
+    }
+    return -1
+}
+
 /** The string literals of a Kotlin file and a mask of which offsets are code. */
 public class KotlinLex internal constructor(
     public val strings: List<KotlinString>,
@@ -118,7 +146,7 @@ internal fun List<IntRange>.around(at: Int): IntRange? = lastOrNull { at in it }
 
 private val FUN_BEFORE = regex("""\bfun\s+(?:[A-Za-z_][A-Za-z0-9_<>.,?* ]*\.)?$""")
 private val NAMED_ARG = regex("""^([A-Za-z_][A-Za-z0-9_]*)\s*=(?!=)""")
-private val TRAILING_LAMBDA = regex("""^\s*\{""")
+internal val OPENS_WITH_BRACE = regex("""^\s*\{""")
 
 /** `.trimIndent()` and `.trimMargin()` change the indentation of a literal, not what it says. */
 private val TRIM_CALL = regex("""\.\s*trim(?:Indent|Margin)\s*\(\s*(?:"[^"\\\n]*"\s*)?\)""")
@@ -236,7 +264,7 @@ private fun parseArgs(
                     if (c != ')') return null
                     finish(i)
                     val after = src.substring(i + 1, minOf(src.length, i + 40))
-                    return ParsedArgs(i, args, TRAILING_LAMBDA.containsMatchIn(after))
+                    return ParsedArgs(i, args, OPENS_WITH_BRACE.containsMatchIn(after))
                 }
                 depth--
             }

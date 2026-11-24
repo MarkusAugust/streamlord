@@ -8,6 +8,7 @@ import io.github.markusaugust.streamlord.core.json.JsonObject
 import io.github.markusaugust.streamlord.core.json.JsonParser
 import io.github.markusaugust.streamlord.core.json.JsonString
 import io.github.markusaugust.streamlord.core.json.JsonWriter
+import io.github.markusaugust.streamlord.core.json.toPrettyJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -162,5 +163,27 @@ class JsonTest {
     fun `toKotlin yields plain collections`() {
         val k = JsonParser.parseObject("""{"a":1,"b":[true,null],"c":{"d":"e"},"f":1.5}""").toKotlin()
         assertEquals(mapOf("a" to 1L, "b" to listOf(true, null), "c" to mapOf("d" to "e"), "f" to 1.5), k)
+    }
+
+    @Test
+    fun `toPrettyJson indents two spaces a level and writes an empty object or array as compact`() {
+        val v = JsonParser.parseObject("""{"a":1,"b":[true,null],"c":{},"d":[],"e":{"f":"g"}}""")
+        val expected =
+            listOf(
+                "{",
+                "  \"a\": 1,",
+                "  \"b\": [",
+                "    true,",
+                "    null",
+                "  ],",
+                "  \"c\": {},",
+                "  \"d\": [],",
+                "  \"e\": {",
+                "    \"f\": \"g\"",
+                "  }",
+                "}",
+            ).joinToString("\n")
+        assertEquals(expected, v.toPrettyJson())
+        assertEquals("\"x\"", JsonString("x").toPrettyJson())
     }
 }

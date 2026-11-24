@@ -857,7 +857,7 @@ private fun namedMarkup(
     depth: Int,
     editor: Editor?,
 ): Boolean {
-    val name = KOTLIN_NAME_AT.matchAt(text, at)?.value ?: return false
+    val name = KOTLIN_NAME.matchAt(text, at)?.value ?: return false
     facts.functions[name].orEmpty().firstOrNull { it.open >= at && text.substring(at + name.length, it.open).isBlank() }?.let {
         return functionMarkup(text, it, depth, sdk, editor)
     }
@@ -866,8 +866,6 @@ private fun namedMarkup(
     val init = valueOf(text, d) ?: return false
     return markupValue(text, init.text, d.at, depth + 1, sdk, editor?.elsewhere(init.start, init.end))
 }
-
-private val KOTLIN_NAME_AT = regex("""[\p{L}_][\p{L}\p{Nd}_]*""")
 
 /** The calls whose result is the text they were given, changed but no more markup than it was. */
 private val TEXT_TRANSFORMS =

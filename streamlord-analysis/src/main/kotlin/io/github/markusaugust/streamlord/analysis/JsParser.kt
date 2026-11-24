@@ -2371,20 +2371,11 @@ private class Parser(
     }
 
     private fun skipSpace() {
-        while (pos < src.length) {
-            val c = src[pos]
-            if (isJsSpace(c)) {
-                pos++
-            } else if (c == '/' && src.getOrNull(pos + 1) == '/') {
-                skipLineComment(2)
-            } else if (c == '/' && src.getOrNull(pos + 1) == '*') {
-                pos += 2
-                val close = src.indexOf("*/", pos)
-                if (close < 0) raise(pos - 2, "Unterminated comment")
-                pos = close + 2
-            } else {
-                return
-            }
+        pos = skipBlank(pos)
+        // skipBlank stops at a comment that never closes, which is an error here.
+        if (src.startsWith("/*", pos)) {
+            pos += 2
+            raise(pos - 2, "Unterminated comment")
         }
     }
 

@@ -862,6 +862,10 @@ public abstract interface class io/github/markusaugust/streamlord/core/json/Json
 	public abstract fun getName ()Ljava/lang/String;
 }
 
+public final class io/github/markusaugust/streamlord/core/json/JsonWriterKt {
+	public static final fun toPrettyJson (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Ljava/lang/String;
+}
+
 public final class io/github/markusaugust/streamlord/core/json/SignalPatchException : java/lang/IllegalArgumentException {
 	public fun <init> (Ljava/lang/String;Lio/github/markusaugust/streamlord/core/json/JsonObject;Z)V
 	public final fun getRefused ()Z

@@ -44,8 +44,6 @@ internal val PAIR_NAMING: Set<String> =
 /** Every call this check reads. */
 internal val SIGNAL_NAMING_CALLS: Set<String> = NAMING_HELPERS + EXPRESSION_HELPERS + PAIR_NAMING + removalCallNames
 
-private val OBJECT_START = regex("""^\s*[{\[]""")
-
 /** The issues of [site], a call in [SIGNAL_NAMING_CALLS], for each signal name in it that holds a hyphen. */
 internal fun signalNameHyphenIssues(
     site: CallSite,
@@ -76,7 +74,7 @@ internal fun signalNameHyphenIssues(
             first?.string?.takeIf {
                 when (site.name) {
                     KEYED_OR_OBJECT -> {
-                        !OBJECT_START.containsMatchIn(it.text) &&
+                        !OPENS_OBJECT_OR_ARRAY.containsMatchIn(it.text) &&
                             (site.named("expression") != null || secondArgument(positional.getOrNull(1), lex) == SecondArgument.EXPRESSION)
                     }
 

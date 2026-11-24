@@ -182,6 +182,14 @@ class JacksonSignalNamesTest {
     }
 
     @Test
+    fun `a JsonNaming in a comment hides no naming strategy in the code after it`() {
+        val src =
+            "// see @JsonNaming(\n" +
+                "val m = mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)\nval s = \")\"\n"
+        assertEquals(true, codeRenamesSignals(src, lexKotlin(src)))
+    }
+
+    @Test
     fun `a naming strategy of something other than a codec renames no signal`() {
         val db = mapOf("src/main/kotlin/app/Db.kt" to "package app\n\nval cfg = DatabaseConfig { namingStrategy = SnakeCase }\n")
         assertEquals(listOf("list.html: unknown-signal '\$query'"), pageOf("data class F(val a: String = \"\")", "a", "query", others = db))
