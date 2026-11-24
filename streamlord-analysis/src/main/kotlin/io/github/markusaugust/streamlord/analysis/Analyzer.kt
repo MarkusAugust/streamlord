@@ -417,7 +417,7 @@ public class Analyzer(
             ) {
                 issues += eventArgumentIssues(site, null, eventCalls, opts.prefix)
             }
-            issues += checkKeyCaseSite(site, src, opts.prefix)
+            issues += checkKeyCaseSite(site, src, lex, opts.prefix)
             issues += modifierLambdaIssues(site, src, lex)
             // The literals of a `+` chain handed to the site are judged there, as one string; the arguments it does not read are free.
             for (judged in judgedStrings(site, src, lex)) {
@@ -1313,6 +1313,7 @@ public class Analyzer(
     private fun checkKeyCaseSite(
         site: CallSite,
         src: String,
+        lex: KotlinLex,
         prefix: String,
     ): List<Issue> {
         val spec = catalog.attributesByKotlin[site.name] ?: return emptyList()
@@ -1322,7 +1323,7 @@ public class Analyzer(
         // (dataOn, dataSignals, dataClass, ...) and the two Pro helpers that take a key and no
         // expression. dataOnClick("expr") passes an expression, never a key.
         val expr = catalog.expressionCallSites[site.name]
-        if (site.name in attributeNameHelpers) return attributeNameIssues(site, spec, src)
+        if (site.name in attributeNameHelpers) return attributeNameIssues(site, spec, src, lex)
         if (if (expr != null) expr.arg == 0 else site.name !in keyOnlyHelpers) return emptyList()
         val positional = site.positional
         val namedKey = KEY_PARAMETERS.firstNotNullOfOrNull { site.named(it) }?.string
@@ -1348,7 +1349,7 @@ public class Analyzer(
         if (signalKey && '-' in name) return emptyList()
         // `case = Case.X`, a positional `Case.X` (dataClass("name", "x", Case.CAMEL)) or `case = Case.X` in the trailing lambda.
         val named = site.args.firstOrNull { it.named == "case" || (it.named == null && CASE_ARG.matchEntire(it.text) != null) }?.text
-        val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src))
+        val explicit = if (named != null) CASE_VALUE.find(named) else CASE_IN_LAMBDA.find(modifiersLambda(site, src, lex))
         val explicitCase = explicit?.groupValues?.get(1)?.lowercase()
         val capital = HAS_CAPITAL.containsMatchIn(name)
         val wire = if (capital) wireKey(name, spec.keyCase, explicitCase) else name + (explicitCase?.let { "__case.$it" } ?: "")
@@ -1356,7 +1357,7 @@ public class Analyzer(
         if (wire != null) {
             // The key itself, not what comes before the first __: in b___case.pascal that is b.
             val keyPart = if (capital) ClientCasing.kebab(name) else name
-            val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src)) "__" else ""
+            val modifiers = wire.removePrefix(keyPart) + if (addsModifiers(site, spec, src, lex)) "__" else ""
             AttributeKeys.runsIntoModifiers(keyPart, modifiers)?.let { return listOf(refusedKey(spec, key, name, it)) }
         }
         val mixed = if (spec.name == "on" && explicitCase == null && !capital) catalog.mixedCaseDomEvent(name) else null
@@ -1432,12 +1433,13 @@ public class Analyzer(
         site: CallSite,
         spec: AttributeSpec,
         src: String,
+        lex: KotlinLex,
     ): Boolean {
         fun on(parameter: String) = (site.named(parameter) ?: site.positional.getOrNull(2))?.text?.trim() == "true"
         if (site.name == KEYED_OR_OBJECT && on("ifMissing")) return true
         if (site.name == "dataPersist" && on("session")) return true
         val names = spec.modifiers.map { it.name.lowercase() }.filter { it != "case" }
-        return LAMBDA_ASSIGNMENT.findAll(modifiersLambda(site, src).replace(KOTLIN_STRING, "\"\"")).any { m ->
+        return LAMBDA_ASSIGNMENT.findAll(modifiersLambda(site, src, lex).replace(KOTLIN_STRING, "\"\"")).any { m ->
             val property = m.groupValues[1].lowercase()
             val value = m.groupValues[2].trim()
             value != "false" && value != "null" && names.any { property.startsWith(it) }
@@ -1448,15 +1450,16 @@ public class Analyzer(
     private fun modifiersLambda(
         site: CallSite,
         src: String,
-    ): String = modifiersLambdaAt(site, src).second
+        lex: KotlinLex,
+    ): String = modifiersLambdaAt(site, src, lex).second
 
     /** [modifiersLambda] and where it starts in [src]. */
     private fun modifiersLambdaAt(
         site: CallSite,
         src: String,
+        lex: KotlinLex,
     ): Pair<Int, String> {
-        val trailing = trailingLambdaText(site, src)
-        if (trailing.isNotEmpty()) return src.indexOf('{', site.closeParen + 1) to trailing
+        trailingLambda(site, src, lex)?.let { return it.first to src.substring(it.first, it.last + 1) }
         val arg = site.named("modifiers") ?: site.positional.firstOrNull { it.text.trimStart().startsWith("{") } ?: return 0 to ""
         return arg.start to arg.text
     }
@@ -1472,7 +1475,7 @@ public class Analyzer(
         lex: KotlinLex,
     ): List<Issue> {
         if (site.name !in catalog.attributesByKotlin) return emptyList()
-        val (start, lambda) = modifiersLambdaAt(site, src)
+        val (start, lambda) = modifiersLambdaAt(site, src, lex)
         if (lambda.isEmpty()) return emptyList()
         // Strings and comments blanked where they stand, so an offset in the lambda is one in the source.
         val code = CharArray(lambda.length) { i -> if (lex.mask[start + i] || lambda[i] == '\n') lambda[i] else ' ' }.concatToString()
@@ -1545,6 +1548,7 @@ public class Analyzer(
         site: CallSite,
         spec: AttributeSpec,
         src: String,
+        lex: KotlinLex,
     ): List<Issue> {
         // The key form takes the name and an expression; one positional string is the object form.
         // A name given by name is the name, literal or not: no positional argument stands in for it.
@@ -1555,7 +1559,7 @@ public class Analyzer(
         if (key.interpolations.isNotEmpty() || OPENS_OBJECT_OR_ARRAY.containsMatchIn(name)) return emptyList()
         AttributeKeys.nameProblem(name)?.let { return listOf(refusedKey(spec, key, name, it)) }
         if (!HAS_CAPITAL.containsMatchIn(name)) {
-            val modifiers = if (addsModifiers(site, spec, src)) "__" else ""
+            val modifiers = if (addsModifiers(site, spec, src, lex)) "__" else ""
             return listOfNotNull(AttributeKeys.runsIntoModifiers(name, modifiers)?.let { refusedKey(spec, key, name, it) })
         }
         val reason = AttributeKeys.capitalIn(name, site.name) ?: return emptyList()
@@ -1575,12 +1579,6 @@ public class Analyzer(
             ),
         )
     }
-
-    /** The text of the trailing lambda `{ ... }` after a call, braces balanced; empty when there is none. */
-    private fun trailingLambdaText(
-        site: CallSite,
-        src: String,
-    ): String = trailingLambda(site, src, lex(src))?.let { src.substring(it.first, it.last + 1) } ?: ""
 
     private fun checkScriptSite(
         site: CallSite,

@@ -54,7 +54,9 @@ All notable changes to Streamlord are recorded here. The format follows
   `List<List<List<Int>>>`, so the values it returns are read as Kotlin's parser reads them. A Spring
   handler parameter's annotation is read to its end, `@RequestParam(defaultValue = ")") q: String`
   (#343). A `@JsonNaming` in a comment no longer hides a naming strategy in the code, a modifiers lambda is
-  read past a brace in a string or a comment, and a constructor's annotations are read to their end.
+  read past a brace in a string or a comment, a constructor's annotations are read to their end, and a
+  backend action's options lambda still being typed, `post("/x") { payloadExpr = "1"` with no closing brace,
+  has its options read.
 - A value in a literal handed to `Trusted`, `Trusted("Hi <i>$name</i>")`, is told what Trusted does
   with it: it vouches for all of its text, the value too. The advice is to build that markup with
   `interpolate { }` and mark the value, which the fix does, `Trusted(interpolate { ... }.text)`, and
