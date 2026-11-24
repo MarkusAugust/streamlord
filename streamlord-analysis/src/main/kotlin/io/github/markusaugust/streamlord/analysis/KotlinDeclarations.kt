@@ -92,7 +92,7 @@ internal class FileFacts(
     }
 
     /** Each annotation, `@Deprecated("<b>x</b>")`, to its end: its arguments say something of the code and hold no markup. */
-    private val annotationArguments: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    private val annotations: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val out = ArrayList<IntRange>()
         var at = src.indexOf('@')
         while (at >= 0) {
@@ -105,10 +105,10 @@ internal class FileFacts(
         out
     }
 
-    /** Whether [at] stands in an annotation's arguments. */
+    /** Whether [at] stands in an annotation: its name, its type arguments or its arguments. */
     fun inAnnotation(at: Int): Boolean {
         val k =
-            annotationArguments.binarySearch {
+            annotations.binarySearch {
                 if (it.last < at) {
                     -1
                 } else if (it.first > at) {
@@ -1115,12 +1115,12 @@ private val QUOTED = regex("`[^`\n]+`")
 // A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
 private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
 
+/** The words a declaration begins with after its modifiers. */
+private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
+
 // A use-site target's colon may have blanks after it, but no declaration's word: `@field:` alone is being typed.
 private val ANNOTATION =
-    regex("""@(?:[a-z]+:\s*(?!(?:va[lr]|fun|class|interface|object)\b))?""" + """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
-
-/** The words a modifier declares something with, on its line. */
-private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
+    regex("""@(?:[a-z]+:\s*(?!(?:${DECLARES.joinToString("|")})\b))?""" + """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
 
 /** Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none is. */
 internal fun annotationEnd(
@@ -1137,17 +1137,20 @@ internal fun annotationEnd(
     val depth = IntArray(3)
     // Past 5,000 characters of code an annotation is one left open; a long literal in it, a query, counts for nothing.
     var budget = if (src.getOrNull(open) == '(' || open < name) 5_000 else 0
+    var arrow = false
     var k = open - 1
     while (++k < src.length && budget > 0) {
         if (code[k]) budget--
         if (code[k] && src[k] in "([{") depth["([{".indexOf(src[k])]++
+        if (code[k] && src.startsWith("->", k) && depth.sum() == 1) arrow = true
         val closes = if (code[k]) ")]}".indexOf(src[k]) else -1
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
-        // `@Composable () -> Unit`: the brackets after a blank are a function type's where an arrow follows them.
+        // `@Composable () -> Unit`, `@Composable (() -> Unit)?`: brackets after a blank are a type's where an arrow
+        // follows them or stands in them.
         if (closes >= 0 && depth.sum() == 0) {
             val next = (k + 1 until src.length).firstOrNull { !src[it].isWhitespace() } ?: src.length
-            return if (open > name && src.startsWith("->", next)) name else k + 1
+            return if (open > name && (arrow || src.startsWith("->", next))) name else k + 1
         }
         // An annotation first on its line is past an annotation left open; `@A(@B 1)` annotates a value, and `this@A` names a label.
         if (k > open && src[k] == '@' && code[k] && firstOnLine(src, k)) break
@@ -1462,7 +1465,7 @@ private fun declarations(
 
     val breaks = LineBreaks(src, code, comments, types)
 
-    /** Whether a declaration's word follows [at] on its line, past words and annotations, twelve at most: `private @A<B> val`. */
+    /** Whether a declaration's word follows [at] past words and annotations, twelve at most: `private @A<B> val`. */
     fun declaresAfter(at: Int): Boolean {
         var k = at
         repeat(13) {

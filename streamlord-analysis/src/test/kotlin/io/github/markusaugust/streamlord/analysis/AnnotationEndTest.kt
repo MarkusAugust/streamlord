@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class AnnotationEndTest {
     @Test
     fun `a file annotation may have blanks before its name and its arguments`() {
-        for (header in listOf("@file: JvmName(\"X\")", "@file:JvmName (\"X\")", "@file:JvmName\t(\"X\")")) {
+        for (header in listOf("@file: JvmName(\"X\")", "@file:JvmName (\"X\")", "@file:JvmName\t(\"X\")", "@file:")) {
             val src = "$header\n\nfun f() = 1\n"
             val edit = importEdits(src, "a.b", "C").single()
             assertEquals(header.length, edit.start, header)
@@ -16,7 +16,12 @@ class AnnotationEndTest {
 
     @Test
     fun `an annotated function type's brackets are the type's, not the annotation's arguments`() {
-        for (type in listOf("@Composable () -> Unit", "@Composable (Int) -> String")) {
+        for (type in listOf(
+            "@Composable () -> Unit",
+            "@Composable (Int) -> String",
+            "@Composable (() -> Unit)?",
+            "@Composable (suspend () -> Unit)?",
+        )) {
             val src = "fun f(content: $type, s: String) = 1\n"
             val at = src.indexOf('@')
             val facts = fileFacts(src)

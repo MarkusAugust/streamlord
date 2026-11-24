@@ -616,7 +616,8 @@ private fun fileHeaderEnd(
         while (k < src.length && isSpace(src[k])) k++
         if (k >= src.length) return end
         if (code[k] && src.startsWith("@file:", k)) {
-            k = annotationEnd(src, code, types, k)
+            // `@file:` alone, being typed, ends past its colon.
+            k = maxOf(annotationEnd(src, code, types, k), k + 6)
             end = k
             continue
         }
