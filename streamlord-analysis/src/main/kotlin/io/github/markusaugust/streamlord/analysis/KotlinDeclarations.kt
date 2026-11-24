@@ -1104,7 +1104,7 @@ private val UNNAMED =
 private val RECEIVER_DOT = regex("""\s*\??\s*\.""")
 
 /** The words that may stand before a declaration, each with what it says of it. */
-private val MODIFIER_WORDS: Map<String, Int> =
+internal val MODIFIER_WORDS: Map<String, Int> =
     "public protected internal final lateinit inline suspend tailrec operator infix external data enum annotation inner value actual expect"
         .split(" ")
         .associateWith { 0 } + listOf("open", "abstract", "sealed").associateWith { EXTENDED } +
@@ -1124,10 +1124,10 @@ private val HARD_KEYWORDS =
         .split(' ')
 
 // A use-site target's colon may have blanks and line breaks after it, but never a hard keyword, and a name is never
-// followed by a colon: `@field:` alone is no annotation while it is being typed.
+// followed by a colon: `@field:` before `val` is no annotation.
 private val ANNOTATION =
     regex(
-        """@(?:[a-z]+:\s*)?(?!(?:${HARD_KEYWORDS.joinToString("|")})\b)""" +
+        """@(?:[a-z]+:\s*)?(?!(?:${HARD_KEYWORDS.joinToString("|")})(?![\p{L}\p{Nd}_]))""" +
             """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?(?![\p{L}\p{Nd}_]|\s*:))""",
     )
 

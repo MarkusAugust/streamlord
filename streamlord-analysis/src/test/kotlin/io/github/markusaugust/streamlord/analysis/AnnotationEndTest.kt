@@ -32,7 +32,7 @@ class AnnotationEndTest {
     }
 
     @Test
-    fun `a use-site target with nothing after it on its line leaves the next line's declaration alone`() {
+    fun `a use-site target before a hard keyword on the next line is no annotation, and leaves the declaration alone`() {
         val src = "class A {\n    @field:\n    val x = 1\n    @get:\n    fun f(s: String) = 1\n}\n"
         val facts = fileFacts(src)
         assertEquals(listOf(true, true), listOf("x", "s").map { facts.names.containsKey(it) })
@@ -48,13 +48,24 @@ class AnnotationEndTest {
     }
 
     @Test
-    fun `an @file target being typed ends past its colon, whatever the next line starts with`() {
+    fun `an @file target being typed ends past its colon, and one with its name on the next line is read to its end`() {
         for (next in listOf("private fun f() = 1", "typealias X = Int", "data class D(val a: Int)", "fun g() = 1")) {
             val src = "@file:\n\n$next\n"
             assertEquals(6, importEdits(src, "a.b", "C").single().start, next)
         }
+        val named = "@file:\nJvmName(\"X\")\n\nfun f() = 1\n"
+        assertEquals(named.indexOf("\n\nfun"), importEdits(named, "a.b", "C").single().start)
         val facts = fileFacts("class A {\n    @get:\n    typealias\n}\n")
         val at = "class A {\n    ".length
         assertEquals(at, annotationEnd("class A {\n    @get:\n    typealias\n}\n", facts.code, facts.types, at))
+    }
+
+    @Test
+    fun `an annotation's name may begin with a hard keyword and go on in any letter`() {
+        for (name in listOf("forØkt", "inÅ", "doÆ")) {
+            val src = "@$name(\"x\") val a = 1\n"
+            val facts = fileFacts(src)
+            assertEquals(src.indexOf(" val"), annotationEnd(src, facts.code, facts.types, 0), name)
+        }
     }
 }
