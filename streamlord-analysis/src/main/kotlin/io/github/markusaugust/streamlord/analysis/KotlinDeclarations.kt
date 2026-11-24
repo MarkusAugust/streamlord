@@ -1115,12 +1115,21 @@ private val QUOTED = regex("`[^`\n]+`")
 // A part of an annotation's name may be in backticks, `` @`A` `` or `` @a.`b` ``.
 private const val ANNOTATION_PART = """(?:[\p{L}_][\p{L}\p{Nd}_]*|`[^`\n]+`)"""
 
-/** The words a declaration begins with after its modifiers. */
+/** The words a modifier may declare a property, a function or a class with, past annotations on its line. */
 private val DECLARES = setOf("val", "var", "fun", "class", "interface", "object")
 
-// A use-site target's colon may have blanks after it, but no declaration's word: `@field:` alone is being typed.
+/** Kotlin's hard keywords, which no annotation's name can be. */
+private val HARD_KEYWORDS =
+    "as break class continue do else false for fun if in interface is null object package return super this throw true try typealias typeof val var when while"
+        .split(' ')
+
+// A use-site target's colon may have blanks and line breaks after it, but never a hard keyword, and a name is never
+// followed by a colon: `@field:` alone is no annotation while it is being typed.
 private val ANNOTATION =
-    regex("""@(?:[a-z]+:\s*(?!(?:${DECLARES.joinToString("|")})\b))?""" + """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?)""")
+    regex(
+        """@(?:[a-z]+:\s*)?(?!(?:${HARD_KEYWORDS.joinToString("|")})\b)""" +
+            """(?:\[|$ANNOTATION_PART(?:\.$ANNOTATION_PART)*\.?(?![\p{L}\p{Nd}_]|\s*:))""",
+    )
 
 /** Just past the annotation written at [at], its type arguments and its arguments too where they close, or [at] where none is. */
 internal fun annotationEnd(
@@ -1147,7 +1156,7 @@ internal fun annotationEnd(
         // A bracket that closes none of its kind is past an annotation left open.
         if (closes >= 0 && --depth[closes] < 0) break
         // `@Composable () -> Unit`, `@Composable (() -> Unit)?`: brackets after a blank are a type's where an arrow
-        // follows them or stands in them.
+        // follows them or stands at their first depth.
         if (closes >= 0 && depth.sum() == 0) {
             val next = (k + 1 until src.length).firstOrNull { !src[it].isWhitespace() } ?: src.length
             return if (open > name && (arrow || src.startsWith("->", next))) name else k + 1

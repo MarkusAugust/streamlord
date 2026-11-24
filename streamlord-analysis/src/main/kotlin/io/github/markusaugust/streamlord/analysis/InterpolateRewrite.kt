@@ -616,8 +616,9 @@ private fun fileHeaderEnd(
         while (k < src.length && isSpace(src[k])) k++
         if (k >= src.length) return end
         if (code[k] && src.startsWith("@file:", k)) {
-            // `@file:` alone, being typed, ends past its colon.
-            k = maxOf(annotationEnd(src, code, types, k), k + 6)
+            // `@file:` with nothing after it on its line is being typed: it ends past its colon, whatever comes next.
+            val line = src.indexOf('\n', k).let { if (it < 0) src.length else it }
+            k = if (src.substring(k + 6, line).isBlank()) k + 6 else maxOf(annotationEnd(src, code, types, k), k + 6)
             end = k
             continue
         }

@@ -46,4 +46,15 @@ class AnnotationEndTest {
         val header = "@file:Suppress(\"\"\"$query\"\"\")\n\nfun g() = 1\n"
         assertEquals(header.indexOf("\n\nfun"), importEdits(header, "a.b", "C").single().start)
     }
+
+    @Test
+    fun `an @file target being typed ends past its colon, whatever the next line starts with`() {
+        for (next in listOf("private fun f() = 1", "typealias X = Int", "data class D(val a: Int)", "fun g() = 1")) {
+            val src = "@file:\n\n$next\n"
+            assertEquals(6, importEdits(src, "a.b", "C").single().start, next)
+        }
+        val facts = fileFacts("class A {\n    @get:\n    typealias\n}\n")
+        val at = "class A {\n    ".length
+        assertEquals(at, annotationEnd("class A {\n    @get:\n    typealias\n}\n", facts.code, facts.types, at))
+    }
 }
