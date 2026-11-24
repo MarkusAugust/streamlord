@@ -686,6 +686,7 @@ public final class io/github/markusaugust/streamlord/core/json/JsonArray : io/gi
 	public fun toJson ()Ljava/lang/String;
 	public synthetic fun toKotlin ()Ljava/lang/Object;
 	public fun toKotlin ()Ljava/util/List;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -701,6 +702,7 @@ public final class io/github/markusaugust/streamlord/core/json/JsonBoolean : io/
 	public fun toJson ()Ljava/lang/String;
 	public fun toKotlin ()Ljava/lang/Boolean;
 	public synthetic fun toKotlin ()Ljava/lang/Object;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -726,6 +728,7 @@ public final class io/github/markusaugust/streamlord/core/json/JsonNull : io/git
 	public fun toJson ()Ljava/lang/String;
 	public synthetic fun toKotlin ()Ljava/lang/Object;
 	public fun toKotlin ()Ljava/lang/Void;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -743,6 +746,7 @@ public final class io/github/markusaugust/streamlord/core/json/JsonNumber : io/g
 	public fun toKotlin ()Ljava/lang/Number;
 	public synthetic fun toKotlin ()Ljava/lang/Object;
 	public final fun toLongOrNull ()Ljava/lang/Long;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -800,6 +804,7 @@ public final class io/github/markusaugust/streamlord/core/json/JsonObject : io/g
 	public fun toJson ()Ljava/lang/String;
 	public synthetic fun toKotlin ()Ljava/lang/Object;
 	public fun toKotlin ()Ljava/util/Map;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 	public final fun values ()Ljava/util/Collection;
 }
@@ -829,16 +834,21 @@ public final class io/github/markusaugust/streamlord/core/json/JsonString : io/g
 	public fun toJson ()Ljava/lang/String;
 	public synthetic fun toKotlin ()Ljava/lang/Object;
 	public fun toKotlin ()Ljava/lang/String;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class io/github/markusaugust/streamlord/core/json/JsonValue {
 	public fun toJson ()Ljava/lang/String;
 	public abstract fun toKotlin ()Ljava/lang/Object;
+	public fun toPrettyJson (Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun toPrettyJson$default (Lio/github/markusaugust/streamlord/core/json/JsonValue;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/json/JsonValue$DefaultImpls {
 	public static fun toJson (Lio/github/markusaugust/streamlord/core/json/JsonValue;)Ljava/lang/String;
+	public static fun toPrettyJson (Lio/github/markusaugust/streamlord/core/json/JsonValue;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun toPrettyJson$default (Lio/github/markusaugust/streamlord/core/json/JsonValue;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
 }
 
 public final class io/github/markusaugust/streamlord/core/json/JsonWriter {
