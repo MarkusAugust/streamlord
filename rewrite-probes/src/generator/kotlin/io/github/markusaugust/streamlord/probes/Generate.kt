@@ -170,6 +170,28 @@ private fun render(
     return out.toString()
 }
 
+/**
+ * Each value of nullable-values.json as a function of the table's parameters that gives whether the compiler types it as one that
+ * may be null, and the list of them with the value's text and what the table says.
+ */
+private fun nullableValues(file: File): String {
+    val table = JsonParser.parseObject(file.readText())
+    val params =
+        table.array("params")!!.objects().joinToString(", ") { p ->
+            "${p.string("name")}: ${p.string("type")} = ${p.string("default")}"
+        }
+    val rows = table.array("values")!!.objects()
+    val suppressed = listOf("UNUSED_PARAMETER", "USELESS_ELVIS", "USELESS_ELVIS_RIGHT_IS_NULL", "UNNECESSARY_SAFE_CALL", "unused", "ktlint")
+    return "@file:Suppress(${suppressed.joinToString(", ") { literal(it) }})\n\npackage $PACKAGE\n\n" +
+        // The value is typed and never run: `q!!` would throw for the defaults.
+        "inline fun <reified T> nullIs(value: () -> T): Boolean = null is T\n\n" +
+        rows.withIndex().joinToString("") { (k, row) -> "fun nullable$k($params): Boolean = nullIs { ${row.string("value")} }\n\n" } +
+        "val NULLABLE_VALUES: List<NullableValue> = listOf(\n" +
+        rows.withIndex().joinToString("") { (k, row) ->
+            "    NullableValue(${literal(row.string("value")!!)}, ${row.boolean("nullable")!!}, nullable$k()),\n"
+        } + ")\n"
+}
+
 fun main(args: Array<String>) {
     val cases = File(args[0])
     val out = File(args[1], PACKAGE.replace('.', '/'))
@@ -184,6 +206,7 @@ fun main(args: Array<String>) {
                 imports.joinToString("") { "import $it\n" } + "\n" + group.joinToString("\n") { render(it.index, it.value) }
         File(out, "Probes$k.kt").writeText(text)
     }
+    File(out, "NullableValues.kt").writeText(nullableValues(File(cases, "nullable-values.json")))
     File(out, "All.kt").writeText(
         "package $PACKAGE\n\nval PROBES: List<Probe> = listOf(\n" + all.indices.joinToString("") { "    P$it.probe,\n" } + ")\n",
     )

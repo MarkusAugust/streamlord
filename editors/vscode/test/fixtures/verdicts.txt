@@ -15318,6 +15318,22 @@ interpolate-template 157-159 warning: interpolate escapes (h.text) here, so the 
 unescaped-interpolation 32-60 hint: Kotlin writes ${listOf(q?.trim()).first()} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${listOf(q?.trim()).first()} where it is null, and Kotlin writes null.
   fix "Mark the values with + in interpolate { }, which escapes the values" 20-69 "interpolate { \"<p title=\\\"${+(listOf(q?.trim()).first())}\\\">x</p>\" }.text" (not preferred)
     edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: takeIf gives null where the test fails: the rewrite is not preferred
+unescaped-interpolation 43-60 hint: Kotlin writes ${s.takeIf { c }} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${s.takeIf { c }} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 31-69 "interpolate { \"<p title=\\\"${+(s.takeIf { c })}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: an element of a list declared to hold null may be null: the rewrite is not preferred
+unescaped-interpolation 39-52 hint: Kotlin writes ${xs.first()} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${xs.first()} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 27-61 "interpolate { \"<p title=\\\"${+xs.first()}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: let gives what its lambda gives, its named parameter standing for what it is called on: the rewrite is not preferred
+unescaped-interpolation 32-51 hint: Kotlin writes ${q.let { v -> v }} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${q.let { v -> v }} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 20-60 "interpolate { \"<p title=\\\"${+(q.let { v -> v })}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
+== fixes.json: a safe call whose arguments hold ?: may give null: the rewrite is not preferred
+unescaped-interpolation 44-63 hint: Kotlin writes ${q?.plus(s ?: "")} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it. interpolate writes nothing for ${q?.plus(s ?: "")} where it is null, and Kotlin writes null.
+  fix "Mark the values with + in interpolate { }, which escapes the values" 32-72 "interpolate { \"<p title=\\\"${+q?.plus(s ?: \"\")}\\\">x</p>\" }.text" (not preferred)
+    edit 0-0 "import io.github.markusaugust.streamlord.core.domain.interpolate\n\n"
 == completions.json: the types of @intl as its first argument, quoted
 completions, alone
   "'datetime'" value 0..0

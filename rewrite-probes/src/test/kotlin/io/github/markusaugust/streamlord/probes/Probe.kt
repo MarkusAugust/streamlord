@@ -57,3 +57,13 @@ typealias Badge = Trusted
 
 /** A map, named so that a probe's parameters, split at their commas, keep its type whole. */
 typealias Counts = Map<String, Int>
+
+/** A value of nullable-values.json, as the generator writes it. */
+class NullableValue(
+    /** The value as written. */
+    val value: String,
+    /** Whether the table says it may be null. */
+    val said: Boolean,
+    /** Whether the compiler types it as one that may be null. */
+    val typed: Boolean,
+)

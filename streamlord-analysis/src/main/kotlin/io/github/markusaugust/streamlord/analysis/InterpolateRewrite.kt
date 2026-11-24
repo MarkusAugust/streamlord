@@ -423,7 +423,7 @@ private val LIST_RESULTS =
 private val COLLECTION_KEPT = setOf("orEmpty", "filter", "filterNot", "take", "drop", "reversed", "plus", "minus")
 
 /** A collection as a declaration reads its type: the name, without what the brackets after it hold. */
-private val COLLECTION_TYPE =
+internal val COLLECTION_TYPE =
     regex(
         """(?:kotlin\.collections\.|java\.util\.)?(?:(?:Mutable)?(?:List|Set|Map|Collection|Iterable)|ArrayList|HashSet|""" +
             """LinkedHashSet|HashMap|LinkedHashMap|Sequence|(?:Int|Long|Short|Byte|Double|Float|Boolean|Char)?Array)\??""",
