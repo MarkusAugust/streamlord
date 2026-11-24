@@ -29,6 +29,13 @@ All notable changes to Streamlord are recorded here. The format follows
 
 ### The analysis
 
+- `@Language("HTML")` and `// language=HTML` reach as far as the Kotlin plugin injects them. A
+  marked function's returns count through `if`, `?:`, a sum and `trimIndent()`, and so do the
+  literals a returned local is set to, alone or in a sum, `val s = "<b>" + x; return s`; a mark
+  on a property no longer reaches its getter or a `by lazy { }` block. Attribute names are
+  completed in a later literal of a sum, `"<div" + " data-on:click__"`. Before, a mark reached the
+  next literal within 240 characters, wherever it stood. What the plugin marks and the analysis
+  does not yet read, such as an assignment to a marked `var`, is listed in #347 (#311).
 - A parameter marked `@Language("HTML")` is found by its place after a comparison among the
   parameters before it, spaced or not, `keep: (Int) -> Boolean = { it > 0 }` or `big: Boolean = 1<2`:
   an argument handed to it is markup. Before, the comparison moved the mark onto the first parameter.
