@@ -115,7 +115,7 @@ class TrustedLiteralTest {
     }
 
     @Test
-    fun `the code a fix writes for Trusted is silent, and a mark in Trusted's text is judged as before`() {
+    fun `the code a fix writes for Trusted is silent, and a mark in Trusted's text is the block's, Trusted marked or not`() {
         fun valuesTold(body: String): List<String> {
             val src = imports + "fun page(name: String, url: String) = $body\n"
             return issues(src).map { src.substring(it.start, it.end) + " " + it.code.id }
@@ -124,14 +124,9 @@ class TrustedLiteralTest {
         assertEquals(emptyList(), valuesTold("Trusted(interpolate { \"Hi <i>\${+name}</i>\" }.text)"))
         assertEquals(emptyList(), valuesTold("Trusted(interpolate { \"<a href=\\\"\${+url}\\\">x</a>\" }.text)"))
         assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${+Trusted(interpolate { \"Hi <i>\${+name}</i>\" }.text)}</li>\" }"))
-        // Trusted written unmarked into the block's markup gives the block its text, marks and all.
+        // Trusted in the block's markup gives the block its text, marks and all, written unmarked or marked.
         assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }"))
-        // Whether a mark in Trusted's text is read takes the code around Trusted, which the text cannot follow: it is
-        // judged as it was, and not given the advice of a value Trusted vouches for (#338).
-        val marked = imports + "fun page(name: String) = interpolate { \"<li>\${+Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }\n"
-        val told = issues(marked).filter { marked.substring(it.start, it.end) == "\${+name}" }
-        assertEquals(1, told.size)
-        assertTrue(!told.single().message.contains("vouches for"), told.single().message)
+        assertEquals(emptyList(), valuesTold("interpolate { \"<li>\${+Trusted(\"Hi <i>\${+name}</i>\")}</li>\" }"))
     }
 
     @Test

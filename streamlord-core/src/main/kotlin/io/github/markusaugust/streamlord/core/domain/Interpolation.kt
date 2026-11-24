@@ -22,7 +22,9 @@ import kotlin.random.Random
  * It waives nothing for the values beside it. Its text becomes part of the markup, and they are
  * judged against the markup as it will be written: `<%s %s="%s">` with `Trusted("button")` and
  * `Trusted("onclick")` puts the third value in an event handler, which is refused, and so does
- * `<%s>%s` with `Trusted("script")`, whose second value would be a program.
+ * `<%s>%s` with `Trusted("script")`, whose second value would be a program. In the block form of
+ * [interpolate] its text is the block's markup, marked or not: a value marked with `+` in it is
+ * escaped where it lands.
  *
  * ```kotlin
  * interpolate("""<li>%s</li>""", Trusted(renderBadge(user)))
@@ -290,8 +292,9 @@ public fun interpolate(
  *
  * The mark leaves a note in the string and keeps the value, so the markup is read with no value in
  * it yet: a trim call on the string runs before the values are in, and a `%` in it is one. A mark
- * may stand in a loop or be written twice. An [Html] and a [Trusted] are marked like any value and
- * written as [interpolate] writes them.
+ * may stand in a loop or be written twice. An [Html] is marked like any value and written as
+ * [interpolate] writes it. A [Trusted] is markup the block reads in place, marked or not: a value
+ * marked in its text is the block's, `+Trusted("Hi <i>${+name}</i>")`.
  *
  * A value written without the mark is filled in by Kotlin before this function sees the string: it
  * is markup as written, neither escaped nor refused, which is right for a constant and for markup
@@ -307,7 +310,8 @@ public fun interpolate(
  * time.
  *
  * @throws UnsafeInterpolationException if a marked value landed where escaping cannot help; its
- *   `index` counts the marks as they stand in the markup.
+ *   `index` counts the marks as they stand in the markup, a marked Trusted's and the marks in its
+ *   text among them.
  */
 public inline fun interpolate(block: InterpolationScope.() -> String): Html = interpolate(ElementsGuard.defaultPrefixes, block)
 
@@ -342,28 +346,47 @@ public class InterpolationScope
         ): Html {
             val format = StringBuilder(markup.length + 16)
             val values = ArrayList<Any?>()
-            var i = 0
-            while (i < markup.length) {
-                val c = markup[i++]
+            // For each value, how many marks stand before it in the markup, a Trusted's among them: a refusal's index.
+            val counted = ArrayList<Int>()
+            var marks = 0
+            // A Trusted is markup, so the marks in its text are the block's as the markup's are. The texts wait on a stack of
+            // their own rather than the call stack, so a Trusted inside thousands costs none; each resolves only the marks
+            // made before its own.
+            val reading = ArrayDeque(listOf(MarkupToRead(markup, marked.size)))
+            while (reading.isNotEmpty()) {
+                val r = reading.last()
+                val text = r.text
+                if (r.at >= text.length) {
+                    reading.removeLast()
+                    continue
+                }
+                val c = text[r.at++]
                 if (c == '%') format.append('%')
                 if (c != MARK_OPENS && c != MARK_CLOSES) {
                     format.append(c)
                     continue
                 }
                 // A mark is read no further than a mark is long, so a stray opening costs nothing.
-                val close = markup.indexOf(MARK_CLOSES, i).takeIf { c == MARK_OPENS && it >= 0 && it - i <= MARK_LENGTH } ?: -1
+                val close = text.indexOf(MARK_CLOSES, r.at).takeIf { c == MARK_OPENS && it >= 0 && it - r.at <= MARK_LENGTH } ?: -1
                 val index =
-                    if (close < 0 || !markup.startsWith("$id.", i)) null else markup.substring(i + id.length + 1, close).toIntOrNull()
+                    if (close < 0 || !text.startsWith("$id.", r.at)) null else text.substring(r.at + id.length + 1, close).toIntOrNull()
                 // No mark of this block: its character stands for nothing, and what follows it is read as markup.
-                if (index == null || index !in marked.indices) {
+                if (index == null || index !in 0 until r.below) {
                     format.append(REPLACEMENT)
                     continue
                 }
-                format.append("%s")
-                values += marked[index]
-                i = close + 1
+                r.at = close + 1
+                val value = marked[index]
+                if (value is Trusted) {
+                    reading.addLast(MarkupToRead(value.html, index))
+                } else {
+                    format.append("%s")
+                    values += value
+                    counted += marks
+                }
+                marks++
             }
-            return interpolated(format.toString(), values, prefixes)
+            return interpolated(format.toString(), values, prefixes, counted)
         }
     }
 
@@ -373,6 +396,14 @@ public value class Placed internal constructor(
     private val mark: String,
 ) {
     override fun toString(): String = mark
+}
+
+/** Markup the block form of [interpolate] reads from [at] on, where a mark resolves only below [below]. */
+private class MarkupToRead(
+    val text: String,
+    val below: Int,
+) {
+    var at = 0
 }
 
 // Two characters Unicode sets aside for a program's own use and no text may hold, around the block's own id and the
@@ -387,6 +418,8 @@ private fun interpolated(
     format: String,
     values: List<Any?>,
     prefixes: List<String>,
+    // What a refusal calls each value: its place among the values, or among the marks of the block form.
+    numbers: List<Int> = values.indices.toList(),
 ): Html {
     val placeholders = placeholders(format)
     require(placeholders.size == values.size) {
@@ -422,12 +455,12 @@ private fun interpolated(
         if (value is Html && landing.markupInPlace && landscapes.all { it.closes(value.text, placeholder) }) {
             out.append(value.text)
         } else {
-            if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, index, landing.attribute)
+            if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, numbers[index], landing.attribute)
             out.escaped(value)
         }
     }
     out.append(text, cut, text.length)
-    for (landscape in landscapes) landscape.checkUrls(text, written.starts.asList(), values)
+    for (landscape in landscapes) landscape.checkUrls(text, written.starts.asList(), values, numbers)
     return Html(out.toString())
 }
 
@@ -1148,6 +1181,7 @@ private class Landscape(
         text: String,
         placeholders: List<Int>,
         values: List<Any?>,
+        numbers: List<Int>,
     ) {
         for (attribute in attributeStarts.indices) {
             val refresh = refreshContent(attribute)
@@ -1162,7 +1196,7 @@ private class Landscape(
             // for; a safe scheme is not enough, since a safe scheme can still point at another origin.
             if (!refresh && codeUrl(attribute)) {
                 if (!urlHostFixedBy(name, text.substring(start, placeholders[untrusted]))) {
-                    throw UnsafeInterpolationException(Position.URL, untrusted, name, loadsCode = true)
+                    throw UnsafeInterpolationException(Position.URL, numbers[untrusted], name, loadsCode = true)
                 }
                 continue
             }
@@ -1175,7 +1209,7 @@ private class Landscape(
                     name.asciiLowercase() == "values" -> value.split(';')
                     else -> listOf(value)
                 }
-            if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, untrusted, name)
+            if (entries.any { !safeUrl(it) }) throw UnsafeInterpolationException(Position.URL, numbers[untrusted], name)
         }
     }
 

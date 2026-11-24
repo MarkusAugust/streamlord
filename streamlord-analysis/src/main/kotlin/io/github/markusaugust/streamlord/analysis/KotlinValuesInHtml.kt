@@ -1163,7 +1163,7 @@ internal fun Analyzer.judgeValues(
                     !mayBeNull(src, ip.text, s.start) && !collectionShown(src, ip.text, s.start)
             // In Trusted's own text the rewrite is offered as anywhere, first where the value is no markup the author may
             // have built; wrapping the value in Trusted once more says nothing.
-            // A `+` in Trusted's text is judged as before: whether a block reads it only the code around Trusted tells (#338).
+            // A `+` in Trusted's text marks a value of the block Trusted stands in, which reads its text as markup.
             if (vouches && !fact.isMarkup() && markedValue(ip) == null) {
                 val message =
                     "Kotlin writes $shown into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, " +

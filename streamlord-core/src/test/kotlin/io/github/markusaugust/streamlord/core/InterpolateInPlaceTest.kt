@@ -193,6 +193,72 @@ class InterpolateInPlaceTest {
     }
 
     @Test
+    fun `a value marked in the text of a Trusted is the block's, whether the Trusted is marked or not`() {
+        val name = "<script>"
+        val expected = "<li>Hi <i>&lt;script&gt;</i></li>"
+        assertEquals(expected, interpolate { "<li>${Trusted("Hi <i>${+name}</i>")}</li>" }.text)
+        assertEquals(expected, interpolate { "<li>${+Trusted("Hi <i>${+name}</i>")}</li>" }.text)
+        assertEquals(
+            expected,
+            interpolate {
+                val t = Trusted("Hi <i>${+name}</i>")
+                "<li>${+t}</li>"
+            }.text,
+        )
+        // A Trusted made in another block holds no mark of this one.
+        var elsewhere = Trusted("")
+        interpolate {
+            elsewhere = Trusted("Hi <i>${+name}</i>")
+            ""
+        }
+        val out = interpolate { "<li>${+elsewhere}</li>" }.text
+        assertEquals(true, out.startsWith("<li>Hi <i>$REPLACED") && "script" !in out && MARK_OPENS !in out, out)
+    }
+
+    @Test
+    fun `a Trusted holds no mark of its own or of a value marked after it, and one inside many is read without overflowing the stack`() {
+        // Its own mark, made up from what a mark writes, is no mark of the block: it is read once, as text.
+        val own =
+            interpolate {
+                val mark = (+"a").toString()
+                "<p>${+Trusted("x" + mark.substringBeforeLast('.') + ".1" + MARK_CLOSES)}</p>"
+            }.text
+        assertEquals(true, own.startsWith("<p>x$REPLACED") && MARK_OPENS !in own && MARK_CLOSES !in own, own)
+        // Nor one of a value marked after it.
+        val later =
+            interpolate {
+                val mark = (+"a").toString()
+                val t = Trusted("y" + mark.substringBeforeLast('.') + ".2" + MARK_CLOSES)
+                "<p>${+t}${+"b"}</p>"
+            }.text
+        assertEquals(true, later.startsWith("<p>y$REPLACED") && later.endsWith("b</p>") && MARK_OPENS !in later, later)
+        val deep =
+            interpolate {
+                var t = Trusted("<b>${+"<i>"}</b>")
+                repeat(20_000) { t = Trusted("${+t}") }
+                "${+t}"
+            }.text
+        assertEquals("<b>&lt;i&gt;</b>", deep)
+    }
+
+    @Test
+    fun `a refusal counts the marks as they stand in the markup, a marked Trusted's and those in its text among them`() {
+        val refused = assertFailsWith<UnsafeInterpolationException> { interpolate { """${+Trusted("<b>")}<a onclick="${+"x"}">""" } }
+        assertEquals(Position.CODE to 1, refused.position to refused.index)
+        val inside = assertFailsWith<UnsafeInterpolationException> { interpolate { """${+"a"}${+Trusted("<a onclick=\"${+"x"}\">")}""" } }
+        assertEquals(Position.CODE to 2, inside.position to inside.index)
+        // The placeholder form counts a Trusted as a value, so the two forms name the same value.
+        val placed = assertFailsWith<UnsafeInterpolationException> { interpolate("""%s<a onclick="%s">""", Trusted("<b>"), "x") }
+        assertEquals(refused.index, placed.index)
+    }
+
+    @Test
+    fun `a marked Trusted writes the characters of a mark it holds no mark of as U+FFFD, and its per cent signs as they are`() {
+        assertEquals("<p>a${REPLACED}b$REPLACED</p>", interpolate { "<p>${+Trusted("a${MARK_OPENS}b$MARK_CLOSES")}</p>" }.text)
+        assertEquals("<p>100% %s</p>", interpolate { "<p>${+Trusted("100% %s")}</p>" }.text)
+    }
+
+    @Test
     fun `markup that was built holds no mark, whatever its values held, so it pulls no value where it is written unmarked`() {
         val secret = "s3cret"
         val forged = "﷐0﷑"
