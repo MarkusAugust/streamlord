@@ -253,6 +253,96 @@ class InterpolateInPlaceTest {
     }
 
     @Test
+    fun `a value marked in a Trusted handed to the placeholder form in the block is the block's, the Html marked or not`() {
+        val name = "<script>"
+        val expected = "<li><b><i>&lt;script&gt;</i></b></li>"
+        assertEquals(expected, interpolate { "<li>${interpolate("<b>%s</b>", Trusted("<i>${+name}</i>"))}</li>" }.text)
+        assertEquals(expected, interpolate { "<li>${+interpolate("<b>%s</b>", Trusted("<i>${+name}</i>"))}</li>" }.text)
+        // An Html of another block holds no mark of this one, and one with none is written as it was.
+        var elsewhere = interpolate("")
+        interpolate {
+            elsewhere = interpolate("<b>%s</b>", Trusted("<i>${+name}</i>"))
+            ""
+        }
+        val out = interpolate { "<li>${+elsewhere}</li>" }.text
+        assertEquals(true, out.startsWith("<li><b><i>$REPLACED") && "script" !in out && MARK_OPENS !in out, out)
+        assertEquals("<li><b>a &lt;b&gt;</b></li>", interpolate { "<li>${+interpolate("<b>%s</b>", "a <b>")}</li>" }.text)
+    }
+
+    @Test
+    fun `a marked Html holding the block's marks keeps the rules of an Html, its values escaped where they land in it`() {
+        val n = "<x>"
+        // In an attribute an Html is characters, and one that does not close what it opens is escaped like a string.
+        assertEquals(
+            """<a title="&lt;i class=&quot;c&quot;&gt;&amp;lt;x&amp;gt;&lt;/i&gt;">t</a>""",
+            interpolate { "<a title=\"${+interpolate("<i class=\"c\">%s</i>", Trusted("${+n}"))}\">t</a>" }.text,
+        )
+        assertEquals("<p>&lt;b&gt;&amp;lt;x&amp;gt;</p>", interpolate { "<p>${+interpolate("<b>%s", Trusted("${+n}"))}</p>" }.text)
+        // A value outside its element text is refused, counted where its mark stands.
+        val refused =
+            assertFailsWith<UnsafeInterpolationException> {
+                interpolate { "<p>${+"a"}${+interpolate("%s", Trusted("<b onclick=\"${+n}\">x</b>"))}</p>" }
+            }
+        assertEquals(Position.STRUCTURE to 2, refused.position to refused.index)
+        // An Html inside thousands is read without overflowing the stack.
+        val deep =
+            interpolate {
+                var h = interpolate("<b>%s</b>", Trusted("${+n}"))
+                repeat(20_000) { h = interpolate("%s", Trusted("${+h}")) }
+                "${+h}"
+            }.text
+        assertEquals("<b>&lt;x&gt;</b>", deep)
+    }
+
+    @Test
+    fun `an Html holding the block's marks is judged where it lands as any Html is, and a Trusted marked in it is text`() {
+        val user = "');alert(1);('"
+        val js = "javascript:alert(1)"
+        val refusals =
+            listOf(
+                Position.DATASTAR to {
+                    interpolate {
+                        "<button data-on:click=\"@get('/x?q=${+interpolate("%s%s", user, Trusted("${+""}"))}')\">b</button>"
+                    }
+                },
+                Position.URL to { interpolate { "<a href=\"${+interpolate("%s%s", js, Trusted("${+""}"))}\">x</a>" } },
+                Position.CODE to { interpolate { "<script>${+interpolate("%s%s", "alert(1)", Trusted("${+""}"))}</script>" } },
+                Position.STYLE to { interpolate { "<p style=\"${+interpolate("%s%s", "color: red", Trusted("${+""}"))}\">x</p>" } },
+            )
+        for ((position, page) in refusals) {
+            val refused = assertFailsWith<UnsafeInterpolationException>(position.name) { page() }
+            assertEquals(position, refused.position)
+        }
+        // The placeholder form judged its values with the mark unread, so markup a mark would bring there could move them:
+        // a Trusted marked in the Html is written as text, escaped where it lands.
+        assertEquals(
+            "<div>&lt;script&gt;alert(1)//</div>",
+            interpolate { "<div>${+interpolate("%s%s", Trusted("${+Trusted("<script>")}"), "alert(1)//")}</div>" }.text,
+        )
+    }
+
+    @Test
+    fun `a value marked in an Html lands in its element text alone, since the Html's prefixes are not the block's to know`() {
+        val user = "');alert(1);('"
+        val pages =
+            listOf(
+                { interpolate { "<p>${+interpolate(listOf("x-"), "<b x-on:click=\"%s\">b</b>", Trusted("${+user}"))}</p>" } },
+                { interpolate(listOf("x-")) { "<p>${+interpolate("<b data-on:click=\"%s\">b</b>", Trusted("${+user}"))}</p>" } },
+                { interpolate { "<p>${+interpolate("<b title=\"%s\">b</b>", Trusted("${+user}"))}</p>" } },
+            )
+        for (page in pages) {
+            val refused = assertFailsWith<UnsafeInterpolationException> { page() }
+            assertEquals(Position.STRUCTURE, refused.position)
+            // It names why and what works: the value handed to that placeholder form as one of its own.
+            val message = refused.message.orEmpty()
+            assertEquals(true, "prefixes" in message && "placeholder form" in message && "Trusted" !in message, message)
+        }
+        // A tag name keeps its own message.
+        val tag = assertFailsWith<UnsafeInterpolationException> { interpolate("<%s>x", "b") }.message.orEmpty()
+        assertEquals(true, "Html" !in tag, tag)
+    }
+
+    @Test
     fun `a marked Trusted writes the characters of a mark it holds no mark of as U+FFFD, and its per cent signs as they are`() {
         assertEquals("<p>a${REPLACED}b$REPLACED</p>", interpolate { "<p>${+Trusted("a${MARK_OPENS}b$MARK_CLOSES")}</p>" }.text)
         assertEquals("<p>100% %s</p>", interpolate { "<p>${+Trusted("100% %s")}</p>" }.text)

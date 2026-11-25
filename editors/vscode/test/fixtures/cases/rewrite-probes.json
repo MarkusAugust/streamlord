@@ -161,6 +161,7 @@
     {"name":"a kotlin.Number in a script is no digits, as a class of it may write anything","params":"v: Number","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":["${v}"]},
     {"name":"an Int in a script is digits","params":"v: Int","body":"\"<script>var n = ${v};</script>\"","rewrite":"none","marks":[]},
     {"name":"a String property of a class elsewhere, in a style, is passed to Trusted with no warning, as a template of it","params":"u: User","body":"\"<style>${u.name}</style>\"","rewrite":"offered","marks":["${u.name}"]},
-    {"name":"in a block, a value Kotlin fills into the text of a Trusted marked later is marked where it stands, and the block escapes it","params":"name: String","body":"interpolate {\n    val t = Trusted(\"Hi <i>$name</i>\")\n    \"<li>${+t}</li>\"\n}.text","rewrite":"none","marks":["$name"]}
+    {"name":"in a block, a value Kotlin fills into the text of a Trusted marked later is marked where it stands, and the block escapes it","params":"name: String","body":"interpolate {\n    val t = Trusted(\"Hi <i>$name</i>\")\n    \"<li>${+t}</li>\"\n}.text","rewrite":"none","marks":["$name"]},
+    {"name":"in a block, a value Kotlin fills into a Trusted handed to the placeholder form, whose Html is marked, is marked where it stands, and the block escapes it","params":"name: String","body":"interpolate { \"<li>${+interpolate(\"<b>%s</b>\", Trusted(\"<i>$name</i>\"))}</li>\" }.text","rewrite":"none","marks":["$name"]}
   ]
 }
