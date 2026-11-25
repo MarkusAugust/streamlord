@@ -222,6 +222,69 @@ internal class FileFacts(
         return d.at in block && d.end >= block.last && d.end <= block.last + 1
     }
 
+    /**
+     * Whether [at], in the block of `interpolate` whose braces are [block], stands in the value of a `val` that nothing in
+     * its sight reads after its name, or in the call of `Trusted` or `interpolate` one is set to: a value that goes
+     * nowhere, to no markup. A block that is itself in the value runs when the `val` is set, and so does every lambda or
+     * call that changes something there, which may take the value elsewhere: neither goes nowhere.
+     */
+    fun inUnusedValue(
+        at: Int,
+        block: IntRange,
+    ): Boolean = unused.any { at in it && block.first !in it }
+
+    // The values of the `val`s nothing reads and in which nothing runs, a lambda nobody calls among them, and the calls of
+    // `Trusted` or `interpolate` such a `val` is set to.
+    private val unused: List<IntRange> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        names.flatMap { (name, list) ->
+            list.filter { !readAfter(name, it) }.mapNotNull { d ->
+                val value =
+                    d.value?.let { it.start until (if (it.end < 0) src.length else it.end) }
+                        ?: d.markupAt.takeIf { d.markup && it >= 0 }?.let { at -> callEnd(at)?.let { at until it } }
+                value?.takeIf { lambda(it) || quiet(it) }
+            }
+        }
+    }
+
+    // Whether [range] is a lambda and nothing more, which runs only where it is called.
+    private fun lambda(range: IntRange): Boolean {
+        var a = range.first
+        var b = minOf(range.last, src.length - 1)
+        while (a < b && src[a].isWhitespace()) a++
+        while (b > a && src[b].isWhitespace()) b--
+        return code[a] && src[a] == '{' && matching(src, code, a) == b
+    }
+
+    /**
+     * Whether no lambda opens in the code of [range], a template's braces aside, and no call there changes what it is called
+     * on: `append`, `add`, `+=`.
+     */
+    fun quiet(range: IntRange): Boolean =
+        range.none { code[it] && src[it] == '{' && src.getOrNull(it - 1) != '$' } &&
+            CHANGES.findAll(src.substring(range.first, minOf(range.last + 1, src.length))).none { code[range.first + it.range.first] }
+
+    // Whether code reads [name] after [d] declares it, as far as [d] is in sight: a template's code and `$name` among it.
+    private fun readAfter(
+        name: String,
+        d: Declaration,
+    ): Boolean {
+        val to = minOf(d.end, src.length)
+        val from = d.at + name.length
+        if (from >= to) return false
+        return regex("""(?<![\p{L}\p{Nd}_])${Regex.escape(name)}(?![\p{L}\p{Nd}_])""")
+            .findAll(src.substring(from, to))
+            .any { m -> (from + m.range.first).let { code[it] || src.getOrNull(it - 1) == '$' } }
+    }
+
+    /** Just past the brackets of the call whose name, or qualifier, starts at [at]; null where none open after it or they never close. */
+    fun callEnd(at: Int): Int? {
+        var k = at
+        while (k < src.length && (isWordPart(src[k]) || src[k] == '.')) k++
+        while (k < src.length && src[k].isWhitespace()) k++
+        if (src.getOrNull(k) != '(') return null
+        return matching(src, code, k).takeIf { it >= 0 }?.plus(1)
+    }
+
     // The `val`s of the file with a value, and at each offset the innermost whose value stands there, worked out once:
     // each value painted over the ones it stands in, which start before it.
     private val valued: Valued by lazy(LazyThreadSafetyMode.PUBLICATION) {
@@ -777,6 +840,9 @@ internal fun codeBefore(
     while (j >= 0 && (src[j].isWhitespace() || !code[j])) j--
     return j
 }
+
+/** A call that changes what it is called on, or what it is said of. */
+private val CHANGES = regex("""\.\s*(?:add|addAll|append|appendLine|put|putAll|set|remove|clear|insert)\s*\(|\+=|-=""")
 
 /** What stands before a name that is no variable being given a value: a receiver's dot, or a type's colon or `?`. */
 private val ASSIGNED_AFTER_NOT = setOf('.', ':', '?')

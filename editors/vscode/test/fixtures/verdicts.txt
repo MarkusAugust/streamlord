@@ -11571,6 +11571,34 @@ interpolate-template 289-291 warning: Kotlin fills in $m before interpolate sees
 interpolate-template 291-293 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: a name set to a mark in a sum with a call and a sum in brackets is a template there
 interpolate-template 291-293 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. It lands in a script, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string the block keeps in a val it never uses may be refused
+unsafe-interpolation 270-278 warning: Where this string goes into the block's markup: interpolate throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string handed to a call the block does not give may be refused
+unsafe-interpolation 270-278 warning: Where this string goes into the block's markup: interpolate throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string of a lambda the block keeps may be refused
+unsafe-interpolation 272-280 warning: Where this string goes into the block's markup: interpolate throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string of a lambda the block's result is called with may be refused
+unsafe-interpolation 288-296 warning: Where this string goes into the block's markup: interpolate throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in the condition of an if the block gives may be refused
+unsafe-interpolation 266-274 warning: Where this string goes into the block's markup: interpolate throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string the block gives by the name of its val is refused
+unsafe-interpolation 270-278 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string the block writes into its markup by name is refused
+unsafe-interpolation 270-278 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string joined into what the block gives is refused
+unsafe-interpolation 291-299 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string the block gives trimmed is refused
+unsafe-interpolation 262-270 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a Trusted the block never uses may be refused
+unsafe-interpolation 283-291 warning: Where this string goes into the block's markup: interpolate throws here: name lands in onclick, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a name set to a mark in a string the block gives by name is judged as the mark
+unsafe-interpolation 285-287 error: interpolate always throws here: m lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a block a val nothing reads is set to is refused, since the block runs
+unsafe-interpolation 284-292 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string a lambda of an unread val hands on is refused
+unsafe-interpolation 282-290 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark in a string handed to println through a call that keeps it is refused
+unsafe-interpolation 296-304 error: interpolate always throws here: name lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"

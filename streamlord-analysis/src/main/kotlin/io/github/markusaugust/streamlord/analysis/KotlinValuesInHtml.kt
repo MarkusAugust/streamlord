@@ -333,8 +333,11 @@ internal fun Analyzer.checkInterpolateBlock(
     own: (Int) -> Boolean,
     // Whether the innermost block an offset is in is one around this one, which is still being built while this one runs.
     around: (Int) -> Boolean,
-    // Whether the string is what the block gives, or a branch of it: the block's markup for certain.
-    given: () -> Boolean,
+    // Whether the literal written at an offset of the string is one the block gives, its markup for certain: see
+    // markupLiterals.
+    reaches: (Int) -> Boolean,
+    // Whether the literal written at an offset of the string goes nowhere for certain, to no markup: see discarded.
+    discarded: (Int) -> Boolean,
     // Whether this block may run after the block that wrote the mark at an offset has been built: in a lambda kept for later.
     later: (Int) -> Boolean,
 ): List<Issue> {
@@ -356,7 +359,7 @@ internal fun Analyzer.checkInterpolateBlock(
     // it is written: judged there where the string is the block's markup for certain and so is the mark. Anywhere else,
     // or where a branch or a var may hold another value, it is the template Kotlin fills in, as any other.
     val named = holding.filter { (ip, it) -> own(it.at) && it.whole && it.holding == Holding.MARK && it.certain && markedValue(ip) == null }
-    val judged = if (named.isNotEmpty() && given()) named else emptyMap()
+    val judged = named.filterKeys { reaches(it.start) }
     val all = s.interpolations.filter { (markedValue(it) != null && it !in outer) || it in judged }
     val read =
         all.map { ip ->
@@ -374,27 +377,47 @@ internal fun Analyzer.checkInterpolateBlock(
     // A + on a number is Kotlin's own and marks nothing: the number is written as it is, as from any template.
     val marks = all.indices.filter { told[it] != ArgKind.NUMBER }
     val format = s.copy(interpolations = s.interpolations - all.toSet() - outer.keys)
-    return judgeInterpolated(
-        s,
-        format,
-        marks.map { all[it].decodedStart },
-        marks.map { read[it] },
-        marks.map { told[it] },
-        true,
-        prefixes,
-        null,
-        src,
-        opts,
-        hyphenated,
-        issues,
-        marks.map { all[it].start until all[it].end },
-        valueOfVal,
-        inHtml = inHtml,
-        held = held,
-        htmlAt = htmlAt,
-        holdsOwn = holdsOwn,
-    )
+    val judgedIssues =
+        judgeInterpolated(
+            s,
+            format,
+            marks.map { all[it].decodedStart },
+            marks.map { read[it] },
+            marks.map { told[it] },
+            true,
+            prefixes,
+            null,
+            src,
+            opts,
+            hyphenated,
+            issues,
+            marks.map { all[it].start until all[it].end },
+            valueOfVal,
+            inHtml = inHtml,
+            held = held,
+            htmlAt = htmlAt,
+            holdsOwn = holdsOwn,
+        )
+    // A literal that goes nowhere is markup only if it goes into the block's markup after all: interpolate throws for it
+    // there, and nowhere else.
+    return judgedIssues.map {
+        if (it.severity != Severity.ERROR || it.code !in THROWS || !discarded(it.start)) {
+            it
+        } else {
+            it.copy(severity = Severity.WARNING, message = whereInMarkup(it.message))
+        }
+    }
 }
+
+/** What interpolate throws for. */
+private val THROWS = setOf(IssueCode.UNSAFE_INTERPOLATION, IssueCode.INTERPOLATE_PLACEHOLDERS)
+
+/**
+ * [message] of a refusal, said of a string that may never go into the block's markup: interpolate throws only where it
+ * does, so never always.
+ */
+private fun whereInMarkup(message: String): String =
+    "Where this string goes into the block's markup: ${message.replaceFirst("interpolate always throws", "interpolate throws")}"
 
 /** What the value a template or an argument from [from] on marks with `+`, [value], is as far as is known: null where it may be anything. */
 internal fun markKind(
@@ -448,12 +471,8 @@ private fun Analyzer.trustedSetTo(
     val d =
         declarationOf(src, arg.text.trim(), arg.start)?.takeIf { it.trusted && it.markupAt >= 0 && !it.overridable && !it.mutable }
             ?: return null
-    // Its one argument is a literal, which markedTrustedLiteral asks for: the call closes past it.
-    val literal = nested(src).firstOrNull { it.start > d.markupAt } ?: return null
-    var close = literal.end
-    while (close < src.length && (src[close].isWhitespace() || src[close] == ',')) close++
-    if (src.getOrNull(close) != ')') return null
-    return Arg(d.markupAt, close + 1, null, src.substring(d.markupAt, close + 1), null)
+    val end = fileFacts(src).callEnd(d.markupAt) ?: return null
+    return Arg(d.markupAt, end, null, src.substring(d.markupAt, end), null)
 }
 
 /**
@@ -1003,17 +1022,7 @@ internal fun Analyzer.heldMark(
     htmlAt: (Int) -> HeldMark?,
     depth: Int = 0,
 ): HeldMark? {
-    var a = from
-    var b = to
-    while (true) {
-        while (a < b && src[a].isWhitespace()) a++
-        while (b > a && src[b - 1].isWhitespace()) b--
-        if (b - a < 2 || src[a] != '(') break
-        val t = src.substring(a, b)
-        if (closing(t, depths(t), 0) != t.length) break
-        a++
-        b--
-    }
+    val (a, b) = unparenSpan(src, from, to)
     if (a >= b || depth > VALUE_DEPTH) return null
     val t = src.substring(a, b)
 
@@ -1141,6 +1150,26 @@ private fun either(values: List<HeldMark?>): HeldMark? {
         branch = branch,
         kind = kind,
     )
+}
+
+/** Where the value from [from] to [to] of [src] is written, without the blanks around it and the brackets around all of it. */
+private fun unparenSpan(
+    src: String,
+    from: Int,
+    to: Int,
+): Pair<Int, Int> {
+    var a = from
+    var b = to
+    while (true) {
+        while (a < b && src[a].isWhitespace()) a++
+        while (b > a && src[b - 1].isWhitespace()) b--
+        if (b - a < 2 || src[a] != '(') break
+        val t = src.substring(a, b)
+        if (closing(t, depths(t), 0) != t.length) break
+        a++
+        b--
+    }
+    return a to b
 }
 
 /** Where each of [parts], read off [t] in order from [from] on, stands in it: null for one not found after the one before. */
@@ -2321,25 +2350,128 @@ private fun Analyzer.datastarTrap(
     )
 }
 
-/** What the block in [braces] gives, its last statement, where it is written; null where none is read. */
-internal fun blockResult(
+/**
+ * The literals the block in [braces] gives, by where each starts: what its last statement is made of as Kotlin reads it,
+ * through templates, branches, sums, the names of its values, the scope functions, the calls that keep a string's text,
+ * the elements of a list, and what `Trusted` and `interpolate` are handed. Any other literal of the block is not shown
+ * to reach its markup.
+ */
+internal fun Analyzer.markupLiterals(
     src: String,
     braces: IntRange,
-): IntRange? {
+): Set<Int> {
     val body = braces.first + 1
-    return resultIn(src.substring(body, braces.last))?.let { body + it.first..body + it.last }
+    val result = resultIn(src.substring(body, braces.last)) ?: return emptySet()
+    val out = HashSet<Int>()
+    val seen = HashSet<Pair<Int, Int>>()
+
+    fun reach(
+        from: Int,
+        to: Int,
+    ) {
+        val (a, b) = unparenSpan(src, from, to)
+        if (a >= b || !seen.add(a to b)) return
+        val t = src.substring(a, b)
+
+        fun inT(span: IntRange?) {
+            if (span != null) reach(a + span.first, a + span.last + 1)
+        }
+        literalAt(src, a)?.takeIf { it.end == b }?.let { literal ->
+            out += literal.start
+            for (ip in literal.interpolations) codeSpan(src, ip, unmarkedCode(ip))?.let { reach(it.first, it.last + 1) }
+            return
+        }
+        branches(t)?.takeIf { it.size > 1 }?.let { all -> return spansIn(t, all.map { it.trim() }, 0).forEach(::inT) }
+        val parts = splitTop(t, "+").map { it.trim() }
+        if (parts.size > 1) return spansIn(t, parts, 0).forEach(::inT)
+        collectionElements(t)?.let { elements -> return spansIn(t, elements.map { it.trim() }, 0).forEach(::inT) }
+        val call = lastCall(t)
+        if (call != null) {
+            val receiver = call.receiver?.let { 0 until it.length }
+            val lambda =
+                call.lambda?.let { l ->
+                    resultIn(l)?.let { t.length - 1 - l.length + it.first..t.length - 1 - l.length + it.last }
+                }
+            when {
+                // `let` and `run` give what their lambda ends with, the receiver where that is it; `also` and `apply` the receiver.
+                scopeCall(call) && (call.name == "let" || call.name == "run") -> {
+                    val lambdaText = call.lambda!!
+                    inT(if (lambdaResult(lambdaText) in scope(src, lambdaText, call.name, false).keys) receiver else lambda)
+                }
+
+                scopeCall(call) || (receiver != null && call.name in KEEPS_TEXT) -> {
+                    inT(receiver)
+                }
+
+                call.name == "joinToString" -> {
+                    inT(receiver)
+                    inT(lambda)
+                }
+
+                receiver == null && call.lambda == null && (coreCall(src, t, "Trusted") || coreCall(src, t, "interpolate")) -> {
+                    spansIn(t, splitTop(call.args, ",").map { it.trim() }, t.indexOf('(') + 1).forEach(::inT)
+                }
+            }
+            return
+        }
+        val textOf = TEXT_OF_VALUE.matchEntire(t)
+        if (textOf != null) return inT(0 until textOf.groupValues[1].length)
+        if (KOTLIN_NAME.matchEntire(t) != null) {
+            val d = declarationOf(src, t, a) ?: return
+            val values = if (d.mutable) d.assigned.filter { it.start < a } else listOfNotNull(d.value)
+            for (v in values) if (v.end >= 0) reach(v.start, v.end)
+            // A val set to a call of Trusted or interpolate keeps no value to read, only where the call starts: the call is read
+            // whole, its brackets to where they close.
+            if (d.markup && d.markupAt >= 0) fileFacts(src).callEnd(d.markupAt)?.let { reach(d.markupAt, it) }
+        }
+    }
+    reach(body + result.first, body + result.last + 1)
+    return out
 }
 
-/** Whether [s] is [result], what a block gives, or a branch of it: the block's markup for certain. */
-internal fun givenByBlock(
+/**
+ * Whether [literal] of the block in [braces] goes nowhere for certain, to no markup: the value of a `val` nothing reads,
+ * a string a call such as `isEmpty()` makes a number or a boolean of, or one handed to `println` or `check`, where no
+ * lambda or call that changes something may take it elsewhere on the way. Anything else may reach the block's markup
+ * by ways the text does not show.
+ */
+internal fun discarded(
     src: String,
-    result: IntRange?,
-    s: KotlinString,
+    facts: FileFacts,
+    literal: KotlinString,
+    braces: IntRange,
 ): Boolean {
-    // A sum with a call on one of its literals, or a part it cannot read, is more than its markup shows.
-    if (result == null || s.called || s.unread) return false
-    if (result.first == s.start && result.last + 1 == s.end) return true
-    val t = src.substring(result.first, result.last + 1)
-    val leaves = branches(t)?.map { it.trim() } ?: return false
-    return spansIn(t, leaves, 0).any { it != null && result.first + it.first == s.start && result.first + it.last + 1 == s.end }
+    if (facts.inUnusedValue(literal.start, braces)) return true
+    if (CONSUMED_BY.matchAt(src, literal.end) != null) return true
+    // The call whose round brackets the literal stands in, whatever else they hold.
+    val open = Operands(src, facts.code).openBefore(literal.start)
+    if (open < 0 || src[open] != '(' || nameBefore(src, open) !in SINKS) return false
+    val close = matching(src, facts.code, open)
+    return close > open && facts.quiet(open..close)
 }
+
+/** The calls after a string that make a number or a boolean of it, which writes no markup. */
+private val CONSUMERS =
+    listOf(
+        "isEmpty",
+        "isNotEmpty",
+        "isBlank",
+        "isNotBlank",
+        "length",
+        "hashCode",
+        "contains",
+        "startsWith",
+        "endsWith",
+        "equals",
+        "compareTo",
+        "count",
+    )
+
+private val CONSUMED_BY = regex("""\s*\??\.\s*(?:${CONSUMERS.joinToString("|")})(?![\p{L}\p{Nd}_])""")
+
+/** Calls whose argument goes to a log or a test, and to no markup. */
+private val SINKS = setOf("println", "print", "check", "require", "assert")
+
+/** The calls on a string that keep its text, marks and all. */
+private val KEEPS_TEXT =
+    setOf("trim", "trimIndent", "trimMargin", "trimStart", "trimEnd", "toString", "prependIndent", "replaceIndent")

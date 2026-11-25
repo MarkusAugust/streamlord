@@ -99,6 +99,14 @@ All notable changes to Streamlord are recorded here. The format follows
   may be null is a mark for certain, since Kotlin's own `+` takes only a number that cannot be
   null. A `val` set to a number by name, `val m = n`, is a number. Only a mark of a block around
   this one is another block's: one of a block beside it is a template here (#362).
+- In `interpolate { }`, a mark in a string that goes nowhere for certain is a warning that core
+  refuses it only where the string goes into the block's markup, where it was an error: the value
+  of a `val` nothing reads, a lambda or a `Trusted` among them, a string `isEmpty()` or `length`
+  makes a boolean or a number of, and one handed to `println` or `check`, where no block, lambda or
+  call such as `append` there may take it elsewhere. A name set to a mark is
+  judged as the mark in every string the block gives, followed through names, sums, branches,
+  `let`, `trim()`, `joinToString` and lists, where it was only in the block's last statement
+  (#364).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`
