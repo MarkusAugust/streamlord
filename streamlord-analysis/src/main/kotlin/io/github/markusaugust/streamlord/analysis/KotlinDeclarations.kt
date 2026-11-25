@@ -42,6 +42,8 @@ internal class Declaration(
     val aliased: Boolean = false,
     /** Whether another declaration may stand in for it: see [overridable]. */
     val overridable: Boolean = false,
+    /** Where the call it is set to starts, where it is [markup]: its qualifier's first letter, or its name's. */
+    val markupAt: Int = -1,
 ) {
     /** Just past where it can last be seen. */
     var end: Int = Int.MAX_VALUE
@@ -1890,6 +1892,7 @@ private fun declarations(
                             trustedText,
                             aliased = initialiser?.third == true,
                             overridable = overridable,
+                            markupAt = initialiser?.second ?: -1,
                         ),
                     )
                 if (owner.kind != "top") owner.ends += d

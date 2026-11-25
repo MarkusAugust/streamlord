@@ -342,12 +342,14 @@ public fun interpolate(
  * a number is Kotlin's own: it is written as the number it is, wherever it stands. The same holds
  * for a type with a `+` of its own.
  *
- * A mark is its own block's: written in another block, a nested one or a later one, it is no mark,
- * and neither is one in a string cut or changed after its values were marked. No value stands
- * there then, and the characters a mark is made of are written as U+FFFD, as they are wherever
- * else the string holds them: text that reaches the block through another escaper never stops the
- * page. Trim the string, and do nothing else to it. A block marks its values from one thread at a
- * time.
+ * A mark is its own block's. Written in the markup of a block inside the one being built that made
+ * it, `interpolate { val m = +name; interpolate { "<p>$m</p>" } }`, it is refused, since its value
+ * would be lost: mark the value in the block it is written in. Written in a later block it is no
+ * mark, and neither is one in a string cut or changed after its values were marked. No value
+ * stands there then, and the characters a mark is made of are written as U+FFFD, as they are
+ * wherever else the string holds them: text that reaches the block through another escaper never
+ * stops the page. Trim the string, and do nothing else to it. A block marks its values from one
+ * thread at a time.
  *
  * A mark stands for its value only in markup. A value holding one, `+name` handed to the placeholder
  * form or a string or Html with a mark in its text, is refused where it would be escaped, while its
@@ -357,7 +359,8 @@ public fun interpolate(
  * @throws UnsafeInterpolationException if a marked value landed where escaping cannot help; its
  *   `index` counts the marks as they stand in the markup, a marked Trusted's or Html's and the marks
  *   in its text among them.
- * @throws IllegalArgumentException if a value that would be escaped holds a mark of a block being built.
+ * @throws IllegalArgumentException if a value that would be escaped holds a mark of a block being built,
+ *   or the markup holds a mark of another block being built.
  */
 public inline fun interpolate(block: InterpolationScope.() -> String): Html = interpolate(ElementsGuard.defaultPrefixes, block)
 
@@ -408,6 +411,9 @@ public class InterpolationScope
             // builds is written as any Html is. Neither stack is the call stack, so one inside thousands costs none; each
             // text resolves only the marks made before its own.
             val building = ArrayDeque(listOf(MarkupToBuild(MarkupToRead(markup, marked.size))))
+            // Whether the markup holds a mark of another block being built, around this one: refused once every other
+            // refusal has had its say.
+            var lost = false
             while (true) {
                 val b = building.last()
                 val r = b.reading.lastOrNull()
@@ -415,7 +421,10 @@ public class InterpolationScope
                     // Read to its end, a piece is built, and is the value its mark stands for in the piece it was marked in.
                     val html = interpolated(b.format.toString(), b.values, prefixes, b.numbers, b.textOnly)
                     building.removeLast()
-                    if (building.isEmpty()) return html
+                    if (building.isEmpty()) {
+                        require(!lost) { LOST_IN_ANOTHER_BLOCK }
+                        return html
+                    }
                     building.last().values += html
                     continue
                 }
@@ -433,6 +442,7 @@ public class InterpolationScope
                 val close = if (c == MARK_CLOSES) -1 else markEnd(r)
                 // No mark of this block: its character stands for nothing, and what follows it is read as markup.
                 if (close < 0) {
+                    if (!lost && c != MARK_CLOSES) lost = markOfBlockBeingBuilt(text, r.at) { it != id }
                     b.format.append(REPLACEMENT)
                     continue
                 }
@@ -514,9 +524,21 @@ private fun holdsMarkBeingBuilt(text: String): Boolean {
         val open = text.indexOfAny(MARK_STARTS, at)
         if (open < 0 || BUILDING.isEmpty()) return false
         at = open + 1
-        if (markEnd(text, at) { dot, _ -> text.substring(at, dot) in BUILDING } >= 0) return true
+        if (markOfBlockBeingBuilt(text, at)) return true
     }
 }
+
+/** Whether the mark that opens just before [at] in [text] is one of a block being built whose id [also] takes. */
+private inline fun markOfBlockBeingBuilt(
+    text: String,
+    at: Int,
+    also: (id: String) -> Boolean = { true },
+): Boolean = markEnd(text, at) { dot, _ -> text.substring(at, dot).let { also(it) && it in BUILDING } } >= 0
+
+private const val LOST_IN_ANOTHER_BLOCK =
+    "The markup holds a mark that + made in another interpolate { } still being built, around this one: a mark stands " +
+        "for its value only in its own block's markup, so the value would be lost, and the mark's note written in its " +
+        "place. Mark the value in the block it is written in: \"...${'$'}{+name}...\"."
 
 /** What a `+` in the block form of [interpolate] writes: a note of which value stands there, and not the value. */
 @JvmInline
@@ -608,7 +630,7 @@ private fun interpolated(
         val landing = landingOf(landscapes, placeholder)
         // Markup interpolate built is markup where it starts and ends in the data state in
         // every reading, so that it cannot move the placeholders after it; anywhere else it is characters.
-        if (value is Html && landing.markupInPlace && landscapes.all { it.closes(value.text, placeholder) }) {
+        if (value is Html && writtenAsMarkup(landscapes, landing, placeholder, value.text)) {
             out.append(value.text)
         } else {
             if (!landing.position.admits(value)) throw UnsafeInterpolationException(landing.position, numbers[index], landing.attribute)
@@ -851,6 +873,37 @@ public fun valueLandings(
         }
     }
 }
+
+/**
+ * Whether [interpolate] writes an Html whose text is [html] as markup at the placeholder [index] of [placeholders] in
+ * [markup], read as [valueLandings] reads it: where it lands in element text that is text in every reading and closes
+ * what it opens there. Anywhere else it escapes the Html as text.
+ */
+@InternalStreamlordApi
+public fun htmlWrittenAsMarkup(
+    markup: String,
+    placeholders: List<IntRange>,
+    index: Int,
+    html: String,
+    prefixes: List<String> = ElementsGuard.defaultPrefixes,
+    known: Map<Int, String> = emptyMap(),
+): Boolean {
+    val written = Written(markup, placeholders, known, percents = false)
+    val landscapes = landscapes(written.text, written.open, prefixes)
+    val at = written.starts[index]
+    return writtenAsMarkup(landscapes, landingOf(landscapes, at), at, html)
+}
+
+/**
+ * Whether an Html whose text is [html] is written as markup at [at], where it has [landing]: in element text that is text
+ * in every reading, closing what it opens there.
+ */
+private fun writtenAsMarkup(
+    landscapes: List<Landscape>,
+    landing: ValueLanding,
+    at: Int,
+    html: String,
+): Boolean = landing.markupInPlace && landscapes.all { it.closes(html, at) }
 
 /**
  * Where [placeholder] lands in [markup] as the browser parses it as a patch: the one reading that follows

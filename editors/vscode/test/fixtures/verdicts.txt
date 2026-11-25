@@ -11398,7 +11398,7 @@ interpolate-placeholders 255-260 error: interpolate throws here: +name is a mark
 interpolate-placeholders 273-278 error: interpolate throws here: +name is a mark of the block, which interpolate escapes as text, so the value it stands for would be lost. Pass name itself, without +: interpolate escapes or refuses the value where it lands.
   fix "Pass name itself" 273-274 ""
 == corpus/kotlin-interpolate-block.json: an Html holding a mark the placeholder form escapes into an attribute is refused as lost
-interpolate-placeholders 267-297 error: interpolate throws here: interpolate("<b>${+name}</b>") is an Html that holds a value marked in the block, and it lands in title, where interpolate escapes it as text, so the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+interpolate-placeholders 267-297 error: interpolate throws here: interpolate("<b>${+name}</b>") is an Html that holds a value marked in the block, and it lands in title, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
 == corpus/kotlin-interpolate-block.json: a string holding a mark handed to the placeholder form is refused as lost
 interpolate-placeholders 259-267 error: interpolate throws here: "Hi ${+name}" holds a mark of the block, which interpolate escapes as text, so the value it stands for would be lost. Pass name itself, without +: interpolate escapes or refuses the value where it lands.
   fix "Pass name itself" 261-262 ""
@@ -11418,6 +11418,90 @@ interpolate-placeholders 255-268 warning: interpolate throws here unless lookup(
 unsafe-interpolation 256-258 warning: interpolate throws here unless +name is Trusted(...): it lands in onclick, which the browser runs. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
 == corpus/kotlin-interpolate-block.json: an Html holding a mark handed to the placeholder form in a script is refused there first
 unsafe-interpolation 251-253 error: interpolate always throws here: interpolate("<b>${+name}</b>") lands in a script, which the browser runs, and only Trusted(...) is let in there. Put the value in a data-* attribute and read it from there; wrap markup you built yourself in Trusted(...).
+== corpus/kotlin-interpolate-block.json: a mark of an outer block marked again in a block inside it is refused
+interpolate-placeholders 286-291 error: interpolate throws here: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 286-291 "${+name}"
+== corpus/kotlin-interpolate-block.json: a mark of an outer block written unmarked in a block inside it is refused
+interpolate-template 274-304 warning: Kotlin fills in ${interpolate { "<p>$m</p>" }} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-placeholders 294-296 error: interpolate throws here: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 294-296 "${+name}"
+== corpus/kotlin-interpolate-block.json: a mark of an outer block in an attribute of a block inside it is refused
+interpolate-template 274-322 warning: Kotlin fills in ${interpolate { "<p title=\\"$m\\…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-placeholders 302-304 error: interpolate throws here: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 302-304 "${+name}"
+== corpus/kotlin-interpolate-block.json: a mark of an outer block kept under a second name is refused in a block inside it
+interpolate-template 285-315 warning: Kotlin fills in ${interpolate { "<p>$k</p>" }} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-placeholders 305-307 error: interpolate throws here: k holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 305-307 "${+name}"
+== corpus/kotlin-interpolate-block.json: a string holding a mark of an outer block is refused in a block inside it
+interpolate-template 282-312 warning: Kotlin fills in ${interpolate { "<p>$s</p>" }} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-placeholders 302-304 error: interpolate throws here: s holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+== corpus/kotlin-interpolate-block.json: a number an outer block marks is Kotlin's own in a block inside it
+interpolate-template 271-301 warning: Kotlin fills in ${interpolate { "<p>$m</p>" }} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-template 291-293 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $m with +, which interpolate escapes" 291-293 "${+m}"
+== corpus/kotlin-interpolate-block.json: a name a block inside declares again is that block's own
+interpolate-template 274-317 warning: Kotlin fills in ${interpolate { val m = "x"; "<…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-template 307-309 warning: Kotlin fills in $m before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+  fix "Mark $m with +, which interpolate escapes" 307-309 "${+m}"
+== corpus/kotlin-interpolate-block.json: a mark kept in a val is refused where the placeholder form escapes it
+interpolate-placeholders 299-300 error: interpolate throws here: m holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a string holding a mark kept in a val is refused where the placeholder form escapes it
+interpolate-placeholders 307-308 error: interpolate throws here: s holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a number marked and kept in a val is handed on as the number
+== corpus/kotlin-interpolate-block.json: an Html holding a mark kept in a val is refused in an attribute
+interpolate-placeholders 336-337 error: interpolate throws here: h is an Html that holds a value marked in the block, and it lands in title, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark in brackets is refused in an attribute
+interpolate-placeholders 296-328 error: interpolate throws here: (interpolate("<b>${+name}</b>… is an Html that holds a value marked in the block, and it lands in title, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark is refused in a textarea
+interpolate-placeholders 298-328 error: interpolate throws here: interpolate("<b>${+name}</b>") is an Html that holds a value marked in the block, and it lands in the text of a <textarea>, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark is refused in a comment
+interpolate-placeholders 286-316 error: interpolate throws here: interpolate("<b>${+name}</b>") is an Html that holds a value marked in the block, and it lands in a comment, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark is refused in a title
+interpolate-placeholders 292-322 error: interpolate throws here: interpolate("<b>${+name}</b>") is an Html that holds a value marked in the block, and it lands in the text of a <title>, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark that leaves a tag open is refused in element text
+interpolate-placeholders 284-316 error: interpolate throws here: interpolate("<b>${+name}</b><… is an Html that holds a value marked in the block, and it leaves a tag or an element open in element text, so interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark that leaves an element open is refused in element text
+interpolate-placeholders 284-310 error: interpolate throws here: interpolate("<b>${+name}") is an Html that holds a value marked in the block, and it leaves a tag or an element open in element text, so interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: an Html holding a mark that closes what it opens is written in element text
+== corpus/kotlin-interpolate-block.json: the text of an Html holding a mark is refused where it is escaped
+interpolate-placeholders 284-319 error: interpolate throws here: interpolate("<i>${+name}</i>"… holds the text of an Html that holds a value marked in the block, which interpolate escapes as text, so the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+== corpus/kotlin-interpolate-block.json: a mark's toString is refused where it is escaped
+interpolate-placeholders 284-302 error: interpolate throws here: (+name).toString() holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a string joined to a mark is refused where it is escaped
+interpolate-placeholders 284-297 error: interpolate throws here: "Hi " + +name holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a string holding a mark joined to more is refused where it is escaped
+interpolate-placeholders 284-302 error: interpolate throws here: "a ${+name}" + "b" holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a mark in a branch may be refused
+interpolate-placeholders 284-305 warning: interpolate throws here only where the branch that holds +name is taken: if (c) +name else "x" holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a number marked in a branch is Kotlin's own
+== corpus/kotlin-interpolate-block.json: a list holding a mark is refused and its elements not offered
+interpolate-placeholders 284-297 error: interpolate throws here: listOf(+name) holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a mark before an elvis is refused
+interpolate-placeholders 284-296 error: interpolate throws here: +name ?: "x" holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a mark in a pair is refused
+interpolate-placeholders 284-294 error: interpolate throws here: +name to 1 holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a mark cast to Any is refused
+interpolate-placeholders 284-296 error: interpolate throws here: +name as Any holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a mark of a sum with a string is refused
+interpolate-placeholders 284-297 error: interpolate throws here: +(name + "x") holds a mark of the block, +(name + "x"), which interpolate escapes as text, so the value it stands for would be lost. Hand name + "x" itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a mark's hash code is a number
+== corpus/kotlin-interpolate-block.json: a mark compared is a boolean
+== corpus/kotlin-interpolate-block.json: the size of a list holding a mark is a number
+== corpus/kotlin-interpolate-block.json: a list holding a mark marked in the block is refused where it is escaped
+interpolate-placeholders 268-281 error: interpolate throws here: listOf(+name) holds a mark of the block, +name, which interpolate escapes as text, so the value it stands for would be lost. Hand name itself to interpolate, without +, or mark it where it stands in the block's markup.
+== corpus/kotlin-interpolate-block.json: a string holding the block's own mark written by name offers no + on it
+interpolate-template 282-284 warning: Kotlin fills in $s before interpolate sees the markup, so interpolate neither escapes nor refuses it. It holds a mark of this block as text, so marked with + it would be escaped and the marked value lost. Mark each value where it is written in the markup.
+== corpus/kotlin-interpolate-block.json: a multi-dollar literal in a template of a block inside another writes a name as text
+interpolate-template 274-306 warning: Kotlin fills in ${interpolate { $$"<p>$m</p>" }} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+== corpus/kotlin-interpolate-block.json: a mark of an outer block in a block kept in a lambda for later may be refused
+interpolate-placeholders 326-328 warning: interpolate throws here if it runs while the block around it is still being built: m holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 326-328 "${+name}"
+== corpus/kotlin-interpolate-block.json: an Html holding a mark in a branch beside an Html without one is written in element text
+== corpus/kotlin-interpolate-block.json: a mark of an outer block marked again in a block inside it and kept in a val is refused
+interpolate-template 274-316 warning: Kotlin fills in ${interpolate { val k = +m; "<p…} before interpolate sees the markup, so interpolate neither escapes nor refuses it. Mark it with +, and interpolate escapes it.
+interpolate-placeholders 306-308 error: interpolate throws here: k holds a mark of the interpolate { } around this one, +name, and a mark stands for its value only in the markup of the block that made it, so the value would be lost. Mark the value in this block: ${+name}.
+  fix "Mark name in this block" 306-308 "${+name}"
 == corpus/kotlin-interpolate.json: a template in the format is filled before interpolate sees it
 interpolate-template 16-22 warning: Kotlin fills in $query before interpolate sees the markup, so interpolate neither escapes nor refuses it. Make it a %s placeholder and pass the value to interpolate.
   fix "Make $query a %s placeholder, which interpolate escapes" 16-22 "%s"
@@ -15412,7 +15496,7 @@ interpolate-template 256-286 warning: interpolate escapes wrap(Trusted("<i>$x</i
 unescaped-interpolation 276-278 warning: Kotlin writes $x into the markup Trusted(...) vouches for, as it is: Trusted escapes none of its text, $x included. If $x can hold text from outside, build this markup with interpolate { } and mark $x with +, which escapes it.
   fix "Mark the values with + in interpolate { }, which escapes the values: \"<i>$x</i>\"" 272-283 "interpolate { \"<i>${+x}</i>\" }.text" (not preferred)
 == fixes.json: in a block, a value marked in a Trusted handed on through a second placeholder form stays hinted, and is refused where that form escapes the Html, marks and all
-interpolate-placeholders 269-314 error: interpolate throws here: interpolate("%s", Trusted("<i… is an Html that holds a value marked in the block, and it lands in title, where interpolate escapes it as text, so the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
+interpolate-placeholders 269-314 error: interpolate throws here: interpolate("%s", Trusted("<i… is an Html that holds a value marked in the block, and it lands in title, where interpolate escapes it as text: the value would be lost. Hand the value to the call that builds the Html, at a %s placeholder.
 unescaped-interpolation 299-307 hint: Kotlin writes ${+name} into the HTML as it is. If it can hold text from outside, mark it with + in interpolate { }, which escapes it; if it is markup you built, declare it Html or wrap it in Trusted(...). Marking the values is not offered here: it would escape this value, which may be markup you built.
 == completions.json: the types of @intl as its first argument, quoted
 completions, alone

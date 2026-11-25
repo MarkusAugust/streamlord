@@ -150,22 +150,81 @@ class InterpolateInPlaceTest {
 
     @Test
     fun `a mark is its own block's alone`() {
-        // Written in a block inside the one that made it: no value of either block is pulled in by it.
-        val nested =
-            interpolate {
-                val title = +"outer"
-                val row = interpolate { "<li>$title ${+"inner"}</li>" }
-                "<ul>$row</ul>"
-            }.text
-        assertEquals(true, "inner" in nested && "outer" !in nested, nested)
-        assertEquals(false, MARK_OPENS in nested || MARK_CLOSES in nested, nested)
-        assertEquals(true, REPLACED in nested, nested)
         // Kept past its block and written in the next.
         var kept = ""
         interpolate { "<p>${+"first"}</p>".also { kept = it } }
         val next = interpolate { "$kept<i>${+"second"}</i>" }.text
         assertEquals(true, next.endsWith("<i>second</i>") && "first" !in next, next)
         assertEquals(false, MARK_OPENS in next || MARK_CLOSES in next, next)
+    }
+
+    @Test
+    fun `a mark of a block being built, written in a block inside it, is refused, since its value would be lost`() {
+        val name = "Gorvek"
+        val refused =
+            listOf<() -> Any>(
+                {
+                    interpolate {
+                        val m = +name
+                        interpolate { "<p>${+m}</p>" }.text
+                    }
+                },
+                {
+                    interpolate {
+                        val m = +name
+                        "<div>${interpolate { "<p>$m</p>" }}</div>"
+                    }
+                },
+                {
+                    interpolate {
+                        val m = +name
+                        interpolate { "<p title=\"$m\">${+"inner"}</p>" }.text
+                    }
+                },
+                // In the text of a Trusted the inner block reads, and in an Html its placeholder form built.
+                {
+                    interpolate {
+                        val m = +name
+                        interpolate { "<p>${+Trusted("<i>$m</i>")}</p>" }.text
+                    }
+                },
+                {
+                    interpolate {
+                        val m = +name
+                        interpolate { "<p>${interpolate("<b>%s</b>", Trusted("$m"))}</p>" }.text
+                    }
+                },
+                // Two blocks out.
+                {
+                    interpolate {
+                        val m = +name
+                        interpolate { interpolate { "<p>$m${+"x"}</p>" }.text }.text
+                    }
+                },
+            )
+        for (shape in refused) {
+            val e = assertFailsWith<IllegalArgumentException> { shape() }
+            assertEquals(true, "another interpolate" in e.message.orEmpty() && "lost" in e.message.orEmpty(), e.message)
+        }
+        // Every other refusal has its say first.
+        assertEquals(
+            Position.CODE,
+            assertFailsWith<UnsafeInterpolationException> {
+                interpolate {
+                    val m = +name
+                    interpolate { "<p onclick=\"${+name}\">$m</p>" }.text
+                }
+            }.position,
+        )
+        // The inner block's values and its own marks are its own: marked there, the value is written.
+        assertEquals(
+            "<ul><li>outer inner</li></ul>",
+            interpolate {
+                val title = "outer"
+                val row = interpolate { "<li>${+title} ${+"inner"}</li>" }
+                "<ul>$row</ul>"
+            }.text,
+        )
     }
 
     @Test

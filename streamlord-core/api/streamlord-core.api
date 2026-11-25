@@ -392,6 +392,8 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolatedExp
 }
 
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt {
+	public static final fun htmlWrittenAsMarkup (Ljava/lang/String;Ljava/util/List;ILjava/lang/String;Ljava/util/List;Ljava/util/Map;)Z
+	public static synthetic fun htmlWrittenAsMarkup$default (Ljava/lang/String;Ljava/util/List;ILjava/lang/String;Ljava/util/List;Ljava/util/Map;ILjava/lang/Object;)Z
 	public static final fun interpolate (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/util/List;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun interpolate (Ljava/util/List;Lkotlin/jvm/functions/Function1;)Ljava/lang/String;
