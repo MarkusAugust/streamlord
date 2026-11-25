@@ -202,6 +202,12 @@ private class PlaceholderHtml(
 /** What the placeholder form reads of an Html's format: a per cent sign written twice, or a placeholder. */
 private val HELD_PERCENT = regex("""%%|%s""")
 
+/** The name written just before [at], past blanks: the name of a call whose bracket is at [at]. */
+internal fun nameBefore(
+    src: String,
+    at: Int,
+): String? = NAME_BEFORE.find(src.substring(maxOf(0, at - 40), at).trimEnd())?.value
+
 /** The name a lambda's brace follows, as [Analyzer.runsLater] reads it. */
 private val NAME_BEFORE = regex("""[\p{L}_][\p{L}\p{Nd}_]*$""")
 
@@ -574,9 +580,9 @@ public class Analyzer(
             if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
         }
 
-        // The innermost block an offset is in, and what each block gives, read once a literal asks.
+        // The innermost block an offset is in, and the literals each block gives, read once a literal asks.
         fun innermostAt(at: Int) = blocks.lastOrNull { at in it.braces }
-        val results = HashMap<InterpolateBlock, IntRange?>()
+        val reached = HashMap<InterpolateBlock, Set<Int>>()
         // A literal joined to values with `+` is read as one string with a placeholder for each value.
         val chained = HashSet<Int>()
         val topLevel = lex.strings.mapTo(HashSet()) { it.start }
@@ -594,6 +600,8 @@ public class Analyzer(
             val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(trusted) } }
             val block = innermost?.takeUnless { html == null && inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
+                // The literal of the chain an offset is written in.
+                fun literalOf(at: Int) = whole.literals.firstOrNull { at in it.start until it.end } ?: s
                 // A quote of the Html's own markup may end the attribute it lands in and put its mark in element text.
                 val held = { at: Int ->
                     val h = htmls.firstOrNull { it.givenAt == at }
@@ -613,7 +621,8 @@ public class Analyzer(
                         htmlAt = htmlAt,
                         own = { at -> innermostAt(at) === block },
                         around = { at -> innermostAt(at)?.let { it !== block && block.braces.first in it.braces } == true },
-                        given = { givenByBlock(src, results.getOrPut(block) { blockResult(src, block.braces) }, whole) },
+                        reaches = { at -> literalOf(at).start in reached.getOrPut(block) { markupLiterals(src, block.braces) } },
+                        discarded = { at -> discarded(src, facts, literalOf(at), block.braces) },
                         later = { at -> runsLater(src, facts.code, at, block.braces.first) },
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
@@ -929,11 +938,11 @@ public class Analyzer(
                 }
                 k--
                 while (k >= 0 && src[k].isWhitespace()) k--
-                return@any k >= 0 && NAME_BEFORE.find(src.substring(maxOf(0, k - 40), k + 1))?.value in KEPT_FOR_LATER
+                return@any k >= 0 && nameBefore(src, k + 1) in KEPT_FOR_LATER
             }
             val before = src.getOrNull(k)
             before == '=' || before == '(' || before == ',' ||
-                NAME_BEFORE.find(src.substring(maxOf(0, k - 40), k + 1))?.value in KEPT_FOR_LATER
+                nameBefore(src, k + 1) in KEPT_FOR_LATER
         }
     }
 

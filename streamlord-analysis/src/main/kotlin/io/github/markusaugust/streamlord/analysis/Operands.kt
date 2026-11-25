@@ -269,7 +269,7 @@ internal class Operands(
     }
 
     /** The bracket open around [at], or -1 where none is within reach: a block or the file, where a line break ends a statement. */
-    private fun openBefore(at: Int): Int {
+    fun openBefore(at: Int): Int {
         var depth = 0
         for (k in at - 1 downTo maxOf(0, at - REACH)) {
             if (!mask[k]) continue
