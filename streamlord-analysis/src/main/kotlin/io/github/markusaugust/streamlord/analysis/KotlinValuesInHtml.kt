@@ -312,12 +312,11 @@ private const val TEXT_ONLY_ADVICE =
 /**
  * The block form, `interpolate { "<p>${+name}</p>" }`: a template that opens with `+` is a value interpolate takes where it
  * stands, judged as the value of a `%s` there is; any other template Kotlin fills in before interpolate sees the markup.
- * [prefixes] are those the call is given, null for none, and [block] is what stands in the block's braces.
+ * [prefixes] are those the call is given, null for none.
  */
 internal fun Analyzer.checkInterpolateBlock(
     s: KotlinString,
     prefixes: List<String>?,
-    block: String,
     src: String,
     opts: Reading,
     hyphenated: Set<String>,
@@ -330,8 +329,12 @@ internal fun Analyzer.checkInterpolateBlock(
     held: (Int) -> Boolean?,
     // The Html of the placeholder form whose call's opening bracket is at an offset, where it holds a mark of a block.
     htmlAt: (Int) -> HeldMark?,
-    // The block's braces, outside which a mark is another block's.
-    braces: IntRange,
+    // Whether an offset is in this block and in no block inside it: a mark written there is this block's own.
+    own: (Int) -> Boolean,
+    // Whether the innermost block an offset is in is one around this one, which is still being built while this one runs.
+    around: (Int) -> Boolean,
+    // Whether the string is what the block gives, or a branch of it: the block's markup for certain.
+    given: () -> Boolean,
     // Whether this block may run after the block that wrote the mark at an offset has been built: in a lambda kept for later.
     later: (Int) -> Boolean,
 ): List<Issue> {
@@ -343,25 +346,34 @@ internal fun Analyzer.checkInterpolateBlock(
             }.toMap()
     // A template that writes a mark of a block around this one, kept by name: interpolate refuses it, since a mark stands
     // for its value only in the markup of the block that made it. One whose value may be a number is warned as any template.
-    val outer = holding.filter { (ip, it) -> it.at !in braces && it.known && (it.whole || markedValue(ip) == null) }
+    val outer = holding.filter { (ip, it) -> around(it.at) && it.known && (it.whole || markedValue(ip) == null) }
     // A template the block's own marks are written in by name: a + on it would be refused, since its value holds them as
     // text. An Html is marked as an Html, its marks resolved in its own markup.
-    val holdsOwn = holding.filter { (ip, it) -> it.at in braces && !it.whole && !it.html && markedValue(ip) == null }.keys
+    val holdsOwn = holding.filter { (ip, it) -> own(it.at) && !it.whole && !it.html && markedValue(ip) == null }.keys
     val issues = ArrayList<Issue>()
     for ((ip, mark) in outer) issues += outerMarkLost(ip, mark, later(mark.at))
-    val all = s.interpolations.filter { markedValue(it) != null && it !in outer }
+    // A template that is a mark of the block itself without a + on it, `$title` of `val title = +name`, is the mark where
+    // it is written: judged there where the string is the block's markup for certain and so is the mark. Anywhere else,
+    // or where a branch or a var may hold another value, it is the template Kotlin fills in, as any other.
+    val named = holding.filter { (ip, it) -> own(it.at) && it.whole && it.holding == Holding.MARK && it.certain && markedValue(ip) == null }
+    val judged = if (named.isNotEmpty() && given()) named else emptyMap()
+    val all = s.interpolations.filter { (markedValue(it) != null && it !in outer) || it in judged }
     val read =
         all.map { ip ->
-            val value = markedValue(ip)!!
-            val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
+            val value = unmarkedCode(ip)
+            val start = src.indexOf(value, if (ip in judged) ip.start else src.indexOf('+', ip.start) + 1)
             Arg(start, start + value.length, null, value, null)
         }
-    val told = all.mapIndexed { k, ip -> markKind(src, opts, ip.start, read[k].text, s.start) }
+    // A name of the block's own mark has the kind heldMark read of its value, a written `+value` markKind's: that a + is a
+    // mark says nothing of what the value is, and Any may hold a number, which a data-* attribute lets in.
+    val told =
+        all.mapIndexed { k, ip ->
+            val mark = judged[ip]
+            if (mark != null) mark.kind else markKind(src, opts, ip.start, read[k].text, s.start)
+        }
     // A + on a number is Kotlin's own and marks nothing: the number is written as it is, as from any template.
     val marks = all.indices.filter { told[it] != ArgKind.NUMBER }
-    // A name set to a mark in the block, `val title = +name`, is the mark where it is written.
-    val set = s.interpolations.filter { it.kind == InterpolationKind.SIMPLE && setToMark(block, it.text) }
-    val format = s.copy(interpolations = s.interpolations - all.toSet() - set.toSet() - outer.keys)
+    val format = s.copy(interpolations = s.interpolations - all.toSet() - outer.keys)
     return judgeInterpolated(
         s,
         format,
@@ -391,17 +403,29 @@ internal fun markKind(
     from: Int,
     value: String,
     at: Int,
+): ArgKind? = valueKind(src, opts, src.indexOf(value, src.indexOf('+', from) + 1), value, at)
+
+/** What [value], written from [start], is as far as is known: null where it may be anything. */
+private fun valueKind(
+    src: String,
+    opts: Reading,
+    start: Int,
+    value: String,
+    at: Int,
 ): ArgKind? {
-    val start = src.indexOf(value, src.indexOf('+', from) + 1)
     val fact = opts.fact(start, start + value.length)
     return if (fact.isOther()) null else fact.argKind() ?: argKind(src, value, value.startsWith("\""), at)
 }
 
-/** The literal of [arg], `Trusted("...")` written whole, whose templates all mark a value: null for any other value. */
+/**
+ * The literal of [arg], `Trusted("...")` written whole or a `val` set to it, whose templates all mark a value: null for
+ * any other value.
+ */
 internal fun Analyzer.markedTrustedLiteral(
     src: String,
     arg: Arg,
 ): KotlinString? {
+    if (KOTLIN_NAME.matchEntire(arg.text.trim()) != null) return trustedSetTo(src, arg)?.let { markedTrustedLiteral(src, it) }
     if (!coreCall(src, arg.text.trim(), "Trusted")) return null
     val literal = nested(src).firstOrNull { it.start > arg.start && it.end <= arg.end } ?: return null
     // The literal is the whole of Trusted's argument, a trailing comma after it as a formatter writes one.
@@ -416,10 +440,21 @@ internal fun Analyzer.markedTrustedLiteral(
     return literal.takeIf { l -> l.interpolations.isNotEmpty() && l.interpolations.all { markedValue(it) != null } }
 }
 
-private fun setToMark(
-    block: String,
-    name: String,
-): Boolean = regex("""(?<![\p{L}\p{Nd}_])${Regex.escape(name)}\s*=\s*\+(?!\+)""").containsMatchIn(block)
+/** The call to `Trusted` that the `val` [arg] names is set to, and nothing more. */
+private fun Analyzer.trustedSetTo(
+    src: String,
+    arg: Arg,
+): Arg? {
+    val d =
+        declarationOf(src, arg.text.trim(), arg.start)?.takeIf { it.trusted && it.markupAt >= 0 && !it.overridable && !it.mutable }
+            ?: return null
+    // Its one argument is a literal, which markedTrustedLiteral asks for: the call closes past it.
+    val literal = nested(src).firstOrNull { it.start > d.markupAt } ?: return null
+    var close = literal.end
+    while (close < src.length && (src[close].isWhitespace() || src[close] == ',')) close++
+    if (src.getOrNull(close) != ')') return null
+    return Arg(d.markupAt, close + 1, null, src.substring(d.markupAt, close + 1), null)
+}
 
 /**
  * What a template of the block form, or a value joined with `+` in it, marks with `+`, as written and without
@@ -744,7 +779,7 @@ private fun Analyzer.judgeInterpolated(
         // A value holding a mark of the block is refused where interpolate escapes it, once no refusal above has fired, since
         // the value the mark stands for would be lost: an Html is escaped outside element text.
         if (arg != null && (block || inHtml != null) && landing.position in ESCAPED_POSITIONS) {
-            val lost = lostMarks(src, opts, arg, block, s.start)
+            val lost = lostMarks(src, opts, arg, block, s.start, htmlAt)
             // A mark the value holds through what Kotlin keeps of it, or an Html of the placeholder form holding one, which
             // interpolate escapes outside element text, and in it where it is no markup in place, as core reads it. One whose
             // value may be a number is left to the mark written whole, as before.
@@ -867,32 +902,51 @@ private fun Analyzer.lostMarks(
     arg: Arg,
     block: Boolean,
     at: Int,
+    htmlAt: (Int) -> HeldMark?,
 ): List<Issue> {
-    // Where each mark is written, and what it marks.
-    val marks = ArrayList<Triple<Int, Int, String>>()
+    // The mark written from an offset to another, `+name` itself, as heldMark reads it. One whose value may be a number is
+    // read only where the + takes a name and the reads on it, as Kotlin reads `+a + 1` too: a sum or a call may be a number.
+    fun markFrom(
+        from: Int,
+        to: Int,
+    ): HeldMark? =
+        heldMark(src, opts, from, to, at, htmlAt)?.takeIf {
+            it.whole && it.holding == Holding.MARK && it.at == from &&
+                (it.known || marked(src.substring(from, to))?.let(::wholeOperand) == true)
+        }
+
+    // Where each mark is written, and what heldMark reads of it.
+    val marks = ArrayList<Pair<IntRange, HeldMark>>()
     // In the block form the value is the one a mark takes, and the mark is its own.
-    val whole = if (block) null else marked(arg.text)?.takeIf(::wholeOperand)
+    val whole = if (block || !arg.text.startsWith("+")) null else markFrom(arg.start, arg.end)
     if (whole != null) {
-        marks += Triple(arg.start, arg.end, whole)
+        marks += arg.start until arg.end to whole
     } else {
         val literal = arg.string ?: nested(src).firstOrNull { it.start == arg.start && it.end == arg.end }
-        for (ip in literal?.interpolations.orEmpty()) markedValue(ip)?.takeIf(::wholeOperand)?.let { marks += Triple(ip.start, ip.end, it) }
+        for (ip in literal?.interpolations.orEmpty()) {
+            if (markedValue(ip) == null) continue
+            val code = codeSpan(src, ip, ip.text.trim()) ?: continue
+            markFrom(code.first, code.last + 1)?.let { marks += ip.start until ip.end to it }
+        }
     }
-    return marks.mapNotNull { (from, end, value) ->
-        val kind = markKind(src, opts, from, value, at)
-        if (kind == ArgKind.NUMBER) return@mapNotNull null
-        val plus = src.indexOf('+', from)
-        val shown = shortened(value)
+    return marks.map { (range, mark) ->
+        val plus = src.indexOf('+', range.first)
+        val shown = shortened(mark.value)
+        val what =
+            if (whole != null) {
+                "${shortened(arg.text.substring(0, operandEnd(arg.text, 1)))} is a mark of the block"
+            } else {
+                "${shortened(arg.text)} holds a mark of the block"
+            }
         val message =
-            "interpolate throws here${if (kind != null) "" else " unless $shown is a number"}: " +
-                (if (whole != null) "+$shown is a mark of the block" else "${shortened(arg.text)} holds a mark of the block") +
+            "interpolate throws here${if (mark.known) "" else " unless $shown is a number"}: $what" +
                 ", which interpolate escapes as text, so the value it stands for would be lost. Pass $shown itself, without +: " +
                 "interpolate escapes or refuses the value where it lands."
         Issue(
-            from,
-            end,
+            range.first,
+            range.last + 1,
             message,
-            if (kind != null) Severity.ERROR else Severity.WARNING,
+            if (mark.certain) Severity.ERROR else Severity.WARNING,
             IssueCode.INTERPOLATE_PLACEHOLDERS,
             fixes = listOf(Fix("Pass $shown itself", plus, plus + 1, "")),
         )
@@ -915,16 +969,24 @@ internal class HeldMark(
     val branch: Boolean = false,
     /** An Html's text as the code writes it, each value and mark standing as text; null where a Trusted or a template may write markup. */
     val text: String? = null,
+    /** What the marked value is, where that is known: a String for a sum with a string in it. */
+    val kind: ArgKind? = null,
 ) {
     val certain: Boolean get() = known && !branch
     val html: Boolean get() = holding == Holding.HTML
 
     /** This mark as a value made of this one's text holds it: an Html's text, where this is the Html. */
-    fun asText(): HeldMark = HeldMark(value, at, known, if (html) Holding.HTML_TEXT else holding, branch = branch)
+    fun asText(): HeldMark = HeldMark(value, at, known, if (html) Holding.HTML_TEXT else holding, branch = branch, kind = kind)
 }
 
+/** A cast to Any, which Kotlin's own + on a number does not take. */
+private const val AS_ANY = """as\??\s*Any\??"""
+
 /** What follows a mark that keeps it in the value, as Kotlin reads `+name ?: x`, `+name to x` and `+name as Any`. */
-private val KEEPS_MARK = regex("""^(?:\?:|to(?![\p{L}\p{Nd}_])|as\??\s*Any\??(?![\p{L}\p{Nd}_.]))""")
+private val KEEPS_MARK = regex("""^(?:\?:|to(?![\p{L}\p{Nd}_])|$AS_ANY(?![\p{L}\p{Nd}_.]))""")
+
+/** A value cast to Any, which a + then marks whatever it holds. */
+private val CAST_TO_ANY = regex("""\s$AS_ANY$""")
 
 /**
  * The mark of a block that the value from [from] to [to] of [src] holds, as Kotlin reads the expression: a mark and what
@@ -956,39 +1018,50 @@ internal fun Analyzer.heldMark(
     val t = src.substring(a, b)
 
     fun held(span: IntRange?): HeldMark? = span?.let { heldMark(src, opts, a + it.first, a + it.last + 1, site, htmlAt, depth + 1) }
+
+    // The mark the + at [plus] puts on [value], written from [start]: none where it is a number, which Kotlin's own + takes.
+    // After a safe call the value cannot be null, and its type says no more than that.
+    fun markOf(
+        value: String,
+        start: Int,
+        plus: Int,
+        whole: Boolean,
+        safe: Boolean = false,
+    ): HeldMark? {
+        val always = !safe && marksWhatever(src, value, start)
+        val kind = if (always) null else valueKind(src, opts, start, value, site)
+        if (kind == ArgKind.NUMBER) return null
+        val told = kind ?: ArgKind.STRING.takeIf { joinsString(value) }
+        return HeldMark(value, plus, always || told != null, whole = whole, kind = told)
+    }
     if (t.startsWith("+") && !t.startsWith("++") && !t.startsWith("+=")) {
         val end = operandEnd(t, 1)
         val rest = t.substring(end).trim()
         if (rest.isNotEmpty() && !KEEPS_MARK.containsMatchIn(rest)) return null
         val value = unparen(t.substring(1, end))
         if (value.isEmpty()) return null
+        // `+name ?: x` and `+name as Any` are the mark, which is never null; `+name to x` is a Pair that holds it.
+        val whole = !rest.startsWith("to")
         // A mark marked again is the mark it was, `+m` of `val m = +name`, another block's too.
         if (KOTLIN_NAME.matchEntire(value) != null) {
             val again = held(spansIn(t, listOf(value), 1)[0])
-            if (again != null && again.whole) return HeldMark(again.value, again.at, again.known, whole = rest.isEmpty())
+            if (again != null && again.whole) {
+                return HeldMark(again.value, again.at, again.known, whole = whole, branch = again.branch, kind = again.kind)
+            }
         }
-        val kind = markKind(src, opts, a, value, site)
-        if (kind == ArgKind.NUMBER) return null
-        return HeldMark(value, a, kind != null || joinsString(value), whole = rest.isEmpty())
+        return markOf(value, src.indexOf(value, a + 1), a, whole)
     }
     // A branch may be taken: the value holds a mark for certain only where every branch holds one as text.
-    branches(t)?.takeIf { it.size > 1 }?.let { all ->
-        val holders = spansIn(t, all, 0).mapNotNull { held(it) }
-        val h = holders.firstOrNull() ?: return null
-        val text = holders.firstOrNull { !it.html }
-        if (text == null) {
-            val branch = holders.size < all.size || holders.any { it.branch }
-            val known = holders.all { it.known }
-            return HeldMark(h.value, h.at, known, Holding.HTML, branch = branch, text = holders.map { it.text }.distinct().singleOrNull())
-        }
-        val branch = holders.size < all.size || holders.any { it.html || it.branch }
-        return HeldMark(text.value, text.at, text.known, text.holding, branch = branch)
-    }
+    branches(t)?.takeIf { it.size > 1 }?.let { all -> return either(spansIn(t, all, 0).map { held(it) }) }
     // A string joined to more: what each part holds is in the string's text.
     val parts = splitTop(t, "+").map { it.trim() }
     if (parts.size > 1) {
         if (parts.any { it.isEmpty() } || !isStringStart(parts[0], 0)) return null
-        return spansIn(t, parts, 0).firstNotNullOfOrNull { held(it) }?.asText()
+        val spans = spansIn(t, parts, 0)
+        // An `if` or a `when` takes the rest of the sum as its branches, `"a" + if (c) +name else "b"`.
+        val branching = parts.indexOfFirst { BRANCHING.containsMatchIn(it) }.takeIf { it > 0 && spans[it] != null }
+        val operands = if (branching == null) spans else spans.take(branching) + listOf(spans[branching]!!.first until t.length)
+        return operands.firstNotNullOfOrNull { held(it) }?.asText()
     }
     literalAt(src, a)?.takeIf { it.end == b }?.let { literal ->
         for (ip in literal.interpolations) {
@@ -1002,16 +1075,72 @@ internal fun Analyzer.heldMark(
     if (call?.receiver != null && call.name == "toString" && call.lambda == null && call.args.isBlank()) {
         return held(0 until call.receiver.length)?.asText()
     }
+    // `also` and `apply` give their receiver, `let` and `run` what their lambda ends with: the receiver where that is it
+    // or a mark of it, `name.let { +it }`.
+    if (scopeCall(call)) {
+        val receiver = 0 until call!!.receiver!!.length
+        if (call.name == "also" || call.name == "apply") return held(receiver)
+        val lambda = call.lambda!!
+        val body = lambdaResult(lambda)
+        val offset = t.length - 1 - lambda.length
+        val result = resultIn(lambda)?.let { offset + it.first..offset + it.last } ?: return null
+        val names = scope(src, lambda, call.name, false).keys
+        if (body in names) return held(receiver)
+        if (marked(body) in names) {
+            // A mark of a mark is the mark it was, and a + on a number Kotlin's own.
+            if (unparen(call.receiver).startsWith("+")) return held(receiver)
+            return markOf(call.receiver.trim(), a, a + result.first, whole = true, safe = call.safe)
+        }
+        return held(result)
+    }
+    // A Pair or a Triple writes its values in brackets.
+    if (call != null && call.receiver == null && call.lambda == null && (call.name == "Pair" || call.name == "Triple")) {
+        val open = t.indexOf('(')
+        return spansIn(t, splitTop(call.args, ",").map { it.trim() }, open + 1).firstNotNullOfOrNull { held(it) }?.asText()
+    }
     TEXT_OF_VALUE.matchEntire(t)?.let { m -> return held(0 until m.groupValues[1].length)?.takeIf { it.html }?.asText() }
     if (coreCall(src, t, "interpolate") && t.endsWith(")")) return htmlAt(a + t.indexOf('('))
     if (KOTLIN_NAME.matchEntire(t) != null) {
         val d = declarationOf(src, t, a)?.takeUnless { it.overridable } ?: return null
+        // A var holds one of the values it is given before here, as a branch taken holds its own.
+        if (d.mutable) {
+            val given = d.assigned.filter { it.start < a && it.end >= 0 }.ifEmpty { return null }
+            return either(given.map { heldMark(src, opts, it.start, it.end, site, htmlAt, depth + 1) })
+        }
         // Set to a call of interpolate and nothing more, the declaration keeps the call's start and no value to read.
         if (d.markup) return if (d.trusted || d.markupAt < 0) null else htmlAt(src.indexOf('(', d.markupAt))
         val v = d.value?.takeUnless { it.getter || it.end < 0 } ?: return null
         return heldMark(src, opts, v.start, v.end, site, htmlAt, depth + 1)
     }
     return null
+}
+
+/**
+ * The mark a value holds that is one of [values], what each holds: for certain only where each holds one as text, and the
+ * mark itself where each is a mark.
+ */
+private fun either(values: List<HeldMark?>): HeldMark? {
+    val holders = values.filterNotNull()
+    val h = holders.firstOrNull() ?: return null
+    val text = holders.firstOrNull { !it.html }
+    if (text == null) {
+        val branch = holders.size < values.size || holders.any { it.branch }
+        val known = holders.all { it.known }
+        val markup = holders.map { it.text }.distinct().singleOrNull()
+        return HeldMark(h.value, h.at, known = known, holding = Holding.HTML, branch = branch, text = markup)
+    }
+    val branch = holders.size < values.size || holders.any { it.html || it.branch }
+    val whole = holders.all { it.whole }
+    val kind = holders.map { it.kind }.distinct().singleOrNull()
+    return HeldMark(
+        text.value,
+        text.at,
+        known = holders.all { it.known },
+        holding = text.holding,
+        whole = whole,
+        branch = branch,
+        kind = kind,
+    )
 }
 
 /** Where each of [parts], read off [t] in order from [from] on, stands in it: null for one not found after the one before. */
@@ -1032,12 +1161,46 @@ private fun spansIn(
     }
 }
 
-/** Whether [value] is a sum with a string literal in it, which Kotlin reads as a String: no number. */
-private fun joinsString(value: String): Boolean =
-    splitTop(value, "+").let { parts ->
+/**
+ * Whether [value] is a sum with a string literal in it, which Kotlin reads as a String: no number. A `let` or a `run`
+ * gives what its lambda ends with.
+ */
+private fun joinsString(value: String): Boolean {
+    val call = lastCall(value)
+    if (scopeCall(call)) {
+        val given = if (call!!.name == "let" || call.name == "run") lambdaResult(call.lambda!!) else call.receiver!!
+        return joinsString(given)
+    }
+    return splitTop(value, "+").let { parts ->
         parts.size > 1 &&
             parts.any { isStringStart(it.trim(), 0) }
     }
+}
+
+/** The scope functions whose value heldMark follows. */
+private val SCOPE_FUNCTIONS = setOf("let", "run", "also", "apply")
+
+/** Whether [call] is one of [SCOPE_FUNCTIONS] on a receiver with its lambda alone: `name.let { +it }`. */
+private fun scopeCall(call: Call?): Boolean =
+    call?.receiver != null && call.lambda != null && call.args.isBlank() && call.name in SCOPE_FUNCTIONS
+
+/** An `if` or a `when` that an operand opens with. */
+private val BRANCHING = regex("""^(?:if|when)(?![\p{L}\p{Nd}_])""")
+
+/**
+ * Whether a + on [value] is a mark whatever its value: Kotlin's own + takes a number that cannot be null, so a value
+ * cast to Any, or a name whose declared type is Any or may be null, is marked.
+ */
+private fun marksWhatever(
+    src: String,
+    value: String,
+    at: Int,
+): Boolean {
+    if (CAST_TO_ANY.containsMatchIn(value)) return true
+    if (KOTLIN_NAME.matchEntire(value) == null) return false
+    val type = declarationOf(src, value, at)?.takeUnless { it.overridable }?.type?.filterNot { it.isWhitespace() } ?: return false
+    return type == "Any" || typeMayBeNull(src, type)
+}
 
 /** Where [code], the code of [ip] as written, stands in [src], or null where it is not inside the template. */
 private fun codeSpan(
@@ -2156,4 +2319,27 @@ private fun Analyzer.datastarTrap(
                     "meant as the signal \$$name, make the literal \$\$\"\"\"...\"\"\" (Kotlin 2.2+) or escape as \${'$'}$name."
             },
     )
+}
+
+/** What the block in [braces] gives, its last statement, where it is written; null where none is read. */
+internal fun blockResult(
+    src: String,
+    braces: IntRange,
+): IntRange? {
+    val body = braces.first + 1
+    return resultIn(src.substring(body, braces.last))?.let { body + it.first..body + it.last }
+}
+
+/** Whether [s] is [result], what a block gives, or a branch of it: the block's markup for certain. */
+internal fun givenByBlock(
+    src: String,
+    result: IntRange?,
+    s: KotlinString,
+): Boolean {
+    // A sum with a call on one of its literals, or a part it cannot read, is more than its markup shows.
+    if (result == null || s.called || s.unread) return false
+    if (result.first == s.start && result.last + 1 == s.end) return true
+    val t = src.substring(result.first, result.last + 1)
+    val leaves = branches(t)?.map { it.trim() } ?: return false
+    return spansIn(t, leaves, 0).any { it != null && result.first + it.first == s.start && result.first + it.last + 1 == s.end }
 }

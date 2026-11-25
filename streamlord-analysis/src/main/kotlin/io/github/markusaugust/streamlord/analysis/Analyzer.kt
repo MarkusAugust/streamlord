@@ -573,6 +573,10 @@ public class Analyzer(
             val issues = expressionIssues(o.value, src, opts, hyphenated, siteHelpers, "the expression of ${o.name}", null, null, o.name)
             if (issues.isNotEmpty()) out += SiteIssues(null, o.value, issues)
         }
+
+        // The innermost block an offset is in, and what each block gives, read once a literal asks.
+        fun innermostAt(at: Int) = blocks.lastOrNull { at in it.braces }
+        val results = HashMap<InterpolateBlock, IntRange?>()
         // A literal joined to values with `+` is read as one string with a placeholder for each value.
         val chained = HashSet<Int>()
         val topLevel = lex.strings.mapTo(HashSet()) { it.start }
@@ -586,7 +590,7 @@ public class Analyzer(
             // The innermost block a literal stands in reads it, where it is markup or marks a value: its call is the
             // issues' site, so a host that resolves calls can say it is somebody else's.
             val trusted = facts.trustedAt(s.start)
-            val innermost = blocks.lastOrNull { s.start in it.braces }
+            val innermost = innermostAt(s.start)
             val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(trusted) } }
             val block = innermost?.takeUnless { html == null && inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
@@ -599,7 +603,6 @@ public class Analyzer(
                     checkInterpolateBlock(
                         whole,
                         block.prefixes,
-                        src.substring(block.braces.first, block.braces.last),
                         src,
                         opts,
                         hyphenated,
@@ -608,7 +611,9 @@ public class Analyzer(
                         html?.let { MarksInHtml(it.givenAt != null, judgedHere = s.start !in it.inPlace) },
                         held = held,
                         htmlAt = htmlAt,
-                        braces = block.braces,
+                        own = { at -> innermostAt(at) === block },
+                        around = { at -> innermostAt(at)?.let { it !== block && block.braces.first in it.braces } == true },
+                        given = { givenByBlock(src, results.getOrPut(block) { blockResult(src, block.braces) }, whole) },
                         later = { at -> runsLater(src, facts.code, at, block.braces.first) },
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)

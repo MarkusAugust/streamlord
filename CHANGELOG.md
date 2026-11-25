@@ -88,6 +88,17 @@ All notable changes to Streamlord are recorded here. The format follows
   (#360).
 - A multi-dollar literal in a template's code, `"${interpolate { $$"<p>$m</p>" }}"`, opens its
   templates with its own dollars: `$m` there is text, where it was read as a template.
+- In `interpolate { }`, a name set to a mark of the block, `val m = +name`, is judged as the mark
+  where it is written in what the block gives: `<script>$m</script>` and `onclick="$m"` are errors
+  as core refuses them, where they were said nothing of. So is a `var` given only marks. Anywhere
+  else, and where it may hold another value, it is warned as the template Kotlin fills in. A mark in
+  brackets, with a type, through a second name, in either branch of an `if` or before `?:` is no
+  longer warned as a template Kotlin fills in. A mark is also followed
+  through `let`, `run`, `also` and `apply`, a `Pair`, a branch inside a sum, `"a" + if (c) +name
+  else "b"`, and a `val` set to a `Trusted` of marks, and a `+` on a value typed `Any` or one that
+  may be null is a mark for certain, since Kotlin's own `+` takes only a number that cannot be
+  null. A `val` set to a number by name, `val m = n`, is a number. Only a mark of a block around
+  this one is another block's: one of a block beside it is a template here (#362).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`
