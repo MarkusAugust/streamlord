@@ -25,6 +25,14 @@ All notable changes to Streamlord are recorded here. The format follows
   escaped `name` into `title`. The block cannot know the `data-*` prefixes the `Html` was built
   with, so it cannot tell such a place from a Datastar expression. Hand the value to that
   placeholder form as one of its own, `interpolate("<b title=\"%s\">b</b>", name)` (#354).
+- **Breaking:** `interpolate` refuses a value that holds a mark of a block being built, where it
+  would escape the value, with an `IllegalArgumentException`: `+name` handed to the placeholder
+  form, `interpolate("<b>%s</b>", +name)`, a string with a mark in it, `"Hi ${+name}"`, and an
+  `Html` holding one that it escapes into an attribute, where the value was lost without a word
+  and the block's id written into the page. Pass the value itself,
+  `interpolate("<b>%s</b>", name)`, or mark it where it stands in the block's markup. Text from
+  outside never stops the page: a mark is refused only while the block that made it is being
+  built (#358).
 - streamlord-spring: two test helpers in `io.github.markusaugust.streamlord.spring.test` read a
   whole stream through MockMvc, a `suspend` controller's too. `MockMvcTester.datastar(method, uri,
   signals)` sends the request as Datastar's client does, and `mockMvc.datastarRequestFactory()`
@@ -59,6 +67,11 @@ All notable changes to Streamlord are recorded here. The format follows
   An `Html` of it written unmarked into a quoted attribute, holding a value marked in it, is an
   error with the mark as its fix. A value marked in it is no longer offered as a `%s` value, which
   core would have written without it (#356).
+- In `interpolate { }`, a mark handed to the placeholder form, `interpolate("<b>%s</b>", +name)`,
+  or held in a string handed to it or marked, `"Hi ${+name}"`, is an error as core refuses it, or
+  a warning where the value may be a number, with the `+` taken away as its fix. So is an `Html`
+  of the placeholder form holding a value marked in it, handed to a second placeholder form that
+  writes it into an attribute (#358).
 - A value may be null where the calls it ends in show it, as the Kotlin compiler types it:
   `s.takeIf { c }`, `q.let { v -> v }`, `q?.plus(s ?: "")` and `xs.first()` of a
   `List<String?>` no longer have the rewrite to `interpolate` preferred, since `interpolate`

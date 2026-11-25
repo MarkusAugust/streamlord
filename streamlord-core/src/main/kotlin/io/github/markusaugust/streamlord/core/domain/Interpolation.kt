@@ -7,6 +7,7 @@ import io.github.markusaugust.streamlord.core.client.asciiLowercase
 import io.github.markusaugust.streamlord.core.client.decodeEntities
 import io.github.markusaugust.streamlord.core.client.isHtmlSpace
 import io.github.markusaugust.streamlord.core.client.regex
+import io.github.markusaugust.streamlord.core.weakSet
 import org.intellij.lang.annotations.Language
 import kotlin.jvm.JvmInline
 import kotlin.random.Random
@@ -293,7 +294,8 @@ public class UnsafeInterpolationException private constructor(
  * Java, `values` is varargs, so a `String[]` passed alone is spread: it is the values.
  *
  * @throws UnsafeInterpolationException if a value landed where escaping cannot help.
- * @throws IllegalArgumentException if the number of values does not match the number of placeholders.
+ * @throws IllegalArgumentException if the number of values does not match the number of placeholders, or a value that
+ *   would be escaped holds a mark of the block form being built, which would lose the value it stands for.
  */
 public fun interpolate(
     @Language("HTML") format: String,
@@ -347,9 +349,15 @@ public fun interpolate(
  * page. Trim the string, and do nothing else to it. A block marks its values from one thread at a
  * time.
  *
+ * A mark stands for its value only in markup. A value holding one, `+name` handed to the placeholder
+ * form or a string or Html with a mark in its text, is refused where it would be escaped, while its
+ * block is being built: the mark would be written as text and its value lost. Hand the value itself
+ * to the placeholder form, or mark it where it stands in the block's markup.
+ *
  * @throws UnsafeInterpolationException if a marked value landed where escaping cannot help; its
  *   `index` counts the marks as they stand in the markup, a marked Trusted's or Html's and the marks
  *   in its text among them.
+ * @throws IllegalArgumentException if a value that would be escaped holds a mark of a block being built.
  */
 public inline fun interpolate(block: InterpolationScope.() -> String): Html = interpolate(ElementsGuard.defaultPrefixes, block)
 
@@ -357,7 +365,14 @@ public inline fun interpolate(block: InterpolationScope.() -> String): Html = in
 public inline fun interpolate(
     prefixes: List<String>,
     block: InterpolationScope.() -> String,
-): Html = InterpolationScope().run { html(block(), prefixes) }
+): Html {
+    val scope = InterpolationScope()
+    try {
+        return scope.html(scope.block(), prefixes)
+    } finally {
+        scope.finished()
+    }
+}
 
 /** Where the block form of [interpolate] is written: it keeps the values its `+` marks. */
 public class InterpolationScope
@@ -372,6 +387,7 @@ public class InterpolationScope
         public operator fun Any?.unaryPlus(): Placed {
             // A mark marked again is the mark it was.
             if (this is Placed) return this
+            if (marked.isEmpty()) BUILDING += id
             marked += this
             return Placed("$MARK_OPENS$id.${marked.size - 1}$MARK_CLOSES")
         }
@@ -450,18 +466,57 @@ public class InterpolationScope
             }
         }
 
-        /**
-         * Where the mark that opens just before [r]'s place ends, if it is one of this block's made before [r]'s text: -1 where
-         * it is none. A mark is read no further than a mark is long, so a stray opening costs nothing.
-         */
-        private fun markEnd(r: MarkupToRead): Int {
-            val text = r.text
-            val close = text.indexOf(MARK_CLOSES, r.at).takeIf { it >= 0 && it - r.at <= MARK_LENGTH } ?: return -1
-            if (!text.startsWith("$id.", r.at)) return -1
-            val index = text.substring(r.at + id.length + 1, close).toIntOrNull() ?: return -1
-            return if (index in 0 until r.below) close else -1
+        /** Built or failed, the block's marks are no longer being built, and a value holding one stops no page. */
+        @PublishedApi
+        internal fun finished() {
+            if (marked.isNotEmpty()) BUILDING -= id
         }
+
+        /** Where the mark that opens just before [r]'s place ends, if it is one of this block's made before [r]'s text: -1 where it is none. */
+        private fun markEnd(r: MarkupToRead): Int =
+            markEnd(r.text, r.at) { dot, index -> dot - r.at == id.length && r.text.startsWith(id, r.at) && index in 0 until r.below }
     }
+
+/**
+ * Where the mark that opens just before [at] in [text] ends, if [ofBlock] takes where its block's id ends and its value's
+ * number: -1 where it is none. A mark is read no further than a mark is long, so a stray opening costs nothing.
+ */
+private inline fun markEnd(
+    text: String,
+    at: Int,
+    ofBlock: (dot: Int, index: Int) -> Boolean,
+): Int {
+    var dot = -1
+    var close = -1
+    for (i in at until minOf(text.length, at + MARK_LENGTH + 1)) {
+        if (text[i] == MARK_CLOSES) {
+            close = i
+            break
+        }
+        if (text[i] == '.' && dot < 0) dot = i
+    }
+    if (dot < 0 || close < 0) return -1
+    val index = text.substring(dot + 1, close).toIntOrNull() ?: return -1
+    return if (ofBlock(dot, index)) close else -1
+}
+
+/**
+ * The ids of the blocks being built that have marked a value: only their `+` writes one of their marks. Held weakly, so a
+ * block suspended and never resumed leaves none behind once nothing reaches it.
+ */
+private val BUILDING: MutableSet<String> = weakSet()
+
+/** Whether [text] holds a mark of a block being built, whose value would be lost if [text] were escaped. */
+private fun holdsMarkBeingBuilt(text: String): Boolean {
+    var at = 0
+    while (true) {
+        // Text without what opens a mark, all but every value, never reaches the set and its lock.
+        val open = text.indexOfAny(MARK_STARTS, at)
+        if (open < 0 || BUILDING.isEmpty()) return false
+        at = open + 1
+        if (markEnd(text, at) { dot, _ -> text.substring(at, dot) in BUILDING } >= 0) return true
+    }
+}
 
 /** What a `+` in the block form of [interpolate] writes: a note of which value stands there, and not the value. */
 @JvmInline
@@ -506,6 +561,7 @@ private const val MARK_CLOSES = '\uFDD1'
 
 // What a mark opens with once the placeholder form has written it into an Html.
 private const val MARK_IN_HTML = '\uFDD2'
+private val MARK_STARTS = charArrayOf(MARK_OPENS, MARK_IN_HTML)
 private const val MARK_RADIX = 36
 private const val MARK_LENGTH = 24
 
@@ -542,6 +598,8 @@ private fun interpolated(
 
     val out = StringBuilder(text.length + values.size * 16)
     var cut = 0
+    // The first value that would lose a mark: refused once every other refusal has had its say.
+    var lost = -1
     for ((index, value) in values.withIndex()) {
         if (value is Trusted) continue
         val placeholder = written.starts[index]
@@ -557,13 +615,22 @@ private fun interpolated(
             if (index in textOnly && landing.position != Position.TEXT) {
                 throw UnsafeInterpolationException.outsideHtmlText(numbers[index], landing.attribute)
             }
-            out.escaped(value)
+            val written = textOf(value)
+            if (lost < 0 && holdsMarkBeingBuilt(written)) lost = index
+            out.escaped(written)
         }
     }
     out.append(text, cut, text.length)
     for (landscape in landscapes) landscape.checkUrls(text, written.starts.asList(), values, numbers)
+    require(lost < 0) { lostMark(numbers[lost]) }
     return built(out.toString())
 }
+
+private fun lostMark(value: Int): String =
+    "Value $value holds a mark that + made in interpolate { }, and would be escaped as text: the value the mark stands " +
+        "for would be lost, and the mark's note written in its place. Hand the value itself to the placeholder form, " +
+        "interpolate(\"...%s...\", name) rather than +name, or mark it, an Html too, where it stands in the block's " +
+        "markup: \"...${'$'}{+name}...\"."
 
 // The values were judged with each mark of a block in the markup unread, as text standing for nothing, so a mark is
 // written as one the block reads as standing in element text alone.
@@ -707,8 +774,7 @@ private fun textOf(value: Any?): String =
         else -> value.toString()
     }
 
-private fun StringBuilder.escaped(value: Any?) {
-    val text = textOf(value)
+private fun StringBuilder.escaped(text: String) {
     for (ch in text) {
         when (ch) {
             '&' -> append("&amp;")
@@ -1126,7 +1192,7 @@ private fun written(
     var cut = from
     for (index in inside) {
         out.append(text, cut, placeholders[index])
-        out.escaped(values[index])
+        out.escaped(textOf(values[index]))
         cut = placeholders[index] + 2
     }
     out.append(text, cut, to)

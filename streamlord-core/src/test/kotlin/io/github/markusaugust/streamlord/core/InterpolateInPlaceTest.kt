@@ -5,6 +5,7 @@ import io.github.markusaugust.streamlord.core.domain.Trusted
 import io.github.markusaugust.streamlord.core.domain.UnsafeInterpolationException
 import io.github.markusaugust.streamlord.core.domain.interpolate
 import io.github.markusaugust.streamlord.core.domain.joinToHtml
+import io.github.markusaugust.streamlord.fixtures.assertGrowsLinearly
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
@@ -194,6 +195,81 @@ class InterpolateInPlaceTest {
         val stored = "a${MARK_OPENS}b${MARK_CLOSES}c ${MARK_OPENS}0.0$MARK_CLOSES"
         val out = interpolate { "<li>$stored</li><li>${+"marked"}</li>" }.text
         assertEquals("<li>a${REPLACED}b${REPLACED}c ${REPLACED}0.0$REPLACED</li><li>marked</li>", out)
+    }
+
+    @Test
+    fun `a value holding a mark of a block being built is refused where it would be escaped, since its value would be lost`() {
+        val name = "Gorvek"
+        val refused =
+            listOf<() -> Any>(
+                { interpolate { "<p>${interpolate("<b>%s</b>", +name)}</p>" } },
+                {
+                    interpolate {
+                        val h = interpolate("<b title=\"%s\">b</b>", +name)
+                        "<p>$h</p>"
+                    }
+                },
+                { interpolate { "<p>${interpolate("<i title=\"%s\">i</i>", interpolate("<b>${+name}</b>"))}</p>" } },
+                { interpolate { "<p>${interpolate("<b>%s</b>", "Hi ${+name}")}</p>" } },
+                { interpolate { "<p>${interpolate("<b>%s</b>", listOf(+name))}</p>" } },
+                { interpolate { "<p>${+"Hi ${+name}"}</p>" } },
+                // A block's mark in the placeholder form of a block inside it.
+                {
+                    interpolate {
+                        val n = +name
+                        interpolate { "<p>${interpolate("<b>%s</b>", n)}</p>" }.text
+                    }
+                },
+            )
+        for (shape in refused) {
+            val e = assertFailsWith<IllegalArgumentException> { shape() }
+            assertEquals(true, "+" in e.message.orEmpty() && "lost" in e.message.orEmpty(), e.message)
+        }
+        // Where it would not be escaped, it is refused as any value there.
+        assertEquals(
+            Position.CODE,
+            assertFailsWith<UnsafeInterpolationException> {
+                interpolate { "<p>${interpolate("<b onclick=\"%s\">b</b>", +name)}</p>" }
+            }.position,
+        )
+        assertEquals(
+            Position.URL,
+            assertFailsWith<UnsafeInterpolationException> {
+                interpolate { "<p>${interpolate("<a href=\"%s\">x</a>", "javascript:${+name}")}</p>" }
+            }.position,
+        )
+        assertEquals(
+            "Value 1 holds a mark",
+            assertFailsWith<IllegalArgumentException> { interpolate { interpolate("<b>%s %s</b>", "a", +name).text } }.message?.take(20),
+        )
+    }
+
+    @Test
+    fun `a value holding what a mark writes stops no page when no block being built made it`() {
+        // Made up, or kept past the block that made it, finished or failed.
+        var kept = ""
+        interpolate { "<p>${+"first"}</p>".also { kept = it } }
+        var failed = ""
+        runCatching<Unit> {
+            interpolate {
+                failed = "${+"x"}"
+                error("the block fails")
+            }
+        }
+        for (text in listOf("${MARK_OPENS}0.0$MARK_CLOSES", "${MARK_IN_HTML}abc.0$MARK_CLOSES", kept, failed)) {
+            assertEquals(false, MARK_OPENS in interpolate("""<p title="%s">%s</p>""", text, text).text)
+            assertEquals(false, MARK_OPENS in interpolate { "<p>${+text}</p>" }.text)
+        }
+    }
+
+    @Test
+    fun `a value holding what opens a mark costs what its length does, while a block is being built`() {
+        val openings = listOf("$MARK_OPENS", "$MARK_IN_HTML$MARK_CLOSES", "${MARK_OPENS}a$MARK_CLOSES")
+        for (opening in openings) {
+            assertGrowsLinearly("a value of stray openings", 2_000, { n -> opening.repeat(n) }) { text ->
+                interpolate { "<p title=\"${+text}\">${+text}</p>" }
+            }
+        }
     }
 
     @Test

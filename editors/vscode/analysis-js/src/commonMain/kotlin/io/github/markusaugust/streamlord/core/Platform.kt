@@ -8,3 +8,5 @@ internal expect fun bigNumberText(
 ): String?
 
 internal expect fun randomBase64(bytes: Int): String
+
+internal expect fun <T> weakSet(): MutableSet<T>

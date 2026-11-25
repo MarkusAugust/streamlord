@@ -504,7 +504,9 @@ public class Analyzer(
             claimed += format.second.start
             for (x in format.second.literals) claimed += x.start
             val inHtml = htmls.firstOrNull { it.site === site }?.let { MarksInHtml(it.givenAt != null) }
-            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated, inHtml)
+            // An Html handed to it is escaped outside element text, marks, quotes and all.
+            val held = { at: Int -> htmls.firstOrNull { it.site.nameStart == at }?.let { marksHeld(src, opts, it) } }
+            val issues = checkInterpolateSite(site, format.first, format.second, src, opts, hyphenated, inHtml, held)
             if (issues.isNotEmpty()) out += SiteIssues(site, null, issues)
         }
         out += indicatorOrderIssues(src, lex, foreign)
@@ -550,6 +552,11 @@ public class Analyzer(
             val html = innermost?.let { b -> htmls.firstOrNull { it.block === b && it.holds(trusted) } }
             val block = innermost?.takeUnless { html == null && inMarkedValue(src, lex.strings, s, it.braces, trusted) }
             if (block != null && (isHtmlString(src, s) || '<' in whole.text || whole.interpolations.any { markedValue(it) != null })) {
+                // A quote of the Html's own markup may end the attribute it lands in and put its mark in element text.
+                val held = { at: Int ->
+                    val h = htmls.firstOrNull { it.givenAt == at }
+                    h?.let { marksHeld(src, opts, it) }?.let { it && !h.quotes }
+                }
                 val issues =
                     checkInterpolateBlock(
                         whole,
@@ -561,7 +568,7 @@ public class Analyzer(
                         facts.inBlockValue(s.start, block.braces),
                         // A Trusted's literal of marks alone the call judges where it lands, its marks among its own values.
                         html?.let { MarksInHtml(it.givenAt != null, judgedHere = s.start !in it.inPlace) },
-                        held = { ip -> htmls.firstOrNull { it.givenAt == ip.start }?.let { marksHeld(src, opts, it) } },
+                        held = held,
                     )
                 if (issues.isNotEmpty()) out += SiteIssues(block.site, whole, issues)
                 continue
@@ -828,7 +835,7 @@ public class Analyzer(
     ): Boolean? {
         var held: Boolean? = null
         for (m in html.marks) {
-            when (markKind(src, opts, m, markedValue(m)!!, m.start)) {
+            when (markKind(src, opts, m.start, markedValue(m)!!, m.start)) {
                 ArgKind.NUMBER -> {}
 
                 null -> {
@@ -836,7 +843,7 @@ public class Analyzer(
                 }
 
                 else -> {
-                    return !html.quotes
+                    return true
                 }
             }
         }

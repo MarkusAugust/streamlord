@@ -548,10 +548,23 @@ internal fun callKind(
     return if (result.isString() || result.isConstant()) ValueFact.STRING else null
 }
 
-/** Whether [e] is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets. */
-private fun wholeOperand(e: String): Boolean {
+/**
+ * Whether [e] is one operand, a name, a chain of calls or a bracketed expression, with no operator outside its brackets:
+ * what a prefix such as `+` takes, since Kotlin reads `+a + 1` and `+a == b` as `(+a) + 1` and `(+a) == b`. A member
+ * read, `?.` and `!!` bind tighter.
+ */
+internal fun wholeOperand(e: String): Boolean {
     val d = depths(e)
-    return e.indices.all { d[it] != 0 || OPERAND_CHAR.matchEntire(e[it].toString()) != null }
+    var i = 0
+    while (i < e.length) {
+        if (d[i] == 0 && (e.startsWith("?.", i) || e.startsWith("!!", i))) {
+            i += 2
+            continue
+        }
+        if (d[i] == 0 && (e[i] == '?' || e[i] == '!' || OPERAND_CHAR.matchEntire(e[i].toString()) == null)) return false
+        i++
+    }
+    return true
 }
 
 // Lines as `USES_HTML_DSL` reads them: they start after `\n` alone and are indented with spaces and tabs.
