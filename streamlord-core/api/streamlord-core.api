@@ -409,6 +409,7 @@ public final class io/github/markusaugust/streamlord/core/domain/InterpolationKt
 
 public final class io/github/markusaugust/streamlord/core/domain/InterpolationScope {
 	public fun <init> ()V
+	public final fun finished ()V
 	public final fun html-Ku8YPtc (Ljava/lang/String;Ljava/util/List;)Ljava/lang/String;
 	public final fun unaryPlus-VTpKpQo (Ljava/lang/Object;)Ljava/lang/String;
 }

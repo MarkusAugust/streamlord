@@ -4,6 +4,8 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.Collections
+import java.util.WeakHashMap
 
 /*
  * What core asks of the JVM. The JavaScript build of the analysis leaves this file out and brings
@@ -32,3 +34,6 @@ internal fun randomBase64(bytes: Int): String {
     random.nextBytes(out)
     return Base64.getEncoder().encodeToString(out)
 }
+
+/** A set many threads may add to and take from at once, which holds each element only while something else reaches it. */
+internal fun <T> weakSet(): MutableSet<T> = Collections.synchronizedSet(Collections.newSetFromMap(WeakHashMap()))

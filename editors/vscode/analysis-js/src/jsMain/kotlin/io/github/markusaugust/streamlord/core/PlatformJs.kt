@@ -12,3 +12,6 @@ internal actual fun randomBase64(bytes: Int): String {
     val out: dynamic = js("crypto").getRandomValues(js("new Uint8Array(bytes)"))
     return js("btoa")(js("String.fromCharCode").apply(null, out)).unsafeCast<String>()
 }
+
+// One thread runs JavaScript, and the analysis builds no block.
+internal actual fun <T> weakSet(): MutableSet<T> = HashSet()

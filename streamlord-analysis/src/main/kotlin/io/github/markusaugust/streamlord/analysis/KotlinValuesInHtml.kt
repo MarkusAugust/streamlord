@@ -193,6 +193,8 @@ internal fun Analyzer.checkInterpolateSite(
     hyphenated: Set<String>,
     // Where the call stands in a block of interpolate, what its marks there are to it.
     inHtml: MarksInHtml? = null,
+    // Whether the value at an offset is an Html of the placeholder form that marks a value of the block: see judgeInterpolated.
+    held: (Int) -> Boolean? = { null },
 ): List<Issue> {
     val placeholders = percentPlaceholders(s.text)
     val (format, at) = withPercentPlaceholders(s, placeholders)
@@ -289,6 +291,7 @@ internal fun Analyzer.checkInterpolateSite(
         hyphenated,
         issues,
         inHtml = inHtml,
+        held = held,
     )
 }
 
@@ -321,9 +324,9 @@ internal fun Analyzer.checkInterpolateBlock(
     valueOfVal: Boolean = false,
     // Where it is markup of an Html the placeholder form builds, whose marks may stand in element text alone.
     inHtml: MarksInHtml? = null,
-    // Whether a template gives an Html of the placeholder form whose markup marks a value of the block: true where the mark
-    // is refused for certain, false where it may not be, a number's or one its own quote may move, null where none is marked.
-    held: (Interpolation) -> Boolean? = { null },
+    // Whether the template at an offset gives an Html of the placeholder form that marks a value of the block: see
+    // judgeInterpolated.
+    held: (Int) -> Boolean? = { null },
 ): List<Issue> {
     val all = s.interpolations.filter { markedValue(it) != null }
     val read =
@@ -332,7 +335,7 @@ internal fun Analyzer.checkInterpolateBlock(
             val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
             Arg(start, start + value.length, null, value, null)
         }
-    val told = all.mapIndexed { k, ip -> markKind(src, opts, ip, read[k].text, s.start) }
+    val told = all.mapIndexed { k, ip -> markKind(src, opts, ip.start, read[k].text, s.start) }
     // A + on a number is Kotlin's own and marks nothing: the number is written as it is, as from any template.
     val marks = all.indices.filter { told[it] != ArgKind.NUMBER }
     // A name set to a mark in the block, `val title = +name`, is the mark where it is written.
@@ -358,15 +361,15 @@ internal fun Analyzer.checkInterpolateBlock(
     )
 }
 
-/** What the value a template marks with `+`, [value], is as far as is known: null where it may be anything. */
+/** What the value a template or an argument from [from] on marks with `+`, [value], is as far as is known: null where it may be anything. */
 internal fun markKind(
     src: String,
     opts: Reading,
-    ip: Interpolation,
+    from: Int,
     value: String,
     at: Int,
 ): ArgKind? {
-    val start = src.indexOf(value, src.indexOf('+', ip.start) + 1)
+    val start = src.indexOf(value, src.indexOf('+', from) + 1)
     val fact = opts.fact(start, start + value.length)
     return if (fact.isOther()) null else fact.argKind() ?: argKind(src, value, value.startsWith("\""), at)
 }
@@ -399,10 +402,13 @@ private fun setToMark(
  * What a template of the block form, or a value joined with `+` in it, marks with `+`, as written and without
  * parentheses around all of it; null where nothing is marked.
  */
-internal fun markedValue(ip: Interpolation): String? =
-    ip.text
+internal fun markedValue(ip: Interpolation): String? = if (ip.kind == InterpolationKind.SIMPLE) null else marked(ip.text)
+
+/** What [text], an expression, marks with `+`, as written and without parentheses around all of it; null where nothing is marked. */
+private fun marked(text: String): String? =
+    text
         .trim()
-        .takeIf { ip.kind != InterpolationKind.SIMPLE && it.startsWith("+") && !it.startsWith("++") }
+        .takeIf { it.startsWith("+") && !it.startsWith("++") }
         ?.drop(1)
         ?.trim()
         ?.let { if (it.startsWith("(") && closing(it, depths(it), 0) == it.length) it.substring(1, it.length - 1).trim() else it }
@@ -432,8 +438,10 @@ private fun Analyzer.judgeInterpolated(
     // Where the string is markup of an Html the placeholder form builds in a block, or that form's format there, whose marks
     // may stand in element text alone.
     inHtml: MarksInHtml? = null,
-    // In a block, whether a template gives an Html of the placeholder form whose markup marks a value: see checkInterpolateBlock.
-    held: (Interpolation) -> Boolean? = { null },
+    // In a block, whether the value written at an offset, a template of the block form or an argument of the placeholder
+    // form, is an Html of the placeholder form whose markup marks a value: true where the mark is refused for certain, false
+    // where it may not be, a number's or one its own quote may move, null where none is marked.
+    held: (Int) -> Boolean? = { null },
 ): List<Issue> {
     val block = formatArg == null
     val view = markupView(src, format)
@@ -506,7 +514,7 @@ private fun Analyzer.judgeInterpolated(
         // element text alone there. A number's + is Kotlin's own and marks nothing.
         val mark = if (!block && inHtml != null) markedValue(ip) else null
         if (mark != null) {
-            val kind = markKind(src, opts, ip, mark, s.start)
+            val kind = markKind(src, opts, ip.start, mark, s.start)
             if (kind != ArgKind.NUMBER && landing.position != Position.TEXT) {
                 val certain = inHtml!!.reaches && kind != null && ip.decodedStart < uncertainFrom
                 issues += textOnlyRefusal(shortened(mark), landing, ip.decodedStart, ip.start until ip.end, certain)
@@ -602,7 +610,7 @@ private fun Analyzer.judgeInterpolated(
             } + if (fixable && nullable) " Where $shown is null, interpolate writes nothing, and Kotlin writes null." else ""
         // An Html written unmarked takes the marks in its own markup along, and the block reads them where it lands.
         // Only in a quoted attribute value, where the Html is characters and its mark is refused, is the mark what helps.
-        val holds = if (block && (landing.position == Position.ATTRIBUTE || landing.position == Position.URL)) held(ip) else null
+        val holds = if (block && (landing.position == Position.ATTRIBUTE || landing.position == Position.URL)) held(ip.start) else null
         if (holds != null) {
             val where =
                 landing.attribute
@@ -698,6 +706,25 @@ private fun Analyzer.judgeInterpolated(
             issues += refused(message, certain)
             continue
         }
+        // A value holding a mark of the block is refused where interpolate escapes it, once no refusal above has fired, since
+        // the value the mark stands for would be lost: an Html is escaped outside element text.
+        if (arg != null && (block || inHtml != null) && landing.position in ESCAPED_POSITIONS) {
+            val lost = lostMarks(src, opts, arg, block, s.start)
+            // The call written whole, not a value read off its Html.
+            val whole = coreCall(src, arg.text.trim(), "interpolate")
+            val html = if (block || landing.position == Position.TEXT || !whole) null else held(arg.start)
+            for (m in lost) issues += m
+            if (html != null) {
+                val where = landing.attribute ?: landingWords(landing, endTagAt(view, d), rawElement(view, landing, d)).first
+                val message =
+                    "interpolate ${if (html) "throws" else "may throw"} here: $shown is an Html that holds a value marked in " +
+                        "the block, and it lands in $where, where interpolate escapes it as text, so the value would be lost. " +
+                        "Hand the value to the call that builds the Html, at a %s placeholder."
+                val severity = if (html) Severity.ERROR else Severity.WARNING
+                issues += Issue(arg.start, arg.end, message, severity, IssueCode.INTERPOLATE_PLACEHOLDERS)
+            }
+            if (lost.isNotEmpty() || html != null) continue
+        }
         if (landing.position in ESCAPED_POSITIONS) {
             // Markup held as a String is text to interpolate: in element text it escapes the tags, which are then printed.
             if (landing.position == Position.TEXT && arg != null && kind != ArgKind.MARKUP && kind != ArgKind.TRUSTED &&
@@ -748,7 +775,7 @@ private fun Analyzer.judgeInterpolated(
     for ((j, literal) in marked) {
         for ((n, m) in literal.interpolations.withIndex()) {
             val value = markedValue(m)!!
-            val kind = markKind(src, opts, m, value, s.start)
+            val kind = markKind(src, opts, m.start, value, s.start)
             val landing = reading.inner.getValue(j)[n]
             if (kind == ArgKind.NUMBER || landing.position == Position.TEXT) continue
             issues +=
@@ -763,6 +790,49 @@ private fun Analyzer.judgeInterpolated(
     }
     issues += mapIssues(format, src, analyzeHtml(view, opts, hyphenated, templates = false))
     return issues
+}
+
+/**
+ * What interpolate throws for each mark of a block that [arg], a value of interpolate in the block, holds as text: the
+ * argument itself, `+name` handed to the placeholder form, or a template of a literal that is the value. interpolate
+ * escapes such a value, and the value the mark stands for would be lost. A number's + is Kotlin's own and marks nothing.
+ */
+private fun Analyzer.lostMarks(
+    src: String,
+    opts: Reading,
+    arg: Arg,
+    block: Boolean,
+    at: Int,
+): List<Issue> {
+    // Where each mark is written, and what it marks.
+    val marks = ArrayList<Triple<Int, Int, String>>()
+    // In the block form the value is the one a mark takes, and the mark is its own.
+    val whole = if (block) null else marked(arg.text)?.takeIf(::wholeOperand)
+    if (whole != null) {
+        marks += Triple(arg.start, arg.end, whole)
+    } else {
+        val literal = arg.string ?: nested(src).firstOrNull { it.start == arg.start && it.end == arg.end }
+        for (ip in literal?.interpolations.orEmpty()) markedValue(ip)?.takeIf(::wholeOperand)?.let { marks += Triple(ip.start, ip.end, it) }
+    }
+    return marks.mapNotNull { (from, end, value) ->
+        val kind = markKind(src, opts, from, value, at)
+        if (kind == ArgKind.NUMBER) return@mapNotNull null
+        val plus = src.indexOf('+', from)
+        val shown = shortened(value)
+        val message =
+            "interpolate throws here${if (kind != null) "" else " unless $shown is a number"}: " +
+                (if (whole != null) "+$shown is a mark of the block" else "${shortened(arg.text)} holds a mark of the block") +
+                ", which interpolate escapes as text, so the value it stands for would be lost. Pass $shown itself, without +: " +
+                "interpolate escapes or refuses the value where it lands."
+        Issue(
+            from,
+            end,
+            message,
+            if (kind != null) Severity.ERROR else Severity.WARNING,
+            IssueCode.INTERPOLATE_PLACEHOLDERS,
+            fixes = listOf(Fix("Pass $shown itself", plus, plus + 1, "")),
+        )
+    }
 }
 
 private val IF_START = regex("""^if\s*\(""")
